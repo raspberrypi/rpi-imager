@@ -115,41 +115,41 @@
         <source>All Files (*)</source>
         <translation>Tüm Dosyalar (*)</translation>
     </message>
-    <message>
+<message>
         <source>Audio notification unavailable - no viable audio player found on this system</source>
-        <translation type="unfinished"></translation>
+        <translation>Sesli bildirim kullanılamıyor - bu sistemde uygun bir ses oynatıcı bulunamadı</translation>
     </message>
     <message>
         <source>Saved Customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Kaydedilmiş Özelleştirme</translation>
     </message>
     <message>
         <source>Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>Temizle</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
-        <translation type="unfinished"></translation>
+        <translation>Ana makine adı, WiFi ve kullanıcı kimlik bilgileri gibi kaydedilmiş tüm işletim sistemi özelleştirme ayarlarını kaldırır</translation>
     </message>
     <message>
         <source>Version: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Sürüm: %1</translation>
     </message>
     <message>
         <source>Clear saved customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>Kaydedilmiş özelleştirmeler temizlensin mi?</translation>
     </message>
     <message>
         <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bu işlem; ana makine adı, WiFi ve kullanıcı kimlik bilgileri gibi kaydedilmiş tüm işletim sistemi özelleştirme ayarlarını silecek.</translation>
     </message>
     <message>
         <source>Keep saved customisation settings and return to the options dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>Kaydedilmiş özelleştirme ayarlarını koru ve seçenekler penceresine dön</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings permanently</source>
-        <translation type="unfinished"></translation>
+        <translation>Kaydedilmiş tüm işletim sistemi özelleştirme ayarlarını kalıcı olarak kaldır</translation>
     </message>
 </context>
 <context>
@@ -289,68 +289,68 @@
         <source>Authorized keys files (authorized_keys)</source>
         <translation>Yetkilendirilmiş anahtar dosyaları (authorized_keys)</translation>
     </message>
-    <message>
+<message>
         <source>Imager Repository Files (*.json *.%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>İmaj Hazırlayıcı Depo Dosyaları (*.json *.%1)</translation>
     </message>
 </context>
 <context>
     <name>ConfirmOtpProgramDialog</name>
     <message>
         <source>WARNING: OTP Programming is PERMANENT and IRREVERSIBLE</source>
-        <translation type="unfinished"></translation>
+        <translation>UYARI: OTP Programlama KALICIDIR ve GERİ DÖNDÜRÜLEMEZ</translation>
     </message>
     <message>
         <source>This operation will permanently program the secure boot public key hash into the device&apos;s one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bu işlem, güvenli önyükleme (secure boot) genel anahtar özetini cihazın tek seferlik programlanabilir (OTP) belleğine kalıcı olarak yazacaktır. Programlandıktan sonra bu cihaz YALNIZCA ilgili özel anahtar ile imzalanmış imajları başlatacaktır. Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz: %1</translation>
     </message>
     <message>
         <source>Serial: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Seri No: %1</translation>
     </message>
     <message>
         <source>Key fingerprint: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Anahtar parmak izi: %1</translation>
     </message>
     <message>
         <source>Also lock JTAG debug port (additional irreversible action)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ayrıca JTAG hata ayıklama portunu kilitle (ek geri döndürülemez işlem)</translation>
     </message>
     <message>
         <source>To confirm, type the device serial number below:</source>
-        <translation type="unfinished"></translation>
+        <translation>Onaylamak için cihazın seri numarasını aşağıya yazın:</translation>
     </message>
     <message>
         <source>Serial to type: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazılacak seri no: %1</translation>
     </message>
     <message>
         <source>Type device serial number exactly</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz seri numarasını tam olarak yazın</translation>
     </message>
     <message>
         <source>Confirmation input. Type exactly: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Onay girişi. Tam olarak şunu yazın: %1</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">İPTAL</translation>
+        <translation>İPTAL</translation>
     </message>
     <message>
         <source>Cancel OTP programming and return to previous screen</source>
-        <translation type="unfinished"></translation>
+        <translation>OTP programlamayı iptal et ve önceki ekrana dön</translation>
     </message>
     <message>
         <source>PROGRAM OTP</source>
-        <translation type="unfinished"></translation>
+        <translation>OTP PROGRAMLA</translation>
     </message>
     <message>
         <source>Permanently program the secure boot key into device OTP memory</source>
-        <translation type="unfinished"></translation>
+        <translation>Güvenli önyükleme anahtarını cihazın OTP belleğine kalıcı olarak programla</translation>
     </message>
 </context>
 <context>
@@ -431,155 +431,155 @@
     <name>DebugOptionsDialog</name>
     <message>
         <source>Debug Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Geliştirici seçenekleri</translation>
     </message>
     <message>
         <source>⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ Bu seçenekler hata ayıklama ve test amaçlıdır. Bunları değiştirmek performansı ve veri bütünlüğünü etkileyebilir.</translation>
     </message>
     <message>
         <source>I/O Options</source>
-        <translation type="unfinished"></translation>
+        <translation>G/Ç Seçenekleri</translation>
     </message>
     <message>
         <source>Enable Direct I/O (F_NOCACHE / O_DIRECT)</source>
-        <translation type="unfinished"></translation>
+        <translation>Doğrudan G/Ç'yi Etkinleştir (F_NOCACHE / O_DIRECT)</translation>
     </message>
     <message>
         <source>Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazma işlemleri için işletim sistemi sayfa önbelleğini atlar. Daha yavaştır ancak verilerin doğrudan cihaza gitmesini sağlar.</translation>
     </message>
     <message>
         <source>Enable Async I/O</source>
-        <translation type="unfinished"></translation>
+        <translation>Asenkron G/Ç'yi Etkinleştir</translation>
     </message>
     <message>
         <source>Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz gecikmesini telafi etmek için birden fazla yazma işlemini sıraya koyar. Doğrudan G/Ç etkinken performansı artırır.</translation>
     </message>
     <message>
         <source>Queue Depth:</source>
-        <translation type="unfinished"></translation>
+        <translation>Sıra Derinliği:</translation>
     </message>
     <message>
         <source>Async queue depth: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Asenkron sıra derinliği: %1</translation>
     </message>
     <message>
         <source>Buffer memory: ~%1-%2 MB (varies by system RAM)</source>
-        <translation type="unfinished"></translation>
+        <translation>Tampon bellek: ~%1-%2 MB (sistem RAM'ine göre değişir)</translation>
     </message>
     <message>
         <source>Enable Periodic Sync</source>
-        <translation type="unfinished"></translation>
+        <translation>Periyodik Senkronizasyonu Etkinleştir</translation>
     </message>
     <message>
         <source>Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazma sırasında verileri periyodik olarak diske boşaltır. Doğrudan G/Ç aktif olduğunda otomatik olarak devre dışı kalır.</translation>
     </message>
     <message>
         <source>Debugging</source>
-        <translation type="unfinished"></translation>
+        <translation>Hata Ayıklama</translation>
     </message>
     <message>
         <source>Verbose Performance Logging</source>
-        <translation type="unfinished"></translation>
+        <translation>Ayrıntılı Performans Günlüğü</translation>
     </message>
     <message>
         <source>Log detailed timing information for each write operation to help diagnose performance issues.</source>
-        <translation type="unfinished"></translation>
+        <translation>Performans sorunlarını teşhis etmeye yardımcı olmak için her yazma işlemi için ayrıntılı zamanlama bilgilerini kaydeder.</translation>
     </message>
     <message>
         <source>Network Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Ağ Seçenekleri</translation>
     </message>
     <message>
         <source>Force IPv4-only Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Sadece IPv4 İndirmelerine Zorla</translation>
     </message>
     <message>
         <source>Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.</source>
-        <translation type="unfinished"></translation>
+        <translation>İndirmeler için yalnızca IPv4 kullanın. Bozuk IPv6 yönlendirmesi nedeniyle bağlantı sorunları yaşıyorsanız bunu etkinleştirin.</translation>
     </message>
     <message>
         <source>Workarounds</source>
-        <translation type="unfinished"></translation>
+        <translation>Geçici Çözümler</translation>
     </message>
     <message>
         <source>Counterfeit Card Mode (skip end-of-device checks)</source>
-        <translation type="unfinished"></translation>
+        <translation>Sahte Kart Modu (cihaz sonu kontrollerini atla)</translation>
     </message>
     <message>
         <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama cihazının sonundaki işlemleri atlar. Sahte bir şekilde yüksek kapasite raporlayan sahte SD kartlar için bunu etkinleştirin. İmaj dosyası, kartın gerçek kapasitesinden küçük olmalıdır.</translation>
     </message>
     <message>
         <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ Bunu yalnızca SD kartınız gerçekte olduğundan daha büyük bir kapasite bildiriyorsa etkinleştirin. İmajınızın kartın gerçek kapasitesinden küçük olduğundan emin olun!</translation>
     </message>
     <message>
         <source>Advanced Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Gelişmiş Özellikler</translation>
     </message>
     <message>
         <source>Enable Rpiboot/Fastboot Support</source>
-        <translation type="unfinished"></translation>
+        <translation>Rpiboot/Fastboot Desteğini Etkinleştir</translation>
     </message>
     <message>
         <source>Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.</source>
-        <translation type="unfinished"></translation>
+        <translation>USB önyükleme modundaki (rpiboot) Raspberry Pi cihazlarını tarar. libusb gerektirir.</translation>
     </message>
     <message>
         <source>Custom Fastboot Gadget:</source>
-        <translation type="unfinished"></translation>
+        <translation>Özel Fastboot Aracı:</translation>
     </message>
     <message>
         <source>(default)</source>
-        <translation type="unfinished"></translation>
+        <translation>(varsayılan)</translation>
     </message>
     <message>
         <source>Browse...</source>
-        <translation type="unfinished"></translation>
+        <translation>Gözat...</translation>
     </message>
     <message>
         <source>Select a local fastboot gadget boot.img file</source>
-        <translation type="unfinished"></translation>
+        <translation>Yerel bir fastboot aracı boot.img dosyası seçin</translation>
     </message>
     <message>
         <source>Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>Temizle</translation>
     </message>
     <message>
         <source>Revert to the default fastboot gadget from GitHub</source>
-        <translation type="unfinished"></translation>
+        <translation>GitHub'daki varsayılan fastboot aracına geri dön</translation>
     </message>
     <message>
         <source>Select Fastboot Gadget Image</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot Aracı İmajı Seçin</translation>
     </message>
     <message>
         <source>Boot images (*.img *.bin)</source>
-        <translation type="unfinished"></translation>
+        <translation>Önyükleme imajları (*.img *.bin)</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">Tüm dosyalar (*)</translation>
+        <translation>Tüm dosyalar (*)</translation>
     </message>
     <message>
         <source>Current Status</source>
-        <translation type="unfinished"></translation>
+        <translation>Mevcut Durum</translation>
     </message>
     <message>
         <source>Close the debug options dialog without saving any changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Herhangi bir değişikliği kaydetmeden hata ayıklama seçenekleri penceresini kapatır</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished"></translation>
+        <translation>Uygula</translation>
     </message>
     <message>
         <source>Apply the selected debug options</source>
-        <translation type="unfinished"></translation>
+        <translation>Seçilen hata ayıklama seçeneklerini uygular</translation>
     </message>
 </context>
 <context>
@@ -610,25 +610,27 @@
     </message>
     <message>
         <source>Unable to load device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz listesi alınamadı</translation>
     </message>
     <message>
         <source>The device list could not be downloaded. Please check your internet connection and try again.
 
 You can still write a local image file by pressing Next and selecting &apos;Use custom&apos; on the following screen.</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz listesi indirilemedi. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.
+
+Yine de &apos;İleri&apos; düğmesine basıp sonraki ekranda &apos;Özel kullan&apos; seçeneğini belirleyerek yerel bir imaj dosyası yazdırabilirsiniz</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>Tekrar dene</translation>
     </message>
     <message>
         <source>Retry downloading the device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz listesini indirmeyi tekrar dene</translation>
     </message>
     <message>
         <source>Connected via USB</source>
-        <translation type="unfinished"></translation>
+        <translation>Usb ile bağlandı</translation>
     </message>
 </context>
 <context>
@@ -708,7 +710,7 @@ You can still write a local image file by pressing Next and selecting &apos;Use 
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Dizin değiştirirken hata oluştu &apos;%1&apos;</translation>
     </message>
-    <message>
+<message>
         <source>The write operation has stalled.
 
 No data has been written for 30 seconds. This could be caused by:
@@ -717,11 +719,18 @@ No data has been written for 30 seconds. This could be caused by:
 • System resource exhaustion
 
 Please check the storage device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazma işlemi durakladı.
+
+30 saniyedir veri yazılmadı. Bunun nedenleri şunlar olabilir:
+• Depolama aygıtı bağlantısı kesildi veya yanıt vermiyor
+• Aygıt arızalandı veya hatalı
+• Sistem kaynakları tükendi
+
+Lütfen depolama aygıtını kontrol edin ve tekrar deneyin.</translation>
     </message>
     <message>
         <source>Failed to acquire write buffer slot</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazma tamponu yuvası alınamadı</translation>
     </message>
     <message>
         <source>The download has stalled.
@@ -732,7 +741,14 @@ No data received for 30 seconds. This could be caused by:
 • Firewall or proxy blocking the connection
 
 Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>İndirme işlemi durakladı.
+
+30 saniyedir veri alınmadı. Bunun nedenleri şunlar olabilir:
+• Ağ bağlantısı kesildi veya kararsız
+• Uzak sunucu yanıt vermiyor
+• Güvenlik duvarı veya vekil sunucu (proxy) bağlantıyı engelliyor
+
+Lütfen ağ bağlantınızı kontrol edin ve tekrar deneyin.</translation>
     </message>
 </context>
 <context>
@@ -929,31 +945,33 @@ Please check your network connection and try again.</source>
         <source>Writing customization files...</source>
         <translation>Özelleştirme dosyaları yazılıyor...</translation>
     </message>
-    <message>
+<message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>&apos;%1&apos; diski ayrılamadı. Lütfen diski kullanan tüm uygulamaları kapatın ve tekrar deneyin.</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>&apos;%1&apos; diski ayrılamadı.</translation>
     </message>
     <message>
         <source>getting device size</source>
-        <translation type="unfinished"></translation>
+        <translation>cihaz boyutu alınıyor</translation>
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing.
 
 The system may be low on memory.</source>
-        <translation type="unfinished"></translation>
+        <translation>MBR sıfırlama için bellek tamponu ayrılamadı.
+
+Sistemin belleği yetersiz olabilir.</translation>
     </message>
     <message>
         <source>preparing storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>depolama aygıtı hazırlanıyor</translation>
     </message>
     <message>
         <source>Zero&apos;ing out end of drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Sürücünün sonu sıfırlanıyor...</translation>
     </message>
     <message>
         <source>Timeout writing to end of storage device.
@@ -961,7 +979,11 @@ The system may be low on memory.</source>
 This may indicate a counterfeit SD card with fake capacity.
 
 Please try a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtının sonuna yazılırken zaman aşımı oluştu.
+
+Bu durum, sahte kapasiteye sahip taklit bir SD kartın göstergesi olabilir.
+
+Lütfen farklı bir depolama aygıtı deneyin.</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.
@@ -969,21 +991,27 @@ Please try a different storage device.</source>
 This could indicate the card is advertising wrong capacity (possible counterfeit).
 
 Please try a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kartın son bölümü sıfırlanmaya çalışılırken yazma hatası oluştu.
+
+Bu, kartın yanlış kapasite bildirdiğini (olası sahte kart) gösteriyor olabilir.
+
+Lütfen farklı bir depolama aygıtı deneyin.</translation>
     </message>
     <message>
         <source>Storage device responding slowly. Restarting in compatibility mode...</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı yavaş yanıt veriyor. Uyumluluk modunda yeniden başlatılıyor...</translation>
     </message>
     <message>
         <source>storage operation</source>
-        <translation type="unfinished"></translation>
+        <translation>depolama işlemi</translation>
     </message>
     <message>
         <source>Failed to open storage device.
 
 The device may be in use by another application, or you may not have permission to access it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı açılamadı.
+
+Aygıt başka bir uygulama tarafından kullanılıyor olabilir veya erişim izniniz olmayabilir.</translation>
     </message>
     <message>
         <source>Error writing to storage device during %1.
@@ -994,49 +1022,70 @@ This could be caused by:
 • Hardware failure or bad sectors
 
 Please check the device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 sırasında depolama aygıtına yazma hatası oluştu.
+
+Bunun nedenleri şunlar olabilir:
+• Aygıt bağlantısı kesildi veya yanıt vermiyor
+• Aygıt dolu veya yazma korumalı
+• Donanım arızası veya bozuk sektörler (bad sectors)
+
+Lütfen aygıtı kontrol edin ve tekrar deneyin.</translation>
     </message>
     <message>
         <source>Error reading from storage device during %1.
 
 The device may have been disconnected or is malfunctioning.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 sırasında depolama aygıtından okuma hatası oluştu.
+
+Aygıtın bağlantısı kesilmiş olabilir veya arızalıdır.</translation>
     </message>
     <message>
         <source>Error seeking on storage device during %1.
 
 The device may be malfunctioning or disconnected.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 sırasında depolama aygıtında arama (seek) hatası oluştu.
+
+Aygıt arızalı olabilir veya bağlantısı kesilmiştir.</translation>
     </message>
     <message>
         <source>Error getting storage device size.
 
 The device may not be properly recognized.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı boyutu alınırken hata oluştu.
+
+Aygıt düzgün şekilde tanınmamış olabilir.</translation>
     </message>
     <message>
         <source>Error closing storage device.
 
 The device may have been disconnected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı kapatılırken hata oluştu.
+
+Aygıtın bağlantısı kesilmiş olabilir.</translation>
     </message>
     <message>
         <source>Failed to lock storage device.
 
 The device may be in use by another application. Please close any applications using this device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı kilitlenemedi.
+
+Aygıt başka bir uygulama tarafından kullanılıyor olabilir. Lütfen bu aygıtı kullanan tüm uygulamaları kapatın ve tekrar deneyin.</translation>
     </message>
     <message>
         <source>Error syncing data to storage device.
 
 The device may have been disconnected or is not responding. Data may not have been fully written.</source>
-        <translation type="unfinished"></translation>
+        <translation>Veriler depolama aygıtıyla senkronize edilirken hata oluştu.
+
+Aygıtın bağlantısı kesilmiş olabilir veya yanıt vermiyor. Veriler tam olarak yazılmamış olabilir.</translation>
     </message>
     <message>
         <source>Error flushing data to storage device.
 
 The device may have been disconnected or is not responding.</source>
-        <translation type="unfinished"></translation>
+        <translation>Veriler depolama aygıtına boşaltılırken (flush) hata oluştu.
+
+Aygıtın bağlantısı kesilmiş olabilir veya yanıt vermiyor.</translation>
     </message>
     <message>
         <source>Storage device timed out during %1.
@@ -1047,13 +1096,22 @@ The device is not responding. This may indicate:
 • Driver or system issue
 
 Please disconnect and reconnect the device, then try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 sırasında depolama aygıtı zaman aşımına uğradı.
+
+Aygıt yanıt vermiyor. Bu şunları gösterebilir:
+• Aygıtın bağlantısı kesildi
+• Aygıt arızalandı
+• Sürücü veya sistem sorunu
+
+Lütfen aygıtın bağlantısını kesip tekrar bağlayın, ardından tekrar deneyin.</translation>
     </message>
     <message>
         <source>Unknown storage error during %1.
 
 Please try again or use a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 sırasında bilinmeyen bir depolama hatası oluştu.
+
+Lütfen tekrar deneyin veya farklı bir depolama aygıtı kullanın.</translation>
     </message>
     <message>
         <source>The storage device is not responding. This may indicate:
@@ -1062,7 +1120,12 @@ Please try again or use a different storage device.</source>
 • A driver or system issue
 
 Please disconnect and reconnect the device, then try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı yanıt vermiyor. Bu şunları gösterebilir:
+• Aygıtın bağlantısı kesildi
+• Aygıt arızalandı
+• Bir sürücü veya sistem sorunu
+
+Lütfen aygıtın bağlantısını kesip tekrar bağlayın, ardından tekrar deneyin.</translation>
     </message>
     <message>
         <source>Error writing to storage device.
@@ -1073,27 +1136,34 @@ Some writes failed to complete. This could be caused by:
 • Hardware failure
 
 Please check the device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtına yazma hatası oluştu.
+
+Bazı yazma işlemleri tamamlanamadı. Bunun nedenleri şunlar olabilir:
+• Yazma sırasında depolama aygıtı bağlantısı kesildi
+• Aygıt dolu veya yazma korumalı
+• Donanım arızası
+
+Lütfen aygıtı kontrol edin ve tekrar deneyin.</translation>
     </message>
     <message>
         <source>flush</source>
-        <translation type="unfinished"></translation>
+        <translation>verileri boşaltma (flush)</translation>
     </message>
     <message>
         <source>sync</source>
-        <translation type="unfinished"></translation>
+        <translation>senkronizasyon (sync)</translation>
     </message>
     <message>
         <source>writing partition table</source>
-        <translation type="unfinished"></translation>
+        <translation>bölüm tablosu yazılıyor</translation>
     </message>
     <message>
         <source>final flush</source>
-        <translation type="unfinished"></translation>
+        <translation>son veri boşaltma</translation>
     </message>
     <message>
         <source>final sync</source>
-        <translation type="unfinished"></translation>
+        <translation>son senkronizasyon</translation>
     </message>
 </context>
 <context>
@@ -1138,112 +1208,112 @@ Please check the device and try again.</source>
         <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
         <translation>Cihaz biçimlendirilemiyor: yetersiz izin. Lütfen yönetici ayrıcalıklarıyla (sudo) çalıştırın.</translation>
     </message>
-    <message>
+<message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>&apos;%1&apos; diski ayrılamadı. Lütfen diski kullanan tüm uygulamaları kapatın ve tekrar deneyin.</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>&apos;%1&apos; diski ayrılamadı.</translation>
     </message>
 </context>
 <context>
     <name>FastbootFlashThread</name>
     <message>
         <source>Applying OS customisation...</source>
-        <translation type="unfinished"></translation>
+        <translation>İşletim sistemi özelleştirmeleri uygulanıyor...</translation>
     </message>
     <message>
         <source>Failed to mount boot partition: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Önyükleme (boot) bölümü bağlanamadı: %1</translation>
     </message>
     <message>
         <source>Failed to read config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>config.txt okunamadı: %1</translation>
     </message>
     <message>
         <source>Failed to write config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>config.txt yazılamadı: %1</translation>
     </message>
     <message>
         <source>Failed to write firstrun.sh: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>firstrun.sh yazılamadı: %1</translation>
     </message>
     <message>
         <source>Failed to write meta-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>meta-data yazılamadı: %1</translation>
     </message>
     <message>
         <source>Failed to write user-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>user-data yazılamadı: %1</translation>
     </message>
     <message>
         <source>Failed to write network-config: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>network-config yazılamadı: %1</translation>
     </message>
     <message>
         <source>Failed to read cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>cmdline.txt okunamadı: %1</translation>
     </message>
     <message>
         <source>Failed to write cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>cmdline.txt yazılamadı: %1</translation>
     </message>
     <message>
         <source>Failed to initialize curl</source>
-        <translation type="unfinished"></translation>
+        <translation>curl başlatılamadı</translation>
     </message>
     <message>
         <source>No entries in image archive</source>
-        <translation type="unfinished"></translation>
+        <translation>İmaj arşivinde girdi bulunamadı</translation>
     </message>
     <message>
         <source>Fastboot error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot hatası: %1</translation>
     </message>
     <message>
         <source>Fastboot error: unexpected internal error</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot hatası: beklenmedik dahili hata</translation>
     </message>
     <message>
         <source>Connecting to fastboot device...</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot cihazına bağlanılıyor...</translation>
     </message>
     <message>
         <source>Failed to open fastboot device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot cihazı açılamadı: %1</translation>
     </message>
     <message>
         <source>Downloading and flashing OS image...</source>
-        <translation type="unfinished"></translation>
+        <translation>İşletim sistemi imajı indiriliyor ve yazdırılıyor...</translation>
     </message>
     <message>
         <source>Fetching block map...</source>
-        <translation type="unfinished"></translation>
+        <translation>Blok haritası getiriliyor...</translation>
     </message>
     <message>
         <source>Fastboot download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot indirmesi başarısız oldu: %1</translation>
     </message>
     <message>
         <source>Fastboot flash failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot yazdırma (flash) işlemi başarısız oldu: %1</translation>
     </message>
     <message>
         <source>Download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>İndirme başarısız oldu: %1</translation>
     </message>
     <message>
         <source>Decompression failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Sıkıştırma açma başarısız oldu: %1</translation>
     </message>
     <message>
         <source>Cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>İptal edildi</translation>
     </message>
     <message>
         <source>Image hash mismatch. Expected: %1 Got: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>İmaj hash uyuşmazlığı. Beklenen: %1 Alınan: %2</translation>
     </message>
 </context>
 <context>
@@ -1399,15 +1469,15 @@ Please check the device and try again.</source>
     <name>ImComboBox</name>
     <message>
         <source>Search: &quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
+        <translation>Ara: &quot;%1&quot;</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 / %2</translation>
     </message>
     <message>
         <source>No matches</source>
-        <translation type="unfinished"></translation>
+        <translation>Eşleşme bulunamadı</translation>
     </message>
 </context>
 <context>
@@ -1480,7 +1550,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Enter folder or file path…</source>
-        <translation type="unfinished"></translation>
+        <translation>Klasör ya da dosya dizini girin</translation>
     </message>
 </context>
 <context>
@@ -1643,53 +1713,61 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
         <source>JSON files (*.json);;All files (*)</source>
         <translation>JSON dosyaları (*.json);;Tüm dosyalar (*)</translation>
     </message>
-    <message>
+<message>
         <source>Starting fastboot flash...</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot yazdırma işlemi başlatılıyor...</translation>
     </message>
     <message>
         <source>Preparing device for imaging...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz imaj yazdırma için hazırlanıyor...</translation>
     </message>
     <message>
         <source>Storage capacity is not large enough.
 
 The image requires at least %1 of storage.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama kapasitesi yeterli değil.
+
+İmaj dosyası en az %1 depolama alanı gerektiriyor.</translation>
     </message>
     <message>
         <source>Input file is not a valid disk image.
 
 File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation type="unfinished"></translation>
+        <translation>Giriş dosyası geçerli bir disk imajı değil.
+
+%1 bayt olan dosya boyutu 512 baytın katı değil.</translation>
     </message>
-    <message>
+<message>
         <source>Failed to start write operation: insufficient memory.
 
 The system does not have enough available memory to perform this operation. Try closing other applications to free up memory, then try again.
 
 Technical details: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazma işlemi başlatılamadı: yetersiz bellek.
+
+Sistemde bu işlemi gerçekleştirmek için yeterli kullanılabilir bellek yok. Bellekte yer açmak için diğer uygulamaları kapatmayı deneyin ve ardından tekrar deneyin.
+
+Teknik detaylar: %1</translation>
     </message>
     <message>
         <source>Failed to start write operation: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazma işlemi başlatılamadı: %1</translation>
     </message>
     <message>
         <source>Limited by download speed</source>
-        <translation type="unfinished"></translation>
+        <translation>İndirme hızıyla sınırlı</translation>
     </message>
     <message>
         <source>Limited by decompression speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Sıkıştırma açma hızıyla sınırlı</translation>
     </message>
     <message>
         <source>Limited by storage device speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı hızıyla sınırlı</translation>
     </message>
     <message>
         <source>Verifying written data</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazılan veriler doğrulanıyor</translation>
     </message>
 </context>
 <context>
@@ -1809,11 +1887,11 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Why am I being asked this?</source>
-        <translation type="unfinished"></translation>
+        <translation>Bana neden bu soru soruluyor?</translation>
     </message>
     <message>
         <source>This also sets the Wi-Fi regulatory domain for your region.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bu aynı zamanda bölgeniz için Wi-Fi düzenleme alanını da belirler.</translation>
     </message>
 </context>
 <context>
@@ -1889,48 +1967,48 @@ Technical details: %1</source>
         <source>Released: %1</source>
         <translation>Yayınlanma: %1</translation>
     </message>
-    <message>
+<message>
         <source>Unable to download OS list. You can still use a local image file.</source>
-        <translation type="unfinished"></translation>
+        <translation>İşletim sistemi listesi indirilemedi. Yine de yerel bir imaj dosyası kullanabilirsiniz.</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>Yeniden Dene</translation>
     </message>
     <message>
         <source>Retry downloading the OS list</source>
-        <translation type="unfinished"></translation>
+        <translation>İşletim sistemi listesini indirmeyi yeniden dene</translation>
     </message>
 </context>
 <context>
     <name>PasswordlessSudoWarningDialog</name>
     <message>
         <source>Passwordless Sudo</source>
-        <translation type="unfinished"></translation>
+        <translation>Parolasız Sudo</translation>
     </message>
     <message>
         <source>Enabling passwordless sudo allows any process running as this user to gain full root privileges without authentication. This significantly weakens the security of your system.</source>
-        <translation type="unfinished"></translation>
+        <translation>Parolasız sudo'nun etkinleştirilmesi, bu kullanıcı olarak çalışan herhangi bir işlemin kimlik doğrulaması olmadan tam kök (root) ayrıcalıkları kazanmasına izin verir. Bu, sisteminizin güvenliğini önemli ölçüde zayıflatır.</translation>
     </message>
     <message>
         <source>Only enable this if you understand the risks and have a specific need, such as automated scripts or headless operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bunu yalnızca riskleri anlıyorsanız ve otomatik betikler veya başsız (headless) çalıştırma gibi özel bir ihtiyacınız varsa etkinleştirin.</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">İPTAL</translation>
+        <translation>İPTAL</translation>
     </message>
     <message>
         <source>Cancel and keep sudo requiring a password</source>
-        <translation type="unfinished"></translation>
+        <translation>İptal et ve sudo için parola gereksinimini koru</translation>
     </message>
     <message>
         <source>ENABLE</source>
-        <translation type="unfinished"></translation>
+        <translation>ETKİNLEŞTİR</translation>
     </message>
     <message>
         <source>Enable passwordless sudo for this user account</source>
-        <translation type="unfinished"></translation>
+        <translation>Bu kullanıcı hesabı için parolasız sudo'yu etkinleştir</translation>
     </message>
 </context>
 <context>
@@ -2046,37 +2124,37 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
 
 Otomatik ayrıcalık yükseltmeyi ayarlamak için &quot;Yetkilendirmeyi Yükle&quot;ye tıklayın veya şu komutla manuel olarak çalıştırın: sudo %1</translation>
     </message>
-    <message>
+<message>
         <source>Invalid Windows physical drive path: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Geçersiz Windows fiziksel sürücü yolu: %1</translation>
     </message>
     <message>
         <source>Failed to open disk for cleaning. Error code: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Disk temizleme için açılamadı. Hata kodu: %1</translation>
     </message>
     <message>
         <source>Failed to clear partition table. Error code: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Bölüm tablosu temizlenemedi. Hata kodu: %1</translation>
     </message>
     <message>
         <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
-        <translation type="unfinished"></translation>
+        <translation>Disk temizleme aracı başlatılamadı. Lütfen yönetici ayrıcalıklarına sahip olduğunuzdan emin olun.</translation>
     </message>
     <message>
         <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
-        <translation type="unfinished"></translation>
+        <translation>Disk temizleme işlemi zaman aşımına uğradı. Disk başka bir uygulama tarafından kullanılıyor olabilir.</translation>
     </message>
     <message>
         <source>Failed to clean disk. Error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Disk temizlenemedi. Hata: %1</translation>
     </message>
     <message>
         <source>Unknown error</source>
-        <translation type="unfinished"></translation>
+        <translation>Bilinmeyen hata</translation>
     </message>
     <message>
         <source>Failed to clean disk after %1 attempts. %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 denemeden sonra disk temizlenemedi. %2</translation>
     </message>
 </context>
 <context>
@@ -2205,59 +2283,59 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için &quot;Yetkilendirmeyi Yükle&q
     <name>RpibootThread</name>
     <message>
         <source>Downloading firmware...</source>
-        <translation type="unfinished"></translation>
+        <translation>Ürün yazılımı indiriliyor...</translation>
     </message>
     <message>
         <source>Failed to obtain rpiboot firmware: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>rpiboot ürün yazılımı alınamadı: %1</translation>
     </message>
     <message>
         <source>Connecting to device...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaza bağlanılıyor...</translation>
     </message>
     <message>
         <source>Failed to open USB device</source>
-        <translation type="unfinished"></translation>
+        <translation>USB cihazı açılamadı</translation>
     </message>
     <message>
         <source>rpiboot protocol failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>rpiboot protokolü başarısız oldu: %1</translation>
     </message>
     <message>
         <source>USB error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>USB hatası: %1</translation>
     </message>
     <message>
         <source>Waiting for device to restart...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihazın yeniden başlaması bekleniyor...</translation>
     </message>
     <message>
         <source>Failed to open USB device after re-enumeration</source>
-        <translation type="unfinished"></translation>
+        <translation>Yeniden numaralandırma (re-enumeration) sonrası USB cihazı açılamadı</translation>
     </message>
     <message>
         <source>Waiting for fastboot device...</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot cihazı bekleniyor...</translation>
     </message>
     <message>
         <source>Timed out waiting for fastboot device to appear.</source>
-        <translation type="unfinished"></translation>
+        <translation>Fastboot cihazının görünmesi beklenirken zaman aşımı oluştu.</translation>
     </message>
     <message>
         <source>Waiting for device to disconnect (%1/%2)...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihazın bağlantısının kesilmesi bekleniyor (%1/%2)...</translation>
     </message>
     <message>
         <source>Device disconnected, waiting for reconnect...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihaz bağlantısı kesildi, yeniden bağlanması bekleniyor...</translation>
     </message>
     <message>
         <source>Waiting for device to reconnect (%1/%2s)...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cihazın yeniden bağlanması bekleniyor (%1/%2sn)...</translation>
     </message>
     <message>
         <source>Timed out waiting for device to re-enumerate after bootcode upload (waited %1s).</source>
-        <translation type="unfinished"></translation>
+        <translation>Önyükleme kodu (bootcode) yüklemesinden sonra cihazın yeniden numaralandırılması beklenirken zaman aşımı oluştu (%1sn beklendi).</translation>
     </message>
 </context>
 <context>
@@ -2356,23 +2434,23 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için &quot;Yetkilendirmeyi Yükle&q
     </message>
     <message>
         <source>OTP Secure Boot Provisioning</source>
-        <translation type="unfinished"></translation>
+        <translation>OTP Güvenli Önyükleme Hazırlama</translation>
     </message>
     <message>
         <source>Program the secure boot public key hash into the device&apos;s OTP memory. This is a permanent, irreversible operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>Güvenli önyükleme genel anahtar özetini cihazın OTP belleğine programlar. Bu kalıcı ve geri döndürülemez bir işlemdir.</translation>
     </message>
     <message>
         <source>Provision Secure Boot OTP</source>
-        <translation type="unfinished"></translation>
+        <translation>Güvenli Önyükleme OTP'sini Hazırla</translation>
     </message>
     <message>
         <source>Permanently program the secure boot key into device OTP memory</source>
-        <translation type="unfinished"></translation>
+        <translation>Güvenli önyükleme anahtarını cihazın OTP belleğine kalıcı olarak programla</translation>
     </message>
     <message>
         <source>WARNING: After OTP provisioning, this device will ONLY boot images signed with the selected key. This cannot be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>UYARI: OTP hazırlama işleminden sonra bu cihaz YALNIZCA seçilen anahtarla imzalanmış imajları başlatacaktır. Bu işlem geri alınamaz.</translation>
     </message>
 </context>
 <context>
@@ -2548,19 +2626,19 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Could not list storage devices: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtları listelenemedi: %1</translation>
     </message>
     <message>
         <source>Error: Could not list storage devices. %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Hata: Depolama aygıtları listelenemedi. %1</translation>
     </message>
     <message>
         <source>Ready for USB boot</source>
-        <translation type="unfinished"></translation>
+        <translation>USB önyükleme için hazır</translation>
     </message>
     <message>
         <source>Could not list storage devices: %1. This may be a permissions issue. Try running the application with administrator privileges.</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtları listelenemedi: %1. Bu bir yetki sorunu olabilir. Uygulamayı yönetici ayrıcalıklarıyla çalıştırmayı deneyin.</translation>
     </message>
 </context>
 <context>
@@ -2583,11 +2661,11 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Imager version %1 is available. Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Imager sürüm %1 mevcuttur. İndirmek için web sitesini ziyaret etmek ister misiniz?</translation>
     </message>
     <message>
         <source>Update</source>
-        <translation type="unfinished"></translation>
+        <translation>Güncelle</translation>
     </message>
 </context>
 <context>
@@ -2666,19 +2744,19 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Enable passwordless sudo</source>
-        <translation type="unfinished"></translation>
+        <translation>Parolasız sudo'yu etkinleştir</translation>
     </message>
     <message>
         <source>Allow this user to run sudo commands without entering a password.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bu kullanıcının şifre girmeden sudo komutları kullanmasına izin verin.</translation>
     </message>
     <message>
         <source>Allows any process running as this user to gain full root privileges without a password. Only enable this if you have a specific need, such as automated scripts or headless operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bu kullanıcı olarak çalışan herhangi bir işlemin parola gerektirmeden tam root ayrıcalıklarına sahip olmasını sağlar. Bunu yalnızca otomatik komut dosyaları veya başsız çalışma gibi özel bir ihtiyacınız varsa etkinleştirin.</translation>
     </message>
     <message>
         <source>Passwordless sudo information: </source>
-        <translation type="unfinished"></translation>
+        <translation>Parola gerektirmeyen sudo bilgileri:</translation>
     </message>
 </context>
 <context>
@@ -2804,7 +2882,7 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>OS</source>
-        <translation>İS (OS)</translation>
+        <translation>İşletim Sistemi</translation>
     </message>
     <message>
         <source>Storage</source>
@@ -2910,61 +2988,63 @@ Sistem sürücülerini göstermek için aşağıdaki
         <source>Warning: Only overwrite the token if you initiated this action.</source>
         <translation>Uyarı: Belirtecin üzerine yalnızca bu işlemi siz başlattıysanız yazın.</translation>
     </message>
-    <message>
+<message>
         <source>Sidebar resize handle</source>
-        <translation type="unfinished"></translation>
+        <translation>Yan çubuk boyutlandırma tutamacı</translation>
     </message>
     <message>
         <source>Open local repository file?</source>
-        <translation type="unfinished"></translation>
+        <translation>Yerel depo dosyası açılsın mı?</translation>
     </message>
     <message>
         <source>Switch to a custom repository?</source>
-        <translation type="unfinished"></translation>
+        <translation>Özel bir depoya geçilsin mi?</translation>
     </message>
     <message>
         <source>You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.</source>
-        <translation type="unfinished"></translation>
+        <translation>Yerel bir Raspberry Pi Imager manifest dosyası açıyorsunuz. Bu işlem, mevcut işletim sistemi listesini bu dosyanın içeriğiyle değiştirecektir.</translation>
     </message>
     <message>
         <source>A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.
 
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Bir web sitesi, Raspberry Pi Imager'ın özel bir işletim sistemi deposu kullanmasını talep ediyor.
+
+</translation>
     </message>
     <message>
         <source>Only accept if you trust this source and intentionally clicked a link to open this repository.</source>
-        <translation type="unfinished"></translation>
+        <translation>Yalnızca kaynağa güveniyorsanız ve bu depoyu açmak için bir bağlantıya bilerek tıkladıysanız kabul edin.</translation>
     </message>
     <message>
         <source>Repository URL: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Depo URL'si: %1</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished">Aç</translation>
+        <translation>Aç</translation>
     </message>
     <message>
         <source>Switch repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Depoyu değiştir</translation>
     </message>
     <message>
         <source>Open the local manifest file and use it as the OS repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Yerel manifest dosyasını aç ve onu işletim sistemi deposu olarak kullan</translation>
     </message>
     <message>
         <source>Switch to the custom repository from the link</source>
-        <translation type="unfinished"></translation>
+        <translation>Bağlantıdaki özel depoya geçiş yap</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>Keep your current repository settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Mevcut depo ayarlarınızı koruyun</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>WizardStepBase</name>
     <message>
@@ -2978,21 +3058,23 @@ Sistem sürücülerini göstermek için aşağıdaki
 </context>
 <context>
     <name>WriteProgressWatchdog</name>
-    <message>
+<message>
         <source>Switched to compatibility mode - write continuing...</source>
-        <translation type="unfinished"></translation>
+        <translation>Uyumluluk moduna geçildi - yazma işlemi devam ediyor...</translation>
     </message>
     <message>
         <source>Write stalled - no progress for %1 seconds.
 
 Please check your storage device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazma işlemi durakladı - %1 saniyedir ilerleme kaydedilmedi.
+
+Lütfen depolama aygıtınızı kontrol edin ve tekrar deneyin.</translation>
     </message>
     <message>
         <source>Storage device not responding. Restarting in compatibility mode...</source>
-        <translation type="unfinished"></translation>
+        <translation>Depolama aygıtı yanıt vermiyor. Uyumluluk modunda yeniden başlatılıyor...</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>WritingStep</name>
     <message>
@@ -3129,7 +3211,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Writing... %1 MB written</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazılıyor... %1 MB yazıldı</translation>
     </message>
 </context>
 <context>
@@ -3232,11 +3314,11 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Offline</source>
-        <translation type="unfinished"></translation>
+        <translation>Çevrim dışı</translation>
     </message>
     <message>
         <source>Using data from %1</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 üzerinden alınan veriler kullanılıyor</translation>
     </message>
 </context>
 </TS>
