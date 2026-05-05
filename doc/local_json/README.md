@@ -80,7 +80,7 @@ script will automatically include a `bmap_url` field in the manifest entry
 pointing to the sidecar file.
 
 You can generate a bmap file for any image using
-[bmaptool](https://github.com/intel/bmap-tools):
+[bmaptool](https://github.com/yoctoproject/bmaptool):
 ```
 bmaptool create image.img -o image.img.bmap
 ```
