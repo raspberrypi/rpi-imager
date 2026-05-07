@@ -563,6 +563,11 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
         else
             _parseCompressedFile();
     }
+
+    // If _extrLen is still not set we do not know the extracted size
+    // and cannot show progress as a percentage.
+    if (!_extrLen)
+        _extractSizeKnown = false;
 }
 
 /* Set device to write to */
