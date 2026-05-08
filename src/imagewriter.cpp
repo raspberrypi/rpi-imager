@@ -519,18 +519,14 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
 {
     _src = url;
     _downloadLen = downloadLen;
-    _extrLen = extrLen;
     _expectedHash = expectedHash;
+    _extractSizeKnown = false;
     _multipleFilesInZip = multifilesinzip;
     _parentCategory = parentcategory;
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
     _bmapUrl = bmapUrl;
-    // Gzip ISIZE is 32-bit, so uncompressed size is unreliable for files >4GB.
-    // When no trusted extract size is provided by the manifest, mark it so the
-    // UI can show indeterminate progress instead of a misleading percentage.
-    _extractSizeKnown = !(!_extrLen && url.toString().toLower().endsWith(".gz"));
 
     qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
@@ -541,7 +537,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     }
 
     // Parse local compressed files to estimate _extrLen for capacity checks.
-    if (!_extrLen && _src.isLocalFile())
+    if (!extrLen && _src.isLocalFile())
     {
         QString lowercaseurl = _src.toLocalFile().toLower();
         bool compressed = lowercaseurl.endsWith(".zip") ||
@@ -564,10 +560,12 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
             _parseCompressedFile();
     }
 
-    // If _extrLen is still not set we do not know the extracted size
-    // and cannot show progress as a percentage.
-    if (!_extrLen)
-        _extractSizeKnown = false;
+    // Gzip ISIZE is 32-bit, so uncompressed size is unreliable for files >4GB.
+    // The only extract size we can trust when calculating progress for gzipped
+    // images is the size provided by the manifest.
+    if (extrLen
+        || (_extrLen && !url.toString().toLower().endsWith(".gz")))
+        _extractSizeKnown = true;
 }
 
 /* Set device to write to */
