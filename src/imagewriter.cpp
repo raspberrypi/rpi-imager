@@ -521,6 +521,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _downloadLen = downloadLen;
     _expectedHash = expectedHash;
     _extractSizeKnown = false;
+    _extrLen = extrLen;
     _multipleFilesInZip = multifilesinzip;
     _parentCategory = parentcategory;
     _osName = osname;
