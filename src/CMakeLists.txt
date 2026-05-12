@@ -331,6 +331,12 @@ endif()
 
 include_directories(BEFORE .)
 
+# Privileged I/O Platform Abstraction Layer (Qt-free; see
+# doc/privileged-helper-plan.md). Builds a static `privileged_io` library
+# that the main binary links against, and that future helper binaries
+# (rpi-imager-writer) will reuse.
+add_subdirectory(privileged_io)
+
 # Test if we need libatomic
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles("
@@ -364,7 +370,8 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "disk_formatter.cpp" "bootimgcreator.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
     "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "secureboot_crypto_common.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
     "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp"
-    "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "eeprom_repo_override.cpp")
+    "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "eeprom_repo_override.cpp"
+    "local_shim_backend.cpp" "privileged_io_glue.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -696,6 +703,9 @@ else()
         target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
     endif()
 endif()
+
+# Privileged I/O PAL — the same library is linked into every variant.
+target_link_libraries(${PROJECT_NAME} PRIVATE privileged_io)
 
 # Testing
 # Restore our testing option after dependencies are configured
