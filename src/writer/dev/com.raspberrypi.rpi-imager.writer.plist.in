@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Development-only launchd plist for rpi-imager-writer.
+
+  Production builds register the helper via SMAppService; this plist is
+  for engineers running the helper from a dev build directory without
+  having to install the .app to /Applications first. Configure-time
+  variable substitution fills in the binary path under the build tree.
+
+  Install for the current user (LaunchAgents) - that gives us a
+  user-context helper for the proof-of-concept. Production helpers go
+  in /Library/LaunchDaemons (system-wide) and run as root, registered
+  via SMAppService.daemon.
+
+  Install:
+    cp build/com.raspberrypi.rpi-imager.writer.plist \
+       ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.raspberrypi.rpi-imager.writer.plist
+
+  Uninstall:
+    launchctl bootout gui/$(id -u)/com.raspberrypi.rpi-imager.writer
+    rm ~/Library/LaunchAgents/com.raspberrypi.rpi-imager.writer.plist
+
+  This is the EQUIVALENT of what SMAppService.register() will do at
+  install time once we wire that up - that path is for the production
+  app bundle.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.raspberrypi.rpi-imager.writer</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@RPI_IMAGER_WRITER_PATH@</string>
+    </array>
+
+    <!-- On-demand activation: the helper launches when the first XPC
+         connection arrives and exits according to its idle policy. -->
+    <key>MachServices</key>
+    <dict>
+        <key>com.raspberrypi.rpi-imager.writer</key>
+        <true/>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- Surface the helper's stdout/stderr to make dev debugging easy. -->
+    <key>StandardOutPath</key>
+    <string>/tmp/rpi-imager-writer.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/rpi-imager-writer.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>RPI_IMAGER_WRITER_DEV</key>
+        <string>1</string>
+    </dict>
+</dict>
+</plist>
