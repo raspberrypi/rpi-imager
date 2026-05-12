@@ -5,6 +5,8 @@
 
 #include "file_operations.h"
 
+#include <vector>
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -48,4 +50,24 @@ FileOperations::DeviceIOLimits FileOperations::QueryDeviceIOLimits(const std::st
   return QueryPlatformDeviceIOLimits(path);
 }
 
-} // namespace rpi_imager 
+FileError FileOperations::PrepareDevice(std::uint64_t device_size,
+                                          bool zero_last_mb) {
+  constexpr std::size_t kOneMB = 1024ull * 1024ull;
+  std::vector<std::uint8_t> zeros(kOneMB, 0);
+
+  if (Seek(0) != FileError::kSuccess) return FileError::kSeekError;
+  if (auto r = WriteSequential(zeros.data(), kOneMB); r != FileError::kSuccess) return r;
+  if (auto r = Flush(); r != FileError::kSuccess) return r;
+
+  if (zero_last_mb && device_size > kOneMB) {
+    if (Seek(device_size - kOneMB) != FileError::kSuccess) return FileError::kSeekError;
+    if (auto r = WriteSequential(zeros.data(), kOneMB); r != FileError::kSuccess) return r;
+    if (auto r = Flush(); r != FileError::kSuccess) return r;
+    if (auto r = ForceSync(); r != FileError::kSuccess) return r;
+  }
+
+  (void)Seek(0);
+  return FileError::kSuccess;
+}
+
+} // namespace rpi_imager
