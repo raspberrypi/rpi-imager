@@ -459,6 +459,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/dialogs/ConfirmUnfilterDialog.qml
         wizard/dialogs/ConfirmSystemDriveDialog.qml
         wizard/dialogs/KeychainPermissionDialog.qml
+        wizard/dialogs/PrivilegedHelperDialog.qml
         wizard/dialogs/UpdateAvailableDialog.qml
         wizard/dialogs/PasswordlessSudoWarningDialog.qml
         wizard/dialogs/RepositoryDialog.qml

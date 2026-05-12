@@ -66,6 +66,19 @@ public:
     };
     Q_ENUM(WriteState)
 
+    // State of the privileged-write helper. macOS only - other platforms
+    // always report Ready (their elevation models don't have an equivalent
+    // "user must approve in Settings" gate). QML drives the explainer /
+    // re-enable dialogs off this.
+    enum class PrivilegedHelperState {
+        Ready,            // helper installed, approved, responsive
+        NeedsInstall,     // SMAppService not yet registered for this app
+        NeedsApproval,    // registered but user must approve in Settings
+        Unavailable,      // platform doesn't support this (< macOS 13, etc.)
+        Unknown           // initial; queried lazily on first probe
+    };
+    Q_ENUM(PrivilegedHelperState)
+
     // NB: the parent argument is deliberately mandatory (no `= nullptr`).
     // ImageWriter is a QML_SINGLETON whose instance is supplied by main() via
     // setQmlInstance()/create(). Qt's qmlRegisterTypesAndRevisions only honours a
@@ -90,6 +103,9 @@ public:
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
     Q_PROPERTY(bool isOsListUnavailable READ isOsListUnavailable NOTIFY osListUnavailableChanged)
     Q_PROPERTY(bool screenReaderActive READ isScreenReaderActive NOTIFY screenReaderActiveChanged)
+    Q_PROPERTY(PrivilegedHelperState privilegedHelperState
+               READ privilegedHelperState
+               NOTIFY privilegedHelperStateChanged)
 
     /* Returns true if the extract size is reliably known (false for gz files which can't store sizes >4GB) */
     Q_INVOKABLE bool isExtractSizeKnown() const { return _extractSizeKnown; }
@@ -430,6 +446,20 @@ public:
     /* Check if OS list is unavailable - derived from whether we have data (for QML offline UI) */
     bool isOsListUnavailable() const { return _completeOsList.isEmpty(); }
 
+    /* Current privileged-helper state. macOS-meaningful; other platforms
+       always report Ready. QML drives the explainer / re-enable UI off
+       this property. Refresh it via refreshPrivilegedHelperState(). */
+    PrivilegedHelperState privilegedHelperState() const { return _privilegedHelperState; }
+
+    /* Re-probe the backend (SMAppService.status + ping) and update
+       privilegedHelperState. Cheap, safe to call on Q_INVOKABLE from QML
+       (e.g. when the user returns from System Settings). */
+    Q_INVOKABLE void refreshPrivilegedHelperState();
+
+    /* Open System Settings > General > Login Items & Extensions so the
+       user can flip the helper toggle. macOS only - no-op elsewhere. */
+    Q_INVOKABLE void openLoginItemsSettings();
+
     /* Get access to performance stats for instrumentation */
     PerformanceStats* performanceStats() { return _performanceStats; }
 
@@ -458,6 +488,7 @@ signals:
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
     void writeStateChanged();
+    void privilegedHelperStateChanged();
     void connectTokenReceived(const QString &token);
     void connectTokenConflictDetected(const QString &token);
     void connectTokenCleared();
@@ -535,6 +566,7 @@ protected:
     DriveListModel _drivelist;
     bool _selectedDeviceValid;
     WriteState _writeState;
+    PrivilegedHelperState _privilegedHelperState = PrivilegedHelperState::Unknown;
     bool _cancelledDueToDeviceRemoval;
     HWListModel _hwlist;
     OSListModel _oslist;

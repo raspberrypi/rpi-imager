@@ -10,6 +10,8 @@
 #include "embedded_config.h"
 #include "config.h"
 #include "file_operations.h"
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
 #include "drivelistitem.h"
 #include "customization_generator.h"
 #include "drivelist/drivelist.h"
@@ -180,6 +182,11 @@ ImageWriter::ImageWriter(QObject *parent)
         qDebug() << "[FileOps]" << msg.c_str();
     });
     qDebug() << "FileOperations log callback installed";
+
+    // Probe the privileged-helper state so the QML layer can render
+    // its initial UI correctly (e.g. show "needs install" prompt on
+    // the device-selection page if applicable).
+    refreshPrivilegedHelperState();
 
     QString platform;
 #ifndef CLI_ONLY_BUILD
@@ -1586,6 +1593,12 @@ void ImageWriter::startWrite()
     connect(_thread, &DownloadThread::eventDeviceClose,
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventHelperSessionSummary,
+            this, [this](quint32 durationMs, QString metadata){
+                _performanceStats->recordEvent(
+                    PerformanceStats::EventType::HelperSessionSummary,
+                    durationMs, true, metadata);
             });
     connect(_thread, &DownloadThread::eventDeviceIOTimeout,
             this, [this](quint32 pendingWrites, QString metadata){
@@ -4659,6 +4672,12 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
             });
+    connect(_thread, &DownloadThread::eventHelperSessionSummary,
+            this, [this](quint32 durationMs, QString metadata){
+                _performanceStats->recordEvent(
+                    PerformanceStats::EventType::HelperSessionSummary,
+                    durationMs, true, metadata);
+            });
     connect(_thread, &DownloadThread::eventDeviceIOTimeout,
             this, [this](quint32 pendingWrites, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
@@ -5136,6 +5155,67 @@ void ImageWriter::_handleMemoryAllocationFailure(const char* what)
     setWriteState(WriteState::Failed);
     _performanceStats->endSession(false, "Memory allocation failure");
     emit error(errorMsg);
+}
+
+// ---------------------------------------------------------------------------
+// Privileged-helper state (macOS SMAppService)
+//
+// Refresh queries the PAL's helper status and translates the backend's
+// HelperState enum into the QML-facing PrivilegedHelperState enum.
+// Non-macOS platforms (and macOS pre-13 fallback to authopen) always
+// report Ready - those elevation models don't have an equivalent
+// "user must approve in Settings" gate.
+// ---------------------------------------------------------------------------
+void ImageWriter::refreshPrivilegedHelperState()
+{
+    PrivilegedHelperState newState = PrivilegedHelperState::Ready;
+#ifdef Q_OS_DARWIN
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    auto status = w.queryHelperStatus();
+    if (!status.ok) {
+        newState = PrivilegedHelperState::Unknown;
+    } else {
+        using HS = rpi_imager::privileged::proto::HelperState;
+        switch (status.value.state()) {
+            case HS::HELPER_STATE_INSTALLED_READY:
+                newState = PrivilegedHelperState::Ready;
+                break;
+            case HS::HELPER_STATE_NOT_INSTALLED:
+                newState = PrivilegedHelperState::NeedsInstall;
+                break;
+            case HS::HELPER_STATE_INSTALLED_DISABLED:
+                newState = PrivilegedHelperState::NeedsApproval;
+                break;
+            default:
+                newState = PrivilegedHelperState::Unknown;
+                break;
+        }
+    }
+    // If the backend isn't the XPC helper (e.g. user opted into
+    // legacy authopen via RPI_IMAGER_USE_LEGACY_AUTHOPEN=1), nothing
+    // to manage at the UI level.
+    if (w.backend() != rpi_imager::privileged::BackendKind::MacOSXpc) {
+        newState = PrivilegedHelperState::Unavailable;
+    }
+#endif
+    if (_privilegedHelperState != newState) {
+        _privilegedHelperState = newState;
+        emit privilegedHelperStateChanged();
+    }
+}
+
+#ifdef Q_OS_DARWIN
+namespace rpi_imager { void OpenLoginItemsSettings(); }
+#endif
+
+void ImageWriter::openLoginItemsSettings()
+{
+#ifdef Q_OS_DARWIN
+    // Routes via SMAppService.openSystemSettingsLoginItems on macOS 13+,
+    // which Apple maintains across pane renames - the x-apple.systempreferences
+    // URLs have been unreliable since System Preferences became System Settings.
+    rpi_imager::OpenLoginItemsSettings();
+#endif
 }
 
 void ImageWriter::_handleSetupException(const char* what)
