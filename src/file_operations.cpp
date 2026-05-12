@@ -4,8 +4,7 @@
  */
 
 #include "file_operations.h"
-
-#include <vector>
+#include "aligned_buffer.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -53,7 +52,9 @@ FileOperations::DeviceIOLimits FileOperations::QueryDeviceIOLimits(const std::st
 FileError FileOperations::PrepareDevice(std::uint64_t device_size,
                                           bool zero_last_mb) {
   constexpr std::size_t kOneMB = 1024ull * 1024ull;
-  std::vector<std::uint8_t> zeros(kOneMB, 0);
+  // Aligned for O_DIRECT on Linux; a std::vector's storage is not.
+  AlignedBuffer zeros(kOneMB);
+  if (!zeros) return FileError::kWriteError;
 
   if (Seek(0) != FileError::kSuccess) return FileError::kSeekError;
   if (auto r = WriteSequential(zeros.data(), kOneMB); r != FileError::kSuccess) return r;
