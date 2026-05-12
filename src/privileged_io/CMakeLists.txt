@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (C) 2026 Raspberry Pi Ltd
+#
+# Privileged I/O Platform Abstraction Layer.
+#
+# Builds a static library `privileged_io` that gets linked into:
+#   - the unprivileged client (rpi-imager)
+#   - the privileged helper (rpi-imager-writer, future)
+#   - test executables
+#
+# The library is intentionally Qt-free (per design doc §8a) so that the
+# helper-side use case can be ported to Rust without dragging Qt out of
+# the codebase first.
+
+# -----------------------------------------------------------------------
+# Protobuf
+# -----------------------------------------------------------------------
+
+# Vendor protobuf via FetchContent, matching the project convention for
+# all major C/C++ dependencies (libcurl, libarchive, zstd, xz, zlib).
+#
+# Why vendor rather than rely on a system install:
+#   * macOS ships universal (arm64+x86_64) binaries. Homebrew only
+#     installs protobuf for the host arch, so a universal link fails
+#     to find the cross-arch libraries.
+#   * Pinning the version isolates us from upstream protobuf API churn.
+#   * Matches the pattern documented in CLAUDE.md.
+#
+# We pin to v21.12 - the last protobuf release that does NOT require
+# Abseil. Pulling in Abseil's full CMake tree across two architectures
+# would dramatically inflate build time and binary size for what is
+# (in our use case) a small structured-message serialisation library.
+# Our .proto schema uses no features beyond proto3 basics, so 21.12 is
+# sufficient.
+include(FetchContent)
+
+set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(protobuf_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(protobuf_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(protobuf_INSTALL OFF CACHE BOOL "" FORCE)
+set(protobuf_BUILD_PROTOC_BINARIES ON CACHE BOOL "" FORCE)
+set(protobuf_BUILD_LIBPROTOC ON CACHE BOOL "" FORCE)
+set(protobuf_MSVC_STATIC_RUNTIME OFF CACHE BOOL "" FORCE)
+set(protobuf_DISABLE_RTTI OFF CACHE BOOL "" FORCE)
+
+# Minor warning hygiene: protobuf's generated code triggers strict
+# warnings; we suppress at the consumer level (target_compile_options
+# below) rather than disabling the project-wide flags here.
+
+FetchContent_Declare(
+    protobuf
+    GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
+    GIT_TAG v21.12
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(protobuf)
+
+# Provide a clean alias for the runtime library, matching the namespace
+# used by modern config-mode protobuf (so call sites can write
+# `protobuf::libprotobuf` regardless of how protobuf was acquired).
+if(NOT TARGET protobuf::libprotobuf)
+    add_library(protobuf::libprotobuf ALIAS libprotobuf)
+endif()
+if(NOT TARGET protobuf::protoc)
+    add_executable(protobuf::protoc ALIAS protoc)
+endif()
+
+set(PROTO_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/proto/imager.proto
+)
+
+# Run protoc as a custom command. Protobuf 21.x doesn't expose the
+# `protobuf_generate` macro that 22+ provides via its config-mode
+# package, but the `protoc` executable target is reachable directly,
+# so we drive code generation explicitly. This pattern works across
+# every protobuf version we'd realistically pin to.
+set(PROTO_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR})
+set(PROTO_GENERATED_HDR ${PROTO_GENERATED_DIR}/proto/imager.pb.h)
+set(PROTO_GENERATED_SRC ${PROTO_GENERATED_DIR}/proto/imager.pb.cc)
+
+add_custom_command(
+    OUTPUT  ${PROTO_GENERATED_HDR} ${PROTO_GENERATED_SRC}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTO_GENERATED_DIR}/proto
+    COMMAND $<TARGET_FILE:protoc>
+            --cpp_out=${PROTO_GENERATED_DIR}
+            --proto_path=${CMAKE_CURRENT_SOURCE_DIR}
+            ${PROTO_FILES}
+    DEPENDS protoc ${PROTO_FILES}
+    COMMENT "Generating C++ from imager.proto"
+    VERBATIM
+)
+
+# -----------------------------------------------------------------------
+# Library target
+# -----------------------------------------------------------------------
+
+set(PRIVILEGED_IO_SOURCES
+    privileged_writer.h
+    factory.cpp
+    backends/in_process_test.h
+    backends/in_process_test.cpp
+    backends/fault_injecting.h
+    backends/fault_injecting.cpp
+    ${PROTO_GENERATED_SRC}
+    ${PROTO_GENERATED_HDR}
+)
+
+# macOS-specific sources (the XPC backend) are appended by a
+# later commit alongside the helper binary - they share the NSXPC
+# protocol header with the helper.
+
+add_library(privileged_io STATIC ${PRIVILEGED_IO_SOURCES})
+
+if(APPLE)
+    # The XPC backend uses NSXPC (Foundation) and SMAppService for
+    # helper installation. ServiceManagement (the framework that
+    # provides SMAppService on macOS 13+) lives alongside Foundation;
+    # both are platform-native, not Qt - this does not violate §8a.
+    target_link_libraries(privileged_io PUBLIC
+        "-framework Foundation"
+        "-framework ServiceManagement"
+    )
+    target_compile_options(privileged_io PRIVATE -fobjc-arc)
+    target_include_directories(privileged_io PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+endif()
+
+# Generated protobuf headers live in the binary dir; consumers need both
+# the source dir (for privileged_writer.h) and the binary dir (for
+# proto/imager.pb.h).
+target_include_directories(privileged_io
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_link_libraries(privileged_io
+    PUBLIC
+        protobuf::libprotobuf
+)
+
+target_compile_features(privileged_io PUBLIC cxx_std_20)
+
+# Strict warnings - this is new code; keep it clean.
+if(MSVC)
+    target_compile_options(privileged_io PRIVATE /W4)
+else()
+    target_compile_options(privileged_io PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Generated protobuf code triggers strict-warning noise; relax for the
+# library as a whole rather than per-file (since `protobuf_generate` doesn't
+# expose the file list in a way we can attach properties to).
+if(NOT MSVC)
+    target_compile_options(privileged_io PRIVATE
+        -Wno-unused-parameter
+    )
+endif()

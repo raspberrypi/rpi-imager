@@ -1,0 +1,299 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Raspberry Pi Ltd
+//
+// Wire format for the unprivileged client <-> privileged helper boundary.
+//
+// This schema is the SINGLE source of truth for cross-process payloads.
+// A future Rust helper consumes the same .proto via `prost`; the C++ client
+// consumes it via `protoc --cpp_out`. Anything that crosses the boundary is
+// expressed here. The boundary is intentionally narrow.
+//
+// Schema-evolution rules (§8a of the design doc):
+//   - Add fields with new tags. Older readers ignore unknown tags.
+//   - NEVER reorder, reuse, or repurpose tag numbers. Reserve them on removal.
+//   - Bump kProtocolVersion on any breaking change. Helper and client compare
+//     versions at handshake; mismatch surfaces "please reinstall" to the user.
+//
+// Style: snake_case fields, PascalCase messages/enums (protobuf convention).
+
+syntax = "proto3";
+
+package rpi_imager.privileged.proto;
+
+// ---------------------------------------------------------------------------
+// Protocol version
+// ---------------------------------------------------------------------------
+
+// Bumped on incompatible changes. Keep in sync with whatever the helper
+// reports at handshake. Phase 1a starts at 1.
+//
+// History:
+//   1 - initial
+message ProtocolVersion {
+  uint32 version = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+enum ErrorCode {
+  ERROR_NONE = 0;
+  ERROR_UNKNOWN = 1;
+  ERROR_NOT_IMPLEMENTED = 2;             // backend doesn't support this op (yet)
+
+  // Privilege/installation
+  ERROR_HELPER_NOT_INSTALLED = 10;
+  ERROR_HELPER_INSTALL_REJECTED = 11;
+  ERROR_HELPER_DISABLED = 12;
+  ERROR_HELPER_VERSION_MISMATCH = 13;
+
+  // Device access
+  ERROR_DEVICE_NOT_FOUND = 20;
+  ERROR_DEVICE_BUSY = 21;
+  ERROR_DEVICE_PERMISSION = 22;
+  ERROR_DEVICE_IO = 23;
+  ERROR_DEVICE_DISCONNECTED = 24;
+
+  // Session lifecycle
+  ERROR_SESSION_NOT_FOUND = 30;
+  ERROR_SESSION_ALREADY_CLOSED = 31;
+  ERROR_INVALID_SLOT = 32;
+  ERROR_SLOT_EXHAUSTED = 33;
+
+  // Mid-write failures
+  ERROR_WRITE_SHORT = 40;
+  ERROR_WRITE_FAILED = 41;
+  ERROR_SYNC_FAILED = 42;
+  ERROR_CANCELLED = 43;
+
+  // Maintenance
+  ERROR_UNMOUNT_FAILED = 50;
+  ERROR_EJECT_FAILED = 51;
+}
+
+// Wraps a non-success outcome. `kernel_errno` is platform errno on POSIX,
+// GetLastError() value on Windows; 0 if no underlying syscall failed.
+message ErrorInfo {
+  ErrorCode code = 1;
+  string detail = 2;          // human-readable, English; UI translates separately
+  int32 kernel_errno = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Helper status
+// ---------------------------------------------------------------------------
+
+enum HelperState {
+  HELPER_STATE_UNKNOWN = 0;
+  HELPER_STATE_NOT_INSTALLED = 1;
+  HELPER_STATE_INSTALLED_DISABLED = 2;   // user disabled in Settings/Login Items
+  HELPER_STATE_INSTALLED_READY = 3;
+  HELPER_STATE_VERSION_MISMATCH = 4;
+}
+
+message HelperStatus {
+  HelperState state = 1;
+  string installed_version = 2;          // empty if not installed
+  string client_version = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Drive enumeration
+// ---------------------------------------------------------------------------
+
+message MountedVolume {
+  string mount_path = 1;
+  string filesystem = 2;
+  uint64 size_bytes = 3;
+}
+
+message DriveInfo {
+  string device_path = 1;                // e.g. /dev/disk2, \\.\PhysicalDrive1
+  string display_name = 2;               // e.g. "Generic Mass Storage"
+  string model = 3;
+  string vendor = 4;
+  uint64 size_bytes = 5;
+  bool is_removable = 6;
+  bool is_usb = 7;
+  bool is_system_drive = 8;
+  uint32 logical_block_size = 9;
+  repeated MountedVolume mounted_volumes = 10;
+}
+
+message DriveChange {
+  enum Kind {
+    KIND_UNKNOWN = 0;
+    KIND_ADDED = 1;
+    KIND_REMOVED = 2;
+    KIND_UPDATED = 3;
+  }
+  Kind kind = 1;
+  DriveInfo drive = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Session lifecycle
+// ---------------------------------------------------------------------------
+
+message OpenOptions {
+  bool direct_io = 1;                    // F_NOCACHE on macOS, O_DIRECT on Linux, FILE_FLAG_NO_BUFFERING on Win32
+  uint32 async_queue_depth = 2;          // 0 = backend default
+  uint32 max_transfer_bytes = 3;         // 0 = backend default
+  bool periodic_sync_enabled = 4;
+  uint32 sync_interval_mb = 5;           // 0 = backend default
+  uint32 sync_interval_ms = 6;           // 0 = backend default
+}
+
+message DeviceLimits {
+  uint32 max_transfer_bytes = 1;
+  uint32 logical_block_size = 2;
+  uint64 total_bytes = 3;
+}
+
+message PrepareOptions {
+  bool zero_first_mb = 1;
+  bool zero_last_mb = 2;
+}
+
+message SessionId {
+  uint64 v = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk write plane
+// The data itself does NOT travel via protobuf - it lives in shared memory.
+// These messages carry the metadata around the shared ring.
+// ---------------------------------------------------------------------------
+
+message Slot {
+  uint32 index = 1;
+  uint64 capacity_bytes = 2;             // size of the shared-memory slot
+}
+
+message WriteRequest {
+  SessionId session_id = 1;
+  uint32 slot_index = 2;                 // points to shared memory
+  uint64 offset = 3;                     // device offset
+  uint64 length = 4;                     // bytes to write from slot start
+}
+
+message WriteResult {
+  uint32 slot_index = 1;
+  uint64 bytes_written = 2;
+  uint64 latency_us = 3;
+  ErrorInfo error = 4;                   // error.code == ERROR_NONE on success
+}
+
+// ---------------------------------------------------------------------------
+// Verify-side reads (sync, low rate; no ring needed)
+// ---------------------------------------------------------------------------
+
+message ReadRequest {
+  SessionId session_id = 1;
+  uint64 offset = 2;
+  uint64 length = 3;
+}
+
+message ReadReply {
+  bytes data = 1;                        // small chunks only; bulk reads use ring slots
+  ErrorInfo error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Performance instrumentation (§7a)
+// ---------------------------------------------------------------------------
+
+message TimedEvent {
+  string type = 1;                       // matches PerformanceStats EventType strings
+  uint64 start_ms = 2;                   // relative to session start (helper clock)
+  uint64 duration_ms = 3;
+  bool success = 4;
+  uint64 bytes_transferred = 5;
+  uint64 throughput_kbps = 6;
+  string metadata = 7;                   // free-form, semicolon-separated key:value
+}
+
+message LatencyHistogram {
+  uint64 min_us = 1;
+  uint64 max_us = 2;
+  uint64 avg_us = 3;
+  uint32 sample_count = 4;
+  // Bucket edges and counts deferred to phase 1b once we know which buckets
+  // make sense; protobuf field tags are reserved for the eventual addition.
+  reserved 10 to 19;
+}
+
+message SizeHistogram {
+  uint64 min_kb = 1;
+  uint64 max_kb = 2;
+  uint64 avg_kb = 3;
+  uint64 total_bytes = 4;
+  uint32 count = 5;
+  reserved 10 to 19;
+}
+
+message AsyncIOStats {
+  bool enabled = 1;
+  bool supported = 2;
+  uint32 queue_depth = 3;
+  uint32 wall_clock_ms = 4;
+  uint32 write_count = 5;
+  uint32 pending_at_drain_start = 6;
+  bool sync_fallback_activated = 7;
+}
+
+message RingBufferStats {
+  uint32 producer_stall_count = 1;
+  uint32 producer_stall_ms = 2;
+  uint32 consumer_stall_count = 3;
+  uint32 consumer_stall_ms = 4;
+}
+
+message PhaseSample {
+  uint32 avg_throughput_kbps = 1;
+  uint64 bytes_total = 2;
+  uint64 duration_ms = 3;
+  uint32 max_throughput_kbps = 4;
+  uint32 min_throughput_kbps = 5;
+  uint32 sample_count = 6;
+}
+
+enum SessionState {
+  SESSION_STATE_UNKNOWN = 0;
+  SESSION_STATE_SUCCEEDED = 1;
+  SESSION_STATE_FAILED = 2;
+  SESSION_STATE_CANCELLED = 3;
+  SESSION_STATE_INTERRUPTED = 4;         // helper crashed
+}
+
+message SessionStats {
+  SessionState state = 1;
+  uint64 bytes_written = 2;
+  uint64 duration_ms = 3;
+  repeated TimedEvent events = 4;
+  LatencyHistogram write_latency = 5;
+  SizeHistogram write_sizes = 6;
+  RingBufferStats consumer_stalls = 7;
+  AsyncIOStats async_io = 8;
+  PhaseSample write_phase_summary = 9;
+  ErrorInfo terminal_error = 10;         // populated iff state != SUCCEEDED
+}
+
+// ---------------------------------------------------------------------------
+// Streaming progress events (real-time, ~10 Hz, coalesced into batches)
+// ---------------------------------------------------------------------------
+
+message ProgressUpdate {
+  SessionId session_id = 1;
+  uint64 bytes_written = 2;
+  uint32 window_throughput_kbps = 3;
+  uint32 pending_writes = 4;
+  uint64 sample_time_ms = 5;             // helper clock, relative to session start
+}
+
+message EventBatch {
+  SessionId session_id = 1;
+  repeated TimedEvent events = 2;        // discrete events accumulated since last batch
+  repeated ProgressUpdate progress = 3;
+}

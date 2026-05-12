@@ -53,6 +53,71 @@ add_custom_target(test_customization_generator
     COMMENT "Running customization generator tests"
 )
 
+
+# -----------------------------------------------------------------------
+# Privileged I/O PAL tests (phase 1a). No Qt dependency - the PAL is
+# Qt-free per design doc §8a.
+# -----------------------------------------------------------------------
+
+add_executable(privileged_writer_inprocess_test
+    privileged_writer_inprocess_test.cpp
+)
+
+target_link_libraries(privileged_writer_inprocess_test PRIVATE
+    Catch2::Catch2WithMain
+    privileged_io
+)
+
+target_include_directories(privileged_writer_inprocess_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(privileged_writer_inprocess_test PRIVATE cxx_std_20)
+target_compile_options(privileged_writer_inprocess_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+catch_discover_tests(privileged_writer_inprocess_test)
+
+add_custom_target(test_privileged_writer_inprocess
+    COMMAND privileged_writer_inprocess_test
+    DEPENDS privileged_writer_inprocess_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running privileged writer in-process backend tests"
+)
+
+# Fault-injection tests use the FaultInjectingBackend wrapper to
+# deterministically reproduce failure modes (eg. mid-stream EIO, the
+# Tahoe authopen-FD failure shape) without needing real hardware.
+add_executable(privileged_writer_fault_test
+    privileged_writer_fault_test.cpp
+)
+
+target_link_libraries(privileged_writer_fault_test PRIVATE
+    Catch2::Catch2WithMain
+    privileged_io
+)
+
+target_include_directories(privileged_writer_fault_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(privileged_writer_fault_test PRIVATE cxx_std_20)
+target_compile_options(privileged_writer_fault_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+catch_discover_tests(privileged_writer_fault_test)
+
+add_custom_target(test_privileged_writer_fault
+    COMMAND privileged_writer_fault_test
+    DEPENDS privileged_writer_fault_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running privileged writer fault-injection tests"
+)
+
 # Determine platform-specific file operations implementation for FAT partition test
 if(WIN32)
     set(PLATFORM_FILE_OPS
