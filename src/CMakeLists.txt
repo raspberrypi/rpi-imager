@@ -375,7 +375,8 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "secureboot_crypto_common.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
     "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp"
     "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "eeprom_repo_override.cpp"
-    "local_shim_backend.cpp" "privileged_io_glue.cpp")
+    "local_shim_backend.cpp" "privileged_io_glue.cpp"
+    "file_operations_benchmark.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
