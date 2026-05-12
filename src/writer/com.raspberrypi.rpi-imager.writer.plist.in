@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Production SMAppService daemon plist.
+
+  Installed at:
+    RpiImager.app/Contents/Library/LaunchDaemons/com.raspberrypi.rpi-imager.writer.plist
+
+  Loaded by SMAppService when the main app calls
+  [SMAppService daemonServiceWithPlistName:@"com.raspberrypi.rpi-imager.writer.plist"]
+  followed by registerAndReturnError:.
+
+  Both the daemon plist's `Label` and the helper binary's embedded
+  CFBundleIdentifier must equal "com.raspberrypi.rpi-imager.writer".
+  Both must also be signed by the same Team ID as the main app.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.raspberrypi.rpi-imager.writer</string>
+
+    <!--
+      Path to the helper binary, relative to the bundle root. SMAppService
+      resolves this against the *main app* bundle that contains the
+      LaunchDaemons directory.
+    -->
+    <key>BundleProgram</key>
+    <string>Contents/MacOS/rpi-imager-writer</string>
+
+    <!--
+      On-demand activation. The first XPC connection from the unprivileged
+      client wakes the helper; idle exit is governed by the helper itself
+      (or, if RunAtLoad were YES, by launchd).
+    -->
+    <key>MachServices</key>
+    <dict>
+        <key>com.raspberrypi.rpi-imager.writer</key>
+        <true/>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!--
+      Process-level resource limits. Helper is short-lived per-write
+      session; we keep these conservative.
+    -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>1024</integer>
+    </dict>
+
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>4096</integer>
+    </dict>
+
+    <!--
+      AssociatedBundleIdentifiers tells launchd this daemon belongs to
+      the main app, so it appears under the right entry in
+      System Settings > Login Items & Extensions > Allow in Background.
+    -->
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>com.raspberrypi.rpi-imager</string>
+    </array>
+</dict>
+</plist>

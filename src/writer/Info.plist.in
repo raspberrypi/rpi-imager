@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Embedded Info.plist for the rpi-imager-writer privileged helper.
+  Linked into the executable via -sectcreate __TEXT __info_plist so that
+  launchd / SMAppService can read the bundle identifier and version
+  directly from the Mach-O binary (no separate .plist file needed
+  alongside).
+
+  CFBundleIdentifier MUST match the Label key in the SMAppService daemon
+  plist that ships in Contents/Library/LaunchDaemons/.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.raspberrypi.rpi-imager.writer</string>
+
+    <key>CFBundleName</key>
+    <string>Raspberry Pi Imager Privileged Helper</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>Raspberry Pi Imager Privileged Helper</string>
+
+    <key>CFBundleVersion</key>
+    <string>@IMAGER_VERSION_STR@</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>@IMAGER_VERSION_STR@</string>
+
+    <key>CFBundleExecutable</key>
+    <string>rpi-imager-writer</string>
+
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Raspberry Pi Ltd. All rights reserved.</string>
+
+    <!-- Hardened runtime is required by SMAppService for daemons. -->
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+</dict>
+</plist>

@@ -118,6 +118,30 @@ add_custom_target(test_privileged_writer_fault
     COMMENT "Running privileged writer fault-injection tests"
 )
 
+# macOS XPC smoke test - manual integration test, deliberately NOT
+# discovered by CTest because it requires an out-of-band launchctl
+# bootstrap of the helper. Run manually:
+#   build/test/macos_xpc_smoke
+if(APPLE)
+    add_executable(macos_xpc_smoke
+        macos_xpc_smoke.cpp
+    )
+
+    target_link_libraries(macos_xpc_smoke PRIVATE
+        privileged_io
+    )
+
+    target_include_directories(macos_xpc_smoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_compile_features(macos_xpc_smoke PRIVATE cxx_std_20)
+    target_compile_options(macos_xpc_smoke PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+endif()
+
 # Determine platform-specific file operations implementation for FAT partition test
 if(WIN32)
     set(PLATFORM_FILE_OPS

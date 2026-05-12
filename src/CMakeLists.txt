@@ -212,6 +212,10 @@ include_directories(BEFORE .)
 # (rpi-imager-writer) will reuse.
 add_subdirectory(privileged_io)
 
+# Privileged helper binary. macOS-only at present; the subdirectory's
+# CMakeLists no-ops on other platforms. See design doc §4.1 / §8a.
+add_subdirectory(writer)
+
 # Test if we need libatomic
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles("
