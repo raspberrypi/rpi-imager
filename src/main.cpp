@@ -35,6 +35,7 @@
 #include <QtMath>
 #endif
 #include "platformquirks.h"
+#include "privileged_helper_diagnostic.h"
 #include "file_operations_benchmark.h"
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
@@ -350,6 +351,13 @@ int main(int argc, char *argv[])
         {"enable-telemetry", "Use default telemetry setting (clear override)"},
         {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"},
         {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"},
+        // Phase 1b proof-of-architecture: end-to-end privileged helper test.
+        // Installs the helper via SMAppService (prompting if needed),
+        // opens the given device, queries its size, optionally writes a
+        // 4 KB pattern + verifies, then exits. macOS-only.
+        {"test-privileged-helper", "Run privileged helper diagnostic against the given device path (macOS)", "device"},
+        {"test-privileged-helper-allow-write", "When set with --test-privileged-helper, also writes a 4 KB test pattern at offset 0 (DESTRUCTIVE)"},
+        {"test-privileged-helper-bulk", "When set with --test-privileged-helper-allow-write, also exercises the shared-memory bulk write path"},
         // Throughput benchmark: writes a configurable amount of zero
         // data through FileOperations::Create() so the platform factory
         // selection rules apply (env vars control which backend is used).
@@ -367,6 +375,28 @@ int main(int argc, char *argv[])
     // Note: This is NOT for passing image files - use --cli mode for that
     parser.addPositionalArgument("callback-url", "rpi-imager:// callback URL (internal use)", "[callback-url]");
     parser.process(app);
+
+#ifdef Q_OS_DARWIN
+    // Phase 1b: privileged helper end-to-end diagnostic. When invoked,
+    // we run the diagnostic in the foreground (no QML / GUI), print
+    // results, and exit. This is the smallest entry point that
+    // demonstrates the architecture working on someone else's Mac:
+    //
+    //   /Applications/Raspberry\ Pi\ Imager.app/Contents/MacOS/rpi-imager \
+    //       --test-privileged-helper /dev/disk7
+    //
+    // First invocation triggers SMAppService.register() which surfaces
+    // the "Allow in Background?" prompt. After approval, subsequent
+    // invocations open the device through the helper and report
+    // results.
+    if (parser.isSet("test-privileged-helper")) {
+        const QString device_qstr = parser.value("test-privileged-helper");
+        const bool allow_write = parser.isSet("test-privileged-helper-allow-write");
+        const bool exercise_bulk = parser.isSet("test-privileged-helper-bulk");
+        return rpi_imager::runPrivilegedHelperDiagnostic(
+            device_qstr.toStdString(), allow_write, exercise_bulk);
+    }
+#endif
 
     // Throughput benchmark. Same factory selection rules as the real
     // imager pipeline, so the env-var controlled backend choice
