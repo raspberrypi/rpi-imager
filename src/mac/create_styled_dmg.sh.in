@@ -139,7 +139,24 @@ if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNIN
             echo "Warning: Failed to sign dylib $dylib"
         }
     done
-    
+
+    # Sign the privileged helper executable (rpi-imager-writer).
+    # SMAppService requires the helper to be signed by the same Team ID
+    # as the main app, with hardened runtime enabled. We sign it before
+    # the parent bundle so the bundle's seal includes it.
+    HELPER_PATH="$DMG_APP_PATH/Contents/MacOS/rpi-imager-writer"
+    if [ -f "$HELPER_PATH" ]; then
+        echo "Signing privileged helper: $HELPER_PATH"
+        codesign --force --verify --verbose --sign "$SIGNING_IDENTITY" \
+                 --timestamp --options runtime "$HELPER_PATH" || {
+            echo "Error: Failed to sign privileged helper"
+            exit 1
+        }
+        echo "✓ Privileged helper signed"
+    else
+        echo "Note: no privileged helper found at $HELPER_PATH (skipping)"
+    fi
+
     # Sign the main app bundle
     echo "Signing main app bundle: $DMG_APP_PATH"
     
@@ -207,6 +224,70 @@ if [ ! -f "$FINAL_DMG_PATH" ]; then
 fi
 
 echo "✓ DMG created successfully: $FINAL_DMG_PATH"
+
+# Sign the DMG container itself if a signing identity is configured.
+# notarytool requires the submission to be signed; without this step
+# notarisation submission fails with "The signature of the binary is
+# invalid".
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
+    echo "Signing DMG container: $FINAL_DMG_PATH"
+    codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$FINAL_DMG_PATH" || {
+        echo "Error: Failed to sign DMG container"
+        exit 1
+    }
+    echo "✓ DMG container signed"
+fi
+
+# Pre-flight notarisation prerequisites check. Catches structural
+# problems before we burn time on a notarytool round-trip.
+preflight_notarisation_ready() {
+    local app="$1"
+    local helper="$app/Contents/MacOS/rpi-imager-writer"
+
+    # 1. App bundle deep-verifies.
+    if ! codesign --verify --deep --strict --verbose=0 "$app" 2>/dev/null; then
+        echo "PREFLIGHT FAIL: bundle does not deep-verify"
+        codesign --verify --deep --strict --verbose=2 "$app" || true
+        return 1
+    fi
+
+    # 2. Helper present + has hardened runtime.
+    if [ ! -f "$helper" ]; then
+        echo "PREFLIGHT FAIL: privileged helper missing at $helper"
+        return 1
+    fi
+    if ! codesign -dvv "$helper" 2>&1 | grep -q "flags=.*runtime"; then
+        echo "PREFLIGHT FAIL: helper not signed with hardened runtime"
+        codesign -dvv "$helper" 2>&1 | head -5
+        return 1
+    fi
+
+    # 3. Helper team identifier matches app team identifier.
+    local app_team helper_team
+    app_team=$(codesign -dvv "$app" 2>&1 | grep TeamIdentifier | awk -F= '{print $2}')
+    helper_team=$(codesign -dvv "$helper" 2>&1 | grep TeamIdentifier | awk -F= '{print $2}')
+    if [ "$app_team" != "$helper_team" ] || [ -z "$app_team" ]; then
+        echo "PREFLIGHT FAIL: app team ($app_team) != helper team ($helper_team)"
+        return 1
+    fi
+
+    # 4. SMAppService plist present.
+    if [ ! -f "$app/Contents/Library/LaunchDaemons/com.raspberrypi.rpi-imager.writer.plist" ]; then
+        echo "PREFLIGHT FAIL: SMAppService plist missing"
+        return 1
+    fi
+
+    return 0
+}
+
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
+    echo "Running notarisation pre-flight checks..."
+    if ! preflight_notarisation_ready "$DMG_APP_PATH"; then
+        echo "Error: pre-flight checks failed; refusing to submit to notarytool"
+        exit 1
+    fi
+    echo "✓ pre-flight passed"
+fi
 
 # Notarize and staple if requested
 if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_PROFILE" != "" ]; then

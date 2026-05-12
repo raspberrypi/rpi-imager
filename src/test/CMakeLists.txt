@@ -154,6 +154,10 @@ elseif(APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/file_operations_macos.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/macfile.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/macfile.cpp
+        # Stub for the helper-routed factory entry point; see file for
+        # rationale (avoids pulling privileged_io / protobuf into tests
+        # that only need a real-fd path).
+        ${CMAKE_CURRENT_SOURCE_DIR}/xpc_file_operations_stub.cpp
     )
 else()
     set(PLATFORM_FILE_OPS

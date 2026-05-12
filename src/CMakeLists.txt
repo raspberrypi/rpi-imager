@@ -569,6 +569,51 @@ endif()
 # Privileged I/O PAL — the same library is linked into every variant.
 target_link_libraries(${PROJECT_NAME} PRIVATE privileged_io)
 
+# Bundle the privileged helper into RpiImager.app on macOS. The
+# rpi-imager-writer target is added in src/writer/CMakeLists.txt; we
+# wire the post-build copy here, after the main rpi-imager target
+# exists, because POST_BUILD on rpi-imager-writer doesn't fire when
+# the helper itself is up-to-date.
+if(APPLE AND TARGET rpi-imager-writer)
+    add_dependencies(${PROJECT_NAME} rpi-imager-writer)
+
+    # Bundle copy. Earlier shape attached this as a POST_BUILD of
+    # ${PROJECT_NAME}, which left a stale helper in the bundle whenever
+    # only writer sources changed (the main app didn't re-link, so its
+    # POST_BUILD didn't fire). Use OUTPUT-driven custom commands instead
+    # so ninja tracks the bundled paths as real files with the helper
+    # binary + plist as their inputs: refresh whenever EITHER input is
+    # newer than the bundled copy.
+    add_custom_command(
+        OUTPUT "${RPI_IMAGER_WRITER_BUNDLED_HELPER_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/rpi-imager.app/Contents/MacOS"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:rpi-imager-writer>"
+            "${RPI_IMAGER_WRITER_BUNDLED_HELPER_PATH}"
+        DEPENDS rpi-imager-writer
+        COMMENT "Bundling rpi-imager-writer into RpiImager.app"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT "${RPI_IMAGER_WRITER_BUNDLED_PLIST_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/rpi-imager.app/Contents/Library/LaunchDaemons"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${RPI_IMAGER_WRITER_SMAPP_PLIST_GENERATED}"
+            "${RPI_IMAGER_WRITER_BUNDLED_PLIST_PATH}"
+        DEPENDS "${RPI_IMAGER_WRITER_SMAPP_PLIST_GENERATED}"
+        COMMENT "Bundling SMAppService plist into RpiImager.app"
+        VERBATIM
+    )
+    add_custom_target(rpi_imager_bundle_helper ALL
+        DEPENDS
+            "${RPI_IMAGER_WRITER_BUNDLED_HELPER_PATH}"
+            "${RPI_IMAGER_WRITER_BUNDLED_PLIST_PATH}"
+    )
+    add_dependencies(${PROJECT_NAME} rpi_imager_bundle_helper)
+endif()
+
 # Testing
 # Restore our testing option after dependencies are configured
 if(DEFINED _IMAGER_BUILD_TESTING)

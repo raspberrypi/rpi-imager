@@ -20,6 +20,8 @@ set(PLATFORM_SOURCES
     mac/secureboot_crypto_macos.cpp
     drivelist/drivelist_darwin.mm
     mac/file_operations_macos.cpp
+    mac/xpc_file_operations.h
+    mac/xpc_file_operations.mm
     mac/platformquirks_macos.mm
     mac/mac_suspend_inhibitor.cpp
 )
