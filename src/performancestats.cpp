@@ -491,6 +491,7 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::RpibootProtocol: return "rpibootProtocol";
         case EventType::RpibootFastbootWait: return "rpibootFastbootWait";
         case EventType::FastbootDeviceOpen: return "fastbootDeviceOpen";
+        case EventType::HelperSessionSummary: return "helperSessionSummary";
 
         default: return "unknown";
     }

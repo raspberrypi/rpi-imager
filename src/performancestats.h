@@ -119,6 +119,11 @@ public:
         RpibootFastbootWait,     // Polling for fastboot device to appear
         FastbootDeviceOpen,      // Opening fastboot USB device
 
+        // Privileged-helper telemetry (§7a). Aggregates helper-side timing
+        // returned by closeSession - per-write pwrite latency, fsync time,
+        // prepareDevice time, hashDevice time. Emitted once per session.
+        HelperSessionSummary,
+
         _Count                 // Sentinel for array sizing
     };
     Q_ENUM(EventType)
