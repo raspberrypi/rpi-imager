@@ -249,7 +249,8 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
     "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
     "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp"
-    "local_shim_backend.cpp" "privileged_io_glue.cpp")
+    "local_shim_backend.cpp" "privileged_io_glue.cpp"
+    "file_operations_benchmark.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)

@@ -35,6 +35,7 @@
 #include <QtMath>
 #endif
 #include "platformquirks.h"
+#include "file_operations_benchmark.h"
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #endif
@@ -348,13 +349,41 @@ int main(int argc, char *argv[])
         {"disable-telemetry", "Disable telemetry (persist setting)"},
         {"enable-telemetry", "Use default telemetry setting (clear override)"},
         {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"},
-        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"}
+        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"},
+        // Throughput benchmark: writes a configurable amount of zero
+        // data through FileOperations::Create() so the platform factory
+        // selection rules apply (env vars control which backend is used).
+        // DESTRUCTIVE - overwrites the start of the target device.
+        {"benchmark-write", "Run FileOperations write-throughput benchmark against the given device (DESTRUCTIVE)", "device"},
+        {"benchmark-size-mb", "Total bytes to write in --benchmark-write mode (default 1024 MiB)", "mb", "1024"},
+        {"benchmark-chunk-kb", "Per-write chunk size in --benchmark-write mode (default 16384 KiB)", "kb", "16384"},
+        {"benchmark-queue-depth", "Async queue depth in --benchmark-write mode (default 8; 1 = synchronous)", "n", "8"},
+        {"benchmark-no-direct-io", "Disable direct I/O in --benchmark-write mode"},
+        {"benchmark-output", "Path to write a JSON performance capture (per-write timings, config, audit-log tail)", "path", ""},
+        {"benchmark-verify", "After writing, also time a verify pass (helper-side SHA-256 when available)"}
     });
 
     // Accept rpi-imager:// callback URLs as positional argument (used by callback relay on Windows)
     // Note: This is NOT for passing image files - use --cli mode for that
     parser.addPositionalArgument("callback-url", "rpi-imager:// callback URL (internal use)", "[callback-url]");
     parser.process(app);
+
+    // Throughput benchmark. Same factory selection rules as the real
+    // imager pipeline, so the env-var controlled backend choice
+    // (RPI_IMAGER_USE_LEGACY_AUTHOPEN) determines which path is timed.
+    if (parser.isSet("benchmark-write")) {
+        rpi_imager::BenchmarkOptions opts;
+        opts.device_path = parser.value("benchmark-write").toStdString();
+        opts.total_bytes = (std::size_t)parser.value("benchmark-size-mb").toULongLong()
+                            * 1024ull * 1024ull;
+        opts.chunk_bytes = (std::size_t)parser.value("benchmark-chunk-kb").toULongLong()
+                            * 1024ull;
+        opts.queue_depth = parser.value("benchmark-queue-depth").toInt();
+        opts.direct_io   = !parser.isSet("benchmark-no-direct-io");
+        opts.output_path = parser.value("benchmark-output").toStdString();
+        opts.verify_after_write = parser.isSet("benchmark-verify");
+        return rpi_imager::runFileOperationsBenchmark(opts);
+    }
 
 
     const QString repoVal = parser.value("repo");
