@@ -105,9 +105,19 @@ set(PRIVILEGED_IO_SOURCES
     ${PROTO_GENERATED_HDR}
 )
 
-# macOS-specific sources (the XPC backend) are appended by a
-# later commit alongside the helper binary - they share the NSXPC
-# protocol header with the helper.
+if(APPLE)
+    list(APPEND PRIVILEGED_IO_SOURCES
+        backends/macos_xpc.h
+        backends/macos_xpc.mm
+        # The protocol header + constants are shared with the helper
+        # binary (under src/writer/). Compiling the .m file into both
+        # targets gives each process its own copy of the constant; the
+        # alternative would be a third tiny shared library. Two
+        # compilations of a one-line .m is the cheaper option.
+        ../writer/server/mac/RpiImagerWriterProtocol.h
+        ../writer/server/mac/RpiImagerWriterProtocol.m
+    )
+endif()
 
 add_library(privileged_io STATIC ${PRIVILEGED_IO_SOURCES})
 
