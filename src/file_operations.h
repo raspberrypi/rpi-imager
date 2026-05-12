@@ -313,6 +313,74 @@ class FileOperations {
   // Prepare for sequential read (e.g., verification)
   // Invalidates cache and enables read-ahead hints for optimal sequential read performance
   virtual void PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) = 0;
+
+  // Result of FastVerifySha256.
+  //   supported=false  - this implementation has no fast path; caller should
+  //                      read the device and hash client-side as before
+  //   supported=true,
+  //   error=kSuccess   - digest is the 32-byte SHA-256 of (prefix || device range)
+  //   supported=true,
+  //   error=other      - implementation tried and failed (real I/O error)
+  struct FastVerifyResult {
+    bool        supported = false;
+    FileError   error = FileError::kSuccess;
+    std::string digest;  // raw 32-byte SHA-256 on success
+  };
+
+  // Helper-side per-session telemetry. macOS XpcFileOperations populates
+  // this from the rpi-imager-writer's closeSession reply (§7a); other
+  // implementations leave `valid = false`. Read after Close() succeeds.
+  struct HelperSessionStats {
+    bool          valid = false;
+    std::uint64_t bytes_written = 0;
+    std::uint64_t duration_ms = 0;
+    std::uint32_t write_count = 0;
+    std::uint32_t min_write_latency_us = 0;
+    std::uint32_t avg_write_latency_us = 0;
+    std::uint32_t max_write_latency_us = 0;
+    std::uint64_t total_fsync_us = 0;
+    std::uint32_t fsync_count = 0;
+    std::uint64_t prepare_device_us = 0;
+    std::uint64_t hash_device_us = 0;
+  };
+
+  // Returns whatever was captured during the most recent Close() (or
+  // an unpopulated struct if the platform has no helper-side telemetry).
+  // Default returns empty so non-helper backends require no change.
+  virtual HelperSessionStats GetLastSessionStats() const { return {}; }
+
+  // Optional fast-path verify: compute SHA-256(prefix || device[offset..offset+length])
+  // *inside* the underlying I/O layer so the data never crosses the IPC
+  // boundary. Returned digest matches what client-side hashing would
+  // produce. Implementations that can't do this (legacy in-process,
+  // tests) return `supported = false`; callers must then fall back to
+  // the read-and-hash loop in DownloadThread::_verify().
+  virtual FastVerifyResult FastVerifySha256(const std::uint8_t* /*prefix*/,
+                                              std::size_t /*prefix_len*/,
+                                              std::uint64_t /*device_offset*/,
+                                              std::uint64_t /*length*/) {
+    return {};  // supported=false, default
+  }
+
+  // Pre-image scrub: zero the first MB and (optionally) the last MB of the
+  // device, then fsync. Returns kSuccess if both succeeded.
+  //
+  // The default implementation runs the legacy in-process sequence
+  // (Seek + WriteSequential + Flush + ForceSync) so platforms with a
+  // direct fd path keep their existing behaviour. Implementations whose
+  // writes route through a privileged helper (e.g. XpcFileOperations on
+  // macOS) override this to delegate the scrub *inside* the helper as a
+  // single transaction, which avoids races between the unmount/open/zero
+  // sequence and other kernel actors during the prepare window.
+  //
+  // `device_size` is the total device length in bytes, as returned by
+  // GetSize(); used to locate the last MB.
+  // `zero_last_mb=false` skips the end-of-device scrub (used when callers
+  // suspect counterfeit media).
+  //
+  // After this call the file position is reset to 0.
+  virtual FileError PrepareDevice(std::uint64_t device_size,
+                                    bool zero_last_mb = true);
   
   // Get platform-specific file handle (for compatibility with existing code)
   virtual int GetHandle() const = 0;

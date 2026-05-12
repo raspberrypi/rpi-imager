@@ -79,6 +79,16 @@ class MacOSFileOperations : public FileOperations {
   bool SetAsyncQueueDepth(int depth) override;
   int GetAsyncQueueDepth() const override { return async_queue_depth_; }
   bool IsAsyncIOSupported() const override { return true; }
+
+  // In-process equivalent of XpcFileOperations::FastVerifySha256.
+  // pread + CommonCrypto SHA-256 on the open fd. No IPC. Provided
+  // primarily so the --benchmark-verify mode can compare the helper-
+  // routed and legacy paths apples-to-apples; the production verify
+  // code path on legacy already does its own read-and-hash loop.
+  FastVerifyResult FastVerifySha256(const std::uint8_t* prefix,
+                                      std::size_t prefix_len,
+                                      std::uint64_t device_offset,
+                                      std::uint64_t length) override;
   FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
                                   AsyncWriteCallback callback = nullptr) override;
   int GetPendingWriteCount() const override { return pending_writes_.load(); }
