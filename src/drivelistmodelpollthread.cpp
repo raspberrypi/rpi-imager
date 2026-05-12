@@ -1,6 +1,16 @@
 #include "drivelistmodelpollthread.h"
 #include <QElapsedTimer>
 #include <QDebug>
+
+#ifdef Q_OS_DARWIN
+// §5: route block-device enumeration through the privileged helper when
+// the macOS XPC backend is in use. Falls back to the in-process
+// Drivelist::ListStorageDevices() path if the helper isn't reachable
+// or returns an error.
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
+#include "privileged_io/backends/macos_xpc.h"
+#endif
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -39,12 +49,49 @@ void DriveListModelPollThread::stop()
 {
     _terminate = true;
     _modeChanged.wakeAll();  // Wake thread to check terminate flag
+#ifdef Q_OS_DARWIN
+    // Best-effort unsubscribe; if the connection is already torn down
+    // the helper's invalidation handler cleans up its tracking anyway.
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    (void)w.unsubscribeDrives();
+#endif
 }
 
 void DriveListModelPollThread::start()
 {
     _terminate = false;
+#ifdef Q_OS_DARWIN
+    // Subscribe for push notifications on macOS. Connection lifecycle
+    // is handled by the backend; we just install our wake callback and
+    // ignore failures (the legacy polling path keeps working at full
+    // 1-second cadence).
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    if (w.backend() == ::rpi_imager::privileged::BackendKind::MacOSXpc) {
+        auto* self = this;
+        auto r = w.subscribeDrives(
+            [self](const ::rpi_imager::privileged::proto::DriveChange&) {
+                // The callback fires on a background queue. Just poke
+                // the poll thread; it'll re-enumerate on the next loop
+                // iteration.
+                self->requestImmediateRescan();
+            });
+        if (!r.ok) {
+            qDebug() << "[drivelist] subscribeDrives failed:"
+                     << QString::fromStdString(r.error.detail())
+                     << "- falling back to pure polling";
+        } else {
+            qDebug() << "[drivelist] subscribed to helper push notifications";
+        }
+    }
+#endif
     QThread::start();
+}
+
+void DriveListModelPollThread::requestImmediateRescan()
+{
+    QMutexLocker lock(&_mutex);
+    _rescanRequested = true;
+    _modeChanged.wakeAll();
 }
 
 void DriveListModelPollThread::setScanMode(ScanMode mode)
@@ -128,7 +175,40 @@ void DriveListModelPollThread::run()
         
         // Perform the scan
         t1.start();
-        auto driveList = Drivelist::ListStorageDevices();
+
+        std::vector<Drivelist::DeviceDescriptor> driveList;
+        bool drivelistFromHelper = false;
+#ifdef Q_OS_DARWIN
+        // Route through the helper when running with the macOS XPC
+        // backend so all privileged device-touch operations go through
+        // a single boundary. Fallback to the legacy in-process path on
+        // any *error* (helper not yet approved, transient XPC error,
+        // etc.) - but a successful enumeration that returns zero
+        // devices is honoured as-is so we don't double-enumerate.
+        {
+            auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+            if (w.backend() == ::rpi_imager::privileged::BackendKind::MacOSXpc) {
+                auto* xpc = dynamic_cast<
+                    ::rpi_imager::privileged::backends::MacOSXpcBackend*>(&w);
+                if (xpc) {
+                    auto r = xpc->listDevicesNow();
+                    if (r.ok) {
+                        driveList = std::move(r.value);
+                        drivelistFromHelper = true;
+                    } else {
+                        qDebug() << "[drivelist] helper listDevicesNow failed:"
+                                 << QString::fromStdString(r.error.detail())
+                                 << "- falling back to in-process enumeration";
+                    }
+                }
+            }
+        }
+        if (!drivelistFromHelper) {
+            driveList = Drivelist::ListStorageDevices();
+        }
+#else
+        driveList = Drivelist::ListStorageDevices();
+#endif
         if (_rpibootEnabled.load(std::memory_order_relaxed)) {
             auto rpibootDevices = rpiboot::scanRpibootDevices();
             driveList.insert(driveList.end(), rpibootDevices.begin(), rpibootDevices.end());
@@ -264,17 +344,22 @@ void DriveListModelPollThread::run()
         if (elapsed > 1000)
             qDebug() << "Enumerating drives took a long time:" << elapsed/1000.0 << "seconds";
         
-        // Sleep based on current mode
-        int sleepSeconds = (currentMode == ScanMode::Slow) ? 5 : 1;
-        
-        // Use interruptible sleep - check mode periodically
-        for (int i = 0; i < sleepSeconds && !_terminate; ++i) {
+        // Sleep based on current mode. Sleep on the wait condition so
+        // a push notification (requestImmediateRescan) or a mode change
+        // can short-circuit the wait and re-poll immediately.
+        const int sleepMs = (currentMode == ScanMode::Slow) ? 5000 : 1000;
+        {
             QMutexLocker lock(&_mutex);
-            if (_scanMode == ScanMode::Paused) {
-                break;  // Mode changed to paused, exit sleep early
+            // If a rescan was requested while we were polling, honour
+            // it without waiting at all.
+            if (_rescanRequested) {
+                _rescanRequested = false;
+            } else if (!_terminate && _scanMode != ScanMode::Paused) {
+                _modeChanged.wait(&_mutex, sleepMs);
+                // The flag is consumed here so the next iteration
+                // performs exactly one extra poll, not a flood.
+                _rescanRequested = false;
             }
-            lock.unlock();
-            QThread::sleep(1);
         }
     }
 }

@@ -88,6 +88,17 @@ public:
      */
     void setFastbootScanEnabled(bool enabled);
 
+    /**
+     * @brief Wake the poll loop immediately to refresh the drive list.
+     *
+     * Thread-safe. Used by the privileged-helper drive-change subscription
+     * on macOS to deliver "push" updates - the helper notifies us that
+     * DiskArbitration saw an appearance/disappearance, and we respond
+     * by short-circuiting the next sleep so the device picker updates
+     * within milliseconds instead of within the polling cadence.
+     */
+    void requestImmediateRescan();
+
 protected:
     bool _terminate;
     std::atomic<bool> _rpibootEnabled{false};
@@ -95,6 +106,7 @@ protected:
     ScanMode _scanMode;
     mutable QMutex _mutex;
     QWaitCondition _modeChanged;
+    bool _rescanRequested = false;  // set by requestImmediateRescan, read inside _mutex
 
     // Fastboot device cache — lives on poll thread, no mutex needed
     struct FastbootStorageInfo {
