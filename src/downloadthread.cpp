@@ -11,6 +11,7 @@
 #include "systemmemorymanager.h"
 #include "timeout_utils.h"
 #include "platformquirks.h"
+#include "privileged_io_glue.h"
 #include "drivelist/drivelist.h"
 #include <fstream>
 #include <sstream>
@@ -198,16 +199,23 @@ bool DownloadThread::_openAndPrepareDevice()
         emit preparationStatusUpdate(tr("Unmounting drive..."));
         unmountTimer.start();
         // Use block device path for unmount (e.g., /dev/disk on macOS, not /dev/rdisk)
-        // DADiskUnmount with kDADiskUnmountOptionWhole automatically unmounts 
+        // DADiskUnmount with kDADiskUnmountOptionWhole automatically unmounts
         // all child volumes (APFS containers, partitions, etc.)
         QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
-        qDebug() << "Unmounting:" << unmountPath;
-        PlatformQuirks::DiskResult unmountResult = PlatformQuirks::unmountDisk(unmountPath);
-        bool unmountSuccess = (unmountResult == PlatformQuirks::DiskResult::Success);
+        qDebug() << "Unmounting via PAL:" << unmountPath;
+        // Phase 1a migration: route through IPrivilegedWriter rather than
+        // calling PlatformQuirks::unmountDisk directly. The LocalShimBackend
+        // currently delegates back to PlatformQuirks; later phases swap in
+        // a privileged-helper backend without touching this call site.
+        auto& writer = rpi_imager::getProcessPrivilegedWriter();
+        auto unmountResult = writer.unmount(unmountPath.toStdString());
+        bool unmountSuccess = unmountResult.ok;
         emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), unmountSuccess);
-        
+
         if (!unmountSuccess) {
-            qDebug() << "Unmount failed with result:" << static_cast<int>(unmountResult);
+            qDebug() << "Unmount failed:"
+                     << QString::fromStdString(unmountResult.error.detail())
+                     << "(code" << unmountResult.error.code() << ")";
 #ifdef Q_OS_DARWIN
             emit error(tr("Failed to unmount disk '%1'. Please close any applications using the disk and try again.").arg(unmountPath));
 #else
@@ -450,109 +458,68 @@ bool DownloadThread::_openAndPrepareDevice()
 #endif
 
 #ifndef Q_OS_WIN
-    // Zero out MBR using unified FileOperations
+    // Zero out MBR via unified FileOperations::PrepareDevice. On macOS
+    // (XpcFileOperations) this is a single privileged call that runs
+    // both scrubs + fsync inside the helper, atomically; on other
+    // platforms it falls back to the in-process Seek/Write/Flush/Sync
+    // sequence via the default implementation in file_operations.cpp.
     QElapsedTimer mbrTimer;
     mbrTimer.start();
-    
+
     std::uint64_t knownsize = 0;
     rpi_imager::FileError sizeResult = _file->GetSize(knownsize);
     if (sizeResult != rpi_imager::FileError::kSuccess) {
         emit error(_fileErrorToString(sizeResult, tr("getting device size")));
         return false;
     }
-    
-    // Use aligned buffer for O_DIRECT compatibility on Linux
-    // O_DIRECT requires buffers to be aligned to the filesystem's logical block size
-    constexpr size_t emptyMBSize = 1024 * 1024;
-    rpi_imager::AlignedBuffer emptyMB(emptyMBSize);
-    if (!emptyMB) {
-        emit error(tr("Failed to allocate buffer for MBR zeroing.\n\n"
-                     "The system may be low on memory."));
-        return false;
-    }
-    
-    emit preparationStatusUpdate(tr("Zero'ing out first and last MB of drive..."));
-    qDebug() << "Zeroing out first and last MB of drive";
-    _timer.start();
 
-    rpi_imager::FileError mbrWriteResult = _file->WriteSequential(emptyMB.data(), emptyMBSize);
-    rpi_imager::FileError mbrFlushResult = (mbrWriteResult == rpi_imager::FileError::kSuccess) ? _file->Flush() : mbrWriteResult;
-    if (mbrWriteResult != rpi_imager::FileError::kSuccess || mbrFlushResult != rpi_imager::FileError::kSuccess)
-    {
-        rpi_imager::FileError errorToReport = (mbrWriteResult != rpi_imager::FileError::kSuccess) ? mbrWriteResult : mbrFlushResult;
-        emit error(_fileErrorToString(errorToReport, tr("preparing storage device")));
-        return false;
-    }
-    qint64 firstMBMs = _timer.elapsed();
-    qDebug() << "  First MB + flush took" << firstMBMs << "ms";
-
-    // Zero out last part of card (may have GPT backup table)
-    // This operation can hang indefinitely on counterfeit SD cards that report
-    // a fake capacity larger than their actual storage, so we use a timeout.
-    // Can be skipped via debug option for users with counterfeit cards.
-    if (_debugSkipEndOfDevice)
-    {
+    const bool zeroLastMb = !_debugSkipEndOfDevice;
+    if (_debugSkipEndOfDevice) {
         qDebug() << "Skipping last MB zeroing (debug: skip end-of-device operations for counterfeit card support)";
     }
-    else if (knownsize > emptyMBSize)
-    {
-        _timer.restart();
-        emit preparationStatusUpdate(tr("Zero'ing out end of drive..."));
-        
-        // Capture needed values for the lambda
-        auto file = _file.get();
-        const uint8_t* bufferData = emptyMB.data();
-        uint64_t seekPosition = knownsize - emptyMBSize;
-        
-        // Write to end of device can hang on counterfeit cards with fake capacity
-        // Use timeout to detect counterfeit cards with fake capacity
-        int lastMBResultInt = 0;
-        auto timeoutResult = runWithTimeout(
-            [file, seekPosition, bufferData, emptyMBSize]() {
-                if (file->Seek(seekPosition) != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kSeekError);
-                if (file->WriteSequential(bufferData, emptyMBSize) != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kWriteError);
-                if (file->Flush() != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kFlushError);
-                if (file->ForceSync() != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kSyncError);
-                return static_cast<int>(rpi_imager::FileError::kSuccess);
-            },
-            lastMBResultInt,
-            TimeoutConfig(kHardTimeoutSeconds).withCancelFlag(&_cancelled)
-        );
-        
-        if (timeoutResult == TimeoutResult::Cancelled) {
-            qDebug() << "Last MB write cancelled";
-            return false;
-        }
-        
-        if (timeoutResult == TimeoutResult::TimedOut) {
-            emit error(tr("Timeout writing to end of storage device.\n\n"
-                          "This may indicate a counterfeit SD card with fake capacity.\n\n"
-                          "Please try a different storage device."));
-            return false;
-        }
-        
-        auto lastMBResult = static_cast<rpi_imager::FileError>(lastMBResultInt);
-        if (lastMBResult != rpi_imager::FileError::kSuccess) {
-            emit error(tr("Write error while trying to zero out last part of card.\n\n"
-                          "This could indicate the card is advertising wrong capacity "
-                          "(possible counterfeit).\n\n"
-                          "Please try a different storage device."));
-            return false;
-        }
-        qDebug() << "  Last MB + flush + sync took" << _timer.elapsed() << "ms";
+
+    emit preparationStatusUpdate(tr("Zero'ing out first and last MB of drive..."));
+    qDebug() << "Zeroing out first and last MB of drive";
+
+    auto file = _file.get();
+    int prepResultInt = 0;
+    auto timeoutResult = runWithTimeout(
+        [file, knownsize, zeroLastMb]() {
+            return static_cast<int>(file->PrepareDevice(knownsize, zeroLastMb));
+        },
+        prepResultInt,
+        TimeoutConfig(kHardTimeoutSeconds).withCancelFlag(&_cancelled)
+    );
+
+    if (timeoutResult == TimeoutResult::Cancelled) {
+        qDebug() << "MBR zero cancelled";
+        return false;
     }
-    _file->Seek(0);
+    if (timeoutResult == TimeoutResult::TimedOut) {
+        emit error(tr("Timeout writing to end of storage device.\n\n"
+                      "This may indicate a counterfeit SD card with fake capacity.\n\n"
+                      "Please try a different storage device."));
+        return false;
+    }
+
+    auto prepResult = static_cast<rpi_imager::FileError>(prepResultInt);
+    if (prepResult != rpi_imager::FileError::kSuccess) {
+        emit error(tr("Write error while trying to zero out last part of card.\n\n"
+                      "This could indicate the card is advertising wrong capacity "
+                      "(possible counterfeit).\n\n"
+                      "Please try a different storage device."));
+        return false;
+    }
+
     qint64 mbrTotalMs = mbrTimer.elapsed();
     qDebug() << "Done zero'ing out start and end of drive. Total MBR prep:" << mbrTotalMs << "ms";
     
-    // Emit MBR zeroing performance event with detailed breakdown
-    QString mbrMetadata = QString("first_mb_ms: %1; last_mb_ms: %2; device_size_mb: %3")
-        .arg(firstMBMs)
-        .arg(_timer.elapsed())  // Last MB timing (from last _timer.restart)
+    // Emit MBR zeroing performance event. PrepareDevice does first +
+    // last MB + fsync as a single op (the helper measures sub-phases on
+    // its side); from here we only have the total.
+    QString mbrMetadata = QString("total_ms: %1; zero_last_mb: %2; device_size_mb: %3")
+        .arg(mbrTotalMs)
+        .arg(zeroLastMb ? "yes" : "no")
         .arg(knownsize / (1024 * 1024));
     emit eventDriveMbrZeroing(static_cast<quint32>(mbrTotalMs), true, mbrMetadata);
 #endif
@@ -1596,10 +1563,36 @@ void DownloadThread::_closeFiles()
 {
     QElapsedTimer closeTimer;
     closeTimer.start();
-    
+
     // Close unified file operations
     if (_file && _file->IsOpen()) {
         _file->Close();
+
+        // §7a helper-side session telemetry, if the backend captured it
+        // during Close (currently only macOS XpcFileOperations).
+        auto hss = _file->GetLastSessionStats();
+        if (hss.valid) {
+            // Format as a semicolon-separated key:value string so the
+            // existing PerformanceStats exporter, which treats event
+            // metadata as opaque, can include it verbatim.
+            QString meta = QString(
+                    "writeCount:%1; minLatencyUs:%2; avgLatencyUs:%3; "
+                    "maxLatencyUs:%4; fsyncUs:%5; fsyncCount:%6; "
+                    "prepareDeviceUs:%7; hashDeviceUs:%8; "
+                    "bytesWritten:%9; helperDurationMs:%10")
+                .arg(hss.write_count)
+                .arg(hss.min_write_latency_us)
+                .arg(hss.avg_write_latency_us)
+                .arg(hss.max_write_latency_us)
+                .arg(hss.total_fsync_us)
+                .arg(hss.fsync_count)
+                .arg(hss.prepare_device_us)
+                .arg(hss.hash_device_us)
+                .arg(static_cast<qulonglong>(hss.bytes_written))
+                .arg(static_cast<qulonglong>(hss.duration_ms));
+            emit eventHelperSessionSummary(
+                static_cast<quint32>(hss.duration_ms), meta);
+        }
     }
 #ifdef Q_OS_WIN
     if (_volumeFile && _volumeFile->IsOpen()) {
@@ -1876,13 +1869,65 @@ bool DownloadThread::_verify()
     _verifyTotal = _file->Tell();
     _verifyThroughputBytes = 0;
     _verifyThroughputTimer.start();
-    
+
+    QElapsedTimer t1;
+    t1.start();
+
+    // Fast path: ask the FileOperations impl to hash the device range
+    // itself. On the macOS helper-routed path this hashes inside the
+    // helper - no data crosses the XPC boundary, just the 32-byte
+    // digest. Implementations that don't support this (legacy paths,
+    // tests) return supported=false and we fall through to the
+    // read-and-hash loop below.
+    //
+    // Layout of the data being hashed must match the write-time hash:
+    //   firstBlock (held in client memory, written to disk last) ||
+    //   device[firstBlockSize..verifyTotal]
+    {
+        const std::uint8_t* prefix = _firstBlock
+            ? reinterpret_cast<const std::uint8_t*>(_firstBlock)
+            : nullptr;
+        const std::size_t prefix_len = _firstBlock
+            ? (std::size_t)_firstBlockSize
+            : 0;
+        const std::uint64_t device_off = (std::uint64_t)_firstBlockSize;
+        const std::uint64_t device_len = (std::uint64_t)_verifyTotal - device_off;
+
+        auto fast = _file->FastVerifySha256(prefix, prefix_len,
+                                              device_off, device_len);
+        if (fast.supported && fast.error == rpi_imager::FileError::kSuccess) {
+            QByteArray helper_digest(fast.digest.data(),
+                                       (int)fast.digest.size());
+            QByteArray write_digest = _writehash.result();
+            qDebug() << "Fast-verify hash:" << helper_digest.toHex();
+            qDebug() << "Fast-verify done in" << t1.elapsed() / 1000.0 << "seconds";
+            const bool match = (helper_digest == write_digest);
+            emit eventVerify(static_cast<quint32>(t1.elapsed()), match,
+                             write_digest.toHex(), helper_digest.toHex());
+            _lastVerifyNow.store(_verifyTotal.load());
+            _onVerifyProgress();
+            if (match) return true;
+            // Hash mismatch - fall through with the usual error
+            // emission. We don't fall back to the slow loop here;
+            // mismatch is mismatch.
+            DownloadThread::_onDownloadError(tr("Verification failed.<br>"
+                                                "Contents of storage did not match what was written to it."));
+            return false;
+        }
+        if (fast.supported && fast.error != rpi_imager::FileError::kSuccess) {
+            // Real I/O error during fast verify. Surface it; don't
+            // silently fall back to slow path.
+            qWarning() << "FastVerifySha256 reported error" << (int)fast.error;
+            DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
+                                                "SD card may be broken."));
+            return false;
+        }
+        // fast.supported == false → fall through to read-and-hash.
+    }
+
     // Use adaptive buffer size based on file size and system memory for optimal verification performance
     size_t verifyBufferSize = SystemMemoryManager::instance().getAdaptiveVerifyBufferSize(_verifyTotal);
     char *verifyBuf = (char *) qMallocAligned(verifyBufferSize, 4096);
-    
-    QElapsedTimer t1;
-    t1.start();
     
     qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
              << _verifyTotal/(1024*1024) << "MB image";

@@ -211,6 +211,12 @@ signals:
     void eventPartitionTableWrite(quint32 durationMs, bool success);  // MBR/partition table write
     void eventFatPartitionSetup(quint32 durationMs, bool success);    // FAT partition parsing
     void eventDeviceClose(quint32 durationMs, bool success);          // Device handle close
+
+    // §7a per-session telemetry from the privileged helper (macOS). The
+    // metadata is a semicolon-separated key:value sequence that
+    // PerformanceStats records verbatim against helperSessionSummary,
+    // so the existing exporter picks it up without further changes.
+    void eventHelperSessionSummary(quint32 durationMs, QString metadata);
     void eventNetworkRetry(quint32 sleepMs, QString metadata);        // Network retry with reason
     void eventNetworkConnectionStats(QString metadata);               // CURL connection timing stats
     void eventDeviceIOTimeout(quint32 pendingWrites, QString metadata); // Device failed to complete I/O
