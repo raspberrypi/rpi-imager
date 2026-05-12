@@ -117,7 +117,36 @@ class MacOSFileOperations : public FileOperations {
   std::uint64_t next_write_id_;
   mutable std::mutex pending_writes_mutex_;
   std::map<std::uint64_t, PendingAsyncWrite> pending_writes_map_;
-  
+
+  // ---- Alignment fix-up for /dev/rdisk* I/O ----------------------------
+  //
+  // macOS raw block devices (/dev/rdisk*) reject pwrite()/read()/pread()
+  // with EINVAL when the length isn't a multiple of the logical block
+  // size. libarchive's zstd decompressor in particular emits chunks of
+  // arbitrary length; without intervention the write fails mid-stream
+  // ("Error writing to device", typically partway through a .img.zst).
+  //
+  // For writes we coalesce unaligned residue into a per-instance tail
+  // buffer so emitted pwrites are always aligned; the trailing partial
+  // block is committed via read-modify-write on Flush/ForceSync/Close.
+  // For reads we round the syscall length up to the next block, then
+  // only return the originally-requested bytes to the caller.
+  std::uint32_t logical_block_size_ = 512;
+  mutable std::mutex tail_mutex_;
+  std::vector<std::uint8_t> tail_bytes_;   // 0..(BS-1) bytes
+  std::uint64_t tail_offset_ = 0;          // device offset where tail belongs
+
+  // Aligned write: takes the alignment lock, prepends any contiguous
+  // tail to (data,size), pwrites the block-aligned portion at offset,
+  // stashes the new residue. Returns the logical bytes committed
+  // (== size on success, regardless of how it was decomposed) or -1
+  // with errno on the underlying pwrite failure.
+  ssize_t PwriteAligned(const std::uint8_t* data, std::size_t size,
+                          std::uint64_t offset);
+  // Flush any pending tail via read-modify-write. Called from Flush /
+  // ForceSync / Close. 0 on success, -1 with errno on I/O failure.
+  int FlushAlignTail();
+
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
   
   // Helper to determine if path is a block device

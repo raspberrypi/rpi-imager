@@ -189,6 +189,16 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
       }
     }
 #endif
+    // Cache the logical block size so the alignment fix-up below
+    // doesn't ioctl on every write. /dev/rdisk* requires pwrite/pread
+    // lengths to be a multiple of this value.
+    {
+      uint32_t bs = 512;
+      if (ioctl(fd_, DKIOCGETBLOCKSIZE, &bs) == 0 && bs > 0) {
+        logical_block_size_ = bs;
+      }
+      tail_bytes_.reserve(logical_block_size_);
+    }
     // macOS doesn't expose queue depth directly; leave suggested_queue_depth as 0
 
     std::cout << "Successfully opened device with authorization, fd=" << fd_
@@ -292,7 +302,12 @@ FileError MacOSFileOperations::GetSize(std::uint64_t& size) {
 FileError MacOSFileOperations::Close() {
   // Wait for any pending async writes
   WaitForPendingWrites();
-  
+
+  // Commit any residual unaligned tail via RMW so the on-disk image
+  // is complete before fd close. Best-effort - log but don't surface,
+  // matching the rest of Close()'s error handling.
+  if (fd_ >= 0) (void)FlushAlignTail();
+
   if (fd_ >= 0) {
     if (close(fd_) != 0) {
       fd_ = -1;
@@ -328,33 +343,106 @@ FileError MacOSFileOperations::OpenInternal(const char* path, int flags, mode_t 
   return FileError::kSuccess;
 }
 
+// Aligned-pwrite wrapper for /dev/rdisk* sessions. macOS raw block
+// devices reject pwrite() with EINVAL when the length isn't a multiple
+// of the logical block size. libarchive's zstd decompressor emits
+// chunks of arbitrary length so we coalesce unaligned residue into a
+// per-instance tail and only emit aligned pwrites. The trailing partial
+// block is committed via FlushAlignTail() called from Flush /
+// ForceSync / Close.
+ssize_t MacOSFileOperations::PwriteAligned(const std::uint8_t* data,
+                                              std::size_t size,
+                                              std::uint64_t offset) {
+  const std::size_t BS = logical_block_size_;
+  std::lock_guard<std::mutex> lk(tail_mutex_);
+
+  std::vector<std::uint8_t> effective;
+  std::uint64_t effective_offset;
+
+  if (!tail_bytes_.empty() &&
+      offset == tail_offset_ + tail_bytes_.size()) {
+    effective.reserve(tail_bytes_.size() + size);
+    effective.insert(effective.end(), tail_bytes_.begin(), tail_bytes_.end());
+    effective.insert(effective.end(), data, data + size);
+    effective_offset = tail_offset_;
+    tail_bytes_.clear();
+  } else if (!tail_bytes_.empty()) {
+    // Non-contiguous offset: RMW the orphaned tail first to keep the
+    // on-disk image consistent (rare; happens after Seek mid-stream).
+    std::vector<std::uint8_t> block(BS);
+    if (::pread(fd_, block.data(), BS, (off_t)tail_offset_) != (ssize_t)BS) {
+      return -1;
+    }
+    std::memcpy(block.data(), tail_bytes_.data(), tail_bytes_.size());
+    if (::pwrite(fd_, block.data(), BS, (off_t)tail_offset_) != (ssize_t)BS) {
+      return -1;
+    }
+    tail_bytes_.clear();
+    effective.assign(data, data + size);
+    effective_offset = offset;
+  } else {
+    effective.assign(data, data + size);
+    effective_offset = offset;
+  }
+
+  const std::size_t aligned_len = (effective.size() / BS) * BS;
+  const std::size_t residue = effective.size() - aligned_len;
+
+  if (aligned_len > 0) {
+    ssize_t wrote = ::pwrite(fd_, effective.data(), aligned_len,
+                              (off_t)effective_offset);
+    if (wrote < 0) return -1;
+    if ((std::size_t)wrote != aligned_len) {
+      // Short write - stash the unwritten remainder so a retry can
+      // pick it up.
+      std::size_t unwritten = aligned_len - (std::size_t)wrote;
+      tail_bytes_.assign(effective.begin() + wrote,
+                          effective.begin() + wrote + unwritten);
+      tail_offset_ = effective_offset + wrote;
+      return wrote - (ssize_t)(effective_offset - offset);
+    }
+  }
+
+  if (residue > 0) {
+    tail_bytes_.assign(effective.begin() + aligned_len, effective.end());
+    tail_offset_ = effective_offset + aligned_len;
+  }
+
+  return (ssize_t)size;  // logical bytes committed
+}
+
+int MacOSFileOperations::FlushAlignTail() {
+  std::lock_guard<std::mutex> lk(tail_mutex_);
+  if (tail_bytes_.empty()) return 0;
+  const std::size_t BS = logical_block_size_;
+  std::vector<std::uint8_t> block(BS);
+  if (::pread(fd_, block.data(), BS, (off_t)tail_offset_) != (ssize_t)BS) {
+    return -1;
+  }
+  std::memcpy(block.data(), tail_bytes_.data(), tail_bytes_.size());
+  if (::pwrite(fd_, block.data(), BS, (off_t)tail_offset_) != (ssize_t)BS) {
+    return -1;
+  }
+  tail_bytes_.clear();
+  return 0;
+}
+
 // Streaming I/O operations
 FileError MacOSFileOperations::WriteSequential(const std::uint8_t* data, std::size_t size) {
   if (!IsOpen()) {
     return FileError::kOpenError;
   }
 
-  std::size_t bytes_written = 0;
-  while (bytes_written < size) {
-    ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
-    if (result <= 0) {
-      if (result == 0 || errno != EINTR) {
-        last_error_code_ = errno;
-        return FileError::kWriteError;
-      }
-      // EINTR - retry the write
-      continue;
-    }
-    bytes_written += static_cast<std::size_t>(result);
+  // Route via PwriteAligned to absorb unaligned chunk lengths from
+  // libarchive on /dev/rdisk*. async_write_offset_ tracks our logical
+  // file cursor (also updated by Seek()).
+  ssize_t r = PwriteAligned(data, size, async_write_offset_);
+  if (r < 0) {
+    last_error_code_ = errno;
+    return FileError::kWriteError;
   }
-
-  last_error_code_ = 0;
-  
-  // Update async_write_offset_ so Tell() returns correct position
-  // This is needed because Seek() sets async_write_offset_, and Tell()
-  // uses it if > 0. Without this update, Tell() would return a stale value.
   async_write_offset_ += size;
-  
+  last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
@@ -363,13 +451,32 @@ FileError MacOSFileOperations::ReadSequential(std::uint8_t* data, std::size_t si
     return FileError::kOpenError;
   }
 
-  ssize_t result = read(fd_, data, size);
+  // Read via pread + alignment round-up so /dev/rdisk* accepts the
+  // request when size isn't a multiple of the block size.
+  const std::size_t BS = logical_block_size_;
+  const std::size_t aligned_size = ((size + BS - 1) / BS) * BS;
+  std::vector<std::uint8_t> buf;
+  void* dst;
+  if (aligned_size == size) {
+    dst = data;  // caller's buffer is already aligned-size; read straight in
+  } else {
+    buf.resize(aligned_size);
+    dst = buf.data();
+  }
+  ssize_t result = ::pread(fd_, dst, aligned_size, (off_t)async_write_offset_);
   if (result < 0) {
     bytes_read = 0;
     return FileError::kReadError;
   }
 
-  bytes_read = static_cast<std::size_t>(result);
+  // pread can return less than requested at end of device. Clamp the
+  // reported bytes_read to what the caller actually asked for.
+  std::size_t got = std::min<std::size_t>((std::size_t)result, size);
+  if (!buf.empty()) {
+    std::memcpy(data, buf.data(), got);
+  }
+  bytes_read = got;
+  async_write_offset_ += got;
   return FileError::kSuccess;
 }
 
@@ -413,6 +520,12 @@ FileError MacOSFileOperations::ForceSync() {
     return FileError::kOpenError;
   }
 
+  // Commit any residual unaligned tail via read-modify-write before
+  // the fsync so the on-disk image is complete at the sync point.
+  if (FlushAlignTail() != 0) {
+    return FileError::kSyncError;
+  }
+
   // Force filesystem sync using fsync - same logic as MacFile::forceSync()
   if (::fsync(fd_) != 0) {
     return FileError::kSyncError;
@@ -424,6 +537,11 @@ FileError MacOSFileOperations::ForceSync() {
 FileError MacOSFileOperations::Flush() {
   if (!IsOpen()) {
     return FileError::kOpenError;
+  }
+
+  // Commit any residual unaligned tail via RMW before flushing.
+  if (FlushAlignTail() != 0) {
+    return FileError::kFlushError;
   }
 
   // On macOS, use fsync for both flush and sync operations
@@ -562,11 +680,14 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   pending_writes_.fetch_add(1);
   
   // Queue the async write using GCD
-  // Note: We use pwrite to write at a specific offset, allowing concurrent writes
+  // Note: We use PwriteAligned (not raw pwrite) so /dev/rdisk* accepts
+  // unaligned libarchive chunks; logical bytes-written equals `size`
+  // on success even when a partial block defers to FlushAlignTail.
   // Capture stats pointer for block - the base class's write_latency_stats_ is thread-safe
   rpi_imager::WriteLatencyStats* stats = &write_latency_stats_;
+  MacOSFileOperations* self = this;
   dispatch_async(async_queue_, ^{
-    ssize_t written = pwrite(fd_, data, size, static_cast<off_t>(write_offset));
+    ssize_t written = self->PwriteAligned(data, size, write_offset);
     
     // Record completion latency (thread-safe via atomic operations)
     stats->recordCompletion(submit_time);
@@ -730,7 +851,9 @@ FileError MacOSFileOperations::AttemptSyncFallback() {
     
     auto result = runWithTimeout(
         [this, &pw, &written]() {
-          written = pwrite(fd_, pw.data, pw.size, static_cast<off_t>(pw.offset));
+          // Sync-fallback replay path - same /dev/rdisk* alignment
+          // requirement; route through PwriteAligned.
+          written = PwriteAligned(pw.data, pw.size, pw.offset);
         },
         TimeoutConfig(kSyncWriteTimeoutSeconds)
             .withOnTimeout([this, &pw]() {
