@@ -31,6 +31,7 @@ set(PLATFORM_SOURCES
     windows/winfile.h
     windows/bootimgcreator_windows.cpp
     windows/rsakeyfingerprint_windows.cpp
+    windows/secureboot_crypto_windows.cpp
     windows/diskpart_util.cpp
     windows/diskpart_util.h
     windows/file_operations_windows.cpp
@@ -56,7 +57,7 @@ set(DEPENDENCIES
     ${CMAKE_BINARY_DIR}/rpi-imager.rc
     wlanapi_delayed.lib
 )
-set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll ole32 oleaut32 wbemuuid)
+set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll crypt32 ole32 oleaut32 wbemuuid)
 
 # Add winusb for rpiboot support
 set(EXTRALIBS ${EXTRALIBS} winusb)

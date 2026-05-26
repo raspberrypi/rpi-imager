@@ -4,6 +4,7 @@
  */
 
 #include "secureboot.h"
+#include "secureboot_crypto.h"
 #include "devicewrapperfatpartition.h"
 #include "acceleratedcryptographichash.h"
 #include "bootimgcreator.h"
@@ -11,26 +12,14 @@
 #include <QFile>
 #include <QDebug>
 #include <QDateTime>
-#include <QProcess>
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <QFileInfo>
 #include <QDir>
 #include <QThread>
 #include <QSet>
-#include <ctime>
-
-#ifdef __APPLE__
-#include <Security/Security.h>
-#include <CommonCrypto/CommonDigest.h>
-#include <CommonCrypto/CommonCrypto.h>
-#endif
-
-#if defined(__linux__) || defined(_WIN32)
-// On Linux use GnuTLS, on Windows use Schannel
-// We'll use OpenSSL if available or external tools as fallback
 #include <QCryptographicHash>
-#endif
+#include <ctime>
 
 SecureBoot::SecureBoot()
 {
@@ -135,129 +124,10 @@ QByteArray SecureBoot::sha256File(const QString &filePath)
 
 QByteArray SecureBoot::rsaSign(const QByteArray &data, const QString &rsaKeyPath)
 {
-#ifdef __APPLE__
-    // On macOS, use Security framework (modern API with SecKeyCreateSignature)
-    // Read the PEM key file
-    QFile keyFile(rsaKeyPath);
-    if (!keyFile.open(QIODevice::ReadOnly)) {
-        qDebug() << "SecureBoot::rsaSign: failed to open key file" << rsaKeyPath;
-        return QByteArray();
-    }
-    QByteArray pemData = keyFile.readAll();
-    keyFile.close();
-
-    // Import the key using Security framework
-    CFDataRef keyData = CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(pemData.constData()), pemData.size());
-    if (!keyData) {
-        qDebug() << "SecureBoot::rsaSign: failed to create CFData from key";
-        return QByteArray();
-    }
-
-    // Set import parameters
-    SecExternalFormat format = kSecFormatPEMSequence;
-    SecExternalItemType itemType = kSecItemTypePrivateKey;
-    SecItemImportExportKeyParameters params;
-    memset(&params, 0, sizeof(params));
-    params.version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION;
-    params.passphrase = nullptr; // Assuming no passphrase
-    
-    CFArrayRef items = nullptr;
-    OSStatus status = SecItemImport(keyData, nullptr, &format, &itemType, 0, &params, nullptr, &items);
-    CFRelease(keyData);
-    
-    if (status != errSecSuccess || !items || CFArrayGetCount(items) == 0) {
-        qDebug() << "SecureBoot::rsaSign: failed to import private key, status:" << status;
-        if (items) CFRelease(items);
-        return QByteArray();
-    }
-
-    SecKeyRef privateKey = (SecKeyRef)CFArrayGetValueAtIndex(items, 0);
-    CFRetain(privateKey); // Retain before releasing the array
-    CFRelease(items);
-
-    // Create CFData from the data to sign
-    CFDataRef dataToSign = CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(data.constData()), data.size());
-    if (!dataToSign) {
-        qDebug() << "SecureBoot::rsaSign: failed to create CFData from data";
-        CFRelease(privateKey);
-        return QByteArray();
-    }
-
-    // Sign the digest using SecKeyCreateSignature (modern API)
-    // Use kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256 since we're passing a pre-computed SHA-256 digest
-    // (The "Digest" variant expects pre-hashed 32-byte data)
-    CFErrorRef error = nullptr;
-    CFDataRef signature = SecKeyCreateSignature(privateKey,
-                                                kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256,
-                                                dataToSign,
-                                                &error);
-    
-    CFRelease(dataToSign);
-    CFRelease(privateKey);
-    
-    if (!signature) {
-        if (error) {
-            CFStringRef errorDesc = CFErrorCopyDescription(error);
-            qDebug() << "SecureBoot::rsaSign: failed to sign data:" 
-                     << QString::fromCFString(errorDesc);
-            CFRelease(errorDesc);
-            CFRelease(error);
-        }
-        return QByteArray();
-    }
-
-    // Convert CFDataRef to QByteArray
-    const UInt8* bytes = CFDataGetBytePtr(signature);
-    CFIndex length = CFDataGetLength(signature);
-    QByteArray result(reinterpret_cast<const char*>(bytes), length);
-    CFRelease(signature);
-    
-    return result.toHex();
-#else
-    // On Linux/Windows, use openssl rsautl to sign the pre-computed digest
-    // We need to wrap the 32-byte SHA-256 digest in PKCS#1 DigestInfo DER structure
-    QByteArray derWrapped;
-    // DigestInfo for SHA-256: SEQUENCE { AlgorithmIdentifier, OCTET STRING }
-    // 30 31 = SEQUENCE, length 49 bytes
-    // 30 0d = SEQUENCE, length 13 bytes (AlgorithmIdentifier)
-    // 06 09 = OID, length 9 bytes
-    // 60 86 48 01 65 03 04 02 01 = SHA-256 OID (2.16.840.1.101.3.4.2.1)
-    // 05 00 = NULL
-    // 04 20 = OCTET STRING, length 32 bytes
-    derWrapped.append("\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20", 19);
-    derWrapped.append(data); // Append the 32-byte SHA-256 digest
-    
-    if (derWrapped.size() != 51) {
-        qDebug() << "SecureBoot::rsaSign: invalid DER-wrapped digest size:" << derWrapped.size();
-        return QByteArray();
-    }
-    
-    QProcess opensslProc;
-    opensslProc.start("openssl", QStringList() 
-        << "rsautl" << "-sign" << "-inkey" << rsaKeyPath << "-pkcs");
-    
-    if (!opensslProc.waitForStarted()) {
-        qDebug() << "SecureBoot::rsaSign: failed to start openssl";
-        return QByteArray();
-    }
-
-    opensslProc.write(derWrapped);
-    opensslProc.closeWriteChannel();
-
-    if (!opensslProc.waitForFinished(30000)) {
-        qDebug() << "SecureBoot::rsaSign: openssl timeout";
-        return QByteArray();
-    }
-
-    if (opensslProc.exitCode() != 0) {
-        qDebug() << "SecureBoot::rsaSign: openssl failed:" << opensslProc.readAllStandardError();
-        return QByteArray();
-    }
-
-    QByteArray signature = opensslProc.readAllStandardOutput();
-    // Return hex-encoded signature
-    return signature.toHex();
-#endif
+    // Delegate to the PAL — each platform under src/{linux,mac,windows}/
+    // ships its own implementation (Security framework, openssl subprocess,
+    // CryptoAPI respectively).  See src/secureboot_crypto.h.
+    return SecureBootCrypto::rsaSignSha256(data, rsaKeyPath);
 }
 
 bool SecureBoot::generateBootSig(const QString &bootImgPath, const QString &rsaKeyPath, const QString &bootSigPath)
@@ -372,24 +242,19 @@ static int asn1ParseLength(const uint8_t *d, int len, int *off)
 
 QByteArray SecureBoot::extractRsaPubkeyBin(const QString &rsaKeyPath)
 {
-    // Run openssl to extract a DER-encoded SubjectPublicKeyInfo for the
-    // RSA key.  `openssl pkey -pubout` works with both private and public
-    // keys, so callers can pass either.
-    QProcess proc;
-    proc.start("openssl", QStringList()
-        << "pkey" << "-in" << rsaKeyPath << "-pubout" << "-outform" << "DER");
-    if (!proc.waitForStarted(5000)) {
-        qDebug() << "SecureBoot::extractRsaPubkeyBin: failed to start openssl";
-        return {};
-    }
-    if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
-        qDebug() << "SecureBoot::extractRsaPubkeyBin: openssl failed:"
-                 << proc.readAllStandardError();
-        return {};
-    }
-    QByteArray der = proc.readAllStandardOutput();
+    // PAL implementation per platform — see src/secureboot_crypto.h.
+    return SecureBootCrypto::extractRsaPubkeyBin(rsaKeyPath);
+}
+
+// Pure ASN.1 parsing of a SubjectPublicKeyInfo DER blob into the boot-ROM
+// 264-byte format.  Called by the mac/linux PAL implementations of
+// SecureBootCrypto::extractRsaPubkeyBin after they fetch the DER via
+// openssl.  Windows skips this entirely (CryptoAPI gives us the bytes in
+// the right order already).
+QByteArray SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(const QByteArray& der)
+{
     if (der.isEmpty()) {
-        qDebug() << "SecureBoot::extractRsaPubkeyBin: empty DER output";
+        qDebug() << "SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE: empty DER";
         return {};
     }
 
@@ -400,7 +265,7 @@ QByteArray SecureBoot::extractRsaPubkeyBin(const QString &rsaKeyPath)
     int i = 0;
 
     auto fail = [](const char *why) -> QByteArray {
-        qDebug() << "SecureBoot::extractRsaPubkeyBin: DER parse:" << why;
+        qDebug() << "SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE: DER parse:" << why;
         return {};
     };
 
@@ -429,7 +294,7 @@ QByteArray SecureBoot::extractRsaPubkeyBin(const QString &rsaKeyPath)
     // Strip the leading 0x00 sign byte that ASN.1 prepends to keep N positive.
     if (nLen > 0 && d[i] == 0x00) { ++i; --nLen; }
     if (nLen != 256) {
-        qDebug() << "SecureBoot::extractRsaPubkeyBin: expected 2048-bit key, got"
+        qDebug() << "SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE: expected 2048-bit key, got"
                  << (nLen * 8) << "bits";
         return {};
     }
