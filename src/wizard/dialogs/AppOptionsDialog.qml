@@ -380,6 +380,19 @@ BaseDialog {
         if (keyPath) {
             rsaKeyPath.text = keyPath;
         }
+        // Re-bind the Secure Boot RSA Key button's visibility on every open.
+        // The dependencies here are mostly plain Q_INVOKABLE methods (not
+        // Q_PROPERTYs with NOTIFY signals), so the original declarative
+        // binding only evaluates once when the singleton dialog is created
+        // in main.qml — flipping "Force secure boot available" in Debug
+        // Options afterwards wouldn't make the picker appear without a
+        // forced re-bind here.
+        secureBootKeyButton.visible = Qt.binding(function() {
+            return (popup.wizardContainer && popup.wizardContainer.secureBootAvailable) ||
+                   imageWriter.isSecureBootForcedByCliFlag() ||
+                   imageWriter.checkSWCapability("secure_boot") ||
+                   imageWriter.getDebugForceSecureBoot();
+        });
         // Raspberry Pi Connect for Organisations is a persisted
         // feature flag.  The API key itself lives in the wizard's
         // Connect step (session-only) so it is never written to
@@ -390,11 +403,15 @@ BaseDialog {
         // Clear initialization flag
         isInitializing = false;
 
-        // Pre-compute final height before opening to avoid first-show reflow
-        if (firstOpen) {
-            var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280;
-            popup.height = Math.max(280, desired);
-        }
+        // Pre-compute final height before opening to avoid first-show reflow.
+        // Clamp to the parent window's available height so the dialog never
+        // overflows — the inner ScrollView handles the rest by scrolling.
+        // Re-applied on every open (not just firstOpen) because the content
+        // height changes when feature flags toggle visibility of rows
+        // (e.g. Secure Boot RSA Key, Pi Connect for Organisations).
+        var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280;
+        var maxHeight = parent ? parent.height - Style.cardPadding * 2 : 560;
+        popup.height = Math.min(Math.max(280, desired), maxHeight);
     }
 
     function applySettings() {
