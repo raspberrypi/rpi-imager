@@ -52,12 +52,24 @@ protected:
 
 private:
     bool pollForFastbootDevice(std::atomic<bool>& found, QString& fastbootId);
+    // SBR equivalent of pollForFastbootDevice: watches for the original
+    // rpiboot device returning on the same port path after the EEPROM
+    // write + reboot.  `priorDeviceAddress` is the address the device had
+    // while file_server was running — a fresh enumeration assigns a
+    // different address, which is how we tell "device returned" from
+    // "device hasn't disappeared yet".
+    bool pollForRpibootReturn(std::atomic<bool>& found, uint8_t priorDeviceAddress);
     bool waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice);
 
     DeviceInfo _device;
     rpiboot::SideloadMode _mode;
     std::atomic<bool> _cancelled{false};
-    std::atomic<bool> _fastbootFound{false};
+    // Next-stage device observed by the mode-specific scanner:
+    //   Fastboot  → fastboot gadget enumerated on the same port path.
+    //   SBR       → rpiboot device re-enumerated after the recovery reboot.
+    // Either way, set by the scanner thread and read via the wrappedProgress
+    // bridge that feeds file_server's cancellation flag.
+    std::atomic<bool> _nextStageFound{false};
     QString _customFastbootGadget;
     QString _signFastbootGadgetKey;
 };
