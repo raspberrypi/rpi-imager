@@ -58,8 +58,27 @@ public:
 
     const std::string& lastError() const { return _lastError; }
 
+    // usbboot hosts the rpiboot USB-protocol scaffolding — gadget kernels
+    // (fastboot-gadget.img, mass-storage-gadget64), the fastboot bootfiles
+    // bundle (firmware/bootfiles.bin), the BCM2836/7 MSD-mode bootcode
+    // (msd/bootcode.bin), and the secure-boot-recovery text configs
+    // (boot.conf, config.txt).  Anything resembling actual EEPROM payload
+    // or recovery firmware under usbboot is a git-symlink into rpi-eeprom
+    // — and GitHub raw HTTP serves symlinks as ~30 bytes of target-path
+    // text, not the binary.  Don't fetch those paths via this base; go to
+    // EEPROM_RAW_BASE instead.
     static constexpr const char* USBBOOT_RAW_BASE =
         "https://github.com/raspberrypi/usbboot/raw/refs/heads/master/";
+    // rpi-eeprom is the canonical source for the BCM2711/BCM2712 bootloader
+    // firmware shipped to end users: pieeprom-DATE.bin (the signed EEPROM
+    // image) and recovery.bin (the unsigned recovery binary that doubles as
+    // the USB-mode bootcode we upload via rpiboot during SBR).  Both live
+    // under firmware-271X/{channel}/; we pull from `latest`.  pieeprom
+    // filenames are dated, so the latest version must be resolved at
+    // runtime via firmware-271X/versions.txt — see
+    // resolveLatestEepromVersion().  recovery.bin is a stable filename.
+    static constexpr const char* EEPROM_RAW_BASE =
+        "https://github.com/raspberrypi/rpi-eeprom/raw/refs/heads/master/";
     static constexpr const char* PROVISIONER_RAW_BASE =
         "https://github.com/raspberrypi/rpi-sb-provisioner/raw/refs/heads/main/";
 
@@ -69,9 +88,21 @@ private:
         std::string localPath;  // relative to the version dir
     };
 
-    // Build the list of files to download for a given mode + chip
+    // Build the list of files to download for a given mode + chip.
+    // For SecureBootRecovery, eepromVersion identifies the dated pieeprom
+    // bin in rpi-eeprom (e.g. "2026-05-22" → pieeprom-2026-05-22.bin).
+    // When std::nullopt, the EEPROM/recovery URLs fall back to whatever's
+    // in the local cache (offline mode); the cache check upstream will
+    // refuse to proceed if those files aren't actually there.
     std::vector<ManifestEntry> buildManifest(SideloadMode mode,
-                                              ChipGeneration chip) const;
+                                              ChipGeneration chip,
+                                              const std::optional<std::string>& eepromVersion = std::nullopt) const;
+
+    // Fetch rpi-eeprom's firmware-271X/versions.txt and return the first
+    // (newest) version it lists.  Returns std::nullopt on network failure;
+    // caller falls back to the cached version sidecar.
+    std::optional<std::string> resolveLatestEepromVersion(ChipGeneration chip,
+                                                           std::atomic<bool>& cancelled);
 
     // Download a single file via curl
     bool downloadFile(const std::string& url,
@@ -93,6 +124,15 @@ private:
     // BCM2711 → bootcode4.bin, BCM2712 → bootcode5.bin.
     bool extractBootcodeFromBootfiles(const std::filesystem::path& versionDir,
                                        ChipGeneration chip);
+
+    // Make the SecureBootRecovery config.txt re-enumerate the device back
+    // into rpiboot after writing the EEPROM, so we can scan for completion.
+    // Strips any existing set_boot_order= / recovery_reboot= lines from the
+    // upstream config and appends our required pair (set_boot_order=0x3
+    // *before* recovery_reboot=1 — order is load-bearing per the bootloader's
+    // section processing).  Idempotent; no-op if the file doesn't exist.
+    bool ensureSbrReenumerates(const std::filesystem::path& versionDir,
+                                ChipGeneration chip);
 
     std::string _lastError;
     std::string _customFastbootGadget;

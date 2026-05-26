@@ -36,12 +36,29 @@ public:
     // resolver is called to look up each requested file.  The default
     // implementation reads from firmwareDir on disk.
     //
-    // Returns true on clean Done, false on error/cancel.
+    // requireReEnumConfirmation distinguishes two ambiguous disconnect cases:
+    //   - Device rebooted into the next stage (e.g. fastboot gadget, or
+    //     rpiboot after an SBR recovery_reboot) without sending Done —
+    //     looks identical at libusb to a yanked cable.
+    //   - User physically unplugged the device mid-flow.
+    // When true, on any disconnect-with-files-served the file server waits a
+    // grace window (matched to the caller's scanner timeout, ~60 s — covers
+    // the fastboot gadget's full Linux boot, which can take up to ~30 s) for
+    // the `cancelled` flag to flip, signalling that the caller's scanner has
+    // observed the next-stage device on the same port path.  Without that
+    // confirmation by deadline, the disconnect is reported as a real
+    // failure.  When false, any disconnect-with-files-served is treated as
+    // successful completion — for callers that don't run a confirmation
+    // scanner.
+    //
+    // Returns true on clean Done (or confirmed re-enumeration when
+    // requireReEnumConfirmation is set), false on error/cancel.
     bool run(IUsbTransport& transport,
              const std::filesystem::path& firmwareDir,
              ProgressCallback progress,
              const std::atomic<bool>& cancelled,
-             FileResolver resolver = nullptr);
+             FileResolver resolver = nullptr,
+             bool requireReEnumConfirmation = false);
 
     // Metadata collected during the file-server phase
     const DeviceMetadata& metadata() const { return _metadata; }

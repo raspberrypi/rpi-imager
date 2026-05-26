@@ -19,8 +19,30 @@
 #include <curl/curl.h>
 
 #include <fstream>
+#include <sstream>
 
 namespace rpiboot {
+
+namespace {
+
+// std::filesystem::copy_file(..., overwrite_existing, ec) is unreliable on
+// Windows (mingw libstdc++): it can return std::errc::file_exists even
+// when the option is set.  We've hit this at three separate sites in this
+// file (custom fastboot gadget materialisation, bootfiles.bin restoration
+// from .original, bootcode5.bin re-baseline from recovery.original.bin).
+// Remove the destination first then copy without overwrite_existing — the
+// remove is a no-op if the file doesn't exist, so this is always safe.
+bool overwriteCopy(const std::filesystem::path& src,
+                   const std::filesystem::path& dest,
+                   std::error_code& ec) noexcept
+{
+    std::error_code removeEc;
+    std::filesystem::remove(dest, removeEc);  // ignore — fine if absent
+    ec.clear();
+    return std::filesystem::copy_file(src, dest, ec);
+}
+
+}  // namespace
 
 FirmwareManager::FirmwareManager() = default;
 
@@ -33,26 +55,35 @@ std::filesystem::path FirmwareManager::cacheRoot() const
 // ── buildManifest ───────────────────────────────────────────────────────
 
 std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
-    SideloadMode mode, ChipGeneration chip) const
+    SideloadMode mode, ChipGeneration chip,
+    const std::optional<std::string>& eepromVersion) const
 {
     std::vector<ManifestEntry> entries;
     const std::string usbboot(USBBOOT_RAW_BASE);
     const std::string provisioner(PROVISIONER_RAW_BASE);
+    const std::string eeprom(EEPROM_RAW_BASE);
 
     // Bootcode file — required for all chip generations.
     // BCM2836_7: downloaded directly from the usbboot msd/ directory; this is
     //   the same binary that upstream rpiboot has compiled in via msd/bootcode.h.
     // BCM2711/BCM2712 in Fastboot mode: extracted from bootfiles.bin at cache
     //   time (see extractBootcodeFromBootfiles).
-    // BCM2711/BCM2712 in SecureBootRecovery mode: downloaded separately because
-    //   the recovery binary differs from the fastboot one.
+    // BCM2711/BCM2712 in SecureBootRecovery mode: the USB-mode bootcode we
+    //   upload to perform the EEPROM write *is* rpi-eeprom's recovery.bin
+    //   for the matching chip — usbboot's various bootcode symlinks
+    //   (secure-boot-recovery/bootcode4.bin, recovery5/bootcode5.bin) all
+    //   chain into the same rpi-eeprom path, and fetching the symlinks via
+    //   GitHub raw HTTP yields ~30 bytes of symlink-target text rather than
+    //   the binary, so we go straight to the canonical source.
+    //   (Note: usbboot/firmware/2711/bootcode4.bin is a different, real
+    //   binary — not recovery — and shouldn't be used for SBR.)
     if (chip == ChipGeneration::BCM2711) {
         if (mode == SideloadMode::SecureBootRecovery) {
-            entries.push_back({usbboot + "firmware/2711/bootcode4.bin", "bootcode4.bin"});
+            entries.push_back({eeprom + "firmware-2711/latest/recovery.bin", "bootcode4.bin"});
         }
     } else if (chip == ChipGeneration::BCM2712) {
         if (mode == SideloadMode::SecureBootRecovery) {
-            entries.push_back({usbboot + "recovery5/bootcode5.bin", "bootcode5.bin"});
+            entries.push_back({eeprom + "firmware-2712/latest/recovery.bin", "bootcode5.bin"});
         }
     }
 
@@ -69,8 +100,15 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
         } else {
             // BCM2711/BCM2712: fastboot gadget kernel + config are separate from
             // bootfiles.bin; bootcode is extracted from the TAR at cache time.
+            //
+            // The upstream gadget is cached under its own name
+            // (fastboot-gadget.img); the active boot.img the file_server
+            // uploads is rematerialised on every run by ensureAvailable() —
+            // either copied from this cached upstream or from the user's
+            // current custom gadget.  Custom gadgets are session-only in the
+            // UI, so they must not leak into the persistent cache.
             entries.push_back({provisioner + "host-support/fastboot-gadget.img",
-                               "fastboot/boot.img"});
+                               "fastboot/fastboot-gadget.img"});
             entries.push_back({usbboot + "mass-storage-gadget64/config.txt",
                                "fastboot/config.txt"});
             entries.push_back({usbboot + "firmware/bootfiles.bin",
@@ -79,18 +117,38 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
         break;
 
     case SideloadMode::SecureBootRecovery:
+        // pieeprom and (BCM2712) recovery binaries come from rpi-eeprom's
+        // `latest` channel — that's the canonical source for shipped
+        // bootloader firmware.  Filenames there are dated (pieeprom-DATE.bin);
+        // the date is resolved at runtime via versions.txt and threaded in
+        // here as eepromVersion.  If unset (offline + no cache), the URL
+        // is left empty so the download loop will fall back to the cached
+        // file or fail with a clear error if neither is present.
         if (chip == ChipGeneration::BCM2711) {
             const std::string sub = "secure-boot-recovery/";
             entries.push_back({usbboot + sub + "boot.conf",            sub + "boot.conf"});
-            entries.push_back({usbboot + sub + "bootcode4.bin",         sub + "bootcode4.bin"});
+            // usbboot/secure-boot-recovery/bootcode4.bin is a git-symlink
+            // (29 bytes via raw HTTP) — the real binary lives at the root
+            // as bootcode4.bin (entry above), no need for a second copy.
             entries.push_back({usbboot + sub + "config.txt",            sub + "config.txt"});
-            entries.push_back({usbboot + sub + "pieeprom.original.bin", sub + "pieeprom.original.bin"});
+            const std::string pieepromUrl = eepromVersion
+                ? eeprom + "firmware-2711/latest/pieeprom-" + *eepromVersion + ".bin"
+                : std::string();
+            entries.push_back({pieepromUrl, sub + "pieeprom.original.bin"});
         } else if (chip == ChipGeneration::BCM2712) {
             const std::string sub = "secure-boot-recovery5/";
             entries.push_back({usbboot + sub + "boot.conf",              sub + "boot.conf"});
             entries.push_back({usbboot + sub + "config.txt",              sub + "config.txt"});
-            entries.push_back({usbboot + sub + "pieeprom.original.bin",   sub + "pieeprom.original.bin"});
-            entries.push_back({usbboot + sub + "recovery.original.bin",   sub + "recovery.original.bin"});
+            const std::string pieepromUrl = eepromVersion
+                ? eeprom + "firmware-2712/latest/pieeprom-" + *eepromVersion + ".bin"
+                : std::string();
+            entries.push_back({pieepromUrl, sub + "pieeprom.original.bin"});
+            // recovery.bin in rpi-eeprom corresponds to what usbboot used
+            // to ship as recovery.original.bin — same content role (the
+            // unsigned baseline binary that gets counter-signed and used
+            // as the bootloader the device runs to write the EEPROM).
+            entries.push_back({eeprom + "firmware-2712/latest/recovery.bin",
+                               sub + "recovery.original.bin"});
         }
         break;
     }
@@ -108,11 +166,82 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     auto root = cacheRoot();
     auto versionDir = root / "master";
 
+    // 1a. For SBR, resolve the latest rpi-eeprom version up-front.  The
+    // EEPROM payload (pieeprom-DATE.bin / recovery.bin) lives in dated
+    // files under firmware-271X/latest/ in the rpi-eeprom repo, so the
+    // newest version date must be fetched from versions.txt before we
+    // can construct the manifest URLs.  Tolerate network failure by
+    // falling back to whatever date the sidecar from a previous run
+    // recorded — this preserves offline behaviour.
+    std::optional<std::string> eepromVersion;
+    if (mode == SideloadMode::SecureBootRecovery) {
+        eepromVersion = resolveLatestEepromVersion(chip, cancelled);
+        if (!eepromVersion) {
+            const std::string sub = (chip == ChipGeneration::BCM2712)
+                                        ? "secure-boot-recovery5"
+                                        : "secure-boot-recovery";
+            auto sidecar = versionDir / sub / ".eeprom-version";
+            if (std::filesystem::exists(sidecar)) {
+                std::ifstream in(sidecar);
+                std::string cached;
+                if (std::getline(in, cached) && !cached.empty()) {
+                    qWarning() << "FirmwareManager: rpi-eeprom version fetch failed,"
+                                  "falling back to cached version"
+                               << QString::fromStdString(cached);
+                    eepromVersion = std::move(cached);
+                }
+            }
+        }
+    }
+
     // 1. Build the file manifest
-    auto manifest = buildManifest(mode, chip);
+    auto manifest = buildManifest(mode, chip, eepromVersion);
     if (manifest.empty()) {
         _lastError = "No firmware files defined for this device";
         return {};
+    }
+
+    // 1a-ii. SBR cache invalidation: if the resolved version differs from
+    // the persisted sidecar, the cached pieeprom/recovery binaries are
+    // stale and must be re-downloaded.  Remove them so the cache check
+    // below treats them as missing.
+    if (mode == SideloadMode::SecureBootRecovery && eepromVersion) {
+        const std::string sub = (chip == ChipGeneration::BCM2712)
+                                    ? "secure-boot-recovery5"
+                                    : "secure-boot-recovery";
+        auto sidecar = versionDir / sub / ".eeprom-version";
+        std::string cached;
+        if (std::filesystem::exists(sidecar)) {
+            std::ifstream in(sidecar);
+            std::getline(in, cached);
+        }
+        if (cached != *eepromVersion) {
+            std::error_code purgeEc;
+            std::filesystem::remove(versionDir / sub / "pieeprom.original.bin", purgeEc);
+            if (chip == ChipGeneration::BCM2712)
+                std::filesystem::remove(versionDir / sub / "recovery.original.bin", purgeEc);
+            qDebug() << "FirmwareManager: rpi-eeprom version changed"
+                     << QString::fromStdString(cached) << "→"
+                     << QString::fromStdString(*eepromVersion)
+                     << "— purged stale EEPROM payload";
+        }
+    }
+
+    // 1b. Fastboot boot.img/boot.sig are derived per-run, not persisted across
+    // runs.  Always purge them up-front so that:
+    //   - a previous run's custom gadget never leaks into the next run (the
+    //     custom-gadget UI is session-only — persisting it on disk would be a
+    //     UI/state mismatch);
+    //   - the signature is always regenerated from the *current* boot.img
+    //     bytes, never inherited from a different binary;
+    //   - copy_file below always creates a fresh destination (no stale-cache
+    //     edge cases on Windows).
+    // The cached upstream gadget lives under its own name (fastboot-gadget.img)
+    // and remains intact, so this isn't a network re-fetch — just a copy.
+    if (mode == SideloadMode::Fastboot) {
+        std::error_code purgeEc;
+        std::filesystem::remove(versionDir / "fastboot" / "boot.img", purgeEc);
+        std::filesystem::remove(versionDir / "fastboot" / "boot.sig", purgeEc);
     }
 
     // BCM2711/BCM2712 in Fastboot mode bundle their bootcode inside
@@ -158,6 +287,11 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     }
     if (allExist && !needsBootcodeExtraction) {
         qDebug() << "FirmwareManager: cache hit for master";
+        // SBR config.txt overrides are idempotent and cheap — re-apply on
+        // cache hit so an older cache from before this helper landed still
+        // gets fixed up.
+        if (mode == SideloadMode::SecureBootRecovery && !ensureSbrReenumerates(versionDir, chip))
+            return {};
         return versionDir;
     }
 
@@ -186,6 +320,17 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         if (std::filesystem::exists(destPath))
             continue;
 
+        // Empty URL means buildManifest couldn't resolve a remote source —
+        // typically the rpi-eeprom version lookup failed with no cached
+        // sidecar to fall back on.  If the file isn't already present,
+        // there's nothing more we can do.
+        if (entry.url.empty()) {
+            _lastError = "Cannot resolve rpi-eeprom firmware URL for "
+                       + entry.localPath
+                       + " (offline and nothing cached from a previous run)";
+            return {};
+        }
+
         // Wrap progress callback to map per-file progress to overall progress
         auto fileProgress = [&progress, i, totalFiles](uint64_t current, uint64_t total,
                                                         const std::string&) {
@@ -200,18 +345,52 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         }
     }
 
-    // 3b. If a custom fastboot gadget was provided, copy it into the cache
-    // in place of the downloaded fastboot-gadget.img.
-    if (mode == SideloadMode::Fastboot && !_customFastbootGadget.empty()) {
+    // 3a. SBR: persist the resolved rpi-eeprom version into a sidecar so
+    // subsequent runs can diff against it and purge stale binaries when
+    // a newer version becomes available.  Written here (post-download) so
+    // a partial/failed download doesn't leave us claiming a version we
+    // don't actually have on disk.
+    if (mode == SideloadMode::SecureBootRecovery && eepromVersion) {
+        const std::string sub = (chip == ChipGeneration::BCM2712)
+                                    ? "secure-boot-recovery5"
+                                    : "secure-boot-recovery";
+        auto sidecar = versionDir / sub / ".eeprom-version";
+        std::error_code sidecarEc;
+        std::filesystem::create_directories(sidecar.parent_path(), sidecarEc);
+        std::ofstream out(sidecar, std::ios::trunc);
+        if (out)
+            out << *eepromVersion << '\n';
+    }
+
+    // 3b. Materialise fastboot/boot.img for BCM2711/BCM2712 fastboot runs.
+    // The active boot.img is rebuilt from scratch on every run (see step 1b):
+    //   - if the user provided a custom gadget, copy from that file;
+    //   - otherwise, copy from the cached upstream fastboot-gadget.img.
+    // BCM2836_7 doesn't ship a separate boot.img (it uses a self-contained
+    // bootfiles.bin bundle) — skip cleanly when the manifest doesn't include
+    // an upstream gadget and no custom is set.
+    if (mode == SideloadMode::Fastboot &&
+        (chip == ChipGeneration::BCM2711 || chip == ChipGeneration::BCM2712)) {
         auto gadgetDest = versionDir / "fastboot" / "boot.img";
         std::filesystem::create_directories(gadgetDest.parent_path(), ec);
-        qDebug() << "FirmwareManager: using custom fastboot gadget:"
-                 << QString::fromStdString(_customFastbootGadget);
+
+        std::filesystem::path gadgetSrc;
+        if (!_customFastbootGadget.empty()) {
+            gadgetSrc = _customFastbootGadget;
+            qDebug() << "FirmwareManager: using custom fastboot gadget:"
+                     << QString::fromStdString(_customFastbootGadget);
+        } else {
+            gadgetSrc = versionDir / "fastboot" / "fastboot-gadget.img";
+            if (!std::filesystem::exists(gadgetSrc)) {
+                _lastError = "Cached fastboot-gadget.img missing — cannot materialise boot.img";
+                return {};
+            }
+        }
+
         std::error_code copyEc;
-        std::filesystem::copy_file(_customFastbootGadget, gadgetDest,
-                                    std::filesystem::copy_options::overwrite_existing, copyEc);
+        overwriteCopy(gadgetSrc, gadgetDest, copyEc);
         if (copyEc) {
-            _lastError = "Failed to copy custom fastboot gadget: " + copyEc.message();
+            _lastError = "Failed to copy fastboot gadget to boot.img: " + copyEc.message();
             return {};
         }
     }
@@ -230,8 +409,7 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         auto bundleOriginal = versionDir / "fastboot" / "bootfiles.bin.original";
         if (std::filesystem::exists(bundleOriginal)) {
             std::error_code restoreEc;
-            std::filesystem::copy_file(bundleOriginal, bundlePath,
-                std::filesystem::copy_options::overwrite_existing, restoreEc);
+            overwriteCopy(bundleOriginal, bundlePath, restoreEc);
             if (restoreEc) {
                 _lastError = "Failed to restore bootfiles.bin from .original: "
                            + restoreEc.message();
@@ -283,8 +461,7 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
                 return {};
             }
             std::error_code copyEc;
-            std::filesystem::copy_file(src, bootcodePath,
-                std::filesystem::copy_options::overwrite_existing, copyEc);
+            overwriteCopy(src, bootcodePath, copyEc);
             if (copyEc) {
                 _lastError = "Failed to refresh bootcode5.bin from recovery.original.bin: "
                            + copyEc.message();
@@ -418,6 +595,12 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         std::filesystem::remove_all(versionDir, ec);
         return {};
     }
+
+    // 5. SBR: rewrite recovery config.txt so the device re-enumerates back
+    // into rpiboot after writing the EEPROM.  Without this, the device boots
+    // into the OS post-recovery and our SBR scanner would time out.
+    if (mode == SideloadMode::SecureBootRecovery && !ensureSbrReenumerates(versionDir, chip))
+        return {};
 
     if (progress)
         progress(100, 100, "Firmware ready");
@@ -629,6 +812,122 @@ bool FirmwareManager::extractBootcodeFromBootfiles(const std::filesystem::path& 
     qDebug() << "FirmwareManager: extracted" << bootcodeFilename.c_str()
              << "(" << data->size() << "bytes) from fastboot/bootfiles.bin";
     return true;
+}
+
+// ── ensureSbrReenumerates ───────────────────────────────────────────────
+
+bool FirmwareManager::ensureSbrReenumerates(const std::filesystem::path& versionDir,
+                                              ChipGeneration chip)
+{
+    const std::string sub = (chip == ChipGeneration::BCM2712)
+                                ? "secure-boot-recovery5"
+                                : "secure-boot-recovery";
+    auto configPath = versionDir / sub / "config.txt";
+    if (!std::filesystem::exists(configPath)) {
+        // First-run case: file not downloaded yet.  Caller invokes us again
+        // after the download loop, so this is a benign no-op.
+        return true;
+    }
+
+    std::ifstream in(configPath);
+    if (!in) {
+        _lastError = "Cannot read SBR config.txt: " + configPath.string();
+        return false;
+    }
+
+    // Strip any pre-existing set_boot_order= or recovery_reboot= lines.
+    // We re-append them in the required order at the end of the file so
+    // we don't have to reason about the section the upstream put them in
+    // (config.txt is processed top-to-bottom; recovery_reboot must be
+    // reached *after* set_boot_order has been observed, otherwise the
+    // bootloader reboots before applying our boot-order override and the
+    // device powers up into normal boot instead of back into rpiboot).
+    auto isOverrideKey = [](const std::string& line) {
+        auto trimStart = line.find_first_not_of(" \t");
+        if (trimStart == std::string::npos)
+            return false;
+        std::string_view rest(line.data() + trimStart, line.size() - trimStart);
+        return rest.starts_with("set_boot_order=") ||
+               rest.starts_with("recovery_reboot=");
+    };
+
+    std::vector<std::string> kept;
+    kept.reserve(64);
+    std::string line;
+    while (std::getline(in, line)) {
+        // Tolerate CRLF input — strip the trailing \r so our re-write is
+        // pure LF (matches what the bootloader expects).
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (isOverrideKey(line))
+            continue;
+        kept.push_back(std::move(line));
+    }
+    in.close();
+
+    std::ofstream out(configPath, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        _lastError = "Cannot rewrite SBR config.txt: " + configPath.string();
+        return false;
+    }
+    for (const auto& l : kept)
+        out << l << '\n';
+    // Order is load-bearing: set_boot_order must precede recovery_reboot.
+    out << "set_boot_order=0x3\n";
+    out << "recovery_reboot=1\n";
+    if (!out) {
+        _lastError = "Write failed on SBR config.txt: " + configPath.string();
+        return false;
+    }
+    qDebug() << "FirmwareManager: rewrote" << QString::fromStdString(configPath.string())
+             << "with set_boot_order=0x3 + recovery_reboot=1"
+             << "(kept" << kept.size() << "upstream line(s))";
+    return true;
+}
+
+// ── resolveLatestEepromVersion ──────────────────────────────────────────
+
+std::optional<std::string> FirmwareManager::resolveLatestEepromVersion(
+    ChipGeneration chip, std::atomic<bool>& cancelled)
+{
+    const std::string firmwareDir = (chip == ChipGeneration::BCM2712)
+                                        ? "firmware-2712"
+                                        : "firmware-2711";
+    const std::string url = std::string(EEPROM_RAW_BASE) + firmwareDir + "/versions.txt";
+
+    // Cache the tiny metadata file under the cache root so it can be
+    // diffed against the persisted sidecar on the next run.
+    auto tmpPath = cacheRoot() / "master" / (firmwareDir + "-versions.txt");
+    std::error_code mkdirEc;
+    std::filesystem::create_directories(tmpPath.parent_path(), mkdirEc);
+
+    if (!downloadFile(url, tmpPath, nullptr, cancelled)) {
+        // Caller falls back to the version sidecar from a previous run.
+        // Don't overwrite _lastError — it's the caller's decision how to
+        // surface this (it's not a hard failure if a cached version exists).
+        return std::nullopt;
+    }
+
+    std::ifstream in(tmpPath);
+    if (!in) {
+        return std::nullopt;
+    }
+    // Skip comment/blank lines; the first data row is the newest version
+    // (the file is "Sorted newest-first" per its own header).
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line.front() == '#')
+            continue;
+        std::istringstream iss(line);
+        std::string version;
+        if (iss >> version && !version.empty()) {
+            qDebug() << "FirmwareManager: resolved latest"
+                     << QString::fromStdString(firmwareDir)
+                     << "version:" << QString::fromStdString(version);
+            return version;
+        }
+    }
+    return std::nullopt;
 }
 
 } // namespace rpiboot

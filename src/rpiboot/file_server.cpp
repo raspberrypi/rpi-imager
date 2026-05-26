@@ -25,7 +25,8 @@ bool FileServer::run(IUsbTransport& transport,
                       const std::filesystem::path& firmwareDir,
                       ProgressCallback progress,
                       const std::atomic<bool>& cancelled,
-                      FileResolver resolver)
+                      FileResolver resolver,
+                      bool requireReEnumConfirmation)
 {
     // Use the disk-based resolver as default
     FileResolver resolverFn = resolver ? std::move(resolver)
@@ -40,6 +41,67 @@ bool FileServer::run(IUsbTransport& transport,
 
     if (progress)
         progress(0, 0, "Waiting for device file requests...");
+
+    // On a disconnect-with-files-served (NO_DEVICE, IO, exhausted retries, or
+    // a flood of garbage messages), libusb can't tell us whether the device
+    // rebooted into the next stage or was physically unplugged.  This helper
+    // resolves the ambiguity by waiting for an external confirmation signal:
+    //   - Fastboot: a scanner thread polls for the fastboot gadget on the
+    //     same port path and sets the cancellation flag once it appears.
+    //     The gadget is a full Linux instance — boot can take up to ~30 s,
+    //     occasionally longer, so the grace window must cover that worst
+    //     case.  Aligned with the scanner's own 60 s timeout in
+    //     RpibootThread::pollForFastbootDevice() so file_server doesn't
+    //     give up before the scanner does.
+    //   - SecureBootRecovery: a similar scanner watches for the device
+    //     returning to rpiboot after the EEPROM write (the recovery
+    //     config.txt is rewritten by FirmwareManager to ensure
+    //     set_boot_order=0x3 + recovery_reboot=1 are present in the right
+    //     order — see ensureSbrReenumerates).  Same 60 s timeout.
+    // The progress callback is driven during the wait so the caller's
+    // cancel-bridge lambda (which polls fastbootFound and updates the
+    // cancellation flag) has a chance to fire — without that, the flag
+    // would never flip even after re-enumeration.
+    auto resolveDisconnect = [&](const char* reason) -> bool {
+        if (!requireReEnumConfirmation) {
+            qDebug() << "rpiboot:" << reason << "after serving"
+                     << filesServed << "file(s) — treating as successful completion";
+            if (progress)
+                progress(filesServed, filesServed, "Device rebooted into next stage");
+            return true;
+        }
+
+        constexpr int GRACE_WINDOW_MS = 60000;  // matches pollForFastbootDevice
+        constexpr int POLL_INTERVAL_MS = 200;
+        qDebug() << "rpiboot:" << reason << "after serving" << filesServed
+                 << "file(s) — waiting up to" << GRACE_WINDOW_MS
+                 << "ms for next-stage device confirmation"
+                 << "(gadget Linux boot can take ~30s)";
+
+        for (int waited = 0; waited < GRACE_WINDOW_MS; waited += POLL_INTERVAL_MS) {
+            if (cancelled.load()) {
+                qDebug() << "rpiboot: next-stage device confirmed by caller after"
+                         << waited << "ms (" << reason << ")";
+                if (progress)
+                    progress(filesServed, filesServed, "Device rebooted into next stage");
+                return true;
+            }
+            if (progress)
+                progress(filesServed, 0,
+                    "Confirming device re-enumeration ("
+                    + std::to_string(waited / 1000 + 1) + "s of "
+                    + std::to_string(GRACE_WINDOW_MS / 1000) + "s)...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(POLL_INTERVAL_MS));
+        }
+
+        _lastError = std::string(reason) + " after serving "
+                   + std::to_string(filesServed)
+                   + " file(s) and never re-enumerated as next-stage device"
+                   + (lastFilename.empty() ? "" : "; last file: " + lastFilename)
+                   + " — check the USB cable and try again";
+        qWarning() << "rpiboot:" << QString::fromStdString(_lastError);
+        return false;
+    };
 
     while (!cancelled.load()) {
         // Read a FileMessage from the device via vendor control transfer IN.
@@ -67,14 +129,11 @@ bool FileServer::run(IUsbTransport& transport,
             constexpr int LIBUSB_ERR_IO        = -1;
             constexpr int LIBUSB_ERR_NO_DEVICE = -4;
             if (bytesRead == LIBUSB_ERR_NO_DEVICE || bytesRead == LIBUSB_ERR_IO) {
-                // If we already served files, the device rebooted into the
-                // next stage (e.g. fastboot gadget) without sending Done.
                 if (filesServed > 0) {
-                    qDebug() << "rpiboot: device disconnected after serving"
-                             << filesServed << "file(s) — treating as successful completion";
-                    if (progress)
-                        progress(filesServed, filesServed, "Device rebooted into next stage");
-                    return true;
+                    return resolveDisconnect(
+                        bytesRead == LIBUSB_ERR_NO_DEVICE
+                            ? "device disconnected (NO_DEVICE)"
+                            : "device disconnected (IO)");
                 }
                 _lastError = "Device disconnected (libusb error "
                     + std::to_string(bytesRead) + ")"
@@ -83,13 +142,8 @@ bool FileServer::run(IUsbTransport& transport,
             }
 
             if (consecutiveErrors > maxRetries) {
-                if (filesServed > 0) {
-                    qDebug() << "rpiboot: max retries reached after serving"
-                             << filesServed << "file(s) — treating as successful completion";
-                    if (progress)
-                        progress(filesServed, filesServed, "Device rebooted into next stage");
-                    return true;
-                }
+                if (filesServed > 0)
+                    return resolveDisconnect("max retries reached");
                 _lastError = "Failed to read FileMessage from device (error "
                     + std::to_string(bytesRead) + " after "
                     + std::to_string(consecutiveErrors) + " retries"
@@ -134,13 +188,8 @@ bool FileServer::run(IUsbTransport& transport,
                      << "0x" << Qt::hex << static_cast<uint32_t>(msg.command) << Qt::dec
                      << ") retry" << consecutiveErrors << "/" << maxRetries;
             if (consecutiveErrors > maxRetries) {
-                if (filesServed > 0) {
-                    qDebug() << "rpiboot: max retries reached after serving"
-                             << filesServed << "file(s) — treating as successful completion";
-                    if (progress)
-                        progress(filesServed, filesServed, "Device rebooted into next stage");
-                    return true;
-                }
+                if (filesServed > 0)
+                    return resolveDisconnect("garbage messages flooded");
                 _lastError = "Unknown file command "
                     + std::to_string(static_cast<int32_t>(msg.command));
                 return false;

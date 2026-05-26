@@ -170,26 +170,34 @@ void RpibootThread::run()
 
     // 2c: Open transport and run file server (on the second-stage device).
     //
-    // For Fastboot sideloading, the device reboots into the fastboot gadget
-    // after receiving the firmware files — it does NOT send a "Done" command.
-    // On Windows/WinUSB, this means the file server never gets a clean
-    // disconnect signal; it just sees PIPE errors and garbage reads.
-    //
-    // To avoid blocking on pointless retries, we start scanning for the
-    // fastboot device in parallel.  Once it appears the file server can
-    // stop — the _fastbootFound flag is OR'd with _cancelled so the
-    // file server's cancellation check picks it up.
-    _fastbootFound.store(false);
+    // Both sideload modes have the same "device disconnects mid-flow rather
+    // than sending Done" behaviour, just into different next-stage devices:
+    //   Fastboot → fastboot gadget (full Linux on the target; new VID/PID).
+    //   SBR      → original rpiboot (after EEPROM write + recovery_reboot;
+    //              same VID/PID, new USB address).
+    // On Windows/WinUSB, the file server never gets a clean disconnect
+    // signal — just PIPE errors and garbage reads.  To distinguish a real
+    // disconnect (user yanked the cable) from a legitimate reboot, we run
+    // a parallel scanner that watches for the next-stage device on the
+    // same port path.  _nextStageFound is OR'd with _cancelled into the
+    // file server's cancel flag via wrappedProgress, so the file server
+    // can short-circuit cleanly as soon as confirmation arrives.
+    _nextStageFound.store(false);
     QString fastbootId;
+    const uint8_t priorDeviceAddress = fileServerDevice.deviceAddress;
 
-    // Launch fastboot scanner in background for Fastboot mode.
+    // Launch the mode-appropriate scanner in the background.
     // Note: fastbootId is captured by reference — safe because the
     // ScannerGuard below guarantees the scanner thread is joined before
     // this variable goes out of scope on any exit path.
-    std::thread fastbootScanner;
+    std::thread nextStageScanner;
     if (_mode == SideloadMode::Fastboot) {
-        fastbootScanner = std::thread([this, &fastbootId]() {
-            pollForFastbootDevice(_fastbootFound, fastbootId);
+        nextStageScanner = std::thread([this, &fastbootId]() {
+            pollForFastbootDevice(_nextStageFound, fastbootId);
+        });
+    } else if (_mode == SideloadMode::SecureBootRecovery) {
+        nextStageScanner = std::thread([this, priorDeviceAddress]() {
+            pollForRpibootReturn(_nextStageFound, priorDeviceAddress);
         });
     }
 
@@ -204,7 +212,7 @@ void RpibootThread::run()
                 thread.join();
             }
         }
-    } scannerGuard{fastbootScanner, _cancelled};
+    } scannerGuard{nextStageScanner, _cancelled};
 
     {
         bool fileServerOk = false;
@@ -221,30 +229,30 @@ void RpibootThread::run()
             fileServeDiag = transport->initDiagnostics();
 
             // The file server checks cancelled.load() each iteration.
-            // Use a local atomic that we set when fastboot appears.
+            // Use a local atomic that we set when the next-stage device appears.
             std::atomic<bool> combinedCancel{false};
             auto wrappedProgress = [&](uint64_t current, uint64_t total, const std::string& status) {
-                // Stop the file server when fastboot appears OR the user cancels
-                if (_fastbootFound.load() || _cancelled.load())
+                // Stop the file server when next-stage device appears OR the user cancels
+                if (_nextStageFound.load() || _cancelled.load())
                     combinedCancel.store(true);
                 progressCb(current, total, status);
             };
             fileServerOk = protocol.serveFiles(*transport, _device.chipGeneration, _mode,
                                                 fwDir, wrappedProgress, combinedCancel);
         } catch (const std::exception& e) {
-            // If the fastboot device already appeared, this exception is expected
+            // If the next-stage device already appeared, this exception is expected
             // (the transport died because the device rebooted).
-            if (!_fastbootFound.load()) {
+            if (!_nextStageFound.load()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QString::fromUtf8(e.what()));
                 emit error(tr("USB error: %1").arg(e.what()));
                 return;
             }
-            fileServerOk = true;  // Fastboot found — the exception is benign
+            fileServerOk = true;  // Next-stage device found — the exception is benign
         }
 
-        // If fastboot was found while the file server was running, that's success
-        if (_fastbootFound.load())
+        // If next-stage device was found while the file server was running, that's success
+        if (_nextStageFound.load())
             fileServerOk = true;
 
         if (!fileServerOk) {
@@ -268,10 +276,10 @@ void RpibootThread::run()
     if (_cancelled.load())
         return;
 
-    // ── Step 3: Wait for the target device to appear ───────────────────
+    // ── Step 3: Wait for the next-stage device to appear ───────────────
     switch (_mode) {
     case SideloadMode::Fastboot:
-        if (_fastbootFound.load()) {
+        if (_nextStageFound.load()) {
             // Already found during the file server phase
             qDebug() << "Fastboot device already detected during file server phase";
         } else {
@@ -282,10 +290,10 @@ void RpibootThread::run()
         {
             // Wait for the background scanner to finish (non-cancelling join —
             // let it complete naturally or time out on its own).
-            if (fastbootScanner.joinable())
-                fastbootScanner.join();
+            if (nextStageScanner.joinable())
+                nextStageScanner.join();
 
-            bool found = _fastbootFound.load();
+            bool found = _nextStageFound.load();
             emit eventFastbootWait(static_cast<quint32>(phaseTimer.elapsed()), found);
             if (found) {
                 emit fastbootDeviceReady(fastbootId);
@@ -297,7 +305,15 @@ void RpibootThread::run()
         break;
 
     case SideloadMode::SecureBootRecovery:
-        // Recovery mode doesn't produce a new device to wait for
+        // With set_boot_order=0x3 + recovery_reboot=1 in the recovery
+        // config.txt (enforced by FirmwareManager::ensureSbrReenumerates),
+        // the device reboots back into rpiboot after writing the EEPROM.
+        // file_server's grace window has already waited for this — if we
+        // got here, either _nextStageFound is set (scanner confirmed) or
+        // file_server exited cleanly via Done.  Either way, the recovery
+        // operation completed and the EEPROM has been written.
+        if (_nextStageFound.load())
+            qDebug() << "SBR: device re-enumerated into rpiboot post-recovery";
         emit success();
         break;
     }
@@ -442,6 +458,53 @@ bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fas
             }
         } catch (const std::exception& e) {
             qWarning() << "rpiboot: USB scan failed during fastboot wait:" << e.what();
+            continue;
+        }
+    }
+
+    return false;
+}
+
+bool RpibootThread::pollForRpibootReturn(std::atomic<bool>& found,
+                                          uint8_t priorDeviceAddress)
+{
+    using namespace rpiboot;
+
+    // After SBR writes the EEPROM and reboots (with set_boot_order=0x3 +
+    // recovery_reboot=1 in config.txt), the device re-enumerates with the
+    // same Broadcom VID/PID it had at the start.  The only stable signal
+    // that says "this is the new enumeration, not the old one still
+    // present" is that USB hands out a fresh device address on reconnect
+    // — so we treat "rpiboot VID/PID on our port path, address != prior"
+    // as the return event.  Address collisions across reconnects are
+    // theoretically possible on heavily-used buses; in practice the
+    // address counter increments and the same port path won't be
+    // reassigned the exact prior address within the poll window.
+    LibusbContext pollCtx;
+
+    constexpr int POLLS = 120;  // 60s — match pollForFastbootDevice
+    for (int attempt = 0; attempt < POLLS; ++attempt) {
+        if (_cancelled.load()) return false;
+
+        QThread::msleep(500);
+
+        try {
+            auto devices = pollCtx.scanBootDevices();
+            for (const auto& dev : devices) {
+                const bool portMatches = !_device.portPath.empty() &&
+                                         dev.portPath == _device.portPath;
+                const bool isFreshAddress = (dev.deviceAddress != priorDeviceAddress);
+                if (portMatches && isFreshAddress) {
+                    qDebug() << "SBR: rpiboot device returned on same port path "
+                                "(bus" << dev.busNumber
+                             << "addr" << dev.deviceAddress
+                             << "vs prior addr" << priorDeviceAddress << ")";
+                    found.store(true);
+                    return true;
+                }
+            }
+        } catch (const std::exception& e) {
+            qWarning() << "rpiboot: USB scan failed during SBR re-enum wait:" << e.what();
             continue;
         }
     }

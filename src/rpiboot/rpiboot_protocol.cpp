@@ -66,7 +66,21 @@ bool RpibootProtocol::serveFiles(IUsbTransport& transport,
         };
     }
 
-    if (!_fileServer.run(transport, sideloadDir, progress, cancelled, resolver)) {
+    // Both sideload modes have an external confirmation mechanism: the
+    // caller (RpibootThread) runs a scanner that watches for the next-stage
+    // device on the same port path and flips the cancellation flag once it
+    // appears.  Requiring that confirmation on disconnect is what lets the
+    // file server tell a real cable yank apart from a legitimate reboot.
+    //   Fastboot → scanner looks for the fastboot gadget VID/PID.
+    //   SBR      → scanner looks for the original rpiboot VID/PID returning
+    //              on a fresh device address (FirmwareManager rewrites the
+    //              recovery config.txt to ensure set_boot_order=0x3 +
+    //              recovery_reboot=1 so the device actually does reboot
+    //              back to rpiboot).
+    const bool requireReEnumConfirmation =
+        (mode == SideloadMode::Fastboot || mode == SideloadMode::SecureBootRecovery);
+    if (!_fileServer.run(transport, sideloadDir, progress, cancelled, resolver,
+                          requireReEnumConfirmation)) {
         _lastError = "File server failed: " + _fileServer.lastError();
         return false;
     }
