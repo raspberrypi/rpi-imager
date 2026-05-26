@@ -1,6 +1,6 @@
 # Bundled liblzma (xz)
 
-set(LIBLZMA_VERSION "5.8.2")
+set(LIBLZMA_VERSION "5.8.3")
 FetchContent_Declare(xz
     GIT_REPOSITORY https://github.com/tukaani-project/xz.git
     GIT_TAG v${LIBLZMA_VERSION}
