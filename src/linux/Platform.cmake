@@ -21,6 +21,7 @@ set(PLATFORM_SOURCES
     linux/acceleratedcryptographichash_gnutls.cpp
     linux/bootimgcreator_linux.cpp
     linux/rsakeyfingerprint_linux.cpp
+    linux/secureboot_crypto_linux.cpp
     linux/file_operations_linux.cpp
     linux/platformquirks_linux.cpp
 )
