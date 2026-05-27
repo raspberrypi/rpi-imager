@@ -79,6 +79,18 @@ private:
     bool applyCustomisation(class fastboot::FastbootProtocol& fb,
                              class rpiboot::IUsbTransport& transport);
 
+    // Best-effort: after the OS image has been flashed, set the
+    // EEPROM's BOOT_ORDER so the chosen storage device boots first on
+    // the next power cycle. Reads the device's existing EEPROM, edits
+    // bootconf.txt in place, re-signs if the device requires it, and
+    // writes back via `oem eeprom-update`. Failures are logged and
+    // swallowed --- a successful image flash should not be reported as
+    // a failure just because the boot-order tweak couldn't run (e.g.
+    // older fastbootd without the eeprom commands, signed-eeprom board
+    // with no key configured, etc.).
+    void applyBootOrderUpdate(class fastboot::FastbootProtocol& fb,
+                               class rpiboot::IUsbTransport& transport);
+
     QString _fastbootId;
     QString _blockDevice;
     QUrl _imageUrl;

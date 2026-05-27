@@ -321,6 +321,86 @@ std::vector<uint8_t> FastbootProtocol::readDeviceFile(rpiboot::IUsbTransport& tr
     return upload(transport, nullptr, cancelled);
 }
 
+// ── EEPROM ─────────────────────────────────────────────────────────────
+
+namespace {
+// SPI flash write of a Pi5 (2 MiB) EEPROM completes well under a
+// minute in practice; allow several to absorb retries / slow chips.
+constexpr int EEPROM_OP_TIMEOUT_MS = 5 * 60 * 1000;
+} // namespace
+
+bool FastbootProtocol::updateEeprom(rpiboot::IUsbTransport& transport,
+                                     std::span<const uint8_t> image,
+                                     std::string_view spidev,
+                                     rpiboot::ProgressCallback progress,
+                                     std::atomic<bool>& cancelled)
+{
+    _lastError.clear();
+
+    if (!download(transport, image, progress, cancelled))
+        return false;
+
+    std::string cmd = "oem eeprom-update";
+    if (!spidev.empty()) {
+        cmd += ' ';
+        cmd.append(spidev);
+    }
+
+    auto resp = sendCommand(transport, cmd, EEPROM_OP_TIMEOUT_MS);
+    if (resp.type != Response::Okay) {
+        _lastError = "oem eeprom-update failed: " + resp.message;
+        return false;
+    }
+    return true;
+}
+
+bool FastbootProtocol::verifyEeprom(rpiboot::IUsbTransport& transport,
+                                     std::span<const uint8_t> image,
+                                     std::string_view spidev,
+                                     rpiboot::ProgressCallback progress,
+                                     std::atomic<bool>& cancelled)
+{
+    _lastError.clear();
+
+    if (!download(transport, image, progress, cancelled))
+        return false;
+
+    std::string cmd = "oem eeprom-verify";
+    if (!spidev.empty()) {
+        cmd += ' ';
+        cmd.append(spidev);
+    }
+
+    auto resp = sendCommand(transport, cmd, EEPROM_OP_TIMEOUT_MS);
+    if (resp.type != Response::Okay) {
+        _lastError = "oem eeprom-verify failed: " + resp.message;
+        return false;
+    }
+    return true;
+}
+
+std::vector<uint8_t> FastbootProtocol::readEeprom(rpiboot::IUsbTransport& transport,
+                                                   std::string_view spidev,
+                                                   rpiboot::ProgressCallback progress,
+                                                   std::atomic<bool>& cancelled)
+{
+    _lastError.clear();
+
+    std::string cmd = "oem eeprom-read";
+    if (!spidev.empty()) {
+        cmd += ' ';
+        cmd.append(spidev);
+    }
+
+    auto resp = sendCommand(transport, cmd, EEPROM_OP_TIMEOUT_MS);
+    if (resp.type != Response::Okay) {
+        _lastError = "oem eeprom-read failed: " + resp.message;
+        return {};
+    }
+
+    return upload(transport, progress, cancelled);
+}
+
 // ── Flash ──────────────────────────────────────────────────────────────
 
 bool FastbootProtocol::flash(rpiboot::IUsbTransport& transport,
