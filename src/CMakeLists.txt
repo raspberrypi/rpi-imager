@@ -270,6 +270,8 @@ set(SOURCES ${SOURCES}
     "fastboot/fastboot_protocol.cpp"
     "fastboot/bmap.cpp"
     "fastboot/sparse_encoder.cpp"
+    "fastboot/pieeprom.cpp"
+    "fastboot/eeprom_signer.cpp"
     "fastbootflashthread.cpp"
     "connect_device_registrar.cpp"
 )

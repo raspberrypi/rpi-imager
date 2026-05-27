@@ -425,6 +425,115 @@ add_custom_target(test_sparse_encoder
     COMMENT "Running sparse encoder tests"
 )
 
+# Pieeprom format tests (parse/edit pieeprom.bin, BOOT_ORDER helpers)
+add_executable(pieeprom_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/pieeprom.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/pieeprom.cpp
+    pieeprom_test.cpp
+)
+target_link_libraries(pieeprom_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+target_include_directories(pieeprom_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+target_compile_features(pieeprom_test PRIVATE cxx_std_20)
+target_compile_options(pieeprom_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(pieeprom_test)
+
+add_custom_target(test_pieeprom
+    COMMAND pieeprom_test
+    DEPENDS pieeprom_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running pieeprom format tests"
+)
+
+# Fastboot EEPROM wire-protocol tests
+add_executable(fastboot_eeprom_wire_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/usb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/test/mock_usb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.cpp
+    fastboot_eeprom_wire_test.cpp
+)
+target_link_libraries(fastboot_eeprom_wire_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+target_include_directories(fastboot_eeprom_wire_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+target_compile_features(fastboot_eeprom_wire_test PRIVATE cxx_std_20)
+target_compile_options(fastboot_eeprom_wire_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(fastboot_eeprom_wire_test)
+
+add_custom_target(test_fastboot_eeprom_wire
+    COMMAND fastboot_eeprom_wire_test
+    DEPENDS fastboot_eeprom_wire_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running fastboot EEPROM wire tests"
+)
+
+# EEPROM signer tests (in-process .sig builder + cross-check vs rpi-eeprom-digest)
+if(WIN32)
+    set(EEPROM_SIGNER_PLATFORM_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp
+    )
+elseif(APPLE)
+    set(EEPROM_SIGNER_PLATFORM_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp
+    )
+else()
+    set(EEPROM_SIGNER_PLATFORM_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+    )
+endif()
+
+add_executable(eeprom_signer_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/eeprom_signer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/eeprom_signer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto.h
+    ${EEPROM_SIGNER_PLATFORM_SRC}
+    eeprom_signer_test.cpp
+)
+target_link_libraries(eeprom_signer_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+if(APPLE)
+    target_link_libraries(eeprom_signer_test PRIVATE
+        "-framework Security" "-framework CoreFoundation"
+    )
+elseif(WIN32)
+    target_link_libraries(eeprom_signer_test PRIVATE
+        crypt32 bcrypt ncrypt
+    )
+endif()
+target_include_directories(eeprom_signer_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+target_compile_features(eeprom_signer_test PRIVATE cxx_std_20)
+target_compile_options(eeprom_signer_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(eeprom_signer_test)
+
+add_custom_target(test_eeprom_signer
+    COMMAND eeprom_signer_test
+    DEPENDS eeprom_signer_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running EEPROM signer tests"
+)
+
 # Hardware integration tests (gated by RPIBOOT_TEST_DEVICE env var)
 add_executable(rpiboot_integration_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h

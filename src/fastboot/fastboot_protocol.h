@@ -119,6 +119,34 @@ public:
                                          std::string_view devicePath,
                                          std::atomic<bool>& cancelled);
 
+    // ── EEPROM (rpi-fastbootd be8a8ce) ────────────────────────────────
+    //
+    // The device-side handlers read whatever was just downloaded via
+    // `download:` as the EEPROM image. `spidev` is optional and may be
+    // empty to let the device auto-detect the SPI bus.
+
+    // Download `image`, then issue "oem eeprom-update [<spidev>]".
+    // Uses a long timeout to cover the SPI flash erase + write cycle.
+    bool updateEeprom(rpiboot::IUsbTransport& transport,
+                      std::span<const uint8_t> image,
+                      std::string_view spidev,
+                      rpiboot::ProgressCallback progress,
+                      std::atomic<bool>& cancelled);
+
+    // Download `image`, then issue "oem eeprom-verify [<spidev>]".
+    bool verifyEeprom(rpiboot::IUsbTransport& transport,
+                      std::span<const uint8_t> image,
+                      std::string_view spidev,
+                      rpiboot::ProgressCallback progress,
+                      std::atomic<bool>& cancelled);
+
+    // Issue "oem eeprom-read [<spidev>]" then upload the staged image.
+    // Returns the EEPROM bytes, or empty on failure (lastError() set).
+    std::vector<uint8_t> readEeprom(rpiboot::IUsbTransport& transport,
+                                     std::string_view spidev,
+                                     rpiboot::ProgressCallback progress,
+                                     std::atomic<bool>& cancelled);
+
     const std::string& lastError() const { return _lastError; }
 
 private:
