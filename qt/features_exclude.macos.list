@@ -41,7 +41,6 @@ systemsemaphore
 systemtrayicon
 tabletevent
 testlib
-texthtmlparser
 textmarkdownreader
 textmarkdownwriter
 textodfwriter
@@ -54,7 +53,6 @@ undoview
 wasm-exceptions
 wasm-jspi
 wasm-simd128
-wayland-compositor-quick
 windeployqt
 # SSL/TLS backend exclusions
 openssl

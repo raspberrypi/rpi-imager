@@ -110,7 +110,7 @@ setup_homebrew_paths
 cd "$BUILD_DIR"
 
 # Build config options using helpers
-CONFIG_OPTS="$(get_base_config_opts) -no-glib -make libs $(get_common_skip_opts)"
+CONFIG_OPTS="$(get_base_config_opts) -no-glib $(get_common_skip_opts)"
 CONFIG_OPTS="$CONFIG_OPTS $(get_build_type_opts)"
 
 # Platform-specific configuration for macOS

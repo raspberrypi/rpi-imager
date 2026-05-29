@@ -17,7 +17,7 @@ QT_BUILD_COMMON_LOADED=1
 # =============================================================================
 
 # Qt Version Configuration
-QT_VERSION_DEFAULT="6.9.3"    # Default version for all platforms
+QT_VERSION_DEFAULT="6.11.1"    # Default version for all platforms
 
 # Build Configuration Defaults
 PREFIX_DEFAULT="/opt/Qt"       # Base installation prefix (version will be appended)

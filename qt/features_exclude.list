@@ -37,7 +37,6 @@ sql
 systemtrayicon
 tabletevent
 testlib
-texthtmlparser
 textmarkdownreader
 textmarkdownwriter
 textodfwriter
@@ -51,5 +50,4 @@ wasm-exceptions
 wasm-jspi
 wasm-simd128
 wayland-server
-wayland-compositor-quick
 windeployqt

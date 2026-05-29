@@ -80,9 +80,6 @@ wasm-exceptions
 wasm-jspi
 wasm-simd128
 
-# Wayland compositor
-wayland-compositor-quick
-
 # Domain validation
 topleveldomain
 
