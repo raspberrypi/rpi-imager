@@ -164,7 +164,7 @@ EOF
 echo "Created CMake toolchain file: $TOOLCHAIN_FILE"
 
 # Build config options using helpers
-CONFIG_OPTS="$(get_base_config_opts) -make libs $(get_common_skip_opts) -skip qtmacextras"
+CONFIG_OPTS="$(get_base_config_opts) $(get_common_skip_opts) -skip qtmacextras"
 CONFIG_OPTS="$CONFIG_OPTS $(get_build_type_opts)"
 
 # Cross-compilation specific options

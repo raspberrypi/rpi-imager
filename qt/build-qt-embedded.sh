@@ -170,7 +170,7 @@ cd "$BUILD_DIR"
 echo "Configuring Qt for embedded systems..."
 
 # Build config options using helpers
-CONFIG_OPTS="$(get_base_config_opts) -make libs $(get_common_skip_opts)"
+CONFIG_OPTS="$(get_base_config_opts) $(get_common_skip_opts)"
 CONFIG_OPTS="$CONFIG_OPTS $(get_build_type_opts)"
 
 # Embedded platform-specific configuration
