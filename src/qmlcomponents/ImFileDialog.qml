@@ -381,7 +381,7 @@ BaseDialog {
             padding: 8
             background: Rectangle {
                 color: Style.mainBackgroundColor
-                radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+                radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
                 border.color: Style.popupBorderColor
                 border.width: Style.sectionBorderWidth
                 antialiasing: true
@@ -404,7 +404,7 @@ BaseDialog {
                     highlightFollowsCurrentItem: true
                     highlight: Rectangle {
                         color: placesList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
-                        radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                         antialiasing: true
                         visible: placesList.currentIndex >= 0
                     }
@@ -433,7 +433,7 @@ BaseDialog {
                                 else
                                     return "transparent"
                             }
-                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                            radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                             antialiasing: true
                         }
                         onClicked: {
@@ -485,7 +485,7 @@ BaseDialog {
                     highlightFollowsCurrentItem: true
                     highlight: Rectangle {
                         color: subfoldersList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
-                        radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                         antialiasing: true
                         visible: subfoldersList.currentIndex >= 0
                     }
@@ -523,7 +523,7 @@ BaseDialog {
                                 else
                                     return "transparent"
                             }
-                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                            radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                             antialiasing: true
                         }
                         onClicked: {
@@ -563,7 +563,7 @@ BaseDialog {
             padding: 8
             background: Rectangle {
                 color: Style.mainBackgroundColor
-                radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+                radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
                 border.color: Style.popupBorderColor
                 border.width: Style.sectionBorderWidth
                 antialiasing: true
@@ -637,7 +637,7 @@ BaseDialog {
                         // Custom styling to make it look like a navigation item
                         background: Rectangle {
                             color: upEntry.hovered ? Qt.rgba(0, 0, 0, 0.1) : Qt.rgba(0, 0, 0, 0.03)
-                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                            radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                             border.width: upEntry.activeFocus ? 2 : 1
                             border.color: upEntry.activeFocus ? Style.focusOutlineColor : Qt.rgba(0, 0, 0, 0.1)
                             antialiasing: true
@@ -669,7 +669,7 @@ BaseDialog {
                         
                         highlight: Rectangle {
                             color: filesList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
-                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                            radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                             antialiasing: true
                             visible: filesList.currentIndex >= 0
                         }
@@ -720,7 +720,7 @@ BaseDialog {
                                     else
                                         return "transparent"
                                 }
-                                radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                                radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                                 antialiasing: true
                             }
                             onClicked: {
@@ -803,6 +803,4 @@ BaseDialog {
         }
     }
 }
-
-
 

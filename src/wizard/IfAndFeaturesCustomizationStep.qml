@@ -16,7 +16,6 @@ import RpiImager
 WizardStepBase {
     id: root
 
-    required property ImageWriter imageWriter
     required property var wizardContainer
 
     // Capability flags for each UI option
@@ -39,12 +38,12 @@ WizardStepBase {
 
     function updateCaps() {
         // Check individual capabilities for each interface/feature
-        supportsI2c = imageWriter.checkHWAndSWCapability("i2c")
-        supportsSpi = imageWriter.checkHWAndSWCapability("spi")
-        supports1Wire = imageWriter.checkHWAndSWCapability("onewire")
-        supportsSerial = imageWriter.checkHWAndSWCapability("serial")
-        supportsSerialConsoleOnly = imageWriter.checkHWCapability("serial_on_console_only")
-        supportsUsbOtg = imageWriter.checkHWAndSWCapability("usb_otg")
+        supportsI2c = ImageWriterSingleton.checkHWAndSWCapability("i2c")
+        supportsSpi = ImageWriterSingleton.checkHWAndSWCapability("spi")
+        supports1Wire = ImageWriterSingleton.checkHWAndSWCapability("onewire")
+        supportsSerial = ImageWriterSingleton.checkHWAndSWCapability("serial")
+        supportsSerialConsoleOnly = ImageWriterSingleton.checkHWCapability("serial_on_console_only")
+        supportsUsbOtg = ImageWriterSingleton.checkHWAndSWCapability("usb_otg")
     }
 
     content: [
@@ -159,8 +158,8 @@ WizardStepBase {
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
                                 accessibleDescription: qsTr("Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage")
-                                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
-                                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-usb-gadget?tab=readme-ov-file"
+                                helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
+                                helpUrl: ImageWriterSingleton.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-usb-gadget?tab=readme-ov-file"
                                 checked: false
                             }
 
@@ -187,7 +186,7 @@ WizardStepBase {
         }
         root.isConfirmed = false
 
-        // Defer capability check to ensure imageWriter capabilities are fully available
+        // Defer capability check to ensure ImageWriterSingleton capabilities are fully available
         // and QML bindings are established
         Qt.callLater(function() {
             updateCaps()
@@ -295,11 +294,11 @@ WizardStepBase {
 
         // These settings depend on per-OS capabilities so must NOT be persisted.
         // Remove any stale values left by older versions.
-        imageWriter.removePersistedCustomisationSetting("enableI2C")
-        imageWriter.removePersistedCustomisationSetting("enableSPI")
-        imageWriter.removePersistedCustomisationSetting("enable1Wire")
-        imageWriter.removePersistedCustomisationSetting("enableSerial")
-        imageWriter.removePersistedCustomisationSetting("enableUsbGadget")
+        ImageWriterSingleton.removePersistedCustomisationSetting("enableI2C")
+        ImageWriterSingleton.removePersistedCustomisationSetting("enableSPI")
+        ImageWriterSingleton.removePersistedCustomisationSetting("enable1Wire")
+        ImageWriterSingleton.removePersistedCustomisationSetting("enableSerial")
+        ImageWriterSingleton.removePersistedCustomisationSetting("enableUsbGadget")
 
         // Mirror into wizardContainer
         wizardContainer.ifI2cEnabled     = i2cVal
@@ -318,7 +317,6 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
-        imageWriter: root.imageWriter
         parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -369,8 +367,8 @@ WizardStepBase {
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             onLinkActivated: function(link) {
-                if (imageWriter) {
-                    imageWriter.openUrl(link)
+                if (ImageWriterSingleton) {
+                    ImageWriterSingleton.openUrl(link)
                 } else {
                     Qt.openUrlExternally(link)
                 }

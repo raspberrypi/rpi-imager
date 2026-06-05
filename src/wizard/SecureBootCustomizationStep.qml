@@ -15,7 +15,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property ImageWriter imageWriter
     required property var wizardContainer
     
     // Track RSA key path for reactive UI updates
@@ -54,16 +53,16 @@ WizardStepBase {
                 }
                 onClicked: {
                     // Prefer native file dialog via Imager's wrapper, but only if available
-                    if (imageWriter.nativeFileDialogAvailable()) {
+                    if (ImageWriterSingleton.nativeFileDialogAvailable()) {
                         var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
                         var startDir = home && home.length > 0 ? home + "/.ssh" : ""
-                        var keyPath = imageWriter.getNativeOpenFileName(
+                        var keyPath = ImageWriterSingleton.getNativeOpenFileName(
                             qsTr("Select RSA Private Key"), 
                             startDir,
                             qsTr("PEM Files (*.pem);;All Files (*)")
                         );
                         if (keyPath) {
-                            imageWriter.setSetting("secureboot_rsa_key", keyPath)
+                            ImageWriterSingleton.setSetting("secureboot_rsa_key", keyPath)
                             // Update tracked property and wizard container state
                             root.rsaKeyPath = keyPath
                             wizardContainer.secureBootKeyConfigured = true
@@ -95,8 +94,8 @@ WizardStepBase {
                 Layout.topMargin: Style.spacingMedium
                 text: qsTr("Enable Secure Boot Signing")
                 accessibleDescription: qsTr("Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi")
-                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn about Secure Boot")
-                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/usbboot/blob/master/secure-boot-recovery/README.md"
+                helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("Learn about Secure Boot")
+                helpUrl: ImageWriterSingleton.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/usbboot/blob/master/secure-boot-recovery/README.md"
                 checked: false
                 // Only enable if RSA key is configured
                 enabled: root.rsaKeyPath && root.rsaKeyPath.length > 0
@@ -168,7 +167,7 @@ WizardStepBase {
                 border.color: Style.titleSeparatorColor
                 border.width: 1
                 radius: Style.sectionBorderRadius
-                visible: typeof imageWriter.isRpibootDevice === "function" && imageWriter.isRpibootDevice()
+                visible: typeof ImageWriterSingleton.isRpibootDevice === "function" && ImageWriterSingleton.isRpibootDevice()
 
                 ColumnLayout {
                     id: otpColumn
@@ -224,8 +223,8 @@ WizardStepBase {
 
     // Helper function to get the RSA key path
     function getRsaKeyPath() {
-        if (imageWriter) {
-            var keyPath = imageWriter.getStringSetting("secureboot_rsa_key")
+        if (ImageWriterSingleton) {
+            var keyPath = ImageWriterSingleton.getStringSetting("secureboot_rsa_key")
             return keyPath || ""
         }
         return ""
@@ -233,8 +232,8 @@ WizardStepBase {
     
     // Helper function to get the RSA key fingerprint
     function getRsaKeyFingerprint() {
-        if (imageWriter && root.rsaKeyPath) {
-            var fingerprint = imageWriter.getRsaKeyFingerprint(root.rsaKeyPath)
+        if (ImageWriterSingleton && root.rsaKeyPath) {
+            var fingerprint = ImageWriterSingleton.getRsaKeyFingerprint(root.rsaKeyPath)
             return fingerprint || qsTr("(unable to compute)")
         }
         return ""
@@ -243,7 +242,6 @@ WizardStepBase {
     // File dialog for RSA key selection (fallback when native dialog unavailable)
     ImFileDialog {
         id: rsaKeyFileDialog
-        imageWriter: root.imageWriter
         parent: root.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select RSA Private Key")
@@ -260,7 +258,7 @@ WizardStepBase {
         onAccepted: {
             if (selectedFile && selectedFile.toString().length > 0) {
                 var filePath = selectedFile.toString().replace(/^file:\/\//, "")
-                imageWriter.setSetting("secureboot_rsa_key", filePath)
+                ImageWriterSingleton.setSetting("secureboot_rsa_key", filePath)
                 // Update tracked property and wizard container state
                 root.rsaKeyPath = filePath
                 wizardContainer.secureBootKeyConfigured = true
@@ -310,13 +308,13 @@ WizardStepBase {
         }
         
         // Also persist for future sessions
-        var saved = imageWriter.getSavedCustomisationSettings()
+        var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         if (secureBootEnablePill.checked) {
             saved.secureBootEnabled = true
         } else {
             delete saved.secureBootEnabled
         }
-        imageWriter.setSavedCustomisationSettings(saved)
+        ImageWriterSingleton.setSavedCustomisationSettings(saved)
         
         console.log("Secure Boot enabled:", secureBootEnablePill.checked)
     }

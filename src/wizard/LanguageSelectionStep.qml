@@ -14,7 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
 
-    required property ImageWriter imageWriter
     required property var wizardContainer
     // Keep a mapping from display names to internal language names
     property var _internalLanguages: []
@@ -25,7 +24,7 @@ WizardStepBase {
 
     // Populate and preselect language on load
     Component.onCompleted: {
-        var langs = imageWriter.getTranslations()
+        var langs = ImageWriterSingleton.getTranslations()
         _internalLanguages = langs
         // Build display names, substituting British English label
         var display = []
@@ -37,7 +36,7 @@ WizardStepBase {
 
         // Pre-select based on current language (which may have been loaded from saved preference in main.cpp)
         // Fall back to English (British) if current language is not set
-        var current = imageWriter.getCurrentLanguage()
+        var current = ImageWriterSingleton.getCurrentLanguage()
         var idx = -1
         
         if (current && current.length > 0) {
@@ -83,7 +82,7 @@ WizardStepBase {
                             if (index >= 0 && index < _internalLanguages.length) {
                                 var internalName = _internalLanguages[index]
                                 if (internalName && internalName.length > 0)
-                                    imageWriter.changeLanguage(internalName)
+                                    ImageWriterSingleton.changeLanguage(internalName)
                             }
                         }
                     }
@@ -97,13 +96,12 @@ WizardStepBase {
         if (idx >= 0 && idx < _internalLanguages.length) {
             var internalName = _internalLanguages[idx]
             if (internalName && internalName.length > 0) {
-                imageWriter.changeLanguage(internalName)
+                ImageWriterSingleton.changeLanguage(internalName)
                 // Persist the language selection so it's remembered for future sessions
                 // This also ensures the language selector is always shown on next launch
-                imageWriter.setSetting("savedLanguage", internalName)
+                ImageWriterSingleton.setSetting("savedLanguage", internalName)
             }
         }
     }
 }
-
 

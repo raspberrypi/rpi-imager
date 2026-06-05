@@ -22,7 +22,6 @@ BaseDialog {
         cancelButton.implicitWidth + saveButton.implicitWidth + Style.spacingMedium * 2
     ) + Style.cardPadding * 4  // Double padding: contentLayout + optionsLayout margins
 
-    // imageWriter is inherited from BaseDialog
     property var wizardContainer: null
 
     property bool initialized: false
@@ -33,7 +32,7 @@ BaseDialog {
     Component.onCompleted: {
         registerFocusGroup("header", function(){
             // Only include header text when screen reader is active (otherwise it's not focusable)
-            if (popup.imageWriter && popup.imageWriter.screenReaderActive) {
+            if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 return [headerText]
             }
             return []
@@ -53,7 +52,7 @@ BaseDialog {
     }
 
     Connections {
-        target: imageWriter
+        target: ImageWriterSingleton
         function onFileSelected(fileUrl) {
             popup.selectedRepo = fileUrl
         }
@@ -72,9 +71,9 @@ BaseDialog {
         Accessible.role: Accessible.Heading
         Accessible.name: text + ", " + qsTr("Choose the source for operating system images")
         Accessible.ignored: false
-        Accessible.focusable: popup.imageWriter ? popup.imageWriter.screenReaderActive : false
-        focusPolicy: (popup.imageWriter && popup.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: popup.imageWriter ? popup.imageWriter.screenReaderActive : false
+        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     // Options section
@@ -158,10 +157,10 @@ BaseDialog {
                     activeFocusOnTab: true
                     onClicked: {
                         // Prefer native file dialog via Imager's wrapper, but only if available
-                        if (imageWriter.nativeFileDialogAvailable()) {
+                        if (ImageWriterSingleton.nativeFileDialogAvailable()) {
                             // Defer opening the native dialog until after the current event completes
                             Qt.callLater(function () {
-                                imageWriter.openFileDialog(qsTr("Select Repository"), CommonStrings.repoFiltersString);
+                                ImageWriterSingleton.openFileDialog(qsTr("Select Repository"), CommonStrings.repoFiltersString);
                             });
                         } else {
                             // Fallback to QML dialog (forced non-native)
@@ -182,7 +181,7 @@ BaseDialog {
                 inputMethodHints: Qt.ImhUrlCharactersOnly
 
                 // Use ImageWriter's validation method for consistency
-                property bool isValid: popup.imageWriter && popup.imageWriter.isValidRepoUrl(text)
+                property bool isValid: ImageWriterSingleton && ImageWriterSingleton.isValidRepoUrl(text)
             }
         }
     }
@@ -228,10 +227,10 @@ BaseDialog {
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
                          || (radioCustomUri.checked && fieldCustomUri.isValid))
                          // Disable while write is in progress to prevent restarting during write
-                         && (imageWriter.writeState === ImageWriter.Idle ||
-                             imageWriter.writeState === ImageWriter.Succeeded ||
-                             imageWriter.writeState === ImageWriter.Failed ||
-                             imageWriter.writeState === ImageWriter.Cancelled)
+                         && (ImageWriterSingleton.writeState === ImageWriter.Idle ||
+                             ImageWriterSingleton.writeState === ImageWriter.Succeeded ||
+                             ImageWriterSingleton.writeState === ImageWriter.Failed ||
+                             ImageWriterSingleton.writeState === ImageWriter.Cancelled)
                 // TODO: only show or enable when settings changed
                 text: qsTr("Apply & Restart")
                 accessibleDescription: qsTr("Apply the new content repository and restart the wizard from the beginning")
@@ -262,14 +261,14 @@ BaseDialog {
         if (!initialized) {
             initialized = true
 
-            if (imageWriter.customRepo()) {
+            if (ImageWriterSingleton.customRepo()) {
                 // Get URL as string to check the scheme
-                var repoStr = imageWriter.osListUrl().toString()
+                var repoStr = ImageWriterSingleton.osListUrl().toString()
                 if (repoStr.startsWith("file:")) {
                     radioOfficial.checked = false
                     radioCustomFile.checked = true
                     radioCustomUri.checked = false
-                    selectedRepo = imageWriter.osListUrl()
+                    selectedRepo = ImageWriterSingleton.osListUrl()
                     originalRepo = repoStr
                 } else if (repoStr.startsWith("http:") || repoStr.startsWith("https:")) {
                     radioOfficial.checked = false
@@ -301,16 +300,16 @@ BaseDialog {
         // Save settings to ImageWriter
         // Only save repository setting if it has actually changed
         if (radioOfficial.checked && originalRepo !== "") {
-            imageWriter.refreshOsListFromDefaultUrl()
+            ImageWriterSingleton.refreshOsListFromDefaultUrl()
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         } else if (radioCustomFile.checked && originalRepo !== selectedRepo.toString()) {
-            imageWriter.refreshOsListFrom(selectedRepo)
+            ImageWriterSingleton.refreshOsListFrom(selectedRepo)
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         } else if (radioCustomUri.checked && originalRepo !== fieldCustomUri.text) {
             // QML auto-converts string to QUrl for C++ method
-            imageWriter.refreshOsListFrom(fieldCustomUri.text)
+            ImageWriterSingleton.refreshOsListFrom(fieldCustomUri.text)
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         }
@@ -325,7 +324,6 @@ BaseDialog {
 
     ImFileDialog {
         id: repoFileDialog
-        imageWriter: popup.imageWriter
         dialogTitle: qsTr("Select custom repository")
         nameFilters: CommonStrings.repoFiltersList
         onAccepted: {

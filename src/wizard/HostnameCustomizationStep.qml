@@ -14,7 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property ImageWriter imageWriter
     required property var wizardContainer
     
     title: qsTr("Customisation: Choose hostname")
@@ -27,7 +26,7 @@ WizardStepBase {
         root.registerFocusGroup("hostname_fields", function(){ 
             // Only include help text when screen reader is active (otherwise it's not focusable)
             var items = []
-            if (root.imageWriter && root.imageWriter.screenReaderActive) {
+            if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 items.push(helpText)
             }
             items.push(fieldHostname)
@@ -87,12 +86,12 @@ WizardStepBase {
             wizardContainer.customizationSettings.hostname = hostnameText
             wizardContainer.hostnameConfigured = true
             // Persist for future sessions
-            imageWriter.setPersistedCustomisationSetting("hostname", hostnameText)
+            ImageWriterSingleton.setPersistedCustomisationSetting("hostname", hostnameText)
         } else {
             // Empty -> remove from both runtime and persistent settings
             delete wizardContainer.customizationSettings.hostname
             wizardContainer.hostnameConfigured = false
-            imageWriter.removePersistedCustomisationSetting("hostname")
+            ImageWriterSingleton.removePersistedCustomisationSetting("hostname")
         }
     }
     

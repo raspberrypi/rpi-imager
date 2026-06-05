@@ -18,8 +18,6 @@ ApplicationWindow {
     id: window
     visible: true
 
-    required property ImageWriter imageWriter
-
     // Whether to show the landing Language Selection step (set from C++)
     property bool showLanguageSelection: false
     // Wizard manages drive list and selection state
@@ -27,19 +25,19 @@ ApplicationWindow {
     // Expose overlay root to child components for dialog parenting
     readonly property alias overlayRootItem: overlayRoot
 
-    width: imageWriter.isEmbeddedMode() ? -1 : Style.scaled(680)
-    height: imageWriter.isEmbeddedMode() ? -1 : Style.scaled(450)
-    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : Style.scaled(680)
-    minimumHeight: imageWriter.isEmbeddedMode() ? -1 : Style.scaled(420)
+    width: ImageWriterSingleton.isEmbeddedMode() ? -1 : Style.scaled(680)
+    height: ImageWriterSingleton.isEmbeddedMode() ? -1 : Style.scaled(450)
+    minimumWidth: ImageWriterSingleton.isEmbeddedMode() ? -1 : Style.scaled(680)
+    minimumHeight: ImageWriterSingleton.isEmbeddedMode() ? -1 : Style.scaled(420)
 
     // Track custom repo host for title display
-    property string customRepoHost: imageWriter.customRepoHost()
+    property string customRepoHost: ImageWriterSingleton.customRepoHost()
     
     // Track offline state for title display (derived from whether OS list data is available)
-    property bool isOffline: imageWriter.isOsListUnavailable
+    property bool isOffline: ImageWriterSingleton.isOsListUnavailable
     
     title: {
-        var baseTitle = qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
+        var baseTitle = qsTr("Raspberry Pi Imager %1").arg(ImageWriterSingleton.constantVersion())
         if (isOffline) {
             baseTitle += " — " + qsTr("Offline")
         }
@@ -53,7 +51,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         // Set the main window for modal file dialogs
-        imageWriter.setMainWindow(window)
+        ImageWriterSingleton.setMainWindow(window)
     }
 
     onClosing: function (close) {
@@ -78,9 +76,9 @@ ApplicationWindow {
         sequence: "Ctrl+Shift+P"
         context: Qt.ApplicationShortcut
         onActivated: {
-            if (imageWriter.hasPerformanceData()) {
+            if (ImageWriterSingleton.hasPerformanceData()) {
                 console.log("Exporting performance data...")
-                imageWriter.exportPerformanceData()
+                ImageWriterSingleton.exportPerformanceData()
             } else {
                 console.log("No performance data available to export")
             }
@@ -107,7 +105,6 @@ ApplicationWindow {
         WizardContainer {
             id: wizardContainer
             anchors.fill: parent
-            imageWriter: window.imageWriter
             optionsPopup: appOptionsDialog
             overlayRootRef: overlayRoot
             // Show Language step if C++ requested it
@@ -132,7 +129,6 @@ ApplicationWindow {
     // Modern error dialog (replaces legacy MsgPopup for error/info cases)
     BaseDialog {
         id: errorDialog
-        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -148,7 +144,7 @@ ApplicationWindow {
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
                 // Only include text elements when screen reader is active (otherwise they're not focusable)
-                if (errorDialog.imageWriter && errorDialog.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     return [errorTitle, errorMessage]
                 }
                 return []
@@ -169,9 +165,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: errorDialog.imageWriter ? errorDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (errorDialog.imageWriter && errorDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: errorDialog.imageWriter ? errorDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         Text {
@@ -185,9 +181,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
-            Accessible.focusable: errorDialog.imageWriter ? errorDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (errorDialog.imageWriter && errorDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: errorDialog.imageWriter ? errorDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
@@ -209,7 +205,6 @@ ApplicationWindow {
     // Specific dialog for storage removal during write
     BaseDialog {
         id: storageRemovedDialog
-        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -222,7 +217,7 @@ ApplicationWindow {
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
                 // Only include text elements when screen reader is active (otherwise they're not focusable)
-                if (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     return [storageRemovedTitle, storageRemovedMessage]
                 }
                 return []
@@ -243,9 +238,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         Text {
@@ -258,9 +253,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
-            Accessible.focusable: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
@@ -282,7 +277,6 @@ ApplicationWindow {
     // Quit dialog (modern style)
     BaseDialog {
         id: quitDialog
-        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -295,7 +289,7 @@ ApplicationWindow {
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
                 // Only include text elements when screen reader is active (otherwise they're not focusable)
-                if (quitDialog.imageWriter && quitDialog.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     return [quitTitle, quitMessage]
                 }
                 return []
@@ -316,9 +310,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: quitDialog.imageWriter ? quitDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (quitDialog.imageWriter && quitDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: quitDialog.imageWriter ? quitDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         Text {
@@ -331,9 +325,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
-            Accessible.focusable: quitDialog.imageWriter ? quitDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (quitDialog.imageWriter && quitDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: quitDialog.imageWriter ? quitDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
@@ -365,13 +359,12 @@ ApplicationWindow {
 
     KeychainPermissionDialog {
         id: keychainpopup
-        imageWriter: window.imageWriter
         parent: overlayRoot
         onAccepted: {
-            window.imageWriter.keychainPermissionResponse(true);
+            ImageWriterSingleton.keychainPermissionResponse(true);
         }
         onRejected: {
-            window.imageWriter.keychainPermissionResponse(false);
+            ImageWriterSingleton.keychainPermissionResponse(false);
         }
     }
 
@@ -380,7 +373,6 @@ ApplicationWindow {
 
     UpdateAvailableDialog {
         id: updatepopup
-        imageWriter: window.imageWriter
         // parent can be set to overlayRoot if needed for centering above
         parent: overlayRoot
         onAccepted: {}
@@ -390,7 +382,6 @@ ApplicationWindow {
     // Permission warning dialog for when not running with elevated privileges
     BaseDialog {
         id: permissionWarningDialog
-        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
         closePolicy: Popup.NoAutoClose  // Prevent closing with escape or clicking outside
@@ -432,9 +423,9 @@ ApplicationWindow {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.description: text
-            Accessible.focusable: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
         Text {
@@ -448,10 +439,10 @@ ApplicationWindow {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.description: qsTr("Error message explaining why elevated privileges are required")
-            Accessible.focusable: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             Accessible.ignored: false
-            focusPolicy: (permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
         RowLayout {
@@ -467,15 +458,15 @@ ApplicationWindow {
                 text: qsTr("Install Authorization")
                 accessibleDescription: qsTr("Install system authorization to allow Raspberry Pi Imager to run with elevated privileges")
                 activeFocusOnTab: true
-                visible: permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isElevatableBundle()
+                visible: ImageWriterSingleton && ImageWriterSingleton.isElevatableBundle()
                 // Make button wide enough to fit the text, with sensible bounds
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 Layout.maximumWidth: Style.buttonWidthMinimum * 2  // Cap at 2x to handle long translations
                 implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
                 onClicked: {
-                    if (permissionWarningDialog.imageWriter.installElevationPolicy()) {
+                    if (ImageWriterSingleton.installElevationPolicy()) {
                         // Policy installed successfully - restart with elevated privileges
-                        permissionWarningDialog.imageWriter.restartWithElevatedPrivileges()
+                        ImageWriterSingleton.restartWithElevatedPrivileges()
                     }
                 }
             }
@@ -493,14 +484,12 @@ ApplicationWindow {
     AppOptionsDialog {
         id: appOptionsDialog
         parent: overlayRoot
-        imageWriter: window.imageWriter
         wizardContainer: wizardContainer
     }
 
     DebugOptionsDialog {
         id: debugOptionsDialog
         parent: overlayRoot
-        imageWriter: window.imageWriter
         wizardContainer: wizardContainer
     }
 
@@ -511,7 +500,6 @@ ApplicationWindow {
         id: performanceSaveDialog
         parent: overlayRoot
         anchors.centerIn: parent
-        imageWriter: window.imageWriter
         dialogTitle: qsTr("Save Performance Data")
         nameFilters: [qsTr("JSON files (*.json)"), qsTr("All files (*)")]
         
@@ -523,14 +511,14 @@ ApplicationWindow {
             }
             if (filePath.length > 0) {
                 console.log("Saving performance data to:", filePath)
-                imageWriter.exportPerformanceDataToFile(filePath)
+                ImageWriterSingleton.exportPerformanceDataToFile(filePath)
             }
         }
     }
 
     // Handle signal from C++ when native save dialog isn't available
     Connections {
-        target: imageWriter
+        target: ImageWriterSingleton
         function onPerformanceSaveDialogNeeded(suggestedFilename, initialDir) {
             console.log("Native save dialog not available, using QML fallback")
             performanceSaveDialog.suggestedFilename = suggestedFilename
@@ -542,13 +530,13 @@ ApplicationWindow {
         
         // Update title when custom repository changes
         function onCustomRepoChanged() {
-            window.customRepoHost = imageWriter.customRepoHost()
+            window.customRepoHost = ImageWriterSingleton.customRepoHost()
         }
         
         // Update title when repo host changes after redirect
         // This ensures "Using data from X" shows the final URL host after redirects
         function onCustomRepoHostChanged() {
-            window.customRepoHost = imageWriter.customRepoHost()
+            window.customRepoHost = ImageWriterSingleton.customRepoHost()
         }
     }
 
@@ -591,7 +579,7 @@ ApplicationWindow {
     }
 
     function onNetworkInfo(msg) {
-        if (imageWriter.isEmbeddedMode() && wizardContainer) {
+        if (ImageWriterSingleton.isEmbeddedMode() && wizardContainer) {
             wizardContainer.networkInfoText = msg;
         }
     }
@@ -601,7 +589,7 @@ ApplicationWindow {
         if (wizardContainer) {
             wizardContainer.selectedStorageName = "";
         }
-        imageWriter.setDst("");
+        ImageWriterSingleton.setDst("");
 
         // If we are past storage selection, navigate back there
         if (wizardContainer && wizardContainer.currentStep > wizardContainer.stepStorageSelection) {
@@ -618,7 +606,7 @@ ApplicationWindow {
             wizardContainer.selectedStorageName = "";
         }
         // Clear backend dst reference
-        window.imageWriter.setDst("");
+        ImageWriterSingleton.setDst("");
         // Navigate back to storage selection for safety
         if (wizardContainer)
             wizardContainer.jumpToStep(wizardContainer.stepStorageSelection);
@@ -629,12 +617,11 @@ ApplicationWindow {
     function onKeychainPermissionRequested() {
         // If warnings are disabled, automatically grant permission without showing dialog
         if (wizardContainer.disableWarnings) {
-            window.imageWriter.keychainPermissionResponse(true);
+            ImageWriterSingleton.keychainPermissionResponse(true);
         } else {
             keychainpopup.askForPermission();
         }
     }
-    
     
     function onPermissionWarning(message) {
         permissionWarningDialog.showWarning(message);

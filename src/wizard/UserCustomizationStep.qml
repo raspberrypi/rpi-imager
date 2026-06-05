@@ -15,7 +15,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property ImageWriter imageWriter
     required property var wizardContainer
     property bool hasSavedUserPassword: false
     property string savedUsername: ""
@@ -118,8 +117,8 @@ WizardStepBase {
                     color: sudoInfoArea.containsMouse || activeFocus ? Style.textDescriptionColor : Style.textMetadataColor
                     Layout.alignment: Qt.AlignVCenter
 
-                    activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                    focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
 
                     Accessible.role: Accessible.StaticText
                     Accessible.name: qsTr("Passwordless sudo information: ") + infoText
@@ -142,7 +141,6 @@ WizardStepBase {
 
     PasswordlessSudoWarningDialog {
         id: passwordlessSudoWarningDialog
-        imageWriter: root.imageWriter
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -195,13 +193,13 @@ WizardStepBase {
         // Update conserved customization settings (runtime state)
         if (usernameText.length > 0 && hasPasswords) {
             // User entered both username and new password
-            var cryptedPwd = imageWriter.crypt(fieldPassword.text)
+            var cryptedPwd = ImageWriterSingleton.crypt(fieldPassword.text)
             wizardContainer.customizationSettings.sshUserName = usernameText
             wizardContainer.customizationSettings.sshUserPassword = cryptedPwd
             wizardContainer.userConfigured = true
             // Persist for future sessions
-            imageWriter.setPersistedCustomisationSetting("sshUserName", usernameText)
-            imageWriter.setPersistedCustomisationSetting("sshUserPassword", cryptedPwd)
+            ImageWriterSingleton.setPersistedCustomisationSetting("sshUserName", usernameText)
+            ImageWriterSingleton.setPersistedCustomisationSetting("sshUserPassword", cryptedPwd)
             // Passwordless sudo (session-only, never persisted)
             if (checkPasswordlessSudo.checked) {
                 wizardContainer.customizationSettings.passwordlessSudo = true
@@ -214,7 +212,7 @@ WizardStepBase {
             // Keep existing sshUserPassword in runtime settings
             wizardContainer.userConfigured = true
             // Persist username (password already persisted)
-            imageWriter.setPersistedCustomisationSetting("sshUserName", usernameText)
+            ImageWriterSingleton.setPersistedCustomisationSetting("sshUserName", usernameText)
             // Passwordless sudo (session-only, never persisted)
             if (checkPasswordlessSudo.checked) {
                 wizardContainer.customizationSettings.passwordlessSudo = true
@@ -228,8 +226,8 @@ WizardStepBase {
             delete wizardContainer.customizationSettings.passwordlessSudo
             wizardContainer.userConfigured = false
             // Remove from persistence
-            imageWriter.removePersistedCustomisationSetting("sshUserName")
-            imageWriter.removePersistedCustomisationSetting("sshUserPassword")
+            ImageWriterSingleton.removePersistedCustomisationSetting("sshUserName")
+            ImageWriterSingleton.removePersistedCustomisationSetting("sshUserPassword")
         } else {
             // Partial/invalid -> do not mark configured
             wizardContainer.userConfigured = false

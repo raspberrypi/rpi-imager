@@ -14,9 +14,6 @@ import RpiImager
 ComboBox {
     id: root
     
-    // Access imageWriter from parent context (cached at creation time)
-    property var imageWriter: null
-    
     font.family: Style.fontFamily
     font.pointSize: Style.fontSizeInput
 
@@ -193,7 +190,7 @@ ComboBox {
         
         background: Rectangle {
             color: Style.mainBackgroundColor
-            radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+            radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
             border.color: Style.popupBorderColor
             border.width: Style.sectionBorderWidth
             antialiasing: true
@@ -354,7 +351,7 @@ ComboBox {
             // Custom highlight that respects popup border radius
             highlight: Rectangle {
                 color: Style.listViewHighlightColor
-                radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+                radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
                 border.color: dropdownList.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
                 border.width: dropdownList.activeFocus ? 2 : 0
                 antialiasing: true

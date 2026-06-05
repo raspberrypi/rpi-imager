@@ -7,6 +7,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import RpiImager
 
 RadioButton {
     id: control
@@ -40,12 +41,9 @@ RadioButton {
         width: control.availableWidth  // Constrain width so text wraps
     }
     
-    // Access imageWriter from parent context (cached at creation time)
-    property var imageWriter: null
-    
     // Custom square indicator for embedded mode to avoid circular rendering artifacts
     Component.onCompleted: {
-        if (control.imageWriter && control.imageWriter.isEmbeddedMode()) {
+        if (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) {
             control.indicator = squareIndicatorComponent.createObject(control)
         }
     }
@@ -93,7 +91,7 @@ RadioButton {
         color: Style.transparent
         border.color: control.activeFocus ? Style.focusOutlineColor : Style.transparent
         border.width: Style.focusOutlineWidth
-        radius: (control.imageWriter && control.imageWriter.isEmbeddedMode()) ? 0 : Style.focusOutlineRadius
+        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? 0 : Style.focusOutlineRadius
         z: -1
     }
     

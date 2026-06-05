@@ -16,18 +16,6 @@ Text {
     // When set, label becomes independently focusable for screen readers with this description
     property string accessibleDescription: ""
     
-    // Access imageWriter from ancestor context
-    property var imageWriter: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                return item.imageWriter;
-            }
-            item = item.parent;
-        }
-        return null;
-    }
-    
     font.pointSize: Style.fontSizeFormLabel
     font.family: Style.fontFamily
     color: isError ? Style.formLabelErrorColor : 
@@ -44,7 +32,7 @@ Text {
     Accessible.name: text
     Accessible.description: accessibleDescription
     Accessible.ignored: accessibleDescription.length === 0
-    Accessible.focusable: imageWriter ? imageWriter.screenReaderActive : false
-    focusPolicy: (imageWriter && imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-    activeFocusOnTab: imageWriter ? imageWriter.screenReaderActive : false
+    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
 } 

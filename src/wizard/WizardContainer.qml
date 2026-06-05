@@ -14,7 +14,6 @@ import RpiImager
 Item {
     id: root
     
-    required property ImageWriter imageWriter
     property int sidebarWidthValue: Style.sidebarWidth
     property var optionsPopup: null
     // Show landing language selection step at startup
@@ -26,7 +25,7 @@ Item {
     
     // Track whether we have network connectivity (derived from OS list availability)
     // This updates reactively when OS list becomes available after a retry
-    readonly property bool hasNetworkConnectivity: !imageWriter.isOsListUnavailable
+    readonly property bool hasNetworkConnectivity: !ImageWriterSingleton.isOsListUnavailable
     
     // Current wizard step - initialized in Component.onCompleted based on network state.
     // NOT a binding, so it won't auto-change when hasNetworkConnectivity changes.
@@ -40,7 +39,7 @@ Item {
     
     // Track writing state — derived from the C++ state machine
     readonly property bool isWriting: {
-        var s = imageWriter.writeState
+        var s = ImageWriterSingleton.writeState
         return s === ImageWriter.Preparing || s === ImageWriter.Writing ||
                s === ImageWriter.Verifying || s === ImageWriter.Finalizing ||
                s === ImageWriter.Cancelling
@@ -184,21 +183,21 @@ Item {
         }
         
         // Default to disabling warnings in embedded mode (per-run, non-persistent)
-        if (imageWriter && imageWriter.isEmbeddedMode()) {
+        if (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) {
             disableWarnings = true
         }
         
         // Initialize customizationSettings from persistent storage
         // Each step can then read from this and update it as needed
-        if (imageWriter) {
-            customizationSettings = imageWriter.getSavedCustomisationSettings()
+        if (ImageWriterSingleton) {
+            customizationSettings = ImageWriterSingleton.getSavedCustomisationSettings()
 
             // Check if secure boot RSA key is configured
-            var rsaKeyPath = imageWriter.getStringSetting("secureboot_rsa_key")
+            var rsaKeyPath = ImageWriterSingleton.getStringSetting("secureboot_rsa_key")
             secureBootKeyConfigured = (rsaKeyPath && rsaKeyPath.length > 0)
 
             // Restore persisted sidebar width
-            var savedWidth = imageWriter.getStringSetting("sidebarWidth")
+            var savedWidth = ImageWriterSingleton.getStringSetting("sidebarWidth")
             if (savedWidth) {
                 sidebarWidthValue = clampSidebarWidth(parseInt(savedWidth))
             }
@@ -207,7 +206,7 @@ Item {
     
     // Handle OS list availability changes
     Connections {
-        target: imageWriter
+        target: ImageWriterSingleton
         function onOsListUnavailableChanged() {
             // When OS list becomes available after starting offline, navigate to device
             // selection so the user can choose their target device (now that the list is available).
@@ -243,8 +242,8 @@ Item {
     }
 
     function saveSidebarWidth(width) {
-        if (imageWriter) {
-            imageWriter.setSetting("sidebarWidth", width.toString())
+        if (ImageWriterSingleton) {
+            ImageWriterSingleton.setSetting("sidebarWidth", width.toString())
         }
     }
 
@@ -391,7 +390,6 @@ Item {
         featUsbGadgetEnabled = false
     }
 
-
     // Map sidebar index back to the first wizard step in that group
     function getWizardStepFromSidebarIndex(sidebarIndex) {
         // When offline, device selection is not shown, so indices shift
@@ -508,7 +506,7 @@ Item {
                             color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.width: 1
-                            radius: root.imageWriter.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
+                            radius: ImageWriterSingleton.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
                             antialiasing: true  // Smooth edges at non-integer scale factors
                             clip: true  // Prevent content overflow at non-integer scale factors
 
@@ -568,7 +566,7 @@ Item {
                                     required property var modelData
                                     width: sublistContainer ? sublistContainer.width : 0
                                     height: Style.sidebarSubItemHeight
-                                    radius: root.imageWriter.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
+                                    radius: ImageWriterSingleton.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
                                     color: Style.transparent
                                     border.color: Style.transparent
                                     border.width: 0
@@ -863,13 +861,13 @@ Item {
             }
             // Before entering the writing step, apply customization (when supported)
             if (nextIndex === stepWriting) {
-                if (customizationSupported && imageWriter) {
+                if (customizationSupported && ImageWriterSingleton) {
                     // Pass session flags so the generator can skip unconfigured sections
                     customizationSettings.wifiConfigured = wifiConfigured
                     // Pass the complete customizationSettings object directly to the generator
                     // This includes both persistent settings (hostname, wifi, etc.) and
                     // ephemeral settings (piConnectEnabled) from the current wizard session
-                    imageWriter.applyCustomisationFromSettings(customizationSettings)
+                    ImageWriterSingleton.applyCustomisationFromSettings(customizationSettings)
                 }
                 
                 // Capture snapshot of customization flags at write summary stage
@@ -976,7 +974,6 @@ Item {
     Component {
         id: languageSelectionStep
         LanguageSelectionStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: {
@@ -993,7 +990,6 @@ Item {
     Component {
         id: deviceSelectionStep
         DeviceSelectionStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: false
             appOptionsButton: optionsButton
@@ -1004,7 +1000,6 @@ Item {
     Component {
         id: osSelectionStep
         OSSelectionStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             // Hide back button when offline (device selection was skipped)
             showBackButton: root.hasNetworkConnectivity
@@ -1018,7 +1013,6 @@ Item {
     Component {
         id: storageSelectionStep
         StorageSelectionStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
@@ -1029,7 +1023,6 @@ Item {
     Component {
         id: hostnameCustomizationStep
         HostnameCustomizationStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
@@ -1043,7 +1036,6 @@ Item {
     Component {
         id: localeCustomizationStep
         LocaleCustomizationStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
@@ -1057,7 +1049,6 @@ Item {
     Component {
         id: userCustomizationStep
         UserCustomizationStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
@@ -1071,7 +1062,6 @@ Item {
     Component {
         id: wifiCustomizationStep
         WifiCustomizationStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
@@ -1085,7 +1075,6 @@ Item {
     Component {
         id: remoteAccessStep
         RemoteAccessStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
@@ -1099,7 +1088,6 @@ Item {
     Component {
         id: secureBootCustomizationStep
         SecureBootCustomizationStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
@@ -1113,7 +1101,6 @@ Item {
     Component {
         id: piConnectCustomizationStep
         PiConnectCustomizationStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: {
@@ -1133,7 +1120,6 @@ Item {
     Component {
         id: ifAndFeaturesStep
         IfAndFeaturesCustomizationStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
             onNextClicked: {
@@ -1153,7 +1139,6 @@ Item {
     Component {
         id: writingStep
         WritingStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: true
             appOptionsButton: optionsButton
@@ -1172,7 +1157,6 @@ Item {
     Component {
         id: doneStep
         DoneStep {
-            imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: false
             nextButtonText: CommonStrings.finish
@@ -1184,7 +1168,6 @@ Item {
     // Token conflict dialog — based on your BaseDialog pattern
     BaseDialog {
         id: tokenConflictDialog
-        imageWriter: root.imageWriter
         parent: root
         anchors.centerIn: parent
 
@@ -1219,7 +1202,7 @@ Item {
             // match your focus group style
             registerFocusGroup("token_conflict_content", function() {
                 // Only include text elements when screen reader is active (otherwise they're not focusable)
-                if (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     return [titleText, bodyText]
                 }
                 return []
@@ -1248,9 +1231,9 @@ Item {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         // Body / security note
@@ -1267,9 +1250,9 @@ Item {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         // Buttons row
@@ -1290,7 +1273,7 @@ Item {
                 onClicked: {
                     tokenConflictDialog.close()
                     // Overwrite in C++ and re-emit to existing listeners
-                    root.imageWriter.overwriteConnectToken(tokenConflictDialog.newToken)
+                    ImageWriterSingleton.overwriteConnectToken(tokenConflictDialog.newToken)
                 }
             }
 
@@ -1305,7 +1288,7 @@ Item {
     }
 
     Connections {
-        target: root.imageWriter
+        target: ImageWriterSingleton
         function onConnectTokenConflictDetected(newToken) {
             tokenConflictDialog.openWithToken(newToken)
         }
@@ -1328,7 +1311,6 @@ Item {
     // Repository URL confirmation dialog — shown when a deep link contains a custom repo URL
     BaseDialog {
         id: repositoryUrlDialog
-        imageWriter: root.imageWriter
         parent: root
         anchors.centerIn: parent
 
@@ -1376,7 +1358,7 @@ Item {
             // match your focus group style
             registerFocusGroup("repo_url_content", function() {
                 // Only include text elements when screen reader is active (otherwise they're not focusable)
-                if (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     return [repoTitleText, repoBodyText, repoUrlText]
                 }
                 return []
@@ -1407,9 +1389,9 @@ Item {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         // Body / security note
@@ -1427,9 +1409,9 @@ Item {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
         // Show the URL being requested
@@ -1456,9 +1438,9 @@ Item {
                 Accessible.role: Accessible.StaticText
                 Accessible.name: qsTr("Repository URL: %1").arg(repositoryUrlDialog.repoUrl)
                 Accessible.ignored: false
-                Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.screenReaderActive : false
-                focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
         }
 
@@ -1486,7 +1468,7 @@ Item {
                     repositoryUrlDialog.close()
                     // Switch to the new repository and reset wizard
                     // QML auto-converts string to QUrl for C++ method
-                    root.imageWriter.refreshOsListFrom(repositoryUrlDialog.repoUrl)
+                    ImageWriterSingleton.refreshOsListFrom(repositoryUrlDialog.repoUrl)
                     root.resetWizard()
                 }
             }
@@ -1501,7 +1483,6 @@ Item {
         }
     }
 
-    
     function onFinalizing() {
         // Forward to the WritingStep if currently active
         if (currentStep === stepWriting && wizardStack.currentItem) {
@@ -1575,14 +1556,14 @@ Item {
         supportsUsbGadget = false
         
         // Reset hardware model selection to prevent stale state
-        if (imageWriter) {
-            var hwModel = imageWriter.getHWList()
+        if (ImageWriterSingleton) {
+            var hwModel = ImageWriterSingleton.getHWList()
             if (hwModel) {
                 hwModel.currentIndex = -1
             }
             // Also clear ImageWriter's internal source and destination state
-            imageWriter.setSrc("")
-            imageWriter.setDst("", 0)
+            ImageWriterSingleton.setSrc("")
+            ImageWriterSingleton.setDst("", 0)
         }
         
         // Navigate back to the first step (device selection if online, OS selection if offline)
@@ -1594,7 +1575,7 @@ Item {
         // Reset only the storage selection to allow choosing a new storage device
         // while preserving device, OS, and customization settings
         selectedStorageName = ""
-        imageWriter.setDst("", 0)
+        ImageWriterSingleton.setDst("", 0)
         
         // Reset ephemeral Pi Connect state (session-only, not preserved)
         // The token is already cleared when write completes, but ensure the enabled flag is reset

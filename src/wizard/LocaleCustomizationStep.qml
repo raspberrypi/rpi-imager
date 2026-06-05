@@ -14,7 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property ImageWriter imageWriter
     required property var wizardContainer
     
     title: qsTr("Customisation: Localisation")
@@ -34,9 +33,9 @@ WizardStepBase {
     // Initialize the component
     Component.onCompleted: {
         // Load capital cities, timezones and keyboard layout data
-        comboCapitalCity.model = imageWriter.getCapitalCitiesList()
-        comboTimezone.model = imageWriter.getTimezoneList()
-        comboKeyboard.model = imageWriter.getKeymapLayoutList()
+        comboCapitalCity.model = ImageWriterSingleton.getCapitalCitiesList()
+        comboTimezone.model = ImageWriterSingleton.getTimezoneList()
+        comboKeyboard.model = ImageWriterSingleton.getKeymapLayoutList()
 
         // Start with no selection so the user must make an active choice
         comboCapitalCity.currentIndex = -1
@@ -80,7 +79,7 @@ WizardStepBase {
         var selectedCity = comboCapitalCity.currentText || comboCapitalCity.editText
         if (!selectedCity || selectedCity.length === 0) return
         
-        var localeData = imageWriter.getLocaleDataForCapital(selectedCity)
+        var localeData = ImageWriterSingleton.getLocaleDataForCapital(selectedCity)
         if (!localeData || Object.keys(localeData).length === 0) return
         
         // Auto-fill timezone if user hasn't manually changed it
@@ -100,7 +99,7 @@ WizardStepBase {
         // Save the recommended WiFi country for later
         if (localeData.countryCode) {
             wizardContainer.customizationSettings.recommendedWifiCountry = localeData.countryCode
-            imageWriter.setPersistedCustomisationSetting("recommendedWifiCountry", localeData.countryCode)
+            ImageWriterSingleton.setPersistedCustomisationSetting("recommendedWifiCountry", localeData.countryCode)
             console.log("LocaleCustomizationStep: Saved recommendedWifiCountry:", localeData.countryCode)
         }
     }
@@ -215,26 +214,26 @@ WizardStepBase {
         // Update conserved customization settings (runtime state)
         if (city.length > 0) {
             wizardContainer.customizationSettings.capitalCity = city
-            imageWriter.setPersistedCustomisationSetting("capitalCity", city)
+            ImageWriterSingleton.setPersistedCustomisationSetting("capitalCity", city)
         } else {
             delete wizardContainer.customizationSettings.capitalCity
-            imageWriter.removePersistedCustomisationSetting("capitalCity")
+            ImageWriterSingleton.removePersistedCustomisationSetting("capitalCity")
         }
         
         if (tz.length > 0) {
             wizardContainer.customizationSettings.timezone = tz
-            imageWriter.setPersistedCustomisationSetting("timezone", tz)
+            ImageWriterSingleton.setPersistedCustomisationSetting("timezone", tz)
         } else {
             delete wizardContainer.customizationSettings.timezone
-            imageWriter.removePersistedCustomisationSetting("timezone")
+            ImageWriterSingleton.removePersistedCustomisationSetting("timezone")
         }
         
         if (kb.length > 0) {
             wizardContainer.customizationSettings.keyboard = kb
-            imageWriter.setPersistedCustomisationSetting("keyboard", kb)
+            ImageWriterSingleton.setPersistedCustomisationSetting("keyboard", kb)
         } else {
             delete wizardContainer.customizationSettings.keyboard
-            imageWriter.removePersistedCustomisationSetting("keyboard")
+            ImageWriterSingleton.removePersistedCustomisationSetting("keyboard")
         }
         
         wizardContainer.localeConfigured = (tz.length > 0 || kb.length > 0)

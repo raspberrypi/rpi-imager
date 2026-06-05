@@ -28,9 +28,6 @@ Popup {
     Accessible.role: Accessible.Dialog
     Accessible.name: msgpopupheader.text || qsTr("Dialog")
     
-    // Access imageWriter from parent context (cached at creation time)
-    property var imageWriter: null
-
     // Functions to be implemented by derived components
     property var getNextFocusableElement: function(startElement) { return startElement }
     property var getPreviousFocusableElement: function(startElement) { return startElement }
@@ -41,7 +38,7 @@ Popup {
 
     background: Rectangle {
         color: Style.listViewRowBackgroundColor
-        radius: (msgpopup.imageWriter && msgpopup.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
         antialiasing: true  // Smooth edges at non-integer scale factors
         clip: true  // Prevent content overflow at non-integer scale factors
     }

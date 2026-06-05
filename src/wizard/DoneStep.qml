@@ -13,13 +13,12 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property ImageWriter imageWriter
     required property var wizardContainer
     
     title: qsTr("Write complete!")
     showBackButton: false
     showNextButton: false
-    readonly property bool autoEjectEnabled: imageWriter.getBoolSetting("eject")
+    readonly property bool autoEjectEnabled: ImageWriterSingleton.getBoolSetting("eject")
     // Use snapshot of customization flags captured when write completed
     // This preserves the state even after token/flags are cleared for security
     readonly property bool anyCustomizationsApplied: (
@@ -60,9 +59,9 @@ WizardStepBase {
                 Layout.fillWidth: true
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
             
             GridLayout {
@@ -80,9 +79,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
-                    Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                    focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
                 Text {
                     id: deviceValue
@@ -114,9 +113,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
-                    Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                    focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
                 Text {
                     id: osValue
@@ -148,9 +147,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
-                    Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                    focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
                 Text {
                     id: storageValue
@@ -188,9 +187,9 @@ WizardStepBase {
                 visible: root.anyCustomizationsApplied
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
             
             ScrollView {
@@ -266,9 +265,9 @@ WizardStepBase {
                 wrapMode: Text.WordWrap
                 Accessible.role: Accessible.StaticText
                 Accessible.name: text
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
         }        
     }
@@ -297,15 +296,15 @@ WizardStepBase {
         
         ImButtonRed {
             id: finishButton
-            text: imageWriter.isEmbeddedMode() ? qsTr("Reboot") : CommonStrings.finish
-            accessibleDescription: imageWriter.isEmbeddedMode() ? qsTr("Reboot the system to apply changes") : qsTr("Close Raspberry Pi Imager and exit the application")
+            text: ImageWriterSingleton.isEmbeddedMode() ? qsTr("Reboot") : CommonStrings.finish
+            accessibleDescription: ImageWriterSingleton.isEmbeddedMode() ? qsTr("Reboot the system to apply changes") : qsTr("Close Raspberry Pi Imager and exit the application")
             enabled: true
             activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum
             Layout.preferredHeight: Style.buttonHeightStandard
             onClicked: {
-                if (imageWriter.isEmbeddedMode()) {
-                    imageWriter.reboot()
+                if (ImageWriterSingleton.isEmbeddedMode()) {
+                    ImageWriterSingleton.reboot()
                 } else {
                     // Close the application
                     // Advanced options settings are already saved
