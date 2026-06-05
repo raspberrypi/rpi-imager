@@ -227,6 +227,7 @@ elseif(APPLE)
         "-framework SystemConfiguration"
         "-framework DiskArbitration"
         "-framework CoreFoundation"
+        "-framework CoreServices"  # LSSetDefaultHandlerForURLScheme (registerUriScheme)
     )
 else()
     set(PLATFORMQUIRKS_SOURCES

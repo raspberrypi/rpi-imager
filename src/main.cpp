@@ -37,7 +37,6 @@
 #include "platformquirks.h"
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
-#include <CoreServices/CoreServices.h>
 #endif
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -276,19 +275,14 @@ int main(int argc, char *argv[])
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
 
-#ifdef Q_OS_DARWIN
-    // Ensure our app is the default handler for rpi-imager:// scheme so Safari recognizes it
+    // Register as the handler for the rpi-imager:// URL scheme so the Raspberry
+    // Pi Connect sign-in callback can route back to us. Platform mechanics live
+    // in the PAL (desktop file on Linux, Launch Services on macOS, installer on
+    // Windows). Skipped in embedded mode, which has no desktop environment.
+    if (!imageWriter.isEmbeddedMode())
     {
-        CFStringRef scheme = CFSTR("rpi-imager");
-        CFBundleRef bundle = CFBundleGetMainBundle();
-        if (bundle) {
-            CFStringRef bundleId = (CFStringRef)CFBundleGetIdentifier(bundle);
-            if (bundleId) {
-                LSSetDefaultHandlerForURLScheme(scheme, bundleId);
-            }
-        }
+        PlatformQuirks::registerUriScheme();
     }
-#endif
 #ifdef Q_OS_LINUX
     if (imageWriter.isEmbeddedMode()) {
         // Font and locale setup only needed for embedded Linux systems
