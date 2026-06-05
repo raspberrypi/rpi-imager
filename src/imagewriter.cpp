@@ -4798,155 +4798,21 @@ void ImageWriter::openUrl(const QUrl &url)
 {
     qDebug() << "Opening URL:" << url.toString();
 
-    bool success = false;
-
-#ifdef Q_OS_LINUX
-    // Use xdg-open on Linux (including AppImage environments)
-    // When running with elevated privileges (sudo/pkexec), we need to run xdg-open
-    // as the original user, not as root, so it can access the user's desktop session
-    if (::geteuid() == 0) {
-        // Running as root - use pkexec to run xdg-open as the original user
-        // Determine the original user's UID and username
-        uid_t targetUid = 0;
-        QString targetUsername;
-        
-        // Check if we were invoked via pkexec or sudo
-        const char* pkexecUid = ::getenv("PKEXEC_UID");
-        const char* sudoUid = ::getenv("SUDO_UID");
-        
-        if (pkexecUid) {
-            // Running under pkexec
-            targetUid = static_cast<uid_t>(::atoi(pkexecUid));
-        } else if (sudoUid) {
-            // Running under sudo
-            targetUid = static_cast<uid_t>(::atoi(sudoUid));
-        } else if (::getuid() != ::geteuid()) {
-            // Running under sudo but SUDO_UID not set - use real UID
-            targetUid = ::getuid();
-        }
-        
-        if (targetUid != 0) {
-            // Look up the username for this UID
-            struct passwd* pw = ::getpwuid(targetUid);
-            if (pw && pw->pw_name) {
-                targetUsername = QString::fromUtf8(pw->pw_name);
-            }
-        }
-        
-        if (!targetUsername.isEmpty()) {
-            // Use runuser to run xdg-open as the original user
-            // runuser is better than pkexec --user because it preserves environment variables
-            // and doesn't require authentication when already running as root
-            // We need to pass the D-Bus session bus address and other environment variables
-            // so xdg-open can connect to the user's desktop session
-            
-            // Get environment variables needed for xdg-open to work
-            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-            
-            // Preserve critical environment variables for D-Bus and display
-            QString dbusSessionAddress = env.value("DBUS_SESSION_BUS_ADDRESS");
-            QString xdgRuntimeDir = env.value("XDG_RUNTIME_DIR");
-            QString display = env.value("DISPLAY");
-            QString waylandDisplay = env.value("WAYLAND_DISPLAY");
-            QString xauthority = env.value("XAUTHORITY");
-            
-            // Build environment for the child process
-            QProcessEnvironment childEnv;
-            if (!dbusSessionAddress.isEmpty()) {
-                childEnv.insert("DBUS_SESSION_BUS_ADDRESS", dbusSessionAddress);
-            }
-            if (!xdgRuntimeDir.isEmpty()) {
-                childEnv.insert("XDG_RUNTIME_DIR", xdgRuntimeDir);
-            }
-            if (!display.isEmpty()) {
-                childEnv.insert("DISPLAY", display);
-            }
-            if (!waylandDisplay.isEmpty()) {
-                childEnv.insert("WAYLAND_DISPLAY", waylandDisplay);
-            }
-            if (!xauthority.isEmpty()) {
-                childEnv.insert("XAUTHORITY", xauthority);
-            }
-            
-            // Use runuser with environment variables passed via env command
-            // Format: runuser -u <username> -- env VAR=value ... xdg-open <url>
-            QStringList runuserArgs;
-            runuserArgs << "-u" << targetUsername << "--";
-            
-            // Build env command with all necessary variables
-            QStringList envArgs;
-            envArgs << "env";
-            if (!dbusSessionAddress.isEmpty()) {
-                envArgs << QString("DBUS_SESSION_BUS_ADDRESS=%1").arg(dbusSessionAddress);
-            }
-            if (!xdgRuntimeDir.isEmpty()) {
-                envArgs << QString("XDG_RUNTIME_DIR=%1").arg(xdgRuntimeDir);
-            }
-            if (!display.isEmpty()) {
-                envArgs << QString("DISPLAY=%1").arg(display);
-            }
-            if (!waylandDisplay.isEmpty()) {
-                envArgs << QString("WAYLAND_DISPLAY=%1").arg(waylandDisplay);
-            }
-            if (!xauthority.isEmpty()) {
-                envArgs << QString("XAUTHORITY=%1").arg(xauthority);
-            }
-            envArgs << "xdg-open" << url.toString();
-            
-            runuserArgs << envArgs;
-            
-            success = PlatformQuirks::launchDetached("runuser", runuserArgs);
-            if (!success) {
-                qWarning() << "Failed to start runuser xdg-open process, falling back to pkexec";
-                // Fallback to pkexec if runuser fails (might not be available on all systems)
-                QStringList pkexecArgs;
-                pkexecArgs << "--user" << targetUsername << "xdg-open" << url.toString();
-                success = PlatformQuirks::launchDetached("pkexec", pkexecArgs);
-                if (!success) {
-                    qWarning() << "Failed to start pkexec xdg-open process";
-                } else {
-                    qDebug() << "Started pkexec xdg-open";
-                }
-            } else {
-                qDebug() << "Started runuser xdg-open";
-            }
-        } else {
-            qWarning() << "Could not determine original user for xdg-open";
-            success = false;
-        }
-    } else {
-        // Not running as root - launch detached to avoid blocking
-        success = PlatformQuirks::launchDetached("xdg-open", QStringList() << url.toString());
-        if (!success) {
-            qWarning() << "Failed to start xdg-open process";
-        } else {
-            qDebug() << "Started xdg-open";
-        }
+    // Platform-native URL launching lives in the PAL (PlatformQuirks). It
+    // returns false when it cannot — or deliberately will not — open the URL
+    // itself (e.g. xdg-open is missing, or Windows defers to Qt to avoid
+    // passing the URL through a shell), in which case we fall back to Qt's
+    // cross-platform opener below.
+    if (PlatformQuirks::openUrlExternally(url)) {
+        return;
     }
-#elif defined(Q_OS_DARWIN)
-    // Use open on macOS
-    success = PlatformQuirks::launchDetached("open", QStringList() << url.toString());
-    if (!success) {
-        qWarning() << "Failed to start open process";
-    } else {
-        qDebug() << "Started open";
-    }
-#elif defined(Q_OS_WIN)
-    // Use QDesktopServices directly on Windows.
-    // Do NOT use cmd /c start — it passes the URL through the shell,
-    // allowing metacharacters (&, |, etc.) to execute arbitrary commands.
-    success = false;
-#endif
 
-    // Fallback to Qt's method if platform command failed or platform is unsupported
-    if (!success) {
 #ifndef CLI_ONLY_BUILD
-        qDebug() << "Falling back to QDesktopServices::openUrl";
-        QDesktopServices::openUrl(url);
+    qDebug() << "Falling back to QDesktopServices::openUrl";
+    QDesktopServices::openUrl(url);
 #else
-        qWarning() << "Unable to open URL in CLI mode:" << url.toString();
+    qWarning() << "Unable to open URL in CLI mode:" << url.toString();
 #endif
-    }
 }
 
 bool ImageWriter::verifyAuthKey(const QString &s, bool strict) const

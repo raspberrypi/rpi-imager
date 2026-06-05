@@ -10,6 +10,9 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <QtGlobal>
 #include <QString>
+#include <QUrl>
+#include <QFile>
+#include <QTemporaryDir>
 #include "platformquirks.h"
 
 using Catch::Matchers::ContainsSubstring;
@@ -248,6 +251,64 @@ TEST_CASE("clearAppImageEnvironment doesn't crash", "[platformquirks][linux]") {
     REQUIRE_NOTHROW(PlatformQuirks::clearAppImageEnvironment());
 }
 
+TEST_CASE("launchDetached reports exec success and failure", "[platformquirks][linux]") {
+    // A real, runnable program (resolved via the internal search path) must
+    // report success once execv() has taken: the close-on-exec status pipe
+    // yields EOF.
+    CHECK(PlatformQuirks::launchDetached("true", QStringList()) == true);
+
+    // A program that cannot be exec'd must report failure rather than masking
+    // it behind the double-fork. This is what lets ImageWriter::openUrl fall
+    // back to QDesktopServices when xdg-open is missing or unrunnable.
+    CHECK(PlatformQuirks::launchDetached("rpi-imager-nonexistent-binary-xyz",
+                                         QStringList()) == false);
+    CHECK(PlatformQuirks::launchDetached("/nonexistent/path/to/binary",
+                                         QStringList()) == false);
+}
+
+TEST_CASE("registerUriScheme writes the rpi-imager:// desktop entry", "[platformquirks][linux]") {
+    // Redirect the XDG data/config dirs to a temp location so the test neither
+    // pollutes nor depends on the real user environment (any update-desktop-
+    // database / xdg-mime side effects land in the temp dirs).
+    QTemporaryDir dataHome;
+    QTemporaryDir configHome;
+    REQUIRE(dataHome.isValid());
+    REQUIRE(configHome.isValid());
+
+    const QByteArray prevData = qgetenv("XDG_DATA_HOME");
+    const QByteArray prevConfig = qgetenv("XDG_CONFIG_HOME");
+    qputenv("XDG_DATA_HOME", dataHome.path().toUtf8());
+    qputenv("XDG_CONFIG_HOME", configHome.path().toUtf8());
+
+    CHECK(PlatformQuirks::registerUriScheme() == true);
+
+    const QString desktopPath = dataHome.path()
+        + "/applications/com.raspberrypi.rpi-imager-uri-handler.desktop";
+    QFile f(desktopPath);
+    REQUIRE(f.exists());
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    const QByteArray firstWrite = f.readAll();
+    f.close();
+
+    const QString contents = QString::fromUtf8(firstWrite);
+    // The entry must claim the scheme and point Exec at this executable with %u.
+    CHECK(contents.contains("MimeType=x-scheme-handler/rpi-imager;"));
+    CHECK(contents.contains("Exec="));
+    CHECK(contents.contains("%u"));
+    CHECK(contents.contains("NoDisplay=true"));
+
+    // Idempotent: a second call leaves the entry byte-for-byte identical.
+    CHECK(PlatformQuirks::registerUriScheme() == true);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    const QByteArray secondWrite = f.readAll();
+    f.close();
+    CHECK(firstWrite == secondWrite);
+
+    // Restore the environment for subsequent tests.
+    if (prevData.isNull()) qunsetenv("XDG_DATA_HOME"); else qputenv("XDG_DATA_HOME", prevData);
+    if (prevConfig.isNull()) qunsetenv("XDG_CONFIG_HOME"); else qputenv("XDG_CONFIG_HOME", prevConfig);
+}
+
 TEST_CASE("getBundlePath resolves executable outside AppImage", "[platformquirks][linux]") {
     // When not running from an AppImage, getBundlePath falls back to /proc/self/exe
     const char* appImage = getenv("APPIMAGE");
@@ -294,7 +355,34 @@ TEST_CASE("macOS isScrollInverted passes through Qt flag", "[platformquirks][mac
     CHECK(PlatformQuirks::isScrollInverted(false) == false);
 }
 
+TEST_CASE("registerUriScheme is safe to call on macOS", "[platformquirks][macos]") {
+    // A bare test binary has no bundle identifier, so this is a no-op that
+    // returns false without touching Launch Services. The assertion is that
+    // the PAL entry point is wired up and side-effect-free in that case.
+    CHECK(PlatformQuirks::registerUriScheme() == false);
+}
+
 #endif // Q_OS_MACOS
+
+// ============================================================================
+// Windows-specific URL scheme tests
+// ============================================================================
+
+#ifdef Q_OS_WIN
+
+TEST_CASE("registerUriScheme is a runtime no-op on Windows", "[platformquirks][windows]") {
+    // The rpi-imager:// association is written to the registry by the installer,
+    // so the runtime call has nothing to do and reports success.
+    CHECK(PlatformQuirks::registerUriScheme() == true);
+}
+
+TEST_CASE("openUrlExternally declines native launch on Windows", "[platformquirks][windows]") {
+    // By design the PAL does not open URLs itself on Windows (avoids routing the
+    // URL through a shell); it reports false so the caller uses QDesktopServices.
+    CHECK(PlatformQuirks::openUrlExternally(QUrl("https://example.com/")) == false);
+}
+
+#endif // Q_OS_WIN
 
 // ============================================================================
 // Network monitoring lifecycle tests

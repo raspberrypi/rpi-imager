@@ -21,6 +21,8 @@
 #import <AppKit/AppKit.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 #import <DiskArbitration/DiskArbitration.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreServices/CoreServices.h>  // LSSetDefaultHandlerForURLScheme
 #include <os/log.h>
 
 // Unified logging - visible in Console.app
@@ -375,6 +377,28 @@ bool launchDetached(const QString& program, const QStringList& arguments) {
     // On macOS, QProcess::startDetached works correctly for launching
     // detached processes that outlive the parent
     return QProcess::startDetached(program, arguments);
+}
+
+bool openUrlExternally(const QUrl& url) {
+    // `open` is always present on macOS and hands the URL to Launch Services.
+    return launchDetached(QStringLiteral("open"), QStringList() << url.toString());
+}
+
+bool registerUriScheme() {
+    // Claim the rpi-imager:// scheme via Launch Services so the browser can
+    // hand the Connect auth token back to us. Requires a bundle identity, so
+    // this is a no-op (returns false) for a plain executable without an
+    // Info.plist (e.g. a unit-test binary).
+    CFBundleRef bundle = CFBundleGetMainBundle();
+    if (!bundle) {
+        return false;
+    }
+    CFStringRef bundleId = static_cast<CFStringRef>(CFBundleGetIdentifier(bundle));
+    if (!bundleId) {
+        return false;
+    }
+    OSStatus status = LSSetDefaultHandlerForURLScheme(CFSTR("rpi-imager"), bundleId);
+    return status == noErr;
 }
 
 bool runElevatedPolicyInstaller() {

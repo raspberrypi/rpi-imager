@@ -446,6 +446,21 @@ bool launchDetached(const QString& program, const QStringList& arguments) {
     return QProcess::startDetached(program, arguments);
 }
 
+bool openUrlExternally(const QUrl& url) {
+    // Deliberately decline native launching: invoking the URL via cmd /c start
+    // would pass it through the shell, letting metacharacters (&, |, ...) run
+    // arbitrary commands. The caller falls back to QDesktopServices::openUrl,
+    // which opens the URL safely on Windows.
+    Q_UNUSED(url);
+    return false;
+}
+
+bool registerUriScheme() {
+    // The rpi-imager:// scheme association is written to the registry by the
+    // installer at install time, so there is nothing to do at runtime.
+    return true;
+}
+
 bool runElevatedPolicyInstaller() {
     return false;
 }

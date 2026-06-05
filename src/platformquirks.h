@@ -8,6 +8,7 @@
 
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 #include <functional>
 
 namespace PlatformQuirks {
@@ -77,6 +78,40 @@ namespace PlatformQuirks {
 
     /** Launch a detached process that will outlive the parent. */
     bool launchDetached(const QString& program, const QStringList& arguments);
+
+    /**
+     * Open a URL using the platform's native mechanism.
+     *
+     * Encapsulates all platform-specific URL launching so callers stay
+     * platform-agnostic:
+     *   - Linux: the xdg-desktop-portal OpenURI interface, falling back to
+     *     xdg-open (run as the original user when elevated).
+     *   - macOS: the `open` command.
+     *   - Windows: returns false by design, so the caller uses Qt's opener
+     *     rather than routing the URL through a shell (metacharacter safety).
+     *
+     * Returns true if the URL was handed off successfully. A false return
+     * means the caller should fall back to QDesktopServices::openUrl().
+     */
+    bool openUrlExternally(const QUrl& url);
+
+    /**
+     * Register this application as the handler for the rpi-imager:// URL
+     * scheme, so the Raspberry Pi Connect sign-in flow can hand the auth token
+     * back by redirecting the browser to an rpi-imager:// URL.
+     *
+     * Platform mechanics differ, but all live behind this one call:
+     *   - Linux: writes a user-level .desktop entry pointing at this
+     *     executable and registers it as the default x-scheme-handler/rpi-imager
+     *     handler (packaged installs ship a system one; AppImages and other
+     *     unpackaged runs need this at runtime).
+     *   - macOS: LSSetDefaultHandlerForURLScheme against this app's bundle.
+     *   - Windows: no-op — the installer writes the registry association.
+     *
+     * Idempotent and best-effort. Returns true if registration succeeded, was
+     * already in place, or is not required on this platform.
+     */
+    bool registerUriScheme();
 
     /** Run the policy installer with elevated privileges (interactive). */
     bool runElevatedPolicyInstaller();
