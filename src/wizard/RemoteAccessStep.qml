@@ -16,8 +16,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
-    
     title: qsTr("Customisation: SSH authentication")
     subtitle: qsTr("Configure SSH access")
     showSkipButton: true

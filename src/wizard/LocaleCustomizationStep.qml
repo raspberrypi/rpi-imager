@@ -14,8 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
-    
     title: qsTr("Customisation: Localisation")
     subtitle: qsTr("Select your location for suggested time zone and keyboard layout")
     showSkipButton: true

@@ -14,8 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
-    
     title: qsTr("Customisation: Choose hostname")
     showSkipButton: true
     nextButtonAccessibleDescription: qsTr("Save hostname and continue to next customisation step")

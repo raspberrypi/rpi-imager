@@ -14,7 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
     // "open" | "secure"
     property string wifiMode: "secure"
     property string originalSavedSSID: ""

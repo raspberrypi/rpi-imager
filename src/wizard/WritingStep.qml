@@ -15,8 +15,6 @@ WizardStepBase {
     id: root
     objectName: "writingStep"
 
-    required property var wizardContainer
-
     title: qsTr("Write image")
     subtitle: {
         if (root.isWriting) {
