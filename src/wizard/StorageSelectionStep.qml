@@ -15,8 +15,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
-    
     title: qsTr("Select your storage device")
     showNextButton: true
     nextButtonEnabled: wizardContainer && wizardContainer.selectedStorageName && wizardContainer.selectedStorageName.length > 0  // Disabled until user selects a storage device

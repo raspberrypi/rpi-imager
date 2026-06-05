@@ -15,8 +15,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
-    
     // Track RSA key path for reactive UI updates
     property string rsaKeyPath: getRsaKeyPath()
     

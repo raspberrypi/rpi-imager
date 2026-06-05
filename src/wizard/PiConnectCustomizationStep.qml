@@ -13,7 +13,6 @@ import RpiImager
 
 WizardStepBase {
     id: root
-    required property var wizardContainer
 
     title: qsTr("Customisation: Raspberry Pi Connect")
     subtitle: orgModeEnabled

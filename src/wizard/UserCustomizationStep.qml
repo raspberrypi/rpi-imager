@@ -15,7 +15,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
     property bool hasSavedUserPassword: false
     property string savedUsername: ""
     

@@ -15,8 +15,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
-    
     readonly property HWListModel hwmodel: ImageWriterSingleton.getHWList()
     readonly property OSListModel osmodel: ImageWriterSingleton.getOSList()
     

@@ -14,8 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property var wizardContainer
-    
     readonly property HWListModel hwModel: ImageWriterSingleton.getHWList()
     
     title: qsTr("Select your Raspberry Pi device")

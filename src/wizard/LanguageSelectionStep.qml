@@ -14,7 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
 
-    required property var wizardContainer
     // Keep a mapping from display names to internal language names
     property var _internalLanguages: []
 

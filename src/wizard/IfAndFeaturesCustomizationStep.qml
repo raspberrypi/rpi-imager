@@ -16,8 +16,6 @@ import RpiImager
 WizardStepBase {
     id: root
 
-    required property var wizardContainer
-
     // Capability flags for each UI option
     property bool supportsI2c: false
     property bool supportsSpi: false
