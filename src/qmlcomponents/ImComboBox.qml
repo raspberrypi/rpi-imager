@@ -14,17 +14,8 @@ import RpiImager
 ComboBox {
     id: root
     
-    // Access imageWriter from parent context
-    property var imageWriter: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                return item.imageWriter;
-            }
-            item = item.parent;
-        }
-        return null;
-    }
+    // Access imageWriter from parent context (cached at creation time)
+    property var imageWriter: null
     
     font.family: Style.fontFamily
     font.pointSize: Style.fontSizeInput
