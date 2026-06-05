@@ -120,37 +120,28 @@ std::string findAPFSParent(const char* bsdName)
             return result;
         }
 
-        // Navigate up the IORegistry hierarchy to find the physical media
+        // Navigate up the IORegistry hierarchy to find the physical media.
         // APFS structure: APFSVolume -> APFSContainer -> AppleAPFSContainerScheme -> IOMedia
-        io_service_t current = service;
-        io_service_t toRelease = IO_OBJECT_NULL;  // Track object to release
+        //
+        // Hold exactly one reference (`current`) at a time: each step releases the
+        // node we just stepped off. The original `service` is simply the first
+        // `current`, so once we step past it the reference is gone and it must
+        // never be released again -- doing so over-releases the underlying mach
+        // port, triggering an EXC_GUARD / GUARD_TYPE_MACH_PORT crash (issue #1632).
+        io_service_t current = service;  // owned (+1)
 
         for (int i = 0; i < 3; i++) {
             io_service_t parent = IO_OBJECT_NULL;
             kern_return_t kr = IORegistryEntryGetParentEntry(current, kIOServicePlane, &parent);
 
-            // Release previous 'current' if it's not the original service
-            if (toRelease != IO_OBJECT_NULL) {
-                IOObjectRelease(toRelease);
-                toRelease = IO_OBJECT_NULL;
-            }
-
             if (kr != KERN_SUCCESS) {
                 DRIVELIST_LOG_DEBUG("findAPFSParent: IORegistry traversal failed at level %d (kr=%#x)", i, kr);
-                if (current != service) {
-                    IOObjectRelease(current);
-                }
-                IOObjectRelease(service);
+                IOObjectRelease(current);
                 return result;
             }
 
-            toRelease = current;  // Mark current for release on next iteration
-            current = parent;
-        }
-
-        // Release the last intermediate object
-        if (toRelease != IO_OBJECT_NULL && toRelease != service) {
-            IOObjectRelease(toRelease);
+            IOObjectRelease(current);  // release the node we just stepped off
+            current = parent;          // take ownership of the parent (+1)
         }
 
         // Now look for sibling that is IOMedia class
@@ -160,7 +151,6 @@ std::string findAPFSParent(const char* bsdName)
         if (kr != KERN_SUCCESS || iterator == IO_OBJECT_NULL) {
             DRIVELIST_LOG_DEBUG("findAPFSParent: failed to get parent iterator (kr=%#x)", kr);
             IOObjectRelease(current);
-            IOObjectRelease(service);
             return result;
         }
 
@@ -185,7 +175,6 @@ std::string findAPFSParent(const char* bsdName)
 
         IOObjectRelease(iterator);
         IOObjectRelease(current);
-        IOObjectRelease(service);
     }
 
     return result;
