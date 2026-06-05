@@ -658,13 +658,12 @@ int main(int argc, char *argv[])
 
     const bool showLanguageSelection = enableLanguageSelection || !couldDetermineLanguage || imageWriter.isEmbeddedMode() || hasSavedLanguagePreference;
 
-    // Expose the single ImageWriter instance to QML as a global "ImageWriterSingleton"
-    // context property, so every component references it directly without parent-traversal
-    // or explicit passing. A context property (rather than qmlRegisterSingletonInstance) is
-    // used deliberately: registering a type into the RpiImager URI at runtime disturbs the
-    // declaratively-registered qt_add_qml_module module and makes its other C++ types
-    // (HWListModel, DriveListModel, ...) unresolvable.
-    engine.rootContext()->setContextProperty("ImageWriterSingleton", &imageWriter);
+    // Supply the app-owned ImageWriter instance to the declaratively-registered
+    // "ImageWriterSingleton" QML singleton (see ImageWriter::create). Declarative
+    // registration keeps the singleton visible to qmllint/qmlsc and — unlike a runtime
+    // qmlRegisterSingletonInstance into the RpiImager URI — does not disturb the
+    // qt_add_qml_module module's other C++ types (HWListModel, DriveListModel, ...).
+    ImageWriter::setQmlInstance(&imageWriter);
 
     engine.setInitialProperties(QVariantMap{
         {"showLanguageSelection", showLanguageSelection}

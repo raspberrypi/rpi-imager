@@ -40,9 +40,9 @@ Item {
     // Track writing state — derived from the C++ state machine
     readonly property bool isWriting: {
         var s = ImageWriterSingleton.writeState
-        return s === ImageWriter.Preparing || s === ImageWriter.Writing ||
-               s === ImageWriter.Verifying || s === ImageWriter.Finalizing ||
-               s === ImageWriter.Cancelling
+        return s === ImageWriterSingleton.Preparing || s === ImageWriterSingleton.Writing ||
+               s === ImageWriterSingleton.Verifying || s === ImageWriterSingleton.Finalizing ||
+               s === ImageWriterSingleton.Cancelling
     }
     
     // Track if we're in "write another" flow (skip to writing step after storage selection)

@@ -30,7 +30,7 @@ WizardStepBase {
     nextButtonText: {
         if (root.isWriting) {
             // Show specific cancel text based on write state
-            if (ImageWriterSingleton.writeState === ImageWriter.Verifying) {
+            if (ImageWriterSingleton.writeState === ImageWriterSingleton.Verifying) {
                 return qsTr("Skip verification")
             } else {
                 return qsTr("Cancel write")
@@ -43,7 +43,7 @@ WizardStepBase {
     }
     nextButtonAccessibleDescription: {
         if (root.isWriting) {
-            if (ImageWriterSingleton.writeState === ImageWriter.Verifying) {
+            if (ImageWriterSingleton.writeState === ImageWriterSingleton.Verifying) {
                 return qsTr("Skip verification and finish the write process")
             } else {
                 return qsTr("Cancel the write operation and return to the summary")
@@ -60,14 +60,14 @@ WizardStepBase {
 
     readonly property bool isWriting: {
         var s = ImageWriterSingleton.writeState
-        return s === ImageWriter.Preparing || s === ImageWriter.Writing ||
-               s === ImageWriter.Verifying || s === ImageWriter.Finalizing ||
-               s === ImageWriter.Cancelling
+        return s === ImageWriterSingleton.Preparing || s === ImageWriterSingleton.Writing ||
+               s === ImageWriterSingleton.Verifying || s === ImageWriterSingleton.Finalizing ||
+               s === ImageWriterSingleton.Cancelling
     }
-    readonly property bool isVerifying: ImageWriterSingleton.writeState === ImageWriter.Verifying
-    readonly property bool isCancelling: ImageWriterSingleton.writeState === ImageWriter.Cancelling
-    readonly property bool isFinalising: ImageWriterSingleton.writeState === ImageWriter.Finalizing
-    readonly property bool isComplete: ImageWriterSingleton.writeState === ImageWriter.Succeeded
+    readonly property bool isVerifying: ImageWriterSingleton.writeState === ImageWriterSingleton.Verifying
+    readonly property bool isCancelling: ImageWriterSingleton.writeState === ImageWriterSingleton.Cancelling
+    readonly property bool isFinalising: ImageWriterSingleton.writeState === ImageWriterSingleton.Finalizing
+    readonly property bool isComplete: ImageWriterSingleton.writeState === ImageWriterSingleton.Succeeded
     property string bottleneckStatus: ""
     property int writeThroughputKBps: 0
     property string operationWarning: ""  // Non-fatal warning message (e.g., sync fallback)
@@ -354,7 +354,7 @@ WizardStepBase {
     onNextClicked: {
         if (root.isWriting) {
             // If we're in verification phase, skip verification and let write complete successfully
-            if (ImageWriterSingleton.writeState === ImageWriter.Verifying) {
+            if (ImageWriterSingleton.writeState === ImageWriterSingleton.Verifying) {
                 ImageWriterSingleton.skipCurrentVerification()
             } else {
                 // Cancel the actual write operation
