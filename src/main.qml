@@ -93,8 +93,9 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         onActivated: {
             console.log("Opening debug options dialog...")
-            debugOptionsDialog.initialize()
-            debugOptionsDialog.open()
+            debugOptionsLoader.active = true
+            debugOptionsLoader.item.initialize()
+            debugOptionsLoader.item.open()
         }
     }
 
@@ -107,7 +108,6 @@ ApplicationWindow {
         WizardContainer {
             id: wizardContainer
             anchors.fill: parent
-            optionsPopup: appOptionsDialog
             overlayRootRef: overlayRoot
             // Show Language step if C++ requested it
             showLanguageSelection: window.showLanguageSelection
@@ -116,7 +116,13 @@ ApplicationWindow {
                 // Reset to start of wizard or close application
                 wizardContainer.currentStep = 0;
             }
-            
+
+            onAppOptionsRequested: {
+                appOptionsLoader.active = true
+                appOptionsLoader.item.initialize()
+                appOptionsLoader.item.open()
+            }
+
             onUpdatePopupRequested: function(updateUrl, version) {
                 if (!window.updatePopupShown) {
                     window.updatePopupShown = true
@@ -444,16 +450,26 @@ ApplicationWindow {
         }
     }
 
-    AppOptionsDialog {
-        id: appOptionsDialog
-        parent: overlayRoot
-        wizardContainer: wizardContainer
+    // Lazily constructed: each of these dialogs is ~600 lines of QML and is only
+    // reachable on user action (the "App Options" button / a debug shortcut), so we
+    // keep them off the startup path. The Loader is inactive until first use; once
+    // realized it persists, so subsequent opens reuse the same instance.
+    Loader {
+        id: appOptionsLoader
+        active: false
+        sourceComponent: AppOptionsDialog {
+            parent: overlayRoot
+            wizardContainer: wizardContainer
+        }
     }
 
-    DebugOptionsDialog {
-        id: debugOptionsDialog
-        parent: overlayRoot
-        wizardContainer: wizardContainer
+    Loader {
+        id: debugOptionsLoader
+        active: false
+        sourceComponent: DebugOptionsDialog {
+            parent: overlayRoot
+            wizardContainer: wizardContainer
+        }
     }
 
     // Removed embeddedFinishedPopup; handled by Wizard Done step
