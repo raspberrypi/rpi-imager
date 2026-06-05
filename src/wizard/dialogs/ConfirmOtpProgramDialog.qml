@@ -49,7 +49,7 @@ BaseDialog {
         Layout.fillWidth: true
         implicitHeight: warningColumn.implicitHeight + Style.spacingMedium * 2
         color: "#FFEBEE"
-        radius: Style.borderRadius
+        radius: Style.cornerRadius(Style.sectionBorderRadius)
 
         ColumnLayout {
             id: warningColumn
