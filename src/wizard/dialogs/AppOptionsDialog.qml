@@ -156,10 +156,10 @@ BaseDialog {
                 accessibleDescription: qsTr("Change the source of operating system images between official Raspberry Pi repository and custom sources")
                 Layout.fillWidth: true
                 // Disable while write is in progress to prevent changing source during write
-                enabled: ImageWriterSingleton.writeState === ImageWriter.Idle ||
-                         ImageWriterSingleton.writeState === ImageWriter.Succeeded ||
-                         ImageWriterSingleton.writeState === ImageWriter.Failed ||
-                         ImageWriterSingleton.writeState === ImageWriter.Cancelled
+                enabled: ImageWriterSingleton.writeState === ImageWriterSingleton.Idle ||
+                         ImageWriterSingleton.writeState === ImageWriterSingleton.Succeeded ||
+                         ImageWriterSingleton.writeState === ImageWriterSingleton.Failed ||
+                         ImageWriterSingleton.writeState === ImageWriterSingleton.Cancelled
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
                 }
@@ -186,10 +186,10 @@ BaseDialog {
                          ImageWriterSingleton.checkSWCapability("secure_boot") ||
                          ImageWriterSingleton.getDebugForceSecureBoot()
                 // Disable while write is in progress
-                enabled: ImageWriterSingleton.writeState === ImageWriter.Idle ||
-                         ImageWriterSingleton.writeState === ImageWriter.Succeeded ||
-                         ImageWriterSingleton.writeState === ImageWriter.Failed ||
-                         ImageWriterSingleton.writeState === ImageWriter.Cancelled
+                enabled: ImageWriterSingleton.writeState === ImageWriterSingleton.Idle ||
+                         ImageWriterSingleton.writeState === ImageWriterSingleton.Succeeded ||
+                         ImageWriterSingleton.writeState === ImageWriterSingleton.Failed ||
+                         ImageWriterSingleton.writeState === ImageWriterSingleton.Cancelled
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
                 }

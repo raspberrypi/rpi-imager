@@ -225,10 +225,10 @@ BaseDialog {
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
                          || (radioCustomUri.checked && fieldCustomUri.isValid))
                          // Disable while write is in progress to prevent restarting during write
-                         && (ImageWriterSingleton.writeState === ImageWriter.Idle ||
-                             ImageWriterSingleton.writeState === ImageWriter.Succeeded ||
-                             ImageWriterSingleton.writeState === ImageWriter.Failed ||
-                             ImageWriterSingleton.writeState === ImageWriter.Cancelled)
+                         && (ImageWriterSingleton.writeState === ImageWriterSingleton.Idle ||
+                             ImageWriterSingleton.writeState === ImageWriterSingleton.Succeeded ||
+                             ImageWriterSingleton.writeState === ImageWriterSingleton.Failed ||
+                             ImageWriterSingleton.writeState === ImageWriterSingleton.Cancelled)
                 // TODO: only show or enable when settings changed
                 text: qsTr("Apply & Restart")
                 accessibleDescription: qsTr("Apply the new content repository and restart the wizard from the beginning")

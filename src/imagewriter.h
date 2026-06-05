@@ -49,8 +49,8 @@ class ImageWriter : public QObject
 {
     Q_OBJECT
 #ifndef CLI_ONLY_BUILD
-    QML_ELEMENT
-    QML_UNCREATABLE("Created by C++")
+    QML_NAMED_ELEMENT(ImageWriterSingleton)
+    QML_SINGLETON
 #endif
 public:
     enum class WriteState {
@@ -69,6 +69,15 @@ public:
     explicit ImageWriter(QObject *parent = nullptr);
     virtual ~ImageWriter();
     void setEngine(QQmlApplicationEngine *engine);
+
+#ifndef CLI_ONLY_BUILD
+    // QML singleton factory: returns the single app-owned instance, which main()
+    // supplies via setQmlInstance() before the engine loads. Registered declaratively
+    // as the "ImageWriterSingleton" QML singleton, so it is visible to qmllint/qmlsc
+    // (unlike a runtime qmlRegisterSingletonInstance, which also disturbs the module).
+    static ImageWriter *create(QQmlEngine *engine, QJSEngine *scriptEngine);
+    static void setQmlInstance(ImageWriter *instance) { s_qmlInstance = instance; }
+#endif
 
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
     Q_PROPERTY(bool isOsListUnavailable READ isOsListUnavailable NOTIFY osListUnavailableChanged)
@@ -476,6 +485,9 @@ protected slots:
     void onBootstrapError(const QString &portPathKey, const QString &msg);
 
 private:
+#ifndef CLI_ONLY_BUILD
+    static ImageWriter *s_qmlInstance;   // app-owned instance returned by create()
+#endif
     void setWriteState(WriteState state);
     WriteState writeState() const { return _writeState; }
     // Cache management

@@ -103,6 +103,18 @@ namespace {
 // Initialize static member for secure boot CLI override
 bool ImageWriter::_forceSecureBootEnabled = false;
 
+#ifndef CLI_ONLY_BUILD
+ImageWriter *ImageWriter::s_qmlInstance = nullptr;
+
+ImageWriter *ImageWriter::create(QQmlEngine *, QJSEngine *)
+{
+    Q_ASSERT(s_qmlInstance);
+    // The instance is owned by main() (stack-allocated), not the QML engine.
+    QQmlEngine::setObjectOwnership(s_qmlInstance, QQmlEngine::CppOwnership);
+    return s_qmlInstance;
+}
+#endif
+
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent),
       _cacheManager(nullptr),
