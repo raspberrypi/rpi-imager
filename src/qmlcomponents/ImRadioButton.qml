@@ -40,17 +40,8 @@ RadioButton {
         width: control.availableWidth  // Constrain width so text wraps
     }
     
-    // Access imageWriter from parent context
-    property var imageWriter: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                return item.imageWriter;
-            }
-            item = item.parent;
-        }
-        return null;
-    }
+    // Access imageWriter from parent context (cached at creation time)
+    property var imageWriter: null
     
     // Custom square indicator for embedded mode to avoid circular rendering artifacts
     Component.onCompleted: {

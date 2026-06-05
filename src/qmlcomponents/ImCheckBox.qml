@@ -27,17 +27,8 @@ CheckBox {
         text: control.text
     }
     
-    // Access imageWriter from parent context
-    property var imageWriter: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                return item.imageWriter;
-            }
-            item = item.parent;
-        }
-        return null;
-    }
+    // Access imageWriter from parent context (cached at creation time)
+    property var imageWriter: null
     
     // Custom contentItem with text wrapping for long translations
     contentItem: Text {

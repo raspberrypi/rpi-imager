@@ -17,16 +17,17 @@ Button {
     // Allow instances to provide a custom accessibility description
     property string accessibleDescription: ""
     
-    // Access imageWriter from parent context
-    property var imageWriter: {
+    // Access imageWriter from parent context (cached at creation time)
+    property var imageWriter: null
+    Component.onCompleted: {
         var item = parent;
         while (item) {
             if (item.imageWriter !== undefined) {
-                return item.imageWriter;
+                control.imageWriter = item.imageWriter;
+                break;
             }
             item = item.parent;
         }
-        return null;
     }
 
     background: Rectangle {
