@@ -254,10 +254,11 @@ WizardStepBase {
         dialogTitle: qsTr("Select RSA Private Key")
         nameFilters: [qsTr("PEM Files (*.pem)"), qsTr("All Files (*)")]
         Component.onCompleted: {
-            // Default to ~/.ssh folder if it exists
-            var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-            if (home && home.length > 0) {
-                var url = (Qt.platform.os === "windows") ? ("file:///" + home + "/.ssh") : ("file://" + home + "/.ssh")
+            // Default to the user's ~/.ssh folder. writableLocation() already returns a
+            // platform-correct file:// URL, so just append the subfolder.
+            var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
+            if (home.length > 0) {
+                var url = home + "/.ssh"
                 rsaKeyFileDialog.currentFolder = url
                 rsaKeyFileDialog.folder = url
             }

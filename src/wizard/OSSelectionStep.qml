@@ -677,12 +677,12 @@ WizardStepBase {
                     // Ensure reasonable defaults
                     customImageFileDialog.dialogTitle = qsTr("Select image")
                     customImageFileDialog.nameFilters = CommonStrings.imageFiltersList
-                    // Default to Downloads folder
-                    var dl = StandardPaths.writableLocation(StandardPaths.DownloadLocation)
-                    if (dl && dl.length > 0) {
-                        var furl = (Qt.platform.os === "windows") ? ("file:///" + dl) : ("file://" + dl)
-                        customImageFileDialog.currentFolder = furl
-                        customImageFileDialog.folder = furl
+                    // Default to Downloads. writableLocation() already returns a
+                    // platform-correct file:// URL, so use it directly.
+                    var dl = String(StandardPaths.writableLocation(StandardPaths.DownloadLocation))
+                    if (dl.length > 0) {
+                        customImageFileDialog.currentFolder = dl
+                        customImageFileDialog.folder = dl
                     }
                     customImageFileDialog.open()
                 } else {
