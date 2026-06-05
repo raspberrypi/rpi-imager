@@ -8,7 +8,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Dialogs
 import QtCore
 import "../qmlcomponents"
 
@@ -402,11 +401,11 @@ WizardStepBase {
                 anchors.bottom: parent.bottom
                 // Delegate highlighting: Works together with ListView's built-in highlight system
                 // DO NOT disable ListView's highlight - both systems work in harmony
-                color: (parentListView && parentListView.currentIndex === index) ? Style.listViewHighlightColor :
+                color: (delegateItem.parentListView && delegateItem.parentListView.currentIndex === delegateItem.index) ? Style.listViewHighlightColor :
                        (osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 anchors.rightMargin: (
-                    (parentListView && parentListView.contentHeight > parentListView.height) ? Style.scrollBarWidth : 0)
+                    (delegateItem.parentListView && delegateItem.parentListView.contentHeight > delegateItem.parentListView.height) ? Style.scrollBarWidth : 0)
                 Accessible.ignored: true
                 
                 MouseArea {
@@ -417,26 +416,26 @@ WizardStepBase {
                     cursorShape: Qt.PointingHandCursor
                     
                     onPressed: {
-                        if (parentListView) {
-                            if (!parentListView.activeFocus) {
-                                parentListView.forceActiveFocus()
+                        if (delegateItem.parentListView) {
+                            if (!delegateItem.parentListView.activeFocus) {
+                                delegateItem.parentListView.forceActiveFocus()
                             }
                         }
                     }
 
                     onClicked: {
                         // Trigger the itemSelected signal to handle selection with scroll preservation
-                        if (parentListView) {
+                        if (delegateItem.parentListView) {
                             // Set flag to indicate this is a mouse click
-                            parentListView.currentSelectionIsFromMouse = true
-                            parentListView.itemSelected(index, delegateItem)
+                            delegateItem.parentListView.currentSelectionIsFromMouse = true
+                            delegateItem.parentListView.itemSelected(delegateItem.index, delegateItem)
                         }
                     }
                     
                     onDoubleClicked: {
                         // Double-click acts like pressing Return - select and advance
-                        if (parentListView) {
-                            parentListView.itemDoubleClicked(index, delegateItem)
+                        if (delegateItem.parentListView) {
+                            delegateItem.parentListView.itemDoubleClicked(delegateItem.index, delegateItem)
                         }
                     }
                 }

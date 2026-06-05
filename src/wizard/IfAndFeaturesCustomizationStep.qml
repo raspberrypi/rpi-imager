@@ -8,8 +8,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
-import QtQuick.Dialogs
-import QtCore
 import "../qmlcomponents"
 import "components"
 
@@ -60,7 +58,7 @@ WizardStepBase {
 
                 // === Interfaces ===
                 WizardSectionContainer {
-                    visible: supportsI2c || supportsSpi || supports1Wire || supportsSerial
+                    visible: root.supportsI2c || root.supportsSpi || root.supports1Wire || root.supportsSerial
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -81,7 +79,7 @@ WizardStepBase {
                             text: qsTr("Enable I2C")
                             accessibleDescription: qsTr("Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals")
                             checked: false
-                            visible: supportsI2c
+                            visible: root.supportsI2c
                         }
 
                         ImOptionPill {
@@ -90,7 +88,7 @@ WizardStepBase {
                             text: qsTr("Enable SPI")
                             accessibleDescription: qsTr("Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors")
                             checked: false
-                            visible: supportsSpi
+                            visible: root.supportsSpi
                         }
 
                         ImOptionPill {
@@ -99,13 +97,13 @@ WizardStepBase {
                             text: qsTr("Enable 1-Wire")
                             accessibleDescription: qsTr("Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices")
                             checked: false
-                            visible: supports1Wire
+                            visible: root.supports1Wire
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Style.spacingMedium
-                            visible: supportsSerial
+                            visible: root.supportsSerial
 
                             WizardFormLabel {
                                 id: labelSerial
@@ -136,7 +134,7 @@ WizardStepBase {
 
                 // === Features ===
                 WizardSectionContainer {
-                    visible: supportsUsbOtg
+                    visible: root.supportsUsbOtg
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -317,7 +315,7 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
-        parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
+        parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
         title: qsTr("USB Gadget Mode Warning")
@@ -412,7 +410,7 @@ WizardStepBase {
                     confirmDialog.close()
                     root.isConfirmed = true
                     // Advance to next step
-                    wizardContainer.nextStep()
+                    root.wizardContainer.nextStep()
                 }
             }
         }
@@ -450,20 +448,20 @@ WizardStepBase {
 
     Connections {
         // Recompute caps if the selected device changes elsewhere
-        target: wizardContainer
+        target: root.wizardContainer
         function onSelectedDeviceNameChanged() {
             // Defer capability check to ensure capabilities are fully propagated
             Qt.callLater(function() {
                 updateCaps()
                 
                 // Update availability flag for sidebar navigation
-                var hasAnyCapabilities = supportsI2c || supportsSpi || supports1Wire || supportsSerial || supportsUsbOtg
-                wizardContainer.ifAndFeaturesAvailable = hasAnyCapabilities
+                var hasAnyCapabilities = root.supportsI2c || root.supportsSpi || root.supports1Wire || root.supportsSerial || root.supportsUsbOtg
+                root.wizardContainer.ifAndFeaturesAvailable = hasAnyCapabilities
                 
                 // Rebuild focus order based on new capabilities
                 root.rebuildFocusOrder()
                 // If Console is no longer supported and was selected, fall back
-                if (!supportsSerialConsoleOnly && comboSerial.editText === qsTr("Console"))
+                if (!root.supportsSerialConsoleOnly && comboSerial.editText === qsTr("Console"))
                     comboSerial.currentIndex = 0;
             })
         }
