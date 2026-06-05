@@ -452,6 +452,33 @@ add_custom_target(test_pieeprom
     COMMENT "Running pieeprom format tests"
 )
 
+# BootloaderImage tests (AB-capable pieeprom: bootsys signing/extraction)
+add_executable(bootloader_image_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.cpp
+    bootloader_image_test.cpp
+)
+target_link_libraries(bootloader_image_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+target_include_directories(bootloader_image_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+target_compile_features(bootloader_image_test PRIVATE cxx_std_20)
+target_compile_options(bootloader_image_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(bootloader_image_test)
+
+add_custom_target(test_bootloader_image
+    COMMAND bootloader_image_test
+    DEPENDS bootloader_image_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running BootloaderImage (AB pieeprom) tests"
+)
+
 # Fastboot EEPROM wire-protocol tests
 add_executable(fastboot_eeprom_wire_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/usb_transport.h

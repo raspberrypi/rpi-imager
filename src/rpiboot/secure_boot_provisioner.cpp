@@ -143,10 +143,21 @@ static QByteArray defaultBootConf2711()
 }
 
 // Generate the pieeprom.sig file alongside a signed pieeprom.bin.  Format
-// matches rpi-eeprom-digest run *without* -k: just sha256 + ts.  The RSA
-// proof for the bootloader lives inside pieeprom.bin as bootconf.sig.
+// matches rpi-eeprom-digest run *with* -k:
+//   <sha256-hex>\n
+//   ts: <epoch>\n
+//   rsa2048: <signature-hex>\n
+// The RSA signature is PKCS#1 v1.5 / SHA-256 over the whole pieeprom.bin,
+// signed with the customer key.  This is REQUIRED for secure boot: the
+// recovery image validates pieeprom.sig's rsa2048 line against the fused
+// customer key before committing the EEPROM.  Omitting it (sha256 + ts
+// only) makes a fused device reject the update — observed as the bootloader
+// "invalid signature" flash sequence during the rpiboot phase, before any
+// reboot.  Mirrors rpi-sb-provisioner's update_eeprom, which always passes
+// `-k <key>` (get_eeprom_digest_sign_args) when signing is available.
 static bool writePieepromSig(const std::filesystem::path& bootImgPath,
                               const std::filesystem::path& sigPath,
+                              const QString& rsaKeyPath,
                               std::string& errOut)
 {
     QString imgQStr = QString::fromStdString(bootImgPath.string());
@@ -155,6 +166,16 @@ static bool writePieepromSig(const std::filesystem::path& bootImgPath,
         errOut = "Failed to hash signed pieeprom.bin";
         return false;
     }
+
+    // RSA-sign the raw 32-byte digest (rsaSign wraps it in the PKCS#1
+    // DigestInfo internally), matching `openssl dgst -sha256 -sign`.
+    const QByteArray rawDigest = QByteArray::fromHex(hashHex);
+    const QByteArray sigHex = SecureBoot::rsaSign(rawDigest, rsaKeyPath);
+    if (sigHex.isEmpty()) {
+        errOut = "Failed to RSA-sign pieeprom.sig with " + rsaKeyPath.toStdString();
+        return false;
+    }
+
     QFile f(QString::fromStdString(sigPath.string()));
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
         errOut = "Cannot write " + sigPath.string();
@@ -164,6 +185,9 @@ static bool writePieepromSig(const std::filesystem::path& bootImgPath,
     f.write("\n");
     f.write("ts: ");
     f.write(QByteArray::number(SecureBoot::getCurrentTimestamp()));
+    f.write("\n");
+    f.write("rsa2048: ");
+    f.write(sigHex);
     f.write("\n");
     f.close();
     return true;
@@ -242,6 +266,31 @@ bool SecureBootProvisioner::prepareSignedRecovery(ChipGeneration gen,
                    + img.lastError().toStdString();
             return false;
         }
+
+        // AB-capable EEPROM images carry a second bootcode blob, "bootsys",
+        // in the first partition.  The boot ROM verifies it against the
+        // customer key exactly like bootcode.bin, so it must be counter-
+        // signed identically (rpi-sign-bootcode -c 2712 -n 16 -v 0).
+        // Omitting this leaves bootsys unsigned and the ROM rejects the
+        // image.  Mirrors usbboot's update-pieeprom.sh and
+        // rpi-sb-provisioner #306; non-AB images have no bootsys.
+        if (img.isABImage()) {
+            QByteArray bootsys = img.getFile(QStringLiteral("bootsys"));
+            if (bootsys.isEmpty()) {
+                errOut = "AB-capable pieeprom.original.bin has no bootsys content";
+                return false;
+            }
+            QByteArray signedBootsys = SecureBoot::signBootcode2712(bootsys, keyQStr);
+            if (signedBootsys.isEmpty()) {
+                errOut = "Failed to counter-sign bootsys";
+                return false;
+            }
+            if (!img.updateBootsys(signedBootsys)) {
+                errOut = "Failed to embed signed bootsys in pieeprom.bin: "
+                       + img.lastError().toStdString();
+                return false;
+            }
+        }
     }
 
     // 5. Splice bootconf.txt, bootconf.sig and pubkey.bin into the EEPROM.
@@ -263,9 +312,10 @@ bool SecureBootProvisioner::prepareSignedRecovery(ChipGeneration gen,
         return false;
     }
 
-    // 6. Generate pieeprom.sig (SHA-256 + timestamp; no rsa2048 line — the
-    //    RSA proof lives inside pieeprom.bin as bootconf.sig).
-    if (!writePieepromSig(pieepromOut, pieepromSig, errOut))
+    // 6. Generate pieeprom.sig (sha256 + ts + rsa2048, signed with the
+    //    customer key) — the recovery verifies this before flashing on a
+    //    secure-boot device.
+    if (!writePieepromSig(pieepromOut, pieepromSig, keyQStr, errOut))
         return false;
 
     // Note: counter-signing the second-stage bootcode that gets uploaded to
