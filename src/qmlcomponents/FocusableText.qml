@@ -12,6 +12,8 @@
  * headings use FocusableHeading.
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick
 
 import RpiImager

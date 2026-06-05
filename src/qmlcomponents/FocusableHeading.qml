@@ -7,6 +7,8 @@
  * behaviour.
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick
 
 import RpiImager
