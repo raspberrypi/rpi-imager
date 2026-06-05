@@ -310,7 +310,16 @@ void DownloadExtractThread::_onDownloadSuccess()
     
     // Wait for extraction thread to finish processing all data
     _extractThread->wait();
-    
+
+    // The download half succeeded, but the extraction thread may have aborted
+    // while draining the ring buffer (or the write was cancelled). Emitting
+    // success() unconditionally here would override an already-reported error
+    // and bounce the UI to the "write complete" screen. (#1603)
+    if (_extractFailed || _cancelled) {
+        qDebug() << "Extraction did not complete successfully; suppressing success signal";
+        return;
+    }
+
     // Extraction thread already called _writeComplete(), so just emit success to signal thread completion
     emit success();
 }
@@ -508,6 +517,7 @@ void DownloadExtractThread::extractImageRun()
         if (!_cancelled)
         {
             // Fatal error
+            _extractFailed = true;
             DownloadThread::cancelDownload();
             
             // Use stall error message if set (from ring buffer stall), otherwise use exception message
@@ -754,6 +764,7 @@ void DownloadExtractThread::extractMultiFileRun()
         if (!_cancelled)
         {
             /* Fatal error */
+            _extractFailed = true;
             DownloadThread::cancelDownload();
             
             // Use stall error message if set (from ring buffer stall), otherwise use exception message
