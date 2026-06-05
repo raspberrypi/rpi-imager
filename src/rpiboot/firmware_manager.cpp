@@ -912,20 +912,35 @@ std::optional<std::string> FirmwareManager::resolveLatestEepromVersion(
     if (!in) {
         return std::nullopt;
     }
-    // Skip comment/blank lines; the first data row is the newest version
-    // (the file is "Sorted newest-first" per its own header).
+    // Columns: version  build_epoch  fw_git_hash  release  [mfg_ver].
+    // The file is "Sorted newest-first", so the first usable data row is
+    // the newest version.  We fetch from the firmware-271X/latest/ channel
+    // directory, which carries every current release (both `latest`- and
+    // `default`-tagged builds live there).  Archived (`old`) builds are not
+    // guaranteed to exist under latest/, so skip them — otherwise a future
+    // newest-but-archived row would resolve to a URL that 404s.
     std::string line;
     while (std::getline(in, line)) {
         if (line.empty() || line.front() == '#')
             continue;
         std::istringstream iss(line);
-        std::string version;
-        if (iss >> version && !version.empty()) {
-            qDebug() << "FirmwareManager: resolved latest"
-                     << QString::fromStdString(firmwareDir)
-                     << "version:" << QString::fromStdString(version);
-            return version;
+        std::string version, buildEpoch, gitHash, release;
+        if (!(iss >> version) || version.empty())
+            continue;
+        // release is the 4th column; tolerate its absence defensively.
+        iss >> buildEpoch >> gitHash >> release;
+        if (release == "old") {
+            qDebug() << "FirmwareManager: skipping archived (old) rpi-eeprom"
+                     << QString::fromStdString(firmwareDir) << "version"
+                     << QString::fromStdString(version);
+            continue;
         }
+        qDebug() << "FirmwareManager: resolved latest"
+                 << QString::fromStdString(firmwareDir)
+                 << "version:" << QString::fromStdString(version)
+                 << "(release:" << QString::fromStdString(
+                        release.empty() ? std::string("?") : release) << ")";
+        return version;
     }
     return std::nullopt;
 }

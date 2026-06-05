@@ -35,6 +35,10 @@ public:
     static constexpr int FILENAME_LEN     = 12;
     static constexpr int ERASE_ALIGN_SIZE = 4096;
     static constexpr int MAX_FILE_SIZE    = ERASE_ALIGN_SIZE - FILE_HDR_LEN;
+    // AB-image layout: a 64 KiB read-only section followed by a 988 KiB
+    // first partition (then an empty second partition + journals).
+    static constexpr int READ_ONLY_SIZE   = 64 * 1024;
+    static constexpr int PARTITION_SIZE   = 988 * 1024;
 
     BootloaderImage();
     ~BootloaderImage();
@@ -62,7 +66,24 @@ public:
     // MAGIC (not FILE_MAGIC) and has no filename header — it's the
     // 128 KiB block at the start of the image.  Returns false if the
     // signed bootcode is larger than the reserved 128 KiB region.
+    //
+    // For AB-capable images the 128 KiB reservation is not enforced: the
+    // bulk bootloader lives in the separate "bootsys" partition file and
+    // bootcode.bin sits inside the 64 KiB read-only section instead.
     bool updateBootcode(const QByteArray &payload);
+
+    // True if this is an AB-capable EEPROM image, i.e. it carries a
+    // "bootsys" file section in the first partition.  Mirrors
+    // rpi-eeprom-config's _is_ab_image probe.
+    bool isABImage() const;
+
+    // Replace the "bootsys" partition file (AB-capable images only).
+    // bootsys holds the bulk bootloader and, like bootcode.bin, must be
+    // customer-counter-signed on a fused BCM2712.  Unlike ordinary config
+    // files it is exempt from the 4 KiB MAX_FILE_SIZE limit; it is bounded
+    // only by the first partition.  Returns false if the section is absent
+    // or the signed payload won't fit.
+    bool updateBootsys(const QByteArray &payload);
 
     QString lastError() const { return _lastError; }
 

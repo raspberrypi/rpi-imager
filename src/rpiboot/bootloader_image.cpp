@@ -223,8 +223,14 @@ bool BootloaderImage::updateFile(const QString &name, const QByteArray &payload)
     // this erase block, except when this is the last section (where
     // trailing padding bytes are fine and a header would shift offsets
     // for round-trip equality with rpi-eeprom-config).
+    //
+    // The gap is always a multiple of 8 (both padStart and next are
+    // 8-aligned).  Use ">= 8" — matching rpi-eeprom-config — so that an
+    // exactly-8-byte gap becomes a zero-length PAD header rather than 8
+    // raw 0xff bytes, which parse() would read as 0xffffffff and treat as
+    // a premature EOF, silently dropping every following section.
     int padBytes = next - padStart;
-    if (padBytes > 8 && !isLast) {
+    if (padBytes >= 8 && !isLast) {
         padBytes -= 8;
         writeBe32(_bytes, padStart, PAD_MAGIC);
         writeBe32(_bytes, padStart + 4, uint32_t(padBytes));
@@ -245,9 +251,13 @@ bool BootloaderImage::updateBootcode(const QByteArray &payload)
     if (!findFile(QStringLiteral("bootcode.bin"), hdr, oldLen, isLast, next))
         return false;
 
-    // The bootcode region is fixed at 128 KiB (next must be ≥ 128 KiB).
+    // Non-AB images reserve a fixed 128 KiB bootcode region (next must be
+    // ≥ 128 KiB).  AB-capable images carry a smaller bootcode inside the
+    // 64 KiB read-only section — the bulk bootloader lives in the separate
+    // "bootsys" partition file — so the reservation does not apply.
+    // Mirrors rpi-eeprom-config's `not self._is_ab_image` guard.
     constexpr int BOOTCODE_RESERVED = 128 * 1024;
-    if (next < BOOTCODE_RESERVED) {
+    if (!isABImage() && next < BOOTCODE_RESERVED) {
         _lastError = "Bootcode reserved region < 128 KiB";
         return false;
     }
@@ -264,8 +274,10 @@ bool BootloaderImage::updateBootcode(const QByteArray &payload)
     while (padStart % 8 != 0)
         _bytes.data()[padStart++] = char(0xff);
 
+    // ">= 8" (not "> 8"): an exactly-8-byte gap must become a zero-length
+    // PAD header, not 8 raw 0xff bytes that parse() would treat as EOF.
     int padBytes = next - padStart;
-    if (padBytes > 8) {
+    if (padBytes >= 8) {
         padBytes -= 8;
         writeBe32(_bytes, padStart, PAD_MAGIC);
         writeBe32(_bytes, padStart + 4, uint32_t(padBytes));
@@ -274,6 +286,91 @@ bool BootloaderImage::updateBootcode(const QByteArray &payload)
     for (int i = 0; i < padBytes; ++i) {
         _bytes.data()[padStart + i] = char(0xff);
     }
+    return parse();
+}
+
+bool BootloaderImage::isABImage() const
+{
+    for (const auto &s : _sections) {
+        if (s.magic == FILE_MAGIC && s.filename == QStringLiteral("bootsys"))
+            return true;
+    }
+    return false;
+}
+
+bool BootloaderImage::updateBootsys(const QByteArray &payload)
+{
+    // bootsys is a FILE_MAGIC file living at the start of the first
+    // partition (offset 64 KiB).  Locate it within the first partition,
+    // mirroring rpi-eeprom-config's partition-scoped find_file.
+    constexpr int partitionEnd = READ_ONLY_SIZE + PARTITION_SIZE;
+
+    int idx = -1;
+    for (int i = 0; i < int(_sections.size()); ++i) {
+        const auto &s = _sections[i];
+        if (s.offset >= READ_ONLY_SIZE && s.offset < partitionEnd &&
+            s.magic == FILE_MAGIC && s.filename == QStringLiteral("bootsys")) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0) {
+        _lastError = "bootsys section not found in first partition";
+        return false;
+    }
+
+    const int hdr    = _sections[idx].offset;
+    const bool isLast = (idx == int(_sections.size()) - 1);
+
+    // next: the first non-padding section after bootsys, capped at the
+    // first-partition end and the trailing scratch reserve.
+    int next = qMin(int(_bytes.size()) - ERASE_ALIGN_SIZE, partitionEnd);
+    for (int i = idx + 1; i < int(_sections.size()); ++i) {
+        if (_sections[i].magic == PAD_MAGIC)
+            continue;
+        next = _sections[i].offset;
+        break;
+    }
+
+    // bootsys is exempt from MAX_FILE_SIZE; it is bounded only by the
+    // partition.  The recorded section length covers [filename + meta +
+    // payload], so the on-disk footprint is payload + FILE_HDR_LEN.
+    const int updateLen = payload.size() + FILE_HDR_LEN;
+    if (hdr + updateLen > int(_bytes.size()) - ERASE_ALIGN_SIZE) {
+        _lastError = "No space for bootsys: would overrun scratch reserve";
+        return false;
+    }
+    if (hdr + updateLen > next) {
+        _lastError = QString("Signed bootsys (%1 bytes) doesn't fit in "
+                             "first partition (available %2)")
+                        .arg(updateLen).arg(next - hdr);
+        return false;
+    }
+
+    const int newLen = payload.size() + FILENAME_LEN + 4;
+    writeBe32(_bytes, hdr + 4, uint32_t(newLen));
+    std::memcpy(_bytes.data() + hdr + 4 + FILE_HDR_LEN,
+                payload.constData(), payload.size());
+
+    // 0xFF-pad to next 8-byte boundary.
+    int padStart = hdr + 4 + FILE_HDR_LEN + payload.size();
+    while (padStart % 8 != 0)
+        _bytes.data()[padStart++] = char(0xff);
+
+    // Insert a PAD_MAGIC section to consume the remaining space up to the
+    // next section, unless bootsys is the last section.  ">= 8" (not "> 8")
+    // so an exactly-8-byte gap becomes a zero-length PAD header rather than
+    // 8 raw 0xff bytes that parse() would treat as a premature EOF.
+    int padBytes = next - padStart;
+    if (padBytes >= 8 && !isLast) {
+        padBytes -= 8;
+        writeBe32(_bytes, padStart, PAD_MAGIC);
+        writeBe32(_bytes, padStart + 4, uint32_t(padBytes));
+        padStart += 8;
+    }
+    for (int i = 0; i < padBytes; ++i)
+        _bytes.data()[padStart + i] = char(0xff);
+
     return parse();
 }
 
