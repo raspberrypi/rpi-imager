@@ -4,13 +4,16 @@
  *
  * MarqueeText: A Text component that scrolls horizontally on hover when truncated.
  *
- * When the text fits within the available width, it displays normally.
+ * When the text fits within the available width, it displays normally (elided).
  * When truncated, hovering triggers a smooth left-to-right scroll animation
  * that reveals the full text, then pauses and returns to the start.
+ *
+ * A single rendered Text drives both the static (elided) and scrolling display;
+ * the headless TextMetrics provides the natural width used to detect truncation
+ * and size the scroll, independent of the rendered element's elide state.
  */
 
 import QtQuick
-import QtQuick.Layouts
 
 import RpiImager
 
@@ -32,6 +35,9 @@ Item {
     // Expose whether text is truncated (for external tooltip logic)
     readonly property bool truncated: textMetrics.width > root.width
 
+    // True while actively scrolling: hovered, truncated and motion allowed
+    readonly property bool scrolling: mouseArea.containsMouse && root.truncated && !PlatformHelper.prefersReducedMotion
+
     // Layout hints - default to content size
     // Note: Don't set Layout.fillWidth here - let parent decide
     implicitWidth: textMetrics.width
@@ -42,78 +48,47 @@ Item {
     Accessible.name: root.text
     Accessible.ignored: false
 
-    // Measure the full text width
+    // Clip to bounds so scrolling text doesn't overflow
+    clip: true
+
+    // Measure the full (unelided) text width, independent of how it is rendered
     TextMetrics {
         id: textMetrics
         text: root.text
     }
 
-    // Clip to bounds so scrolling text doesn't overflow
-    clip: true
-
-    // The actual text element that will be animated
+    // Single rendered element: elides when static, shows full text and animates x when scrolling
     Text {
-        id: scrollingText
+        id: label
         text: root.text
         font: textMetrics.font
         color: root.color
-        
-        // Position for animation
+        width: root.width
+        anchors.verticalCenter: parent.verticalCenter
+        // Left-align while scrolling so the reveal starts from the beginning
+        horizontalAlignment: root.scrolling ? Text.AlignLeft : root.horizontalAlignment
+        elide: root.scrolling ? Text.ElideNone : Text.ElideRight
         x: 0
-        anchors.verticalCenter: parent.verticalCenter
-        
-        // Don't elide - we want to show full text when scrolling
-        elide: Text.ElideNone
-        
+
         // Accessibility handled by parent
         Accessible.ignored: true
     }
 
-    // Static display when not hovering (with elide)
-    Text {
-        id: staticText
-        text: root.text
-        font: textMetrics.font
-        color: root.color
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        horizontalAlignment: root.horizontalAlignment
-        elide: Text.ElideRight
-        visible: !mouseArea.containsMouse || !root.truncated
-        
-        // Accessibility handled by parent
-        Accessible.ignored: true
-    }
-
-    // Hide scrolling text when static is visible
-    states: [
-        State {
-            name: "scrolling"
-            when: mouseArea.containsMouse && root.truncated
-            PropertyChanges { target: scrollingText; visible: true }
-            PropertyChanges { target: staticText; visible: false }
-        },
-        State {
-            name: "static"
-            when: !mouseArea.containsMouse || !root.truncated
-            PropertyChanges { target: scrollingText; visible: false; x: 0 }
-            PropertyChanges { target: staticText; visible: true }
-        }
-    ]
-
-    // Scroll animation sequence
+    // Scroll animation sequence, driven declaratively by the scrolling state
     SequentialAnimation {
         id: scrollAnimation
-        running: false
+        running: root.scrolling
         loops: Animation.Infinite
+
+        // Reset to the start whenever scrolling stops
+        onRunningChanged: if (!running) label.x = 0
 
         // Pause at start
         PauseAnimation { duration: root.pauseAtStartMs }
 
         // Scroll left to reveal hidden text (with padding to ensure full visibility)
         NumberAnimation {
-            target: scrollingText
+            target: label
             property: "x"
             from: 0
             to: -(textMetrics.width - root.width + root.scrollPadding)
@@ -126,7 +101,7 @@ Item {
 
         // Quick reset to start
         NumberAnimation {
-            target: scrollingText
+            target: label
             property: "x"
             to: 0
             duration: 300
@@ -140,16 +115,5 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.NoButton  // Don't consume clicks
-
-        onContainsMouseChanged: {
-            if (containsMouse && root.truncated && !PlatformHelper.prefersReducedMotion) {
-                scrollingText.x = 0
-                scrollAnimation.restart()
-            } else {
-                scrollAnimation.stop()
-                scrollingText.x = 0
-            }
-        }
     }
 }
-
