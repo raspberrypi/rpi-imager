@@ -1655,7 +1655,9 @@ void ImageWriter::startWrite()
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);
-    _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
+    // Single source of truth for the User-Agent: CurlNetworkConfig (also used by
+    // all the libcurl fetch paths via applyCurlSettings) so it can never drift.
+    _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
     qDebug() << "startWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
     
@@ -4703,7 +4705,8 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);
-    _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
+    // Single source of truth for the User-Agent (see startWrite).
+    _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
     qDebug() << "_continueStartWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
     
