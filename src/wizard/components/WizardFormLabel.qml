@@ -7,7 +7,7 @@ import QtQuick
 import QtQuick.Layouts
 import RpiImager
 
-Text {
+FocusableText {
     id: root
     
     property bool isError: false
@@ -28,11 +28,6 @@ Text {
     
     // Accessibility - labels become keyboard-focusable when screen reader is active
     // When accessibleDescription is set, label is independently focusable (not ignored)
-    Accessible.role: Accessible.StaticText
-    Accessible.name: text
     Accessible.description: accessibleDescription
     Accessible.ignored: accessibleDescription.length === 0
-    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
 } 

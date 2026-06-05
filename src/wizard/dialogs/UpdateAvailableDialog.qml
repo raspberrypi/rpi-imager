@@ -38,7 +38,7 @@ BaseDialog {
     }
 
     // Dialog content
-    Text {
+    FocusableHeading {
         id: titleText
         text: qsTr("Update available")
         font.pointSize: Style.fontSizeHeading
@@ -46,14 +46,9 @@ BaseDialog {
         font.bold: true
         color: Style.formLabelColor
         Layout.fillWidth: true
-        Accessible.role: Accessible.Heading
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
-    Text {
+    FocusableText {
         id: descriptionText
         text: root.version.length > 0
             ? qsTr("Imager version %1 is available. Would you like to visit the website to download it?").arg(root.version)
@@ -63,11 +58,6 @@ BaseDialog {
         font.family: Style.fontFamily
         color: Style.textDescriptionColor
         Layout.fillWidth: true
-        Accessible.role: Accessible.StaticText
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     RowLayout {

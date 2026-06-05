@@ -41,7 +41,7 @@ BaseDialog {
     }
 
     // Dialog content
-    Text {
+    FocusableText {
         id: warningText
         textFormat: Text.StyledText
         text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
@@ -53,12 +53,8 @@ BaseDialog {
         color: Style.textDescriptionColor
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
-        Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     RowLayout {

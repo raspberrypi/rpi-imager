@@ -1219,7 +1219,7 @@ Item {
         }
 
         // ----- CONTENT -----
-        Text {
+        FocusableHeading {
             id: titleText
             text: qsTr("Replace existing Raspberry Pi Connect token?")
             font.pointSize: Style.fontSizeHeading
@@ -1228,16 +1228,11 @@ Item {
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         // Body / security note
-        Text {
+        FocusableText {
             id: bodyText
             text: qsTr("A new Raspberry Pi Connect token was received that differs from your current one.\n\n") +
                   qsTr("Do you want to overwrite the existing token?\n\n") +
@@ -1247,12 +1242,7 @@ Item {
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         // Buttons row
@@ -1375,7 +1365,7 @@ Item {
         }
 
         // ----- CONTENT -----
-        Text {
+        FocusableHeading {
             id: repoTitleText
             text: repositoryUrlDialog.isLocalFile 
                 ? qsTr("Open local repository file?")
@@ -1386,16 +1376,11 @@ Item {
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         // Body / security note
-        Text {
+        FocusableText {
             id: repoBodyText
             text: repositoryUrlDialog.isLocalFile
                 ? qsTr("You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.")
@@ -1406,12 +1391,7 @@ Item {
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
         // Show the URL being requested
@@ -1424,7 +1404,7 @@ Item {
             border.width: 1
             radius: Style.listItemBorderRadius
             
-            Text {
+            FocusableText {
                 id: repoUrlText
                 anchors.fill: parent
                 anchors.margins: Style.spacingSmall
@@ -1435,12 +1415,8 @@ Item {
                 wrapMode: Text.WrapAnywhere
                 elide: Text.ElideMiddle
                 maximumLineCount: 3
-                Accessible.role: Accessible.StaticText
                 Accessible.name: qsTr("Repository URL: %1").arg(repositoryUrlDialog.repoUrl)
                 Accessible.ignored: false
-                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
         }
 

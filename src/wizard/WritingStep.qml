@@ -104,7 +104,7 @@ WizardStepBase {
             spacing: Style.spacingMedium
             visible: !root.isWriting && !root.isComplete
 
-            Text {
+            FocusableHeading {
                 id: summaryHeading
                 text: qsTr("Summary")
                 font.pointSize: Style.fontSizeHeading
@@ -112,11 +112,6 @@ WizardStepBase {
                 font.bold: true
                 color: Style.formLabelColor
                 Layout.fillWidth: true
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
 
             GridLayout {
@@ -126,17 +121,13 @@ WizardStepBase {
                 columnSpacing: Style.formColumnSpacing
                 rowSpacing: Style.spacingSmall
 
-                Text {
+                FocusableText {
                     id: deviceLabel
                     text: CommonStrings.device
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
-                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
 
                 MarqueeText {
@@ -150,17 +141,13 @@ WizardStepBase {
                     Accessible.ignored: true  // Read as part of the label
                 }
 
-                Text {
+                FocusableText {
                     id: osLabel
                     text: qsTr("Operating system:")
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
-                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
 
                 MarqueeText {
@@ -174,17 +161,13 @@ WizardStepBase {
                     Accessible.ignored: true  // Read as part of the label
                 }
 
-                Text {
+                FocusableText {
                     id: storageLabel
                     text: CommonStrings.storage
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
-                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
 
                 MarqueeText {
@@ -209,7 +192,7 @@ WizardStepBase {
             spacing: Style.spacingMedium
             visible: !root.isWriting && !root.isComplete && root.anyCustomizationsApplied
 
-            Text {
+            FocusableHeading {
                 id: customizationsHeading
                 text: qsTr("Customisations to apply:")
                 font.pointSize: Style.fontSizeHeading
@@ -217,11 +200,6 @@ WizardStepBase {
                 font.bold: true
                 color: Style.formLabelColor
                 Layout.fillWidth: true
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
 
             ScrollView {
@@ -301,7 +279,7 @@ WizardStepBase {
             spacing: Style.spacingMedium
             visible: root.isWriting || root.isComplete
 
-            Text {
+            FocusableText {
                 id: progressText
                 text: qsTr("Starting write process...")
                 font.pointSize: Style.fontSizeHeading
@@ -311,10 +289,6 @@ WizardStepBase {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 Accessible.role: Accessible.StatusBar
-                Accessible.name: text
-                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
 
             ProgressBar {
@@ -457,7 +431,7 @@ WizardStepBase {
         }
 
         // Dialog content - now using BaseDialog's contentLayout
-        Text {
+        FocusableHeading {
             id: warningText
             text: qsTr("You are about to ERASE all data on: %1").arg(wizardContainer.selectedStorageName || qsTr("the storage device"))
             font.pointSize: Style.fontSizeHeading
@@ -466,15 +440,10 @@ WizardStepBase {
             color: Style.formLabelErrorColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
-        Text {
+        FocusableText {
             id: permanentText
             text: qsTr("This action is PERMANENT and CANNOT be undone.")
             font.pointSize: Style.fontSizeFormLabel
@@ -482,12 +451,7 @@ WizardStepBase {
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         Text {

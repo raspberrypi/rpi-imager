@@ -47,7 +47,7 @@ WizardStepBase {
             Layout.fillWidth: true
             spacing: Style.spacingMedium
             
-            Text {
+            FocusableHeading {
                 id: choicesHeading
                 text: qsTr("Your choices:")
                 font.pointSize: Style.fontSizeHeading
@@ -55,11 +55,6 @@ WizardStepBase {
                 font.bold: true
                 color: Style.formLabelColor
                 Layout.fillWidth: true
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
             
             GridLayout {
@@ -69,17 +64,13 @@ WizardStepBase {
                 columnSpacing: Style.formColumnSpacing
                 rowSpacing: Style.spacingSmall
                 
-                Text {
+                FocusableText {
                     id: deviceLabel
                     text: CommonStrings.device
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
-                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
                 Text {
                     id: deviceValue
@@ -103,17 +94,13 @@ WizardStepBase {
                     }
                 }
                 
-                Text {
+                FocusableText {
                     id: osLabel
                     text: qsTr("Operating system:")
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
-                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
                 Text {
                     id: osValue
@@ -137,17 +124,13 @@ WizardStepBase {
                     }
                 }
                 
-                Text {
+                FocusableText {
                     id: storageLabel
                     text: qsTr("Storage:")
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
-                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
                 Text {
                     id: storageValue
@@ -173,7 +156,7 @@ WizardStepBase {
             }
             
             // Customization summary
-            Text {
+            FocusableHeading {
                 id: customizationsHeading
                 text: qsTr("Customisations applied:")
                 font.pointSize: Style.fontSizeFormLabel
@@ -183,11 +166,6 @@ WizardStepBase {
                 Layout.fillWidth: true
                 Layout.topMargin: Style.spacingSmall
                 visible: root.anyCustomizationsApplied
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
             
             ScrollView {
@@ -252,7 +230,7 @@ WizardStepBase {
                 }
                 ScrollBar.vertical: ScrollBar { policy: contentItem.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff; width: Style.scrollBarWidth }
             }
-            Text {
+            FocusableText {
                 id: ejectInstruction
                 text: root.autoEjectEnabled ? qsTr("The storage device was ejected automatically. You can now remove it safely.") : qsTr("Please eject the storage device before removing it from your computer.")
                 font.pointSize: Style.fontSizeDescription
@@ -261,11 +239,6 @@ WizardStepBase {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
-                Accessible.role: Accessible.StaticText
-                Accessible.name: text
-                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
         }        
     }

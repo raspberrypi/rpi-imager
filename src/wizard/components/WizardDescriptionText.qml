@@ -7,7 +7,7 @@ import QtQuick
 import QtQuick.Layouts
 import RpiImager
 
-Text {
+FocusableText {
     id: root
     
     font.pointSize: Style.fontSizeDescription
@@ -19,10 +19,5 @@ Text {
     wrapMode: Text.WordWrap
     
     // Accessibility - description text becomes keyboard-focusable when screen reader is active
-    Accessible.role: Accessible.StaticText
-    Accessible.name: text
     Accessible.ignored: false
-    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
 } 

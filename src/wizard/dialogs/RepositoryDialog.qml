@@ -59,7 +59,7 @@ BaseDialog {
     }
 
     // Header
-    Text {
+    FocusableHeading {
         id: headerText
         text: qsTr("Content Repository")
         font.pointSize: Style.fontSizeLargeHeading
@@ -68,12 +68,8 @@ BaseDialog {
         color: Style.formLabelColor
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
-        Accessible.role: Accessible.Heading
         Accessible.name: text + ", " + qsTr("Choose the source for operating system images")
         Accessible.ignored: false
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     // Options section

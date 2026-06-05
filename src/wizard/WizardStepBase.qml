@@ -196,9 +196,16 @@ FocusScope {
         }
     }
 
+    // Rebuild the Tab order when the screen reader is toggled at runtime: focus
+    // groups include/exclude header and label items based on screenReaderActive.
+    Connections {
+        target: ImageWriterSingleton
+        function onScreenReaderActiveChanged() { root.rebuildFocusOrder() }
+    }
+
     Component.onCompleted: {
         // Automatically register header elements (title, subtitle) as first focus group
-        registerFocusGroup("_wizard_header", function(){ 
+        registerFocusGroup("_wizard_header", function(){
             var items = []
             // Only include title/subtitle in focus order when screen reader is active
             if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
