@@ -44,6 +44,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QFileInfo>
+#include <QSize>
 #include <QCryptographicHash>
 #include <QUrl>
 #include <filesystem>
@@ -1842,8 +1843,9 @@ bool registerUriScheme() {
 
 qreal detectTextScaleFactor()
 {
-    // If QT_SCALE_FACTOR is already set (embedded mode), don't add text scaling
-    // on top — the whole UI is already scaled uniformly by the launcher script.
+    // If QT_SCALE_FACTOR is already set (embedded mode sets it from the display
+    // DPI/resolution in applyEmbeddedDisplayScaling), don't add text scaling on
+    // top — the whole UI is already scaled uniformly by Qt.
     if (!qgetenv("QT_SCALE_FACTOR").isEmpty()) {
         return 1.0;
     }
@@ -1908,6 +1910,170 @@ qreal detectTextScaleFactor()
 qreal fontDpiCorrection()
 {
     return 72.0 / 96.0;
+}
+
+namespace {
+
+// Connected display, as read from /sys/class/drm. Physical dimensions are
+// optional (0 = unknown) because many panels report no usable size.
+struct DrmDisplay {
+    int widthPx = 0;
+    int heightPx = 0;
+    int widthMm = 0;
+    int heightMm = 0;
+    bool valid() const { return widthPx > 0 && heightPx > 0; }
+};
+
+// A computed DPI outside this window is treated as bogus physical-size data,
+// triggering the resolution-based fallback. Spans large low-DPI TVs through
+// dense phone-class panels.
+constexpr qreal kMinPlausibleDpi = 40.0;
+constexpr qreal kMaxPlausibleDpi = 600.0;
+
+// Derive the physical image size (mm) from a raw EDID block. Prefers the
+// per-millimetre size in the first detailed timing descriptor; falls back to
+// the coarse centimetre-granularity bytes in the basic display parameters.
+// Returns {0, 0} when neither is usable.
+QSize physicalSizeFromEdid(const QByteArray &edid)
+{
+    if (edid.size() < 128)
+        return {};
+    const auto *b = reinterpret_cast<const unsigned char *>(edid.constData());
+
+    // Validate the fixed EDID header before trusting any offsets.
+    static const unsigned char kHeader[8] = {0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
+    if (std::memcmp(b, kHeader, sizeof(kHeader)) != 0)
+        return {};
+
+    // First detailed timing descriptor lives at offset 54. It carries the
+    // image size in mm, but only when it is an actual timing descriptor
+    // (non-zero pixel clock) rather than a monitor descriptor.
+    constexpr int kDtd = 54;
+    if (b[kDtd] != 0 || b[kDtd + 1] != 0) {
+        const int hMm = b[kDtd + 12] | ((b[kDtd + 14] & 0xF0) << 4);
+        const int vMm = b[kDtd + 13] | ((b[kDtd + 14] & 0x0F) << 8);
+        if (hMm > 0 && vMm > 0)
+            return QSize(hMm, vMm);
+    }
+
+    // Basic display parameters: max image size in cm (bytes 0x15 / 0x16).
+    const int hCm = b[21];
+    const int vCm = b[22];
+    if (hCm > 0 && vCm > 0)
+        return QSize(hCm * 10, vCm * 10);
+
+    return {};
+}
+
+// Find the first connected DRM connector that advertises a usable mode, and
+// read its native resolution plus best-effort physical size.
+DrmDisplay readConnectedDisplay()
+{
+    DrmDisplay info;
+    const QDir drmDir(QStringLiteral("/sys/class/drm"));
+    const QStringList connectors = drmDir.entryList(
+        QStringList() << QStringLiteral("card*-*"),
+        QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+
+    for (const QString &connector : connectors) {
+        const QString base = drmDir.absoluteFilePath(connector);
+
+        // Skip outputs that aren't connected.
+        QFile statusFile(base + QStringLiteral("/status"));
+        if (!statusFile.open(QIODevice::ReadOnly))
+            continue;
+        if (statusFile.readAll().trimmed() != QByteArray("connected"))
+            continue;
+
+        // Native resolution = first (preferred) line of the modes file.
+        int w = 0, h = 0;
+        QFile modesFile(base + QStringLiteral("/modes"));
+        if (modesFile.open(QIODevice::ReadOnly)) {
+            const QByteArray firstMode = modesFile.readLine().trimmed();
+            const int xPos = firstMode.indexOf('x');
+            if (xPos > 0) {
+                w = firstMode.left(xPos).toInt();
+                h = firstMode.mid(xPos + 1).toInt();
+            }
+        }
+        if (w <= 0 || h <= 0)
+            continue;  // connected but advertises no usable mode
+
+        info.widthPx = w;
+        info.heightPx = h;
+
+        // Physical size from EDID (frequently absent on DSI panels).
+        QFile edidFile(base + QStringLiteral("/edid"));
+        if (edidFile.open(QIODevice::ReadOnly)) {
+            const QSize mm = physicalSizeFromEdid(edidFile.readAll());
+            info.widthMm = mm.width();
+            info.heightMm = mm.height();
+        }
+
+        qInfo() << "Embedded scaling: connector" << connector
+                << QStringLiteral("%1x%2 px").arg(w).arg(h)
+                << (info.widthMm > 0
+                        ? QStringLiteral("%1x%2 mm").arg(info.widthMm).arg(info.heightMm)
+                        : QStringLiteral("(no physical size)"));
+        break;
+    }
+    return info;
+}
+
+} // namespace
+
+void applyEmbeddedDisplayScaling()
+{
+    // A manually-set QT_SCALE_FACTOR (environment override, testing, or a site
+    // policy) always wins — never clobber it.
+    if (!qgetenv("QT_SCALE_FACTOR").isEmpty()) {
+        qInfo() << "Embedded scaling: QT_SCALE_FACTOR already set to"
+                << qgetenv("QT_SCALE_FACTOR") << "- leaving untouched";
+        return;
+    }
+
+    const DrmDisplay display = readConnectedDisplay();
+    if (!display.valid()) {
+        qWarning() << "Embedded scaling: no connected display found via DRM;"
+                   << "leaving QT_SCALE_FACTOR unset (Qt defaults to 1.0)";
+        return;
+    }
+
+    qreal scale = 1.0;
+    const char *basis = nullptr;
+
+    // Primary path: derive the factor from DPI when the physical size is
+    // present and yields a plausible density.
+    if (display.widthMm > 0) {
+        const qreal dpi = display.widthPx * 25.4 / display.widthMm;
+        if (dpi >= kMinPlausibleDpi && dpi <= kMaxPlausibleDpi) {
+            if      (dpi >= 216) scale = 2.5;
+            else if (dpi >= 168) scale = 2.0;
+            else if (dpi >= 132) scale = 1.5;
+            else if (dpi >= 108) scale = 1.25;
+            else                 scale = 1.0;
+            basis = "DPI";
+            qInfo().nospace() << "Embedded scaling: " << qRound(dpi) << " DPI -> scale " << scale;
+        } else {
+            qWarning().nospace() << "Embedded scaling: implausible " << qRound(dpi)
+                                 << " DPI from physical size; using resolution fallback";
+        }
+    }
+
+    // Fallback: choose a fixed factor from the pixel resolution when we can't
+    // trust (or don't have) a physical size. Key off the longer edge so
+    // portrait panels are treated the same as landscape.
+    if (!basis) {
+        const int longEdge = qMax(display.widthPx, display.heightPx);
+        if      (longEdge >= 3840) scale = 2.0;   // 4K / UHD
+        else if (longEdge >= 2560) scale = 1.5;   // QHD / 1440p
+        else                       scale = 1.0;   // 1080p and below
+        basis = "resolution";
+        qInfo().nospace() << "Embedded scaling: " << longEdge << "px long edge -> scale " << scale;
+    }
+
+    qputenv("QT_SCALE_FACTOR", QByteArray::number(scale));
+    qInfo().nospace() << "Embedded scaling: QT_SCALE_FACTOR=" << scale << " (from " << basis << ")";
 }
 
 } // namespace PlatformQuirks

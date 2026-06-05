@@ -230,6 +230,25 @@ namespace PlatformQuirks {
      * Call this in forked child processes before execvp().
      */
     void clearAppImageEnvironment();
+
+    /**
+     * Determine an appropriate UI scale factor for an embedded display and set
+     * QT_SCALE_FACTOR accordingly. MUST be called BEFORE QGuiApplication is
+     * constructed (Qt reads QT_SCALE_FACTOR during platform initialisation).
+     *
+     * Embedded builds run under the linuxfb/eglfs QPA platform with no window
+     * manager or compositor to negotiate DPI, so the scale has to be derived
+     * here from the connected display, read directly from /sys/class/drm:
+     *   - If the panel reports a plausible physical size, the factor is chosen
+     *     from the display's DPI.
+     *   - If the physical size is missing or implausible (common on cheap HDMI
+     *     panels and DSI displays that report 0 cm or nonsense EDID), the
+     *     factor falls back to a fixed value keyed off the pixel resolution.
+     *
+     * An already-set QT_SCALE_FACTOR (manual override) is always respected and
+     * left untouched. A no-op if no connected display can be read.
+     */
+    void applyEmbeddedDisplayScaling();
 #endif
 }
 
