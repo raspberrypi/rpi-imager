@@ -462,19 +462,6 @@
                                     "[\"cm3\", \"cm4\"]"
                                 ]
                             },
-                            "matching_type": {
-                                "$id": "#/properties/os_list/items/anyOf/0/properties/matching_type",
-                                "type": "array",
-                                "title": "The matching_type schema",
-                                "description": "Allows specification of the matching algorithm to use for device tags. If you set this to 'exclusive', any image that does not explicitly tag your target device will not be displayed. Set to 'prefix' to allow for family matching (eg, match all Pi1 devices), but no untagged images. Set to 'inclusive', and get your exact device name and all untagged images. Finally, if you set to 'inclusive_prefix', you can match all images tagged with your family prefix (eg, Pi1), and any untagged image.",
-                                "default": "exclusive",
-                                "examples": [
-                                    "exclusive",
-                                    "exclusive_prefix",
-                                    "inclusive",
-                                    "inclusive_prefix"
-                                ]
-                            },
                             "website": {
                                 "$id": "#/properties/os_list/items/anyOf/1/properties/website",
                                 "type": "string",
@@ -529,6 +516,36 @@
                                 "default": "",
                                 "examples": [
                                     "https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-03-01/2026-03-01-raspios-trixie-arm64-lite.img.bmap"
+                                ]
+                            },
+                            "random": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/random",
+                                "type": "boolean",
+                                "title": "The random schema",
+                                "description": "Optional. If set to true, subitems arrays within this entry will be randomly shuffled (Fisher-Yates) when loaded. Useful for categories where a random selection is desired.",
+                                "default": false,
+                                "examples": [
+                                    true
+                                ]
+                            },
+                            "tooltip": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/tooltip",
+                                "type": "string",
+                                "title": "The tooltip schema",
+                                "description": "Optional. Tooltip text shown for this OS entry in the 'CHOOSE OS' list when the user hovers over it.",
+                                "default": "",
+                                "examples": [
+                                    "This is the recommended OS for beginners"
+                                ]
+                            },
+                            "enable_rpi_connect": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/enable_rpi_connect",
+                                "type": "boolean",
+                                "title": "The enable_rpi_connect schema",
+                                "description": "Optional. If set to true, enables the Raspberry Pi Connect setup option in the OS customization wizard.",
+                                "default": false,
+                                "examples": [
+                                    true
                                 ]
                             }
                         },
