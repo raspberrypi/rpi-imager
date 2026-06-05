@@ -17,7 +17,14 @@ WizardStepBase {
     
     // Track RSA key path for reactive UI updates
     property string rsaKeyPath: getRsaKeyPath()
-    
+
+    // OTP secure-boot provisioning UI is scaffolded but not yet wired to a backend:
+    // the pill below sets state nothing consumes, and ConfirmOtpProgramDialog is never
+    // shown. Keep the section hidden until the rpiboot OTP-bootstrap flow is ported from
+    // rpi-sb-provisioner; flip this to true (or remove the gate) when it lands. Shipping
+    // it inert would present misleading "device is locked to signed boot" UI.
+    readonly property bool otpProvisioningImplemented: false
+
     // Only show and enable this step if OS supports secure boot
     visible: wizardContainer.secureBootAvailable
     enabled: wizardContainer.secureBootAvailable
@@ -165,7 +172,8 @@ WizardStepBase {
                 border.color: Style.titleSeparatorColor
                 border.width: 1
                 radius: Style.sectionBorderRadius
-                visible: typeof ImageWriterSingleton.isRpibootDevice === "function" && ImageWriterSingleton.isRpibootDevice()
+                visible: root.otpProvisioningImplemented
+                         && typeof ImageWriterSingleton.isRpibootDevice === "function" && ImageWriterSingleton.isRpibootDevice()
 
                 ColumnLayout {
                     id: otpColumn
