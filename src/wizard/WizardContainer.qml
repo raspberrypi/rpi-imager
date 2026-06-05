@@ -15,7 +15,6 @@ Item {
     id: root
     
     property int sidebarWidthValue: Style.sidebarWidth
-    property var optionsPopup: null
     // Show landing language selection step at startup
     property bool showLanguageSelection: false
     // Reference to the full-window overlay root for dialog parenting
@@ -145,6 +144,9 @@ Item {
     
     signal wizardCompleted()
     signal updatePopupRequested(url updateUrl, string version)
+    // Emitted when the user clicks "App Options". main.qml owns the dialog and
+    // constructs it lazily on first request, so it stays off the startup path.
+    signal appOptionsRequested()
     
     // Focus anchor for global keyboard navigation
     Item {
@@ -695,17 +697,7 @@ Item {
                     text: qsTr("App Options")
                     accessibleDescription: qsTr("Open application settings to configure sound alerts, auto-eject, telemetry, and content repository")
                     activeFocusOnTab: true
-                    onClicked: {
-                        if (root.optionsPopup) {
-                            if (!root.optionsPopup.wizardContainer) {
-                                root.optionsPopup.wizardContainer = root
-                            }
-                            // TODO: actually duplicate
-                            // as onOpen in it already calls initialize()
-                            root.optionsPopup.initialize()
-                            root.optionsPopup.open()
-                        }
-                    }
+                    onClicked: root.appOptionsRequested()
                 }
             }
         }
