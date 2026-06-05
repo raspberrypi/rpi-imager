@@ -92,22 +92,36 @@ Dialog {
         property var _focusGroups: []
         property var _focusableItems: []
         property var initialFocusItem: null
-        
+
+        // Coalesce bursts of focus-order rebuilds (e.g. the registerFocusGroup calls
+        // during construction) into one. Use for fire-and-forget triggers; call
+        // rebuildFocusOrder() directly where the result is read synchronously.
+        property bool _focusRebuildPending: false
+        function requestFocusRebuild() {
+            if (_focusRebuildPending) return
+            _focusRebuildPending = true
+            Qt.callLater(_flushFocusRebuild)
+        }
+        function _flushFocusRebuild() {
+            if (_focusRebuildPending) rebuildFocusOrder()
+        }
+
         function registerFocusGroup(name, getItemsFn, order) {
             if (order === undefined) order = 0
             // Replace if exists
             for (var i = 0; i < _focusGroups.length; i++) {
                 if (_focusGroups[i].name === name) {
                     _focusGroups[i] = { name: name, getItemsFn: getItemsFn, order: order, enabled: true }
-                    rebuildFocusOrder()
+                    requestFocusRebuild()
                     return
                 }
             }
             _focusGroups.push({ name: name, getItemsFn: getItemsFn, order: order, enabled: true })
-            rebuildFocusOrder()
+            requestFocusRebuild()
         }
         
         function rebuildFocusOrder() {
+            _focusRebuildPending = false   // a synchronous rebuild supersedes any pending debounced one
             // Compose enabled groups by order
             _focusGroups.sort(function(a,b){ return a.order - b.order })
             var items = []
@@ -165,10 +179,15 @@ Dialog {
         dialogFocusScope.rebuildFocusOrder()
     }
 
+    // Debounced rebuild for fire-and-forget triggers (see dialogFocusScope).
+    function requestFocusRebuild() {
+        dialogFocusScope.requestFocusRebuild()
+    }
+
     // Rebuild the Tab order when the screen reader is toggled at runtime.
     Connections {
         target: ImageWriterSingleton
-        function onScreenReaderActiveChanged() { root.rebuildFocusOrder() }
+        function onScreenReaderActiveChanged() { root.requestFocusRebuild() }
     }
 
     // Default escape handler - child dialogs can override

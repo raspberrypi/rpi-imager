@@ -47,7 +47,7 @@ FocusScope {
     onAppOptionsButtonChanged: {
         // Rebuild navigation when App Options button is connected
         if (appOptionsButton) {
-            Qt.callLater(rebuildFocusOrder)
+            requestFocusRebuild()
         }
     }
 
@@ -55,7 +55,21 @@ FocusScope {
     property var _focusGroups: []
     // Flattened focus items after composition
     property var _focusableItems: []
-    
+
+    // Coalesce bursts of focus-order rebuilds (e.g. the many registerFocusGroup
+    // calls during construction) into a single rebuild at end of the event loop.
+    // Use for fire-and-forget triggers; call rebuildFocusOrder() directly where the
+    // result (initialFocusItem / _focusableItems) is read synchronously.
+    property bool _focusRebuildPending: false
+    function requestFocusRebuild() {
+        if (_focusRebuildPending) return
+        _focusRebuildPending = true
+        Qt.callLater(_flushFocusRebuild)
+    }
+    function _flushFocusRebuild() {
+        if (_focusRebuildPending) rebuildFocusOrder()
+    }
+
     signal nextClicked()
     signal backClicked()
     signal skipClicked()
@@ -200,7 +214,7 @@ FocusScope {
     // groups include/exclude header and label items based on screenReaderActive.
     Connections {
         target: ImageWriterSingleton
-        function onScreenReaderActiveChanged() { root.rebuildFocusOrder() }
+        function onScreenReaderActiveChanged() { root.requestFocusRebuild() }
     }
 
     Component.onCompleted: {
@@ -257,12 +271,12 @@ FocusScope {
         for (var i = 0; i < _focusGroups.length; i++) {
             if (_focusGroups[i].name === name) {
                 _focusGroups[i] = { name: name, getItemsFn: getItemsFn, order: order, enabled: true }
-                rebuildFocusOrder()
+                requestFocusRebuild()
                 return
             }
         }
         _focusGroups.push({ name: name, getItemsFn: getItemsFn, order: order, enabled: true })
-        rebuildFocusOrder()
+        requestFocusRebuild()
     }
 
     function setFocusGroupEnabled(name, enabled) {
@@ -279,6 +293,7 @@ FocusScope {
     // With simplified navigation and no tabbing requirement, this is no longer needed.
 
     function rebuildFocusOrder() {
+        _focusRebuildPending = false   // a synchronous rebuild supersedes any pending debounced one
         // Compose enabled groups by order
         _focusGroups.sort(function(a,b){ return a.order - b.order })
         var items = []
