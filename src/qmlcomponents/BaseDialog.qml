@@ -15,9 +15,7 @@ import RpiImager
 Dialog {
     id: root
     
-    // imageWriter property - child dialogs will provide the actual value
     // We declare it here so bindings work, but children override it
-    property var imageWriter
     
     // Standard dialog properties
     modal: true
@@ -67,7 +65,7 @@ Dialog {
     // Set the dialog background directly
     background: Rectangle {
         color: Style.titleBackgroundColor
-        radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
         border.color: Style.popupBorderColor
         border.width: Style.sectionBorderWidth
         antialiasing: true  // Smooth edges at non-integer scale factors
@@ -155,8 +153,6 @@ Dialog {
             anchors.margins: Style.cardPadding
             spacing: Style.spacingMedium
             
-            // Make imageWriter available to all children via parent lookup
-            property var imageWriter: root.imageWriter
         }
     }
     

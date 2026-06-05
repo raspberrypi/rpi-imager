@@ -14,18 +14,6 @@ import RpiImager
 FocusScope {
     id: root
     
-    // Access imageWriter from parent context if not explicitly provided
-    property var imageWriter: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                return item.imageWriter;
-            }
-            item = item.parent;
-        }
-        return null;
-    }
-    
     // Access networkInfoText from parent context (WizardContainer)
     property string networkInfoText: {
         var item = parent;
@@ -105,9 +93,9 @@ FocusScope {
                 Accessible.role: Accessible.Heading
                 Accessible.name: root.title
                 Accessible.ignored: false
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
             
             MarqueeText {
@@ -121,9 +109,9 @@ FocusScope {
                 Accessible.role: Accessible.StaticText
                 Accessible.name: root.subtitle
                 Accessible.ignored: false
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
         }
         
@@ -147,7 +135,7 @@ FocusScope {
                 font.pointSize: Style.fontSizeCaption
                 font.family: Style.fontFamily
                 color: Style.textDescriptionColor
-                visible: root.imageWriter && root.imageWriter.isEmbeddedMode() && root.networkInfoText.length > 0
+                visible: ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode() && root.networkInfoText.length > 0
                 Layout.alignment: Qt.AlignVCenter
                 elide: Text.ElideRight
                 Layout.maximumWidth: parent.width * 0.4  // Don't let it take up too much space
@@ -219,7 +207,7 @@ FocusScope {
         registerFocusGroup("_wizard_header", function(){ 
             var items = []
             // Only include title/subtitle in focus order when screen reader is active
-            if (root.imageWriter && root.imageWriter.screenReaderActive) {
+            if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 if (titleText.visible) items.push(titleText)
                 if (subtitleText.visible) items.push(subtitleText)
             }
@@ -230,7 +218,7 @@ FocusScope {
         
         // Set initial focus based on screen reader state
         var firstFocusTarget = null
-        if (root.imageWriter && root.imageWriter.screenReaderActive) {
+        if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
             // Screen reader active: start at title for full context
             firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
         } else {
@@ -247,7 +235,7 @@ FocusScope {
         if (visible) {
             // Set initial focus based on screen reader state
             var firstFocusTarget = null
-            if (root.imageWriter && root.imageWriter.screenReaderActive) {
+            if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 // Screen reader active: start at title for full context
                 firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
             } else {

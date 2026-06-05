@@ -17,8 +17,6 @@ import RpiImager
 ColumnLayout {
     id: root
     
-    required property ImageWriter imageWriter
-    
     // Public API: list of key strings
     property var keys: []
     
@@ -140,9 +138,9 @@ ColumnLayout {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-            focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
         ImButton {
@@ -192,9 +190,9 @@ ColumnLayout {
                     return qsTr("SSH key %1").arg(index + 1)
                 }
                 Accessible.ignored: false
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 
                 // Key text (truncated for display)
                 Text {
@@ -284,12 +282,12 @@ ColumnLayout {
                         addKeyField.text = ""
                     } else {
                         // Browse for file
-                        if (root.imageWriter.nativeFileDialogAvailable()) {
+                        if (ImageWriterSingleton.nativeFileDialogAvailable()) {
                             var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
                             var startDir = home && home.length > 0 ? home + "/.ssh" : ""
-                            var picked = root.imageWriter.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, CommonStrings.sshFiltersString)
+                            var picked = ImageWriterSingleton.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, CommonStrings.sshFiltersString)
                             if (picked && picked.length > 0) {
-                                var contents = root.imageWriter.readFileContents(picked)
+                                var contents = ImageWriterSingleton.readFileContents(picked)
                                 if (contents && contents.length > 0) {
                                     root.addKeysFromFile(contents)
                                 }
@@ -309,7 +307,6 @@ ColumnLayout {
     // File dialog for browsing keys
     ImFileDialog {
         id: browseKeyFileDialog
-        imageWriter: root.imageWriter
         parent: root.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select SSH Public Key")
@@ -323,7 +320,7 @@ ColumnLayout {
         onAccepted: {
             if (selectedFile && selectedFile.toString().length > 0) {
                 var filePath = selectedFile.toString().replace(/^file:\/\//, "")
-                var contents = root.imageWriter.readFileContents(filePath)
+                var contents = ImageWriterSingleton.readFileContents(filePath)
                 if (contents && contents.length > 0) {
                     root.addKeysFromFile(contents)
                 }

@@ -17,26 +17,13 @@ Button {
     // Allow instances to provide a custom accessibility description
     property string accessibleDescription: ""
     
-    // Access imageWriter from parent context (cached at creation time)
-    property var imageWriter: null
-    Component.onCompleted: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                control.imageWriter = item.imageWriter;
-                break;
-            }
-            item = item.parent;
-        }
-    }
-
     background: Rectangle {
         color: control.enabled
                ? (control.activeFocus
                    ? Style.button2HoveredBackgroundColor
                    : (control.hovered ? Style.button2HoveredBackgroundColor : Style.button2BackgroundColor))
                : Qt.rgba(0, 0, 0, 0.1)
-        radius: (control.imageWriter && control.imageWriter.isEmbeddedMode()) ? Style.buttonBorderRadiusEmbedded : 4
+        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.buttonBorderRadiusEmbedded : 4
         antialiasing: true  // Smooth edges at non-integer scale factors
         clip: true  // Prevent content overflow at non-integer scale factors
     }

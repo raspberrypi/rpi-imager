@@ -13,7 +13,6 @@ import RpiImager
 
 WizardStepBase {
     id: root
-    required property ImageWriter imageWriter
     required property var wizardContainer
 
     title: qsTr("Customisation: Raspberry Pi Connect")
@@ -35,7 +34,7 @@ WizardStepBase {
     // token.  The key is forwarded to the fastboot flash thread and
     // used to register each provisioned device with Connect.
     readonly property bool orgModeEnabled:
-        imageWriter ? imageWriter.getBoolSetting("connect_org_enabled") : false
+        ImageWriterSingleton ? ImageWriterSingleton.getBoolSetting("connect_org_enabled") : false
 
     // True when the selected target storage is a fastboot device.
     // Determines which organisation flow to run on Next:
@@ -126,7 +125,7 @@ WizardStepBase {
                 text: qsTr("Clear saved key")
                 accessibleDescription: qsTr("Remove the saved Raspberry Pi Connect organisation API key")
                 onClicked: {
-                    imageWriter.clearConnectOrgRegistration()
+                    ImageWriterSingleton.clearConnectOrgRegistration()
                     fieldOrgApiKey.text = ""
                     fieldOrgDescription.text = ""
                     if (root.wizardContainer)
@@ -147,8 +146,8 @@ WizardStepBase {
                 visible: !root.orgModeEnabled
                 text: qsTr("Enable Raspberry Pi Connect")
                 accessibleDescription: qsTr("Enable secure remote access to your Raspberry Pi through the Raspberry Pi Connect cloud service")
-                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is Raspberry Pi Connect?")
-                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/software/connect/"
+                helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("What is Raspberry Pi Connect?")
+                helpUrl: ImageWriterSingleton.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/software/connect/"
                 checked: false
                 onToggled: function(isChecked) {
                     wizardContainer.piConnectEnabled = isChecked
@@ -166,9 +165,9 @@ WizardStepBase {
                 enabled: useTokenPill.checked
                 visible: !root.orgModeEnabled && useTokenPill.checked && !root.connectTokenReceived
                 onClicked: {
-                    if (root.imageWriter) {
+                    if (ImageWriterSingleton) {
                         var authUrl = Qt.resolvedUrl("https://connect.raspberrypi.com/imager/")
-                        root.imageWriter.openUrl(authUrl)
+                        ImageWriterSingleton.openUrl(authUrl)
                     }
                 }
             }
@@ -228,7 +227,7 @@ WizardStepBase {
     // row.  `orgKeyDirty` flips as soon as the user types, so we
     // know whether to replace the stored key on Next.
     property bool hasStoredOrgKey:
-        imageWriter ? imageWriter.hasConnectOrgRegistration() : false
+        ImageWriterSingleton ? ImageWriterSingleton.hasConnectOrgRegistration() : false
     property bool orgKeyDirty: false
     
     // Validation: allow proceed when:
@@ -275,7 +274,7 @@ WizardStepBase {
     }
 
     Connections {
-        target: root.imageWriter
+        target: ImageWriterSingleton
 
         // Listen for callback with token
         function onConnectTokenReceived(token){
@@ -322,9 +321,9 @@ WizardStepBase {
         // a secret) so the user can see / edit it.  Skip if the
         // wizard container already has an in-flight value from
         // earlier in the session.
-        if (imageWriter && wizardContainer &&
+        if (ImageWriterSingleton && wizardContainer &&
             wizardContainer.connectOrgDescription.length === 0) {
-            wizardContainer.connectOrgDescription = imageWriter.getConnectOrgDescription()
+            wizardContainer.connectOrgDescription = ImageWriterSingleton.getConnectOrgDescription()
         }
 
         // When entering this step with a saved key, land on the
@@ -360,7 +359,7 @@ WizardStepBase {
             return items
         }, 0)
 
-        var token = root.imageWriter.getRuntimeConnectToken()
+        var token = ImageWriterSingleton.getRuntimeConnectToken()
         if (token && token.length > 0) {
             root.connectTokenReceived = true
             root.connectToken = token
@@ -413,15 +412,15 @@ WizardStepBase {
             var desc = fieldOrgDescription.text.trim()
             if (typedKey.length > 0) {
                 // Replace both key and description.
-                imageWriter.setConnectOrgRegistration(typedKey, desc)
+                ImageWriterSingleton.setConnectOrgRegistration(typedKey, desc)
                 fieldOrgApiKey.text = ""  // don't keep the typed secret visible
                 root.orgKeyDirty = false
             } else {
                 // Keep the existing saved key; only update description.
-                imageWriter.setConnectOrgDescription(desc)
+                ImageWriterSingleton.setConnectOrgDescription(desc)
             }
             // Refresh status for when the user navigates back to this step.
-            root.hasStoredOrgKey = imageWriter.hasConnectOrgRegistration()
+            root.hasStoredOrgKey = ImageWriterSingleton.hasConnectOrgRegistration()
             wizardContainer.connectOrgDescription = desc
 
             if (!root.targetIsFastboot) {
@@ -431,7 +430,7 @@ WizardStepBase {
                 // raw secret off the QML stack and lets the wizard
                 // discard it cleanly if the user changes target later.
                 var authDesc = desc.length > 0 ? desc : qsTr("Raspberry Pi Imager")
-                var authResult = imageWriter.requestOrgAuthKey(authDesc, 1)
+                var authResult = ImageWriterSingleton.requestOrgAuthKey(authDesc, 1)
                 if (!authResult || authResult.ok !== true) {
                     authKeyErrorDialog.detail =
                         (authResult && authResult.error) ? authResult.error : ""
@@ -470,7 +469,7 @@ WizardStepBase {
                 }
                 
                 // Validate token format
-                var tokenIsValid = root.imageWriter.verifyAuthKey(tokenToValidate, true)
+                var tokenIsValid = ImageWriterSingleton.verifyAuthKey(tokenToValidate, true)
                 //console.log("Token validation result:", tokenIsValid, "for token:", tokenToValidate)
                 
                 if (!tokenIsValid) {
@@ -478,8 +477,8 @@ WizardStepBase {
                     invalidTokenDialog.open()
                     return
                 }
-                // Token is valid, set it in imageWriter
-                root.imageWriter.overwriteConnectToken(tokenToValidate)
+                // Token is valid, set it in ImageWriterSingleton
+                ImageWriterSingleton.overwriteConnectToken(tokenToValidate)
             }
             // Update conserved customization settings (runtime state only - NOT persisted)
             wizardContainer.customizationSettings.piConnectEnabled = true
@@ -498,7 +497,6 @@ WizardStepBase {
     // Invalid token dialog
     BaseDialog {
         id: invalidTokenDialog
-        imageWriter: root.imageWriter
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -568,7 +566,6 @@ WizardStepBase {
     // Auth-key minting failure dialog (non-fastboot org mode).
     BaseDialog {
         id: authKeyErrorDialog
-        imageWriter: root.imageWriter
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -655,5 +652,4 @@ WizardStepBase {
         wizardContainer.jumpToStep(wizardContainer.stepWriting)
     }
 }
-
 

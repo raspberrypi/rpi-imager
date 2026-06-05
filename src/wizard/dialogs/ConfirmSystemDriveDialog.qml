@@ -37,12 +37,12 @@ BaseDialog {
     Component.onCompleted: {
         registerFocusGroup("warning", function(){ 
             // Only include warning text when screen reader is active (otherwise it's not focusable)
-            return (root.imageWriter && root.imageWriter.screenReaderActive) ? [warningTextElement] : []
+            return (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? [warningTextElement] : []
         }, 0)
         registerFocusGroup("input", function(){ 
             // Only include drive name text when screen reader is active (otherwise it's not focusable)
             var items = []
-            if (root.imageWriter && root.imageWriter.screenReaderActive) {
+            if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 items.push(driveNameText)
             }
             items.push(nameInput)
@@ -72,9 +72,9 @@ BaseDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
-        Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-        focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor; Accessible.ignored: true }
@@ -126,9 +126,9 @@ BaseDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: qsTr("Drive name to type: %1").arg(text)
         Accessible.ignored: false
-        Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-        focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     TextField {

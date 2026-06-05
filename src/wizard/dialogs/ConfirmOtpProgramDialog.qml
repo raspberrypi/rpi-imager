@@ -28,7 +28,7 @@ BaseDialog {
 
     Component.onCompleted: {
         registerFocusGroup("warning", function(){
-            return (root.imageWriter && root.imageWriter.screenReaderActive) ? [warningText] : []
+            return (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? [warningText] : []
         }, 0)
         registerFocusGroup("input", function(){
             return [jtagLockCheck, confirmInput]

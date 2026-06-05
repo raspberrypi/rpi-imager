@@ -36,18 +36,6 @@ Item {
     // This is independent of Layout.fillWidth constraints
     readonly property real naturalWidth: labelMetrics.width + optionButton.implicitWidth + Style.spacingMedium * 2 + Style.cardPadding
 
-    // Access imageWriter from parent context
-    property var imageWriter: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                return item.imageWriter;
-            }
-            item = item.parent;
-        }
-        return null;
-    }
-    
     // Measure label text independently for naturalWidth
     TextMetrics {
         id: labelMetrics
@@ -104,8 +92,8 @@ Item {
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
                     onTapped: {
-                        if (control.imageWriter) {
-                            control.imageWriter.openUrl(control.helpUrl)
+                        if (ImageWriterSingleton) {
+                            ImageWriterSingleton.openUrl(control.helpUrl)
                         } else {
                             Qt.openUrlExternally(control.helpUrl)
                         }
@@ -119,30 +107,30 @@ Item {
                 
                 // Keyboard activation
                 Keys.onEnterPressed: {
-                    if (control.imageWriter) {
-                        control.imageWriter.openUrl(control.helpUrl)
+                    if (ImageWriterSingleton) {
+                        ImageWriterSingleton.openUrl(control.helpUrl)
                     } else {
                         Qt.openUrlExternally(control.helpUrl)
                     }
                 }
                 Keys.onReturnPressed: {
-                    if (control.imageWriter) {
-                        control.imageWriter.openUrl(control.helpUrl)
+                    if (ImageWriterSingleton) {
+                        ImageWriterSingleton.openUrl(control.helpUrl)
                     } else {
                         Qt.openUrlExternally(control.helpUrl)
                     }
                 }
                 Keys.onSpacePressed: {
-                    if (control.imageWriter) {
-                        control.imageWriter.openUrl(control.helpUrl)
+                    if (ImageWriterSingleton) {
+                        ImageWriterSingleton.openUrl(control.helpUrl)
                     } else {
                         Qt.openUrlExternally(control.helpUrl)
                     }
                 }
                 
                 Accessible.onPressAction: {
-                    if (control.imageWriter) {
-                        control.imageWriter.openUrl(control.helpUrl)
+                    if (ImageWriterSingleton) {
+                        ImageWriterSingleton.openUrl(control.helpUrl)
                     } else {
                         Qt.openUrlExternally(control.helpUrl)
                     }

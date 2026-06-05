@@ -15,7 +15,6 @@ WizardStepBase {
     id: root
     objectName: "writingStep"
 
-    required property ImageWriter imageWriter
     required property var wizardContainer
 
     title: qsTr("Write image")
@@ -31,7 +30,7 @@ WizardStepBase {
     nextButtonText: {
         if (root.isWriting) {
             // Show specific cancel text based on write state
-            if (imageWriter.writeState === ImageWriter.Verifying) {
+            if (ImageWriterSingleton.writeState === ImageWriter.Verifying) {
                 return qsTr("Skip verification")
             } else {
                 return qsTr("Cancel write")
@@ -44,7 +43,7 @@ WizardStepBase {
     }
     nextButtonAccessibleDescription: {
         if (root.isWriting) {
-            if (imageWriter.writeState === ImageWriter.Verifying) {
+            if (ImageWriterSingleton.writeState === ImageWriter.Verifying) {
                 return qsTr("Skip verification and finish the write process")
             } else {
                 return qsTr("Cancel the write operation and return to the summary")
@@ -56,19 +55,19 @@ WizardStepBase {
         }
     }
     backButtonAccessibleDescription: qsTr("Return to previous customization step")
-    nextButtonEnabled: root.isWriting || root.isComplete || (!beginWriteDelay.running && imageWriter.readyToWrite())
+    nextButtonEnabled: root.isWriting || root.isComplete || (!beginWriteDelay.running && ImageWriterSingleton.readyToWrite())
     showBackButton: true
 
     readonly property bool isWriting: {
-        var s = imageWriter.writeState
+        var s = ImageWriterSingleton.writeState
         return s === ImageWriter.Preparing || s === ImageWriter.Writing ||
                s === ImageWriter.Verifying || s === ImageWriter.Finalizing ||
                s === ImageWriter.Cancelling
     }
-    readonly property bool isVerifying: imageWriter.writeState === ImageWriter.Verifying
-    readonly property bool isCancelling: imageWriter.writeState === ImageWriter.Cancelling
-    readonly property bool isFinalising: imageWriter.writeState === ImageWriter.Finalizing
-    readonly property bool isComplete: imageWriter.writeState === ImageWriter.Succeeded
+    readonly property bool isVerifying: ImageWriterSingleton.writeState === ImageWriter.Verifying
+    readonly property bool isCancelling: ImageWriterSingleton.writeState === ImageWriter.Cancelling
+    readonly property bool isFinalising: ImageWriterSingleton.writeState === ImageWriter.Finalizing
+    readonly property bool isComplete: ImageWriterSingleton.writeState === ImageWriter.Succeeded
     property string bottleneckStatus: ""
     property int writeThroughputKBps: 0
     property string operationWarning: ""  // Non-fatal warning message (e.g., sync fallback)
@@ -117,9 +116,9 @@ WizardStepBase {
                 Layout.fillWidth: true
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
 
             GridLayout {
@@ -137,9 +136,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
-                    Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                    focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
 
                 MarqueeText {
@@ -161,9 +160,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
-                    Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                    focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
 
                 MarqueeText {
@@ -185,9 +184,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
-                    Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                    focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                    activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                    Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                    focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
                 }
 
                 MarqueeText {
@@ -222,9 +221,9 @@ WizardStepBase {
                 Layout.fillWidth: true
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
 
             ScrollView {
@@ -315,9 +314,9 @@ WizardStepBase {
                 horizontalAlignment: Text.AlignHCenter
                 Accessible.role: Accessible.StatusBar
                 Accessible.name: text
-                Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-                focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-                activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+                Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             }
 
             ProgressBar {
@@ -381,13 +380,13 @@ WizardStepBase {
     onNextClicked: {
         if (root.isWriting) {
             // If we're in verification phase, skip verification and let write complete successfully
-            if (imageWriter.writeState === ImageWriter.Verifying) {
-                imageWriter.skipCurrentVerification()
+            if (ImageWriterSingleton.writeState === ImageWriter.Verifying) {
+                ImageWriterSingleton.skipCurrentVerification()
             } else {
                 // Cancel the actual write operation
                 progressBar.value = 100
                 progressText.text = qsTr("Finalising…")
-                imageWriter.cancelWrite()
+                ImageWriterSingleton.cancelWrite()
             }
         } else if (!root.isComplete) {
             // If warnings are disabled, skip the confirmation dialog
@@ -411,7 +410,6 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
-        imageWriter: root.imageWriter
         parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
 
@@ -430,7 +428,7 @@ WizardStepBase {
         Component.onCompleted: {
             registerFocusGroup("warning", function(){ 
                 // Only include warning texts when screen reader is active (otherwise they're not focusable)
-                if (confirmDialog.imageWriter && confirmDialog.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     return [warningText, permanentText]
                 }
                 return []
@@ -444,7 +442,7 @@ WizardStepBase {
         onOpened: {
             // If a screen reader is active, bypass the timer - screen reader users
             // need time to hear the content, not wait for a visual countdown
-            if (confirmDialog.imageWriter && confirmDialog.imageWriter.screenReaderActive) {
+            if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 allowAccept = true
                 countdown = 0
                 rebuildFocusOrder()
@@ -473,9 +471,9 @@ WizardStepBase {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: confirmDialog.imageWriter ? confirmDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (confirmDialog.imageWriter && confirmDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: confirmDialog.imageWriter ? confirmDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         Text {
@@ -489,9 +487,9 @@ WizardStepBase {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: confirmDialog.imageWriter ? confirmDialog.imageWriter.screenReaderActive : false
-            focusPolicy: (confirmDialog.imageWriter && confirmDialog.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: confirmDialog.imageWriter ? confirmDialog.imageWriter.screenReaderActive : false
+            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         Text {
@@ -570,10 +568,10 @@ WizardStepBase {
             root.writeThroughputKBps = 0
             root.operationWarning = ""
             // Check if extract size is known upfront (e.g., gz files can't reliably store sizes >4GB)
-            root.isIndeterminateProgress = !imageWriter.isExtractSizeKnown()
+            root.isIndeterminateProgress = !ImageWriterSingleton.isExtractSizeKnown()
             progressText.text = qsTr("Starting write process...")
             progressBar.value = 0
-            imageWriter.startWrite()
+            ImageWriterSingleton.startWrite()
         }
     }
 
@@ -613,7 +611,7 @@ WizardStepBase {
 
     // Update isWriting state when write completes
     Connections {
-        target: imageWriter
+        target: ImageWriterSingleton
         function onSuccess() {
             progressText.text = qsTr("Write completed successfully!")
 
@@ -652,7 +650,7 @@ WizardStepBase {
             var items = []
             if (summaryLayout.visible) {
                 // Only include text labels when screen reader is active
-                if (root.imageWriter && root.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     items.push(summaryHeading)
                     items.push(deviceLabel)
                     items.push(osLabel)
@@ -667,7 +665,7 @@ WizardStepBase {
             var items = []
             if (customLayout.visible) {
                 // Only include heading when screen reader is active; always include scroll view
-                if (root.imageWriter && root.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     items.push(customizationsHeading)
                 }
                 items.push(customizationsScrollView)
@@ -680,7 +678,7 @@ WizardStepBase {
             var items = []
             if (progressLayout.visible) {
                 // Only include progress text when screen reader is active
-                if (root.imageWriter && root.imageWriter.screenReaderActive) {
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     items.push(progressText)
                 }
                 // Always include progress bar when visible (during writing)

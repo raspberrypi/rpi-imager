@@ -27,9 +27,6 @@ CheckBox {
         text: control.text
     }
     
-    // Access imageWriter from parent context (cached at creation time)
-    property var imageWriter: null
-    
     // Custom contentItem with text wrapping for long translations
     contentItem: Text {
         text: control.text
@@ -43,7 +40,7 @@ CheckBox {
     
     // Custom square indicator for embedded mode to avoid rendering artifacts
     Component.onCompleted: {
-        if (control.imageWriter && control.imageWriter.isEmbeddedMode()) {
+        if (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) {
             control.indicator = squareIndicatorComponent.createObject(control)
         }
     }

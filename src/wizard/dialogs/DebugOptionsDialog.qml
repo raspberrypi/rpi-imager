@@ -16,7 +16,6 @@ BaseDialog {
     // Height based on window size minus padding - content scrolls within
     height: parent ? Math.min(500, parent.height - Style.cardPadding * 2) : 500
     
-    // imageWriter is inherited from BaseDialog
     property var wizardContainer: null
     
     property bool initialized: false
@@ -30,7 +29,7 @@ BaseDialog {
     // Register focus groups when component is ready
     Component.onCompleted: {
         registerFocusGroup("header", function(){ 
-            if (popup.imageWriter && popup.imageWriter.screenReaderActive) {
+            if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 return [headerText, warningText]
             }
             return []
@@ -55,9 +54,9 @@ BaseDialog {
         horizontalAlignment: Text.AlignHCenter
         Accessible.role: Accessible.Heading
         Accessible.name: text
-        Accessible.focusable: popup.imageWriter ? popup.imageWriter.screenReaderActive : false
-        focusPolicy: (popup.imageWriter && popup.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: popup.imageWriter ? popup.imageWriter.screenReaderActive : false
+        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     // Warning text
@@ -72,9 +71,9 @@ BaseDialog {
         horizontalAlignment: Text.AlignHCenter
         Accessible.role: Accessible.StaticText
         Accessible.name: text
-        Accessible.focusable: popup.imageWriter ? popup.imageWriter.screenReaderActive : false
-        focusPolicy: (popup.imageWriter && popup.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: popup.imageWriter ? popup.imageWriter.screenReaderActive : false
+        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     // Scrollable options section
@@ -423,7 +422,7 @@ BaseDialog {
             Text {
                 Layout.fillWidth: true
                 Layout.leftMargin: Style.spacingLarge
-                visible: chkSignFastbootGadget.checked && !imageWriter.getStringSetting("secureboot_rsa_key")
+                visible: chkSignFastbootGadget.checked && !ImageWriterSingleton.getStringSetting("secureboot_rsa_key")
                 text: qsTr("⚠️ No Secure Boot RSA key configured. Set one in App Options → Secure Boot RSA Key, otherwise signing will be skipped.")
                 font.pointSize: Style.fontSizeSmall
                 font.family: Style.fontFamily
@@ -539,18 +538,18 @@ BaseDialog {
             isInitializing = true;
             
             // Load current settings from ImageWriter
-            chkDirectIO.checked = imageWriter.getDebugDirectIO();
-            chkAsyncIO.checked = imageWriter.getDebugAsyncIO();
-            asyncQueueDepthSlider.value = imageWriter.getDebugAsyncQueueDepth();
-            chkPeriodicSync.checked = imageWriter.getDebugPeriodicSync();
-            chkVerboseLogging.checked = imageWriter.getDebugVerboseLogging();
-            chkIPv4Only.checked = imageWriter.getDebugIPv4Only();
-            chkIgnoreDeviceLimits.checked = imageWriter.getDebugIgnoreDeviceLimits();
-            chkSkipEndOfDevice.checked = imageWriter.getDebugSkipEndOfDevice();
-            chkRpiboot.checked = imageWriter.getDebugRpiboot();
-            gadgetPathText.gadgetPath = imageWriter.getDebugCustomFastbootGadget();
-            chkForceSecureBoot.checked = imageWriter.getDebugForceSecureBoot();
-            chkSignFastbootGadget.checked = imageWriter.getDebugSignFastbootGadget();
+            chkDirectIO.checked = ImageWriterSingleton.getDebugDirectIO();
+            chkAsyncIO.checked = ImageWriterSingleton.getDebugAsyncIO();
+            asyncQueueDepthSlider.value = ImageWriterSingleton.getDebugAsyncQueueDepth();
+            chkPeriodicSync.checked = ImageWriterSingleton.getDebugPeriodicSync();
+            chkVerboseLogging.checked = ImageWriterSingleton.getDebugVerboseLogging();
+            chkIPv4Only.checked = ImageWriterSingleton.getDebugIPv4Only();
+            chkIgnoreDeviceLimits.checked = ImageWriterSingleton.getDebugIgnoreDeviceLimits();
+            chkSkipEndOfDevice.checked = ImageWriterSingleton.getDebugSkipEndOfDevice();
+            chkRpiboot.checked = ImageWriterSingleton.getDebugRpiboot();
+            gadgetPathText.gadgetPath = ImageWriterSingleton.getDebugCustomFastbootGadget();
+            chkForceSecureBoot.checked = ImageWriterSingleton.getDebugForceSecureBoot();
+            chkSignFastbootGadget.checked = ImageWriterSingleton.getDebugSignFastbootGadget();
 
             initialized = true;
             isInitializing = false;
@@ -559,18 +558,18 @@ BaseDialog {
 
     function applySettings() {
         // Apply settings to ImageWriter
-        imageWriter.setDebugDirectIO(chkDirectIO.checked);
-        imageWriter.setDebugAsyncIO(chkAsyncIO.checked);
-        imageWriter.setDebugAsyncQueueDepth(Math.round(asyncQueueDepthSlider.value));
-        imageWriter.setDebugPeriodicSync(chkPeriodicSync.checked);
-        imageWriter.setDebugVerboseLogging(chkVerboseLogging.checked);
-        imageWriter.setDebugIPv4Only(chkIPv4Only.checked);
-        imageWriter.setDebugIgnoreDeviceLimits(chkIgnoreDeviceLimits.checked);
-        imageWriter.setDebugSkipEndOfDevice(chkSkipEndOfDevice.checked);
-        imageWriter.setDebugRpiboot(chkRpiboot.checked);
-        imageWriter.setDebugCustomFastbootGadget(gadgetPathText.gadgetPath || "");
-        imageWriter.setDebugForceSecureBoot(chkForceSecureBoot.checked);
-        imageWriter.setDebugSignFastbootGadget(chkSignFastbootGadget.checked);
+        ImageWriterSingleton.setDebugDirectIO(chkDirectIO.checked);
+        ImageWriterSingleton.setDebugAsyncIO(chkAsyncIO.checked);
+        ImageWriterSingleton.setDebugAsyncQueueDepth(Math.round(asyncQueueDepthSlider.value));
+        ImageWriterSingleton.setDebugPeriodicSync(chkPeriodicSync.checked);
+        ImageWriterSingleton.setDebugVerboseLogging(chkVerboseLogging.checked);
+        ImageWriterSingleton.setDebugIPv4Only(chkIPv4Only.checked);
+        ImageWriterSingleton.setDebugIgnoreDeviceLimits(chkIgnoreDeviceLimits.checked);
+        ImageWriterSingleton.setDebugSkipEndOfDevice(chkSkipEndOfDevice.checked);
+        ImageWriterSingleton.setDebugRpiboot(chkRpiboot.checked);
+        ImageWriterSingleton.setDebugCustomFastbootGadget(gadgetPathText.gadgetPath || "");
+        ImageWriterSingleton.setDebugForceSecureBoot(chkForceSecureBoot.checked);
+        ImageWriterSingleton.setDebugSignFastbootGadget(chkSignFastbootGadget.checked);
 
         console.log("Debug options applied: DirectIO=" + chkDirectIO.checked +
                     ", AsyncIO=" + chkAsyncIO.checked +

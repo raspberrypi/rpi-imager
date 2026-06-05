@@ -14,7 +14,6 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property ImageWriter imageWriter
     required property var wizardContainer
     // "open" | "secure"
     property string wifiMode: "secure"
@@ -68,7 +67,7 @@ WizardStepBase {
 
         // If not saved, try to auto-detect the current SSID from the system
         if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
-            var detectedSsid = imageWriter.getSSID()
+            var detectedSsid = ImageWriterSingleton.getSSID()
             console.log("WifiCustomizationStep: detected SSID:", detectedSsid)
             if (detectedSsid && detectedSsid.length > 0) {
                 fieldWifiSSID.text = detectedSsid
@@ -90,7 +89,7 @@ WizardStepBase {
         if (!hadSavedCrypt && fieldWifiSSID.text && fieldWifiSSID.text.length > 0) {
             // Auto-populate WiFi password from system keychain when available
             // Only when no crypted password is already saved
-            var psk = imageWriter.getPSKForSSID(fieldWifiSSID.text)
+            var psk = ImageWriterSingleton.getPSKForSSID(fieldWifiSSID.text)
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
                 fieldWifiPasswordConfirm.text = psk
@@ -111,12 +110,12 @@ WizardStepBase {
     // This is called when the user clicks "Allow" in the macOS location permission dialog
     // after the initial 5-second timeout has expired
     Connections {
-        target: imageWriter
+        target: ImageWriterSingleton
         function onLocationPermissionGranted() {
             console.log("WifiCustomizationStep: Location permission granted, retrying SSID detection")
             // Only retry if SSID field is still empty (user hasn't manually entered one)
             if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
-                var detectedSsid = imageWriter.getSSID()
+                var detectedSsid = ImageWriterSingleton.getSSID()
                 console.log("WifiCustomizationStep: re-detected SSID:", detectedSsid)
                 if (detectedSsid && detectedSsid.length > 0) {
                     fieldWifiSSID.text = detectedSsid
@@ -124,7 +123,7 @@ WizardStepBase {
                     
                     // Also try to auto-populate the password if we don't have one saved
                     if (!hadSavedCrypt && (!fieldWifiPassword.text || fieldWifiPassword.text.length === 0)) {
-                        var psk = imageWriter.getPSKForSSID(detectedSsid)
+                        var psk = ImageWriterSingleton.getPSKForSSID(detectedSsid)
                         if (psk && psk.length > 0) {
                             fieldWifiPassword.text = psk
                             fieldWifiPasswordConfirm.text = psk
@@ -475,7 +474,7 @@ WizardStepBase {
                    if (pwd !== fieldWifiPasswordConfirm.text) return;
                    // overwrite with new password
                    var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
-                   wizardContainer.customizationSettings.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd
+                   wizardContainer.customizationSettings.wifiPasswordCrypt = isPassphrase ? ImageWriterSingleton.pbkdf2(pwd, ssid) : pwd
                } else if (hadCryptBefore && sameSSID) {
                    // keep the existing crypt
                    // (do nothing)
@@ -496,7 +495,7 @@ WizardStepBase {
         }
         
         // Also persist for future sessions
-        var saved = imageWriter.getSavedCustomisationSettings()
+        var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         saved.wifiMode = wifiMode
         if (ssid.length > 0) {
             saved.wifiSSID = ssid
@@ -505,7 +504,7 @@ WizardStepBase {
             } else {
                if (pwd.length > 0) {
                    var isPassphrase2 = (pwd.length >= 8 && pwd.length < 64)
-                   saved.wifiPasswordCrypt = isPassphrase2 ? imageWriter.pbkdf2(pwd, ssid) : pwd
+                   saved.wifiPasswordCrypt = isPassphrase2 ? ImageWriterSingleton.pbkdf2(pwd, ssid) : pwd
                } else if (hadCryptBefore && sameSSID) {
                    // keep existing
                } else {
@@ -518,7 +517,7 @@ WizardStepBase {
             delete saved.wifiPasswordCrypt
             delete saved.wifiHidden
         }
-        imageWriter.setSavedCustomisationSettings(saved)
+        ImageWriterSingleton.setSavedCustomisationSettings(saved)
         // Do not log sensitive data
     }
     

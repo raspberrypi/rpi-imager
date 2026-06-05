@@ -33,7 +33,7 @@ BaseDialog {
     Component.onCompleted: {
         registerFocusGroup("warning", function(){ 
             // Only include warning text when screen reader is active (otherwise it's not focusable)
-            return (root.imageWriter && root.imageWriter.screenReaderActive) ? [warningText] : []
+            return (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? [warningText] : []
         }, 0)
         registerFocusGroup("buttons", function(){ 
             return [keepFilterButton, showSystemButton] 
@@ -56,9 +56,9 @@ BaseDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
-        Accessible.focusable: root.imageWriter ? root.imageWriter.screenReaderActive : false
-        focusPolicy: (root.imageWriter && root.imageWriter.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: root.imageWriter ? root.imageWriter.screenReaderActive : false
+        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     RowLayout {

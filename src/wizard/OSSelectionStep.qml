@@ -15,11 +15,10 @@ import RpiImager
 WizardStepBase {
     id: root
     
-    required property ImageWriter imageWriter
     required property var wizardContainer
     
-    readonly property HWListModel hwmodel: imageWriter.getHWList()
-    readonly property OSListModel osmodel: imageWriter.getOSList()
+    readonly property HWListModel hwmodel: ImageWriterSingleton.getHWList()
+    readonly property OSListModel osmodel: ImageWriterSingleton.getOSList()
     
     title: qsTr("Choose operating system")
     subtitle: qsTr("Select an operating system to install on your Raspberry Pi")
@@ -40,7 +39,7 @@ WizardStepBase {
     
     // Connect to cache status changes
     Connections {
-        target: imageWriter
+        target: ImageWriterSingleton
         function onCacheStatusChanged() {
             // Save scroll position before updating cache status (which causes all delegates to re-evaluate)
             var savedContentY = oslist.contentY
@@ -125,7 +124,7 @@ WizardStepBase {
     }
 
     Connections {
-        target: imageWriter
+        target: ImageWriterSingleton
         function onOsListPrepared() {
             // If we were showing offline state and now have data, force full reload
             // (softRefresh only updates existing rows, doesn't add new ones)
@@ -162,14 +161,14 @@ WizardStepBase {
         // Handle native file selection for "Use custom"
         function onFileSelected(fileUrl) {
             // Ensure ImageWriter src is set to the chosen file explicitly
-            imageWriter.setSrc(fileUrl)
+            ImageWriterSingleton.setSrc(fileUrl)
             // OS swapped — drop any stale org-minted auth key so it
             // doesn't end up baked into the new image.
-            if (typeof imageWriter.discardOrgMintedConnectToken === "function")
-                imageWriter.discardOrgMintedConnectToken()
+            if (typeof ImageWriterSingleton.discardOrgMintedConnectToken === "function")
+                ImageWriterSingleton.discardOrgMintedConnectToken()
             // Update selected OS name to the chosen file name
-            root.wizardContainer.selectedOsName = imageWriter.srcFileName()
-            root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+            root.wizardContainer.selectedOsName = ImageWriterSingleton.srcFileName()
+            root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
             // For custom images, customization is not supported; clear any staged flags
             if (!root.wizardContainer.customizationSupported) {
                 root.wizardContainer.hostnameConfigured = false
@@ -179,10 +178,10 @@ WizardStepBase {
                 root.wizardContainer.sshEnabled = false
                 root.wizardContainer.piConnectEnabled = false
                 root.wizardContainer.piConnectAvailable = false
-                root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag() || imageWriter.getDebugForceSecureBoot()
+                root.wizardContainer.secureBootAvailable = ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
             }
             root.customSelected = true
-            root.customSelectedSize = imageWriter.getSelectedSourceSize()
+            root.customSelectedSize = ImageWriterSingleton.getSelectedSourceSize()
             root.nextButtonEnabled = true
             
             // Scroll back to the "Use custom" option so user can see their selection
@@ -207,12 +206,11 @@ WizardStepBase {
     property alias customImageFileDialog: customImageFileDialog
     ImFileDialog {
         id: customImageFileDialog
-        imageWriter: root.imageWriter
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         anchors.centerIn: parent
         nameFilters: CommonStrings.imageFiltersList
         onAccepted: {
-            imageWriter.acceptCustomImageFromQml(selectedFile)
+            ImageWriterSingleton.acceptCustomImageFromQml(selectedFile)
         }
         onRejected: {
             // No-op; user cancelled
@@ -238,7 +236,7 @@ WizardStepBase {
     }
     
     // Track whether OS list is unavailable (no data loaded)
-    readonly property bool osListUnavailable: imageWriter.isOsListUnavailable
+    readonly property bool osListUnavailable: ImageWriterSingleton.isOsListUnavailable
     
     // Content
     content: [
@@ -286,7 +284,7 @@ WizardStepBase {
                     text: qsTr("Retry")
                     accessibleDescription: qsTr("Retry downloading the OS list")
                     onClicked: {
-                        imageWriter.beginOSListFetch()
+                        ImageWriterSingleton.beginOSListFetch()
                     }
                 }
             }
@@ -514,16 +512,16 @@ WizardStepBase {
                                 (typeof(delegateItem.url) === "string" && delegateItem.url === "internal://custom")
                                 ? (function(){
                                     var sz = root.customSelected ? root.customSelectedSize : 0;
-                                    return sz > 0 ? qsTr("Local - %1").arg(imageWriter.formatSize(sz)) : "";
+                                    return sz > 0 ? qsTr("Local - %1").arg(ImageWriterSingleton.formatSize(sz)) : "";
                                   })()
                                 : (!delegateItem.url ? "" :
                                   ((typeof(delegateItem.extract_sha256) !== "undefined" && 
                                     root.cacheStatusVersion >= 0 && // Force re-evaluation when cache status changes
-                                    imageWriter.isCached(delegateItem.url, delegateItem.extract_sha256))
+                                    ImageWriterSingleton.isCached(delegateItem.url, delegateItem.extract_sha256))
                                     ? qsTr("Cached on your computer")
                                     : (delegateItem.url.startsWith("file://")
                                        ? qsTr("Local file")
-                                       : qsTr("Online - %1 download").arg(imageWriter.formatSize(delegateItem.image_download_size)))))
+                                       : qsTr("Online - %1 download").arg(ImageWriterSingleton.formatSize(delegateItem.image_download_size)))))
                             Accessible.ignored: true
                         }
                         
@@ -668,10 +666,10 @@ WizardStepBase {
                 // Don't clear selectedOsName or customSelected here - only update them when user actually selects a file
                 // Changing these properties causes delegate height changes and scroll position resets
                 root.nextButtonEnabled = false
-                if (imageWriter.nativeFileDialogAvailable()) {
+                if (ImageWriterSingleton.nativeFileDialogAvailable()) {
                     // Defer opening the native dialog until after the current event completes
                     Qt.callLater(function() {
-                        imageWriter.openFileDialog(
+                        ImageWriterSingleton.openFileDialog(
                             qsTr("Select image"),
                             CommonStrings.imageFiltersString)
                     })
@@ -692,7 +690,7 @@ WizardStepBase {
                 }
             } else if (typeof(model.url) === "string" && model.url === "internal://format") {
                 // Erase/format flow
-                imageWriter.setSrc(
+                ImageWriterSingleton.setSrc(
                     model.url,
                     model.image_download_size,
                     model.extract_size,
@@ -702,12 +700,12 @@ WizardStepBase {
                     model.name,
                     typeof(model.init_format) != "undefined" ? model.init_format : ""
                 )
-                imageWriter.setSWCapabilitiesList("[]")
+                ImageWriterSingleton.setSWCapabilitiesList("[]")
 
                 root.wizardContainer.selectedOsName = model.name
-                root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+                root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = false
-                root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag() || imageWriter.getDebugForceSecureBoot()
+                root.wizardContainer.secureBootAvailable = ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
                 root.wizardContainer.passwordlessSudoAvailable = false
                 root.wizardContainer.ccRpiAvailable = false
                 root.wizardContainer.ifAndFeaturesAvailable = false
@@ -717,7 +715,7 @@ WizardStepBase {
                 }
             } else {
                 // Normal OS selection
-                imageWriter.setSrc(
+                ImageWriterSingleton.setSrc(
                     model.url,
                     model.image_download_size,
                     model.extract_size,
@@ -729,22 +727,22 @@ WizardStepBase {
                     typeof(model.release_date) != "undefined" ? model.release_date : "",
                     typeof(model.bmap_url) != "undefined" ? model.bmap_url : ""
                 )
-                imageWriter.setSWCapabilitiesList(model.capabilities)
+                ImageWriterSingleton.setSWCapabilitiesList(model.capabilities)
 
                 root.wizardContainer.selectedOsName = model.name
-                root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-                root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
-                root.wizardContainer.secureBootAvailable = imageWriter.checkSWCapability("secure_boot") || imageWriter.isSecureBootForcedByCliFlag() || imageWriter.getDebugForceSecureBoot()
-                root.wizardContainer.passwordlessSudoAvailable = imageWriter.checkSWCapability("passwordless_sudo")
-                root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
+                root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
+                root.wizardContainer.piConnectAvailable = ImageWriterSingleton.checkSWCapability("rpi_connect")
+                root.wizardContainer.secureBootAvailable = ImageWriterSingleton.checkSWCapability("secure_boot") || ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
+                root.wizardContainer.passwordlessSudoAvailable = ImageWriterSingleton.checkSWCapability("passwordless_sudo")
+                root.wizardContainer.ccRpiAvailable = ImageWriterSingleton.imageSupportsCcRpi()
                 
                 // Check if any interface/feature capabilities are available (requires both HW and SW support)
                 if (root.wizardContainer.ccRpiAvailable) {
-                    var hasAnyIfFeatures = imageWriter.checkHWAndSWCapability("i2c") ||
-                                           imageWriter.checkHWAndSWCapability("spi") ||
-                                           imageWriter.checkHWAndSWCapability("onewire") ||
-                                           imageWriter.checkHWAndSWCapability("serial") ||
-                                           imageWriter.checkHWAndSWCapability("usb_otg")
+                    var hasAnyIfFeatures = ImageWriterSingleton.checkHWAndSWCapability("i2c") ||
+                                           ImageWriterSingleton.checkHWAndSWCapability("spi") ||
+                                           ImageWriterSingleton.checkHWAndSWCapability("onewire") ||
+                                           ImageWriterSingleton.checkHWAndSWCapability("serial") ||
+                                           ImageWriterSingleton.checkHWAndSWCapability("usb_otg")
                     root.wizardContainer.ifAndFeaturesAvailable = hasAnyIfFeatures
                 } else {
                     root.wizardContainer.ifAndFeaturesAvailable = false
@@ -758,8 +756,8 @@ WizardStepBase {
                 // Drop any auth key minted for the previously-selected
                 // OS — leaving a stale org credential bound to a fresh
                 // image is a leak we'd rather not ship.
-                if (typeof imageWriter.discardOrgMintedConnectToken === "function")
-                    imageWriter.discardOrgMintedConnectToken()
+                if (typeof ImageWriterSingleton.discardOrgMintedConnectToken === "function")
+                    ImageWriterSingleton.discardOrgMintedConnectToken()
                 if (!root.wizardContainer.secureBootAvailable) {
                     delete root.wizardContainer.customizationSettings.secureBootEnabled
                     root.wizardContainer.secureBootEnabled = false
@@ -782,11 +780,11 @@ WizardStepBase {
                 root.wizardContainer.if1WireEnabled = false
                 root.wizardContainer.ifSerial = "Disabled"
                 root.wizardContainer.featUsbGadgetEnabled = false
-                imageWriter.removePersistedCustomisationSetting("enableI2C")
-                imageWriter.removePersistedCustomisationSetting("enableSPI")
-                imageWriter.removePersistedCustomisationSetting("enable1Wire")
-                imageWriter.removePersistedCustomisationSetting("enableSerial")
-                imageWriter.removePersistedCustomisationSetting("enableUsbGadget")
+                ImageWriterSingleton.removePersistedCustomisationSetting("enableI2C")
+                ImageWriterSingleton.removePersistedCustomisationSetting("enableSPI")
+                ImageWriterSingleton.removePersistedCustomisationSetting("enable1Wire")
+                ImageWriterSingleton.removePersistedCustomisationSetting("enableSerial")
+                ImageWriterSingleton.removePersistedCustomisationSetting("enableUsbGadget")
 
                 root.customSelected = false
                 root.nextButtonEnabled = true
@@ -886,18 +884,18 @@ WizardStepBase {
         var osSuccess = root.osmodel.reload()
         if (osSuccess && !modelLoaded) {
             modelLoaded = true
-            var o = JSON.parse(root.imageWriter.getFilteredOSlist())
+            var o = JSON.parse(ImageWriterSingleton.getFilteredOSlist())
             if ("imager" in o) {
                 var imager = o["imager"]
-                if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
-                    if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
+                if (ImageWriterSingleton.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
+                    if (!ImageWriterSingleton.isEmbeddedMode() && ImageWriterSingleton.isVersionNewer(imager["latest_version"])) {
                         root.updatePopupRequested(imager["url"], imager["latest_version"])
                     }
                 }
                 if ("default_os" in imager) {
                     selectNamedOS(imager["default_os"], root.osmodel)
                 }
-                if (root.imageWriter.isEmbeddedMode()) {
+                if (ImageWriterSingleton.isEmbeddedMode()) {
                     if ("embedded_default_os" in imager) {
                         selectNamedOS(imager["embedded_default_os"], root.osmodel)
                     }
