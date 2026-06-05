@@ -488,7 +488,6 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/FocusableHeading.qml
         qmlcomponents/ImFileDialog.qml
         qmlcomponents/ImSaveFileDialog.qml
-        qmlcomponents/ImPopup.qml
         qmlcomponents/ImRadioButton.qml
         qmlcomponents/ImOptionPill.qml
         qmlcomponents/ImOptionButton.qml
