@@ -74,11 +74,7 @@ RadioButton {
     
     // Accessibility properties - combine text with description in name
     Accessible.role: Accessible.RadioButton
-    Accessible.name: {
-        var name = text
-        var desc = accessibleDescription
-        return desc !== "" ? (name + ", " + desc) : name
-    }
+    Accessible.name: CommonStrings.controlAccessibleName(text, accessibleDescription, enabled)
     Accessible.description: ""
     Accessible.checkable: true
     Accessible.checked: checked
@@ -91,7 +87,7 @@ RadioButton {
         color: Style.transparent
         border.color: control.activeFocus ? Style.focusOutlineColor : Style.transparent
         border.width: Style.focusOutlineWidth
-        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? 0 : Style.focusOutlineRadius
+        radius: Style.cornerRadius(Style.focusOutlineRadius)
         z: -1
     }
     

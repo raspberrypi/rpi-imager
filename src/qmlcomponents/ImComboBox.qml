@@ -190,7 +190,7 @@ ComboBox {
         
         background: Rectangle {
             color: Style.mainBackgroundColor
-            radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+            radius: Style.cornerRadius(Style.sectionBorderRadius)
             border.color: Style.popupBorderColor
             border.width: Style.sectionBorderWidth
             antialiasing: true
@@ -351,7 +351,7 @@ ComboBox {
             // Custom highlight that respects popup border radius
             highlight: Rectangle {
                 color: Style.listViewHighlightColor
-                radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+                radius: Style.cornerRadius(Style.sectionBorderRadius)
                 border.color: dropdownList.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
                 border.width: dropdownList.activeFocus ? 2 : 0
                 antialiasing: true

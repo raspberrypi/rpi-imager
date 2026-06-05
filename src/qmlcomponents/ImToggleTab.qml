@@ -31,7 +31,7 @@ Button {
                         ? Style.buttonFocusedBackgroundColor
                         : (control.hovered ? Style.buttonHoveredBackgroundColor : Style.buttonBackgroundColor)))
               : Qt.rgba(0, 0, 0, 0.1)
-        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.buttonBorderRadiusEmbedded : 4
+        radius: Style.cornerRadius(4)
         border.color: (control.enabled && !control.active) ? Style.popupBorderColor : "transparent"
         border.width: control.active ? 0 : 1
         antialiasing: true  // Smooth edges at non-integer scale factors

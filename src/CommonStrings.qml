@@ -21,6 +21,16 @@ Item {
     function withAll(list)          { return list.concat([allFilesLabel]) }
     function toFilterString(list)   { return list.join(";;") }
 
+    // Compose a control's accessible name from its text, an optional description,
+    // and enabled state. Folded into the name because VoiceOver reads the name more
+    // reliably than separate description/state.
+    function controlAccessibleName(name, description, enabled) {
+        if (!enabled && description !== "") return name + ", " + description + " (disabled)"
+        if (!enabled)                       return name + " (disabled)"
+        if (description !== "")             return name + ", " + description
+        return name
+    }
+
     readonly property var imageExtensions: ["*.img","*.zip","*.iso","*.gz","*.xz","*.zst","*.wic"]
 
     readonly property var imageFiltersList: withAll([
