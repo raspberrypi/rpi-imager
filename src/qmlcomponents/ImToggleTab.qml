@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 

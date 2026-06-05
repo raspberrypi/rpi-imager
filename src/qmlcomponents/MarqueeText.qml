@@ -13,6 +13,8 @@
  * and size the scroll, independent of the rendered element's elide state.
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick
 
 import RpiImager
