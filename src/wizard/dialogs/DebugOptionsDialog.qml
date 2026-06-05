@@ -43,7 +43,7 @@ BaseDialog {
     }
 
     // Header
-    Text {
+    FocusableHeading {
         id: headerText
         text: qsTr("Debug Options")
         font.pointSize: Style.fontSizeLargeHeading
@@ -52,15 +52,10 @@ BaseDialog {
         color: Style.formLabelColor
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
-        Accessible.role: Accessible.Heading
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     // Warning text
-    Text {
+    FocusableText {
         id: warningText
         text: qsTr("⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.")
         font.pointSize: Style.fontSizeDescription
@@ -69,11 +64,6 @@ BaseDialog {
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
-        Accessible.role: Accessible.StaticText
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     // Scrollable options section

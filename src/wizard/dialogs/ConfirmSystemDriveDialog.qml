@@ -60,7 +60,7 @@ BaseDialog {
     }
 
     // Dialog content
-    Text {
+    FocusableText {
         id: warningTextElement
         textFormat: Text.StyledText
         wrapMode: Text.WordWrap
@@ -69,12 +69,8 @@ BaseDialog {
         color: Style.textDescriptionColor
         Layout.fillWidth: true
         text: root.riskText + "<br><br>" + root.systemDriveText + "<br><br>" + root.proceedText
-        Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor; Accessible.ignored: true }
@@ -115,7 +111,7 @@ BaseDialog {
         Accessible.ignored: false
     }
 
-    Text {
+    FocusableText {
         id: driveNameText
         font.family: Style.fontFamily
         font.pointSize: Style.fontSizeSm
@@ -123,12 +119,8 @@ BaseDialog {
         color: Style.textDescriptionColor
         text: root.driveName
         // Make this text focusable when screen reader is active
-        Accessible.role: Accessible.StaticText
         Accessible.name: qsTr("Drive name to type: %1").arg(text)
         Accessible.ignored: false
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     TextField {

@@ -121,7 +121,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: Style.spacingMedium
         
-        Text {
+        FocusableText {
             id: summaryText
             text: {
                 if (root.keys.length === 0) {
@@ -135,12 +135,7 @@ ColumnLayout {
             font.pointSize: Style.fontSizeFormLabel
             color: Style.formLabelColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
         ImButton {

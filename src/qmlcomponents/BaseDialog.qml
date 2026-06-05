@@ -164,7 +164,13 @@ Dialog {
     function rebuildFocusOrder() {
         dialogFocusScope.rebuildFocusOrder()
     }
-    
+
+    // Rebuild the Tab order when the screen reader is toggled at runtime.
+    Connections {
+        target: ImageWriterSingleton
+        function onScreenReaderActiveChanged() { root.rebuildFocusOrder() }
+    }
+
     // Default escape handler - child dialogs can override
     function escapePressed() {
         root.close()

@@ -155,7 +155,7 @@ ApplicationWindow {
         }
 
         // Dialog content
-        Text {
+        FocusableHeading {
             id: errorTitle
             text: errorDialog.titleText
             font.pointSize: Style.fontSizeHeading
@@ -163,14 +163,9 @@ ApplicationWindow {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
-        Text {
+        FocusableText {
             id: errorMessage
             text: errorDialog.message
             textFormat: Text.StyledText
@@ -179,11 +174,7 @@ ApplicationWindow {
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
             Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
@@ -228,7 +219,7 @@ ApplicationWindow {
         }
 
         // Dialog content
-        Text {
+        FocusableHeading {
             id: storageRemovedTitle
             text: qsTr("Storage device removed")
             font.pointSize: Style.fontSizeHeading
@@ -236,14 +227,9 @@ ApplicationWindow {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
-        Text {
+        FocusableText {
             id: storageRemovedMessage
             text: qsTr("The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.")
             wrapMode: Text.WordWrap
@@ -251,11 +237,6 @@ ApplicationWindow {
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
@@ -300,7 +281,7 @@ ApplicationWindow {
         }
 
         // Dialog content
-        Text {
+        FocusableHeading {
             id: quitTitle
             text: qsTr("Are you sure you want to quit?")
             font.pointSize: Style.fontSizeHeading
@@ -308,14 +289,9 @@ ApplicationWindow {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
-        Text {
+        FocusableText {
             id: quitMessage
             text: qsTr("Raspberry Pi Imager is still busy. Are you sure you want to quit?")
             font.pointSize: Style.fontSizeDescription
@@ -323,11 +299,6 @@ ApplicationWindow {
             color: Style.textDescriptionColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
@@ -412,7 +383,7 @@ ApplicationWindow {
         }
         
         // Dialog content
-        Text {
+        FocusableHeading {
             id: headingText
             text: qsTr("Insufficient Permissions")
             font.pointSize: Style.fontSizeHeading
@@ -420,15 +391,10 @@ ApplicationWindow {
             font.bold: true
             color: Style.formLabelErrorColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
             Accessible.description: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
-        Text {
+        FocusableText {
             id: messageText
             text: permissionWarningDialog.warningMessage
             font.pointSize: Style.fontSizeDescription
@@ -436,13 +402,8 @@ ApplicationWindow {
             color: Style.textDescriptionColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
             Accessible.description: qsTr("Error message explaining why elevated privileges are required")
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
             Accessible.ignored: false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
         
         RowLayout {

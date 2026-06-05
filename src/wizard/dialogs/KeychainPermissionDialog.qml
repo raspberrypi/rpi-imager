@@ -42,7 +42,7 @@ BaseDialog {
     }
 
     // Dialog content goes directly into the BaseDialog's contentLayout
-    Text {
+    FocusableHeading {
         id: titleText
         text: qsTr("Keychain Access")
         font.pointSize: Style.fontSizeHeading
@@ -50,39 +50,24 @@ BaseDialog {
         font.bold: true
         color: Style.formLabelColor
         Layout.fillWidth: true
-        Accessible.role: Accessible.Heading
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
-    Text {
+    FocusableText {
         id: descriptionText
         text: qsTr("Would you like to prefill the Wi‑Fi password from the system keychain?")
         wrapMode: Text.WordWrap
         color: Style.textDescriptionColor
         font.pointSize: Style.fontSizeDescription
         Layout.fillWidth: true
-        Accessible.role: Accessible.StaticText
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
-    Text {
+    FocusableText {
         id: subText
         text: qsTr("This will require administrator authentication on macOS.")
         wrapMode: Text.WordWrap
         color: Style.textMetadataColor
         font.pointSize: Style.fontSizeSmall
         Layout.fillWidth: true
-        Accessible.role: Accessible.StaticText
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     RowLayout {

@@ -72,7 +72,7 @@ BaseDialog {
     }
 
     // Header
-    Text {
+    FocusableHeading {
         id: headerText
         text: qsTr("App Options")
         font.pointSize: Style.fontSizeLargeHeading
@@ -81,11 +81,6 @@ BaseDialog {
         color: Style.formLabelColor
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
-        Accessible.role: Accessible.Heading
-        Accessible.name: text
-        Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
     }
 
     // Options section — scrollable so we don't hide items when the option
@@ -468,7 +463,7 @@ BaseDialog {
         }
 
         // Dialog content
-        Text {
+        FocusableHeading {
             id: confirmTitleText
             text: qsTr("Disable warnings?")
             font.pointSize: Style.fontSizeHeading
@@ -476,14 +471,9 @@ BaseDialog {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
-        Text {
+        FocusableText {
             id: confirmDescriptionText
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
@@ -492,11 +482,7 @@ BaseDialog {
             color: Style.textDescriptionColor
             Layout.fillWidth: true
             text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
-            Accessible.role: Accessible.StaticText
             Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
@@ -555,7 +541,7 @@ BaseDialog {
         }
 
         // Dialog content
-        Text {
+        FocusableHeading {
             id: clearSettingsTitleText
             text: qsTr("Clear saved customisation?")
             font.pointSize: Style.fontSizeHeading
@@ -563,14 +549,9 @@ BaseDialog {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
-            Accessible.role: Accessible.Heading
-            Accessible.name: text
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
-        Text {
+        FocusableText {
             id: clearSettingsDescriptionText
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
@@ -579,11 +560,7 @@ BaseDialog {
             color: Style.textDescriptionColor
             Layout.fillWidth: true
             text: qsTr("This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.")
-            Accessible.role: Accessible.StaticText
             Accessible.name: text.replace(/<[^>]+>/g, '')
-            Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
-            focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
-            activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
         }
 
         RowLayout {
