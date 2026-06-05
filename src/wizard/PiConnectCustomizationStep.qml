@@ -6,7 +6,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "../qmlcomponents"
 import "components"
@@ -151,7 +150,7 @@ WizardStepBase {
                 helpUrl: ImageWriterSingleton.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/software/connect/"
                 checked: false
                 onToggled: function(isChecked) {
-                    wizardContainer.piConnectEnabled = isChecked
+                    root.wizardContainer.piConnectEnabled = isChecked
                     // Rebuild focus order when pill state changes
                     root.rebuildFocusOrder()
                 }
@@ -311,7 +310,7 @@ WizardStepBase {
                 fieldConnectToken.text = ""
             }
             // Clear from customization settings
-            delete wizardContainer.customizationSettings.piConnectEnabled
+            delete root.wizardContainer.customizationSettings.piConnectEnabled
             // Rebuild focus order
             root.rebuildFocusOrder()
         }

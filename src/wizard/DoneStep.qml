@@ -72,11 +72,11 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
+                    Accessible.name: text + ": " + (root.wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
                 }
                 Text {
                     id: deviceValue
-                    text: wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
+                    text: root.wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -102,11 +102,11 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
+                    Accessible.name: text + " " + (root.wizardContainer.selectedOsName || CommonStrings.noImageSelected)
                 }
                 Text {
                     id: osValue
-                    text: wizardContainer.selectedOsName || CommonStrings.noImageSelected
+                    text: root.wizardContainer.selectedOsName || CommonStrings.noImageSelected
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -132,11 +132,11 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + " " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
+                    Accessible.name: text + " " + (root.wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
                 }
                 Text {
                     id: storageValue
-                    text: wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
+                    text: root.wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -182,7 +182,7 @@ WizardStepBase {
                 Accessible.name: {
                     // Build a list of visible customizations to announce using snapshot
                     var items = []
-                    var snapshot = wizardContainer.completionSnapshot
+                    var snapshot = root.wizardContainer.completionSnapshot
                     if (snapshot.hostnameConfigured) items.push(CommonStrings.hostnameConfigured)
                     if (snapshot.localeConfigured) items.push(CommonStrings.localeConfigured)
                     if (snapshot.userConfigured) items.push(CommonStrings.userAccountConfigured)
@@ -216,7 +216,7 @@ WizardStepBase {
                     Column {
                         id: customizationColumn
                         width: parent.width
-                        property var snapshot: wizardContainer.completionSnapshot
+                        property var snapshot: root.wizardContainer.completionSnapshot
                         Text { text: "✓ " + CommonStrings.hostnameConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.hostnameConfigured }
                         Text { text: "✓ " + CommonStrings.localeConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.localeConfigured }
                         Text { text: "✓ " + CommonStrings.userAccountConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.userConfigured }
@@ -263,7 +263,7 @@ WizardStepBase {
             onClicked: {
                 // Return to storage selection to write the same image to another SD card
                 // This preserves device, OS, and customization settings
-                wizardContainer.resetToWriteStep()
+                root.wizardContainer.resetToWriteStep()
             }
         },
         

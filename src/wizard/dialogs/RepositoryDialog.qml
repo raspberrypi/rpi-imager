@@ -5,7 +5,6 @@
 
 pragma ComponentBehavior: Bound
 
-import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -139,7 +138,7 @@ BaseDialog {
 
                 ImTextField {
                     id: fieldCustomRepository
-                    text: selectedRepo !== "" ? UrlFmt.display(selectedRepo) : ""
+                    text: popup.selectedRepo !== "" ? UrlFmt.display(popup.selectedRepo) : ""
                     Layout.fillWidth: true
                     placeholderText: qsTr("Please select a custom repository json file")
                     font.pointSize: Style.fontSizeInput

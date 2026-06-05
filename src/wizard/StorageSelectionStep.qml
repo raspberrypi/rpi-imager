@@ -80,9 +80,9 @@ WizardStepBase {
     // Watch for device removal - when selectedStorageName becomes empty, clear the currentIndex
     // This ensures that when a device is re-inserted, it won't appear highlighted but not actually selected
     Connections {
-        target: wizardContainer
+        target: root.wizardContainer
         function onSelectedStorageNameChanged() {
-            if (!wizardContainer.selectedStorageName || wizardContainer.selectedStorageName.length === 0) {
+            if (!root.wizardContainer.selectedStorageName || root.wizardContainer.selectedStorageName.length === 0) {
                 // Device was removed - clear the visual selection and ensure next button is disabled
                 dstlist.currentIndex = -1
                 root.selectedDeviceName = ""

@@ -6,7 +6,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import QtCore
 import "../qmlcomponents"
@@ -72,7 +71,7 @@ WizardStepBase {
                             ImageWriterSingleton.setSetting("secureboot_rsa_key", keyPath)
                             // Update tracked property and wizard container state
                             root.rsaKeyPath = keyPath
-                            wizardContainer.secureBootKeyConfigured = true
+                            root.wizardContainer.secureBootKeyConfigured = true
                             // Rebuild focus order and update UI
                             root.rebuildFocusOrder()
                         }
@@ -107,7 +106,7 @@ WizardStepBase {
                 // Only enable if RSA key is configured
                 enabled: root.rsaKeyPath && root.rsaKeyPath.length > 0
                 onToggled: function(isChecked) { 
-                    wizardContainer.secureBootEnabled = isChecked
+                    root.wizardContainer.secureBootEnabled = isChecked
                     // Rebuild focus order when pill state changes
                     root.rebuildFocusOrder()
                 }
@@ -209,7 +208,7 @@ WizardStepBase {
                         checked: false
                         enabled: root.rsaKeyPath && root.rsaKeyPath.length > 0
                         onToggled: function(isChecked) {
-                            wizardContainer.otpProvisioningEnabled = isChecked
+                            root.wizardContainer.otpProvisioningEnabled = isChecked
                             root.rebuildFocusOrder()
                         }
                     }
@@ -269,7 +268,7 @@ WizardStepBase {
                 ImageWriterSingleton.setSetting("secureboot_rsa_key", filePath)
                 // Update tracked property and wizard container state
                 root.rsaKeyPath = filePath
-                wizardContainer.secureBootKeyConfigured = true
+                root.wizardContainer.secureBootKeyConfigured = true
                 // Rebuild focus order and update UI
                 root.rebuildFocusOrder()
             }

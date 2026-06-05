@@ -1288,8 +1288,8 @@ Item {
         function onConnectTokenCleared() {
             // Reset Pi Connect state when token is cleared (e.g., after write completes)
             // Note: Snapshot is already captured when entering writing step, so no need to capture here
-            piConnectEnabled = false
-            delete customizationSettings.piConnectEnabled
+            root.piConnectEnabled = false
+            delete root.customizationSettings.piConnectEnabled
         }
         
         // Handle repository URL received from deep link (rpi-imager://open?repo=...)

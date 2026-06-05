@@ -129,12 +129,12 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
+                    Accessible.name: text + ": " + (root.wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
                 }
 
                 MarqueeText {
                     id: deviceValue
-                    text: wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
+                    text: root.wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -149,12 +149,12 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
+                    Accessible.name: text + " " + (root.wizardContainer.selectedOsName || CommonStrings.noImageSelected)
                 }
 
                 MarqueeText {
                     id: osValue
-                    text: wizardContainer.selectedOsName || CommonStrings.noImageSelected
+                    text: root.wizardContainer.selectedOsName || CommonStrings.noImageSelected
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -169,12 +169,12 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + ": " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
+                    Accessible.name: text + ": " + (root.wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
                 }
 
                 MarqueeText {
                     id: storageValue
-                    text: wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
+                    text: root.wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -216,17 +216,17 @@ WizardStepBase {
                 Accessible.name: {
                     // Build a list of visible customizations to announce
                     var items = []
-                    if (wizardContainer.hostnameConfigured) items.push(CommonStrings.hostnameConfigured)
-                    if (wizardContainer.localeConfigured) items.push(CommonStrings.localeConfigured)
-                    if (wizardContainer.userConfigured) items.push(CommonStrings.userAccountConfigured)
-                    if (wizardContainer.wifiConfigured) items.push(CommonStrings.wifiConfigured)
-                    if (wizardContainer.sshEnabled) items.push(CommonStrings.sshEnabled)
-                    if (wizardContainer.piConnectEnabled) items.push(CommonStrings.piConnectEnabled)
-                    if (wizardContainer.featUsbGadgetEnabled) items.push(CommonStrings.usbGadgetEnabled)
-                    if (wizardContainer.ifI2cEnabled) items.push(CommonStrings.i2cEnabled)
-                    if (wizardContainer.ifSpiEnabled) items.push(CommonStrings.spiEnabled)
-                    if (wizardContainer.if1WireEnabled) items.push(CommonStrings.onewireEnabled)
-                    if (wizardContainer.ifSerial !== "" && wizardContainer.ifSerial !== "Disabled") items.push(CommonStrings.serialConfigured)
+                    if (root.wizardContainer.hostnameConfigured) items.push(CommonStrings.hostnameConfigured)
+                    if (root.wizardContainer.localeConfigured) items.push(CommonStrings.localeConfigured)
+                    if (root.wizardContainer.userConfigured) items.push(CommonStrings.userAccountConfigured)
+                    if (root.wizardContainer.wifiConfigured) items.push(CommonStrings.wifiConfigured)
+                    if (root.wizardContainer.sshEnabled) items.push(CommonStrings.sshEnabled)
+                    if (root.wizardContainer.piConnectEnabled) items.push(CommonStrings.piConnectEnabled)
+                    if (root.wizardContainer.featUsbGadgetEnabled) items.push(CommonStrings.usbGadgetEnabled)
+                    if (root.wizardContainer.ifI2cEnabled) items.push(CommonStrings.i2cEnabled)
+                    if (root.wizardContainer.ifSpiEnabled) items.push(CommonStrings.spiEnabled)
+                    if (root.wizardContainer.if1WireEnabled) items.push(CommonStrings.onewireEnabled)
+                    if (root.wizardContainer.ifSerial !== "" && root.wizardContainer.ifSerial !== "Disabled") items.push(CommonStrings.serialConfigured)
                     
                     return items.length + " " + (items.length === 1 ? qsTr("customization") : qsTr("customizations")) + ": " + items.join(", ")
                 }
@@ -252,17 +252,17 @@ WizardStepBase {
                         id: customizationsColumn
                         width: parent.width
                         spacing: Style.spacingXSmall
-                        Text { text: "• " + CommonStrings.hostnameConfigured;      font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.hostnameConfigured;         Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.localeConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.localeConfigured;           Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.userAccountConfigured;   font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.wifiConfigured;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.sshEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled;                 Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.piConnectEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled;           Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.usbGadgetEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled;       Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.i2cEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifI2cEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.spiEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSpiEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.onewireEnabled;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.if1WireEnabled;             Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.serialConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSerial !== "" && wizardContainer.ifSerial !== "Disabled"; Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.hostnameConfigured;      font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.hostnameConfigured;         Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.localeConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.localeConfigured;           Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.userAccountConfigured;   font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.userConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.wifiConfigured;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.wifiConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.sshEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.sshEnabled;                 Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.piConnectEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.piConnectEnabled;           Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.usbGadgetEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.featUsbGadgetEnabled;       Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.i2cEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifI2cEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.spiEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifSpiEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.onewireEnabled;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.if1WireEnabled;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.serialConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifSerial !== "" && root.wizardContainer.ifSerial !== "Disabled"; Accessible.role: Accessible.ListItem; Accessible.name: text }
                     }
                 }
                 ScrollBar.vertical: ScrollBar {
@@ -435,7 +435,7 @@ WizardStepBase {
         // Dialog content - now using BaseDialog's contentLayout
         FocusableHeading {
             id: warningText
-            text: qsTr("You are about to ERASE all data on: %1").arg(wizardContainer.selectedStorageName || qsTr("the storage device"))
+            text: qsTr("You are about to ERASE all data on: %1").arg(root.wizardContainer.selectedStorageName || qsTr("the storage device"))
             font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
@@ -580,7 +580,7 @@ WizardStepBase {
             progressText.text = qsTr("Write completed successfully!")
 
             // Automatically advance to the done screen
-            wizardContainer.nextStep()
+            root.wizardContainer.nextStep()
         }
         function onError(msg) {
             progressText.text = qsTr("Write failed: %1").arg(msg)

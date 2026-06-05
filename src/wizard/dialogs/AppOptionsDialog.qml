@@ -181,7 +181,7 @@ BaseDialog {
                 accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
                 Layout.fillWidth: true
                 // Only show if secure boot is available (via OS capabilities or CLI flag)
-                visible: (wizardContainer && wizardContainer.secureBootAvailable) ||
+                visible: (popup.wizardContainer && popup.wizardContainer.secureBootAvailable) ||
                          ImageWriterSingleton.isSecureBootForcedByCliFlag() ||
                          ImageWriterSingleton.checkSWCapability("secure_boot") ||
                          ImageWriterSingleton.getDebugForceSecureBoot()

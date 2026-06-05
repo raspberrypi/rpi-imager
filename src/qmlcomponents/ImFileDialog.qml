@@ -430,7 +430,7 @@ BaseDialog {
                             color: {
                                 if (ListView.isCurrentItem && placesList.activeFocus)
                                     return Style.listViewHighlightColor
-                                else if (hovered)
+                                else if (leftPane.hovered)
                                     return Style.listViewHoverRowBackgroundColor
                                 else
                                     return "transparent"
@@ -520,7 +520,7 @@ BaseDialog {
                             color: {
                                 if (ListView.isCurrentItem && subfoldersList.activeFocus)
                                     return Style.listViewHighlightColor
-                                else if (hovered)
+                                else if (leftPane.hovered)
                                     return Style.listViewHoverRowBackgroundColor
                                 else
                                     return "transparent"
