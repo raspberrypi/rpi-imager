@@ -482,7 +482,6 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImButton.qml
         qmlcomponents/ImButtonRed.qml
         qmlcomponents/ImCheckBox.qml
-        qmlcomponents/ImCloseButton.qml
         qmlcomponents/ImComboBox.qml
         qmlcomponents/FocusableText.qml
         qmlcomponents/FocusableHeading.qml
