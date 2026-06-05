@@ -533,16 +533,19 @@ endif()
 
 # Only create QML module for GUI builds
 if(NOT BUILD_CLI_ONLY)
+    # CACHEGEN is left enabled (the default): qmlcachegen compiles our QML to
+    # bytecode at build time and embeds it in the binary, so the engine skips
+    # the per-launch lex/parse/compile step. This uses the FOSS qmlcachegen
+    # (the C++-emitting qmlsc is not required and is not shipped with the
+    # open-source Qt we build against).
     qt_add_qml_module(${PROJECT_NAME}
         URI RpiImager
         VERSION 1.0
         QML_FILES ${IMAGER_QML_FILES}
         SOURCES ${IMAGER_QML_CPP_TYPES}
-        NO_CACHEGEN
         OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
         DEPENDENCIES QtQuick
         NO_PLUGIN
-        QML_FILES
     )
 endif()
 
