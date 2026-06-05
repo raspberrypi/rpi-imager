@@ -160,11 +160,12 @@ Item {
         listViewHoverRowBackgroundColor.g,
         listViewHoverRowBackgroundColor.b, 0.3)
     readonly property int sidebarItemBorderRadius: 4     // not scaled — visual decoration
-    // Embedded-mode overrides (0 radius to avoid software renderer artifacts)
-    readonly property int sectionBorderRadiusEmbedded: 0
-    readonly property int listItemBorderRadiusEmbedded: 0
-    readonly property int sidebarItemBorderRadiusEmbedded: 0
-    readonly property int buttonBorderRadiusEmbedded: 0
+
+    // Embedded (kiosk) mode squares off corners (radius 0) to avoid software-renderer
+    // antialiasing artifacts. Fixed for the session, so evaluated once.
+    readonly property bool embeddedMode: ImageWriterSingleton.isEmbeddedMode()
+    // Corner radius to use, given `normalRadius` as the non-embedded value.
+    function cornerRadius(normalRadius) { return embeddedMode ? 0 : normalRadius }
     // Sidebar item heights
     readonly property int sidebarItemHeight: buttonHeightStandard
     readonly property int sidebarSubItemHeight: sidebarItemHeight - scaled(12)

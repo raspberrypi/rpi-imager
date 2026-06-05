@@ -506,7 +506,7 @@ Item {
                             color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.width: 1
-                            radius: ImageWriterSingleton.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
+                            radius: Style.cornerRadius(Style.sidebarItemBorderRadius)
                             antialiasing: true  // Smooth edges at non-integer scale factors
                             clip: true  // Prevent content overflow at non-integer scale factors
 
@@ -566,7 +566,7 @@ Item {
                                     required property var modelData
                                     width: sublistContainer ? sublistContainer.width : 0
                                     height: Style.sidebarSubItemHeight
-                                    radius: ImageWriterSingleton.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
+                                    radius: Style.cornerRadius(Style.sidebarItemBorderRadius)
                                     color: Style.transparent
                                     border.color: Style.transparent
                                     border.width: 0

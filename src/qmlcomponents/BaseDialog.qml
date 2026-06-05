@@ -65,7 +65,7 @@ Dialog {
     // Set the dialog background directly
     background: Rectangle {
         color: Style.titleBackgroundColor
-        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+        radius: Style.cornerRadius(Style.sectionBorderRadius)
         border.color: Style.popupBorderColor
         border.width: Style.sectionBorderWidth
         antialiasing: true  // Smooth edges at non-integer scale factors

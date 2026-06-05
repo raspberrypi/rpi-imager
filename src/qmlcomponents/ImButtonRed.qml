@@ -23,7 +23,7 @@ Button {
                    ? Style.button2HoveredBackgroundColor
                    : (control.hovered ? Style.button2HoveredBackgroundColor : Style.button2BackgroundColor))
                : Qt.rgba(0, 0, 0, 0.1)
-        radius: (ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode()) ? Style.buttonBorderRadiusEmbedded : 4
+        radius: Style.cornerRadius(4)
         antialiasing: true  // Smooth edges at non-integer scale factors
         clip: true  // Prevent content overflow at non-integer scale factors
     }
@@ -47,20 +47,7 @@ Button {
     
     // Accessibility properties
     Accessible.role: Accessible.Button
-    Accessible.name: {
-        // Combine text with description in name since VoiceOver reads name more reliably
-        var name = text
-        var desc = accessibleDescription
-        if (!enabled && desc !== "") {
-            return name + ", " + desc + " (disabled)"
-        } else if (!enabled) {
-            return name + " (disabled)"
-        } else if (desc !== "") {
-            return name + ", " + desc
-        } else {
-            return name
-        }
-    }
+    Accessible.name: CommonStrings.controlAccessibleName(text, accessibleDescription, enabled)
     Accessible.description: ""
     Accessible.onPressAction: clicked()
     
