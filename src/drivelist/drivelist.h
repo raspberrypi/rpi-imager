@@ -193,6 +193,7 @@ struct DeviceDescriptor {
     std::string busType;          ///< Bus type: "USB", "SATA", "NVME", "SD", "MMC", "SCSI", etc.
     std::string busVersion;       ///< Bus version string (e.g., "3.0" for USB 3.0)
     std::string enumerator;       ///< Driver/enumerator name (Windows-specific)
+    int32_t deviceNumber = -1;    ///< Physical disk number (Windows-specific); -1 if unknown
     std::string devicePath;       ///< Full device path (Windows-specific)
     std::string parentDevice;     ///< Parent device path (for APFS volumes on macOS)
 
