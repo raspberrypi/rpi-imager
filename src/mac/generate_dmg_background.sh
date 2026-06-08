@@ -2,45 +2,72 @@
 
 # Script to generate DMG background image for Raspberry Pi Imager
 # This script will create a background image or provide instructions
+#
+# Pillow is sourced, in order:
+#   1. The system python3, if Pillow is already importable.
+#   2. A build-local virtualenv, into which Pillow is pip-installed. This works
+#      even when the system python3 is PEP 668 "externally-managed" (e.g. Homebrew
+#      or Debian Python), where a plain `pip3 install` is refused — and it never
+#      pollutes the user's global Python.
+# Anything past that falls back to the manual instructions below.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_PATH="${1:-$SCRIPT_DIR/dmg_background.png}"
 VERSION_STR="${2:-}"
+PY_GENERATOR="$SCRIPT_DIR/create_dmg_background.py"
 
 # Remove existing background image to force regeneration
 rm -f "$OUTPUT_PATH"
 
 echo "Generating DMG background image..."
 
-# Check if Python 3 and Pillow are available
+# Run the Pillow generator with the given interpreter; succeeds only if the PNG appears.
+run_generator() {
+    "$1" "$PY_GENERATOR" "$OUTPUT_PATH" "$VERSION_STR" && [ -f "$OUTPUT_PATH" ]
+}
+
 if command -v python3 &> /dev/null; then
     echo "Found Python 3, checking for Pillow..."
-    
+
+    # 1. System python3 already has Pillow.
     if python3 -c "import PIL" 2>/dev/null; then
-        echo "Pillow found, generating background image..."
-        python3 "$SCRIPT_DIR/create_dmg_background.py" "$OUTPUT_PATH" "$VERSION_STR"
-        
-        if [ -f "$OUTPUT_PATH" ]; then
+        echo "Pillow found in system python3, generating background image..."
+        if run_generator python3; then
             echo "✓ Background image created successfully: $OUTPUT_PATH"
             exit 0
-        else
-            echo "✗ Failed to create background image"
         fi
+        echo "✗ Generator failed despite Pillow being importable"
     else
-        echo "Pillow not found. Installing..."
-        if command -v pip3 &> /dev/null; then
-            pip3 install Pillow
-            echo "Pillow installed, generating background image..."
-            python3 "$SCRIPT_DIR/create_dmg_background.py" "$OUTPUT_PATH" "$VERSION_STR"
-            
-            if [ -f "$OUTPUT_PATH" ]; then
+        echo "Pillow not available in system python3."
+    fi
+
+    # 2. Build-local virtualenv. Reused across rebuilds; sidesteps PEP 668.
+    VENV_DIR="$(dirname "$OUTPUT_PATH")/.dmg-bg-venv"
+    VENV_PY="$VENV_DIR/bin/python3"
+    echo "Setting up build-local virtualenv for Pillow at $VENV_DIR ..."
+    if [ ! -x "$VENV_PY" ]; then
+        python3 -m venv "$VENV_DIR" 2>/dev/null || {
+            echo "Warning: could not create virtualenv (is the venv module available?)"
+            VENV_PY=""
+        }
+    fi
+    if [ -n "$VENV_PY" ] && [ -x "$VENV_PY" ]; then
+        if ! "$VENV_PY" -c "import PIL" 2>/dev/null; then
+            echo "Installing Pillow into virtualenv..."
+            "$VENV_PY" -m pip install --quiet --upgrade pip 2>/dev/null || true
+            "$VENV_PY" -m pip install --quiet Pillow || {
+                echo "Warning: 'pip install Pillow' into virtualenv failed (no network?)"
+            }
+        fi
+        if "$VENV_PY" -c "import PIL" 2>/dev/null; then
+            echo "Generating background image using virtualenv Pillow..."
+            if run_generator "$VENV_PY"; then
                 echo "✓ Background image created successfully: $OUTPUT_PATH"
                 exit 0
             fi
-        else
-            echo "pip3 not found, cannot install Pillow automatically"
+            echo "✗ Generator failed in virtualenv"
         fi
     fi
 else
