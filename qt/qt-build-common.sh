@@ -436,13 +436,9 @@ EOF
 
     # Add macOS-specific settings
     if [ "$IS_MACOS" -eq 1 ]; then
-        # Use the same deployment target as setup_macos_flags
-        _macos_major=$(sw_vers -productVersion | cut -d. -f1)
-        if [ "$_macos_major" -ge 11 ]; then
-            _deploy_target="11.0"
-        else
-            _deploy_target="10.15"
-        fi
+        # Qt 6.11 requires macOS 13.0 as its minimum deployment target.
+        # Keep this in sync with setup_macos_flags and src/CMakeLists.txt.
+        _deploy_target="13.0"
         cat >> "$toolchain_file" << EOF
 
 # macOS specific settings
@@ -705,17 +701,14 @@ setup_macos_flags() {
     fi
     
     MACOS_VERSION=$(sw_vers -productVersion)
-    MACOS_MAJOR=$(echo "$MACOS_VERSION" | cut -d. -f1)
-    
+
     echo "Detected macOS $MACOS_VERSION"
-    
+
+    # Qt 6.11 requires macOS 13.0 as its minimum deployment target.
+    # Keep this in sync with the toolchain file above and src/CMakeLists.txt.
     if [ "$UNIVERSAL_BUILD" -eq 1 ]; then
         echo "  Optimizing for Universal Binary (Intel + Apple Silicon)"
-        if [ "$MACOS_MAJOR" -ge 11 ]; then
-            MAC_CFLAGS="-mmacos-version-min=11.0"
-        else
-            MAC_CFLAGS="-mmacos-version-min=10.15"
-        fi
+        MAC_CFLAGS="-mmacos-version-min=13.0"
         MAC_CFLAGS_X86_64="-march=x86-64-v2 -mtune=intel"
         MAC_CFLAGS_ARM64="-march=armv8.4-a+crypto -mtune=apple-a14"
         echo "  Intel optimizations: $MAC_CFLAGS_X86_64"
@@ -728,12 +721,8 @@ setup_macos_flags() {
             echo "  Optimizing for Intel x86_64"
             MAC_CFLAGS="-march=x86-64-v2 -mtune=intel"
         fi
-        
-        if [ "$MACOS_MAJOR" -ge 11 ]; then
-            MAC_CFLAGS="$MAC_CFLAGS -mmacos-version-min=11.0"
-        else
-            MAC_CFLAGS="$MAC_CFLAGS -mmacos-version-min=10.15"
-        fi
+
+        MAC_CFLAGS="$MAC_CFLAGS -mmacos-version-min=13.0"
     fi
     
     export MAC_CFLAGS MAC_CFLAGS_X86_64 MAC_CFLAGS_ARM64

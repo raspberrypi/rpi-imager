@@ -18,7 +18,7 @@ This script is specifically designed to build a **minimal Qt** that contains onl
 
 Before running the script, ensure you have:
 
-- macOS 10.15 (Catalina) or later
+- A version of macOS meeting the deployment target defined in `qt-build-common.sh`
 - Xcode Command Line Tools installed: `xcode-select --install`
 - Homebrew package manager installed: <https://brew.sh>
 - At least 15GB of free disk space
@@ -123,7 +123,7 @@ The script automatically detects your Mac and applies appropriate optimizations:
 
 - **Apple Silicon (M1/M2/M3)**: Optimized for `armv8.4-a+crypto` with `apple-a14` tuning
 - **Intel x86_64**: Optimized for `x86-64-v2` with Intel tuning
-- **Deployment Target**: Set to macOS 11.0 for modern API support
+- **Deployment Target**: Set by the script to the minimum macOS version Qt requires (defined in `qt-build-common.sh`)
 - **Build Type**: Uses `-no-framework` for easier deployment (builds as dylibs)
 
 ### Universal Builds
@@ -132,7 +132,7 @@ By default, the script creates fat binaries containing both Intel and Apple Sili
 
 - **Intel optimizations**: `-march=x86-64-v2 -mtune=intel` for better x86_64 performance
 - **Apple Silicon optimizations**: `-march=armv8.4-a+crypto -mtune=apple-a14` for M-series chips
-- **Installation path**: `/opt/Qt/6.9.3/macos` (same as single-architecture builds)
+- **Installation path**: `/opt/Qt/6.11.1/macos` (same as single-architecture builds)
 - **CMake integration**: Toolchain file automatically sets `CMAKE_OSX_ARCHITECTURES="x86_64;arm64"`
 
 **When to use universal builds:**
