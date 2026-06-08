@@ -105,7 +105,7 @@ int Cli::run()
     }
 
     // Now create ImageWriter for actual write operations
-    _imageWriter = new ImageWriter;
+    _imageWriter = new ImageWriter(nullptr);
     connect(_imageWriter, &ImageWriter::success, this, &Cli::onSuccess);
     connect(_imageWriter, &ImageWriter::error, this, &Cli::onError);
     connect(_imageWriter, &ImageWriter::preparationStatusUpdate, this, &Cli::onPreparationStatusUpdate);

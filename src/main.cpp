@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
     CurlNetworkConfig::ensureInitialized();
 
     // Create ImageWriter early to check embedded mode
-    ImageWriter imageWriter;
+    ImageWriter imageWriter(nullptr);
 
     // Register as the handler for the rpi-imager:// URL scheme so the Raspberry
     // Pi Connect sign-in callback can route back to us. Platform mechanics live
