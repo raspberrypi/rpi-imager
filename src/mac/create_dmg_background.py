@@ -41,29 +41,33 @@ def create_dmg_background(output_path="dmg_background.png", version_str="", widt
         
         title_font = None
         instruction_font = None
-        
+        chosen_font_path = None
+
         for font_path in font_paths:
             if os.path.exists(font_path):
                 try:
                     # Use larger fonts scaled for high resolution
                     title_font = ImageFont.truetype(font_path, 32 * scale_factor)
                     instruction_font = ImageFont.truetype(font_path, 18 * scale_factor)
+                    chosen_font_path = font_path
                     print(f"Using font: {font_path}")
                     break
                 except Exception as e:
                     print(f"Failed to load {font_path}: {e}")
                     continue
-        
+
         if not title_font:
             # Fallback to default font with larger sizes
             title_font = ImageFont.load_default()
             instruction_font = ImageFont.load_default()
+            chosen_font_path = None
             print("Using default fonts")
-            
+
     except Exception as e:
         print(f"Warning: Could not load custom font: {e}")
         title_font = ImageFont.load_default()
         instruction_font = ImageFont.load_default()
+        chosen_font_path = None
     
     # Colors inspired by raspberrypi.com design
     raspberry_red = '#C51A4A'      # Official Raspberry Pi red
@@ -75,7 +79,26 @@ def create_dmg_background(output_path="dmg_background.png", version_str="", widt
         title_text = f"Raspberry Pi Imager {version_str}"
     else:
         title_text = "Raspberry Pi Imager"
-    
+
+    # Shrink the title to fit the window width — a long version string
+    # (e.g. "v2.0.9-45-g3f3f306f-dirty") would otherwise overflow both edges.
+    # Only scalable TrueType fonts can be resized; the default bitmap font can't.
+    if chosen_font_path:
+        base_title_size = 32
+        min_title_size = 14
+        title_margin = 40 * scale_factor          # min gap to each window edge
+        max_title_width = high_width - (2 * title_margin)
+        title_size = base_title_size
+        while title_size > min_title_size:
+            candidate = ImageFont.truetype(chosen_font_path, title_size * scale_factor)
+            bbox = draw.textbbox((0, 0), title_text, font=candidate)
+            if (bbox[2] - bbox[0]) <= max_title_width:
+                break
+            title_size -= 1
+        title_font = ImageFont.truetype(chosen_font_path, title_size * scale_factor)
+        if title_size < base_title_size:
+            print(f"Scaled title font down to {title_size}px to fit '{title_text}'")
+
     title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
     title_width = title_bbox[2] - title_bbox[0]
     title_x = (high_width - title_width) // 2
