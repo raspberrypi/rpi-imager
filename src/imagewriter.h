@@ -386,8 +386,14 @@ public:
     /* Check if audio notification (beep) is available on this system */
     Q_INVOKABLE bool isBeepAvailable();
 
-    /* Set an rpiboot device as the write target */
-    Q_INVOKABLE void setRpibootDevice(const QString &deviceId);
+    /* Set an rpiboot device as the write target.
+       `storageTarget` is the block-device name (e.g. "mmcblk0", "nvme0n1")
+       to flash to once the device has been bootstrapped into fastboot
+       mode.  Pass an empty string only when the storage choice is not yet
+       known --- the rpiboot-then-flash path will then fall back to the
+       eMMC (the only universally-present CM storage) and log a warning. */
+    Q_INVOKABLE void setRpibootDevice(const QString &deviceId,
+                                       const QString &storageTarget = QString());
     /* Returns true if the current target is an rpiboot device */
     Q_INVOKABLE bool isRpibootDevice() const;
 
@@ -579,6 +585,7 @@ protected:
     bool _debugSignFastbootGadget;
 
     QString _rpibootDeviceId;
+    QString _rpibootStorageTarget;  // block device on the CM to flash after bootstrap (e.g. "mmcblk0", "nvme0n1")
     bool _isRpibootDevice = false;
     RpibootThread *_rpibootThread = nullptr;
     FastbootFlashThread *_fastbootFlashThread = nullptr;

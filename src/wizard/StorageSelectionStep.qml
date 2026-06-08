@@ -498,7 +498,12 @@ WizardStepBase {
         if (dstitem.isFastbootStorage && typeof ImageWriterSingleton.setFastbootDevice === "function") {
             ImageWriterSingleton.setFastbootDevice(dstitem.device, dstitem.size)
         } else if (dstitem.isRpiboot && typeof ImageWriterSingleton.setRpibootDevice === "function") {
-            ImageWriterSingleton.setRpibootDevice(dstitem.device)
+            // Pass the chosen storage block-device name through to the rpiboot
+            // selection.  After auto-bootstrap into fastboot mode the same
+            // string drives both the flash destination and the EEPROM
+            // BOOT_ORDER nibble we set post-flash; leaving it unset would
+            // silently default to the eMMC.
+            ImageWriterSingleton.setRpibootDevice(dstitem.device, dstitem.fastbootBlockDevice || "")
         } else {
             ImageWriterSingleton.setDst(dstitem.device, dstitem.size)
         }

@@ -30,7 +30,6 @@ set(PLATFORM_SOURCES
     windows/winfile.cpp
     windows/winfile.h
     windows/bootimgcreator_windows.cpp
-    windows/rsakeyfingerprint_windows.cpp
     windows/secureboot_crypto_windows.cpp
     windows/diskpart_util.cpp
     windows/diskpart_util.h
