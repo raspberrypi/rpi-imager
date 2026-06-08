@@ -66,7 +66,15 @@ public:
     };
     Q_ENUM(WriteState)
 
-    explicit ImageWriter(QObject *parent = nullptr);
+    // NB: the parent argument is deliberately mandatory (no `= nullptr`).
+    // ImageWriter is a QML_SINGLETON whose instance is supplied by main() via
+    // setQmlInstance()/create(). Qt's qmlRegisterTypesAndRevisions only honours a
+    // create() factory when the type is NOT default-constructible (see
+    // singletonConstructionMode() in qqmlprivate.h) — a default-constructible
+    // singleton is silently `new`-constructed by the engine instead, handing QML a
+    // *second* ImageWriter that never receives the OS list. Keeping this parameter
+    // mandatory forces create() to be used so QML shares the app-owned instance.
+    explicit ImageWriter(QObject *parent);
     virtual ~ImageWriter();
     void setEngine(QQmlApplicationEngine *engine);
 
