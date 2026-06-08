@@ -22,6 +22,7 @@
 #include "wlancredentials.h"
 #include "device_info.h"
 #include "platformquirks.h"
+#include "secureboot_crypto.h"
 #ifndef CLI_ONLY_BUILD
 #include "iconimageprovider.h"
 #include "iconmultifetcher.h"
@@ -615,16 +616,19 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     qDebug() << "Device selection changed to:" << device;
 }
 
-void ImageWriter::setRpibootDevice(const QString &deviceId)
+void ImageWriter::setRpibootDevice(const QString &deviceId,
+                                    const QString &storageTarget)
 {
     _rpibootDeviceId = deviceId;
+    _rpibootStorageTarget = storageTarget;
     _isRpibootDevice = true;
     _selectedDeviceValid = true;
     // Set _dst to the rpiboot ID so readyToWrite() passes
     _dst = deviceId;
     _devLen = 0;
 
-    qDebug() << "rpiboot device selected:" << deviceId;
+    qDebug() << "rpiboot device selected:" << deviceId
+             << "storageTarget=" << (storageTarget.isEmpty() ? QStringLiteral("<unset>") : storageTarget);
 }
 
 bool ImageWriter::isRpibootDevice() const
@@ -811,8 +815,22 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
         }
     }
 
-    // Start FastbootFlashThread
-    _fastbootFlashThread = new FastbootFlashThread(fastbootId, QStringLiteral("mmcblk0"), flashSrc, _downloadLen, _extrLen, _expectedHash, this);
+    // Start FastbootFlashThread.  Use the storage target the user picked
+    // in the wizard --- this drives both where the image is written and
+    // the BOOT_ORDER nibble we'll set in the EEPROM afterwards.  An empty
+    // target here means the rpiboot selection didn't carry one through,
+    // in which case fall back to the eMMC (the only storage every CM is
+    // guaranteed to have) and log a warning so the mismatch is visible
+    // in support logs.
+    QString storageTarget = _rpibootStorageTarget;
+    if (storageTarget.isEmpty()) {
+        qWarning() << "rpiboot fastboot handoff: no storage target carried"
+                      " through selection --- defaulting to mmcblk0;"
+                      " EEPROM BOOT_ORDER will reflect SD/eMMC, not the"
+                      " user's intended target";
+        storageTarget = QStringLiteral("mmcblk0");
+    }
+    _fastbootFlashThread = new FastbootFlashThread(fastbootId, storageTarget, flashSrc, _downloadLen, _extrLen, _expectedHash, this);
     _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
     if (!_bmapUrl.isEmpty())
         _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
@@ -3784,13 +3802,30 @@ void ImageWriter::setDebugSignFastbootGadget(bool enabled)
     }
 }
 
-// Platform-specific implementation (defined in platform-specific source files)
-extern QString getRsaKeyFingerprint(const QString &keyPath);
-
 QString ImageWriter::getRsaKeyFingerprint(const QString &keyPath)
 {
-    // Delegate to platform-specific implementation
-    return ::getRsaKeyFingerprint(keyPath);
+    if (keyPath.isEmpty() || !QFile::exists(keyPath)) {
+        return QString();
+    }
+
+    // The boot ROM hashes its 264-byte (N little-endian || E little-endian) blob
+    // to produce the fingerprint it reports back. The PAL builds that same blob
+    // natively on every platform, so the fingerprint is just SHA-256 of it.
+    const QByteArray bootloaderFormat = SecureBootCrypto::extractRsaPubkeyBin(keyPath);
+    if (bootloaderFormat.size() != 264) {
+        qDebug() << "getRsaKeyFingerprint: extractRsaPubkeyBin returned"
+                 << bootloaderFormat.size() << "bytes, expected 264";
+        return QString();
+    }
+
+    const QByteArray hash = QCryptographicHash::hash(bootloaderFormat, QCryptographicHash::Sha256);
+
+    QString fingerprint;
+    for (int i = 0; i < 16 && i < hash.size(); i++) {
+        fingerprint += QString("%1").arg(static_cast<unsigned char>(hash[i]), 2, 16, QChar('0'));
+        if (i == 7) fingerprint += ":";
+    }
+    return fingerprint.toUpper();
 }
 
 void ImageWriter::setSetting(const QString &key, const QVariant &value)

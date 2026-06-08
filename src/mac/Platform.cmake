@@ -17,7 +17,6 @@ set(PLATFORM_SOURCES
     mac/macfile.cpp
     mac/macfile.h
     mac/bootimgcreator_macos.cpp
-    mac/rsakeyfingerprint_macos.mm
     mac/secureboot_crypto_macos.cpp
     drivelist/drivelist_darwin.mm
     mac/file_operations_macos.cpp
