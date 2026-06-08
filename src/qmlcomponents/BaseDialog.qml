@@ -196,16 +196,23 @@ Dialog {
     function escapePressed() {
         root.close()
     }
-    
-    onOpened: {
-        // Now that dialog is visible, rebuild focus order
-        dialogFocusScope.rebuildFocusOrder()
-        
+
+    // Move active focus to the dialog's first focusable item. Child dialogs whose
+    // focusable content appears asynchronously (e.g. buttons revealed only after a
+    // countdown) should call this after rebuildFocusOrder() so the keyboard has a
+    // landing point - KeyNavigation.tab only works once something holds focus.
+    function focusInitialItem() {
         // Ensure the FocusScope gets focus first
         dialogFocusScope.forceActiveFocus()
         // Then focus the initial item
         if (dialogFocusScope.initialFocusItem) {
             dialogFocusScope.initialFocusItem.forceActiveFocus()
         }
+    }
+
+    onOpened: {
+        // Now that dialog is visible, rebuild focus order
+        dialogFocusScope.rebuildFocusOrder()
+        focusInitialItem()
     }
 }

@@ -422,6 +422,7 @@ WizardStepBase {
                 allowAccept = true
                 countdown = 0
                 rebuildFocusOrder()
+                focusInitialItem()
             } else {
                 allowAccept = false
                 countdown = 2
@@ -514,8 +515,10 @@ WizardStepBase {
             if (confirmDialog.countdown <= 0) {
                 confirmDelay.stop()
                 confirmDialog.allowAccept = true
-                // Rebuild focus order now that buttons are visible
+                // Rebuild focus order now that buttons are visible, then move
+                // focus onto Cancel so Tab/Enter work without a mouse click.
                 confirmDialog.rebuildFocusOrder()
+                confirmDialog.focusInitialItem()
             }
         }
     }
