@@ -23,14 +23,28 @@ BaseDialog {
     
     // Optional reference to the wizard container for ephemeral flags
     property var wizardContainer: null
-    
+
     property bool initialized: false
     property bool isInitializing: false
+
+    // True while a write is in progress. Used to gate actions that don't make
+    // sense mid-write (e.g. clearing saved customisation). Mirrors the
+    // definition in WizardContainer/WritingStep.
+    readonly property bool isWriting: {
+        var s = ImageWriterSingleton.writeState
+        return s === ImageWriterSingleton.Preparing || s === ImageWriterSingleton.Writing ||
+               s === ImageWriterSingleton.Verifying || s === ImageWriterSingleton.Finalizing ||
+               s === ImageWriterSingleton.Cancelling
+    }
 
     // Custom escape handling
     function escapePressed() {
         popup.close()
     }
+
+    // Keep the Tab focus chain in sync if a write starts/finishes while the
+    // dialog is open — the Clear button enters/leaves the order with it.
+    onIsWritingChanged: requestFocusRebuild()
 
     // Dynamic width that updates when language/text changes
     implicitWidth: Math.max(
@@ -233,7 +247,13 @@ BaseDialog {
                 id: clearSettingsButton
                 text: qsTr("Saved Customisation")
                 btnText: qsTr("Clear")
-                accessibleDescription: qsTr("Remove all saved OS customisation settings such as hostname, WiFi, and user credentials")
+                // Disabled mid-write: clearing only wipes the persisted settings
+                // (the running write already holds its own copy), so allowing it
+                // here is confusing without changing what gets written.
+                enabled: !popup.isWriting
+                accessibleDescription: popup.isWriting
+                    ? qsTr("Clearing saved customisation is unavailable while a write is in progress")
+                    : qsTr("Remove all saved OS customisation settings such as hostname, WiFi, and user credentials")
                 Layout.fillWidth: true
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
