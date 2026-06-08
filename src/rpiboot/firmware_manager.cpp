@@ -18,6 +18,7 @@
 
 #include <curl/curl.h>
 
+#include <cctype>
 #include <fstream>
 #include <sstream>
 
@@ -40,6 +41,36 @@ bool overwriteCopy(const std::filesystem::path& src,
     std::filesystem::remove(dest, removeEc);  // ignore — fine if absent
     ec.clear();
     return std::filesystem::copy_file(src, dest, ec);
+}
+
+// Capture the ETag from a curl response.  Used to populate a sidecar file
+// next to each cached download so the next session can issue a conditional
+// GET (If-None-Match) and skip the body transfer when the upstream hasn't
+// changed.  GitHub raw URLs return a content-hash ETag and honour
+// If-None-Match with 304 Not Modified.
+size_t curlHeaderCapture(char *buffer, size_t size, size_t nitems, void *userdata)
+{
+    auto *out = static_cast<std::string*>(userdata);
+    const size_t total = size * nitems;
+    constexpr const char* key = "etag:";
+    constexpr size_t keyLen = 5;
+    if (total > keyLen) {
+        bool match = true;
+        for (size_t i = 0; i < keyLen; ++i) {
+            if (std::tolower(static_cast<unsigned char>(buffer[i])) != key[i]) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            std::string value(buffer + keyLen, total - keyLen);
+            const auto first = value.find_first_not_of(" \t\r\n");
+            const auto last  = value.find_last_not_of(" \t\r\n");
+            if (first != std::string::npos)
+                *out = value.substr(first, last - first + 1);
+        }
+    }
+    return total;
 }
 
 }  // namespace
@@ -254,50 +285,23 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         (mode == SideloadMode::Fastboot &&
          (chip == ChipGeneration::BCM2711 || chip == ChipGeneration::BCM2712));
 
-    // 2. Cache hit — all manifest files already exist (and no stale .tmp files)
-    bool allExist = true;
-    for (const auto& entry : manifest) {
-        auto filePath = versionDir / entry.localPath;
-        if (!std::filesystem::exists(filePath)) {
-            allExist = false;
-            // Clean up any leftover .tmp file from an interrupted download
-            std::error_code ec;
-            std::filesystem::remove(std::filesystem::path(filePath).concat(".tmp"), ec);
-            break;
-        }
-    }
-    // When fastboot-gadget signing is requested, also require boot.sig to be
-    // present in the cache (otherwise we need to re-run the post-download
-    // signing step below).
-    const bool needsGadgetSigning =
-        (mode == SideloadMode::Fastboot && !_signFastbootGadgetKey.empty());
-    if (needsGadgetSigning && allExist) {
-        if (!std::filesystem::exists(versionDir / "fastboot" / "boot.sig"))
-            allExist = false;
-    }
-    // When re-provisioning signing is enabled (any mode), force a cache miss
-    // so that the post-download signing steps run.  We don't track which key
-    // the cached output was signed with, and re-signing is cheap (~100 ms of
-    // RSA + file copies) — much simpler and more correct than introducing
-    // sentinel marker files keyed by the user's PEM path.
+    // 2. Refresh each manifest entry.  downloadFile now issues a conditional
+    // GET (If-None-Match) when a cached file + .etag sidecar are present,
+    // so the common case is one cheap 304 roundtrip per file rather than a
+    // full re-download.  Network failures degrade gracefully: if the file
+    // is already cached, we proceed with the stale copy; only files that
+    // are completely missing turn a network failure into a hard error.
+    //
+    // The signing-related "force a cache miss" branches that used to live
+    // here are now unnecessary — re-signing reads from the cached payload
+    // regardless of whether it was just refreshed or 304'd.
     const bool needsRecoverySigning =
         (mode == SideloadMode::SecureBootRecovery && !_signFastbootGadgetKey.empty());
-    if (needsRecoverySigning) {
-        allExist = false;
-    }
-    if (allExist && !needsBootcodeExtraction) {
-        qDebug() << "FirmwareManager: cache hit for master";
-        // SBR config.txt overrides are idempotent and cheap — re-apply on
-        // cache hit so an older cache from before this helper landed still
-        // gets fixed up.
-        if (mode == SideloadMode::SecureBootRecovery && !ensureSbrReenumerates(versionDir, chip))
-            return {};
-        return versionDir;
-    }
+    const bool needsGadgetSigning =
+        (mode == SideloadMode::Fastboot && !_signFastbootGadgetKey.empty());
 
-    // 3. Download each missing file
     if (progress)
-        progress(0, 100, "Downloading rpiboot firmware...");
+        progress(0, 100, "Checking rpiboot firmware...");
 
     std::error_code ec;
     std::filesystem::create_directories(versionDir, ec);
@@ -316,19 +320,22 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         const auto& entry = manifest[i];
         auto destPath = versionDir / entry.localPath;
 
-        // Skip files already downloaded
-        if (std::filesystem::exists(destPath))
-            continue;
+        // Clean up any leftover .tmp file from an interrupted previous run.
+        std::error_code tmpEc;
+        std::filesystem::remove(std::filesystem::path(destPath).concat(".tmp"), tmpEc);
 
         // Empty URL means buildManifest couldn't resolve a remote source —
         // typically the rpi-eeprom version lookup failed with no cached
         // sidecar to fall back on.  If the file isn't already present,
         // there's nothing more we can do.
         if (entry.url.empty()) {
-            _lastError = "Cannot resolve rpi-eeprom firmware URL for "
-                       + entry.localPath
-                       + " (offline and nothing cached from a previous run)";
-            return {};
+            if (!std::filesystem::exists(destPath)) {
+                _lastError = "Cannot resolve rpi-eeprom firmware URL for "
+                           + entry.localPath
+                           + " (offline and nothing cached from a previous run)";
+                return {};
+            }
+            continue;
         }
 
         // Wrap progress callback to map per-file progress to overall progress
@@ -336,7 +343,7 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
                                                         const std::string&) {
             if (progress && total > 0) {
                 uint64_t overallPct = (i * 100 + current * 100 / total) / totalFiles;
-                progress(overallPct, 100, "Downloading rpiboot firmware...");
+                progress(overallPct, 100, "Checking rpiboot firmware...");
             }
         };
 
@@ -643,9 +650,22 @@ bool FirmwareManager::downloadFile(const std::string& url,
                                     ProgressCallback progress,
                                     std::atomic<bool>& cancelled)
 {
-    qDebug() << "FirmwareManager: downloading" << url.c_str();
+    qDebug() << "FirmwareManager: refreshing" << url.c_str();
 
-    // Ensure parent directory exists
+    // If we have a cached copy with a stored ETag, ask the server whether
+    // it still matches.  GitHub raw URLs serve a content-hash ETag and
+    // respond 304 Not Modified when the body would be byte-identical, so
+    // this turns repeat-session loads into ~200-byte roundtrips while
+    // guaranteeing we pick up any upstream changes.
+    auto etagPath = std::filesystem::path(destPath).concat(".etag");
+    const bool destExists = std::filesystem::exists(destPath);
+    std::string cachedEtag;
+    if (destExists) {
+        std::ifstream etagIn(etagPath);
+        if (etagIn)
+            std::getline(etagIn, cachedEtag);
+    }
+
     std::error_code ec;
     std::filesystem::create_directories(destPath.parent_path(), ec);
     if (ec) {
@@ -684,8 +704,23 @@ bool FirmwareManager::downloadFile(const std::string& url,
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progressData);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
+    std::string newEtag;
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, curlHeaderCapture);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &newEtag);
+
+    struct curl_slist *headers = nullptr;
+    if (destExists && !cachedEtag.empty()) {
+        std::string h = "If-None-Match: " + cachedEtag;
+        headers = curl_slist_append(headers, h.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    }
+
     CURLcode res = curl_easy_perform(curl);
+    long responseCode = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
     curl_easy_cleanup(curl);
+    if (headers)
+        curl_slist_free_all(headers);
 
     out.close();
 
@@ -695,19 +730,50 @@ bool FirmwareManager::downloadFile(const std::string& url,
         return false;
     }
 
+    // 304 Not Modified — upstream content matches what we already have on
+    // disk.  Discard the empty .tmp file, keep both the cached payload and
+    // its sidecar untouched.
+    if (res == CURLE_OK && responseCode == 304) {
+        std::filesystem::remove(tmpPath, ec);
+        qDebug() << "FirmwareManager: 304 — keeping cached"
+                 << QString::fromStdString(destPath.string());
+        return true;
+    }
+
     if (res != CURLE_OK) {
+        std::filesystem::remove(tmpPath, ec);
+        // Soft failure when a cached copy exists: we'd rather proceed with
+        // stale-but-known-good firmware than abort the user's write
+        // because their network blipped.  Hard failure only when nothing
+        // cached is available to fall back on.
+        if (destExists) {
+            qWarning() << "FirmwareManager: refresh failed for"
+                       << QString::fromStdString(destPath.string())
+                       << "—" << (errorBuffer[0] ? errorBuffer : curl_easy_strerror(res))
+                       << "; using cached copy";
+            return true;
+        }
         _lastError = "Download failed: ";
         _lastError += errorBuffer[0] ? errorBuffer : curl_easy_strerror(res);
-        std::filesystem::remove(tmpPath, ec);
         return false;
     }
 
-    // Atomic rename: only a complete download becomes visible to the cache
+    // 200 OK: commit fresh bytes atomically and persist the new ETag so
+    // the next session can issue a conditional GET against it.
     std::filesystem::rename(tmpPath, destPath, ec);
     if (ec) {
         _lastError = "Failed to rename downloaded file: " + ec.message();
         std::filesystem::remove(tmpPath, ec);
         return false;
+    }
+    if (!newEtag.empty()) {
+        std::ofstream etagOut(etagPath, std::ios::trunc);
+        if (etagOut)
+            etagOut << newEtag;
+    } else {
+        // No ETag in response — clear any stale sidecar so we don't try a
+        // conditional GET with a sidecar that no longer matches.
+        std::filesystem::remove(etagPath, ec);
     }
 
     qDebug() << "FirmwareManager: saved" << QString::fromStdString(destPath.string());
