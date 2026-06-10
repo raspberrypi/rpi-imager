@@ -337,6 +337,7 @@ public:
 
     Q_INVOKABLE QString crypt(const QByteArray &password);
     Q_INVOKABLE QString pbkdf2(const QByteArray &psk, const QByteArray &ssid);
+    Q_INVOKABLE QString wifiSsidOctetsBase64(const QString &ssid) const;
 
     Q_INVOKABLE QStringList getTranslations();
     Q_INVOKABLE QString getCurrentLanguage();

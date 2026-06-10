@@ -464,6 +464,7 @@ WizardStepBase {
         // Handle SSID and password
         if (ssid.length > 0) {
             wizardContainer.customizationSettings.wifiSSID = ssid
+            wizardContainer.customizationSettings.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
 
             if (wifiMode === "open") {
                // always clear in open mode
@@ -490,6 +491,7 @@ WizardStepBase {
         } else {
             // No SSID -> clear SSID and password settings
             delete wizardContainer.customizationSettings.wifiSSID
+            delete wizardContainer.customizationSettings.wifiSsidOctetsBase64
             delete wizardContainer.customizationSettings.wifiPasswordCrypt
             delete wizardContainer.customizationSettings.wifiHidden
             wizardContainer.wifiConfigured = false
@@ -500,6 +502,7 @@ WizardStepBase {
         saved.wifiMode = wifiMode
         if (ssid.length > 0) {
             saved.wifiSSID = ssid
+            saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
             if (wifiMode === "open") {
                delete saved.wifiPasswordCrypt
             } else {
@@ -515,6 +518,7 @@ WizardStepBase {
             saved.wifiHidden = hidden
         } else {
             delete saved.wifiSSID
+            delete saved.wifiSsidOctetsBase64
             delete saved.wifiPasswordCrypt
             delete saved.wifiHidden
         }

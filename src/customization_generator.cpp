@@ -8,8 +8,57 @@
 #include <QCryptographicHash>
 #include <QRegularExpression>
 #include <QStringList>
+#include <QStringConverter>
 
 namespace rpi_imager {
+
+namespace {
+
+bool isValidUtf8(const QByteArray& data)
+{
+    if (data.isEmpty())
+        return true;
+    auto converter = QStringDecoder(QStringConverter::Utf8);
+    converter(data);
+    return !converter.hasError();
+}
+
+bool ssidOctetsSafeForImagerCustom(const QByteArray& ssidOctets)
+{
+    if (ssidOctets.contains('\0'))
+        return false;
+    return isValidUtf8(ssidOctets);
+}
+
+QByteArray wpaSupplicantSsidField(const QByteArray& ssidOctets)
+{
+    auto needsHex = [&]() {
+        if (!isValidUtf8(ssidOctets))
+            return true;
+        for (unsigned char byte : ssidOctets) {
+            if (byte < 0x20 || byte == 0x7F || byte == '\\' || byte == '"')
+                return true;
+        }
+        return false;
+    }();
+
+    if (needsHex)
+        return QByteArray("\tssid=hex:") + ssidOctets.toHex();
+
+    QByteArray escaped("\tssid=\"");
+    for (unsigned char byte : ssidOctets) {
+        if (byte == '\\')
+            escaped += "\\\\";
+        else if (byte == '"')
+            escaped += "\\\"";
+        else
+            escaped += char(byte);
+    }
+    escaped += '"';
+    return escaped;
+}
+
+} // namespace
 
 QString CustomisationGenerator::shellQuote(const QString& value) {
     QString t = value;
@@ -21,43 +70,71 @@ QString CustomisationGenerator::pbkdf2(const QByteArray& password, const QByteAr
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, password, ssid, 4096, 32).toHex();
 }
 
-QString CustomisationGenerator::yamlEscapeString(const QString& value) {
-    // Escape a string for use in YAML double-quoted strings.
-    // Per IEEE 802.11, SSIDs can be 0-32 octets containing ANY byte value,
-    // including null, control characters, and non-printable bytes.
-    // YAML double-quoted strings use backslash escapes for special characters.
-    QString result;
-    result.reserve(value.size() * 2);  // Worst case: all chars need escaping
-    
-    for (const QChar& ch : value) {
-        ushort code = ch.unicode();
-        
-        if (code == '\\') {
-            result += QStringLiteral("\\\\");
-        } else if (code == '"') {
-            result += QStringLiteral("\\\"");
-        } else if (code == '\n') {
-            result += QStringLiteral("\\n");
-        } else if (code == '\r') {
-            result += QStringLiteral("\\r");
-        } else if (code == '\t') {
-            result += QStringLiteral("\\t");
-        } else if (code == '\b') {
-            result += QStringLiteral("\\b");
-        } else if (code == '\f') {
-            result += QStringLiteral("\\f");
-        } else if (code == 0) {
-            result += QStringLiteral("\\0");
-        } else if (code < 0x20 || code == 0x7F) {
-            // Other control characters (0x01-0x07, 0x0B, 0x0E-0x1F, 0x7F) - use hex escape
-            result += QString(QStringLiteral("\\x%1")).arg(code, 2, 16, QChar('0'));
-        } else {
-            // Safe to include as-is (printable ASCII and Unicode above 0x7F)
-            result += ch;
+QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
+{
+    QByteArray result;
+    result.reserve(value.size() * 2);
+
+    for (unsigned char byte : value) {
+        switch (byte) {
+        case '\\':
+            result += "\\\\";
+            break;
+        case '"':
+            result += "\\\"";
+            break;
+        case '\n':
+            result += "\\n";
+            break;
+        case '\r':
+            result += "\\r";
+            break;
+        case '\t':
+            result += "\\t";
+            break;
+        case '\b':
+            result += "\\b";
+            break;
+        case '\f':
+            result += "\\f";
+            break;
+        case 0:
+            result += "\\0";
+            break;
+        default:
+            if (byte >= 0x20 && byte < 0x7F)
+                result += char(byte);
+            else {
+                result += "\\x";
+                result += QByteArray::number(byte, 16).rightJustified(2, '0');
+            }
+            break;
         }
     }
-    
+
     return result;
+}
+
+QByteArray CustomisationGenerator::ssidOctetsFromSettings(const QVariantMap& settings, bool wifiConfigured)
+{
+    if (!wifiConfigured)
+        return {};
+
+    if (settings.contains(QStringLiteral("wifiSsidOctets"))) {
+        const QVariant raw = settings.value(QStringLiteral("wifiSsidOctets"));
+        if (raw.metaType().id() == QMetaType::QByteArray)
+            return raw.toByteArray();
+    }
+
+    if (settings.contains(QStringLiteral("wifiSsidOctetsBase64"))) {
+        return QByteArray::fromBase64(settings.value(QStringLiteral("wifiSsidOctetsBase64")).toByteArray());
+    }
+
+    return settings.value(QStringLiteral("wifiSSID")).toString().toUtf8();
+}
+
+QString CustomisationGenerator::yamlEscapeString(const QString& value) {
+    return QString::fromUtf8(yamlEscapeSsidOctets(value.toUtf8()));
 }
 
 QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, const QString& piConnectToken) {
@@ -73,7 +150,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
     const bool wifiConfigured = s.value("wifiConfigured", true).toBool();
-    const QString ssid = wifiConfigured ? s.value("wifiSSID").toString() : QString();
+    const QByteArray ssidOctets = ssidOctetsFromSettings(s, wifiConfigured);
     const QString cryptedPskFromSettings = wifiConfigured ? s.value("wifiPasswordCrypt").toString() : QString();
     bool hidden = wifiConfigured ? s.value("wifiHidden").toBool() : false;
     if (!hidden)
@@ -86,7 +163,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         const QString legacyPwd = s.value("wifiPassword").toString();
         if (!legacyPwd.isEmpty()) {
             const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
-            cryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
+            cryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssidOctets) : legacyPwd;
         }
     }
     
@@ -187,40 +264,41 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("chmod 0440 ") + shellQuote(sudoersFile), script);
     }
 
-    if (!ssid.isEmpty()) {
-        // Prefer imager_custom set_wlan; fallback to manual wpa_supplicant
-        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
-        QString wlanCmd = QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_wlan ");
-        if (hidden) wlanCmd += QStringLiteral(" -h ");
-        wlanCmd += shellQuote(ssid) + QStringLiteral(" ") + shellQuote(cryptedPsk) + QStringLiteral(" ") + shellQuote(wifiCountry);
-        line(wlanCmd, script);
-        line(QStringLiteral("else"), script);
-        line(QStringLiteral("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'WPAEOF'"), script);
-        if (!wifiCountry.isEmpty()) line(QStringLiteral("country=") + wifiCountry, script);
-        line(QStringLiteral("ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev"), script);
-        line(QStringLiteral("ap_scan=1"), script);
-        line(QStringLiteral(""), script);
-        line(QStringLiteral("update_config=1"), script);
-        line(QStringLiteral("network={"), script);
-        if (hidden) line(QStringLiteral("\tscan_ssid=1"), script);
-        // Escape quotes and backslashes for wpa_supplicant.conf quoted strings
-        QString escapedSsid = ssid;
-        escapedSsid.replace("\\", "\\\\");  // Backslash must be escaped first
-        escapedSsid.replace("\"", "\\\"");  // Then escape quotes
-        line(QStringLiteral("\tssid=\"") + escapedSsid + QStringLiteral("\""), script);
-        if (cryptedPsk.isEmpty()) {
-            // Open network (no password) - use key_mgmt=NONE
-            // See: https://github.com/raspberrypi/rpi-imager/issues/1396
-            line(QStringLiteral("\tkey_mgmt=NONE"), script);
-        } else {
-            // WPA2/WPA3 transition mode: allow connection to both WPA2-PSK and WPA3-SAE networks
-            line(QStringLiteral("\tkey_mgmt=WPA-PSK SAE"), script);
-            line(QStringLiteral("\tpsk=") + cryptedPsk, script);
-            // ieee80211w=1 enables optional Protected Management Frames (required for WPA3, optional for WPA2)
-            line(QStringLiteral("\tieee80211w=1"), script);
+    if (!ssidOctets.isEmpty()) {
+        const bool useImagerCustom = ssidOctetsSafeForImagerCustom(ssidOctets);
+        // Prefer imager_custom set_wlan when the SSID is shell-safe UTF-8; otherwise
+        // write wpa_supplicant.conf directly with hex/raw octets.
+        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ] && ")
+             + (useImagerCustom ? QStringLiteral("true") : QStringLiteral("false"))
+             + QStringLiteral("; then"), script);
+        if (useImagerCustom) {
+            QString wlanCmd = QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_wlan ");
+            if (hidden) wlanCmd += QStringLiteral(" -h ");
+            wlanCmd += shellQuote(QString::fromUtf8(ssidOctets)) + QStringLiteral(" ")
+                     + shellQuote(cryptedPsk) + QStringLiteral(" ") + shellQuote(wifiCountry);
+            line(wlanCmd, script);
         }
-        line(QStringLiteral("}"), script);
-        line(QStringLiteral("WPAEOF"), script);
+        line(QStringLiteral("else"), script);
+        script += "cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'WPAEOF'\n";
+        if (!wifiCountry.isEmpty())
+            script += ("country=" + wifiCountry + "\n").toUtf8();
+        script += "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n";
+        script += "ap_scan=1\n\n";
+        script += "update_config=1\n";
+        script += "network={\n";
+        if (hidden)
+            script += "\tscan_ssid=1\n";
+        script += wpaSupplicantSsidField(ssidOctets);
+        script += "\n";
+        if (cryptedPsk.isEmpty()) {
+            script += "\tkey_mgmt=NONE\n";
+        } else {
+            script += "\tkey_mgmt=WPA-PSK SAE\n";
+            script += "\tpsk=" + cryptedPsk.toUtf8() + "\n";
+            script += "\tieee80211w=1\n";
+        }
+        script += "}\n";
+        script += "WPAEOF\n";
         line(QStringLiteral("   chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf"), script);
         line(QStringLiteral("   rfkill unblock wifi"), script);
         line(QStringLiteral("   for filename in /var/lib/systemd/rfkill/*:wlan ; do"), script);
@@ -498,12 +576,12 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     const bool piConnectEnabled = settings.value("piConnectEnabled").toBool();
     QString cleanToken = piConnectToken.trimmed();
     const bool wifiConfigured = settings.value("wifiConfigured", true).toBool();
-    const QString ssid = wifiConfigured ? settings.value("wifiSSID").toString() : QString();
+    const QByteArray ssidOctets = ssidOctetsFromSettings(settings, wifiConfigured);
     const QString wifiCountry = settings.value("recommendedWifiCountry").toString().trimmed();
     
     // Determine if we need runcmd section
     // Only create runcmd if we actually have commands to add
-    bool needsRuncmdForWifi = !wifiCountry.isEmpty() && ssid.isEmpty();
+    bool needsRuncmdForWifi = !wifiCountry.isEmpty() && ssidOctets.isEmpty();
     bool needsRuncmdForPiConnect = piConnectEnabled && !cleanToken.isEmpty();
     bool needsRuncmdForSsh = sshEnabled;
     bool needsRuncmd = needsRuncmdForPiConnect || needsRuncmdForWifi || needsRuncmdForSudo || needsRuncmdForSsh;
@@ -584,6 +662,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
 QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariantMap& settings,
                                                                   bool hasCcRpi)
 {
+    Q_UNUSED(hasCcRpi);
+
     QByteArray netcfg;
     
     auto push = [](const QString& line, QByteArray& out) {
@@ -592,9 +672,15 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
             out += '\n';
         }
     };
+    auto pushBytes = [](const QByteArray& line, QByteArray& out) {
+        if (!line.isEmpty()) {
+            out += line;
+            out += '\n';
+        }
+    };
     
     const bool wifiConfigured = settings.value("wifiConfigured", true).toBool();
-    const QString ssid = wifiConfigured ? settings.value("wifiSSID").toString() : QString();
+    const QByteArray ssidOctets = ssidOctetsFromSettings(settings, wifiConfigured);
     const QString cryptedPskFromSettings = wifiConfigured ? settings.value("wifiPasswordCrypt").toString() : QString();
     const bool hidden = wifiConfigured ? settings.value("wifiHidden").toBool() : false;
     const QString regDom = settings.value("recommendedWifiCountry").toString().trimmed().toUpper();
@@ -604,7 +690,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     // generate wifis config with just a regulatory domain. When we have an SSID, we set
     // the regulatory domain in the network config here. When there's no SSID, the regulatory
     // domain is set via cmdline parameter (cfg80211.ieee80211_regdom) in imagewriter.cpp
-    if (!ssid.isEmpty()) {
+    if (!ssidOctets.isEmpty()) {
         // Include eth0 DHCP alongside wifi to ensure wired ethernet continues to work
         // when cloud-init applies the network-config (which would otherwise replace the
         // distro default). Only needed when we're providing a network-config file.
@@ -624,10 +710,14 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         }
         
         push(QStringLiteral("      access-points:"), netcfg);
-        // Escape SSID for YAML double-quoted string context
-        // Per IEEE 802.11, SSIDs can contain any byte value (0-255), including
-        // backslashes, quotes, control characters, and non-printable bytes
-        push(QStringLiteral("        \"") + yamlEscapeString(ssid) + QStringLiteral("\":"), netcfg);
+        // Escape SSID octets for YAML double-quoted string context. High bytes and
+        // controls use \\xHH so netplan receives the exact IEEE 802.11 SSID bytes.
+        {
+            QByteArray keyLine("        \"");
+            keyLine += yamlEscapeSsidOctets(ssidOctets);
+            keyLine += "\":";
+            pushBytes(keyLine, netcfg);
+        }
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
@@ -637,7 +727,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
             const QString legacyPwd = settings.value("wifiPassword").toString();
             if (!legacyPwd.isEmpty()) {
                 const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
-                effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
+                effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssidOctets) : legacyPwd;
             }
         }
         if (effectiveCryptedPsk.isEmpty()) {

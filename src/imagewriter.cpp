@@ -3997,6 +3997,11 @@ QString ImageWriter::pbkdf2(const QByteArray &psk, const QByteArray &ssid)
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, psk, ssid, 4096, 32).toHex();
 }
 
+QString ImageWriter::wifiSsidOctetsBase64(const QString &ssid) const
+{
+    return QString::fromLatin1(ssid.toUtf8().toBase64());
+}
+
 void ImageWriter::setSavedCustomisationSettings(const QVariantMap &map)
 {
     _settings.beginGroup("imagecustomization");
