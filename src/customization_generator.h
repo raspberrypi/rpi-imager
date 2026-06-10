@@ -62,6 +62,16 @@ public:
     static QByteArray generateCloudInitNetworkConfig(const QVariantMap& settings,
                                                     bool hasCcRpi = false);
 
+    /**
+     * @brief Escape IEEE 802.11 SSID octets for YAML double-quoted strings
+     */
+    static QByteArray yamlEscapeSsidOctets(const QByteArray& ssidOctets);
+
+    /**
+     * @brief Extract IEEE 802.11 SSID octets from customization settings
+     */
+    static QByteArray ssidOctetsFromSettings(const QVariantMap& settings, bool wifiConfigured);
+
 private:
     /**
      * @brief Shell-quote a string for safe use in bash scripts
@@ -80,16 +90,6 @@ private:
      */
     static QString pbkdf2(const QByteArray& password, const QByteArray& ssid);
     
-    /**
-     * @brief Escape a string for use in YAML double-quoted strings
-     * 
-     * Per IEEE 802.11, SSIDs can be 0-32 octets containing ANY byte value,
-     * including null, control characters, and non-printable bytes.
-     * This function escapes all special characters for safe YAML inclusion.
-     * 
-     * @param value String to escape
-     * @return Escaped string safe for YAML double-quoted context
-     */
     static QString yamlEscapeString(const QString& value);
 };
 
