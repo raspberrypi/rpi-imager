@@ -829,9 +829,10 @@ Item {
     function nextStep() {
         if (root.currentStep < root.totalSteps - 1) {
             var nextIndex = root.currentStep + 1
+            var replayPreviousWrite = writeAnotherMode && root.currentStep === stepStorageSelection
             
             // Special handling for "write another" mode: skip directly to writing step after storage selection
-            if (writeAnotherMode && root.currentStep === stepStorageSelection) {
+            if (replayPreviousWrite) {
                 nextIndex = stepWriting
                 writeAnotherMode = false  // Reset the flag
             }
@@ -853,13 +854,16 @@ Item {
             }
             // Before entering the writing step, apply customization (when supported)
             if (nextIndex === stepWriting) {
-                if (customizationSupported && ImageWriterSingleton) {
+                if (customizationSupported && ImageWriterSingleton && !replayPreviousWrite) {
                     // Pass session flags so the generator can skip unconfigured sections
                     customizationSettings.wifiConfigured = wifiConfigured
                     // Pass the complete customizationSettings object directly to the generator
                     // This includes both persistent settings (hostname, wifi, etc.) and
                     // ephemeral settings (piConnectEnabled) from the current wizard session
                     ImageWriterSingleton.applyCustomisationFromSettings(customizationSettings)
+                } else if (replayPreviousWrite) {
+                    // Reuse the exact customisation payload staged for the previous write.
+                    // Regenerating from saved settings can re-apply customisations the user skipped.
                 }
                 
                 // Capture snapshot of customization flags at write summary stage
