@@ -7,19 +7,37 @@
 
 #include <QDebug>
 
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <thread>
+#include <utility>
 
 namespace rpiboot {
 
 // Vendor IN request type for ep_read (device-to-host control transfer)
 constexpr uint8_t VENDOR_REQUEST_TYPE_IN = VENDOR_REQUEST_TYPE | 0x80;  // 0xC0
 
-// Timeout for reading FileMessages from the device.
-// Upstream uses 20s for a single blocking read. We use a shorter timeout
-// with a retry loop so the UI stays responsive during the wait.
-constexpr int EP_READ_TIMEOUT_MS = 3000;
+// Timeout for reading FileMessages from the device, matching upstream
+// rpiboot's ep_read() (20s blocking control IN).
+//
+// This MUST be long enough to cover the device's longest legitimate pause
+// between messages — most notably the multi-second EEPROM erase/write after
+// it pulls pieeprom.bin, and the gaps between the metadata fields it streams
+// back at the end of provisioning (USER_SERIAL_NUM, MAC_ADDR, EEPROM_UPDATE,
+// SECURE_BOOT_PROVISION, ...).
+//
+// A short timeout here is actively harmful: the file-server protocol is a
+// strict host-polled ping-pong (device sends a message in response to our
+// control IN, waits for our control-OUT ack, then waits for the next IN).
+// If we cancel the IN mid-pause and reissue, the device's eventual response
+// lands misaligned on the next transfer — we read the tail of the previous
+// message as a bogus command, never send the ack the device is waiting for,
+// and the handshake stalls (the device goes silent and we time out forever).
+// Re-enumeration on reboot still returns promptly because libusb reports
+// NO_DEVICE/IO immediately, so the long timeout doesn't cost us in the
+// common completion path.
+constexpr int EP_READ_TIMEOUT_MS = 20000;
 
 bool FileServer::run(IUsbTransport& transport,
                       const std::filesystem::path& firmwareDir,
@@ -36,7 +54,12 @@ bool FileServer::run(IUsbTransport& transport,
 
     uint64_t filesServed = 0;
     int consecutiveErrors = 0;
-    constexpr int MAX_RETRIES = 20;
+    // With a 20s blocking read (EP_READ_TIMEOUT_MS), each retry already waits
+    // out any legitimate device pause, so a small budget is enough.  Real
+    // reboots/disconnects short-circuit immediately via NO_DEVICE/IO below and
+    // don't consume this budget; this only bounds the genuinely-mute-but-
+    // present case (~3 × 20s) and a misaligned-read garbage flood.
+    constexpr int MAX_RETRIES = 3;
     std::string lastFilename;
 
     if (progress)
@@ -288,7 +311,7 @@ bool FileServer::handleReadFile(IUsbTransport& transport,
     bool isMetadata = !filename.empty() && filename[0] == '*';
 
     if (isMetadata) {
-        parseMetadata(filename, {});
+        parseMetadata(filename);
         // Metadata: zero-length ep_write response (control transfer only, no bulk)
         transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
                                   0, 0, {}, DEFAULT_TIMEOUT_MS);
@@ -354,38 +377,130 @@ bool FileServer::handleReadFile(IUsbTransport& transport,
     return true;
 }
 
-void FileServer::parseMetadata(const std::string& filename,
-                                const std::vector<uint8_t>& data)
+namespace {
+
+// ── DUID C40 decode ─────────────────────────────────────────────────────
+// Ported verbatim from usbboot's decode_duid.c so that FACTORY_UUID values
+// are reported in the same human-readable form as upstream rpiboot.
+
+constexpr int DUID_LENGTH = 36;
+
+int charToC40(char val)
 {
-    // Metadata filenames look like "*serial", "*mac", "*otp", "*board-rev"
-    // The "data" returned by the resolver is typically empty for metadata;
-    // the interesting part is in the filename itself (the device encodes
-    // the value as part of the file path).
+    if (val >= 'a' && val <= 'z')
+        val = static_cast<char>(val - 32);
+    if (val >= '0' && val <= '9')
+        return 4 + val - '0';
+    if (val >= 'A' && val <= 'Z')
+        return 14 + val - 'A';
+    return -1;
+}
 
-    // Strip the leading '*'
-    std::string key = filename.substr(1);
+char c40ToChar(int val)
+{
+    if (val >= charToC40('0') && val <= charToC40('9'))
+        return static_cast<char>('0' + val - charToC40('0'));
+    if (val >= charToC40('A') && val <= charToC40('Z'))
+        return static_cast<char>('A' + val - charToC40('A'));
+    return '\0';
+}
 
-    // The value may be appended after a '=' or encoded in the rest of the path
-    std::string value;
-    auto eqPos = key.find('=');
-    if (eqPos != std::string::npos) {
-        value = key.substr(eqPos + 1);
-        key = key.substr(0, eqPos);
-    } else if (!data.empty()) {
-        value.assign(reinterpret_cast<const char*>(data.data()), data.size());
+void decodeHalfWord(int halfWord, int* c40List, int& index)
+{
+    c40List[index] = (halfWord - 1) / 1600;
+    halfWord -= c40List[index++] * 1600;
+    c40List[index] = (halfWord - 1) / 40;
+    halfWord -= c40List[index++] * 40;
+    c40List[index++] = halfWord - 1;
+}
+
+// Decode an underscore-separated list of hex words into the C40 string.
+// Returns false on invalid input (matches upstream's -1 return).
+bool decodeDuidC40(const std::string& wordsIn, std::string& out)
+{
+    int c40List[DUID_LENGTH];
+    int i = 0;
+
+    std::string buf = wordsIn;  // strtok mutates its input
+    for (char* tok = std::strtok(buf.data(), "_"); tok != nullptr;
+         tok = std::strtok(nullptr, "_")) {
+        uint32_t word = static_cast<uint32_t>(std::strtoul(tok, nullptr, 16));
+        if (word == 0)
+            break;
+        // Each half-word emits 3 C40 values; guard the fixed-size buffer.
+        if (i + 3 > DUID_LENGTH)
+            return false;
+        decodeHalfWord(static_cast<int>(word & 0xFFFF), c40List, i);
+
+        uint16_t msig = static_cast<uint16_t>(word >> 16);
+        if (msig > 0) {
+            if (i + 3 > DUID_LENGTH)
+                return false;
+            decodeHalfWord(msig, c40List, i);
+        }
     }
 
-    if (key == "serial" || key == "serialNumber")
+    out.clear();
+    for (int c = 0; c < i; ++c) {
+        char ch = c40ToChar(c40List[c]);
+        if (ch == '\0')
+            return false;
+        out.push_back(ch);
+    }
+    return true;
+}
+
+} // namespace
+
+void FileServer::parseMetadata(const std::string& filename)
+{
+    // The device encodes metadata as "*PROPERTY*VALUE" in the requested
+    // filename — e.g. "*USER_SERIAL_NUM*b91b3ce7", "*EEPROM_UPDATE*success".
+    // Mirror upstream's write_metadata_file(): split on '*' into a property
+    // (first token) and value (second token), and record every pair.
+    if (filename.size() < 2 || filename[0] != '*')
+        return;
+
+    const std::string body = filename.substr(1);  // strip leading '*'
+    const auto sep = body.find('*');
+    std::string property = (sep == std::string::npos) ? body : body.substr(0, sep);
+    std::string value;
+    if (sep != std::string::npos) {
+        // Upstream uses strtok(NULL, "*"), i.e. the token up to the next '*'.
+        const auto end = body.find('*', sep + 1);
+        value = body.substr(sep + 1, end == std::string::npos
+                                         ? std::string::npos
+                                         : end - (sep + 1));
+    }
+
+    if (property.empty())
+        return;
+
+    // FACTORY_UUID is C40-encoded; decode it to match upstream's output.
+    if (property == "FACTORY_UUID" && !value.empty()) {
+        std::string decoded;
+        if (decodeDuidC40(value, decoded))
+            value = std::move(decoded);
+        else
+            qWarning() << "rpiboot: failed to decode FACTORY_UUID metadata:"
+                       << QString::fromStdString(value);
+    }
+
+    _metadata.fields.emplace_back(property, value);
+    qDebug() << "rpiboot metadata:" << QString::fromStdString(property)
+             << "=" << QString::fromStdString(value);
+
+    // Populate typed convenience accessors from the upstream property names.
+    if (property == "USER_SERIAL_NUM")
         _metadata.serialNumber = value;
-    else if (key == "mac" || key == "macAddress")
+    else if (property == "MAC_ADDR")
         _metadata.macAddress = value;
-    else if (key == "otp" || key == "otpState")
-        _metadata.otpState = value;
-    else if (key == "board-rev" || key == "boardRevision") {
+    else if (property == "USER_BOARDREV") {
         try {
-            _metadata.boardRevision = static_cast<uint32_t>(std::stoul(value, nullptr, 16));
+            _metadata.boardRevision =
+                static_cast<uint32_t>(std::stoul(value, nullptr, 16));
         } catch (...) {
-            // Ignore parse errors
+            // Ignore parse errors — keep the raw value in fields regardless.
         }
     }
 }

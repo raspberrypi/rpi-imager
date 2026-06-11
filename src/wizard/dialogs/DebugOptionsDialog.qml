@@ -402,8 +402,8 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkSignFastbootGadget
-                text: qsTr("CM5 re-provisioning mode (sign gadget, pieeprom, recovery)")
-                accessibleDescription: qsTr("Counter-sign the fastboot gadget, pieeprom EEPROM image and recovery bootcode using the RSA key configured in App Options. Only enable when re-provisioning a Compute Module 5 whose secure-boot OTP is already fused; on a fresh CM5 the counter-signed firmware will not boot.")
+                text: qsTr("CM5 re-provisioning mode (special-reprovision-device)")
+                accessibleDescription: qsTr("Match rpi-sb-provisioner's special-reprovision-device: run secure-boot recovery (re-sign recovery.bin from upstream, reuse cached pieeprom) then fastboot (sign bootfiles and gadget). Requires the RSA key in App Options. Only for Compute Modules whose secure-boot OTP is already fused.")
                 Layout.fillWidth: true
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
