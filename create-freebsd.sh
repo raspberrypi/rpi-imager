@@ -134,12 +134,12 @@ if [ -z "$QT_DIR" ]; then
     echo ""
 
     echo "Or build the port from source without portmaster (make sure to clone the ports tree):"
-    echo "  portsmaster --packages-build /usr/ports/devel/qt6-base && make install clean"
+    echo "  portmaster --packages-build /usr/ports/devel/qt6-base && make install clean"
     if [ "$CLI_BUILD" -eq 0 ]; then
-        echo "  portsmaster --packages-build /usr/ports/devel/qt6-imageformats"
+        echo "  portmaster --packages-build /usr/ports/devel/qt6-imageformats"
     fi
     echo "If you need translations:"
-    echo "  portsmaster --packages-build /usr/ports/devel/qt6-tools"
+    echo "  portmaster --packages-build /usr/ports/devel/qt6-tools"
 
     echo ""
 
