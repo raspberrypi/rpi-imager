@@ -36,6 +36,9 @@ public:
     void cancel();
     void setCustomFastbootGadget(const QString &path) { _customFastbootGadget = path; }
     void setSignFastbootGadgetKey(const QString &keyPath) { _signFastbootGadgetKey = keyPath; }
+    // Match rpi-sb-provisioner's special-reprovision-device: run the SBR
+    // phase (re-sign recovery.bin, reuse cached pieeprom) before fastboot.
+    void setReprovisionDevice(bool enabled) { _reprovisionDevice = enabled; }
 
 signals:
     void success();
@@ -60,10 +63,15 @@ private:
     // "device hasn't disappeared yet".
     bool pollForRpibootReturn(std::atomic<bool>& found, uint8_t priorDeviceAddress);
     bool waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice);
+    bool runPhase(rpiboot::SideloadMode mode,
+                  QString& fastbootId,
+                  QString& bootcodeDiag,
+                  QString& fileServeDiag);
 
     DeviceInfo _device;
     rpiboot::SideloadMode _mode;
     std::atomic<bool> _cancelled{false};
+    std::atomic<bool> _stopScanner{false};
     // Next-stage device observed by the mode-specific scanner:
     //   Fastboot  → fastboot gadget enumerated on the same port path.
     //   SBR       → rpiboot device re-enumerated after the recovery reboot.
@@ -72,6 +80,7 @@ private:
     std::atomic<bool> _nextStageFound{false};
     QString _customFastbootGadget;
     QString _signFastbootGadgetKey;
+    bool _reprovisionDevice = false;
 };
 
 #endif // RPIBOOTTHREAD_H

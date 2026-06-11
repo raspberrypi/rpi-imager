@@ -216,8 +216,9 @@ TEST_CASE("FileServer parses star-prefixed metadata", "[rpiboot][fileserver]")
 {
     MockUsbTransport mock;
 
-    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*serial=ABC123"));
-    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*mac=B8:27:EB:AA:BB:CC"));
+    // Upstream format: "*PROPERTY*VALUE" (see write_metadata_file).
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*USER_SERIAL_NUM*ABC123"));
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*MAC_ADDR*B8:27:EB:AA:BB:CC"));
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
 
     std::atomic<bool> cancelled{false};
@@ -227,6 +228,31 @@ TEST_CASE("FileServer parses star-prefixed metadata", "[rpiboot][fileserver]")
 
     CHECK(server.metadata().serialNumber.value_or("") == "ABC123");
     CHECK(server.metadata().macAddress.value_or("") == "B8:27:EB:AA:BB:CC");
+    // Every reported field is captured verbatim, in order.
+    REQUIRE(server.metadata().fields.size() == 2);
+    CHECK(server.metadata().fields[0].first == "USER_SERIAL_NUM");
+    CHECK(server.metadata().fields[1].first == "MAC_ADDR");
+}
+
+TEST_CASE("FileServer captures provisioning status metadata", "[rpiboot][fileserver]")
+{
+    MockUsbTransport mock;
+
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*EEPROM_UPDATE*success"));
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*SECURE_BOOT_PROVISION*success"));
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    REQUIRE(server.run(mock, std::filesystem::temp_directory_path(), nullptr, cancelled));
+
+    const std::string* eeprom = server.metadata().find("EEPROM_UPDATE");
+    const std::string* secure = server.metadata().find("SECURE_BOOT_PROVISION");
+    REQUIRE(eeprom != nullptr);
+    REQUIRE(secure != nullptr);
+    CHECK(*eeprom == "success");
+    CHECK(*secure == "success");
 }
 
 TEST_CASE("FileServer respects cancellation", "[rpiboot][fileserver]")
@@ -459,7 +485,7 @@ TEST_CASE("FileServer parses board-rev metadata as hex", "[rpiboot][fileserver]"
 {
     MockUsbTransport mock;
 
-    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*board-rev=c03111"));
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*USER_BOARDREV*c03111"));
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
 
     std::atomic<bool> cancelled{false};
@@ -470,11 +496,31 @@ TEST_CASE("FileServer parses board-rev metadata as hex", "[rpiboot][fileserver]"
     CHECK(*server.metadata().boardRevision == 0xc03111);
 }
 
-TEST_CASE("FileServer ignores unknown metadata keys", "[rpiboot][fileserver]")
+TEST_CASE("FileServer decodes FACTORY_UUID C40 metadata", "[rpiboot][fileserver]")
 {
     MockUsbTransport mock;
 
-    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*unknownKey=someValue"));
+    // C40-encoded form of "001000911006186073" (the decoded FACTORY_UUID
+    // documented in usbboot's secure-boot-recovery5 README). Each 16-bit
+    // half-word encodes 3 characters; words are underscore-separated hex.
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile,
+                                               "*FACTORY_UUID*19a519a6_19ab520e_1ac0212b"));
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    REQUIRE(server.run(mock, std::filesystem::temp_directory_path(), nullptr, cancelled));
+    const std::string* uuid = server.metadata().find("FACTORY_UUID");
+    REQUIRE(uuid != nullptr);
+    CHECK(*uuid == "001000911006186073");
+}
+
+TEST_CASE("FileServer captures unknown metadata keys generically", "[rpiboot][fileserver]")
+{
+    MockUsbTransport mock;
+
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "*UNKNOWN_KEY*someValue"));
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
 
     std::atomic<bool> cancelled{false};
@@ -482,11 +528,15 @@ TEST_CASE("FileServer ignores unknown metadata keys", "[rpiboot][fileserver]")
 
     REQUIRE(server.run(mock, std::filesystem::temp_directory_path(), nullptr, cancelled));
 
-    // None of the known metadata fields should be set
+    // Unknown keys don't populate the typed accessors...
     CHECK_FALSE(server.metadata().serialNumber.has_value());
     CHECK_FALSE(server.metadata().macAddress.has_value());
     CHECK_FALSE(server.metadata().otpState.has_value());
     CHECK_FALSE(server.metadata().boardRevision.has_value());
+    // ...but are still recorded verbatim, like upstream's metadata JSON.
+    const std::string* v = server.metadata().find("UNKNOWN_KEY");
+    REQUIRE(v != nullptr);
+    CHECK(*v == "someValue");
 }
 
 // ────────────────────────────────────────────────────────────────────────

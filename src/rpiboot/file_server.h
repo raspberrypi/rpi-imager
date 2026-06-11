@@ -77,8 +77,9 @@ private:
                         const std::filesystem::path& firmwareDir,
                         const std::atomic<bool>& cancelled);
 
-    void parseMetadata(const std::string& filename,
-                       const std::vector<uint8_t>& data);
+    // Parse a star-prefixed metadata request ("*PROPERTY*VALUE") and record
+    // it in _metadata.  Mirrors upstream rpiboot's write_metadata_file().
+    void parseMetadata(const std::string& filename);
 
     DeviceMetadata _metadata;
     std::string _lastError;

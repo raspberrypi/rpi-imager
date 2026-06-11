@@ -579,20 +579,33 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
 
     // 3e. If SecureBootRecovery signing is requested, prepare the signed
     // pieeprom.bin (with embedded bootconf.txt + bootconf.sig + pubkey.bin)
-    // and counter-signed bootcode5.bin needed by an already-fused CM5/CM4.
+    // on first use.  On re-provision (special-reprovision-device in
+    // rpi-sb-bootstrap.sh) the signed pieeprom is reused from cache and
+    // only bootcode5.bin is re-signed from fresh upstream recovery.bin
+    // (handled in step 3c above).
     if (needsRecoverySigning) {
         const std::string sub = (chip == ChipGeneration::BCM2712)
                                     ? "secure-boot-recovery5"
                                     : "secure-boot-recovery";
         auto recoveryDir = versionDir / sub;
-        std::string err;
-        const bool counterSign = (chip == ChipGeneration::BCM2712);
-        qDebug() << "FirmwareManager: preparing signed recovery firmware in"
-                 << QString::fromStdString(recoveryDir.string());
-        if (!SecureBootProvisioner::prepareSignedRecovery(
-                chip, recoveryDir, _signFastbootGadgetKey, counterSign, err)) {
-            _lastError = "Failed to prepare signed recovery firmware: " + err;
-            return {};
+        const auto pieepromOut = recoveryDir / "pieeprom.bin";
+        const auto pieepromSig = recoveryDir / "pieeprom.sig";
+        const bool reprovisionCacheHit =
+            std::filesystem::exists(pieepromOut) &&
+            std::filesystem::exists(pieepromSig);
+        if (reprovisionCacheHit) {
+            qDebug() << "FirmwareManager: reusing cached signed pieeprom for"
+                     << "re-provision (skipping prepareSignedRecovery)";
+        } else {
+            std::string err;
+            const bool counterSign = (chip == ChipGeneration::BCM2712);
+            qDebug() << "FirmwareManager: preparing signed recovery firmware in"
+                     << QString::fromStdString(recoveryDir.string());
+            if (!SecureBootProvisioner::prepareSignedRecovery(
+                    chip, recoveryDir, _signFastbootGadgetKey, counterSign, err)) {
+                _lastError = "Failed to prepare signed recovery firmware: " + err;
+                return {};
+            }
         }
     }
 

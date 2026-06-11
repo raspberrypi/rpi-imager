@@ -17,6 +17,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace rpiboot {
 
@@ -114,11 +116,33 @@ enum class SideloadMode {
 
 // ── Device metadata ────────────────────────────────────────────────────
 // Collected from star-prefixed file requests during the file-server phase.
+//
+// The device's recovery/provisioning firmware streams these back at the end
+// of the run as "*PROPERTY*VALUE" file requests (e.g. "*USER_SERIAL_NUM*...",
+// "*EEPROM_UPDATE*success", "*SECURE_BOOT_PROVISION*success").  Upstream
+// rpiboot (write_metadata_file) records every property/value pair verbatim to
+// a JSON file; we mirror that by capturing them all in `fields`, in arrival
+// order, and additionally expose the common ones via typed accessors.
 struct DeviceMetadata {
-    std::optional<std::string> serialNumber;
-    std::optional<std::string> macAddress;
-    std::optional<std::string> otpState;
-    std::optional<uint32_t>    boardRevision;
+    // Every property/value pair the device reported, in the order received.
+    std::vector<std::pair<std::string, std::string>> fields;
+
+    // Typed convenience accessors for frequently-used properties, populated
+    // from the upstream property names during parsing.
+    std::optional<std::string> serialNumber;   // USER_SERIAL_NUM
+    std::optional<std::string> macAddress;     // MAC_ADDR
+    std::optional<std::string> otpState;       // legacy
+    std::optional<uint32_t>    boardRevision;  // USER_BOARDREV (hex)
+
+    // Look up an arbitrary property by its upstream name (e.g. "EEPROM_UPDATE",
+    // "SECURE_BOOT_PROVISION", "CUSTOMER_KEY_HASH").  Returns nullptr if the
+    // device didn't report it.
+    [[nodiscard]] const std::string* find(std::string_view key) const {
+        for (const auto& [k, v] : fields)
+            if (k == key)
+                return &v;
+        return nullptr;
+    }
 };
 
 // ── Protocol constants ─────────────────────────────────────────────────

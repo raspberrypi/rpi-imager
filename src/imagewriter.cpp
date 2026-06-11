@@ -170,7 +170,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugIgnoreDeviceLimits = false; // Use device-reported I/O limits by default
     _debugRpiboot = false;          // Rpiboot/fastboot support disabled by default
     _debugForceSecureBoot = false;  // No UI override; CLI flag still wins
-    _debugSignFastbootGadget = false; // CM5 re-provisioning: sign fastboot gadget
+    _debugSignFastbootGadget = false; // CM5 special-reprovision-device (SBR then fastboot)
     
     // Calculate optimal async queue depth based on system memory
     _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
@@ -717,6 +717,7 @@ void ImageWriter::onRpibootDeviceDetected(const QString &deviceId,
         } else {
             thread->setSignFastbootGadgetKey(rsaKey);
         }
+        thread->setReprovisionDevice(true);
     }
 
     connect(thread, &RpibootThread::fastbootDeviceReady, this,
@@ -1115,10 +1116,11 @@ void ImageWriter::startWrite()
         if (_debugSignFastbootGadget) {
             QString rsaKey = _settings.value("secureboot_rsa_key").toString();
             if (rsaKey.isEmpty()) {
-                qWarning() << "Debug: Sign fastboot gadget requested, but no secure boot RSA key is configured; skipping signing";
+                qWarning() << "Debug: Re-provisioning requested, but no secure boot RSA key is configured; signing will be skipped";
             } else {
                 _rpibootThread->setSignFastbootGadgetKey(rsaKey);
             }
+            _rpibootThread->setReprovisionDevice(true);
         }
 
         // After sideload, start FastbootFlashThread
