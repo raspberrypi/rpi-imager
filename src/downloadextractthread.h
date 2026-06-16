@@ -47,6 +47,7 @@ signals:
 
 protected:
     size_t _writeBufferSize;
+    size_t _writeSlots = 0;  // write ring-buffer slot count (for rebuild)
     _extractThreadClass *_extractThread;
     
     // Zero-copy ring buffer for curl -> libarchive data transfer (compressed data)

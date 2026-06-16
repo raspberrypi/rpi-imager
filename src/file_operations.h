@@ -15,6 +15,10 @@
 #include <mutex>
 #include <vector>
 
+// Supplies RingBuffer slot memory; see write_buffer_provider.h. Declared at
+// global scope to match RingBuffer (which is not namespaced).
+class WriteBufferProvider;
+
 namespace rpi_imager {
 
 // Logging callback type - allows Qt layer to capture debug output without Qt dependency
@@ -187,6 +191,20 @@ class FileOperations {
   // worst-case maximum. No-op by default; safe to ignore. Call before
   // SetAsyncQueueDepth().
   virtual void SetMaxWriteSizeHint(std::size_t bytes) { (void)bytes; }
+
+  // Optionally supply the memory provider for the producer's write ring
+  // buffer. A backend that pre-maps device-write memory (the macOS helper's
+  // shared-memory bulk ring) can return a provider whose slots live in that
+  // memory, letting the producer fill it directly so the write path needs no
+  // copy. Returns nullptr by default, in which case the caller uses an
+  // aligned-heap provider (unchanged behaviour).
+  //
+  // Note: a zero-copy provider generally requires the device to be open (a
+  // write session established) before the region can be mapped, so callers
+  // should create/rebuild the write ring after OpenDevice().
+  virtual std::shared_ptr<WriteBufferProvider> CreateWriteBufferProvider() {
+    return nullptr;
+  }
 
   // Configure async I/O queue depth (1 = synchronous, >1 = async with that many in-flight)
   // Must be called before writes. Returns false if async I/O is not supported.

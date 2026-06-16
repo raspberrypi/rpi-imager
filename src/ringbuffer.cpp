@@ -4,14 +4,18 @@
  */
 
 #include "ringbuffer.h"
+#include "write_buffer_provider.h"
 #include <QtGlobal>
 #include <QString>
 #include <chrono>
 
-RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
+RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment,
+                       std::shared_ptr<WriteBufferProvider> provider)
     : _numSlots(numSlots)
     , _slotSize(slotSize)
     , _alignment(alignment)
+    , _provider(provider ? std::move(provider)
+                         : std::make_shared<HeapWriteBufferProvider>())
     , _writeIndex(0)
     , _readIndex(0)
     , _committedCount(0)
@@ -27,28 +31,25 @@ RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
     , _sessionTimer(nullptr)
 {
     _slots.resize(numSlots);
-    _memory.reserve(numSlots);
-    
-    // Pre-allocate aligned memory for each slot
+
+    // Obtain slot memory from the provider (aligned heap by default, or a
+    // backend-supplied region for zero-copy device writes).
+    std::vector<void*> slotPtrs;
+    if (!_provider->allocateSlots(numSlots, slotSize, alignment, slotPtrs)
+        || slotPtrs.size() != numSlots) {
+        qDebug() << "RingBuffer: provider failed to allocate" << numSlots
+                 << "slots of" << slotSize << "bytes";
+        throw std::bad_alloc();
+    }
     for (size_t i = 0; i < numSlots; ++i) {
-        char* mem = static_cast<char*>(qMallocAligned(slotSize, alignment));
-        if (!mem) {
-            qDebug() << "RingBuffer: Failed to allocate slot" << i;
-            // Clean up already allocated
-            for (char* ptr : _memory) {
-                qFreeAligned(ptr);
-            }
-            _memory.clear();
-            throw std::bad_alloc();
-        }
-        _memory.push_back(mem);
-        _slots[i].data = mem;
+        _slots[i].data = static_cast<char*>(slotPtrs[i]);
         _slots[i].capacity = slotSize;
         _slots[i].size = 0;
     }
-    
-    qDebug() << "RingBuffer: Allocated" << numSlots << "slots of" 
-             << slotSize / 1024 << "KB each (" << (numSlots * slotSize) / (1024 * 1024) << "MB total)";
+
+    qDebug() << "RingBuffer: Allocated" << numSlots << "slots of"
+             << slotSize / 1024 << "KB each (" << (numSlots * slotSize) / (1024 * 1024) << "MB total)"
+             << (_provider->isZeroCopy() ? "[zero-copy]" : "[heap]");
 }
 
 RingBuffer::~RingBuffer()
@@ -72,11 +73,17 @@ RingBuffer::~RingBuffer()
         }
     }
     
-    // Free all allocated memory
-    for (char* ptr : _memory) {
-        qFreeAligned(ptr);
+    // Free all allocated memory via the provider. The provider must outlive
+    // any device writes still referencing zero-copy slots; callers drain
+    // pending writes before destroying the ring (see DownloadExtractThread).
+    if (_provider) {
+        _provider->releaseSlots();
     }
-    _memory.clear();
+}
+
+bool RingBuffer::isZeroCopy() const
+{
+    return _provider && _provider->isZeroCopy();
 }
 
 RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
@@ -17,6 +18,8 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QString>
+
+class WriteBufferProvider;
 
 /**
  * @brief Lock-free (for single producer/consumer) ring buffer with pre-allocated slots
@@ -80,8 +83,13 @@ public:
      * @param numSlots Number of slots in the ring buffer
      * @param slotSize Size of each slot in bytes
      * @param alignment Memory alignment for slots (default 4096 for direct I/O)
+     * @param provider Supplies the slot memory. If null, an internal
+     *        HeapWriteBufferProvider is used (aligned heap allocation), which
+     *        matches the historical behaviour. A backend may pass a provider
+     *        whose memory is directly device-writable for a zero-copy path.
      */
-    RingBuffer(size_t numSlots, size_t slotSize, size_t alignment = 4096);
+    RingBuffer(size_t numSlots, size_t slotSize, size_t alignment = 4096,
+               std::shared_ptr<WriteBufferProvider> provider = nullptr);
     
     /**
      * @brief Destructor - frees all pre-allocated memory
@@ -174,6 +182,12 @@ public:
     size_t numSlots() const { return _numSlots; }
 
     /**
+     * @brief Whether slot memory is directly device-writable (no copy).
+     * Reflects the backing provider; false for the default heap provider.
+     */
+    bool isZeroCopy() const;
+
+    /**
      * @brief Reset the ring buffer for reuse
      */
     void reset();
@@ -206,7 +220,7 @@ private:
     size_t _alignment;
     
     std::vector<Slot> _slots;
-    std::vector<char*> _memory;  // Raw memory blocks for cleanup
+    std::shared_ptr<WriteBufferProvider> _provider;  // Owns the slot memory
     
     // Ring buffer indices
     std::atomic<size_t> _writeIndex;  // Next slot to write

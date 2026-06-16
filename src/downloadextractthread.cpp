@@ -118,12 +118,20 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
         qDebug() << "Write buffer size adjusted:" << _writeBufferSize << "->" << actualWriteSize;
         _writeBufferSize = actualWriteSize;
     }
+    _writeSlots = writeSlots;
     
-    // Create zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
+    // Create ring buffer for curl -> libarchive data transfer (compressed data).
+    // Always heap-backed: compressed data does not go to the device.
     _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
-    
-    // Create ring buffer for decompress -> write path (decompressed data)
-    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize);
+
+    // Create ring buffer for decompress -> write path (decompressed data).
+    // Offer the backend a chance to supply device-writable slot memory for a
+    // zero-copy write path; nullptr (the default) falls back to heap. The
+    // device is not open yet here, so a backend that needs an open session
+    // returns nullptr now and the ring is rebuilt in _onDevicePrepared().
+    auto writeProvider = _file ? _file->CreateWriteBufferProvider() : nullptr;
+    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize,
+                                                    pageSize, writeProvider);
     
     qDebug() << "Using buffer size:" << _writeBufferSize << "bytes with page size:" << pageSize << "bytes";
     qDebug() << "Input ring buffer:" << inputSlots << "slots of" << actualInputSize << "bytes";
@@ -155,38 +163,59 @@ DownloadExtractThread::~DownloadExtractThread()
 
 void DownloadExtractThread::_onDevicePrepared()
 {
+    // This runs after _openAndPrepareDevice() but before any ring buffer
+    // access, so it's safe to reallocate the write ring here.
+    size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
+
     // If the user asked to ignore device limits and the write buffer was capped
     // below the RAM-based optimum, reallocate the ring buffers at full size.
-    // This runs after _openAndPrepareDevice() but before any ring buffer access.
-    if (!_debugIgnoreDeviceLimits)
-        return;
+    if (_debugIgnoreDeviceLimits)
+    {
+        size_t optimalWriteSize = SystemMemoryManager::instance().getOptimalWriteBufferSize();
+        if (_writeBufferSize < optimalWriteSize)
+        {
+            qDebug() << "Ignoring device I/O limits: reallocating ring buffers"
+                     << "(write buffer" << _writeBufferSize << "->" << optimalWriteSize << ")";
 
-    size_t optimalWriteSize = SystemMemoryManager::instance().getOptimalWriteBufferSize();
-    if (_writeBufferSize >= optimalWriteSize)
-        return;  // wasn't capped — nothing to do
+            size_t inputBufferSizeHint = SystemMemoryManager::instance().getOptimalInputBufferSize();
+            size_t writeBufferSizeHint = optimalWriteSize;
 
-    qDebug() << "Ignoring device I/O limits: reallocating ring buffers"
-             << "(write buffer" << _writeBufferSize << "->" << optimalWriteSize << ")";
+            size_t inputSlots, writeSlots;
+            size_t actualInputSize, actualWriteSize;
+            size_t totalMemory = SystemMemoryManager::instance().getCoordinatedRingBufferConfig(
+                inputBufferSizeHint, writeBufferSizeHint,
+                inputSlots, writeSlots,
+                actualInputSize, actualWriteSize);
 
-    size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
-    size_t inputBufferSizeHint = SystemMemoryManager::instance().getOptimalInputBufferSize();
-    size_t writeBufferSizeHint = optimalWriteSize;
+            _writeBufferSize = actualWriteSize;
+            _writeSlots = writeSlots;
+            _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
+            _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize);
 
-    size_t inputSlots, writeSlots;
-    size_t actualInputSize, actualWriteSize;
-    size_t totalMemory = SystemMemoryManager::instance().getCoordinatedRingBufferConfig(
-        inputBufferSizeHint, writeBufferSizeHint,
-        inputSlots, writeSlots,
-        actualInputSize, actualWriteSize);
+            qDebug() << "Reallocated ring buffers:"
+                     << "input" << inputSlots << "x" << actualInputSize
+                     << "write" << writeSlots << "x" << actualWriteSize
+                     << "total" << (totalMemory / (1024 * 1024)) << "MB";
+        }
+    }
 
-    _writeBufferSize = actualWriteSize;
-    _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
-    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize);
-
-    qDebug() << "Reallocated ring buffers:"
-             << "input" << inputSlots << "x" << actualInputSize
-             << "write" << writeSlots << "x" << actualWriteSize
-             << "total" << (totalMemory / (1024 * 1024)) << "MB";
+    // Now that the device is open, give the backend a chance to back the write
+    // ring with device-writable (zero-copy) slot memory. A null provider (the
+    // default, non-macOS, or helper unavailable) leaves the existing heap ring
+    // in place; the provider itself also falls back to heap if the shared ring
+    // can't be mapped (e.g. geometry exceeds the helper's bulk-buffer cap).
+    if (_file)
+    {
+        auto writeProvider = _file->CreateWriteBufferProvider();
+        if (writeProvider)
+        {
+            _writeRingBuffer = std::make_shared<RingBuffer>(
+                _writeSlots, _writeBufferSize, pageSize, writeProvider);
+            qDebug() << "Write ring backing:"
+                     << (_writeRingBuffer->isZeroCopy() ? "zero-copy (helper shared ring)"
+                                                        : "heap (provider fallback)");
+        }
+    }
 }
 
 void DownloadExtractThread::_emitProgressUpdate()

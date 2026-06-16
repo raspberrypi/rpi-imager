@@ -6,6 +6,7 @@
 #include "../privileged_io/privileged_writer.h"
 #include "../privileged_io/backends/macos_xpc.h"
 #include "../privileged_io_glue.h"
+#include "../write_buffer_provider.h"
 
 #import <ServiceManagement/ServiceManagement.h>
 #import <AppKit/AppKit.h>
@@ -67,6 +68,23 @@ struct XpcFileOperations::State {
     void* ring_base = nullptr;
     std::size_t ring_size = 0;
     std::vector<bool> slot_in_use;
+
+    // ---- Zero-copy ring (slots are the producer's RingBuffer memory) ----
+    //
+    // When a zero-copy WriteBufferProvider maps the helper bulk ring as the
+    // producer's write ring buffer, the producer fills these slots directly
+    // and AsyncWriteSequential submits the slot's offset with no copy. The
+    // mapping reuses ring_base/ring_size (so Close() tears it down via the
+    // same path); zerocopy_active flags the in-range submit path and
+    // zc_slot_bytes bounds an individual write. Back-pressure is provided by
+    // the producer's RingBuffer, so the copy-path slot_in_use pool is unused
+    // (and cleared) in this mode.
+    bool zerocopy_active = false;
+    std::size_t zc_slot_bytes = 0;
+
+    // Sentinel slot index meaning "no copy-ring slot to free" (zero-copy
+    // submit, where the producer's RingBuffer owns slot lifetime).
+    static constexpr std::size_t kNoSlot = static_cast<std::size_t>(-1);
     mutable std::mutex slot_mutex;
     std::condition_variable slot_cv;
     std::atomic<int>       pending_writes{0};
@@ -240,6 +258,8 @@ FileError XpcFileOperations::Close() {
         state_->ring_base = nullptr;
         state_->ring_size = 0;
         state_->slot_in_use.clear();
+        state_->zerocopy_active = false;
+        state_->zc_slot_bytes = 0;
     }
 
     auto& w = ::rpi_imager::getProcessPrivilegedWriter();
@@ -432,6 +452,133 @@ bool XpcFileOperations::SetAsyncQueueDepth(int depth) {
     return true;
 }
 
+bool XpcFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t slotSize,
+                                          std::vector<void*>& outSlots) {
+    outSlots.clear();
+    if (count == 0 || slotSize == 0) return false;
+
+    // Bound the ring to the helper's bulk-buffer cap (256 MB; see
+    // service_impl.mm kMaxBulkBuffer). Larger write rings can't be mapped
+    // zero-copy, so the caller falls back to heap slots.
+    constexpr std::size_t kMaxZeroCopyRingBytes = 256ull * 1024 * 1024;
+    if (count > kMaxZeroCopyRingBytes / slotSize) {
+        return false;
+    }
+    const std::size_t ring_bytes = count * slotSize;
+
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    if (!state_->open) return false;        // copy-ring (if any) left intact
+    auto* xpc = xpcBackend();
+    if (!xpc) return false;                 // copy-ring left intact
+
+    // NOTE: the client-side mapBulkBuffer tears down the prior (copy-ring)
+    // mapping *before* establishing the new one, so once we call it the
+    // copy ring is gone regardless of the outcome.
+    auto map_r = xpc->mapBulkBuffer(state_->session_id, ring_bytes);
+    void* base = map_r.ok ? xpc->bulkBufferBase() : nullptr;
+    if (!base || xpc->bulkBufferSize() < ring_bytes) {
+        // Map failed and the copy ring is already gone. Degrade to the
+        // synchronous write path (always correct) rather than leaving a
+        // dangling copy-ring pointer behind; the provider also falls back to
+        // heap slots, so writes still complete.
+        if (!map_r.ok) {
+            FileOperationsLog("XpcFileOperations: zero-copy mapBulkBuffer failed: "
+                              + map_r.error.detail());
+        }
+        state_->ring_base = nullptr;
+        state_->ring_size = 0;
+        state_->slot_in_use.clear();
+        state_->zerocopy_active = false;
+        state_->zc_slot_bytes = 0;
+        state_->async_ready = false;
+        return false;
+    }
+
+    // The zero-copy ring replaces any copy-ring mapping established by
+    // SetAsyncQueueDepth. Back-pressure now comes from the producer's
+    // RingBuffer, so the copy-path slot pool is unused (cleared here).
+    state_->ring_base = base;
+    state_->ring_size = ring_bytes;
+    state_->slot_in_use.clear();
+    state_->zerocopy_active = true;
+    state_->zc_slot_bytes = slotSize;
+    state_->async_ready = true;
+    if (state_->queue_depth < 2) {
+        // count is bounded by the 256 MB cap / slotSize, so it fits an int.
+        state_->queue_depth = static_cast<int>(count);
+    }
+    state_->cancelled.store(false);
+    state_->had_error.store(false);
+    state_->pending_writes.store(0);
+
+    outSlots.reserve(count);
+    auto* p = static_cast<std::uint8_t*>(base);
+    for (std::size_t i = 0; i < count; ++i) {
+        outSlots.push_back(p + i * slotSize);
+    }
+    return true;
+}
+
+void XpcFileOperations::releaseZeroCopyRing() {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    if (!state_->zerocopy_active) return;
+    if (state_->open) {
+        if (auto* xpc = xpcBackend()) {
+            (void)xpc->mapBulkBuffer(state_->session_id, 0);
+        }
+    }
+    state_->ring_base = nullptr;
+    state_->ring_size = 0;
+    state_->zerocopy_active = false;
+    state_->zc_slot_bytes = 0;
+}
+
+// Provider that backs RingBuffer slots with the helper's shared-memory bulk
+// ring (zero-copy), falling back to aligned heap if the ring can't be mapped.
+class XpcWriteBufferProvider : public WriteBufferProvider {
+public:
+    explicit XpcWriteBufferProvider(XpcFileOperations* xpc) : xpc_(xpc) {}
+    ~XpcWriteBufferProvider() override { releaseSlots(); }
+
+    bool allocateSlots(std::size_t count, std::size_t slotSize,
+                       std::size_t alignment,
+                       std::vector<void*>& outSlots) override {
+        releaseSlots();
+        if (xpc_ && xpc_->adoptZeroCopyRing(count, slotSize, outSlots)) {
+            zero_copy_ = true;
+            return true;
+        }
+        zero_copy_ = false;
+        return heap_.allocateSlots(count, slotSize, alignment, outSlots);
+    }
+
+    void releaseSlots() override {
+        if (zero_copy_) {
+            if (xpc_) xpc_->releaseZeroCopyRing();
+            zero_copy_ = false;
+        } else {
+            heap_.releaseSlots();
+        }
+    }
+
+    bool isZeroCopy() const override { return zero_copy_; }
+
+private:
+    XpcFileOperations* xpc_ = nullptr;  // outlives this provider (see header)
+    HeapWriteBufferProvider heap_;
+    bool zero_copy_ = false;
+};
+
+std::shared_ptr<WriteBufferProvider> XpcFileOperations::CreateWriteBufferProvider() {
+    // A zero-copy ring needs an established write session; before OpenDevice
+    // there's nothing to map, so the caller uses a heap provider.
+    {
+        std::lock_guard<std::mutex> lk(state_->mutex);
+        if (!state_->open) return nullptr;
+    }
+    return std::make_shared<XpcWriteBufferProvider>(this);
+}
+
 int XpcFileOperations::GetAsyncQueueDepth() const {
     std::lock_guard<std::mutex> lk(state_->mutex);
     return state_->queue_depth;
@@ -451,21 +598,35 @@ FileError XpcFileOperations::AsyncWriteSequential(const std::uint8_t* data,
     // Fast paths: not configured for async, oversized chunk, or
     // cancelled -> fall through to synchronous WriteSequential.
     bool use_sync = false;
-    std::uint64_t offset_for_sync = 0;
+    bool zero_copy = false;
+    std::uint64_t zc_buffer_offset = 0;
     {
         std::lock_guard<std::mutex> lk(state_->mutex);
         if (!state_->open) {
             if (callback) callback(FileError::kOpenError, 0);
             return FileError::kOpenError;
         }
-        if (!state_->async_ready || size > state_->slot_bytes) {
-            use_sync = true;
-        }
         if (state_->cancelled.load()) {
             if (callback) callback(FileError::kCancelled, 0);
             return FileError::kCancelled;
         }
-        offset_for_sync = state_->write_offset;
+        if (state_->zerocopy_active && state_->ring_base) {
+            // The producer filled a slot inside the shared ring; submit its
+            // offset directly with no copy. A pointer outside the ring (not
+            // expected on this path) falls back to a synchronous write rather
+            // than misusing the copy-ring slot pool.
+            const auto* base = static_cast<const std::uint8_t*>(state_->ring_base);
+            if (data >= base && data + size <= base + state_->ring_size &&
+                size <= state_->zc_slot_bytes) {
+                zero_copy = true;
+                zc_buffer_offset =
+                    static_cast<std::uint64_t>(data - base);
+            } else {
+                use_sync = true;
+            }
+        } else if (!state_->async_ready || size > state_->slot_bytes) {
+            use_sync = true;
+        }
     }
     if (use_sync) {
         // Run the synchronous path with the existing write_offset
@@ -476,9 +637,14 @@ FileError XpcFileOperations::AsyncWriteSequential(const std::uint8_t* data,
         return r;
     }
 
-    // Acquire a free slot (blocks if all are in use).
-    std::size_t slot_index = 0;
-    {
+    // Determine the ring offset to submit. Zero-copy: the data already lives
+    // in the ring, so submit its offset directly. Copy path: acquire a free
+    // slot (blocking on back-pressure) and copy the caller's buffer in.
+    std::size_t slot_index = State::kNoSlot;
+    std::uint64_t buffer_offset = 0;
+    if (zero_copy) {
+        buffer_offset = zc_buffer_offset;
+    } else {
         std::unique_lock<std::mutex> slot_lk(state_->slot_mutex);
         state_->slot_cv.wait(slot_lk, [this] {
             if (state_->cancelled.load()) return true;
@@ -489,18 +655,15 @@ FileError XpcFileOperations::AsyncWriteSequential(const std::uint8_t* data,
             if (callback) callback(FileError::kCancelled, 0);
             return FileError::kCancelled;
         }
+        slot_index = 0;
         for (std::size_t i = 0; i < state_->slot_in_use.size(); ++i) {
             if (!state_->slot_in_use[i]) { slot_index = i; state_->slot_in_use[i] = true; break; }
         }
+        buffer_offset = static_cast<std::uint64_t>(slot_index) * state_->slot_bytes;
+        std::uint8_t* slot_base =
+            static_cast<std::uint8_t*>(state_->ring_base) + buffer_offset;
+        std::memcpy(slot_base, data, size);
     }
-
-    // Copy caller's buffer into the slot, snapshot offset, advance
-    // the write cursor under the main mutex.
-    const std::uint64_t buffer_offset =
-        static_cast<std::uint64_t>(slot_index) * state_->slot_bytes;
-    std::uint8_t* slot_base =
-        static_cast<std::uint8_t*>(state_->ring_base) + buffer_offset;
-    std::memcpy(slot_base, data, size);
 
     std::uint64_t device_offset;
     priv::proto::SessionId sid;
@@ -555,12 +718,15 @@ FileError XpcFileOperations::AsyncWriteSequential(const std::uint8_t* data,
             st->async_writes_completed.fetch_add(1);
             st->async_last_complete = now;
 
-            // Free the slot.
-            {
-                std::lock_guard<std::mutex> lk(st->slot_mutex);
-                st->slot_in_use[slot_for_release] = false;
+            // Free the copy-ring slot (zero-copy submits have none; the
+            // producer's RingBuffer owns slot lifetime there).
+            if (slot_for_release != State::kNoSlot) {
+                {
+                    std::lock_guard<std::mutex> lk(st->slot_mutex);
+                    st->slot_in_use[slot_for_release] = false;
+                }
+                st->slot_cv.notify_one();
             }
-            st->slot_cv.notify_one();
 
             FileError fe = FileError::kSuccess;
             std::size_t bytes = 0;

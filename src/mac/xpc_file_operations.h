@@ -15,17 +15,19 @@
 // path with `RPI_IMAGER_USE_LEGACY_AUTHOPEN=1` for diagnostic comparison.
 //
 // Write path: the production loop enables async I/O (SetAsyncQueueDepth
-// > 1) and submits via AsyncWriteSequential, which copies each chunk into
-// a shared-memory ring slot and dispatches it to the helper's bulk-write
-// path (submitBulkWriteAsync -> bulkWriteFromBuffer). The synchronous
-// writeChunk path is the fallback for small/metadata writes, oversized
-// chunks, and when the ring can't be mapped. See
-// doc/privileged-helper-plan.md §6.
+// > 1) and submits via AsyncWriteSequential, which dispatches each chunk to
+// the helper's bulk-write path (submitBulkWriteAsync -> bulkWriteFromBuffer)
+// from a shared-memory ring slot. The synchronous writeChunk path is the
+// fallback for small/metadata writes, oversized chunks, and when the ring
+// can't be mapped. See doc/privileged-helper-plan.md §6.
 //
-// Known inefficiency: AsyncWriteSequential memcpy's the caller's buffer
-// into the ring rather than having the caller fill mapped ring memory
-// directly, so the macOS path is one-copy where the Linux io_uring and
-// Windows IOCP paths are zero-copy. See §13.
+// Zero-copy: CreateWriteBufferProvider() can back the producer's write ring
+// buffer directly with the helper's shared-memory ring (see
+// write_buffer_provider.h), so the producer decompresses straight into
+// device-write memory and AsyncWriteSequential submits the slot's offset
+// with no intermediate copy. When the ring can't be mapped (e.g. the
+// geometry exceeds the helper's bulk-buffer cap), the provider falls back to
+// aligned-heap slots and the one-copy path is used. See §13.
 
 #pragma once
 
@@ -35,6 +37,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace rpi_imager::privileged {
 class IPrivilegedWriter;
@@ -44,6 +47,8 @@ class SessionId;
 }
 
 namespace rpi_imager {
+
+class XpcWriteBufferProvider;
 
 class XpcFileOperations : public FileOperations {
 public:
@@ -74,6 +79,15 @@ public:
     // parallelism. WaitForPendingWrites blocks until all in-flight
     // writes have completed.
     void SetMaxWriteSizeHint(std::size_t bytes) override;
+
+    // Zero-copy seam: returns a provider that backs RingBuffer slots with the
+    // helper's shared-memory bulk ring so the producer fills device-write
+    // memory directly. Returns nullptr unless the device is open (a zero-copy
+    // ring needs an established write session), in which case the caller uses
+    // a heap provider. The returned provider falls back to heap internally if
+    // the ring can't be mapped, so the write always proceeds.
+    std::shared_ptr<WriteBufferProvider> CreateWriteBufferProvider() override;
+
     bool SetAsyncQueueDepth(int depth) override;
     int  GetAsyncQueueDepth() const override;
     bool IsAsyncIOSupported() const override;
@@ -114,6 +128,20 @@ public:
     DirectIOInfo GetDirectIOInfo() const override;
 
 private:
+    friend class XpcWriteBufferProvider;
+
+    // Map a shared-memory ring of `count` × `slotSize` bytes for zero-copy
+    // writes and hand back per-slot base pointers. Replaces any copy-ring
+    // mapping established by SetAsyncQueueDepth. Returns false (and maps
+    // nothing) if there's no open session, no XPC backend, the geometry
+    // exceeds the helper's bulk-buffer cap, or mapping fails — the caller
+    // then uses heap-backed slots. Used by XpcWriteBufferProvider.
+    bool adoptZeroCopyRing(std::size_t count, std::size_t slotSize,
+                           std::vector<void*>& outSlots);
+    // Release the zero-copy ring mapping (idempotent). Used by the provider
+    // and by Close().
+    void releaseZeroCopyRing();
+
     struct State;
     std::unique_ptr<State> state_;
 };
