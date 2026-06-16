@@ -12,7 +12,10 @@
 //
 // Purpose: acceptance check for the "Performance regression from IPC
 // overhead" risk. Run the same invocation under both env-var settings
-// and compare numbers.
+// and compare numbers. On macOS the write defaults to the zero-copy path
+// (writing from the helper's shared-memory ring); pass
+// --benchmark-no-zero-copy to force the buffer-copy path for an A/B
+// comparison on the same backend.
 //
 // DESTRUCTIVE: overwrites the first N MB of the target device with
 // zeros. Refuses to run without an explicit --benchmark-allow-destroy
@@ -31,6 +34,12 @@ struct BenchmarkOptions {
     std::size_t chunk_bytes = 4ull * 1024 * 1024;          // 4 MB per write
     int  queue_depth = 8;                                   // async queue depth
     bool direct_io = true;
+
+    // When true (default), write from a backend-provided zero-copy buffer
+    // (the macOS helper's shared-memory ring) so the benchmark exercises the
+    // production zero-copy path. When false, write from a heap buffer (the
+    // buffer-copy path) — useful for an A/B comparison on the same backend.
+    bool zero_copy = true;
 
     // Optional: dump a structured performance capture to this path (JSON).
     // Includes per-write submit/complete timings, configuration, summary
