@@ -1631,9 +1631,18 @@ void DownloadThread::_writeComplete()
         quint32 asyncWaitMs = static_cast<quint32>(asyncWaitTimer.elapsed());
         qDebug() << "Async I/O drain:" << pendingBefore << "pending writes completed in" << asyncWaitMs << "ms";
         
+        // Zero-copy write observability: did the helper write directly from
+        // producer memory, and how many submits took each path?
+        bool zcEngaged = false;
+        quint64 zcSubmits = 0, copySubmits = 0;
+        _file->GetZeroCopyWriteStats(zcEngaged, zcSubmits, copySubmits);
+        qDebug() << "Zero-copy writes:" << (zcEngaged ? "engaged" : "not engaged")
+                 << "(zero-copy submits" << zcSubmits << ", copy submits" << copySubmits << ")";
+
         // Emit async I/O stats for performance logging
         emit eventAsyncIOConfig(_debugAsyncIO, _file->IsAsyncIOSupported(), 
-                               _file->GetAsyncQueueDepth(), static_cast<quint32>(pendingBefore));
+                               _file->GetAsyncQueueDepth(), static_cast<quint32>(pendingBefore),
+                               zcEngaged, zcSubmits, copySubmits);
         
         // Get and emit detailed async I/O timing stats
         uint32_t wallClockMs, writeCount, minLatencyUs, maxLatencyUs, avgLatencyUs;

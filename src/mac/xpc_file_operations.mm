@@ -100,6 +100,13 @@ struct XpcFileOperations::State {
     bool zerocopy_active = false;
     std::size_t zc_slot_bytes = 0;
 
+    // Observability: whether a zero-copy ring was ever adopted this session
+    // (survives Close so post-write stats can report it; reset on OpenDevice),
+    // and per-path async submit counts.
+    bool zerocopy_engaged = false;
+    std::atomic<std::uint64_t> zc_submits{0};
+    std::atomic<std::uint64_t> copy_submits{0};
+
     // Sentinel slot index meaning "no copy-ring slot to free" (zero-copy
     // submit, where the producer's RingBuffer owns slot lifetime).
     static constexpr std::size_t kNoSlot = static_cast<std::size_t>(-1);
@@ -213,6 +220,9 @@ FileError XpcFileOperations::OpenDevice(const std::string& path) {
         // session's stats are no longer addressable from the helper
         // side either (it tore down the session on closeSession).
         state_->last_session_stats = FileOperations::HelperSessionStats{};
+        state_->zerocopy_engaged = false;
+        state_->zc_submits.store(0, std::memory_order_relaxed);
+        state_->copy_submits.store(0, std::memory_order_relaxed);
     }
 
     return FileError::kSuccess;
@@ -519,6 +529,7 @@ bool XpcFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t slotSiz
     state_->ring_size = ring_bytes;
     state_->slot_in_use.clear();
     state_->zerocopy_active = true;
+    state_->zerocopy_engaged = true;
     state_->zc_slot_bytes = slotSize;
     state_->async_ready = true;
     if (state_->queue_depth < 2) {
@@ -661,8 +672,10 @@ FileError XpcFileOperations::AsyncWriteSequential(const std::uint8_t* data,
     std::size_t slot_index = State::kNoSlot;
     std::uint64_t buffer_offset = 0;
     if (zero_copy) {
+        state_->zc_submits.fetch_add(1, std::memory_order_relaxed);
         buffer_offset = zc_buffer_offset;
     } else {
+        state_->copy_submits.fetch_add(1, std::memory_order_relaxed);
         std::unique_lock<std::mutex> slot_lk(state_->slot_mutex);
         state_->slot_cv.wait(slot_lk, [this] {
             if (state_->cancelled.load()) return true;
@@ -822,6 +835,15 @@ void XpcFileOperations::GetAsyncIOStats(uint32_t& wallClockMs,
     minLatencyUs = (mn == UINT32_MAX) ? 0 : mn;
     maxLatencyUs = state_->async_max_latency_us.load();
     avgLatencyUs = static_cast<uint32_t>(state_->async_total_latency_us.load() / writeCount);
+}
+
+void XpcFileOperations::GetZeroCopyWriteStats(bool& engaged,
+                                                std::uint64_t& zeroCopySubmits,
+                                                std::uint64_t& copySubmits) const {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    engaged = state_->zerocopy_engaged;
+    zeroCopySubmits = state_->zc_submits.load(std::memory_order_relaxed);
+    copySubmits = state_->copy_submits.load(std::memory_order_relaxed);
 }
 
 FileError XpcFileOperations::Seek(std::uint64_t position) {

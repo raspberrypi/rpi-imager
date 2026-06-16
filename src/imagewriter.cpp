@@ -1661,9 +1661,12 @@ void ImageWriter::startWrite()
                 _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
             });
     connect(_thread, &DownloadThread::eventAsyncIOConfig,
-            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
-                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
-                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
+            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd,
+                         bool zeroCopyEngaged, quint64 zeroCopySubmits, quint64 copySubmits){
+                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4; "
+                                           "zeroCopyEngaged: %5; zeroCopySubmits: %6; copySubmits: %7")
+                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd)
+                    .arg(zeroCopyEngaged).arg(zeroCopySubmits).arg(copySubmits);
                 _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
             });
     connect(_thread, &DownloadThread::eventAsyncIOTiming,
@@ -4739,9 +4742,12 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
             });
     connect(_thread, &DownloadThread::eventAsyncIOConfig,
-            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
-                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
-                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
+            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd,
+                         bool zeroCopyEngaged, quint64 zeroCopySubmits, quint64 copySubmits){
+                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4; "
+                                           "zeroCopyEngaged: %5; zeroCopySubmits: %6; copySubmits: %7")
+                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd)
+                    .arg(zeroCopyEngaged).arg(zeroCopySubmits).arg(copySubmits);
                 _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
             });
     connect(_thread, &DownloadThread::eventAsyncIOTiming,

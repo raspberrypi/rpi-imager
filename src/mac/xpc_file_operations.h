@@ -100,6 +100,9 @@ public:
     void GetAsyncIOStats(uint32_t& wallClockMs, uint32_t& writeCount,
                           uint32_t& minLatencyUs, uint32_t& maxLatencyUs,
                           uint32_t& avgLatencyUs) const override;
+    void GetZeroCopyWriteStats(bool& engaged,
+                                std::uint64_t& zeroCopySubmits,
+                                std::uint64_t& copySubmits) const override;
 
     // Remaining pure-virtual obligations from the FileOperations
     // contract. The helper handles seeking implicitly per pwrite/pread

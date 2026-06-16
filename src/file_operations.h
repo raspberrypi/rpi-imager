@@ -314,6 +314,19 @@ class FileOperations {
     write_latency_stats_.reset();
   }
 
+  // Zero-copy write observability. For backends that can write directly from
+  // caller/producer memory (e.g. the macOS helper's shared-memory ring),
+  // reports whether the zero-copy path was used this session and how many
+  // async submits took the zero-copy vs the buffer-copy path. Default: the
+  // backend has no distinct zero-copy path (engaged=false, counts 0).
+  virtual void GetZeroCopyWriteStats(bool& engaged,
+                                     std::uint64_t& zeroCopySubmits,
+                                     std::uint64_t& copySubmits) const {
+    engaged = false;
+    zeroCopySubmits = 0;
+    copySubmits = 0;
+  }
+
   // Device I/O limits discovered from the storage hardware.
   // Used to size write buffers and async queue depth to match device capabilities.
   // Zero values mean "unknown" — callers should fall back to their own heuristics.
