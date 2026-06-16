@@ -4,19 +4,23 @@
 #include "file_operations_benchmark.h"
 
 #include "file_operations.h"
+#include "write_buffer_provider.h"
 #include "privileged_io/privileged_writer.h"
 #include "privileged_io_glue.h"
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
 #include <sys/utsname.h>
+#include <unistd.h>
 #include <vector>
 
 namespace rpi_imager {
@@ -167,6 +171,44 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
 
     std::vector<std::uint8_t> chunk(opts.chunk_bytes, 0);
 
+    // Zero-copy setup: back the write buffers with the backend's shared-memory
+    // ring so the benchmark exercises the production zero-copy path (writes
+    // submit directly from mapped slots, no per-write copy). The backend's
+    // zero-copy mode provides no internal back-pressure (it relies on the
+    // producer's ring), so we cap in-flight writes to the slot count and don't
+    // reuse a slot until its write completes. Falls back to the copy path if a
+    // provider isn't available or the ring can't be mapped.
+    std::shared_ptr<WriteBufferProvider> provider;
+    std::vector<void*> zc_slots;
+    std::size_t zc_slot_bytes = 0;
+    bool zero_copy_engaged = false;
+    if (async_ok && opts.zero_copy) {
+        provider = file->CreateWriteBufferProvider();
+        if (provider) {
+            std::size_t pageSize = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+            if (pageSize == 0) pageSize = 4096;
+            zc_slot_bytes = ((opts.chunk_bytes + pageSize - 1) / pageSize) * pageSize;
+            if (provider->allocateSlots(static_cast<std::size_t>(opts.queue_depth),
+                                        zc_slot_bytes, pageSize, zc_slots) &&
+                provider->isZeroCopy()) {
+                zero_copy_engaged = true;
+                for (void* s : zc_slots) std::memset(s, 0, zc_slot_bytes);
+            } else {
+                provider.reset();
+                zc_slots.clear();
+            }
+        }
+    }
+    std::printf("benchmark: zero-copy=%s\n",
+                zero_copy_engaged ? "yes"
+                                  : (opts.zero_copy ? "no (provider unavailable; copy path)"
+                                                    : "no (disabled; copy path)"));
+
+    // Free-slot tracking for the zero-copy path's back-pressure.
+    std::vector<char> slot_busy(zero_copy_engaged ? zc_slots.size() : 0, 0);
+    std::mutex slot_mtx;
+    std::condition_variable slot_cv;
+
     std::atomic<std::size_t> errors{0};
     std::atomic<std::size_t> bytes_done{0};
 
@@ -202,7 +244,33 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
         }
 
         FileError fe;
-        if (async_ok) {
+        if (zero_copy_engaged) {
+            // Acquire a free ring slot (blocks once queue_depth are in flight).
+            std::size_t slotIdx = 0;
+            {
+                std::unique_lock<std::mutex> lk(slot_mtx);
+                slot_cv.wait(lk, [&]{
+                    for (char b : slot_busy) if (!b) return true;
+                    return false;
+                });
+                for (std::size_t i = 0; i < slot_busy.size(); ++i) {
+                    if (!slot_busy[i]) { slotIdx = i; slot_busy[i] = 1; break; }
+                }
+            }
+            fe = file->AsyncWriteSequential(
+                static_cast<const std::uint8_t*>(zc_slots[slotIdx]), this_chunk,
+                [&samples, idx, &errors, &bytes_done, &now_us,
+                 &slot_mtx, &slot_cv, &slot_busy, slotIdx]
+                (FileError r, std::size_t n) {
+                    samples[idx].complete_us = now_us();
+                    samples[idx].status = (int)r;
+                    samples[idx].size = n;
+                    if (r != FileError::kSuccess) errors.fetch_add(1);
+                    else bytes_done.fetch_add(n);
+                    { std::lock_guard<std::mutex> lk(slot_mtx); slot_busy[slotIdx] = 0; }
+                    slot_cv.notify_one();
+                });
+        } else if (async_ok) {
             fe = file->AsyncWriteSequential(chunk.data(), this_chunk,
                 [&samples, idx, &errors, &bytes_done, &now_us]
                 (FileError r, std::size_t n) {
@@ -302,11 +370,19 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
         file->GetAsyncIOStats(wallMs, count, minUs, maxUs, avgUs);
     }
 
+    bool zc_stat_engaged = false;
+    std::uint64_t zc_submits = 0, copy_submits = 0;
+    file->GetZeroCopyWriteStats(zc_stat_engaged, zc_submits, copy_submits);
+
     std::printf("benchmark: wrote %.1f MiB in %lld ms (%.2f MB/s)\n",
                 mb_written, (long long)elapsed_ms, mb_per_s);
     if (async_ok && count > 0) {
         std::printf("benchmark: async writes=%u min=%uus avg=%uus max=%uus\n",
                     count, minUs, avgUs, maxUs);
+        std::printf("benchmark: zero-copy engaged=%s submits=%llu copy-submits=%llu\n",
+                    zc_stat_engaged ? "yes" : "no",
+                    (unsigned long long)zc_submits,
+                    (unsigned long long)copy_submits);
     }
     if (errors.load() > 0) {
         std::printf("benchmark: %zu errors\n", errors.load());
@@ -338,7 +414,9 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
             out << "    \"chunk_bytes\": " << opts.chunk_bytes << ",\n";
             out << "    \"queue_depth\": " << opts.queue_depth << ",\n";
             out << "    \"direct_io\": " << (opts.direct_io ? "true" : "false") << ",\n";
-            out << "    \"async_engaged\": " << (async_ok ? "true" : "false") << "\n";
+            out << "    \"async_engaged\": " << (async_ok ? "true" : "false") << ",\n";
+            out << "    \"zero_copy_requested\": " << (opts.zero_copy ? "true" : "false") << ",\n";
+            out << "    \"zero_copy_engaged\": " << (zero_copy_engaged ? "true" : "false") << "\n";
             out << "  },\n";
             out << "  \"summary\": {\n";
             out << "    \"unmount_ms\": " << unmount_ms << ",\n";
@@ -364,6 +442,11 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
             out << "    \"avg_latency_us\": " << avgUs << ",\n";
             out << "    \"max_latency_us\": " << maxUs << ",\n";
             out << "    \"wall_clock_ms\": " << wallMs << "\n";
+            out << "  },\n";
+            out << "  \"zero_copy\": {\n";
+            out << "    \"engaged\": " << (zc_stat_engaged ? "true" : "false") << ",\n";
+            out << "    \"zero_copy_submits\": " << zc_submits << ",\n";
+            out << "    \"copy_submits\": " << copy_submits << "\n";
             out << "  },\n";
             out << "  \"writes\": [\n";
             std::size_t emitted_samples = 0;
@@ -394,12 +477,13 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
         }
     }
 
-    std::printf("BENCHMARK result=%s backend=%s bytes=%zu elapsed_ms=%lld throughput_mb_s=%.2f\n",
+    std::printf("BENCHMARK result=%s backend=%s bytes=%zu elapsed_ms=%lld throughput_mb_s=%.2f zero_copy=%s\n",
                 errors.load() == 0 ? "ok" : "fail",
                 backend,
                 (std::size_t)bytes_done.load(),
                 (long long)elapsed_ms,
-                mb_per_s);
+                mb_per_s,
+                zc_stat_engaged ? "yes" : "no");
     return errors.load() == 0 ? 0 : 1;
 }
 

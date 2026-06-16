@@ -95,6 +95,9 @@ int doBulkRoundTrip(priv::backends::MacOSXpcBackend& backend,
         std::fprintf(stderr, "FAIL  bulkBufferBase() returned null after map\n");
         return 1;
     }
+    std::printf("[diagnostic]   shared bulk buffer mapped at %p (%zu bytes) - this is the\n"
+                "[diagnostic]   same shared-memory plane the production zero-copy write path uses\n",
+                base, kBufSize);
 
     // Fill the first 4 KB of the shared buffer with a recognisable
     // pattern. The pattern stamps offset/len in the trailer so we can
@@ -143,7 +146,7 @@ int doBulkRoundTrip(priv::backends::MacOSXpcBackend& backend,
         (void)backend.mapBulkBuffer(sid, 0);
         return 1;
     }
-    std::printf("[diagnostic]   read-back matches\n");
+    std::printf("[diagnostic]   read-back matches - zero-copy shared-memory write plane OK\n");
 
     std::printf("[diagnostic]   mapBulkBuffer(size=0) release...\n");
     auto rel = backend.mapBulkBuffer(sid, 0);
@@ -269,8 +272,12 @@ int runPrivilegedHelperDiagnostic(const std::string& device_path,
     }
 
     if (rc == 0) {
+        const bool bulk_exercised = allow_write && exercise_bulk;
         std::printf("\n==============================================================\n");
         std::printf(" PASS  privileged helper architecture is functional\n");
+        std::printf("       zero-copy shared-memory plane: %s\n",
+                    bulk_exercised ? "exercised OK"
+                                   : "not exercised (add --test-privileged-helper-bulk)");
         std::printf("==============================================================\n");
     }
     return rc;
