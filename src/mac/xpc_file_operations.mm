@@ -19,6 +19,8 @@
 #include <iostream>
 #include <vector>
 
+#include <sys/sysctl.h>
+
 namespace rpi_imager {
 
 namespace priv = rpi_imager::privileged;
@@ -32,6 +34,22 @@ namespace {
 priv::backends::MacOSXpcBackend* xpcBackend() {
     auto& w = ::rpi_imager::getProcessPrivilegedWriter();
     return dynamic_cast<priv::backends::MacOSXpcBackend*>(&w);
+}
+
+// Mirror of the helper's RAM-proportional bulk-buffer ceiling (1/3 of
+// physical RAM, floored at 256 MB; see service_impl.mm maxBulkBufferBytes).
+// Used to avoid attempting a zero-copy map the helper would reject - which
+// would tear down the copy ring and force a synchronous fallback. The
+// client's write ring is already RAM-bounded, so this rarely trips.
+std::size_t maxZeroCopyRingBytes() {
+    constexpr std::uint64_t kFloor = 256ull * 1024 * 1024;
+    std::uint64_t mem = 0;
+    std::size_t len = sizeof(mem);
+    if (sysctlbyname("hw.memsize", &mem, &len, nullptr, 0) != 0 || mem == 0) {
+        return static_cast<std::size_t>(kFloor);
+    }
+    const std::uint64_t third = mem / 3;
+    return static_cast<std::size_t>(third > kFloor ? third : kFloor);
 }
 
 }  // namespace
@@ -457,10 +475,10 @@ bool XpcFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t slotSiz
     outSlots.clear();
     if (count == 0 || slotSize == 0) return false;
 
-    // Bound the ring to the helper's bulk-buffer cap (256 MB; see
-    // service_impl.mm kMaxBulkBuffer). Larger write rings can't be mapped
-    // zero-copy, so the caller falls back to heap slots.
-    constexpr std::size_t kMaxZeroCopyRingBytes = 256ull * 1024 * 1024;
+    // Bound the ring to the helper's RAM-proportional bulk-buffer cap (see
+    // maxZeroCopyRingBytes / service_impl.mm). Larger write rings can't be
+    // mapped zero-copy, so the caller falls back to heap slots.
+    const std::size_t kMaxZeroCopyRingBytes = maxZeroCopyRingBytes();
     if (count > kMaxZeroCopyRingBytes / slotSize) {
         return false;
     }
