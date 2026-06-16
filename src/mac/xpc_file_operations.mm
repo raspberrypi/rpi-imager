@@ -313,6 +313,13 @@ FileError XpcFileOperations::Close() {
             hss.min_write_latency_us = (std::uint32_t)h.min_us();
             hss.avg_write_latency_us = (std::uint32_t)h.avg_us();
             hss.max_write_latency_us = (std::uint32_t)h.max_us();
+            const int nb = std::min(h.bucket_upper_us_size(), h.bucket_counts_size());
+            hss.write_latency_bucket_upper_us.reserve(nb);
+            hss.write_latency_bucket_counts.reserve(nb);
+            for (int i = 0; i < nb; ++i) {
+                hss.write_latency_bucket_upper_us.push_back(h.bucket_upper_us(i));
+                hss.write_latency_bucket_counts.push_back(h.bucket_counts(i));
+            }
         }
         // The backend already translated discrete events; pull
         // helper.fsync / helper.prepareDevice / helper.hashDevice out

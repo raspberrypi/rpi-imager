@@ -1580,11 +1580,27 @@ void DownloadThread::_closeFiles()
             // Format as a semicolon-separated key:value string so the
             // existing PerformanceStats exporter, which treats event
             // metadata as opaque, can include it verbatim.
+            // §7a per-write latency histogram, formatted as
+            // "<=100us=N,<=250us=M,...,>50000us=K" (edges arrive from the
+            // helper, last bucket is open-ended with a UINT64_MAX sentinel).
+            QString latencyBuckets;
+            {
+                const auto& edges = hss.write_latency_bucket_upper_us;
+                const auto& counts = hss.write_latency_bucket_counts;
+                for (size_t i = 0; i < edges.size() && i < counts.size(); ++i) {
+                    if (!latencyBuckets.isEmpty()) latencyBuckets += ",";
+                    QString label = (edges[i] == UINT64_MAX)
+                        ? QString(">%1us").arg(i > 0 ? static_cast<qulonglong>(edges[i-1]) : 0)
+                        : QString("<=%1us").arg(static_cast<qulonglong>(edges[i]));
+                    latencyBuckets += QString("%1=%2").arg(label).arg(static_cast<qulonglong>(counts[i]));
+                }
+            }
             QString meta = QString(
                     "writeCount:%1; minLatencyUs:%2; avgLatencyUs:%3; "
                     "maxLatencyUs:%4; fsyncUs:%5; fsyncCount:%6; "
                     "prepareDeviceUs:%7; hashDeviceUs:%8; "
-                    "bytesWritten:%9; helperDurationMs:%10")
+                    "bytesWritten:%9; helperDurationMs:%10; "
+                    "latencyBuckets:%11")
                 .arg(hss.write_count)
                 .arg(hss.min_write_latency_us)
                 .arg(hss.avg_write_latency_us)
@@ -1594,7 +1610,8 @@ void DownloadThread::_closeFiles()
                 .arg(hss.prepare_device_us)
                 .arg(hss.hash_device_us)
                 .arg(static_cast<qulonglong>(hss.bytes_written))
-                .arg(static_cast<qulonglong>(hss.duration_ms));
+                .arg(static_cast<qulonglong>(hss.duration_ms))
+                .arg(latencyBuckets);
             emit eventHelperSessionSummary(
                 static_cast<quint32>(hss.duration_ms), meta);
         }

@@ -381,6 +381,12 @@ class FileOperations {
     std::uint32_t fsync_count = 0;
     std::uint64_t prepare_device_us = 0;
     std::uint64_t hash_device_us = 0;
+    // §7a per-write latency histogram. write_latency_bucket_upper_us[i] is the
+    // inclusive upper edge (microseconds, final = UINT64_MAX) and
+    // write_latency_bucket_counts[i] the sample count for bucket i. Equal
+    // length, or both empty when the backend reported no buckets.
+    std::vector<std::uint64_t> write_latency_bucket_upper_us;
+    std::vector<std::uint64_t> write_latency_bucket_counts;
   };
 
   // Returns whatever was captured during the most recent Close() (or

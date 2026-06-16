@@ -219,9 +219,15 @@ message LatencyHistogram {
   uint64 max_us = 2;
   uint64 avg_us = 3;
   uint32 sample_count = 4;
-  // Bucket edges and counts deferred until we know which buckets make
-  // sense; protobuf field tags are reserved for the eventual addition.
-  reserved 10 to 19;
+  // §7a Fixed-edge histogram. bucket_upper_us[i] is the inclusive upper edge
+  // (microseconds) of bucket i; the final bucket is open-ended and carries a
+  // sentinel edge (UINT64_MAX). bucket_counts[i] is the number of samples in
+  // bucket i. The two arrays have equal length, or are both empty when the
+  // producer didn't record buckets. The edges travel on the wire so readers
+  // don't have to hard-code them.
+  repeated uint64 bucket_upper_us = 10;
+  repeated uint64 bucket_counts = 11;
+  reserved 12 to 19;
 }
 
 message SizeHistogram {
