@@ -1314,13 +1314,31 @@ Result<proto::SessionStats> MacOSXpcBackend::closeSession(
             stats.set_bytes_written(num(@"bytesWritten"));
             stats.set_duration_ms(num(@"durationMs"));
 
-            // Per-write latency histogram: min/avg/max and sample count.
-            // Bucket data is reserved for later (§7a).
+            // Per-write latency histogram: min/avg/max, sample count, and
+            // (§7a) fixed-edge buckets. Edges arrive alongside counts so we
+            // don't hard-code them; mismatched/absent arrays are tolerated.
             auto* hist = stats.mutable_write_latency();
             hist->set_min_us(num(@"minWriteLatencyUs"));
             hist->set_avg_us(num(@"avgWriteLatencyUs"));
             hist->set_max_us(num(@"maxWriteLatencyUs"));
             hist->set_sample_count((std::uint32_t)num(@"writeCount"));
+
+            NSArray* edges = [d[@"writeLatencyBucketUpperUs"] isKindOfClass:[NSArray class]]
+                                 ? (NSArray*)d[@"writeLatencyBucketUpperUs"] : nil;
+            NSArray* counts = [d[@"writeLatencyBucketCounts"] isKindOfClass:[NSArray class]]
+                                  ? (NSArray*)d[@"writeLatencyBucketCounts"] : nil;
+            if (edges && counts && edges.count == counts.count) {
+                for (NSUInteger i = 0; i < edges.count; ++i) {
+                    NSNumber* e = edges[i];
+                    NSNumber* c = counts[i];
+                    if (![e isKindOfClass:[NSNumber class]] ||
+                        ![c isKindOfClass:[NSNumber class]]) {
+                        continue;
+                    }
+                    hist->add_bucket_upper_us((std::uint64_t)e.unsignedLongLongValue);
+                    hist->add_bucket_counts((std::uint64_t)c.unsignedLongLongValue);
+                }
+            }
 
             // Convert helper-side discrete timings into TimedEvent
             // entries so the existing PerformanceStats event readers

@@ -36,7 +36,9 @@
 #include <sys/sysctl.h>
 #include <unistd.h>
 #include <random>
+#include <array>
 #include <atomic>
+#include <limits>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -216,6 +218,25 @@ void tearDownDriveSubSessionOnDriveSubQueueIfIdle() {
     g_drive_sub_da_session = nullptr;
 }
 
+// §7a per-write latency histogram bucket edges. Inclusive upper edge in
+// microseconds for each bucket; the final bucket is open-ended (sentinel
+// UINT64_MAX). Chosen to span fast NVMe (sub-100 µs) through slow SD-card
+// stalls (tens of ms). The edges travel on the wire so the client doesn't
+// hard-code them.
+constexpr std::array<std::uint64_t, 10> kLatencyBucketUpperUs = {
+    100ull, 250ull, 500ull, 1000ull, 2000ull, 5000ull,
+    10000ull, 25000ull, 50000ull,
+    std::numeric_limits<std::uint64_t>::max(),
+};
+constexpr std::size_t kNumLatencyBuckets = kLatencyBucketUpperUs.size();
+
+inline std::size_t latencyBucketIndex(std::uint64_t sample_us) {
+    for (std::size_t i = 0; i < kNumLatencyBuckets; ++i) {
+        if (sample_us <= kLatencyBucketUpperUs[i]) return i;
+    }
+    return kNumLatencyBuckets - 1;
+}
+
 struct OpenSession {
     int fd = -1;
     std::string device_path;
@@ -250,6 +271,9 @@ struct OpenSession {
     std::atomic<std::uint32_t> fsync_count{0};
     std::atomic<std::uint64_t> prepare_device_us{0};
     std::atomic<std::uint64_t> hash_device_us{0};
+    // §7a per-write latency histogram; latency_buckets[i] counts samples
+    // whose latency fell in bucket i (see kLatencyBucketUpperUs).
+    std::array<std::atomic<std::uint64_t>, kNumLatencyBuckets> latency_buckets{};
 };
 
 // Lock-free min/max update for the latency stats.
@@ -1243,6 +1267,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     sess_ptr->total_write_latency_us.fetch_add(lat_us);
     updateLatencyMinMax(sess_ptr->min_write_latency_us,
                          sess_ptr->max_write_latency_us, lat_us);
+    sess_ptr->latency_buckets[latencyBucketIndex(lat_us)].fetch_add(1);
     // No per-write OK log; see bulkWriteFromBuffer for rationale.
     reply((uint64_t)wrote, nil, 0);
 }
@@ -1379,6 +1404,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     std::atomic<std::uint64_t>* total_write_lat_ptr = nullptr;
     std::atomic<std::uint32_t>* min_lat_ptr = nullptr;
     std::atomic<std::uint32_t>* max_lat_ptr = nullptr;
+    std::array<std::atomic<std::uint64_t>, kNumLatencyBuckets>* latency_buckets_ptr = nullptr;
     dispatch_queue_t bulk_queue = nullptr;
     dispatch_semaphore_t inflight_sem = nullptr;
     {
@@ -1397,6 +1423,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         total_write_lat_ptr = &sess->total_write_latency_us;
         min_lat_ptr = &sess->min_write_latency_us;
         max_lat_ptr = &sess->max_write_latency_us;
+        latency_buckets_ptr = &sess->latency_buckets;
         bulk_queue = sess->bulk_queue;
         inflight_sem = sess->bulk_inflight_sem;
     }
@@ -1475,6 +1502,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         write_count_ptr->fetch_add(1);
         total_write_lat_ptr->fetch_add(lat_us);
         updateLatencyMinMax(*min_lat_ptr, *max_lat_ptr, lat_us);
+        (*latency_buckets_ptr)[latencyBucketIndex(lat_us)].fetch_add(1);
 
         if (wrote < 0) {
             // Roll back the CAS on failure.
@@ -1854,6 +1882,17 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     const std::uint64_t prep_us = drained->prepare_device_us.load();
     const std::uint64_t hash_us = drained->hash_device_us.load();
 
+    // §7a per-write latency histogram. Edges travel alongside counts so the
+    // client doesn't hard-code them.
+    NSMutableArray<NSNumber*>* bucketEdges =
+        [NSMutableArray arrayWithCapacity:kNumLatencyBuckets];
+    NSMutableArray<NSNumber*>* bucketCounts =
+        [NSMutableArray arrayWithCapacity:kNumLatencyBuckets];
+    for (std::size_t i = 0; i < kNumLatencyBuckets; ++i) {
+        [bucketEdges addObject:@((unsigned long long)kLatencyBucketUpperUs[i])];
+        [bucketCounts addObject:@((unsigned long long)drained->latency_buckets[i].load())];
+    }
+
     NSDictionary* stats = @{
         @"schemaVersion":     @(1),
         @"bytesWritten":      @((unsigned long long)bytes),
@@ -1866,6 +1905,8 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         @"fsyncCount":        @((unsigned int)fsync_n),
         @"prepareDeviceUs":   @((unsigned long long)prep_us),
         @"hashDeviceUs":      @((unsigned long long)hash_us),
+        @"writeLatencyBucketUpperUs": bucketEdges,
+        @"writeLatencyBucketCounts":  bucketCounts,
     };
 
     auditLogf(@"OK closeSession session=%llu pid=%d device=%s "
