@@ -114,7 +114,7 @@ else
     if [ -d "/opt/Qt" ]; then
         echo "Checking for Qt installations in /opt/Qt..."
         # Find the newest Qt6 version installed
-        NEWEST_QT=$(find /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
+        NEWEST_QT=$(find -L /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
         if [ -n "$NEWEST_QT" ]; then
             QT_VERSION=$(basename "$NEWEST_QT")
             

@@ -81,20 +81,44 @@ download_qt_source
 # Clean build directory if requested
 clean_build_directory
 
-# Build custom ICU if needed
-if [ -d "$BASE_DIR/icu/icu4c/source/lib" ]; then
-    echo "ICU already built"
+# Build custom ICU if needed (installed to icu/install — isolated from host libicu-dev)
+ICU_INSTALL="$BASE_DIR/icu/install"
+
+if [ -d "$ICU_INSTALL/lib" ] && ls "$ICU_INSTALL/lib"/libicuuc.so* >/dev/null 2>&1; then
+    echo "ICU already installed to $ICU_INSTALL"
 else
     echo "Building custom ICU..."
 
     ICU_VERSION=$(get_icu_version_for_qt "$QT_VERSION")
     ICU_TAG=$(icu_version_to_tag "$ICU_VERSION")
     ICU_DATA_ZIP=$(icu_version_to_data_package "$ICU_VERSION")
-    
+
     echo "Using ICU version $ICU_VERSION (tag: $ICU_TAG) for Qt $QT_VERSION"
 
     cd "$BASE_DIR"
     LANG_DIR="$PROJECT_ROOT/src/i18n"
+
+    if [ ! -d "$BASE_DIR/icu" ]; then
+        git clone https://github.com/unicode-org/icu.git
+    fi
+    cd "$BASE_DIR/icu/icu4c/source"
+
+    echo "Checking out ICU $ICU_TAG..."
+    git fetch --tags 2>/dev/null || true
+    git checkout "$ICU_TAG" 2>/dev/null || {
+        echo "Warning: Could not checkout $ICU_TAG, trying latest stable..."
+        git checkout "$(git describe --tags --abbrev=0)" 2>/dev/null || true
+    }
+
+    if [ ! -d "data" ]; then
+        echo "Downloading ICU data package $ICU_DATA_ZIP..."
+        wget "https://github.com/unicode-org/icu/releases/download/$ICU_TAG/$ICU_DATA_ZIP" || {
+            echo "Warning: Could not download $ICU_DATA_ZIP, using default data"
+        }
+        if [ -f "$ICU_DATA_ZIP" ]; then
+            unzip -q "$ICU_DATA_ZIP"
+        fi
+    fi
 
     if [ -d "$LANG_DIR" ]; then
         cd "$LANG_DIR"
@@ -110,7 +134,7 @@ else
             fi
         done
         cd "$BASE_DIR"
-        
+
         cat > "$BASE_DIR/language_filters.json" << EOF
 {
 "localeFilter": {
@@ -132,36 +156,15 @@ else
 }
 EOF
         echo "Language filters: $JSON_INCLUDELIST"
-
-        if [ ! -d "$BASE_DIR/icu" ]; then
-            git clone https://github.com/unicode-org/icu.git
-        fi
         cd "$BASE_DIR/icu/icu4c/source"
-        
-        echo "Checking out ICU $ICU_TAG..."
-        git fetch --tags 2>/dev/null || true
-        git checkout "$ICU_TAG" 2>/dev/null || {
-            echo "Warning: Could not checkout $ICU_TAG, trying latest stable..."
-            git checkout "$(git describe --tags --abbrev=0)" 2>/dev/null || true
-        }
-        
-        if [ ! -d "data" ]; then
-            echo "Downloading ICU data package $ICU_DATA_ZIP..."
-            wget "https://github.com/unicode-org/icu/releases/download/$ICU_TAG/$ICU_DATA_ZIP" || {
-                echo "Warning: Could not download $ICU_DATA_ZIP, using default data"
-            }
-            if [ -f "$ICU_DATA_ZIP" ]; then
-                unzip -q "$ICU_DATA_ZIP"
-            fi
-        fi
-        
-        ICU_DATA_FILTER_FILE="$BASE_DIR/language_filters.json" ./runConfigureICU Linux
-        make -j"$CORES"
+        ICU_DATA_FILTER_FILE="$BASE_DIR/language_filters.json" ./runConfigureICU Linux --prefix="$ICU_INSTALL"
     else
         echo "Warning: Language directory not found at $LANG_DIR, building ICU without language filters"
-        ./runConfigureICU Linux
-        make -j"$CORES"
+        ./runConfigureICU Linux --prefix="$ICU_INSTALL"
     fi
+
+    make -j"$CORES"
+    make install
 fi
 
 # Configure and build Qt
@@ -183,10 +186,30 @@ CONFIG_OPTS="$CONFIG_OPTS $EXCLUSION_OPTS"
 # Add CMake-specific options
 CONFIG_OPTS="$CONFIG_OPTS $(get_cmake_opts)"
 
-# Add ICU if built
-if [ -d "$BASE_DIR/icu/icu4c/source/lib" ]; then
-    CONFIG_OPTS="$CONFIG_OPTS -DICU_ROOT=\"$BASE_DIR/icu/icu4c/source/lib\""
+# Custom ICU: prepend -I so headers beat host /usr/include/unicode from libicu-dev
+if [ -d "$ICU_INSTALL/include" ] && [ -d "$ICU_INSTALL/lib" ]; then
+    export CPPFLAGS="-I$ICU_INSTALL/include ${CPPFLAGS:-}"
+    export CFLAGS="-I$ICU_INSTALL/include ${CFLAGS:-}"
+    export CXXFLAGS="-I$ICU_INSTALL/include ${CXXFLAGS:-}"
+    export LDFLAGS="-L$ICU_INSTALL/lib -Wl,-rpath-link,$ICU_INSTALL/lib -Wl,-rpath,$ICU_INSTALL/lib ${LDFLAGS:-}"
+    export LD_LIBRARY_PATH="$ICU_INSTALL/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    CONFIG_OPTS="$CONFIG_OPTS -DICU_ROOT=\"$ICU_INSTALL\""
+    CONFIG_OPTS="$CONFIG_OPTS -DICU_INCLUDE_DIR=\"$ICU_INSTALL/include\""
+    CONFIG_OPTS="$CONFIG_OPTS -DICU_I18N_LIBRARY_RELEASE=\"$ICU_INSTALL/lib/libicui18n.so\""
+    CONFIG_OPTS="$CONFIG_OPTS -DICU_UC_LIBRARY_RELEASE=\"$ICU_INSTALL/lib/libicuuc.so\""
+    CONFIG_OPTS="$CONFIG_OPTS -DICU_DATA_LIBRARY_RELEASE=\"$ICU_INSTALL/lib/libicudata.so\""
+    CONFIG_OPTS="$CONFIG_OPTS -DCMAKE_BUILD_RPATH=\"$ICU_INSTALL/lib\""
+    CONFIG_OPTS="$CONFIG_OPTS -DCMAKE_INSTALL_RPATH=\"$ICU_INSTALL/lib\""
+    CONFIG_OPTS="$CONFIG_OPTS -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
 fi
+
+embedded_icu_env_vars() {
+    cat << EOF
+
+# Custom ICU used by this Qt build (until libs are vendored into the image)
+export LD_LIBRARY_PATH="$ICU_INSTALL/lib:\${LD_LIBRARY_PATH}"
+EOF
+}
 
 # Run Qt configure
 run_qt_configure "$CONFIG_OPTS"
@@ -198,7 +221,7 @@ build_qt
 install_qt
 
 # Create environment and toolchain files
-create_qt_env_script "embedded"
+create_qt_env_script "embedded" embedded_icu_env_vars
 create_cmake_toolchain "embedded"
 
 # Print final usage instructions
