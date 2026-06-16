@@ -172,6 +172,24 @@ if [ -z "$QT_DIR" ]; then
     exit 1
 fi
 
+# Ensure Qt host tools (qmake, rcc, etc.) can load custom ICU runtime libs.
+# This matters for embedded Qt builds linked against ICU 73 from qt/icu/install.
+for ICU_RUNTIME_LIB_DIR in \
+    "$SCRIPT_DIR/qt/icu/install/lib" \
+    "$SCRIPT_DIR/qt/icu/icu4c/source/lib"
+do
+    if [ -d "$ICU_RUNTIME_LIB_DIR" ]; then
+        case "${LD_LIBRARY_PATH:-}" in
+            *"$ICU_RUNTIME_LIB_DIR"*) ;;
+            *)
+                export LD_LIBRARY_PATH="$ICU_RUNTIME_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                echo "Using ICU runtime libraries from: $ICU_RUNTIME_LIB_DIR"
+                ;;
+        esac
+        break
+    fi
+done
+
 # Check if Qt Version
 if [ -f "$QT_DIR/bin/qmake" ]; then
     QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
