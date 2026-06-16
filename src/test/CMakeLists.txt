@@ -55,8 +55,8 @@ add_custom_target(test_customization_generator
 
 
 # -----------------------------------------------------------------------
-# Privileged I/O PAL tests (phase 1a). No Qt dependency - the PAL is
-# Qt-free per design doc §8a.
+# Privileged I/O PAL tests. No Qt dependency - the PAL is Qt-free
+# (see doc/privileged-helper-plan.md §8a).
 # -----------------------------------------------------------------------
 
 add_executable(privileged_writer_inprocess_test

@@ -25,7 +25,7 @@ package rpi_imager.privileged.proto;
 // ---------------------------------------------------------------------------
 
 // Bumped on incompatible changes. Keep in sync with whatever the helper
-// reports at handshake. Phase 1a starts at 1.
+// reports at handshake.
 //
 // History:
 //   1 - initial
@@ -219,8 +219,8 @@ message LatencyHistogram {
   uint64 max_us = 2;
   uint64 avg_us = 3;
   uint32 sample_count = 4;
-  // Bucket edges and counts deferred to phase 1b once we know which buckets
-  // make sense; protobuf field tags are reserved for the eventual addition.
+  // Bucket edges and counts deferred until we know which buckets make
+  // sense; protobuf field tags are reserved for the eventual addition.
   reserved 10 to 19;
 }
 

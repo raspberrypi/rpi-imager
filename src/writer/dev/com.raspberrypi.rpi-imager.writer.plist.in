@@ -9,8 +9,8 @@
   variable substitution fills in the binary path under the build tree.
 
   Install for the current user (LaunchAgents) - that gives us a
-  user-context helper for the proof-of-concept. Production helpers go
-  in /Library/LaunchDaemons (system-wide) and run as root, registered
+  user-context helper for development. Production helpers go in
+  /Library/LaunchDaemons (system-wide) and run as root, registered
   via SMAppService.daemon.
 
   Install:
@@ -22,9 +22,8 @@
     launchctl bootout gui/$(id -u)/com.raspberrypi.rpi-imager.writer
     rm ~/Library/LaunchAgents/com.raspberrypi.rpi-imager.writer.plist
 
-  This is the EQUIVALENT of what SMAppService.register() will do at
-  install time once we wire that up - that path is for the production
-  app bundle.
+  This is the EQUIVALENT of what SMAppService.register() does at install
+  time for the production app bundle.
 -->
 <plist version="1.0">
 <dict>

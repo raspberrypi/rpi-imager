@@ -10,16 +10,22 @@
 // the FD privately, so the kernel's per-write enforcement against
 // borrowed FDs never has a chance to fire.
 //
-// Selected at runtime by `CreatePlatformFileOperations()` when the
-// `RPI_IMAGER_USE_XPC_HELPER` environment variable is set, so that an
-// A/B deployment can roll the helper-routed path out to a fraction of
-// users without changing the binary.
+// This is the default macOS path, selected by
+// `CreatePlatformFileOperations()`. Opt out to the legacy in-process
+// path with `RPI_IMAGER_USE_LEGACY_AUTHOPEN=1` for diagnostic comparison.
 //
-// Phase 1b implementation note: writes go through the synchronous
-// `writeChunk` path (bytes copied across the XPC boundary). The
-// shared-memory bulk-write ring is wired and demonstrated by the
-// diagnostic but not yet plumbed into the production write loop -
-// that's a follow-up that lifts throughput without changing semantics.
+// Write path: the production loop enables async I/O (SetAsyncQueueDepth
+// > 1) and submits via AsyncWriteSequential, which copies each chunk into
+// a shared-memory ring slot and dispatches it to the helper's bulk-write
+// path (submitBulkWriteAsync -> bulkWriteFromBuffer). The synchronous
+// writeChunk path is the fallback for small/metadata writes, oversized
+// chunks, and when the ring can't be mapped. See
+// doc/privileged-helper-plan.md §6.
+//
+// Known inefficiency: AsyncWriteSequential memcpy's the caller's buffer
+// into the ring rather than having the caller fill mapped ring memory
+// directly, so the macOS path is one-copy where the Linux io_uring and
+// Windows IOCP paths are zero-copy. See §13.
 
 #pragma once
 
@@ -60,13 +66,14 @@ public:
     FileError ReadSequential(std::uint8_t* data, std::size_t size,
                                 std::size_t& bytes_read) override;
 
-    // Async API - phase 1b: routes through the helper's shared-memory
-    // bulk-write ring. SetAsyncQueueDepth(N) maps an N×slot_size ring
+    // Async API: routes through the helper's shared-memory bulk-write
+    // ring. SetAsyncQueueDepth(N) maps an N×slot_size ring
     // (via mapBulkBuffer); AsyncWriteSequential copies the caller's
     // buffer into a slot and submits via submitBulkWriteAsync, which
     // dispatches the pwrite on the helper side with bounded
     // parallelism. WaitForPendingWrites blocks until all in-flight
     // writes have completed.
+    void SetMaxWriteSizeHint(std::size_t bytes) override;
     bool SetAsyncQueueDepth(int depth) override;
     int  GetAsyncQueueDepth() const override;
     bool IsAsyncIOSupported() const override;

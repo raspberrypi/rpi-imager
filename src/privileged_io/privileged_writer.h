@@ -247,9 +247,9 @@ public:
 
     struct Config {
         // Prefer the privileged helper backend over legacy paths (default).
-        // When false on macOS, the factory selects MacOSAuthopenLegacyBackend
-        // even on Tahoe+ - useful for diagnostic comparison via
-        // --debug-use-authopen.
+        // When false, the factory skips the native helper backend and uses
+        // the client-supplied local_backend_constructor instead - useful for
+        // diagnostic comparison against the legacy in-process path.
         bool prefer_helper = true;
 
         // Whether the factory may show user prompts during creation
@@ -262,12 +262,12 @@ public:
         // the helper binary inside the bundle.
         std::string app_bundle_path;
 
-        // Phase 1a injection point: the client supplies a constructor for
-        // a "do it ourselves" backend that wraps existing in-process code.
-        // The factory selects this in production until real privileged
-        // backends (XPC, polkit, UAC) ship in phases 1b/2/3. Leaving it
-        // null causes the factory to fall back to InProcessTestBackend,
-        // which is appropriate for tests but not for production.
+        // Client-supplied constructor for a "do it ourselves" backend that
+        // wraps existing in-process code (the LocalShimBackend). Selected on
+        // platforms without a native privileged backend and on the macOS
+        // opt-out path. Leaving it null causes the factory to fall back to
+        // InProcessTestBackend, which is appropriate for tests but not for
+        // production.
         BackendConstructor local_backend_constructor;
 
         // Test override: when non-null, the factory returns this instance

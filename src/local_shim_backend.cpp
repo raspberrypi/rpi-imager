@@ -15,7 +15,7 @@ priv::Result<void> notImplemented(const char* method) {
     proto::ErrorInfo e;
     e.set_code(proto::ERROR_NOT_IMPLEMENTED);
     e.set_detail(std::string("LocalShimBackend::") + method
-                 + " not implemented in phase 1a");
+                 + " not implemented by this backend");
     return priv::Result<void>::failure(std::move(e));
 }
 
@@ -24,7 +24,7 @@ priv::Result<T> notImplementedT(const char* method) {
     proto::ErrorInfo e;
     e.set_code(proto::ERROR_NOT_IMPLEMENTED);
     e.set_detail(std::string("LocalShimBackend::") + method
-                 + " not implemented in phase 1a");
+                 + " not implemented by this backend");
     return priv::Result<T>::failure(std::move(e));
 }
 
@@ -85,15 +85,14 @@ priv::Result<void> LocalShimBackend::uninstallHelper() {
 }
 
 priv::BackendKind LocalShimBackend::backend() const {
-    // Phase 1a: pick the closest existing kind. We aren't a "real" backend
-    // so we co-opt one of the legacy backend kinds for the time being.
-    // When phase 1b lands proper backends, this enum gains a dedicated
-    // LocalShim entry and we remove the special case.
+    // The shim isn't a native privileged backend, so it co-opts the
+    // closest existing kind. A dedicated LocalShim enum value can be added
+    // if a caller ever needs to distinguish it.
     return priv::BackendKind::MacOSAuthopenLegacy;
 }
 
 std::string LocalShimBackend::backendDescription() const {
-    return "LocalShimBackend (phase 1a; delegates to PlatformQuirks)";
+    return "LocalShimBackend (delegates to PlatformQuirks)";
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +147,7 @@ void LocalShimBackend::submitWrite(const proto::SessionId&,
     *wr.mutable_error() = [&] {
         proto::ErrorInfo e;
         e.set_code(proto::ERROR_NOT_IMPLEMENTED);
-        e.set_detail("LocalShimBackend::submitWrite not implemented in phase 1a");
+        e.set_detail("LocalShimBackend::submitWrite not implemented by this backend");
         return e;
     }();
     on_complete(wr);
@@ -174,7 +173,7 @@ priv::Result<proto::SessionStats> LocalShimBackend::closeSession(
 }
 
 // ---------------------------------------------------------------------------
-// Maintenance - phase 1a proof-of-concept migration
+// Maintenance - delegate to the existing PlatformQuirks code
 // ---------------------------------------------------------------------------
 
 priv::Result<void> LocalShimBackend::unmount(const std::string& device_path) {

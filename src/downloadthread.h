@@ -266,6 +266,12 @@ protected:
      * libcurl callbacks
      */
     virtual size_t _writeData(const char *buf, size_t len);
+
+    // Largest single sequential write this thread will submit (the producer's
+    // write ring-buffer slot size). Used to size the macOS helper's
+    // shared-memory ring. 0 = unknown (backend assumes its worst-case cap).
+    virtual size_t _maxWriteChunkHint() const { return 0; }
+
     bool _progress(curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
     void _header(const std::string &header);
 

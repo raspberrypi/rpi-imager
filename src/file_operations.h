@@ -180,6 +180,14 @@ class FileOperations {
   // Completion callback for async writes
   using AsyncWriteCallback = std::function<void(FileError result, std::size_t bytes_written)>;
   
+  // Optional hint: the maximum size of a single sequential write the caller
+  // will submit (e.g. the producer's ring-buffer slot size). Backends that
+  // pre-map I/O buffers (the macOS helper's shared-memory ring) use this to
+  // size their slots to the actual write size instead of assuming a
+  // worst-case maximum. No-op by default; safe to ignore. Call before
+  // SetAsyncQueueDepth().
+  virtual void SetMaxWriteSizeHint(std::size_t bytes) { (void)bytes; }
+
   // Configure async I/O queue depth (1 = synchronous, >1 = async with that many in-flight)
   // Must be called before writes. Returns false if async I/O is not supported.
   virtual bool SetAsyncQueueDepth(int depth) { (void)depth; return false; }

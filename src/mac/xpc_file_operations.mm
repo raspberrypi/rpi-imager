@@ -51,12 +51,17 @@ struct XpcFileOperations::State {
     // submitBulkWriteAsync. The completion callback frees the slot.
     //
     // Slot size = max chunk per XPC round-trip. Each round-trip has a
-    // fixed per-call cost (~1 ms on macOS NSXPC), so larger slots
-    // mean fewer trips per GB. Tuned to 32 MB: amortises IPC overhead
-    // to <0.3% at 100 MB/s flash speeds, while keeping the default
-    // ring (qd=8 × 32 MB = 256 MB) within reason for memory-
-    // constrained hosts. Callers can shrink via SetAsyncQueueDepth.
-    static constexpr std::size_t kSlotBytes = 32ull * 1024 * 1024;
+    // fixed per-call cost (~1 ms on macOS NSXPC), so larger slots mean
+    // fewer trips per GB. The effective size (slot_bytes) is set at
+    // SetAsyncQueueDepth time from the caller's SetMaxWriteSizeHint, so a
+    // depth-N ring reserves N × the actual write size rather than N × the
+    // 32 MB worst-case cap. The imager's write buffers are ≤8 MB, so this
+    // is a ~4× reduction in mapped shared memory. kMaxSlotBytes caps the
+    // hint; kMinSlotBytes floors it so a tiny hint still amortises IPC.
+    static constexpr std::size_t kMaxSlotBytes = 32ull * 1024 * 1024;
+    static constexpr std::size_t kMinSlotBytes =  1ull * 1024 * 1024;
+    std::size_t max_write_hint = 0;          // set by SetMaxWriteSizeHint
+    std::size_t slot_bytes = kMaxSlotBytes;  // finalised at SetAsyncQueueDepth
     int  queue_depth = 1;
     bool async_ready = false;
     void* ring_base = nullptr;
@@ -361,11 +366,30 @@ FileError XpcFileOperations::ReadSequential(std::uint8_t* data,
     return FileError::kSuccess;
 }
 
+void XpcFileOperations::SetMaxWriteSizeHint(std::size_t bytes) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    state_->max_write_hint = bytes;
+}
+
 bool XpcFileOperations::SetAsyncQueueDepth(int depth) {
     if (depth < 1) depth = 1;
 
     std::lock_guard<std::mutex> lk(state_->mutex);
     if (!state_->open) return false;
+
+    // Size each ring slot to the caller's largest expected write (rounded
+    // up to a page), clamped to [kMinSlotBytes, kMaxSlotBytes]. Without a
+    // hint we fall back to the worst-case cap so behaviour is unchanged.
+    {
+        std::size_t slot = State::kMaxSlotBytes;
+        if (state_->max_write_hint > 0) {
+            constexpr std::size_t kPage = 4096;
+            slot = ((state_->max_write_hint + kPage - 1) / kPage) * kPage;
+            slot = std::max(slot, State::kMinSlotBytes);
+            slot = std::min(slot, State::kMaxSlotBytes);
+        }
+        state_->slot_bytes = slot;
+    }
 
     // depth == 1 means synchronous mode; nothing to set up.
     if (depth == 1) {
@@ -389,7 +413,7 @@ bool XpcFileOperations::SetAsyncQueueDepth(int depth) {
     }
 
     const std::size_t ring_bytes =
-        static_cast<std::size_t>(depth) * State::kSlotBytes;
+        static_cast<std::size_t>(depth) * state_->slot_bytes;
     auto map_r = xpc->mapBulkBuffer(state_->session_id, ring_bytes);
     if (!map_r.ok) {
         FileOperationsLog("XpcFileOperations: mapBulkBuffer failed: "
@@ -434,7 +458,7 @@ FileError XpcFileOperations::AsyncWriteSequential(const std::uint8_t* data,
             if (callback) callback(FileError::kOpenError, 0);
             return FileError::kOpenError;
         }
-        if (!state_->async_ready || size > State::kSlotBytes) {
+        if (!state_->async_ready || size > state_->slot_bytes) {
             use_sync = true;
         }
         if (state_->cancelled.load()) {
@@ -473,7 +497,7 @@ FileError XpcFileOperations::AsyncWriteSequential(const std::uint8_t* data,
     // Copy caller's buffer into the slot, snapshot offset, advance
     // the write cursor under the main mutex.
     const std::uint64_t buffer_offset =
-        static_cast<std::uint64_t>(slot_index) * State::kSlotBytes;
+        static_cast<std::uint64_t>(slot_index) * state_->slot_bytes;
     std::uint8_t* slot_base =
         static_cast<std::uint8_t*>(state_->ring_base) + buffer_offset;
     std::memcpy(slot_base, data, size);
@@ -650,9 +674,9 @@ void XpcFileOperations::PrepareForSequentialRead(std::uint64_t offset,
                                                     std::uint64_t /*length*/) {
     std::lock_guard<std::mutex> lk(state_->mutex);
     state_->read_offset = offset;
-    // F_RDAHEAD / F_NOCACHE hints don't cross the XPC boundary in
-    // phase 1b. The helper opens with O_RDWR and the kernel's read-
-    // ahead heuristics apply on its side.
+    // F_RDAHEAD / F_NOCACHE hints don't cross the XPC boundary. The
+    // helper opens with O_RDWR and the kernel's read-ahead heuristics
+    // apply on its side.
 }
 
 FileOperations::FastVerifyResult XpcFileOperations::FastVerifySha256(

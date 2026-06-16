@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 Raspberry Pi Ltd
 //
-// LocalShimBackend - phase 1a "do it ourselves" backend.
+// LocalShimBackend - "do it ourselves" backend.
 //
 // Implements IPrivilegedWriter by delegating to the existing Qt-based
 // platform code (PlatformQuirks for unmount/eject; FileOperations for
 // device I/O). The shim lives in the client codebase rather than inside
 // the privileged_io library because it depends on Qt; the library itself
-// is Qt-free per design doc §8a so a future Rust helper can reuse the
-// proto schema without dragging Qt along.
+// is Qt-free (see doc/privileged-helper-plan.md §8a) so a future Rust
+// helper can reuse the proto schema without dragging Qt along.
 //
-// This backend bridges phase 1a (PAL interface in place, no behaviour
-// change) and phase 1b (real macOS XPC backend). Once 1b ships, the
-// shim's macOS code path becomes dead and can be deleted; Linux and
-// Windows continue to use the shim until phases 2/3 land.
+// This is the opt-out / non-macOS fallback backend: on macOS the
+// helper-routed MacOSXpcBackend is the default, and the shim is selected
+// only when the helper path is disabled. On Linux and Windows it remains
+// the active backend until native privileged backends are built.
 //
-// Unmigrated methods return ERROR_NOT_IMPLEMENTED; we fill them in as
-// individual call sites migrate. This makes "not yet wired" obvious in
-// logs.
+// Methods without a native implementation here return
+// ERROR_NOT_IMPLEMENTED, which makes "not wired on this backend" obvious
+// in logs.
 
 #pragma once
 
@@ -51,14 +51,14 @@ public:
     BackendKind  backend() const override;
     std::string  backendDescription() const override;
 
-    // Drive enumeration - phase 1a leaves DriveListModel on its own
-    // poll loop; we'll migrate that in phase 1b.
+    // Drive enumeration - not implemented by the shim; the client's
+    // DriveListModel uses its own poll loop on this backend.
     Result<std::vector<rpi_imager::privileged::proto::DriveInfo>> listDrivesNow() override;
     Result<void> subscribeDrives(DriveChangeCallback cb) override;
     Result<void> unsubscribeDrives() override;
 
-    // Sessions / bulk write plane - all return NOT_IMPLEMENTED until
-    // the real backend (phase 1b on macOS) takes over.
+    // Sessions / bulk write plane - all return NOT_IMPLEMENTED; these are
+    // provided only by a native privileged backend (MacOSXpcBackend).
     Result<rpi_imager::privileged::proto::SessionId> openSession(
         const std::string& device_path,
         const rpi_imager::privileged::proto::OpenOptions&) override;
@@ -87,8 +87,7 @@ public:
     Result<rpi_imager::privileged::proto::SessionStats> closeSession(
         const rpi_imager::privileged::proto::SessionId&) override;
 
-    // Maintenance - migrated for phase 1a proof-of-concept. These
-    // delegate to PlatformQuirks::unmountDisk / ::ejectDisk.
+    // Maintenance - delegate to PlatformQuirks::unmountDisk / ::ejectDisk.
     Result<void> unmount(const std::string& device_path) override;
     Result<void> eject(const std::string& device_path) override;
 };

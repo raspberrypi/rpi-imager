@@ -3,14 +3,15 @@
 //
 // Process-wide accessor for the IPrivilegedWriter used by the unprivileged
 // client. Lazy-initialised on first call; thread-safe via Meyers singleton
-// semantics. Constructed via PrivilegedWriterFactory using
-// makeLocalShimConstructor() (phase 1a) so production calls flow through
-// the LocalShimBackend by default.
+// semantics. Constructed via PrivilegedWriterFactory: on macOS this is the
+// helper-routed MacOSXpcBackend by default, with the LocalShimBackend
+// supplied as the opt-out / non-macOS fallback (see the implementation and
+// doc/privileged-helper-plan.md §4).
 //
-// This accessor exists to keep the phase 1a proof-of-concept call-site
-// migrations small. Once the PAL is fully wired through ImageWriter and
-// DownloadThread (later in phase 1a), the singleton can be retired in
-// favour of explicit dependency injection.
+// This accessor centralises backend construction so call sites don't each
+// build their own. It can be retired in favour of explicit dependency
+// injection if the wiring is ever threaded through ImageWriter and
+// DownloadThread directly.
 
 #pragma once
 

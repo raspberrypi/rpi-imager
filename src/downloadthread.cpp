@@ -203,10 +203,10 @@ bool DownloadThread::_openAndPrepareDevice()
         // all child volumes (APFS containers, partitions, etc.)
         QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
         qDebug() << "Unmounting via PAL:" << unmountPath;
-        // Phase 1a migration: route through IPrivilegedWriter rather than
-        // calling PlatformQuirks::unmountDisk directly. The LocalShimBackend
-        // currently delegates back to PlatformQuirks; later phases swap in
-        // a privileged-helper backend without touching this call site.
+        // Route through IPrivilegedWriter rather than calling
+        // PlatformQuirks::unmountDisk directly, so the active backend (the
+        // macOS helper, or the LocalShimBackend elsewhere) handles it
+        // without touching this call site.
         auto& writer = rpi_imager::getProcessPrivilegedWriter();
         auto unmountResult = writer.unmount(unmountPath.toStdString());
         bool unmountSuccess = unmountResult.ok;
@@ -435,6 +435,11 @@ bool DownloadThread::_openAndPrepareDevice()
 
     // Configure async I/O if enabled
     if (_debugAsyncIO && _file->IsAsyncIOSupported()) {
+        // Tell the backend the largest write we'll submit so it can size any
+        // pre-mapped I/O buffers to the actual chunk size (macOS helper ring).
+        if (size_t hint = _maxWriteChunkHint(); hint > 0) {
+            _file->SetMaxWriteSizeHint(hint);
+        }
         bool asyncConfigured = _file->SetAsyncQueueDepth(_debugAsyncQueueDepth);
         qDebug() << "Async I/O:" << (asyncConfigured ? "configured" : "failed to configure")
                  << "with queue depth" << _debugAsyncQueueDepth;

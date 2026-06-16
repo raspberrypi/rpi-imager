@@ -213,7 +213,7 @@ include_directories(BEFORE .)
 add_subdirectory(privileged_io)
 
 # Privileged helper binary. macOS-only at present; the subdirectory's
-# CMakeLists no-ops on other platforms. See design doc §4.1 / §8a.
+# CMakeLists no-ops on other platforms. See design doc §8a / §12.
 add_subdirectory(writer)
 
 # Test if we need libatomic

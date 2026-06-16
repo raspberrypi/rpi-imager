@@ -351,10 +351,10 @@ int main(int argc, char *argv[])
         {"enable-telemetry", "Use default telemetry setting (clear override)"},
         {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"},
         {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"},
-        // Phase 1b proof-of-architecture: end-to-end privileged helper test.
-        // Installs the helper via SMAppService (prompting if needed),
-        // opens the given device, queries its size, optionally writes a
-        // 4 KB pattern + verifies, then exits. macOS-only.
+        // End-to-end privileged helper diagnostic. Installs the helper via
+        // SMAppService (prompting if needed), opens the given device,
+        // queries its size, optionally writes a 4 KB pattern + verifies,
+        // then exits. macOS-only.
         {"test-privileged-helper", "Run privileged helper diagnostic against the given device path (macOS)", "device"},
         {"test-privileged-helper-allow-write", "When set with --test-privileged-helper, also writes a 4 KB test pattern at offset 0 (DESTRUCTIVE)"},
         {"test-privileged-helper-bulk", "When set with --test-privileged-helper-allow-write, also exercises the shared-memory bulk write path"},
@@ -377,10 +377,10 @@ int main(int argc, char *argv[])
     parser.process(app);
 
 #ifdef Q_OS_DARWIN
-    // Phase 1b: privileged helper end-to-end diagnostic. When invoked,
-    // we run the diagnostic in the foreground (no QML / GUI), print
-    // results, and exit. This is the smallest entry point that
-    // demonstrates the architecture working on someone else's Mac:
+    // Privileged helper end-to-end diagnostic. When invoked, we run the
+    // diagnostic in the foreground (no QML / GUI), print results, and
+    // exit. This is the smallest entry point that demonstrates the
+    // architecture working on someone else's Mac:
     //
     //   /Applications/Raspberry\ Pi\ Imager.app/Contents/MacOS/rpi-imager \
     //       --test-privileged-helper /dev/disk7
