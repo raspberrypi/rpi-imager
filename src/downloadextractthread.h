@@ -59,6 +59,7 @@ protected:
     // ninety seconds of real waiting each, which no suite can sit through.
     // RingBuffer's constructor already takes this -- nothing here passed it.
     uint32_t _stallTimeoutMs;
+    size_t _writeSlots = 0;  // write ring-buffer slot count (for rebuild)
     _extractThreadClass *_extractThread;
     
     // Zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
