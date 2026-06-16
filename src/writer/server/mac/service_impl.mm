@@ -33,6 +33,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 #include <random>
 #include <atomic>
@@ -51,6 +52,33 @@ namespace {
 //     1; we allow a small headroom for batch-imaging UIs.
 constexpr std::uint64_t kMaxSessionBytesWritten = 64ull * 1024 * 1024 * 1024;
 constexpr std::size_t   kMaxSessionsPerClient   = 3;
+
+// Physical RAM, queried by the helper itself (never trusted from the
+// client). Returns 0 if the query fails.
+std::uint64_t physicalMemoryBytes() {
+    std::uint64_t mem = 0;
+    std::size_t len = sizeof(mem);
+    if (sysctlbyname("hw.memsize", &mem, &len, nullptr, 0) != 0) {
+        return 0;
+    }
+    return mem;
+}
+
+// Defense-in-depth ceiling for a single mapped bulk buffer. The client sizes
+// its write ring as a fraction of RAM (a slot count bounded by 20% of
+// available RAM, and hard-capped at 256 × 16 MB = 4 GB; see
+// SystemMemoryManager::getCoordinatedRingBufferConfig). A ceiling of 1/3 of
+// physical RAM comfortably covers any legitimate request while still bounding
+// a buggy/compromised client's RSS demand, and scales with the machine
+// instead of a fixed limit. Floored at 256 MB so low-RAM hosts still allow a
+// usable ring even if the RAM query is unavailable.
+std::uint64_t maxBulkBufferBytes() {
+    constexpr std::uint64_t kFloor = 256ull * 1024 * 1024;
+    const std::uint64_t phys = physicalMemoryBytes();
+    if (phys == 0) return kFloor;
+    const std::uint64_t third = phys / 3;
+    return third > kFloor ? third : kFloor;
+}
 
 // Maximum number of in-flight bulk pwrite()s per session. Tuned to
 // match typical SSD/SD card queue depths; larger values give more
@@ -1248,10 +1276,12 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         return;
     }
 
-    // Bound the size. Bulk buffers are intended for ring-style write
-    // throughput; cap at 256 MB for now (a generous ring of, say,
-    // 32 × 8 MB slots). Reject anything bigger to limit RSS exposure.
-    constexpr std::uint64_t kMaxBulkBuffer = 256ull * 1024 * 1024;
+    // Bound the size to a RAM-proportional ceiling (1/3 of physical RAM,
+    // floored at 256 MB; see maxBulkBufferBytes). This scales with the
+    // machine so it covers the client's RAM-aware write-ring sizing instead
+    // of fighting it with a fixed limit, while still bounding RSS exposure
+    // from a buggy/compromised client.
+    const std::uint64_t kMaxBulkBuffer = maxBulkBufferBytes();
     if (sizeBytes > kMaxBulkBuffer) {
         reply(nil,
               [NSString stringWithFormat:@"mapBulkBuffer: size %llu > cap %llu",
