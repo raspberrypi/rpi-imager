@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Raspberry Pi Ltd
 //
 // MacOSXpcBackend - client-side IPrivilegedWriter that talks to the
-// rpi-imager-writer helper over NSXPC.
+// rpi-imager-writer helper over NSXPC. This is the default macOS
+// privileged backend; see doc/privileged-helper-plan.md.
 //
-// Phase 1b proof-of-architecture: only `unmount`, `eject`, and the
-// helper-status methods are implemented. All write/read/session
-// methods return ERROR_NOT_IMPLEMENTED while the bulk-write plane
-// (shared-memory ring) is being designed in subsequent phases.
+// Implements the full PAL surface: helper lifecycle, drive enumeration
+// and push subscription (§5), the write-session lifecycle, and the
+// shared-memory bulk-write plane (§6).
 //
 // macOS-only. Compile-gated in privileged_io/CMakeLists.txt.
 
@@ -60,12 +60,12 @@ public:
     BackendKind  backend() const override { return BackendKind::MacOSXpc; }
     std::string  backendDescription() const override;
 
-    // Drive enumeration - phase 1b returns NOT_IMPLEMENTED.
+    // Drive enumeration (§5).
     Result<std::vector<proto_ns::DriveInfo>> listDrivesNow() override;
     Result<void> subscribeDrives(DriveChangeCallback cb) override;
     Result<void> unsubscribeDrives() override;
 
-    // Sessions / bulk plane - phase 1b returns NOT_IMPLEMENTED.
+    // Sessions / bulk plane (§6).
     Result<proto_ns::SessionId> openSession(const std::string& device_path,
                                              const proto_ns::OpenOptions&) override;
     Result<proto_ns::DeviceLimits> queryDeviceLimits(const proto_ns::SessionId&) override;
@@ -93,7 +93,7 @@ public:
         std::uint64_t length) override;
     Result<proto_ns::SessionStats> closeSession(const proto_ns::SessionId&) override;
 
-    // Maintenance - phase 1b proof-of-concept entry points.
+    // Maintenance.
     Result<void> unmount(const std::string& device_path) override;
     Result<void> eject(const std::string& device_path) override;
 
@@ -130,8 +130,8 @@ public:
     // listDrivesNow() returns proto::DriveInfo for cross-platform use;
     // the imager's existing UI code consumes Drivelist::DeviceDescriptor
     // verbatim, so we expose a method that returns the latter and
-    // skips the proto round-trip. Phase 2/3 backends that adopt the
-    // PAL-typed flow will plumb through the proto path instead.
+    // skips the proto round-trip. Native Linux/Windows backends adopt the
+    // PAL-typed flow and plumb through the proto path instead.
     Result<std::vector<Drivelist::DeviceDescriptor>> listDevicesNow();
 
     // Async variant: returns immediately, invokes `on_complete` from a

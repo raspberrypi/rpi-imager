@@ -137,8 +137,8 @@ private:
         std::deque<PendingWrite> queue;
         std::atomic<bool>       stop{false};
 
-        // Stats accumulators (not yet wired into SessionStats fully; phase 1a
-        // populates the basics, later phases add histograms etc.)
+        // Stats accumulators. Only the basics are populated here; this
+        // test backend doesn't fill in the full SessionStats histograms.
         std::chrono::steady_clock::time_point started_at;
         std::atomic<std::uint64_t> bytes_written{0};
         std::atomic<std::uint32_t> writes_completed{0};

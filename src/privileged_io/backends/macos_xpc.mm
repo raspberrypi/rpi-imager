@@ -347,8 +347,7 @@ Result<std::vector<proto::DriveInfo>> MacOSXpcBackend::listDrivesNow() {
     // concrete-class result into proto::DriveInfo. Most callers in the
     // imager talk directly to listDevicesNow() and consume the
     // DeviceDescriptor, but the cross-platform PAL path lives here so
-    // future code (Phase 2 Linux / Phase 3 Windows) can use a uniform
-    // call site.
+    // native Linux/Windows backends can use a uniform call site.
     auto rich = listDevicesNow();
     if (!rich.ok) {
         return Result<std::vector<proto::DriveInfo>>::failure(rich.error);
@@ -617,7 +616,12 @@ Result<void> MacOSXpcBackend::unsubscribeDrives() {
     }
 }
 
-// ----- Sessions / bulk plane (NOT_IMPLEMENTED in phase 1b) ----------------
+// ----- Sessions / bulk plane (§6) -----------------------------------------
+//
+// openSession/queryDeviceLimits/prepareDevice/read/write/sync/hash/close
+// are implemented below. The slot-based acquireSlot/submitWrite PAL methods
+// are NOT used by this backend - the bulk-write path goes through the
+// concrete-class mapBulkBuffer/submitBulkWriteAsync API instead.
 
 Result<proto::SessionId> MacOSXpcBackend::openSession(
     const std::string& device_path, const proto::OpenOptions&) {
@@ -763,8 +767,8 @@ Result<proto::DeviceLimits> MacOSXpcBackend::queryDeviceLimits(
 
         proto::DeviceLimits limits;
         limits.set_total_bytes(sync->size_bytes);
-        // Block size + max transfer left at default for now; phase 1b
-        // doesn't need them, and they aren't surfaced over XPC yet.
+        // Block size + max transfer left at default for now; the write
+        // path doesn't need them, and they aren't surfaced over XPC yet.
         limits.set_logical_block_size(512);
         limits.set_max_transfer_bytes(0);
         return Result<proto::DeviceLimits>::success(std::move(limits));
@@ -856,20 +860,10 @@ void MacOSXpcBackend::submitWrite(const proto::SessionId& sid,
                                     std::uint64_t offset,
                                     std::uint64_t length,
                                     WriteCompleteCallback on_complete) {
-    // Phase 1b: synchronous path via NSData over XPC. Bulk write
-    // (shared memory + async pipeline) lands in the next sub-phase.
-    // The Slot.data pointer was filled by the caller via acquireSlot,
-    // but the InProcess test backend's slot pool is what's typically
-    // backing this for unit tests. For the real XPC backend we
-    // synthesise a minimal "use the bytes the caller already filled
-    // into a slot" path: the slot index is taken to refer to a
-    // caller-owned buffer that lives at the client side (NSXPC will
-    // copy the data on send anyway).
-    //
-    // Production callers (the imager pipeline) typically don't issue
-    // writes through this synchronous path; the high-throughput shared-
-    // memory ring will replace it. But we wire it up so the GUI
-    // diagnostic can exercise a real privileged write.
+    // The slot-based submitWrite PAL method is not used against this
+    // backend: the high-throughput path is the concrete-class shared-
+    // memory ring (mapBulkBuffer/submitBulkWriteAsync). This entry point
+    // exists only to satisfy the interface and surfaces a clear error.
     @autoreleasepool {
         if (!on_complete) return;
 
@@ -898,19 +892,17 @@ void MacOSXpcBackend::submitWrite(const proto::SessionId& sid,
             return;
         }
 
-        // Phase 1b: callers using submitWrite() against MacOSXpcBackend
-        // must populate slot data via acquireSlot() before submitting.
-        // We don't have a real slot pool yet on the XPC backend, so
-        // surface this as ERROR_NOT_IMPLEMENTED with a clear message.
-        // (The diagnostic GUI uses the lower-level openSession +
-        // queryDeviceLimits path plus a separate writeBlocking helper -
-        // see writeBlockingForDiagnostic below.)
+        // The XPC backend has no PAL-level slot pool; the bulk-write ring
+        // is reached via the concrete-class API instead. Surface this as
+        // ERROR_NOT_IMPLEMENTED with a clear message. (The diagnostic GUI
+        // uses the lower-level openSession + queryDeviceLimits path plus a
+        // separate writeBlocking helper - see writeBlockingForDiagnostic.)
         (void)offset; (void)length; (void)token;
         proto::WriteResult wr;
         wr.set_slot_index(slot_index);
         *wr.mutable_error() = makeError(proto::ERROR_NOT_IMPLEMENTED,
-            "submitWrite via XPC requires the bulk-write ring (phase 1b sub-phase). "
-            "Use the diagnostic write helpers for now.");
+            "submitWrite via XPC requires the concrete-class bulk-write ring. "
+            "Use mapBulkBuffer/submitBulkWriteAsync or the diagnostic helpers.");
         on_complete(wr);
     }
 }
@@ -1322,8 +1314,8 @@ Result<proto::SessionStats> MacOSXpcBackend::closeSession(
             stats.set_bytes_written(num(@"bytesWritten"));
             stats.set_duration_ms(num(@"durationMs"));
 
-            // Per-write latency histogram. Phase 1b records min/avg/max
-            // and sample count; bucket data is reserved for later.
+            // Per-write latency histogram: min/avg/max and sample count.
+            // Bucket data is reserved for later (§7a).
             auto* hist = stats.mutable_write_latency();
             hist->set_min_us(num(@"minWriteLatencyUs"));
             hist->set_avg_us(num(@"avgWriteLatencyUs"));
@@ -1394,9 +1386,9 @@ Result<void> doUnmountOrEject(MacOSXpcBackend::State& state,
                 sync->cv.notify_one();
             }];
 
-        // Phase 1b: only unmount is wired through XPC. eject reuses the
-        // unmount endpoint until we add a dedicated method (small,
-        // versioned schema change in the protocol).
+        // Only unmount is wired through XPC. eject reuses the unmount
+        // endpoint until we add a dedicated method (small, versioned
+        // schema change in the protocol).
         (void)eject_after;
         [proxy unmountDevice:path
                        reply:^(BOOL ok, NSString* _Nullable detail, int32_t status) {

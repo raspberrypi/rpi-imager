@@ -10,9 +10,9 @@
 // of zero data through the async path, then reports wall-clock time and
 // throughput in MB/s.
 //
-// Purpose: phase 1b acceptance check for the "Performance regression
-// from IPC overhead" risk. Run the same invocation under both env-var
-// settings and compare numbers.
+// Purpose: acceptance check for the "Performance regression from IPC
+// overhead" risk. Run the same invocation under both env-var settings
+// and compare numbers.
 //
 // DESTRUCTIVE: overwrites the first N MB of the target device with
 // zeros. Refuses to run without an explicit --benchmark-allow-destroy

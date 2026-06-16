@@ -1117,8 +1117,8 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     }
 
     // Bound the read size to a sensible upper limit for the synchronous
-    // (NSData-over-XPC) path. Phase 1b is for small chunks only - the
-    // bulk read path will use shared memory.
+    // (NSData-over-XPC) path. This path is for small chunks only - the
+    // bulk read path uses shared memory.
     constexpr uint64_t kMaxBytes = 4ull * 1024 * 1024;
     if (length == 0 || length > kMaxBytes) {
         reply(nil,
