@@ -367,6 +367,7 @@ int main(int argc, char *argv[])
         {"benchmark-chunk-kb", "Per-write chunk size in --benchmark-write mode (default 16384 KiB)", "kb", "16384"},
         {"benchmark-queue-depth", "Async queue depth in --benchmark-write mode (default 8; 1 = synchronous)", "n", "8"},
         {"benchmark-no-direct-io", "Disable direct I/O in --benchmark-write mode"},
+        {"benchmark-no-zero-copy", "Force the buffer-copy write path in --benchmark-write mode (for A/B vs zero-copy)"},
         {"benchmark-output", "Path to write a JSON performance capture (per-write timings, config, audit-log tail)", "path", ""},
         {"benchmark-verify", "After writing, also time a verify pass (helper-side SHA-256 when available)"}
     });
@@ -410,6 +411,7 @@ int main(int argc, char *argv[])
                             * 1024ull;
         opts.queue_depth = parser.value("benchmark-queue-depth").toInt();
         opts.direct_io   = !parser.isSet("benchmark-no-direct-io");
+        opts.zero_copy   = !parser.isSet("benchmark-no-zero-copy");
         opts.output_path = parser.value("benchmark-output").toStdString();
         opts.verify_after_write = parser.isSet("benchmark-verify");
         return rpi_imager::runFileOperationsBenchmark(opts);
