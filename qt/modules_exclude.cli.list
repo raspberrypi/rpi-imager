@@ -56,6 +56,7 @@ qtpositioning
 # Development and documentation
 qtdoc
 qtlanguageserver
+qtcanvaspainter
 
 # Misc specialized
 qtlottie

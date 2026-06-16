@@ -98,6 +98,8 @@ cd "$BUILD_DIR"
 # Build config options using helpers
 CONFIG_OPTS="$(get_base_config_opts) $(get_common_skip_opts)"
 CONFIG_OPTS="$CONFIG_OPTS $(get_build_type_opts)"
+# rpi-imager is QML-only; Widgets is unused and triggers GCC ICE on aarch64
+CONFIG_OPTS="$CONFIG_OPTS -no-widgets"
 
 # Apply exclusions
 echo "Applying exclusions for desktop build..."

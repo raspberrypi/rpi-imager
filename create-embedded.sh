@@ -126,7 +126,7 @@ else
     if [ -d "/opt/Qt" ]; then
         echo "Checking for Qt installations in /opt/Qt..."
         # Find the newest Qt6 version installed
-        NEWEST_QT=$(find /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
+        NEWEST_QT=$(find -L /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
         if [ -n "$NEWEST_QT" ]; then
             QT_VERSION=$(basename "$NEWEST_QT")
 
@@ -186,9 +186,9 @@ if type get_icu_version_for_qt >/dev/null 2>&1; then
     echo "Using ICU version: $ICU_VERSION (major: $ICU_MAJOR_VERSION)"
 else
     # Fallback if common functions not available
-    echo "Warning: Could not determine ICU version, using default 76"
-    ICU_VERSION="76.1"
-    ICU_MAJOR_VERSION="76"
+    echo "Warning: Could not determine ICU version, using default 73.2"
+    ICU_VERSION="73.2"
+    ICU_MAJOR_VERSION="73"
 fi
 
 # Configuration
@@ -457,7 +457,10 @@ cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin
 
 # Copy ICU libraries (using detected version)
 echo "Copying ICU $ICU_VERSION libraries..."
-ICU_LIB_DIR="$PWD/qt/icu/icu4c/source/lib"
+ICU_LIB_DIR="$PWD/qt/icu/install/lib"
+if [ ! -d "$ICU_LIB_DIR" ]; then
+    ICU_LIB_DIR="$PWD/qt/icu/icu4c/source/lib"
+fi
 if [ -d "$ICU_LIB_DIR" ]; then
     cp "$ICU_LIB_DIR/libicudata.so.$ICU_MAJOR_VERSION" "$OPTDIR/lib/" 2>/dev/null || \
         echo "Warning: Could not find libicudata.so.$ICU_MAJOR_VERSION"

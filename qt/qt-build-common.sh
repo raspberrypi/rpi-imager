@@ -237,11 +237,21 @@ download_qt_source() {
             download_url="https://download.qt.io/official_releases/qt/${QT_VERSION%.*}/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz"
             
             if command -v curl >/dev/null 2>&1; then
-                curl -L -o "qt-everywhere-src-$QT_VERSION.tar.xz" "$download_url"
+                curl -fL -o "qt-everywhere-src-$QT_VERSION.tar.xz" "$download_url"
             elif command -v wget >/dev/null 2>&1; then
-                wget "$download_url"
+                wget -O "qt-everywhere-src-$QT_VERSION.tar.xz" "$download_url"
             else
                 echo "Error: Neither wget nor curl found. Please install one of them."
+                cd "$_orig_dir" || return 1
+                return 1
+            fi
+
+            archive="qt-everywhere-src-$QT_VERSION.tar.xz"
+            if ! xz -t "$archive" 2>/dev/null; then
+                echo "Error: Download of Qt $QT_VERSION failed (not a valid .tar.xz archive)."
+                echo "URL: $download_url"
+                echo "Check that the version exists at https://download.qt.io/official_releases/qt/"
+                rm -f "$archive"
                 cd "$_orig_dir" || return 1
                 return 1
             fi
@@ -809,8 +819,8 @@ get_icu_version_for_qt() {
     qt_ver="${1:-$QT_VERSION}"
     
     case "$qt_ver" in
-        6.9.3)
-            echo "76.1"
+        6.9.3|6.11.0|6.11.1)
+            echo "73.2"
             ;;
         *)
             echo "Unknown Qt version $qt_ver" >&2
