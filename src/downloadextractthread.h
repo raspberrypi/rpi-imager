@@ -108,6 +108,7 @@ protected:
 
     virtual void _onDevicePrepared() override;
     virtual size_t _writeData(const char *buf, size_t len) override;
+    size_t _maxWriteChunkHint() const override { return _writeBufferSize; }
     virtual void _onDownloadSuccess() override;
     virtual void _onDownloadError(const QString &msg) override;
     void _emitProgressUpdate();

@@ -3,8 +3,8 @@
 //
 // rpi-imager-writer: the privileged helper.
 //
-// Started by launchd in production (via SMAppService daemon registration
-// in phase 1b production wiring; via a hand-installed plist for dev).
+// Started by launchd in production (via SMAppService daemon registration;
+// via a hand-installed plist for dev).
 // Listens on a Mach service for NSXPC connections from the unprivileged
 // rpi-imager client and performs privileged disk operations.
 
