@@ -7,6 +7,7 @@
 
 # Install PolicyKit policy for privilege escalation
 debian/com.raspberrypi.rpi-imager.policy /usr/share/polkit-1/actions/
+debian/com.raspberrypi.rpi-imager.writer.policy /usr/share/polkit-1/actions/
 
 # Install udev rules granting unprivileged USB access to rpiboot/fastboot
 # devices. Without these a non-root user cannot open the device and it
