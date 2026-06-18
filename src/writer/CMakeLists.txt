@@ -7,11 +7,75 @@
 # port to Rust (or any non-C++ language) does not require ripping Qt out
 # of the codebase first. Only the Cocoa/Foundation frameworks are linked.
 #
-# macOS is the shipping helper. The native Windows helper (phase 3, §14) is
-# built only when the experimental option is enabled. Linux is phase 2.
+# macOS is the shipping helper. Windows and Linux helpers are built by default;
+# pass RPI_IMAGER_DISABLE_WINDOWS_HELPER or RPI_IMAGER_DISABLE_LINUX_HELPER to omit.
 
 if(NOT APPLE)
-    if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    if(UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+        find_package(GnuTLS REQUIRED)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(LIBURING liburing)
+        pkg_check_modules(UDEV REQUIRED libudev)
+        pkg_check_modules(GPGME REQUIRED gpgme)
+
+        set(_writer_linux_sources
+            server/session_telemetry.h
+            server/session_telemetry.cpp
+            server/drive_list_rpc.h
+            server/wire_outbound.h
+            server/wire_outbound.cpp
+            server/drive_watch_service.h
+            server/linux/drive_watch_linux.cpp
+            server/linux/service_impl.h
+            server/linux/service_impl.cpp
+            server/linux/drivelist_linux_helper.h
+            server/linux/drivelist_linux_helper.cpp
+            server/linux/helper_log.h
+            server/linux/helper_log.cpp
+            server/linux/peer_auth_linux.h
+            server/linux/peer_auth_linux.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/helper_maintenance.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/appimage_signature.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/proc_environ.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist.h
+        )
+
+        add_library(rpi_imager_writer_linux STATIC ${_writer_linux_sources})
+        target_include_directories(rpi_imager_writer_linux PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/..
+            ${CMAKE_CURRENT_BINARY_DIR}/..
+        )
+        if(LIBURING_FOUND)
+            target_compile_definitions(rpi_imager_writer_linux PRIVATE HAVE_LIBURING)
+            target_include_directories(rpi_imager_writer_linux PRIVATE ${LIBURING_INCLUDE_DIRS})
+        endif()
+        target_link_libraries(rpi_imager_writer_linux PUBLIC
+            privileged_io
+            GnuTLS::GnuTLS
+            ${UDEV_LIBRARIES}
+            ${GPGME_LIBRARIES}
+        )
+        target_include_directories(rpi_imager_writer_linux PUBLIC
+            ${UDEV_INCLUDE_DIRS}
+            ${GPGME_INCLUDE_DIRS}
+        )
+        if(LIBURING_FOUND)
+            target_link_libraries(rpi_imager_writer_linux PUBLIC ${LIBURING_LIBRARIES})
+        endif()
+        target_compile_features(rpi_imager_writer_linux PUBLIC cxx_std_20)
+
+        add_executable(rpi-imager-writer
+            main_linux.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.cpp
+        )
+        target_link_libraries(rpi-imager-writer PRIVATE rpi_imager_writer_linux)
+        target_compile_features(rpi-imager-writer PRIVATE cxx_std_20)
+        set_target_properties(rpi-imager-writer PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        )
+    elseif(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
         # rpi-imager-writer.exe: the elevated Windows helper (§14.5).
         #
         # NOTE: built as a console-subsystem exe so the standard int main()
@@ -20,10 +84,20 @@ if(NOT APPLE)
         # helper is launched elevated; deferred while the helper is brought up.
         add_executable(rpi-imager-writer
             main_win.cpp
+            server/session_telemetry.h
+            server/session_telemetry.cpp
+            server/drive_list_rpc.h
+            server/wire_outbound.h
+            server/wire_outbound.cpp
+            server/drive_watch_service.h
+            server/win/drive_watch_win.cpp
             server/win/service_impl.h
             server/win/service_impl.cpp
             server/win/peer_auth_win.h
             server/win/peer_auth_win.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../windows/helper_maintenance.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp
             # §14.5 - the helper performs device I/O with the SAME Qt-free
             # WindowsFileOperations the client uses in-process today. These TUs
             # carry no Qt (verified) so they satisfy the Qt-free rule (§8a).

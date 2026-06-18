@@ -109,16 +109,53 @@ set(PRIVILEGED_IO_SOURCES
     ${PROTO_GENERATED_HDR}
 )
 
-# Native Windows privileged backend (§14). Compiled only when the experimental
-# helper is enabled; otherwise Windows uses the LocalShimBackend exactly as
-# before. See doc/privileged-helper-plan.md §14.6.
-if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+# Native Windows privileged backend (§14). Omitted when
+# RPI_IMAGER_DISABLE_WINDOWS_HELPER is set; otherwise Windows uses the
+# LocalShimBackend when RPI_IMAGER_USE_WINDOWS_HELPER is unset.
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     list(APPEND PRIVILEGED_IO_SOURCES
         backends/windows_uac.h
         backends/windows_uac.cpp
         wire/win_shared_memory.h
         wire/win_shared_memory.cpp
+        wire/drive_descriptor_json.h
+        wire/drive_descriptor_json.cpp
+        wire/duplex_connection.h
+        wire/duplex_connection.cpp
+        wire/server_message.h
+        wire/server_message.cpp
+        wire/protocol.h
     )
+endif()
+
+# Linux backends (phase 2). LinuxEmbedded is always built on Linux (root
+# in-process path). LinuxPolkit + socket transport are omitted when
+# RPI_IMAGER_DISABLE_LINUX_HELPER is set.
+if(UNIX AND NOT APPLE)
+    list(APPEND PRIVILEGED_IO_SOURCES
+        backends/linux_embedded.h
+        backends/linux_embedded.cpp
+        wire/linux_shared_memory.h
+        wire/linux_shared_memory.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/helper_maintenance.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/sha256.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/sha256.h
+    )
+    if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+        list(APPEND PRIVILEGED_IO_SOURCES
+            backends/linux_polkit.h
+            backends/linux_polkit.cpp
+            wire/linux_socket_io.h
+            wire/linux_socket_io.cpp
+            wire/drive_descriptor_json.h
+            wire/drive_descriptor_json.cpp
+            wire/duplex_connection.h
+            wire/duplex_connection.cpp
+            wire/server_message.h
+            wire/server_message.cpp
+            wire/protocol.h
+        )
+    endif()
 endif()
 
 if(APPLE)
@@ -175,9 +212,14 @@ target_link_libraries(privileged_io
 # main app defining it on itself; the helper target deliberately does not, so
 # the helper never pulls in the client-side adapter. The shell32/ole32 link
 # deps stay PUBLIC so the final client executable resolves them.
-if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     target_compile_definitions(privileged_io PRIVATE RPI_IMAGER_ENABLE_WINDOWS_HELPER)
     target_link_libraries(privileged_io PUBLIC shell32 ole32)
+    target_include_directories(privileged_io PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+endif()
+
+if(UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+    target_compile_definitions(privileged_io PRIVATE RPI_IMAGER_ENABLE_LINUX_HELPER)
     target_include_directories(privileged_io PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 endif()
 
