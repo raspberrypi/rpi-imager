@@ -1,6 +1,6 @@
 #define MyAppName "Raspberry Pi Imager"
 #define MyAppVersion "@IMAGER_VERSION_STR@"
-#define MyAppPublisher "Raspberry Pi Ltd"
+#define MyAppPublisher "@RPI_IMAGER_PUBLISHER_ORG@"
 #define RaspberryPiSoftwareURL "https://www.raspberrypi.com/software"
 #define ImagerRepoRootURL "https://github.com/raspberrypi/rpi-imager"
 #define ImagerRepoIssuesURL "https://github.com/raspberrypi/rpi-imager/issues"
@@ -89,6 +89,9 @@ Source: "@CMAKE_BINARY_DIR@\deploy\{#MyAppExeName}"; DestDir: "{app}"; Flags: ig
 
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-cli.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-callback-relay.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Privileged helper (§14). Omitted from installs built without
+; RPI_IMAGER_ENABLE_WINDOWS_HELPER (skipifsourcedoesntexist).
+Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-writer.exe"; DestDir: "{app}"; Flags: ignoreversion signonce skipifsourcedoesntexist
 Source: "@CMAKE_BINARY_DIR@\deploy\license.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Core DLLs

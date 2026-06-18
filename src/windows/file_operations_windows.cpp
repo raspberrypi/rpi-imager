@@ -10,6 +10,11 @@
 #include <sstream>
 #include <chrono>
 #include <algorithm>
+#include <cstdlib>
+
+#if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+#include "windows_helper_file_operations.h"
+#endif
 
 using rpi_imager::TimeoutDefaults::kSyncWriteTimeoutSeconds;
 using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
@@ -1776,8 +1781,20 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
   return limits;
 }
 
-// Platform-specific factory function implementation
+// Platform-specific factory function implementation.
+//
+// The default Windows path is the in-process WindowsFileOperations. When the
+// native helper is compiled in (RPI_IMAGER_ENABLE_WINDOWS_HELPER) and the user
+// opts in (RPI_IMAGER_USE_WINDOWS_HELPER=1), writes route through the elevated
+// rpi-imager-writer.exe via WindowsHelperFileOperations (§14.6). The opt-in is
+// experimental while the bulk plane is brought up; see the design doc §14.
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
+#if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+  const char* use_win = std::getenv("RPI_IMAGER_USE_WINDOWS_HELPER");
+  if (use_win && use_win[0] == '1') {
+    return CreateWindowsHelperFileOperations();
+  }
+#endif
   return std::make_unique<WindowsFileOperations>();
 }
 

@@ -16,6 +16,14 @@
 #include "backends/macos_xpc.h"
 #endif
 
+// Native Windows backend is opt-in and gated at build time so default Windows
+// builds/behavior are unchanged while it's brought up (§14.6, §14.11). The
+// define is only ever set on Windows builds (CMake gates it under WIN32), so
+// it doubles as the platform guard.
+#if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+#include "backends/windows_uac.h"
+#endif
+
 #include <utility>
 
 namespace rpi_imager::privileged {
@@ -34,6 +42,20 @@ PrivilegedWriterFactory::create(Config config) {
     if (config.prefer_helper) {
         backends::MacOSXpcBackend::Options xpc_opts;
         return std::make_unique<backends::MacOSXpcBackend>(std::move(xpc_opts));
+    }
+#endif
+
+#if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    // On Windows the native helper is selected only when explicitly preferred
+    // (the glue sets prefer_helper from RPI_IMAGER_USE_WINDOWS_HELPER, default
+    // off). Otherwise control falls through to the LocalShimBackend below, so
+    // shipping this code does not change the default in-process path.
+    if (config.prefer_helper) {
+        backends::WindowsUacBackend::Options win_opts;
+        if (!config.app_bundle_path.empty()) {
+            win_opts.helper_exe_path = config.app_bundle_path;
+        }
+        return std::make_unique<backends::WindowsUacBackend>(std::move(win_opts));
     }
 #endif
 

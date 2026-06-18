@@ -206,6 +206,23 @@ endif()
 
 include_directories(BEFORE .)
 
+# Native Windows privileged helper (phase 3; design doc §14). Opt-in and OFF
+# by default while it is brought up: enabling it compiles the
+# WindowsUacBackend, the rpi-imager-writer.exe helper, and the
+# WindowsHelperFileOperations adapter. None of these change default behavior
+# unless RPI_IMAGER_USE_WINDOWS_HELPER=1 is also set at runtime (§14.6, §14.11).
+option(RPI_IMAGER_ENABLE_WINDOWS_HELPER
+    "Build the experimental native Windows privileged helper (phase 3)" OFF)
+
+# Shipping identity (publisher org, Windows client exe name, …). Shared by C++
+# (rpi_imager_identity.h), VERSIONINFO, and the Inno Setup template. Included
+# after helper/signing options so auto-discovery can read them.
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/rpi_imager_identity.cmake)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/rpi_imager_identity.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/rpi_imager_identity.h
+    @ONLY)
+
 # Privileged I/O Platform Abstraction Layer (Qt-free; see
 # doc/privileged-helper-plan.md). Builds a static `privileged_io` library
 # that the main binary links against, and that future helper binaries
@@ -571,6 +588,14 @@ endif()
 
 # Privileged I/O PAL — the same library is linked into every variant.
 target_link_libraries(${PROJECT_NAME} PRIVATE privileged_io)
+
+# When the experimental Windows helper is enabled, the client (this target)
+# compiles the WindowsHelperFileOperations adapter and selects it from
+# file_operations_windows.cpp's factory under this define. It is scoped to the
+# client target so the helper binary never inherits it (§14.6).
+if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+endif()
 
 # Bundle the privileged helper into RpiImager.app on macOS. The
 # rpi-imager-writer target is added in src/writer/CMakeLists.txt; we

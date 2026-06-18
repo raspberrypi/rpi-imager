@@ -12,6 +12,7 @@ namespace rpi_imager {
 rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter() {
     static std::unique_ptr<rpi_imager::privileged::IPrivilegedWriter> writer = [] {
         rpi_imager::privileged::PrivilegedWriterFactory::Config config;
+#if defined(__APPLE__)
         // On macOS, the privileged helper backend is the default. Opt
         // out via RPI_IMAGER_USE_LEGACY_AUTHOPEN=1 (or the old
         // RPI_IMAGER_USE_XPC_HELPER=0) for diagnostic comparison or
@@ -22,6 +23,19 @@ rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter() {
         const bool opt_out = (legacy && legacy[0] == '1') ||
                              (use_xpc && use_xpc[0] == '0');
         config.prefer_helper = !opt_out;
+#elif defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+        // On Windows the native helper (WindowsUacBackend) is opt-in while it
+        // is brought up (§14.11 rollout gate): default off, enabled with
+        // RPI_IMAGER_USE_WINDOWS_HELPER=1. When off, prefer_helper is false so
+        // the factory selects the LocalShimBackend, i.e. the existing
+        // in-process write path is unchanged.
+        const char* use_win = std::getenv("RPI_IMAGER_USE_WINDOWS_HELPER");
+        config.prefer_helper = (use_win && use_win[0] == '1');
+#else
+        // No native privileged backend on this platform; the LocalShimBackend
+        // is the active path. prefer_helper has no native branch to select.
+        config.prefer_helper = false;
+#endif
         config.allow_user_prompt = true;
         config.local_backend_constructor = makeLocalShimConstructor();
         return rpi_imager::privileged::PrivilegedWriterFactory::create(
