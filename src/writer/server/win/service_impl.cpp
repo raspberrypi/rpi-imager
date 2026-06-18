@@ -8,10 +8,17 @@
 
 #include "service_impl.h"
 #include "peer_auth_win.h"
+#include "../session_telemetry.h"
+#include "../drive_list_rpc.h"
+#include "../wire_outbound.h"
+#include "../drive_watch_service.h"
+#include "../../../windows/helper_maintenance.h"
 
 // Resolved via privileged_io's PUBLIC include dirs (source dir for wire/,
 // binary dir for the generated proto/).
 #include "wire/frame.h"
+#include "wire/handshake.h"
+#include "wire/protocol.h"
 #include "wire/win_shared_memory.h"
 #include "proto/imager.pb.h"
 
@@ -19,6 +26,7 @@
 // own process - the whole point of the privilege boundary (§2). It reuses the
 // Qt-free WindowsFileOperations the client uses in-process today (§14.5).
 #include "windows/file_operations_windows.h"
+#include "drivelist/drivelist.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -39,7 +47,7 @@ namespace rpi_imager::writer {
 
 namespace {
 
-constexpr std::uint32_t kProtocolVersion = 1;
+constexpr std::uint32_t kProtocolVersion = wire::kProtocolVersion;
 
 // Cap a single synchronous read/write chunk crossing the wire. Bulk transfers
 // use the shared-memory plane (§14.3); this path is for metadata + verify.
@@ -151,11 +159,32 @@ private:
     std::vector<UCHAR> obj_;
 };
 
+proto::ErrorInfo mapMaintenanceError(win_maint::Result r, const char* op) {
+    switch (r) {
+        case win_maint::Result::Success:
+            return ok();
+        case win_maint::Result::InvalidDrive:
+            return fail(proto::ERROR_DEVICE_NOT_FOUND,
+                        std::string(op) + ": invalid device path");
+        case win_maint::Result::AccessDenied:
+            return fail(proto::ERROR_DEVICE_PERMISSION,
+                        std::string(op) + ": access denied");
+        case win_maint::Result::Busy:
+            return fail(proto::ERROR_DEVICE_BUSY, std::string(op) + ": device busy");
+        default:
+            return fail(proto::ERROR_UNMOUNT_FAILED,
+                        win_maint::lastDetail().empty()
+                            ? std::string(op) + " failed"
+                            : win_maint::lastDetail());
+    }
+}
+
 struct Session {
     std::unique_ptr<rpi_imager::WindowsFileOperations> fops;
     wire::WinSharedMemory bulk;
     std::uint64_t bytes_written = 0;
     std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+    SessionTelemetry telemetry;
 };
 
 // Owns the privileged session state for one connected client. The dispatch
@@ -164,6 +193,11 @@ class Helper {
 public:
     explicit Helper(DWORD client_pid) : client_pid_(client_pid) {}
 
+    void setPushContext(WireOutbound* outbound, DriveWatchService* drive_watch) {
+        outbound_ = outbound;
+        drive_watch_ = drive_watch;
+    }
+
     proto::ErrorInfo dispatch(const proto::WireRequest& req, std::string& out_payload);
 
 private:
@@ -171,6 +205,10 @@ private:
         auto it = sessions_.find(sid.v());
         return it == sessions_.end() ? nullptr : &it->second;
     }
+
+    void sendDriveChangedEvent();
+    proto::ErrorInfo handleSubscribeDrives();
+    proto::ErrorInfo handleUnsubscribeDrives();
 
     proto::ErrorInfo handleOpenSession(const std::string& payload, std::string& out);
     proto::ErrorInfo handleQueryDeviceLimits(const std::string& payload, std::string& out);
@@ -182,11 +220,51 @@ private:
     proto::ErrorInfo handleSyncDevice(const std::string& payload, std::string& out);
     proto::ErrorInfo handleHashDevice(const std::string& payload, std::string& out);
     proto::ErrorInfo handleCloseSession(const std::string& payload, std::string& out);
+    proto::ErrorInfo handleListDrives(std::string& out);
+    proto::ErrorInfo handleUnmount(const std::string& payload);
+    proto::ErrorInfo handleEject(const std::string& payload);
 
     DWORD client_pid_ = 0;
     std::unordered_map<std::uint64_t, Session> sessions_;
     std::uint64_t next_id_ = 1;
+
+    WireOutbound* outbound_ = nullptr;
+    DriveWatchService* drive_watch_ = nullptr;
+    bool drive_subscribed_ = false;
 };
+
+void Helper::sendDriveChangedEvent() {
+    if (!outbound_) {
+        return;
+    }
+    proto::WireEvent ev;
+    ev.set_kind(proto::WIRE_EVENT_DRIVE_CHANGED);
+    ev.mutable_change()->set_kind(proto::DriveChange::KIND_UPDATED);
+    (void)outbound_->sendEvent(ev);
+}
+
+proto::ErrorInfo Helper::handleSubscribeDrives() {
+    if (drive_subscribed_) {
+        return ok();
+    }
+    if (!drive_watch_ || !outbound_) {
+        return fail(proto::ERROR_UNKNOWN, "push context not configured");
+    }
+    drive_subscribed_ = true;
+    drive_watch_->subscribe([this] { sendDriveChangedEvent(); });
+    return ok();
+}
+
+proto::ErrorInfo Helper::handleUnsubscribeDrives() {
+    if (!drive_subscribed_) {
+        return ok();
+    }
+    drive_subscribed_ = false;
+    if (drive_watch_) {
+        drive_watch_->unsubscribe();
+    }
+    return ok();
+}
 
 proto::ErrorInfo Helper::handleOpenSession(const std::string& payload, std::string& out) {
     proto::OpenSessionRequest req;
@@ -242,10 +320,13 @@ proto::ErrorInfo Helper::handlePrepareDevice(const std::string& payload, std::st
     if (s->fops->GetSize(size) != FileError::kSuccess) {
         return fail(proto::ERROR_DEVICE_IO, "prepareDevice: GetSize failed");
     }
+    const auto t0 = std::chrono::steady_clock::now();
     const FileError e = s->fops->PrepareDevice(size, req.options().zero_last_mb());
+    const auto t1 = std::chrono::steady_clock::now();
     if (e != FileError::kSuccess) {
         return fail(mapFileError(e), "PrepareDevice failed");
     }
+    s->telemetry.recordPrepareDevice(t1 - t0);
     return ok();
 }
 
@@ -317,6 +398,7 @@ proto::ErrorInfo Helper::handleBulkWrite(const std::string& payload, std::string
 
     s->bytes_written += len;
     const auto lat_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    s->telemetry.recordWriteLatency(static_cast<std::uint64_t>(lat_us));
 
     proto::WriteResult wr;
     wr.set_slot_index(req.slot_index());
@@ -335,14 +417,18 @@ proto::ErrorInfo Helper::handleWriteChunk(const std::string& payload, std::strin
         return fail(proto::ERROR_WRITE_FAILED, "writeChunk: chunk exceeds sync cap");
     }
 
+    const auto t0 = std::chrono::steady_clock::now();
     const FileError e = s->fops->WriteAtOffset(
         req.offset(),
         reinterpret_cast<const std::uint8_t*>(req.data().data()),
         req.data().size());
+    const auto t1 = std::chrono::steady_clock::now();
     if (e != FileError::kSuccess) {
         return fail(mapFileError(e), "WriteAtOffset failed");
     }
     s->bytes_written += req.data().size();
+    const auto lat_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    s->telemetry.recordWriteLatency(static_cast<std::uint64_t>(lat_us));
 
     proto::WriteChunkReply reply;
     reply.set_bytes_written(req.data().size());
@@ -380,10 +466,13 @@ proto::ErrorInfo Helper::handleSyncDevice(const std::string& payload, std::strin
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad SessionRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "syncDevice: no session");
+    const auto t0 = std::chrono::steady_clock::now();
     const FileError e = s->fops->ForceSync();
+    const auto t1 = std::chrono::steady_clock::now();
     if (e != FileError::kSuccess) {
         return fail(mapFileError(e), "ForceSync failed");
     }
+    s->telemetry.recordFsync(t1 - t0);
     return ok();
 }
 
@@ -392,6 +481,8 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad HashDeviceRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "hashDeviceSha256: no session");
+
+    const auto t0 = std::chrono::steady_clock::now();
 
     Sha256 sha;
     if (!sha.init()) return fail(proto::ERROR_UNKNOWN, "BCrypt SHA-256 init failed");
@@ -427,10 +518,68 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     std::string digest;
     if (!sha.finish(digest)) return fail(proto::ERROR_UNKNOWN, "hash finalize failed");
 
+    const auto t1 = std::chrono::steady_clock::now();
+    s->telemetry.recordHashDevice(t1 - t0);
+
     proto::HashDeviceReply reply;
     reply.set_digest(digest);
     reply.SerializeToString(&out);
     return ok();
+}
+
+proto::ErrorInfo Helper::handleListDrives(std::string& out) {
+    std::vector<Drivelist::DeviceDescriptor> devices;
+    try {
+        devices = Drivelist::ListStorageDevices();
+    } catch (const std::exception& e) {
+        return fail(proto::ERROR_UNKNOWN, std::string("listDrives: ") + e.what());
+    }
+    const proto::DriveList list = buildDriveList(devices);
+    list.SerializeToString(&out);
+    return ok();
+}
+
+proto::ErrorInfo Helper::handleUnmount(const std::string& payload) {
+    proto::PathRequest req;
+    if (!req.ParseFromString(payload)) {
+        return fail(proto::ERROR_UNKNOWN, "bad PathRequest");
+    }
+    const auto r = win_maint::unmountDisk(req.device_path());
+    if (r == win_maint::Result::Success) {
+        return ok();
+    }
+    proto::ErrorInfo err = mapMaintenanceError(r, "unmount");
+    if (r != win_maint::Result::Success) {
+        err.set_kernel_errno(win_maint::lastWin32Error());
+    }
+    return err;
+}
+
+proto::ErrorInfo Helper::handleEject(const std::string& payload) {
+    proto::PathRequest req;
+    if (!req.ParseFromString(payload)) {
+        return fail(proto::ERROR_UNKNOWN, "bad PathRequest");
+    }
+    const auto r = win_maint::ejectDisk(req.device_path());
+    if (r == win_maint::Result::Success) {
+        return ok();
+    }
+    proto::ErrorInfo err;
+    switch (r) {
+        case win_maint::Result::InvalidDrive:
+            err = fail(proto::ERROR_DEVICE_NOT_FOUND, "eject: invalid device path");
+            break;
+        case win_maint::Result::Busy:
+            err = fail(proto::ERROR_DEVICE_BUSY, "eject: device busy");
+            break;
+        default:
+            err = fail(proto::ERROR_EJECT_FAILED,
+                       win_maint::lastDetail().empty() ? "eject failed"
+                                                       : win_maint::lastDetail());
+            break;
+    }
+    err.set_kernel_errno(win_maint::lastWin32Error());
+    return err;
 }
 
 proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::string& out) {
@@ -442,17 +591,15 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
     Session& s = it->second;
     s.bulk.release();
     const FileError e = s.fops->Close();
-    const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - s.started).count();
+    const bool success = (e == FileError::kSuccess);
+    proto::ErrorInfo terminal;
+    if (!success) {
+        terminal = fail(mapFileError(e), "Close failed");
+    }
 
     proto::SessionStats stats;
-    stats.set_bytes_written(s.bytes_written);
-    stats.set_duration_ms(static_cast<std::uint64_t>(dur));
-    stats.set_state(e == FileError::kSuccess ? proto::SESSION_STATE_SUCCEEDED
-                                             : proto::SESSION_STATE_FAILED);
-    if (e != FileError::kSuccess) {
-        *stats.mutable_terminal_error() = fail(mapFileError(e), "Close failed");
-    }
+    s.telemetry.fillSessionStats(stats, s.bytes_written, s.started, success,
+                                 success ? nullptr : &terminal);
     stats.SerializeToString(&out);
 
     sessions_.erase(it);
@@ -461,12 +608,22 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
 
 proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& out_payload) {
     switch (req.method()) {
-        case proto::WIRE_HELLO:
+        case proto::WIRE_HELLO: {
+            const auto ver_err = wire::checkProtocolVersion(req.payload(), kProtocolVersion);
+            if (ver_err.code() != proto::ERROR_NONE) {
+                return ver_err;
+            }
+            [[fallthrough]];
+        }
         case proto::WIRE_QUERY_HELPER_STATUS: {
             proto::HelperStatus status;
-            status.set_state(proto::HELPER_STATE_INSTALLED_READY);
-            status.set_installed_version(std::to_string(kProtocolVersion));
-            status.set_client_version(std::to_string(kProtocolVersion));
+            wire::fillReadyHelperStatus(status, kProtocolVersion);
+            if (req.method() == proto::WIRE_HELLO) {
+                proto::ProtocolVersion pv;
+                if (pv.ParseFromString(req.payload())) {
+                    wire::applyClientProtocolVersion(status, pv.version());
+                }
+            }
             status.SerializeToString(&out_payload);
             return ok();
         }
@@ -481,12 +638,11 @@ proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& ou
         case proto::WIRE_MAP_BULK_BUFFER:     return handleMapBulkBuffer(req.payload(), out_payload);
         case proto::WIRE_BULK_WRITE:          return handleBulkWrite(req.payload(), out_payload);
 
-        // Pending: drive enumeration / maintenance through the helper (§14.7).
-        case proto::WIRE_LIST_DRIVES:
-            return fail(proto::ERROR_NOT_IMPLEMENTED, "listDrives pending (§14.7)");
-        case proto::WIRE_UNMOUNT:
-        case proto::WIRE_EJECT:
-            return fail(proto::ERROR_NOT_IMPLEMENTED, "maintenance pending");
+        case proto::WIRE_LIST_DRIVES:         return handleListDrives(out_payload);
+        case proto::WIRE_SUBSCRIBE_DRIVES:    return handleSubscribeDrives();
+        case proto::WIRE_UNSUBSCRIBE_DRIVES:  return handleUnsubscribeDrives();
+        case proto::WIRE_UNMOUNT:             return handleUnmount(req.payload());
+        case proto::WIRE_EJECT:               return handleEject(req.payload());
         default:
             return fail(proto::ERROR_NOT_IMPLEMENTED, "unknown method");
     }
@@ -542,7 +698,11 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
         return;
     }
 
+    WireOutbound outbound(pipe);
+    DriveWatchService drive_watch;
     Helper helper(client_pid);
+    helper.setPushContext(&outbound, &drive_watch);
+
     wire::FrameAccumulator acc;
     char buf[8192];
     std::string payload;
@@ -551,11 +711,11 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
         bool oversize = false;
         if (!acc.next(payload, oversize)) {
             if (oversize) {
-                return;  // protocol violation - drop the client
+                break;
             }
             DWORD got = 0;
             if (!ReadFile(pipe, buf, sizeof(buf), &got, nullptr) || got == 0) {
-                return;  // client disconnected
+                break;
             }
             acc.append(buf, got);
             continue;
@@ -563,7 +723,7 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
 
         proto::WireRequest req;
         if (!req.ParseFromString(payload)) {
-            return;  // malformed - drop
+            break;
         }
 
         proto::WireResponse resp;
@@ -575,15 +735,12 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
             resp.set_payload(reply_payload);
         }
 
-        std::string ser;
-        if (!resp.SerializeToString(&ser) || ser.size() > wire::kMaxFrameBytes) {
-            return;
-        }
-        const std::string frame = wire::encodeFrame(ser);
-        if (!writeAll(pipe, frame.data(), frame.size())) {
-            return;
+        if (!outbound.sendResponse(resp)) {
+            break;
         }
     }
+
+    drive_watch.unsubscribe();
 }
 
 } // namespace
