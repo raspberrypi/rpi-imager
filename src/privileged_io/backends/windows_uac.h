@@ -13,11 +13,8 @@
 // authenticates the connecting client via publisher-pinned Authenticode
 // verification (§14.4, peer_auth_win.cpp).
 //
-// SCAFFOLD STATUS: the transport plumbing (launch, connect, framed RPC) is
-// wired; the privileged operations are still being brought up against the
-// helper server (src/writer/server/win). Gated behind the
-// RPI_IMAGER_ENABLE_WINDOWS_HELPER build option and an explicit runtime
-// opt-in, so it never changes default behavior.
+// Gated behind the RPI_IMAGER_ENABLE_WINDOWS_HELPER build option and an
+// explicit runtime opt-in, so it never changes default behavior.
 //
 // Windows-only translation unit: CMake compiles it only on Windows when
 // RPI_IMAGER_ENABLE_WINDOWS_HELPER is set (like the macOS XPC backend), so it

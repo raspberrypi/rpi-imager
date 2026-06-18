@@ -11,6 +11,16 @@
 #include "privileged_io/privileged_writer.h"
 #include "privileged_io/backends/macos_xpc.h"
 #endif
+#if defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
+#include "privileged_io/backends/windows_uac.h"
+#endif
+#if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
+#include "privileged_io/backends/linux_polkit.h"
+#endif
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -19,6 +29,82 @@
 #include "fastboot/fastboot_protocol.h"
 #include <set>
 #include <sstream>
+
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+namespace {
+
+bool tryListDevicesFromHelper(std::vector<Drivelist::DeviceDescriptor>& out) {
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    using BK = ::rpi_imager::privileged::BackendKind;
+
+#ifdef Q_OS_DARWIN
+    if (w.backend() == BK::MacOSXpc) {
+        auto* xpc = dynamic_cast<
+            ::rpi_imager::privileged::backends::MacOSXpcBackend*>(&w);
+        if (!xpc) {
+            return false;
+        }
+        auto r = xpc->listDevicesNow();
+        if (!r.ok) {
+            qDebug() << "[drivelist] helper listDevicesNow failed:"
+                     << QString::fromStdString(r.error.detail())
+                     << "- falling back to in-process enumeration";
+            return false;
+        }
+        out = std::move(r.value);
+        return true;
+    }
+#endif
+#if defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    if (w.backend() == BK::WindowsUac) {
+        auto* uac = dynamic_cast<
+            ::rpi_imager::privileged::backends::WindowsUacBackend*>(&w);
+        if (!uac) {
+            return false;
+        }
+        auto r = uac->listDevicesNow();
+        if (!r.ok) {
+            qDebug() << "[drivelist] helper listDevicesNow failed:"
+                     << QString::fromStdString(r.error.detail())
+                     << "- falling back to in-process enumeration";
+            return false;
+        }
+        out = std::move(r.value);
+        return true;
+    }
+#endif
+#if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+    if (w.backend() == BK::LinuxPolkit) {
+        auto* polkit = dynamic_cast<
+            ::rpi_imager::privileged::backends::LinuxPolkitBackend*>(&w);
+        if (!polkit) {
+            return false;
+        }
+        auto r = polkit->listDevicesNow();
+        if (!r.ok) {
+            qDebug() << "[drivelist] helper listDevicesNow failed:"
+                     << QString::fromStdString(r.error.detail())
+                     << "- falling back to in-process enumeration";
+            return false;
+        }
+        out = std::move(r.value);
+        return true;
+    }
+#endif
+    return false;
+}
+
+bool usesHelperDriveNotifications() {
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    using BK = ::rpi_imager::privileged::BackendKind;
+    const auto kind = w.backend();
+    return kind == BK::MacOSXpc || kind == BK::WindowsUac || kind == BK::LinuxPolkit;
+}
+
+} // namespace
+#endif
 
 /*
  * SPDX-License-Identifier: Apache-2.0
@@ -49,30 +135,27 @@ void DriveListModelPollThread::stop()
 {
     _terminate = true;
     _modeChanged.wakeAll();  // Wake thread to check terminate flag
-#ifdef Q_OS_DARWIN
-    // Best-effort unsubscribe; if the connection is already torn down
-    // the helper's invalidation handler cleans up its tracking anyway.
-    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
-    (void)w.unsubscribeDrives();
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+    if (usesHelperDriveNotifications()) {
+        auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+        (void)w.unsubscribeDrives();
+    }
 #endif
 }
 
 void DriveListModelPollThread::start()
 {
     _terminate = false;
-#ifdef Q_OS_DARWIN
-    // Subscribe for push notifications on macOS. Connection lifecycle
-    // is handled by the backend; we just install our wake callback and
-    // ignore failures (the legacy polling path keeps working at full
-    // 1-second cadence).
-    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
-    if (w.backend() == ::rpi_imager::privileged::BackendKind::MacOSXpc) {
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+    if (usesHelperDriveNotifications()) {
+        auto& w = ::rpi_imager::getProcessPrivilegedWriter();
         auto* self = this;
         auto r = w.subscribeDrives(
             [self](const ::rpi_imager::privileged::proto::DriveChange&) {
-                // The callback fires on a background queue. Just poke
-                // the poll thread; it'll re-enumerate on the next loop
-                // iteration.
                 self->requestImmediateRescan();
             });
         if (!r.ok) {
@@ -80,7 +163,7 @@ void DriveListModelPollThread::start()
                      << QString::fromStdString(r.error.detail())
                      << "- falling back to pure polling";
         } else {
-            qDebug() << "[drivelist] subscribed to helper push notifications";
+            qDebug() << "[drivelist] subscribed to helper drive notifications";
         }
     }
 #endif
@@ -178,37 +261,16 @@ void DriveListModelPollThread::run()
 
         std::vector<Drivelist::DeviceDescriptor> driveList;
         bool drivelistFromHelper = false;
-#ifdef Q_OS_DARWIN
-        // Route through the helper when running with the macOS XPC
-        // backend so all privileged device-touch operations go through
-        // a single boundary. Fallback to the legacy in-process path on
-        // any *error* (helper not yet approved, transient XPC error,
-        // etc.) - but a successful enumeration that returns zero
-        // devices is honoured as-is so we don't double-enumerate.
-        {
-            auto& w = ::rpi_imager::getProcessPrivilegedWriter();
-            if (w.backend() == ::rpi_imager::privileged::BackendKind::MacOSXpc) {
-                auto* xpc = dynamic_cast<
-                    ::rpi_imager::privileged::backends::MacOSXpcBackend*>(&w);
-                if (xpc) {
-                    auto r = xpc->listDevicesNow();
-                    if (r.ok) {
-                        driveList = std::move(r.value);
-                        drivelistFromHelper = true;
-                    } else {
-                        qDebug() << "[drivelist] helper listDevicesNow failed:"
-                                 << QString::fromStdString(r.error.detail())
-                                 << "- falling back to in-process enumeration";
-                    }
-                }
-            }
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+        if (tryListDevicesFromHelper(driveList)) {
+            drivelistFromHelper = true;
         }
+#endif
         if (!drivelistFromHelper) {
             driveList = Drivelist::ListStorageDevices();
         }
-#else
-        driveList = Drivelist::ListStorageDevices();
-#endif
         if (_rpibootEnabled.load(std::memory_order_relaxed)) {
             auto rpibootDevices = rpiboot::scanRpibootDevices();
             driveList.insert(driveList.end(), rpibootDevices.begin(), rpibootDevices.end());

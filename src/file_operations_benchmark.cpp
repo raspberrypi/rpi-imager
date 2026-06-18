@@ -35,7 +35,16 @@ const char* describeSelectedBackend() {
     if (xpc && xpc[0] == '0') return "macos-authopen-legacy";
     return "macos-xpc-helper";
 #elif defined(__linux__)
-    return "linux";
+    if (::geteuid() == 0) {
+        return "linux-embedded";
+    }
+#if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+    const char* use = std::getenv("RPI_IMAGER_USE_LINUX_HELPER");
+    if (use && use[0] == '1') {
+        return "linux-polkit-helper";
+    }
+#endif
+    return "linux-in-process";
 #elif defined(_WIN32)
     return "windows";
 #else
@@ -62,6 +71,22 @@ struct WriteSample {
 std::string readHelperAuditLogTail(std::size_t max_bytes) {
 #if defined(__APPLE__)
     const char* path = "/Library/Logs/Raspberry Pi/Imager/helper.log";
+    std::ifstream f(path, std::ios::in | std::ios::binary);
+    if (!f) return {};
+    f.seekg(0, std::ios::end);
+    auto size = f.tellg();
+    if (size <= 0) return {};
+    std::size_t bytes = static_cast<std::size_t>(size);
+    std::size_t skip = bytes > max_bytes ? bytes - max_bytes : 0;
+    f.seekg(static_cast<std::streamoff>(skip), std::ios::beg);
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+#elif defined(__linux__)
+    const char* runtime = std::getenv("XDG_RUNTIME_DIR");
+    std::string path = runtime && runtime[0]
+                           ? std::string(runtime) + "/rpi-imager/helper.log"
+                           : "/tmp/rpi-imager-helper.log";
     std::ifstream f(path, std::ios::in | std::ios::binary);
     if (!f) return {};
     f.seekg(0, std::ios::end);
