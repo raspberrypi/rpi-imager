@@ -12,8 +12,11 @@
 
 #include "windows_uac.h"
 
-#include "../wire/frame.h"
+#include "../wire/handshake.h"
 #include "../wire/win_shared_memory.h"
+#include "../wire/drive_descriptor_json.h"
+#include "../wire/duplex_connection.h"
+#include "../wire/protocol.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -33,7 +36,7 @@ namespace rpi_imager::privileged::backends {
 
 namespace {
 
-constexpr std::uint32_t kProtocolVersion = 1;
+constexpr std::uint32_t kProtocolVersion = wire::kProtocolVersion;
 
 proto_ns::ErrorInfo makeError(proto_ns::ErrorCode code,
                               const std::string& detail,
@@ -75,8 +78,8 @@ struct WindowsUacBackend::State {
     std::mutex      mutex;          // serialises one in-flight RPC at a time
     HANDLE          pipe = INVALID_HANDLE_VALUE;
     HANDLE          helper_process = nullptr;
-    std::atomic<std::uint64_t> next_request_id{1};
     bool            connected = false;
+    wire::DuplexConnection duplex;
 
     // Bulk plane.
     wire::WinSharedMemory bulk;
@@ -99,6 +102,7 @@ struct WindowsUacBackend::State {
     bool                    worker_started = false;
 
     ~State() {
+        duplex.detach();
         {
             std::lock_guard<std::mutex> lk(queue_mutex);
             worker_stop = true;
@@ -131,34 +135,9 @@ WindowsUacBackend::~WindowsUacBackend() = default;
 
 namespace {
 
-// Writes the whole buffer to the pipe, looping over partial writes.
-bool writeAll(HANDLE pipe, const char* data, std::size_t len) {
-    std::size_t off = 0;
-    while (off < len) {
-        DWORD wrote = 0;
-        const DWORD chunk = static_cast<DWORD>(
-            (len - off) > 0x7fffffffu ? 0x7fffffffu : (len - off));
-        if (!WriteFile(pipe, data + off, chunk, &wrote, nullptr) || wrote == 0) {
-            return false;
-        }
-        off += wrote;
-    }
-    return true;
-}
-
-} // namespace
-
-// ensureConnectedImpl: launch the helper elevated (once) and connect the
-// control pipe. State::mutex is held by the caller. Returns a populated
-// ErrorInfo via `err` on failure.
-//
-// SCAFFOLD: this is the §14.8 launch path; it needs validation on a real
-// Windows host (UAC consent flow, pipe-server readiness race).
-namespace {
-
 bool ensureConnectedImpl(WindowsUacBackend::State* st,
                          proto_ns::ErrorInfo& err) {
-    if (st->connected && st->pipe != INVALID_HANDLE_VALUE) {
+    if (st->connected && st->pipe != INVALID_HANDLE_VALUE && st->duplex.isAttached()) {
         return true;
     }
 
@@ -225,6 +204,9 @@ bool ensureConnectedImpl(WindowsUacBackend::State* st,
 
     st->pipe = pipe;
     st->connected = true;
+    if (!st->duplex.isAttached()) {
+        st->duplex.attach(pipe);
+    }
     return true;
 }
 
@@ -236,9 +218,6 @@ bool ensureConnectedImpl(WindowsUacBackend::State* st,
 
 namespace {
 
-// Synchronous request/response. Serialises WireRequest, frames it, writes it,
-// then reads framed bytes until a complete WireResponse arrives. The caller
-// holds State::mutex so only one RPC is in flight; the first response is ours.
 bool callRpcLocked(WindowsUacBackend::State* st,
                    proto_ns::WireMethod method,
                    const std::string& request_payload,
@@ -248,57 +227,16 @@ bool callRpcLocked(WindowsUacBackend::State* st,
         return false;
     }
 
-    proto_ns::WireRequest req;
-    req.set_method(method);
-    req.set_request_id(st->next_request_id.fetch_add(1));
-    req.set_payload(request_payload);
-
-    std::string ser;
-    if (!req.SerializeToString(&ser) || ser.size() > wire::kMaxFrameBytes) {
-        err = makeError(proto_ns::ERROR_UNKNOWN, "Failed to serialize request");
-        return false;
-    }
-    const std::string frame = wire::encodeFrame(ser);
-    if (!writeAll(st->pipe, frame.data(), frame.size())) {
-        err = makeError(proto_ns::ERROR_DEVICE_IO,
-                        "Pipe write failed", static_cast<int>(GetLastError()));
-        st->connected = false;
-        return false;
-    }
-
-    wire::FrameAccumulator acc;
-    std::string payload;
-    char buf[8192];
-    for (;;) {
-        bool oversize = false;
-        if (acc.next(payload, oversize)) {
-            break;
-        }
-        if (oversize) {
-            err = makeError(proto_ns::ERROR_DEVICE_IO, "Helper sent oversize frame");
+    const wire::RpcResult rpc = st->duplex.call(method, request_payload);
+    if (!rpc.ok) {
+        err = rpc.error;
+        if (err.code() == proto_ns::ERROR_DEVICE_DISCONNECTED
+            || err.code() == proto_ns::ERROR_DEVICE_IO) {
             st->connected = false;
-            return false;
         }
-        DWORD got = 0;
-        if (!ReadFile(st->pipe, buf, sizeof(buf), &got, nullptr) || got == 0) {
-            err = makeError(proto_ns::ERROR_DEVICE_DISCONNECTED,
-                            "Helper closed the pipe", static_cast<int>(GetLastError()));
-            st->connected = false;
-            return false;
-        }
-        acc.append(buf, got);
-    }
-
-    proto_ns::WireResponse resp;
-    if (!resp.ParseFromString(payload)) {
-        err = makeError(proto_ns::ERROR_UNKNOWN, "Malformed helper response");
         return false;
     }
-    if (resp.error().code() != proto_ns::ERROR_NONE) {
-        err = resp.error();
-        return false;
-    }
-    out_reply_payload = resp.payload();
+    out_reply_payload = rpc.payload;
     return true;
 }
 
@@ -320,12 +258,17 @@ Result<proto_ns::HelperStatus> WindowsUacBackend::queryHelperStatus() {
     pv.SerializeToString(&pv_ser);
     if (!callRpcLocked(state_.get(), proto_ns::WIRE_HELLO, pv_ser, err, reply)) {
         proto_ns::HelperStatus s;
-        s.set_state(proto_ns::HELPER_STATE_NOT_INSTALLED);
+        if (err.code() == proto_ns::ERROR_HELPER_VERSION_MISMATCH) {
+            s.set_state(proto_ns::HELPER_STATE_VERSION_MISMATCH);
+        } else {
+            s.set_state(proto_ns::HELPER_STATE_NOT_INSTALLED);
+        }
         s.set_client_version(std::to_string(kProtocolVersion));
         return Result<proto_ns::HelperStatus>::success(std::move(s));
     }
     proto_ns::HelperStatus s;
     s.ParseFromString(reply);
+    wire::applyClientProtocolVersion(s, kProtocolVersion);
     return Result<proto_ns::HelperStatus>::success(std::move(s));
 }
 
@@ -342,8 +285,8 @@ Result<void> WindowsUacBackend::installHelper() {
 }
 
 Result<void> WindowsUacBackend::uninstallHelper() {
-    // Nothing persists to uninstall; closing the pipe lets the helper exit.
     std::lock_guard<std::mutex> lk(state_->mutex);
+    state_->duplex.detach();
     if (state_->pipe != INVALID_HANDLE_VALUE) {
         CloseHandle(state_->pipe);
         state_->pipe = INVALID_HANDLE_VALUE;
@@ -373,26 +316,54 @@ Result<std::vector<proto_ns::DriveInfo>> WindowsUacBackend::listDrivesNow() {
     return Result<std::vector<proto_ns::DriveInfo>>::success(std::move(out));
 }
 
-Result<void> WindowsUacBackend::subscribeDrives(DriveChangeCallback) {
-    // §14.7: drive-change push is a follow-on; the client keeps polling
-    // listDrivesNow on this backend for now.
-    return Result<void>::failure(
-        makeError(proto_ns::ERROR_NOT_IMPLEMENTED, "subscribeDrives: §14.7 follow-on"));
+Result<void> WindowsUacBackend::subscribeDrives(DriveChangeCallback cb) {
+    if (!cb) {
+        return Result<void>::failure(
+            makeError(proto_ns::ERROR_UNKNOWN, "null drive-change callback"));
+    }
+    state_->duplex.setEventCallback(
+        [cb = std::move(cb)](const proto_ns::WireEvent& ev) {
+            if (ev.kind() != proto_ns::WIRE_EVENT_DRIVE_CHANGED) {
+                return;
+            }
+            proto_ns::DriveChange dc = ev.change();
+            if (dc.kind() == proto_ns::DriveChange::KIND_UNKNOWN) {
+                dc.set_kind(proto_ns::DriveChange::KIND_UPDATED);
+            }
+            cb(dc);
+        });
+
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_SUBSCRIBE_DRIVES, {}, err, reply)) {
+        state_->duplex.setEventCallback(nullptr);
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
 }
 
 Result<void> WindowsUacBackend::unsubscribeDrives() {
+    state_->duplex.setEventCallback(nullptr);
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    (void)callRpcLocked(state_.get(), proto_ns::WIRE_UNSUBSCRIBE_DRIVES, {}, err, reply);
     return Result<void>::success();
 }
 
 Result<std::vector<Drivelist::DeviceDescriptor>>
 WindowsUacBackend::listDevicesNow() {
-    // The §5 concrete-class shortcut (DeviceDescriptor without a proto round
-    // trip) is brought up after the proto-typed path; not wired yet.
-    Result<std::vector<Drivelist::DeviceDescriptor>> r;
-    r.ok = false;
-    r.error = makeError(proto_ns::ERROR_NOT_IMPLEMENTED,
-                        "listDevicesNow: use listDrivesNow (proto path) for now");
-    return r;
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_LIST_DRIVES, {}, err, reply)) {
+        return Result<std::vector<Drivelist::DeviceDescriptor>>::failure(std::move(err));
+    }
+    proto_ns::DriveList list;
+    list.ParseFromString(reply);
+    return Result<std::vector<Drivelist::DeviceDescriptor>>::success(
+        wire::deviceDescriptorsFromDriveList(list));
 }
 
 // ---------------------------------------------------------------------------

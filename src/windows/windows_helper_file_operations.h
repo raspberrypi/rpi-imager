@@ -5,25 +5,20 @@
 // privileged disk I/O through the elevated rpi-imager-writer.exe helper
 // (WindowsUacBackend) instead of opening \\.\PhysicalDriveN locally. This is
 // the Windows analogue of macOS's XpcFileOperations (§14.6).
-//
-// Selected by CreatePlatformFileOperations() when the build option +
-// RPI_IMAGER_USE_WINDOWS_HELPER opt-in are set. The default Windows path
-// remains the in-process WindowsFileOperations.
-//
-// Windows-only translation unit: CMake compiles it only on Windows when
-// RPI_IMAGER_ENABLE_WINDOWS_HELPER is set.
 
 #pragma once
 
 #include "../file_operations.h"
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace rpi_imager {
+
+class WindowsWriteBufferProvider;
 
 class WindowsHelperFileOperations : public FileOperations {
 public:
@@ -46,6 +41,7 @@ public:
                              std::size_t& bytes_read) override;
 
     void SetMaxWriteSizeHint(std::size_t bytes) override;
+    std::shared_ptr<WriteBufferProvider> CreateWriteBufferProvider() override;
 
     bool SetAsyncQueueDepth(int depth) override;
     int GetAsyncQueueDepth() const override;
@@ -55,6 +51,11 @@ public:
     int GetPendingWriteCount() const override;
     FileError WaitForPendingWrites() override;
     void CancelAsyncIO() override;
+    void GetAsyncIOStats(uint32_t& wallClockMs, uint32_t& writeCount,
+                         uint32_t& minLatencyUs, uint32_t& maxLatencyUs,
+                         uint32_t& avgLatencyUs) const override;
+    void GetZeroCopyWriteStats(bool& engaged, std::uint64_t& zeroCopySubmits,
+                               std::uint64_t& copySubmits) const override;
 
     FileError Seek(std::uint64_t position) override;
     std::uint64_t Tell() const override;
@@ -63,6 +64,11 @@ public:
     void PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) override;
     FileError PrepareDevice(std::uint64_t device_size,
                             bool zero_last_mb = true) override;
+    FastVerifyResult FastVerifySha256(const std::uint8_t* prefix,
+                                      std::size_t prefix_len,
+                                      std::uint64_t device_offset,
+                                      std::uint64_t length) override;
+    HelperSessionStats GetLastSessionStats() const override;
 
     int GetHandle() const override { return -1; }
     int GetLastErrorCode() const override;
@@ -71,6 +77,12 @@ public:
     DirectIOInfo GetDirectIOInfo() const override;
 
 private:
+    friend class WindowsWriteBufferProvider;
+
+    bool adoptZeroCopyRing(std::size_t count, std::size_t slotSize,
+                           std::vector<void*>& outSlots);
+    void releaseZeroCopyRing();
+
     struct State;
     std::unique_ptr<State> state_;
 };
