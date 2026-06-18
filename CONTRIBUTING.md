@@ -54,7 +54,7 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
   - `-DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64` - or the equivalent path you installed mingw64 to.
   - `-DENABLE_INNO_INSTALLER=ON` - to enable the Inno Setup installer, rather than the legacy NSIS installer.
   - `-DIMAGER_SIGNED_APP=ON` - to enable code signing for redistribution.
-  - `-DRPI_IMAGER_ENABLE_WINDOWS_HELPER=ON` - optional; build the privileged Windows helper.
+  - Privileged helpers (`rpi-imager-writer`) are built by default on Windows and Linux. Use `-DRPI_IMAGER_DISABLE_WINDOWS_HELPER=ON` or `-DRPI_IMAGER_DISABLE_LINUX_HELPER=ON` to omit them. At runtime, set `RPI_IMAGER_USE_WINDOWS_HELPER=1` or `RPI_IMAGER_USE_LINUX_HELPER=1` (or run as root on Linux for the embedded path). See [doc/linux-appimage-signing.md](doc/linux-appimage-signing.md) for AppImage GPG signing and peer auth.
   - `-DRPI_IMAGER_PUBLISHER_ORG="Your Org"` - when using a dev code-signing cert; must match cert `O=` (see dev signing doc). Thumbprints are auto-discovered on Windows when this matches a cert in your store.
 - In the CMake plugin tab, ensure you have selected the `MinSizeRel` variant if you intend to distribute to others.
 - In the CMake plugin tab, select the 'inno_installer' target, and build it

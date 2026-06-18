@@ -206,13 +206,41 @@ endif()
 
 include_directories(BEFORE .)
 
-# Native Windows privileged helper (phase 3; design doc §14). Opt-in and OFF
-# by default while it is brought up: enabling it compiles the
-# WindowsUacBackend, the rpi-imager-writer.exe helper, and the
-# WindowsHelperFileOperations adapter. None of these change default behavior
-# unless RPI_IMAGER_USE_WINDOWS_HELPER=1 is also set at runtime (§14.6, §14.11).
-option(RPI_IMAGER_ENABLE_WINDOWS_HELPER
-    "Build the experimental native Windows privileged helper (phase 3)" OFF)
+# Native Windows privileged helper (phase 3; design doc §14). Built by default;
+# set RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON to omit rpi-imager-writer.exe, the
+# WindowsUacBackend, and the WindowsHelperFileOperations adapter. Runtime
+# selection still requires RPI_IMAGER_USE_WINDOWS_HELPER=1 (§14.6, §14.11).
+option(RPI_IMAGER_DISABLE_WINDOWS_HELPER
+    "Omit the native Windows privileged helper (rpi-imager-writer, UAC backend)" OFF)
+
+# Native Linux privileged helper (phase 2; design doc §12). Built by default;
+# set RPI_IMAGER_DISABLE_LINUX_HELPER=ON to omit LinuxPolkitBackend and
+# rpi-imager-writer. LinuxEmbedded (in-process when already root) is always
+# compiled on Linux. Runtime selection still requires RPI_IMAGER_USE_LINUX_HELPER=1.
+option(RPI_IMAGER_DISABLE_LINUX_HELPER
+    "Omit the native Linux privileged helper (rpi-imager-writer, polkit backend)" OFF)
+
+# Migrate deprecated ENABLE_* cache entries from older configure runs.
+if(DEFINED CACHE{RPI_IMAGER_ENABLE_WINDOWS_HELPER})
+    if(NOT RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+        set(RPI_IMAGER_DISABLE_WINDOWS_HELPER ON CACHE BOOL
+            "Omit the native Windows privileged helper (rpi-imager-writer, UAC backend)" FORCE)
+        message(STATUS "RPI_IMAGER_ENABLE_WINDOWS_HELPER is deprecated; applied DISABLE_WINDOWS_HELPER=ON")
+    else()
+        message(STATUS "RPI_IMAGER_ENABLE_WINDOWS_HELPER is deprecated; helpers are on by default — remove it from your cache")
+    endif()
+    unset(RPI_IMAGER_ENABLE_WINDOWS_HELPER CACHE)
+endif()
+if(DEFINED CACHE{RPI_IMAGER_ENABLE_LINUX_HELPER})
+    if(NOT RPI_IMAGER_ENABLE_LINUX_HELPER)
+        set(RPI_IMAGER_DISABLE_LINUX_HELPER ON CACHE BOOL
+            "Omit the native Linux privileged helper (rpi-imager-writer, polkit backend)" FORCE)
+        message(STATUS "RPI_IMAGER_ENABLE_LINUX_HELPER is deprecated; applied DISABLE_LINUX_HELPER=ON")
+    else()
+        message(STATUS "RPI_IMAGER_ENABLE_LINUX_HELPER is deprecated; helpers are on by default — remove it from your cache")
+    endif()
+    unset(RPI_IMAGER_ENABLE_LINUX_HELPER CACHE)
+endif()
 
 # Shipping identity (publisher org, Windows client exe name, …). Shared by C++
 # (rpi_imager_identity.h), VERSIONINFO, and the Inno Setup template. Included
@@ -593,8 +621,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE privileged_io)
 # compiles the WindowsHelperFileOperations adapter and selects it from
 # file_operations_windows.cpp's factory under this define. It is scoped to the
 # client target so the helper binary never inherits it (§14.6).
-if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     target_compile_definitions(${PROJECT_NAME} PRIVATE RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+endif()
+
+if(UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE RPI_IMAGER_ENABLE_LINUX_HELPER)
+    if(TARGET rpi_imager_writer_linux)
+        target_link_libraries(${PROJECT_NAME} PRIVATE rpi_imager_writer_linux)
+    endif()
 endif()
 
 # Bundle the privileged helper into RpiImager.app on macOS. The

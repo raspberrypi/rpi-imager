@@ -37,6 +37,12 @@
 #include "platformquirks.h"
 #include "privileged_helper_diagnostic.h"
 #include "file_operations_benchmark.h"
+#if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+#include <vector>
+#include "writer/server/linux/service_impl.h"
+#include "linux/appimage_signature.h"
+#include "rpi_imager_identity.h"
+#endif
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #endif
@@ -160,6 +166,40 @@ int main(int argc, char *argv[])
             return success ? 0 : 1;
         }
     }
+
+#if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+    // Privileged helper service mode (pkexec $APPIMAGE --privileged-helper …).
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--privileged-helper") == 0) {
+            if (g_logFile) {
+                fclose(g_logFile);
+            }
+            return rpi_imager::writer::RpiImagerWriterServiceMainLinux(argc, argv);
+        }
+        if (strcmp(argv[i], "--verify-appimage-signature") == 0 && i + 1 < argc) {
+            std::vector<std::string> trusted;
+            trusted.reserve(identity::kTrustedAppImageKeyFingerprintCount);
+            for (std::size_t k = 0; k < identity::kTrustedAppImageKeyFingerprintCount; ++k) {
+                trusted.emplace_back(identity::kTrustedAppImageKeyFingerprints[k]);
+            }
+            const auto result =
+                appimage::verifyEmbeddedSignature(argv[i + 1], trusted);
+            std::fprintf(stderr, "%s: %s\n",
+                         argv[i + 1],
+                         appimage::verifyResultMessage(result));
+            if (g_logFile) {
+                fclose(g_logFile);
+            }
+            if (result == appimage::VerifyResult::Ok) {
+                return 0;
+            }
+            if (result == appimage::VerifyResult::Unsigned && trusted.empty()) {
+                return 0;
+            }
+            return 1;
+        }
+    }
+#endif
 
     // Attempt automatic elevation if running from an elevatable bundle without privileges
     // This happens BEFORE Qt initialization to avoid overhead

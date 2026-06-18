@@ -6,6 +6,7 @@
 
 # Install PolicyKit policy for privilege escalation
 debian/com.raspberrypi.rpi-imager.policy /usr/share/polkit-1/actions/
+debian/com.raspberrypi.rpi-imager.writer.policy /usr/share/polkit-1/actions/
 
 src/linux/icon/rpi-imager.svg /usr/share/icons/hicolor/scalable/apps/
 

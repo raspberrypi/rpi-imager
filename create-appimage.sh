@@ -240,6 +240,9 @@ fi
 
 # Add Qt path to CMake flags
 CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
+if [ -n "${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS:-}" ]; then
+    CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DRPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS=${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS}"
+fi
 
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
@@ -421,6 +424,32 @@ else
 fi
 
 echo "AppImage created at $OUTPUT_FILE"
+
+# Optional embedded GPG signature (Type 2 .sha256_sig section, no sidecar).
+if [ -n "${RPI_IMAGER_APPIMAGE_SIGN_KEY:-}" ]; then
+    echo "Signing AppImage with key ${RPI_IMAGER_APPIMAGE_SIGN_KEY}..."
+    APPIMAGETOOL="${TOOLS_DIR}/appimagetool-${ARCH}.AppImage"
+    if [ ! -f "$APPIMAGETOOL" ]; then
+        curl -L -o "$APPIMAGETOOL" \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${ARCH}.AppImage"
+        chmod +x "$APPIMAGETOOL"
+    fi
+    SIGNED_TMP="${OUTPUT_FILE%.AppImage}.signed.AppImage"
+    rm -f "$SIGNED_TMP"
+    ARCH="${ARCH}" VERSION="${PROJECT_VERSION}" \
+        "$APPIMAGETOOL" --sign --sign-key "${RPI_IMAGER_APPIMAGE_SIGN_KEY}" \
+        --no-appstream "$APPDIR" "$SIGNED_TMP"
+    mv "$SIGNED_TMP" "$OUTPUT_FILE"
+    if [ -z "${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS:-}" ]; then
+        FPR="$(gpg --with-colons --fingerprint "${RPI_IMAGER_APPIMAGE_SIGN_KEY}" 2>/dev/null \
+            | awk -F: '/^fpr:/ {print toupper($10); exit}')"
+        if [ -n "$FPR" ]; then
+            echo "Detected signing key fingerprint: $FPR"
+            echo "Reconfigure with -DRPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS=${FPR} for peer auth pinning."
+        fi
+    fi
+    echo "Signed AppImage at $OUTPUT_FILE"
+fi
 
 # Create symlinks for debian packaging and user convenience
 # Primary symlink matches debian/rpi-imager.install expectations

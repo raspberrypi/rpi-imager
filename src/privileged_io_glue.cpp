@@ -31,6 +31,12 @@ rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter() {
         // in-process write path is unchanged.
         const char* use_win = std::getenv("RPI_IMAGER_USE_WINDOWS_HELPER");
         config.prefer_helper = (use_win && use_win[0] == '1');
+#elif defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+        // Linux polkit helper: opt-in via RPI_IMAGER_USE_LINUX_HELPER=1.
+        // When running as root the factory selects LinuxEmbeddedBackend
+        // regardless of this flag.
+        const char* use_linux = std::getenv("RPI_IMAGER_USE_LINUX_HELPER");
+        config.prefer_helper = (use_linux && use_linux[0] == '1');
 #else
         // No native privileged backend on this platform; the LocalShimBackend
         // is the active path. prefer_helper has no native branch to select.

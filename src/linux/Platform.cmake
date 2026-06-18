@@ -24,6 +24,12 @@ set(PLATFORM_SOURCES
     linux/file_operations_linux.cpp
     linux/platformquirks_linux.cpp
 )
+if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+    list(APPEND PLATFORM_SOURCES
+        linux/linux_helper_file_operations.h
+        linux/linux_helper_file_operations.cpp
+    )
+endif()
 
 # Only include DBus-dependent and GUI components for non-CLI builds
 if(NOT BUILD_CLI_ONLY)

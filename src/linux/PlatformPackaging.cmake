@@ -33,6 +33,11 @@ add_dependencies(${PROJECT_NAME} generate_metainfo)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
+if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER AND TARGET rpi-imager-writer)
+    install(TARGETS rpi-imager-writer DESTINATION bin)
+    add_dependencies(${PROJECT_NAME} rpi-imager-writer)
+endif()
+
 if(BUILD_CLI_ONLY)
     # CLI-only build: install CLI-specific desktop file (marked as NoDisplay)
     # Icon is still required for AppImage tooling (linuxdeploy) even though NoDisplay=true
