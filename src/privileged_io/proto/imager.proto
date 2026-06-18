@@ -173,9 +173,10 @@ message Slot {
 
 message WriteRequest {
   SessionId session_id = 1;
-  uint32 slot_index = 2;                 // points to shared memory
+  uint32 slot_index = 2;                 // ring slot (macOS multi-slot path)
   uint64 offset = 3;                     // device offset
-  uint64 length = 4;                     // bytes to write from slot start
+  uint64 length = 4;                     // bytes to write from buffer/slot
+  uint64 buffer_offset = 5;              // offset within mapped bulk buffer (§14.3)
 }
 
 message WriteResult {
@@ -302,4 +303,120 @@ message EventBatch {
   SessionId session_id = 1;
   repeated TimedEvent events = 2;        // discrete events accumulated since last batch
   repeated ProgressUpdate progress = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Pipe RPC envelope (§14.3)
+//
+// macOS NSXPC carries method dispatch and the shared-memory handle itself, so
+// it does NOT use these messages. Transports without native RPC dispatch -
+// the Windows named-pipe backend (WindowsUacBackend) - frame requests and
+// responses with this envelope: a 4-byte little-endian length prefix followed
+// by a serialized WireRequest / WireResponse (see wire/frame.h).
+//
+// The envelope is deliberately generic: `method` selects the dispatch and
+// `payload` is the serialized per-method request/reply message below. New
+// methods get new WireMethod values; older peers reject unknown methods with
+// ERROR_NOT_IMPLEMENTED. Bulk payload bytes never travel in `payload`; they
+// live in the shared-memory plane exactly as on macOS (§6).
+// ---------------------------------------------------------------------------
+
+enum WireMethod {
+  WIRE_METHOD_UNSPECIFIED = 0;
+
+  // Handshake / lifecycle
+  WIRE_HELLO = 1;                  // req: ProtocolVersion, reply: HelperStatus
+  WIRE_QUERY_HELPER_STATUS = 2;    // req: (empty), reply: HelperStatus
+
+  // Drive enumeration (§5)
+  WIRE_LIST_DRIVES = 3;            // req: (empty), reply: DriveList
+
+  // Session lifecycle (§6)
+  WIRE_OPEN_SESSION = 10;          // req: OpenSessionRequest, reply: SessionId
+  WIRE_QUERY_DEVICE_LIMITS = 11;   // req: SessionRequest, reply: DeviceLimits
+  WIRE_PREPARE_DEVICE = 12;        // req: PrepareDeviceRequest, reply: (empty)
+  WIRE_MAP_BULK_BUFFER = 13;       // req: MapBulkBufferRequest, reply: MapBulkBufferReply
+  WIRE_BULK_WRITE = 14;            // req: WriteRequest, reply: WriteResult
+  WIRE_READ_CHUNK = 15;            // req: ReadRequest, reply: ReadReply
+  WIRE_WRITE_CHUNK = 16;           // req: WriteChunkRequest, reply: WriteChunkReply
+  WIRE_SYNC_DEVICE = 17;           // req: SessionRequest, reply: (empty)
+  WIRE_HASH_DEVICE_SHA256 = 18;    // req: HashDeviceRequest, reply: HashDeviceReply
+  WIRE_CLOSE_SESSION = 19;         // req: SessionRequest, reply: SessionStats
+
+  // Maintenance
+  WIRE_UNMOUNT = 30;               // req: PathRequest, reply: (empty)
+  WIRE_EJECT = 31;                 // req: PathRequest, reply: (empty)
+}
+
+message WireRequest {
+  WireMethod method = 1;
+  uint64 request_id = 2;           // client-assigned; echoed in WireResponse
+  bytes payload = 3;               // serialized per-method request message
+}
+
+message WireResponse {
+  uint64 request_id = 1;           // matches WireRequest.request_id
+  ErrorInfo error = 2;             // error.code == ERROR_NONE on success
+  bytes payload = 3;               // serialized per-method reply message
+}
+
+// Per-method request/reply wrappers used by the envelope above. Requests
+// whose argument is already a single message (WriteRequest, ReadRequest)
+// or whose reply is already a single message (WriteResult, ReadReply,
+// DeviceLimits, SessionId, SessionStats, HelperStatus) reuse those directly.
+
+message OpenSessionRequest {
+  string device_path = 1;
+  OpenOptions options = 2;
+}
+
+message SessionRequest {            // queryDeviceLimits / syncDevice / closeSession
+  SessionId session_id = 1;
+}
+
+message PrepareDeviceRequest {
+  SessionId session_id = 1;
+  PrepareOptions options = 2;
+}
+
+message MapBulkBufferRequest {
+  SessionId session_id = 1;
+  uint64 size_bytes = 2;           // 0 releases the mapping
+}
+
+// Returned by WIRE_MAP_BULK_BUFFER when size_bytes > 0. The section_handle is
+// a file-mapping HANDLE duplicated into the client process (§14.3); protobuf
+// cannot express handles, so it travels here instead of a side channel.
+message MapBulkBufferReply {
+  uint64 section_handle = 1;       // valid only in the connecting client process
+  uint64 size_bytes = 2;
+}
+
+message WriteChunkRequest {
+  SessionId session_id = 1;
+  uint64 offset = 2;
+  bytes data = 3;                  // small/metadata writes only; bulk uses the ring
+}
+
+message WriteChunkReply {
+  uint64 bytes_written = 1;
+}
+
+message HashDeviceRequest {
+  SessionId session_id = 1;
+  bytes prefix = 2;                // optional first-block prefix hashed before device bytes
+  uint64 device_offset = 3;
+  uint64 length = 4;
+}
+
+message HashDeviceReply {
+  bytes digest = 1;                // 32-byte SHA-256
+}
+
+message DriveList {
+  repeated DriveInfo drives = 1;
+}
+
+message PathRequest {               // unmount / eject
+  string device_path = 1;
 }

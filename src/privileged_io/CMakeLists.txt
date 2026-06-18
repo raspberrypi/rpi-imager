@@ -101,9 +101,25 @@ set(PRIVILEGED_IO_SOURCES
     backends/in_process_test.cpp
     backends/fault_injecting.h
     backends/fault_injecting.cpp
+    # Named-pipe transport framing (§14.3). Qt-free and platform-agnostic;
+    # used by the Windows backend and shared with the helper.
+    wire/frame.h
+    wire/frame.cpp
     ${PROTO_GENERATED_SRC}
     ${PROTO_GENERATED_HDR}
 )
+
+# Native Windows privileged backend (§14). Compiled only when the experimental
+# helper is enabled; otherwise Windows uses the LocalShimBackend exactly as
+# before. See doc/privileged-helper-plan.md §14.6.
+if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    list(APPEND PRIVILEGED_IO_SOURCES
+        backends/windows_uac.h
+        backends/windows_uac.cpp
+        wire/win_shared_memory.h
+        wire/win_shared_memory.cpp
+    )
+endif()
 
 if(APPLE)
     list(APPEND PRIVILEGED_IO_SOURCES
@@ -149,6 +165,21 @@ target_link_libraries(privileged_io
     PUBLIC
         protobuf::libprotobuf
 )
+
+# The Windows backend launches the elevated helper (ShellExecuteExW -> shell32)
+# and mints a unique pipe-name GUID (CoCreateGuid/StringFromGUID2 -> ole32).
+#
+# The RPI_IMAGER_ENABLE_WINDOWS_HELPER define is PRIVATE so it reaches the
+# factory here but does NOT propagate to every consumer. The client adapter
+# selection (in the main app's file_operations_windows.cpp) is enabled by the
+# main app defining it on itself; the helper target deliberately does not, so
+# the helper never pulls in the client-side adapter. The shell32/ole32 link
+# deps stay PUBLIC so the final client executable resolves them.
+if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    target_compile_definitions(privileged_io PRIVATE RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    target_link_libraries(privileged_io PUBLIC shell32 ole32)
+    target_include_directories(privileged_io PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+endif()
 
 target_compile_features(privileged_io PUBLIC cxx_std_20)
 

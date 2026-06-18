@@ -191,7 +191,10 @@ sent, which is what lets the bulk transfer tests check a real round trip.
   - During installation, choose the Qt version named by `QT_VERSION_DEFAULT` in [qt/qt-build-common.sh](./qt/qt-build-common.sh), with the Mingw64 64-bit toolchain. Any newer Qt 6 that satisfies the `find_package(Qt6 ...)` minimum in `src/CMakeLists.txt` will also configure.
 - For building the installer, install Inno Setup scriptable install system: https://jrsoftware.org/isdl.php
 - Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
-- It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
+- Install the **Windows 10 SDK** (provides `signtool.exe` for Authenticode signing).
+- A **code signing certificate** is required for redistribution (`-DIMAGER_SIGNED_APP=ON`).
+  For local testing of the experimental Windows privileged helper, a self-signed
+  cert is sufficient — see [`doc/windows-privileged-helper-dev.md`](doc/windows-privileged-helper-dev.md).
 
 #### Building
 
@@ -203,6 +206,8 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
   - `-DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64` - or the equivalent path you installed mingw64 to.
   - `-DENABLE_INNO_INSTALLER=ON` - to enable the Inno Setup installer, rather than the legacy NSIS installer.
   - `-DIMAGER_SIGNED_APP=ON` - to enable code signing for redistribution.
+  - `-DRPI_IMAGER_ENABLE_WINDOWS_HELPER=ON` - optional; build the privileged Windows helper.
+  - `-DRPI_IMAGER_PUBLISHER_ORG="Your Org"` - when using a dev code-signing cert; must match cert `O=` (see dev signing doc). Thumbprints are auto-discovered on Windows when this matches a cert in your store.
 - In the CMake plugin tab, ensure you have selected the `MinSizeRel` variant if you intend to distribute to others.
 - In the CMake plugin tab, select the 'inno_installer' target, and build it
 - Your resultant installer will be located in `%WORKSPACE%\build\installer`
