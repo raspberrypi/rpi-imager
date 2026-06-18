@@ -29,6 +29,7 @@ package rpi_imager.privileged.proto;
 //
 // History:
 //   1 - initial
+//   2 - WireServerMessage envelope; helper push (WIRE_SUBSCRIBE_DRIVES)
 message ProtocolVersion {
   uint32 version = 1;
 }
@@ -312,7 +313,8 @@ message EventBatch {
 // it does NOT use these messages. Transports without native RPC dispatch -
 // the Windows named-pipe backend (WindowsUacBackend) - frame requests and
 // responses with this envelope: a 4-byte little-endian length prefix followed
-// by a serialized WireRequest / WireResponse (see wire/frame.h).
+// by a serialized WireRequest on the client->helper direction and a
+// WireServerMessage on the helper->client direction (see wire/frame.h).
 //
 // The envelope is deliberately generic: `method` selects the dispatch and
 // `payload` is the serialized per-method request/reply message below. New
@@ -330,6 +332,8 @@ enum WireMethod {
 
   // Drive enumeration (§5)
   WIRE_LIST_DRIVES = 3;            // req: (empty), reply: DriveList
+  WIRE_SUBSCRIBE_DRIVES = 4;       // req: (empty), reply: (empty)
+  WIRE_UNSUBSCRIBE_DRIVES = 5;     // req: (empty), reply: (empty)
 
   // Session lifecycle (§6)
   WIRE_OPEN_SESSION = 10;          // req: OpenSessionRequest, reply: SessionId
@@ -358,6 +362,27 @@ message WireResponse {
   uint64 request_id = 1;           // matches WireRequest.request_id
   ErrorInfo error = 2;             // error.code == ERROR_NONE on success
   bytes payload = 3;               // serialized per-method reply message
+}
+
+// Unsolicited helper->client notifications (§5 push). Carried inside
+// WireServerMessage, not as a bare frame payload.
+enum WireEventKind {
+  WIRE_EVENT_UNSPECIFIED = 0;
+  WIRE_EVENT_DRIVE_CHANGED = 1;
+}
+
+message WireEvent {
+  WireEventKind kind = 1;
+  DriveChange change = 2;          // usually KIND_UPDATED sentinel (pull-on-push)
+}
+
+// Helper->client envelope. RPC replies and push events share the same
+// length-prefixed byte stream; the reader demuxes on this message.
+message WireServerMessage {
+  oneof message {
+    WireResponse response = 1;
+    WireEvent event = 2;
+  }
 }
 
 // Per-method request/reply wrappers used by the envelope above. Requests
@@ -415,6 +440,10 @@ message HashDeviceReply {
 
 message DriveList {
   repeated DriveInfo drives = 1;
+  // UTF-8 JSON array of DeviceDescriptor objects (same keys as the macOS
+  // helper's listDrivesNow NSDictionary entries). Populated by Win/Linux
+  // helpers so clients can reconstruct full DeviceDescriptor payloads.
+  bytes rich_descriptors_json = 2;
 }
 
 message PathRequest {               // unmount / eject
