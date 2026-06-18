@@ -66,7 +66,7 @@ if (IMAGER_SIGNED_APP)
 
     # The privileged helper must be Authenticode-signed with the same publisher
     # cert as rpi-imager.exe so §14.4 publisher pinning can succeed.
-    if(RPI_IMAGER_ENABLE_WINDOWS_HELPER AND TARGET rpi-imager-writer)
+    if(NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER AND TARGET rpi-imager-writer)
         add_custom_command(TARGET rpi-imager-writer POST_BUILD
             COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256
                     ${_IMAGER_SIGNTOOL_CERT_ARGS}
@@ -157,7 +157,7 @@ add_custom_command(TARGET ${PROJECT_NAME}
 
 # Ship the privileged helper beside the main exe when the experimental Windows
 # helper is enabled (§14.5). Publisher pinning (§14.4) requires co-location.
-if(RPI_IMAGER_ENABLE_WINDOWS_HELPER AND TARGET rpi-imager-writer)
+if(NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER AND TARGET rpi-imager-writer)
     add_dependencies(${PROJECT_NAME} rpi-imager-writer)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy

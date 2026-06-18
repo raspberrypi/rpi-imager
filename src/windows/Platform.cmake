@@ -38,10 +38,9 @@ set(PLATFORM_SOURCES
     windows/windows_suspend_inhibitor.cpp
 )
 
-# Native Windows privileged-helper adapter (§14.6). Compiled into the client
-# only when the experimental helper is enabled; the RPI_IMAGER_ENABLE_WINDOWS_HELPER
-# compile definition reaches this TU via the privileged_io PUBLIC define.
-if(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+# Native Windows privileged-helper adapter (§14.6). Omitted when
+# RPI_IMAGER_DISABLE_WINDOWS_HELPER is set at configure time.
+if(NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     list(APPEND PLATFORM_SOURCES
         windows/windows_helper_file_operations.h
         windows/windows_helper_file_operations.cpp

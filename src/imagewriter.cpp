@@ -5175,8 +5175,8 @@ void ImageWriter::_handleMemoryAllocationFailure(const char* what)
 void ImageWriter::refreshPrivilegedHelperState()
 {
     PrivilegedHelperState newState = PrivilegedHelperState::Ready;
-#ifdef Q_OS_DARWIN
     auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+#ifdef Q_OS_DARWIN
     auto status = w.queryHelperStatus();
     if (!status.ok) {
         newState = PrivilegedHelperState::Unknown;
@@ -5192,6 +5192,9 @@ void ImageWriter::refreshPrivilegedHelperState()
             case HS::HELPER_STATE_INSTALLED_DISABLED:
                 newState = PrivilegedHelperState::NeedsApproval;
                 break;
+            case HS::HELPER_STATE_VERSION_MISMATCH:
+                newState = PrivilegedHelperState::NeedsInstall;
+                break;
             default:
                 newState = PrivilegedHelperState::Unknown;
                 break;
@@ -5201,6 +5204,33 @@ void ImageWriter::refreshPrivilegedHelperState()
     // legacy authopen via RPI_IMAGER_USE_LEGACY_AUTHOPEN=1), nothing
     // to manage at the UI level.
     if (w.backend() != rpi_imager::privileged::BackendKind::MacOSXpc) {
+        newState = PrivilegedHelperState::Unavailable;
+    }
+#elif defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    using BK = rpi_imager::privileged::BackendKind;
+    const auto kind = w.backend();
+    if (kind == BK::LinuxPolkit || kind == BK::WindowsUac) {
+        auto status = w.queryHelperStatus();
+        if (!status.ok) {
+            newState = PrivilegedHelperState::Unknown;
+        } else {
+            using HS = rpi_imager::privileged::proto::HelperState;
+            switch (status.value.state()) {
+                case HS::HELPER_STATE_INSTALLED_READY:
+                    newState = PrivilegedHelperState::Ready;
+                    break;
+                case HS::HELPER_STATE_NOT_INSTALLED:
+                    newState = PrivilegedHelperState::NeedsInstall;
+                    break;
+                case HS::HELPER_STATE_VERSION_MISMATCH:
+                    newState = PrivilegedHelperState::NeedsInstall;
+                    break;
+                default:
+                    newState = PrivilegedHelperState::Unknown;
+                    break;
+            }
+        }
+    } else {
         newState = PrivilegedHelperState::Unavailable;
     }
 #endif

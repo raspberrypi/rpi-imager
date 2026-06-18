@@ -90,7 +90,8 @@ Source: "@CMAKE_BINARY_DIR@\deploy\{#MyAppExeName}"; DestDir: "{app}"; Flags: ig
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-cli.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-callback-relay.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Privileged helper (§14). Omitted from installs built without
-; RPI_IMAGER_ENABLE_WINDOWS_HELPER (skipifsourcedoesntexist).
+; Built when the Windows helper is enabled (default). Omitted when
+; RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON (skipifsourcedoesntexist).
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-writer.exe"; DestDir: "{app}"; Flags: ignoreversion signonce skipifsourcedoesntexist
 Source: "@CMAKE_BINARY_DIR@\deploy\license.txt"; DestDir: "{app}"; Flags: ignoreversion
 
