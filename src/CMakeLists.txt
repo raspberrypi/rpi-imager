@@ -368,23 +368,6 @@ if(GENERATE_COUNTRIES_FROM_REGDB)
     list(APPEND SOURCES "${GENERATED_COUNTRIES_QRC}")
 endif()
 
-option(GENERATE_CAPITAL_CITIES "Generate capital cities list from REST Countries API" ON)
-
-if(GENERATE_CAPITAL_CITIES)
-    set(REST_COUNTRIES_URL "https://restcountries.com/v3.1/all?fields=name,capital,cca2,timezones")
-
-    # The generator script handles fallback internally - it downloads from API
-    # and falls back to the source file if the download fails (offline builds)
-    add_generated_resource_with_fallback(GENERATED_CAPITAL_CITIES_QRC GENERATE_CAPITAL_CITIES_TGT capital-cities
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateCapitalCities.cmake
-        capital-cities_generated.txt capital-cities.txt
-        ${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt
-        EXTRA_CMAKE_ARGS 
-            -DAPI_URL=${REST_COUNTRIES_URL}
-            -DKEYMAP_FILE=${CMAKE_CURRENT_SOURCE_DIR}/keymap-layouts.txt
-    )
-    list(APPEND SOURCES "${GENERATED_CAPITAL_CITIES_QRC}")
-endif()
 # Create the application target before tools reference it
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows
@@ -427,12 +410,6 @@ if(GENERATE_COUNTRIES_FROM_REGDB AND DEFINED GENERATE_COUNTRIES_TGT)
     add_dependencies(${PROJECT_NAME} ${GENERATE_COUNTRIES_TGT})
     # Make sure autogen (rcc) also waits on countries generation
     set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_COUNTRIES_TGT})
-endif()
-
-# Ensure capital cities list is generated before building resources
-if(GENERATE_CAPITAL_CITIES AND DEFINED GENERATE_CAPITAL_CITIES_TGT)
-    add_dependencies(${PROJECT_NAME} ${GENERATE_CAPITAL_CITIES_TGT})
-    set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_CAPITAL_CITIES_TGT})
 endif()
 
 # Note: Icon Composer compilation for macOS dark mode icons is handled in

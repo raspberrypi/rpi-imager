@@ -1,6 +1,6 @@
 # Capital Cities Database
 # Format: CityName|CountryName|CountryCode|Timezone|Language|KeyboardLayout
-# Generated from REST Countries API (https://restcountries.com/)
+# Vendored snapshot from the pre-V5 REST Countries API (before the V5 license)
 # Sorted alphabetically by capital city name
 Abu Dhabi|United Arab Emirates|AE|Asia/Dubai|Arabic|us
 Abuja|Nigeria|NG|Africa/Lagos|English|us
