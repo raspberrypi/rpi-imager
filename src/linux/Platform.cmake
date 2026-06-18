@@ -48,6 +48,12 @@ set(PLATFORM_SOURCES
     linux/platformquirks_linux.cpp
     linux/userfiles_linux.cpp
 )
+if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+    list(APPEND PLATFORM_SOURCES
+        linux/linux_helper_file_operations.h
+        linux/linux_helper_file_operations.cpp
+    )
+endif()
 
 # DBus-backed components. The embedded (linuxfb netboot) build has no session
 # bus and is built without QtDBus, so it uses the same stubs as the CLI build

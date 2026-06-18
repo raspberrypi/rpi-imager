@@ -39,6 +39,11 @@ install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 # silently never appears. Applies to both GUI and CLI builds.
 install(FILES "${CMAKE_CURRENT_LIST_DIR}/99-rpiboot.rules" DESTINATION lib/udev/rules.d)
 
+if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER AND TARGET rpi-imager-writer)
+    install(TARGETS rpi-imager-writer DESTINATION bin)
+    add_dependencies(${PROJECT_NAME} rpi-imager-writer)
+endif()
+
 if(BUILD_CLI_ONLY)
     # CLI-only build: install CLI-specific desktop file (marked as NoDisplay)
     # Icon is still required for AppImage tooling (linuxdeploy) even though NoDisplay=true

@@ -24,6 +24,14 @@
 #include "backends/windows_uac.h"
 #endif
 
+#if defined(__linux__)
+#include <unistd.h>
+#include "backends/linux_embedded.h"
+#if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+#include "backends/linux_polkit.h"
+#endif
+#endif
+
 #include <utility>
 
 namespace rpi_imager::privileged {
@@ -57,6 +65,25 @@ PrivilegedWriterFactory::create(Config config) {
         }
         return std::make_unique<backends::WindowsUacBackend>(std::move(win_opts));
     }
+#endif
+
+#if defined(__linux__)
+    // Embedded / kiosk installs that already run as root use in-process I/O
+    // with no helper process or polkit prompt.
+    if (::geteuid() == 0) {
+        return std::make_unique<backends::LinuxEmbeddedBackend>();
+    }
+
+#if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+    // pkexec-launched helper; opt-in at runtime via RPI_IMAGER_USE_LINUX_HELPER.
+    if (config.prefer_helper) {
+        backends::LinuxPolkitBackend::Options linux_opts;
+        if (!config.app_bundle_path.empty()) {
+            linux_opts.helper_exe_path = config.app_bundle_path;
+        }
+        return std::make_unique<backends::LinuxPolkitBackend>(std::move(linux_opts));
+    }
+#endif
 #endif
 
     // Client-supplied "do it ourselves" backend wraps the existing

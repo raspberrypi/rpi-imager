@@ -99,11 +99,61 @@ else()
         "inline constexpr wchar_t kTrustedSignerThumbprints[][41] = {};")
 endif()
 
-if(CMAKE_HOST_WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER
+# Linux AppImage embedded-signature key fingerprints (hex, no spaces). When
+# non-empty, the Linux helper requires a valid embedded GPG signature on the
+# client's $APPIMAGE path (§12 peer auth).
+set(RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS "" CACHE STRING
+    "GPG key fingerprints accepted for signed AppImage peer auth (semicolon-separated)")
+
+string(REPLACE "," ";" _rpi_appimage_fp_str "${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS}")
+string(REGEX REPLACE "[ \t]" "" _rpi_appimage_fp_str "${_rpi_appimage_fp_str}")
+set(_rpi_appimage_fp_list ${_rpi_appimage_fp_str})
+set(_rpi_appimage_fp_entries "")
+set(RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_COUNT 0)
+set(_rpi_appimage_fp_seen "")
+if(NOT _rpi_appimage_fp_str STREQUAL "")
+    foreach(_rpi_fp IN LISTS _rpi_appimage_fp_list)
+        if(_rpi_fp STREQUAL "")
+            continue()
+        endif()
+        string(TOUPPER "${_rpi_fp}" _rpi_fp)
+        list(FIND _rpi_appimage_fp_seen "${_rpi_fp}" _rpi_fp_seen_idx)
+        if(NOT _rpi_fp_seen_idx EQUAL -1)
+            continue()
+        endif()
+        string(LENGTH "${_rpi_fp}" _rpi_fp_len)
+        if(_rpi_fp_len LESS 16 OR NOT _rpi_fp MATCHES "^[0-9A-F]+$")
+            message(WARNING
+                "AppImage key fingerprint: ignoring invalid entry '${_rpi_fp}'")
+            continue()
+        endif()
+        list(APPEND _rpi_appimage_fp_seen "${_rpi_fp}")
+        string(APPEND _rpi_appimage_fp_entries "    \"${_rpi_fp}\",\n")
+        math(EXPR RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_COUNT
+            "${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_COUNT} + 1")
+    endforeach()
+endif()
+if(RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_COUNT GREATER 0)
+    set(RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_ARRAY
+        "inline constexpr char kTrustedAppImageKeyFingerprints[][65] = {\n${_rpi_appimage_fp_entries}};")
+else()
+    set(RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_ARRAY
+        "inline constexpr char kTrustedAppImageKeyFingerprints[][65] = {};")
+endif()
+
+if(CMAKE_HOST_WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER
    AND RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINT_COUNT EQUAL 0)
     message(WARNING
         "Windows helper peer auth has no trusted signer thumbprints configured. "
         "Install a code-signing cert whose O= matches RPI_IMAGER_PUBLISHER_ORG, "
         "set RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS, or enable "
         "RPI_IMAGER_AUTO_TRUST_SIGNING_CERT.")
+endif()
+
+if(UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER
+   AND RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_COUNT EQUAL 0)
+    message(WARNING
+        "Linux helper peer auth has no pinned AppImage GPG key fingerprints. "
+        "Release AppImage builds should set RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS "
+        "to the signing key fingerprint(s). Dev builds allow unsigned AppImages.")
 endif()

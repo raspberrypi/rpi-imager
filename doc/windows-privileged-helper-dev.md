@@ -1,7 +1,8 @@
 # Windows privileged helper — FOSS developer signing guide
 
-The experimental Windows helper path (`RPI_IMAGER_ENABLE_WINDOWS_HELPER` +
-`RPI_IMAGER_USE_WINDOWS_HELPER=1`) enforces **publisher-pinned peer
+The Windows helper path (built by default; disable with
+`RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON`) uses `RPI_IMAGER_USE_WINDOWS_HELPER=1`
+at runtime and enforces **publisher-pinned peer
 authentication** before honoring pipe RPCs (`peer_auth_win.cpp`). There is
 **no runtime bypass**: the connecting client must be
 
@@ -84,7 +85,6 @@ automatically — you only need to set the publisher org:
 
 ```powershell
 cmake -S src -B build `
-  -DRPI_IMAGER_ENABLE_WINDOWS_HELPER=ON `
   -DRPI_IMAGER_PUBLISHER_ORG="$org" `
   -DQt6_ROOT=C:\Qt\6.9.0\mingw_64 `
   -DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64
@@ -218,7 +218,7 @@ releases.
 
 | Variable | Purpose |
 |----------|---------|
-| `RPI_IMAGER_ENABLE_WINDOWS_HELPER` | Compile the helper, PAL backend, and adapter |
+| `RPI_IMAGER_DISABLE_WINDOWS_HELPER` | Omit the helper, PAL backend, and adapter (default: **built**) |
 | `RPI_IMAGER_PUBLISHER_ORG` | Publisher `O=` pinned by peer auth (override for dev) |
 | `RPI_IMAGER_AUTO_TRUST_SIGNING_CERT` | Auto-discover thumbprints from cert store (default ON) |
 | `RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS` | Extra thumbprints (manual / rotation / non-Windows configure) |
