@@ -208,15 +208,16 @@ include_directories(BEFORE .)
 
 # Native Windows privileged helper (phase 3; design doc §14). Built by default;
 # set RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON to omit rpi-imager-writer.exe, the
-# WindowsUacBackend, and the WindowsHelperFileOperations adapter. Runtime
-# selection still requires RPI_IMAGER_USE_WINDOWS_HELPER=1 (§14.6, §14.11).
+# WindowsUacBackend, and the WindowsHelperFileOperations adapter. Opt out at
+# runtime with RPI_IMAGER_USE_LEGACY_INPROCESS=1 or RPI_IMAGER_USE_WINDOWS_HELPER=0.
 option(RPI_IMAGER_DISABLE_WINDOWS_HELPER
     "Omit the native Windows privileged helper (rpi-imager-writer, UAC backend)" OFF)
 
 # Native Linux privileged helper (phase 2; design doc §12). Built by default;
 # set RPI_IMAGER_DISABLE_LINUX_HELPER=ON to omit LinuxPolkitBackend and
 # rpi-imager-writer. LinuxEmbedded (in-process when already root) is always
-# compiled on Linux. Runtime selection still requires RPI_IMAGER_USE_LINUX_HELPER=1.
+# compiled on Linux. Opt out at runtime with RPI_IMAGER_USE_LEGACY_INPROCESS=1
+# or RPI_IMAGER_USE_LINUX_HELPER=0.
 option(RPI_IMAGER_DISABLE_LINUX_HELPER
     "Omit the native Linux privileged helper (rpi-imager-writer, polkit backend)" OFF)
 

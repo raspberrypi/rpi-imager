@@ -39,14 +39,18 @@ const char* describeSelectedBackend() {
         return "linux-embedded";
     }
 #if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
-    const char* use = std::getenv("RPI_IMAGER_USE_LINUX_HELPER");
-    if (use && use[0] == '1') {
+    if (preferNativePrivilegedHelper("RPI_IMAGER_USE_LINUX_HELPER")) {
         return "linux-polkit-helper";
     }
 #endif
     return "linux-in-process";
 #elif defined(_WIN32)
-    return "windows";
+#if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    if (preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")) {
+        return "windows-uac-helper";
+    }
+#endif
+    return "windows-in-process";
 #else
     return "unknown";
 #endif
