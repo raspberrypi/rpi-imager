@@ -9,7 +9,6 @@ obj-**
 .vscode
 .zed
 .idea
-.claude
 
 # Debian packaging
 debian/rpi-imager/**

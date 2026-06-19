@@ -4,6 +4,10 @@ export DH_VERBOSE = 1
 # Get the list of packages that should be built based on build profiles
 PACKAGES := $(shell dh_listpackages)
 
+VERSION_DIR := $(CURDIR)/debian/tmp/version
+CONFIGURE_VERSIONED := $(CURDIR)/src/cmake/ConfigureVersionedFile.cmake
+GENERATE_VERSION := $(CURDIR)/src/cmake/GenerateVersion.cmake
+
 %:
 	dh $@
 
@@ -19,6 +23,21 @@ override_dh_clean:
 		debian/com.raspberrypi.rpi-imager.metainfo.xml
 	rm -f debian/files debian/*.substvars debian/*.debhelper.log \
 		debian/debhelper-build-stamp
+
+# Desktop .deb installs pre-built AppImages and does not run a full CMake
+# build, but still needs metainfo.xml configured with the git version.
+.PHONY: override_dh_auto_build
+override_dh_auto_build:
+ifneq (,$(filter rpi-imager,$(PACKAGES)))
+	mkdir -p $(VERSION_DIR)
+	cmake -DSOURCE_DIR=$(CURDIR) -DOUTPUT_DIR=$(VERSION_DIR) \
+		-DGIT_EXECUTABLE=$$(command -v git) \
+		-P $(GENERATE_VERSION)
+	cmake -DVERSION_VARS_FILE=$(VERSION_DIR)/imager_version_vars.cmake \
+		-DINPUT=$(CURDIR)/debian/com.raspberrypi.rpi-imager.metainfo.xml.in \
+		-DOUTPUT=$(CURDIR)/debian/com.raspberrypi.rpi-imager.metainfo.xml \
+		-P $(CONFIGURE_VERSIONED)
+endif
 
 # For the embedded package, install the vendored directory tree produced by
 # create-embedded.sh into the package staging area.
