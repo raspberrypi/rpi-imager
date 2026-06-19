@@ -1,4 +1,4 @@
-rpi-imager (2.0.10) unstable; urgency=medium
+rpi-imager (2.0.10-1) unstable; urgency=medium
 
   * Pi Connect:
     - Fix Connect sign-in on more Linux systems (#1564)
