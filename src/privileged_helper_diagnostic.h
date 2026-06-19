@@ -28,7 +28,8 @@ namespace rpi_imager {
 //                buffer and exercise mapBulkBuffer / bulkWriteFromBuffer
 //                / readChunk, proving the zero-copy path is alive.
 //
-// On macOS and Linux (with RPI_IMAGER_USE_LINUX_HELPER=1 or root). Returns 0 on
+// On macOS, Linux, and Windows when the native helper is built (default).
+// Opt out with RPI_IMAGER_USE_LEGACY_INPROCESS=1. Returns 0 on
 // success. Safe before QML init.
 int runPrivilegedHelperDiagnostic(const std::string& device_path,
                                     bool allow_write,

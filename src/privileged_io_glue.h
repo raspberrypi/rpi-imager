@@ -24,4 +24,10 @@ namespace rpi_imager {
 // for the configuration used.
 rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter();
 
+// True when the native privileged helper should be used (default on Win/Linux
+// when built). Opt out with RPI_IMAGER_USE_LEGACY_INPROCESS=1 or
+// RPI_IMAGER_USE_WINDOWS_HELPER=0 / RPI_IMAGER_USE_LINUX_HELPER=0.
+// platform_opt_out_env may be null on platforms without a per-platform override.
+bool preferNativePrivilegedHelper(const char* platform_opt_out_env = nullptr);
+
 } // namespace rpi_imager
