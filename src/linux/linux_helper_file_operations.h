@@ -6,7 +6,8 @@
 // locally. Linux analogue of macOS XpcFileOperations / WindowsHelperFileOperations.
 //
 // Selected when running as root (LinuxEmbedded) or when
-// RPI_IMAGER_USE_LINUX_HELPER=1 (LinuxPolkit, requires build flag).
+// Selected when the Linux helper is built (default). Opt out with
+// RPI_IMAGER_USE_LEGACY_INPROCESS=1 or RPI_IMAGER_USE_LINUX_HELPER=0.
 
 #pragma once
 

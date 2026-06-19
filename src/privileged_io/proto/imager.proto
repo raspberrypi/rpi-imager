@@ -150,6 +150,7 @@ message DeviceLimits {
   uint32 max_transfer_bytes = 1;
   uint32 logical_block_size = 2;
   uint64 total_bytes = 3;
+  uint32 suggested_queue_depth = 4;  // 0 = unknown (OS did not report a limit)
 }
 
 message PrepareOptions {
@@ -407,6 +408,7 @@ message PrepareDeviceRequest {
 message MapBulkBufferRequest {
   SessionId session_id = 1;
   uint64 size_bytes = 2;           // 0 releases the mapping
+  uint32 async_queue_depth = 3;    // client async ring depth (>1 enables bulk async)
 }
 
 // Returned by WIRE_MAP_BULK_BUFFER when size_bytes > 0. The section_handle is

@@ -9,6 +9,7 @@
 #include "../drive_list_rpc.h"
 #include "../wire_outbound.h"
 #include "../drive_watch_service.h"
+#include "../bulk_write_async.h"
 #include "../../../drivelist/drivelist.h"
 #include "../../../linux/helper_maintenance.h"
 
@@ -23,6 +24,7 @@
 
 #include <gnutls/crypto.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -142,9 +144,10 @@ private:
 struct Session {
     std::unique_ptr<rpi_imager::LinuxFileOperations> fops;
     wire::LinuxSharedMemory bulk;
-    std::uint64_t bytes_written = 0;
+    std::atomic<std::uint64_t> bytes_written{0};
     std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
     SessionTelemetry telemetry;
+    SessionBulkWriter bulk_writer;
 };
 
 class Helper {
@@ -154,7 +157,8 @@ public:
         drive_watch_ = drive_watch;
     }
 
-    proto::ErrorInfo dispatch(const proto::WireRequest& req, std::string& out_payload);
+    proto::ErrorInfo dispatch(const proto::WireRequest& req, std::string& out_payload,
+                              bool& response_deferred);
     int pending_fd() const { return pending_fd_; }
     void clearPendingFd() { pending_fd_ = -1; }
 
@@ -172,7 +176,8 @@ private:
     proto::ErrorInfo handleQueryDeviceLimits(const std::string& payload, std::string& out);
     proto::ErrorInfo handlePrepareDevice(const std::string& payload, std::string& out);
     proto::ErrorInfo handleMapBulkBuffer(const std::string& payload, std::string& out);
-    proto::ErrorInfo handleBulkWrite(const std::string& payload, std::string& out);
+    proto::ErrorInfo handleBulkWrite(std::uint64_t request_id, const std::string& payload,
+                                     std::string& out, bool& response_deferred);
     proto::ErrorInfo handleWriteChunk(const std::string& payload, std::string& out);
     proto::ErrorInfo handleReadChunk(const std::string& payload, std::string& out);
     proto::ErrorInfo handleSyncDevice(const std::string& payload, std::string& out);
@@ -241,7 +246,9 @@ proto::ErrorInfo Helper::handleOpenSession(const std::string& payload, std::stri
     }
 
     const std::uint64_t id = next_id_++;
-    sessions_.emplace(id, std::move(s));
+    auto [it, inserted] = sessions_.emplace(id, std::move(s));
+    (void)inserted;
+    it->second.bulk_writer.start(it->second.fops.get(), outbound_);
 
     proto::SessionId sid;
     sid.set_v(id);
@@ -265,6 +272,10 @@ proto::ErrorInfo Helper::handleQueryDeviceLimits(const std::string& payload, std
     out_limits.set_total_bytes(size);
     out_limits.set_max_transfer_bytes(static_cast<std::uint32_t>(lim.max_transfer_bytes));
     out_limits.set_logical_block_size(512);
+    if (lim.suggested_queue_depth > 0) {
+        out_limits.set_suggested_queue_depth(
+            static_cast<std::uint32_t>(lim.suggested_queue_depth));
+    }
     out_limits.SerializeToString(&out);
     return ok();
 }
@@ -304,8 +315,18 @@ proto::ErrorInfo Helper::handleMapBulkBuffer(const std::string& payload, std::st
     if (want > maxBulkBufferBytes()) {
         return fail(proto::ERROR_UNKNOWN, "mapBulkBuffer: size exceeds RAM-proportional cap");
     }
-    if (s->bytes_written >= kMaxSessionBytesWritten) {
+    if (s->bytes_written.load() >= kMaxSessionBytesWritten) {
         return fail(proto::ERROR_WRITE_FAILED, "mapBulkBuffer: session cap exhausted");
+    }
+
+    const auto& io_lim = s->fops->GetDeviceIOLimits();
+    int async_depth = static_cast<int>(req.async_queue_depth());
+    if (async_depth <= 0) {
+        async_depth = kDefaultBulkInFlightCap;
+    }
+    async_depth = io_lim.capAsyncQueueDepth(async_depth);
+    if (async_depth > 1) {
+        s->bulk_writer.configureAsyncQueueDepth(async_depth);
     }
 
     s->bulk.release();
@@ -322,7 +343,11 @@ proto::ErrorInfo Helper::handleMapBulkBuffer(const std::string& payload, std::st
     return ok();
 }
 
-proto::ErrorInfo Helper::handleBulkWrite(const std::string& payload, std::string& out) {
+proto::ErrorInfo Helper::handleBulkWrite(const std::uint64_t request_id,
+                                         const std::string& payload,
+                                         std::string& out,
+                                         bool& response_deferred) {
+    response_deferred = false;
     proto::WriteRequest req;
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad WriteRequest");
     Session* s = find(req.session_id());
@@ -337,28 +362,16 @@ proto::ErrorInfo Helper::handleBulkWrite(const std::string& payload, std::string
     if (len == 0 || buf_off > shm_size || len > shm_size - buf_off) {
         return fail(proto::ERROR_WRITE_FAILED, "bulkWrite: bounds check failed");
     }
-    if (s->bytes_written + len > kMaxSessionBytesWritten) {
-        return fail(proto::ERROR_WRITE_FAILED, "bulkWrite: session cap reached");
-    }
 
-    const auto t0 = std::chrono::steady_clock::now();
     const auto* src = static_cast<const std::uint8_t*>(s->bulk.base()) + buf_off;
-    const FileError e = s->fops->WriteAtOffset(req.offset(), src, static_cast<std::size_t>(len));
-    const auto t1 = std::chrono::steady_clock::now();
-    if (e != FileError::kSuccess) {
-        return fail(mapFileError(e), "bulkWrite: WriteAtOffset failed");
+    proto::ErrorInfo sync_err;
+    if (s->bulk_writer.submit(request_id, req, src, kMaxSessionBytesWritten,
+                              &s->bytes_written, &s->telemetry, sync_err)) {
+        response_deferred = true;
+        (void)out;
+        return ok();
     }
-
-    s->bytes_written += len;
-    const auto lat_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    s->telemetry.recordWriteLatency(static_cast<std::uint64_t>(lat_us));
-
-    proto::WriteResult wr;
-    wr.set_slot_index(req.slot_index());
-    wr.set_bytes_written(len);
-    wr.set_latency_us(static_cast<std::uint64_t>(lat_us));
-    wr.SerializeToString(&out);
-    return ok();
+    return sync_err;
 }
 
 proto::ErrorInfo Helper::handleWriteChunk(const std::string& payload, std::string& out) {
@@ -379,7 +392,7 @@ proto::ErrorInfo Helper::handleWriteChunk(const std::string& payload, std::strin
     if (e != FileError::kSuccess) {
         return fail(mapFileError(e), "WriteAtOffset failed");
     }
-    s->bytes_written += req.data().size();
+    s->bytes_written.fetch_add(req.data().size());
     const auto lat_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
     s->telemetry.recordWriteLatency(static_cast<std::uint64_t>(lat_us));
 
@@ -419,6 +432,7 @@ proto::ErrorInfo Helper::handleSyncDevice(const std::string& payload, std::strin
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad SessionRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "syncDevice: no session");
+    s->bulk_writer.drainBeforeSync(s->fops.get());
     const auto t0 = std::chrono::steady_clock::now();
     const FileError e = s->fops->ForceSync();
     const auto t1 = std::chrono::steady_clock::now();
@@ -434,6 +448,8 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad HashDeviceRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "hashDeviceSha256: no session");
+
+    s->bulk_writer.drainBeforeSync(s->fops.get());
 
     const auto t0 = std::chrono::steady_clock::now();
 
@@ -533,6 +549,8 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
     if (it == sessions_.end()) return fail(proto::ERROR_SESSION_NOT_FOUND, "closeSession: no session");
 
     Session& s = it->second;
+    s.bulk_writer.shutdown();
+    (void)s.fops->WaitForPendingWrites();
     s.bulk.release();
     const FileError e = s.fops->Close();
     const bool success = (e == FileError::kSuccess);
@@ -542,7 +560,7 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
     }
 
     proto::SessionStats stats;
-    s.telemetry.fillSessionStats(stats, s.bytes_written, s.started, success,
+    s.telemetry.fillSessionStats(stats, s.bytes_written.load(), s.started, success,
                                  success ? nullptr : &terminal);
     stats.SerializeToString(&out);
 
@@ -550,7 +568,9 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
     return ok();
 }
 
-proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& out_payload) {
+proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& out_payload,
+                                  bool& response_deferred) {
+    response_deferred = false;
     pending_fd_ = -1;
     switch (req.method()) {
         case proto::WIRE_HELLO: {
@@ -581,7 +601,9 @@ proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& ou
         case proto::WIRE_HASH_DEVICE_SHA256: return handleHashDevice(req.payload(), out_payload);
         case proto::WIRE_CLOSE_SESSION: return handleCloseSession(req.payload(), out_payload);
         case proto::WIRE_MAP_BULK_BUFFER: return handleMapBulkBuffer(req.payload(), out_payload);
-        case proto::WIRE_BULK_WRITE: return handleBulkWrite(req.payload(), out_payload);
+        case proto::WIRE_BULK_WRITE:
+            return handleBulkWrite(req.request_id(), req.payload(), out_payload,
+                                   response_deferred);
         case proto::WIRE_LIST_DRIVES: return handleListDrives(out_payload);
         case proto::WIRE_SUBSCRIBE_DRIVES: return handleSubscribeDrives();
         case proto::WIRE_UNSUBSCRIBE_DRIVES: return handleUnsubscribeDrives();
@@ -649,7 +671,11 @@ void serviceLoop(int client_fd) {
         proto::WireResponse resp;
         resp.set_request_id(req.request_id());
         std::string reply_payload;
-        const proto::ErrorInfo err = helper.dispatch(req, reply_payload);
+        bool response_deferred = false;
+        const proto::ErrorInfo err = helper.dispatch(req, reply_payload, response_deferred);
+        if (response_deferred) {
+            continue;
+        }
         *resp.mutable_error() = err;
         if (err.code() == proto::ERROR_NONE) {
             resp.set_payload(reply_payload);

@@ -410,7 +410,8 @@ Result<void> LinuxEmbeddedBackend::eject(const std::string& device_path) {
 }
 
 Result<void> LinuxEmbeddedBackend::mapBulkBuffer(const proto_ns::SessionId& sid,
-                                                 std::size_t size_bytes) {
+                                                 std::size_t size_bytes,
+                                                 std::uint32_t /*async_queue_depth*/) {
     std::lock_guard<std::mutex> lk(state_->mutex);
     if (size_bytes == 0) {
         state_->client_bulk.release();
