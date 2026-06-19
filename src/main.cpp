@@ -35,6 +35,7 @@
 #include <QtMath>
 #endif
 #include "platformquirks.h"
+#include "privileged_io_glue.h"
 #include "privileged_helper_diagnostic.h"
 #include "file_operations_benchmark.h"
 #if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
@@ -306,13 +307,22 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Early check for elevated privileges on platforms that require them (Linux/Windows)
+    // Early check for elevated privileges where the in-process path still needs them.
+    // Linux: root/polkit unless a helper policy is installed.
+    // Windows: default helper path runs asInvoker; warn only for legacy in-process I/O.
     bool hasPermissionIssue = false;
-#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+#if defined(Q_OS_LINUX)
     if (!PlatformQuirks::hasElevatedPrivileges())
     {
         hasPermissionIssue = true;
         qWarning() << "Not running with elevated privileges - device access may fail";
+    }
+#elif defined(Q_OS_WIN)
+    if (!preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")
+        && !PlatformQuirks::hasElevatedPrivileges())
+    {
+        hasPermissionIssue = true;
+        qWarning() << "Not running with elevated privileges - legacy in-process I/O may fail";
     }
 #endif
 

@@ -114,7 +114,7 @@ static void start_imager_with_url(const wchar_t* urlW)
     }
 
     // Build command line: "rpi-imager.exe" "<url>"
-    // Use ShellExecuteEx to respect UAC manifest of rpi-imager.exe
+    // Launch the unprivileged GUI client (asInvoker manifest).
     SHELLEXECUTEINFOW sei{};
     sei.cbSize = sizeof(sei);
     sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI; // No error UI on failure

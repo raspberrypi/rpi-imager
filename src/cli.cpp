@@ -13,6 +13,7 @@
 #include "drivelist/drivelist.h"
 #include "imageadvancedoptions.h"
 #include "platformquirks.h"
+#include "privileged_io_glue.h"
 
 /* Message handler to discard qDebug() output if using cli (unless --debug is set) */
 static void devnullMsgHandler(QtMsgType, const QMessageLogContext &, const QString &)
@@ -64,13 +65,13 @@ int Cli::run()
     parser.addPositionalArgument("dst", "Destination device");
     parser.process(*_app);
 
-    // Check for elevated privileges on platforms that require them (Linux/Windows)
+    // Check for elevated privileges where the in-process path still needs them.
+#if defined(Q_OS_LINUX)
     if (!PlatformQuirks::hasElevatedPrivileges())
     {
         // Common error message
         const char* commonMsg = "Writing to storage devices requires elevated privileges.";
         
-#ifdef Q_OS_LINUX
         // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
         // Check if running from AppImage first
         QString execName;
@@ -88,13 +89,19 @@ int Cli::run()
         << " --cli"
 #endif
         << " ..." << std::endl;
-#elif defined(Q_OS_WIN)
-        std::cerr << "ERROR: Not running as Administrator." << std::endl;
-        std::cerr << commonMsg << std::endl;
-        std::cerr << "Please run as Administrator." << std::endl;
-#endif
         return 1;
     }
+#elif defined(Q_OS_WIN)
+    if (!preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")
+        && !PlatformQuirks::hasElevatedPrivileges())
+    {
+        std::cerr << "ERROR: Not running as Administrator." << std::endl;
+        std::cerr << "Writing to storage devices requires elevated privileges." << std::endl;
+        std::cerr << "Please run as Administrator, or unset RPI_IMAGER_USE_LEGACY_INPROCESS "
+                     "to use the privileged helper." << std::endl;
+        return 1;
+    }
+#endif
 
 
     const QStringList args = parser.positionalArguments();
