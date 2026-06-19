@@ -1463,7 +1463,8 @@ void* MacOSXpcBackend::bulkBufferBase() const { return state_->bulk_base; }
 std::size_t MacOSXpcBackend::bulkBufferSize() const { return state_->bulk_size; }
 
 Result<void> MacOSXpcBackend::mapBulkBuffer(const proto::SessionId& sid,
-                                              std::size_t size_bytes) {
+                                              std::size_t size_bytes,
+                                              std::uint32_t /*async_queue_depth*/) {
     @autoreleasepool {
         std::uint64_t token = 0;
         {
