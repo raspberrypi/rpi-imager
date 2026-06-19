@@ -117,39 +117,39 @@
     </message>
     <message>
         <source>Audio notification unavailable - no viable audio player found on this system</source>
-        <translation type="unfinished"></translation>
+        <translation>Notificación de audio no disponible: no se encontró ningún reproductor de audio viable en este sistema</translation>
     </message>
     <message>
         <source>Saved Customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Personalización guardada</translation>
     </message>
     <message>
         <source>Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>Borrar</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
-        <translation type="unfinished"></translation>
+        <translation>Elimina todos los ajustes de personalización del sistema operativo guardados, como el nombre de host, WiFi y las credenciales de usuario.</translation>
     </message>
     <message>
         <source>Version: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Versión: %1</translation>
     </message>
     <message>
         <source>Clear saved customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>¿Borrar personalización guardada?</translation>
     </message>
     <message>
         <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
-        <translation type="unfinished"></translation>
+        <translation>Esto eliminará todas las configuraciones de personalización del sistema operativo guardadas, como el nombre de host, WiFi y las credenciales de usuario.</translation>
     </message>
     <message>
         <source>Keep saved customisation settings and return to the options dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>Mantener los ajustes de personalización guardados y volver al cuadro de diálogo de opciones</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings permanently</source>
-        <translation type="unfinished"></translation>
+        <translation>Eliminar permanentemente todos los ajustes de personalización del sistema operativo guardados</translation>
     </message>
 </context>
 <context>
@@ -291,66 +291,66 @@
     </message>
     <message>
         <source>Imager Repository Files (*.json *.%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Archivos del repositorio de imágenes (*.json *.%1)</translation>
     </message>
 </context>
 <context>
     <name>ConfirmOtpProgramDialog</name>
     <message>
         <source>WARNING: OTP Programming is PERMANENT and IRREVERSIBLE</source>
-        <translation type="unfinished"></translation>
+        <translation>ADVERTENCIA: La programación OTP es PERMANENTE e IRREVERSIBLE</translation>
     </message>
     <message>
         <source>This operation will permanently program the secure boot public key hash into the device&apos;s one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Esta operación programará permanentemente el hash de la clave pública de arranque seguro en la memoria programable una sola vez (OTP) del dispositivo. Una vez programado, este dispositivo solo arrancará imágenes firmadas con la clave privada correspondiente. Esta acción no se puede deshacer.</translation>
     </message>
     <message>
         <source>Device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Dispositivo: %1</translation>
     </message>
     <message>
         <source>Serial: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Serie: %1</translation>
     </message>
     <message>
         <source>Key fingerprint: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Huella digital de la clave: %1</translation>
     </message>
     <message>
         <source>Also lock JTAG debug port (additional irreversible action)</source>
-        <translation type="unfinished"></translation>
+        <translation>También bloquear el puerto de depuración JTAG (acción irreversible adicional)</translation>
     </message>
     <message>
         <source>To confirm, type the device serial number below:</source>
-        <translation type="unfinished"></translation>
+        <translation>Para confirmar, escriba el número de serie del dispositivo a continuación:</translation>
     </message>
     <message>
         <source>Serial to type: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Serie a escribir: %1</translation>
     </message>
     <message>
         <source>Type device serial number exactly</source>
-        <translation type="unfinished"></translation>
+        <translation>Escriba el número de serie del dispositivo exactamente</translation>
     </message>
     <message>
         <source>Confirmation input. Type exactly: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Entrada de confirmación. Escriba exactamente: %1</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">CANCELAR</translation>
+        <translation>CANCELAR</translation>
     </message>
     <message>
         <source>Cancel OTP programming and return to previous screen</source>
-        <translation type="unfinished"></translation>
+        <translation>Cancelar la programación OTP y volver a la pantalla anterior</translation>
     </message>
     <message>
         <source>PROGRAM OTP</source>
-        <translation type="unfinished"></translation>
+        <translation>PROGRAMAR OTP</translation>
     </message>
     <message>
         <source>Permanently program the secure boot key into device OTP memory</source>
-        <translation type="unfinished"></translation>
+        <translation>Programe permanentemente la clave de inicio seguro en la memoria OTP del dispositivo</translation>
     </message>
 </context>
 <context>
@@ -431,155 +431,155 @@
     <name>DebugOptionsDialog</name>
     <message>
         <source>Debug Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Opciones de depuración</translation>
     </message>
     <message>
         <source>⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ Estas opciones son para depuración y pruebas. Cambiarlas puede afectar al rendimiento y a la integridad de los datos.</translation>
     </message>
     <message>
         <source>I/O Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Opciones de E/S</translation>
     </message>
     <message>
         <source>Enable Direct I/O (F_NOCACHE / O_DIRECT)</source>
-        <translation type="unfinished"></translation>
+        <translation>Habilitar E/S directa (F_NOCACHE / O_DIRECT)</translation>
     </message>
     <message>
         <source>Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Omite la caché de páginas del sistema operativo para las escrituras. Es más lento, pero garantiza que los datos vayan directamente al dispositivo.</translation>
     </message>
     <message>
         <source>Enable Async I/O</source>
-        <translation type="unfinished"></translation>
+        <translation>Habilitar E/S asíncrona</translation>
     </message>
     <message>
         <source>Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.</source>
-        <translation type="unfinished"></translation>
+        <translation>Pone en cola varias escrituras para solapar la latencia del dispositivo. Mejora el rendimiento con E/S directa activada.</translation>
     </message>
     <message>
         <source>Queue Depth:</source>
-        <translation type="unfinished"></translation>
+        <translation>Profundidad de la cola:</translation>
     </message>
     <message>
         <source>Async queue depth: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Profundidad de cola asíncrona: %1</translation>
     </message>
     <message>
         <source>Buffer memory: ~%1-%2 MB (varies by system RAM)</source>
-        <translation type="unfinished"></translation>
+        <translation>Memoria intermedia: ~%1-%2 MB (varía según la RAM del sistema)</translation>
     </message>
     <message>
         <source>Enable Periodic Sync</source>
-        <translation type="unfinished"></translation>
+        <translation>Habilitar sincronización periódica</translation>
     </message>
     <message>
         <source>Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.</source>
-        <translation type="unfinished"></translation>
+        <translation>Vacía periódicamente los datos al disco durante las escrituras. Se desactiva automáticamente cuando la E/S directa está activa.</translation>
     </message>
     <message>
         <source>Debugging</source>
-        <translation type="unfinished"></translation>
+        <translation>Depuración</translation>
     </message>
     <message>
         <source>Verbose Performance Logging</source>
-        <translation type="unfinished"></translation>
+        <translation>Registro de rendimiento detallado</translation>
     </message>
     <message>
         <source>Log detailed timing information for each write operation to help diagnose performance issues.</source>
-        <translation type="unfinished"></translation>
+        <translation>Registre información de tiempo detallada para cada operación de escritura para ayudar a diagnosticar problemas de rendimiento.</translation>
     </message>
     <message>
         <source>Network Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Opciones de red</translation>
     </message>
     <message>
         <source>Force IPv4-only Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Forzar descargas solo IPv4</translation>
     </message>
     <message>
         <source>Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Utilice únicamente IPv4 para descargas. Habilítelo si experimenta problemas de conexión debido a un enrutamiento IPv6 roto.</translation>
     </message>
     <message>
         <source>Workarounds</source>
-        <translation type="unfinished"></translation>
+        <translation>Soluciones alternativas</translation>
     </message>
     <message>
         <source>Counterfeit Card Mode (skip end-of-device checks)</source>
-        <translation type="unfinished"></translation>
+        <translation>Modo de tarjeta falsificada (omitir comprobaciones al final del dispositivo)</translation>
     </message>
     <message>
         <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
-        <translation type="unfinished"></translation>
+        <translation>Omita operaciones al final del dispositivo de almacenamiento. Habilite esto para tarjetas SD falsificadas que informen de una capacidad mayor falsa. La imagen debe ser más pequeña que la capacidad real de la tarjeta.</translation>
     </message>
     <message>
         <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ Active esto solo si su tarjeta SD indica una capacidad mayor que la real. Asegúrese de que la imagen sea más pequeña que la capacidad real de la tarjeta.</translation>
     </message>
     <message>
         <source>Advanced Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Funciones avanzadas</translation>
     </message>
     <message>
         <source>Enable Rpiboot/Fastboot Support</source>
-        <translation type="unfinished"></translation>
+        <translation>Habilitar soporte Rpiboot/Fastboot</translation>
     </message>
     <message>
         <source>Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.</source>
-        <translation type="unfinished"></translation>
+        <translation>Busca dispositivos Raspberry Pi en modo de arranque USB (rpiboot). Requiere libusb.</translation>
     </message>
     <message>
         <source>Custom Fastboot Gadget:</source>
-        <translation type="unfinished"></translation>
+        <translation>Gadget Fastboot personalizado:</translation>
     </message>
     <message>
         <source>(default)</source>
-        <translation type="unfinished"></translation>
+        <translation>(por defecto)</translation>
     </message>
     <message>
         <source>Browse...</source>
-        <translation type="unfinished"></translation>
+        <translation>Navegar...</translation>
     </message>
     <message>
         <source>Select a local fastboot gadget boot.img file</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleccione un archivo boot.img del gadget fastboot local</translation>
     </message>
     <message>
         <source>Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>Borrar</translation>
     </message>
     <message>
         <source>Revert to the default fastboot gadget from GitHub</source>
-        <translation type="unfinished"></translation>
+        <translation>Volver al gadget fastboot predeterminado de GitHub</translation>
     </message>
     <message>
         <source>Select Fastboot Gadget Image</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleccione la imagen del gadget Fastboot</translation>
     </message>
     <message>
         <source>Boot images (*.img *.bin)</source>
-        <translation type="unfinished"></translation>
+        <translation>Imágenes de arranque (*.img *.bin)</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">Todos los archivos (*)</translation>
+        <translation>Todos los archivos (*)</translation>
     </message>
     <message>
         <source>Current Status</source>
-        <translation type="unfinished"></translation>
+        <translation>Estado actual</translation>
     </message>
     <message>
         <source>Close the debug options dialog without saving any changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Cierre el cuadro de diálogo de opciones de depuración sin guardar ningún cambio</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished"></translation>
+        <translation>Aplicar</translation>
     </message>
     <message>
         <source>Apply the selected debug options</source>
-        <translation type="unfinished"></translation>
+        <translation>Aplicar las opciones de depuración seleccionadas</translation>
     </message>
 </context>
 <context>
@@ -610,25 +610,27 @@
     </message>
     <message>
         <source>Unable to load device list</source>
-        <translation type="unfinished"></translation>
+        <translation>No se puede cargar la lista de dispositivos</translation>
     </message>
     <message>
         <source>The device list could not be downloaded. Please check your internet connection and try again.
 
 You can still write a local image file by pressing Next and selecting &apos;Use custom&apos; on the following screen.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo descargar la lista de dispositivos. Verifique su conexión a Internet e inténtelo nuevamente.
+
+Aún puede escribir un archivo de imagen local presionando Siguiente y seleccionando &apos;Usar personalizado&apos; en la siguiente pantalla.</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>Reintentar</translation>
     </message>
     <message>
         <source>Retry downloading the device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Vuelva a intentar descargar la lista de dispositivos</translation>
     </message>
     <message>
         <source>Connected via USB</source>
-        <translation type="unfinished"></translation>
+        <translation>Conectado a través de USB</translation>
     </message>
 </context>
 <context>
@@ -717,11 +719,18 @@ No data has been written for 30 seconds. This could be caused by:
 • System resource exhaustion
 
 Please check the storage device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>La operación de escritura se ha detenido.
+
+No se han escrito datos durante 30 segundos. Esto podría deberse a:
+ • Dispositivo de almacenamiento desconectado o que no responde
+ • El dispositivo falló o está defectuoso
+ • Agotamiento de los recursos del sistema
+
+ Verifique el dispositivo de almacenamiento e inténtelo nuevamente.</translation>
     </message>
     <message>
         <source>Failed to acquire write buffer slot</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo adquirir la ranura del búfer de escritura</translation>
     </message>
     <message>
         <source>The download has stalled.
@@ -732,7 +741,14 @@ No data received for 30 seconds. This could be caused by:
 • Firewall or proxy blocking the connection
 
 Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>La descarga se ha detenido.
+
+No se recibieron datos durante 30 segundos. Esto podría deberse a:
+ • Conexión de red perdida o inestable
+ • El servidor remoto dejó de responder
+ • Firewall o proxy bloqueando la conexión
+
+ Verifique su conexión de red e inténtelo nuevamente.</translation>
     </message>
 </context>
 <context>
@@ -931,29 +947,31 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo desmontar el disco &apos;%1&apos;. Cierre todas las aplicaciones que utilicen el disco y vuelva a intentarlo.</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo desmontar el disco &apos;%1&apos;.</translation>
     </message>
     <message>
         <source>getting device size</source>
-        <translation type="unfinished"></translation>
+        <translation>obteniendo el tamaño del dispositivo</translation>
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing.
 
 The system may be low on memory.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo asignar el búfer para la puesta a cero del MBR.
+
+Es posible que el sistema tenga poca memoria.</translation>
     </message>
     <message>
         <source>preparing storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>preparando el dispositivo de almacenamiento</translation>
     </message>
     <message>
         <source>Zero&apos;ing out end of drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Poniendo a cero el final de la unidad...</translation>
     </message>
     <message>
         <source>Timeout writing to end of storage device.
@@ -961,7 +979,11 @@ The system may be low on memory.</source>
 This may indicate a counterfeit SD card with fake capacity.
 
 Please try a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Tiempo de espera de escritura al final del dispositivo de almacenamiento.
+
+Esto puede indicar una tarjeta SD falsificada con capacidad falsa.
+
+Pruebe con un dispositivo de almacenamiento diferente.</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.
@@ -969,21 +991,27 @@ Please try a different storage device.</source>
 This could indicate the card is advertising wrong capacity (possible counterfeit).
 
 Please try a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error de escritura al intentar poner a cero la última parte de la tarjeta.
+
+Esto podría indicar que la tarjeta anuncia una capacidad incorrecta (posible falsificación).
+
+Pruebe con un dispositivo de almacenamiento diferente.</translation>
     </message>
     <message>
         <source>Storage device responding slowly. Restarting in compatibility mode...</source>
-        <translation type="unfinished"></translation>
+        <translation>El dispositivo de almacenamiento responde lentamente. Reiniciando en modo compatibilidad...</translation>
     </message>
     <message>
         <source>storage operation</source>
-        <translation type="unfinished"></translation>
+        <translation>operación de almacenamiento</translation>
     </message>
     <message>
         <source>Failed to open storage device.
 
 The device may be in use by another application, or you may not have permission to access it.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo abrir el dispositivo de almacenamiento.
+
+Es posible que otra aplicación esté utilizando el dispositivo o que usted no tenga permiso para acceder a él.</translation>
     </message>
     <message>
         <source>Error writing to storage device during %1.
@@ -994,49 +1022,70 @@ This could be caused by:
 • Hardware failure or bad sectors
 
 Please check the device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al escribir en el dispositivo de almacenamiento durante %1.
+
+Esto podría deberse a:
+• El dispositivo se desconectó o dejó de responder
+•El dispositivo está lleno o protegido contra escritura
+•Falla de hardware o sectores defectuosos
+
+Verifique el dispositivo e inténtelo nuevamente.</translation>
     </message>
     <message>
         <source>Error reading from storage device during %1.
 
 The device may have been disconnected or is malfunctioning.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al leer desde el dispositivo de almacenamiento durante %1.
+
+Es posible que el dispositivo se haya desconectado o no funcione correctamente.</translation>
     </message>
     <message>
         <source>Error seeking on storage device during %1.
 
 The device may be malfunctioning or disconnected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al buscar en el dispositivo de almacenamiento durante %1.
+
+El dispositivo puede estar funcionando mal o estar desconectado.</translation>
     </message>
     <message>
         <source>Error getting storage device size.
 
 The device may not be properly recognized.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al obtener el tamaño del dispositivo de almacenamiento.
+
+Es posible que el dispositivo no se reconozca correctamente.</translation>
     </message>
     <message>
         <source>Error closing storage device.
 
 The device may have been disconnected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al cerrar el dispositivo de almacenamiento.
+
+Es posible que el dispositivo se haya desconectado.</translation>
     </message>
     <message>
         <source>Failed to lock storage device.
 
 The device may be in use by another application. Please close any applications using this device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo bloquear el dispositivo de almacenamiento.
+
+Es posible que otra aplicación esté utilizando el dispositivo. Cierra todas las aplicaciones que utilicen este dispositivo y vuelve a intentarlo.</translation>
     </message>
     <message>
         <source>Error syncing data to storage device.
 
 The device may have been disconnected or is not responding. Data may not have been fully written.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al sincronizar datos con el dispositivo de almacenamiento.
+
+Es posible que el dispositivo se haya desconectado o no responda. Es posible que los datos no se hayan escrito en su totalidad.</translation>
     </message>
     <message>
         <source>Error flushing data to storage device.
 
 The device may have been disconnected or is not responding.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al vaciar datos en el dispositivo de almacenamiento.
+
+Es posible que el dispositivo se haya desconectado o no responda.</translation>
     </message>
     <message>
         <source>Storage device timed out during %1.
@@ -1047,13 +1096,22 @@ The device is not responding. This may indicate:
 • Driver or system issue
 
 Please disconnect and reconnect the device, then try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Se agotó el tiempo de espera del dispositivo de almacenamiento durante %1.
+
+El dispositivo no responde. Esto puede indicar:
+ • El dispositivo se desconectó
+ • El dispositivo falló
+ • Problema con el controlador o el sistema
+
+ Desconecte y vuelva a conectar el dispositivo, luego intente nuevamente.</translation>
     </message>
     <message>
         <source>Unknown storage error during %1.
 
 Please try again or use a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error de almacenamiento desconocido durante %1.
+
+ Inténtelo de nuevo o utilice un dispositivo de almacenamiento diferente.</translation>
     </message>
     <message>
         <source>The storage device is not responding. This may indicate:
@@ -1062,7 +1120,12 @@ Please try again or use a different storage device.</source>
 • A driver or system issue
 
 Please disconnect and reconnect the device, then try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>El dispositivo de almacenamiento no responde. Esto puede indicar:
+ • El dispositivo se desconectó
+ • El dispositivo falló
+ • Un problema con el controlador o el sistema
+
+ Desconecte y vuelva a conectar el dispositivo, luego intente nuevamente.</translation>
     </message>
     <message>
         <source>Error writing to storage device.
@@ -1073,27 +1136,34 @@ Some writes failed to complete. This could be caused by:
 • Hardware failure
 
 Please check the device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Error al escribir en el dispositivo de almacenamiento.
+
+Algunas escrituras no se pudieron completar. Esto podría deberse a:
+ • Dispositivo de almacenamiento desconectado durante la escritura
+ • El dispositivo está lleno o protegido contra escritura
+ • Fallo de hardware
+
+ Verifique el dispositivo e inténtelo nuevamente.</translation>
     </message>
     <message>
         <source>flush</source>
-        <translation type="unfinished"></translation>
+        <translation>vaciado</translation>
     </message>
     <message>
         <source>sync</source>
-        <translation type="unfinished"></translation>
+        <translation>sincronizar</translation>
     </message>
     <message>
         <source>writing partition table</source>
-        <translation type="unfinished"></translation>
+        <translation>escribiendo tabla de particiones</translation>
     </message>
     <message>
         <source>final flush</source>
-        <translation type="unfinished"></translation>
+        <translation>descarga final</translation>
     </message>
     <message>
         <source>final sync</source>
-        <translation type="unfinished"></translation>
+        <translation>sincronización final</translation>
     </message>
 </context>
 <context>
@@ -1140,110 +1210,110 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo desmontar el disco &apos;%1&apos;. Cierre todas las aplicaciones que utilicen el disco y vuelva a intentarlo.</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo desmontar el disco &apos;%1&apos;.</translation>
     </message>
 </context>
 <context>
     <name>FastbootFlashThread</name>
     <message>
         <source>Applying OS customisation...</source>
-        <translation type="unfinished"></translation>
+        <translation>Aplicando personalización del sistema operativo...</translation>
     </message>
     <message>
         <source>Failed to mount boot partition: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo montar la partición de inicio: %1</translation>
     </message>
     <message>
         <source>Failed to read config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo leer el archivo config.txt: %1</translation>
     </message>
     <message>
         <source>Failed to write config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo escribir config.txt: %1</translation>
     </message>
     <message>
         <source>Failed to write firstrun.sh: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo escribir firstrun.sh: %1</translation>
     </message>
     <message>
         <source>Failed to write meta-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudieron escribir metadatos: %1</translation>
     </message>
     <message>
         <source>Failed to write user-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudieron escribir datos de usuario: %1</translation>
     </message>
     <message>
         <source>Failed to write network-config: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo escribir la configuración de red: %1</translation>
     </message>
     <message>
         <source>Failed to read cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo leer cmdline.txt: %1</translation>
     </message>
     <message>
         <source>Failed to write cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo escribir cmdline.txt: %1</translation>
     </message>
     <message>
         <source>Failed to initialize curl</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo inicializar curl</translation>
     </message>
     <message>
         <source>No entries in image archive</source>
-        <translation type="unfinished"></translation>
+        <translation>No hay entradas en el archivo de imágenes.</translation>
     </message>
     <message>
         <source>Fastboot error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Error de arranque rápido: %1</translation>
     </message>
     <message>
         <source>Fastboot error: unexpected internal error</source>
-        <translation type="unfinished"></translation>
+        <translation>Error de arranque rápido: error interno inesperado</translation>
     </message>
     <message>
         <source>Connecting to fastboot device...</source>
-        <translation type="unfinished"></translation>
+        <translation>Conectándose al dispositivo fastboot...</translation>
     </message>
     <message>
         <source>Failed to open fastboot device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo abrir el dispositivo fastboot: %1</translation>
     </message>
     <message>
         <source>Downloading and flashing OS image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Descargando y actualizando imagen del sistema operativo...</translation>
     </message>
     <message>
         <source>Fetching block map...</source>
-        <translation type="unfinished"></translation>
+        <translation>Obteniendo mapa de bloques...</translation>
     </message>
     <message>
         <source>Fastboot download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Falló la descarga de Fastboot: %1</translation>
     </message>
     <message>
         <source>Fastboot flash failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Falló el flash de arranque rápido: %1</translation>
     </message>
     <message>
         <source>Download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Descarga fallida: %1</translation>
     </message>
     <message>
         <source>Decompression failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Error de descompresión: %1</translation>
     </message>
     <message>
         <source>Cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>Cancelado</translation>
     </message>
     <message>
         <source>Image hash mismatch. Expected: %1 Got: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>El hash de la imagen no coincide. Esperado: %1 Obtenido: %2</translation>
     </message>
 </context>
 <context>
@@ -1399,15 +1469,15 @@ Please check the device and try again.</source>
     <name>ImComboBox</name>
     <message>
         <source>Search: &quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
+        <translation>Búsqueda: &quot;%1&quot;</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 de %2</translation>
     </message>
     <message>
         <source>No matches</source>
-        <translation type="unfinished"></translation>
+        <translation>No hay coincidencias</translation>
     </message>
 </context>
 <context>
@@ -1480,7 +1550,7 @@ o escriba una ruta en la barra de direcciones situada arriba.</translation>
     </message>
     <message>
         <source>Enter folder or file path…</source>
-        <translation type="unfinished"></translation>
+        <translation>Ingrese la carpeta o ruta del archivo...</translation>
     </message>
 </context>
 <context>
@@ -1645,23 +1715,27 @@ o escriba una ruta en la barra de direcciones situada arriba.</translation>
     </message>
     <message>
         <source>Starting fastboot flash...</source>
-        <translation type="unfinished"></translation>
+        <translation>Iniciando flash de arranque rápido...</translation>
     </message>
     <message>
         <source>Preparing device for imaging...</source>
-        <translation type="unfinished"></translation>
+        <translation>Preparando el dispositivo para grabar la imagen...</translation>
     </message>
     <message>
         <source>Storage capacity is not large enough.
 
 The image requires at least %1 of storage.</source>
-        <translation type="unfinished"></translation>
+        <translation>La capacidad de almacenamiento no es lo suficientemente grande.
+
+La imagen requiere al menos %1 de almacenamiento.</translation>
     </message>
     <message>
         <source>Input file is not a valid disk image.
 
 File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation type="unfinished"></translation>
+        <translation>El archivo de entrada no es una imagen de disco válida.
+
+El tamaño del archivo %1 bytes no es un múltiplo de 512 bytes.</translation>
     </message>
     <message>
         <source>Failed to start write operation: insufficient memory.
@@ -1669,27 +1743,31 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
 The system does not have enough available memory to perform this operation. Try closing other applications to free up memory, then try again.
 
 Technical details: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo iniciar la operación de escritura: memoria insuficiente.
+
+El sistema no tiene suficiente memoria disponible para realizar esta operación. Intente cerrar otras aplicaciones para liberar memoria y vuelva a intentarlo.
+
+Detalles técnicos: %1</translation>
     </message>
     <message>
         <source>Failed to start write operation: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo iniciar la operación de escritura: %1</translation>
     </message>
     <message>
         <source>Limited by download speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Limitado por la velocidad de descarga</translation>
     </message>
     <message>
         <source>Limited by decompression speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Limitado por la velocidad de descompresión.</translation>
     </message>
     <message>
         <source>Limited by storage device speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Limitado por la velocidad del dispositivo de almacenamiento</translation>
     </message>
     <message>
         <source>Verifying written data</source>
-        <translation type="unfinished"></translation>
+        <translation>Verificando datos escritos</translation>
     </message>
 </context>
 <context>
@@ -1809,11 +1887,11 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Why am I being asked this?</source>
-        <translation type="unfinished"></translation>
+        <translation>¿Por qué me preguntan esto?</translation>
     </message>
     <message>
         <source>This also sets the Wi-Fi regulatory domain for your region.</source>
-        <translation type="unfinished"></translation>
+        <translation>Esto también establece el dominio regulatorio de Wi-Fi para su región.</translation>
     </message>
 </context>
 <context>
@@ -1891,46 +1969,46 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Unable to download OS list. You can still use a local image file.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se puede descargar la lista de sistemas operativos. Aún puedes usar un archivo de imagen local.</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>Reintentar</translation>
     </message>
     <message>
         <source>Retry downloading the OS list</source>
-        <translation type="unfinished"></translation>
+        <translation>Vuelva a intentar descargar la lista de sistemas operativos</translation>
     </message>
 </context>
 <context>
     <name>PasswordlessSudoWarningDialog</name>
     <message>
         <source>Passwordless Sudo</source>
-        <translation type="unfinished"></translation>
+        <translation>Sudo sin contraseña</translation>
     </message>
     <message>
         <source>Enabling passwordless sudo allows any process running as this user to gain full root privileges without authentication. This significantly weakens the security of your system.</source>
-        <translation type="unfinished"></translation>
+        <translation>Habilitar sudo sin contraseña permite que cualquier proceso que se ejecute como este usuario obtenga privilegios completos de root sin autenticación. Esto debilita significativamente la seguridad de su sistema.</translation>
     </message>
     <message>
         <source>Only enable this if you understand the risks and have a specific need, such as automated scripts or headless operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>Actívelo solo si comprende los riesgos y tiene una necesidad específica, como scripts automatizados o funcionamiento sin monitor ni teclado.</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">CANCELAR</translation>
+        <translation>CANCELAR</translation>
     </message>
     <message>
         <source>Cancel and keep sudo requiring a password</source>
-        <translation type="unfinished"></translation>
+        <translation>Cancelar y mantener sudo que requiere una contraseña</translation>
     </message>
     <message>
         <source>ENABLE</source>
-        <translation type="unfinished"></translation>
+        <translation>ACTIVAR</translation>
     </message>
     <message>
         <source>Enable passwordless sudo for this user account</source>
-        <translation type="unfinished"></translation>
+        <translation>Activar sudo sin contraseña para esta cuenta de usuario</translation>
     </message>
 </context>
 <context>
@@ -2048,35 +2126,35 @@ Haga clic en «Instalar autorización» para configurar la elevación automátic
     </message>
     <message>
         <source>Invalid Windows physical drive path: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Ruta de la unidad física de Windows no válida: %1</translation>
     </message>
     <message>
         <source>Failed to open disk for cleaning. Error code: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo abrir el disco para limpiarlo. Código de error: %1</translation>
     </message>
     <message>
         <source>Failed to clear partition table. Error code: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo borrar la tabla de particiones. Código de error: %1</translation>
     </message>
     <message>
         <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo iniciar la utilidad de limpieza del disco. Asegúrese de tener privilegios de administrador.</translation>
     </message>
     <message>
         <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
-        <translation type="unfinished"></translation>
+        <translation>Se agotó el tiempo de espera de la operación de limpieza del disco. Es posible que otra aplicación esté utilizando el disco.</translation>
     </message>
     <message>
         <source>Failed to clean disk. Error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo limpiar el disco. Error: %1</translation>
     </message>
     <message>
         <source>Unknown error</source>
-        <translation type="unfinished"></translation>
+        <translation>Error desconocido</translation>
     </message>
     <message>
         <source>Failed to clean disk after %1 attempts. %2</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo limpiar el disco después de %1 intentos. %2</translation>
     </message>
 </context>
 <context>
@@ -2205,59 +2283,59 @@ Haga clic en «Instalar autorización» para configurar la elevación automátic
     <name>RpibootThread</name>
     <message>
         <source>Downloading firmware...</source>
-        <translation type="unfinished"></translation>
+        <translation>Descargando firmware...</translation>
     </message>
     <message>
         <source>Failed to obtain rpiboot firmware: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo obtener el firmware rpiboot: %1</translation>
     </message>
     <message>
         <source>Connecting to device...</source>
-        <translation type="unfinished"></translation>
+        <translation>Conectando al dispositivo...</translation>
     </message>
     <message>
         <source>Failed to open USB device</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo abrir el dispositivo USB</translation>
     </message>
     <message>
         <source>rpiboot protocol failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>El protocolo rpiboot falló: %1</translation>
     </message>
     <message>
         <source>USB error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Error de USB: %1</translation>
     </message>
     <message>
         <source>Waiting for device to restart...</source>
-        <translation type="unfinished"></translation>
+        <translation>Esperando que el dispositivo se reinicie...</translation>
     </message>
     <message>
         <source>Failed to open USB device after re-enumeration</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudo abrir el dispositivo USB después de volver a enumerarlo</translation>
     </message>
     <message>
         <source>Waiting for fastboot device...</source>
-        <translation type="unfinished"></translation>
+        <translation>Esperando dispositivo fastboot...</translation>
     </message>
     <message>
         <source>Timed out waiting for fastboot device to appear.</source>
-        <translation type="unfinished"></translation>
+        <translation>Se agotó el tiempo de espera a que aparezca el dispositivo fastboot.</translation>
     </message>
     <message>
         <source>Waiting for device to disconnect (%1/%2)...</source>
-        <translation type="unfinished"></translation>
+        <translation>Esperando que el dispositivo se desconecte (%1/%2)...</translation>
     </message>
     <message>
         <source>Device disconnected, waiting for reconnect...</source>
-        <translation type="unfinished"></translation>
+        <translation>Dispositivo desconectado, esperando reconexión...</translation>
     </message>
     <message>
         <source>Waiting for device to reconnect (%1/%2s)...</source>
-        <translation type="unfinished"></translation>
+        <translation>Esperando que el dispositivo se vuelva a conectar (%1/%2s)...</translation>
     </message>
     <message>
         <source>Timed out waiting for device to re-enumerate after bootcode upload (waited %1s).</source>
-        <translation type="unfinished"></translation>
+        <translation>Se agotó el tiempo de espera para que el dispositivo se volviera a enumerar después de cargar el código de inicio (esperó %1s).</translation>
     </message>
 </context>
 <context>
@@ -2356,23 +2434,23 @@ Haga clic en «Instalar autorización» para configurar la elevación automátic
     </message>
     <message>
         <source>OTP Secure Boot Provisioning</source>
-        <translation type="unfinished"></translation>
+        <translation>Aprovisionamiento de arranque seguro OTP</translation>
     </message>
     <message>
         <source>Program the secure boot public key hash into the device&apos;s OTP memory. This is a permanent, irreversible operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>Programe el hash de la clave pública de arranque seguro en la memoria OTP del dispositivo. Esta es una operación permanente e irreversible.</translation>
     </message>
     <message>
         <source>Provision Secure Boot OTP</source>
-        <translation type="unfinished"></translation>
+        <translation>Aprovisionar OTP de arranque seguro</translation>
     </message>
     <message>
         <source>Permanently program the secure boot key into device OTP memory</source>
-        <translation type="unfinished"></translation>
+        <translation>Programe permanentemente la clave de inicio seguro en la memoria OTP del dispositivo</translation>
     </message>
     <message>
         <source>WARNING: After OTP provisioning, this device will ONLY boot images signed with the selected key. This cannot be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>ADVERTENCIA: Después del aprovisionamiento OTP, este dispositivo solo arrancará imágenes firmadas con la clave seleccionada. Esto no se puede deshacer.</translation>
     </message>
 </context>
 <context>
@@ -2548,19 +2626,19 @@ para mostrar las unidades del sistema.</translation>
     </message>
     <message>
         <source>Could not list storage devices: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudieron enumerar los dispositivos de almacenamiento: %1</translation>
     </message>
     <message>
         <source>Error: Could not list storage devices. %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Error: no se pudieron enumerar los dispositivos de almacenamiento. %1</translation>
     </message>
     <message>
         <source>Ready for USB boot</source>
-        <translation type="unfinished"></translation>
+        <translation>Listo para arranque USB</translation>
     </message>
     <message>
         <source>Could not list storage devices: %1. This may be a permissions issue. Try running the application with administrator privileges.</source>
-        <translation type="unfinished"></translation>
+        <translation>No se pudieron enumerar los dispositivos de almacenamiento: %1. Esto puede ser un problema de permisos. Intente ejecutar la aplicación con privilegios de administrador.</translation>
     </message>
 </context>
 <context>
@@ -2583,11 +2661,11 @@ para mostrar las unidades del sistema.</translation>
     </message>
     <message>
         <source>Imager version %1 is available. Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>La versión %1 de Imager está disponible. ¿Quiere visitar el sitio web para descargarla?</translation>
     </message>
     <message>
         <source>Update</source>
-        <translation type="unfinished"></translation>
+        <translation>Actualizar</translation>
     </message>
 </context>
 <context>
@@ -2666,19 +2744,19 @@ para mostrar las unidades del sistema.</translation>
     </message>
     <message>
         <source>Enable passwordless sudo</source>
-        <translation type="unfinished"></translation>
+        <translation>Habilitar sudo sin contraseña</translation>
     </message>
     <message>
         <source>Allow this user to run sudo commands without entering a password.</source>
-        <translation type="unfinished"></translation>
+        <translation>Permita que este usuario ejecute comandos sudo sin ingresar una contraseña.</translation>
     </message>
     <message>
         <source>Allows any process running as this user to gain full root privileges without a password. Only enable this if you have a specific need, such as automated scripts or headless operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>Permite que cualquier proceso ejecutado como este usuario obtenga privilegios completos de root sin contraseña. Actívelo solo si tiene una necesidad específica, como scripts automatizados o funcionamiento sin monitor ni teclado.</translation>
     </message>
     <message>
         <source>Passwordless sudo information: </source>
-        <translation type="unfinished"></translation>
+        <translation>Información sudo sin contraseña:</translation>
     </message>
 </context>
 <context>
@@ -2912,57 +2990,59 @@ para mostrar las unidades del sistema.</translation>
     </message>
     <message>
         <source>Sidebar resize handle</source>
-        <translation type="unfinished"></translation>
+        <translation>Controlador de cambio de tamaño de la barra lateral</translation>
     </message>
     <message>
         <source>Open local repository file?</source>
-        <translation type="unfinished"></translation>
+        <translation>¿Abrir el archivo del repositorio local?</translation>
     </message>
     <message>
         <source>Switch to a custom repository?</source>
-        <translation type="unfinished"></translation>
+        <translation>¿Cambiar a un repositorio personalizado?</translation>
     </message>
     <message>
         <source>You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.</source>
-        <translation type="unfinished"></translation>
+        <translation>Está abriendo un archivo de manifiesto local de Raspberry Pi Imager. Esto reemplazará la lista de sistemas operativos actual con el contenido de este archivo.</translation>
     </message>
     <message>
         <source>A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.
 
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Un sitio web solicita cambiar Raspberry Pi Imager para usar un repositorio de sistema operativo personalizado.
+
+</translation>
     </message>
     <message>
         <source>Only accept if you trust this source and intentionally clicked a link to open this repository.</source>
-        <translation type="unfinished"></translation>
+        <translation>Acepte solo si confía en esta fuente e hizo clic intencionalmente en un enlace para abrir este repositorio.</translation>
     </message>
     <message>
         <source>Repository URL: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>URL del repositorio: %1</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished">Abrir</translation>
+        <translation>Abrir</translation>
     </message>
     <message>
         <source>Switch repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Cambiar repositorio</translation>
     </message>
     <message>
         <source>Open the local manifest file and use it as the OS repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Abra el archivo de manifiesto local y utilícelo como repositorio del sistema operativo.</translation>
     </message>
     <message>
         <source>Switch to the custom repository from the link</source>
-        <translation type="unfinished"></translation>
+        <translation>Cambie al repositorio personalizado desde el enlace</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>Keep your current repository settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Mantenga la configuración actual de su repositorio</translation>
     </message>
 </context>
 <context>
@@ -2980,17 +3060,19 @@ para mostrar las unidades del sistema.</translation>
     <name>WriteProgressWatchdog</name>
     <message>
         <source>Switched to compatibility mode - write continuing...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cambiado al modo de compatibilidad: continúa escribiendo...</translation>
     </message>
     <message>
         <source>Write stalled - no progress for %1 seconds.
 
 Please check your storage device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Escritura detenida: no hay progreso durante %1 segundos.
+
+Compruebe su dispositivo de almacenamiento e inténtelo de nuevo.</translation>
     </message>
     <message>
         <source>Storage device not responding. Restarting in compatibility mode...</source>
-        <translation type="unfinished"></translation>
+        <translation>El dispositivo de almacenamiento no responde. Reiniciando en modo compatibilidad...</translation>
     </message>
 </context>
 <context>
@@ -3129,7 +3211,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Writing... %1 MB written</source>
-        <translation type="unfinished"></translation>
+        <translation>Escribiendo... %1 MB escrito</translation>
     </message>
 </context>
 <context>
@@ -3232,11 +3314,11 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Offline</source>
-        <translation type="unfinished"></translation>
+        <translation>Desconectado</translation>
     </message>
     <message>
         <source>Using data from %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Usando datos de %1</translation>
     </message>
 </context>
 </TS>
