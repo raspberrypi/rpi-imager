@@ -5,6 +5,7 @@ rpi-imager (2.0.9) unstable; urgency=medium
     - Wizard flow for Pi Connect for Organisations enrolment
     - Organisation registration and provisioning-token tracking
     - Register device identity with Connect after fastboot flash
+    - Fix Connect sign-in on more Linux systems (#1564)
   * Secure Boot / rpiboot:
     - Rewrite SecureBootProvisioner for in-place CM5 re-provisioning
     - Add CM5 re-provisioning pipeline in FirmwareManager
@@ -13,6 +14,13 @@ rpi-imager (2.0.9) unstable; urgency=medium
     - config-sig generation, RSA public-key extraction and
       bootcode2712 signing
     - Debug toggles for force-secure-boot and sign-fastboot-gadget
+    - AB-image support in BootloaderImage with signing and extraction
+      tests
+    - Fetch firmware from rpi-eeprom; fixup reboot expectations
+    - Fix CM5 re-provisioning support
+    - Always validate stale cached firmware assets
+    - PAL-ify RSA key fingerprint; fix rpiboot storage handoff
+    - Push key handling behind the PAL
   * Fastboot:
     - Capture INFO/TEXT lines for OEM commands
     - Chunk file_server bulk transfers
@@ -21,14 +29,27 @@ rpi-imager (2.0.9) unstable; urgency=medium
     - Track naked rpiboot devices separately in the drive list
     - Fix command truncation
     - Normalise custom gadget paths so local files can be used
+    - Set chosen storage as first boot source via EEPROM
   * OS Customisation:
     - cloud-init: drop enable_ssh in favour of systemctl runcmd
     - cloud-init: use 'user' (not 'users') for user configuration
     - Fix serial-if disabled handling
+    - Enhance SSID handling with octet support and YAML escaping
+    - Vendor capital cities data; stop fetching from REST Countries API
+    - Wizard: improve nextStep logic for "write another" mode
   * UI:
     - Reduced motion support for accessibility
     - Make AppOptionsDialog scrollable; move Telemetry to bottom
     - Align SecureBoot step container styling
+    - QML refactor: ImageWriter singleton, cachegen, lazy-loaded options
+      dialogs
+    - Fix keyboard navigation on write confirmation dialog
+    - Disable 'clear customisation' during active writes
+    - Re-bind RSA key visibility for debug options
+    - Prevent ImageWriter double-construction
+    - FocusableText/Heading components for accessibility
+    - Gate OTP programming visibility
+    - Prevent VoiceOver crash on password fields (#1607)
   * Write Operations:
     - Remove the 512-byte alignment requirement
     - Better overflow handling in DeviceWrapper for GPT and MBR
@@ -36,6 +57,10 @@ rpi-imager (2.0.9) unstable; urgency=medium
     - disk_formatter: handle extremely large sectors_per_fat
     - downloadextractthread: use shared_ptr for the write ringbuffer
     - cachemanager: fix TOCTOU on directory existence check
+    - Don't emit success() after a failed extraction (#1603)
+    - Set extract length when manifest size is given
+    - Omit percent progress when extract size cannot be determined
+    - Parse zstd header for extract size with local .zst archives
   * Device I/O:
     - Read per-device I/O limits to inform write tuning
   * Windows:
@@ -45,24 +70,47 @@ rpi-imager (2.0.9) unstable; urgency=medium
     - Uninstaller preserves user preferences, removes cache and
       customisation data
     - Use secure memory erase for WiFi credentials
+    - Reliably flag system drives (#1558)
+    - Force disk status refresh on write errors
   * macOS:
     - Use secure memory erase for WiFi credentials
+    - Require macOS 13 as minimum
+    - Scale release label in create-dmg
+    - Fall back to venv for custom background generation
+    - Coalesce unaligned writes/reads to /dev/rdisk* (fixes .img.zst
+      EINVAL)
+    - Prevent mach-port over-release crash (#1632)
   * Linux:
     - Prefer kreadconfig6, fall back to kreadconfig5; pick the right
       binary via KDE_SESSION_VERSION
     - SuspendInhibitor and launchDetached use explicit search paths
     - AppImage: exclude libsystemd, libdbus-1, libcap for Linux
       Desktop AppImages
+    - Build fixes
   * Embedded:
     - Use explicit path for the reboot command
+    - Move scaling choices into C++
+    - Deploy vendored tree without AppImage
+    - Drop NetworkAccessManagerFactory and OpenSSL
+    - create-embedded.sh: support custom ICU runtime libraries
   * Tests:
     - Relocate disk_formatter_test, add CMake target, build on
       non-Windows platforms
+  * Dependencies:
+    - Upgrade curl, libarchive, libusb, nghttp2, and xz
+    - Single source of truth for curl user-agent
+  * Build:
+    - Trim unused Qt build features and configuration options
   * Licensing:
     - Add nghttp2, libusb and yescrypt to the licence manifest
+  * Documentation:
+    - Update os-list-schema; prune bmap spec document
+    - Update bmap-tools repo URL
+  * Performance:
+    - Refactor analyse_performance script
   * i18n: Updated French, Irish and Turkish translation dictionaries
 
- -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 01 May 2026 16:30:00 +0100
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 19 Jun 2026 12:00:00 +0100
 
 rpi-imager (2.0.8) unstable; urgency=medium
 
