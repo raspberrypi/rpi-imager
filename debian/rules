@@ -11,6 +11,15 @@ PACKAGES := $(shell dh_listpackages)
 override_dh_strip:
 	dh_strip --exclude=rpi-imager
 
+.PHONY: override_dh_clean
+override_dh_clean:
+	dh_clean
+	rm -rf debian/rpi-imager debian/rpi-imager-cli debian/rpi-imager-embedded \
+		debian/rpi-imager-amd64 debian/.debhelper debian/tmp \
+		debian/com.raspberrypi.rpi-imager.metainfo.xml
+	rm -f debian/files debian/*.substvars debian/*.debhelper.log \
+		debian/debhelper-build-stamp
+
 # For the embedded package, install the vendored directory tree produced by
 # create-embedded.sh into the package staging area.
 override_dh_auto_install:

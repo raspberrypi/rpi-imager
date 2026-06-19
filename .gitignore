@@ -9,6 +9,7 @@ obj-**
 .vscode
 .zed
 .idea
+.claude
 
 # Debian packaging
 debian/rpi-imager/**
@@ -54,3 +55,7 @@ test-cli-**
 
 # clangd related
 .cache/clangd
+
+# Python tooling
+.venv
+**/.venv
