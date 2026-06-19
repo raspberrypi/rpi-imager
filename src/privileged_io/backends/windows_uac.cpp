@@ -24,13 +24,9 @@
 #include <objbase.h>
 
 #include <algorithm>
-#include <atomic>
-#include <condition_variable>
 #include <cstring>
-#include <deque>
 #include <mutex>
 #include <string>
-#include <thread>
 
 namespace rpi_imager::privileged::backends {
 
@@ -75,7 +71,7 @@ std::wstring clientExeDir() {
 struct WindowsUacBackend::State {
     Options options;
 
-    std::mutex      mutex;          // serialises one in-flight RPC at a time
+    std::mutex      mutex;          // serialises connect + sync control-plane RPCs
     HANDLE          pipe = INVALID_HANDLE_VALUE;
     HANDLE          helper_process = nullptr;
     bool            connected = false;
@@ -85,32 +81,8 @@ struct WindowsUacBackend::State {
     wire::WinSharedMemory bulk;
     proto_ns::SessionId   bulk_session;
 
-    // Single-worker async submit queue (bounded in-flight is the helper's
-    // job; the producer ring is the back-pressure - §13).
-    struct AsyncJob {
-        proto_ns::SessionId sid;
-        std::uint64_t buffer_offset;
-        std::uint64_t device_offset;
-        std::size_t   length;
-        BulkWriteCallback cb;
-    };
-    std::thread             worker;
-    std::mutex              queue_mutex;
-    std::condition_variable queue_cv;
-    std::deque<AsyncJob>    queue;
-    bool                    worker_stop = false;
-    bool                    worker_started = false;
-
     ~State() {
         duplex.detach();
-        {
-            std::lock_guard<std::mutex> lk(queue_mutex);
-            worker_stop = true;
-        }
-        queue_cv.notify_all();
-        if (worker.joinable()) {
-            worker.join();
-        }
         if (pipe != INVALID_HANDLE_VALUE) {
             CloseHandle(pipe);
         }
@@ -584,12 +556,14 @@ Result<void> WindowsUacBackend::eject(const std::string& device_path) {
 // ---------------------------------------------------------------------------
 
 Result<void> WindowsUacBackend::mapBulkBuffer(const proto_ns::SessionId& sid,
-                                              std::size_t size_bytes) {
+                                              std::size_t size_bytes,
+                                              const std::uint32_t async_queue_depth) {
     std::lock_guard<std::mutex> lk(state_->mutex);
 
     proto_ns::MapBulkBufferRequest req;
     *req.mutable_session_id() = sid;
     req.set_size_bytes(size_bytes);
+    req.set_async_queue_depth(async_queue_depth);
     std::string req_ser;
     req.SerializeToString(&req_ser);
 
@@ -624,6 +598,9 @@ Result<void> WindowsUacBackend::mapBulkBuffer(const proto_ns::SessionId& sid,
             static_cast<int>(GetLastError())));
     }
     state_->bulk_session = sid;
+    if (async_queue_depth > 1) {
+        state_->duplex.setMaxOutstandingAsync(async_queue_depth);
+    }
     return Result<void>::success();
 }
 
@@ -670,41 +647,61 @@ void WindowsUacBackend::submitBulkWriteAsync(const proto_ns::SessionId& sid,
                                              std::uint64_t device_offset,
                                              std::size_t length,
                                              BulkWriteCallback on_complete) {
+    if (!on_complete) {
+        return;
+    }
+
+    if (!state_->bulk.valid() || length == 0
+        || buffer_offset > state_->bulk.size()
+        || length > state_->bulk.size() - buffer_offset) {
+        on_complete(Result<std::size_t>::failure(makeError(
+            proto_ns::ERROR_UNKNOWN,
+            "bulkWriteFromBuffer: no buffer mapped or out of bounds")));
+        return;
+    }
+
+    proto_ns::WriteRequest req;
+    *req.mutable_session_id() = sid;
+    req.set_buffer_offset(buffer_offset);
+    req.set_offset(device_offset);
+    req.set_length(length);
+    std::string req_ser;
+    req.SerializeToString(&req_ser);
+
     {
-        std::lock_guard<std::mutex> lk(state_->queue_mutex);
-        if (!state_->worker_started) {
-            state_->worker_started = true;
-            State* st = state_.get();
-            WindowsUacBackend* self = this;
-            state_->worker = std::thread([st, self]() {
-                for (;;) {
-                    State::AsyncJob job;
-                    {
-                        std::unique_lock<std::mutex> qlk(st->queue_mutex);
-                        st->queue_cv.wait(qlk, [st] {
-                            return st->worker_stop || !st->queue.empty();
-                        });
-                        if (st->worker_stop && st->queue.empty()) {
-                            return;
-                        }
-                        job = std::move(st->queue.front());
-                        st->queue.pop_front();
-                    }
-                    // bulkWriteFromBuffer takes State::mutex itself, so the
-                    // single worker serialises the bulk RPCs against the
-                    // control-plane RPCs.
-                    auto result = self->bulkWriteFromBuffer(
-                        job.sid, job.buffer_offset, job.device_offset, job.length);
-                    if (job.cb) {
-                        job.cb(std::move(result));
+        std::lock_guard<std::mutex> lk(state_->mutex);
+        proto_ns::ErrorInfo err;
+        if (!ensureConnectedImpl(state_.get(), err)) {
+            on_complete(Result<std::size_t>::failure(std::move(err)));
+            return;
+        }
+    }
+
+    WindowsUacBackend* self = this;
+    BulkWriteCallback user_cb = std::move(on_complete);
+    state_->duplex.submitAsync(
+        proto_ns::WIRE_BULK_WRITE, req_ser,
+        [self, user_cb = std::move(user_cb)](wire::RpcResult rpc) mutable {
+            if (!rpc.ok) {
+                {
+                    std::lock_guard<std::mutex> lk(self->state_->mutex);
+                    if (rpc.error.code() == proto_ns::ERROR_DEVICE_DISCONNECTED
+                        || rpc.error.code() == proto_ns::ERROR_DEVICE_IO) {
+                        self->state_->connected = false;
                     }
                 }
-            });
-        }
-        state_->queue.push_back(State::AsyncJob{
-            sid, buffer_offset, device_offset, length, std::move(on_complete)});
-    }
-    state_->queue_cv.notify_one();
+                user_cb(Result<std::size_t>::failure(std::move(rpc.error)));
+                return;
+            }
+            proto_ns::WriteResult wr;
+            if (!wr.ParseFromString(rpc.payload)) {
+                user_cb(Result<std::size_t>::failure(makeError(
+                    proto_ns::ERROR_UNKNOWN, "bulkWrite: bad WriteResult reply")));
+                return;
+            }
+            user_cb(Result<std::size_t>::success(
+                static_cast<std::size_t>(wr.bytes_written())));
+        });
 }
 
 } // namespace rpi_imager::privileged::backends

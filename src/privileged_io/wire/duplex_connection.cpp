@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstring>
 #include <utility>
+#include <vector>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -139,6 +140,40 @@ bool DuplexConnection::attach(int sock_fd) {
 }
 #endif
 
+void DuplexConnection::failAllOutstandingAsyncLocked(const proto::ErrorInfo& err) {
+    std::vector<AsyncCallback> callbacks;
+    callbacks.reserve(outstanding_async_.size());
+    for (auto& [id, cb] : outstanding_async_) {
+        (void)id;
+        callbacks.push_back(std::move(cb));
+    }
+    outstanding_async_.clear();
+    async_cv_.notify_all();
+
+    RpcResult result;
+    result.ok = false;
+    result.error = err;
+    for (auto& cb : callbacks) {
+        if (cb) {
+            cb(result);
+        }
+    }
+}
+
+RpcResult DuplexConnection::rpcResultFromResponse(const proto::WireResponse& response,
+                                                  int ancillary_fd) {
+    RpcResult out;
+    if (response.error().code() != proto::ERROR_NONE) {
+        out.ok = false;
+        out.error = response.error();
+    } else {
+        out.ok = true;
+        out.payload = response.payload();
+        out.ancillary_fd = ancillary_fd;
+    }
+    return out;
+}
+
 void DuplexConnection::detach() {
     stop_.store(true);
     attached_.store(false);
@@ -152,14 +187,23 @@ void DuplexConnection::detach() {
 #endif
     acc_ = FrameAccumulator{};
 
-    std::lock_guard<std::mutex> lk(rpc_mutex_);
-    if (pending_) {
-        pending_->complete = true;
-        pending_->result.ok = false;
-        pending_->result.error = makeIoError(
-            proto::ERROR_DEVICE_DISCONNECTED, "connection detached", 0);
-        rpc_cv_.notify_all();
-        pending_.reset();
+    const proto::ErrorInfo disconnected =
+        makeIoError(proto::ERROR_DEVICE_DISCONNECTED, "connection detached", 0);
+
+    {
+        std::lock_guard<std::mutex> lk(rpc_mutex_);
+        if (pending_) {
+            pending_->complete = true;
+            pending_->result.ok = false;
+            pending_->result.error = disconnected;
+            rpc_cv_.notify_all();
+            pending_.reset();
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lk(async_mutex_);
+        failAllOutstandingAsyncLocked(disconnected);
     }
 }
 
@@ -174,6 +218,7 @@ bool DuplexConnection::writeRequest(const proto::WireRequest& req) {
         return false;
     }
     const std::string frame = encodeFrame(ser);
+    std::lock_guard<std::mutex> lk(write_mutex_);
 #if defined(_WIN32)
     return writeAllHandle(io_, frame.data(), frame.size());
 #else
@@ -192,7 +237,7 @@ RpcResult DuplexConnection::call(proto::WireMethod method,
 
     std::unique_lock<std::mutex> lk(rpc_mutex_);
     if (pending_) {
-        out.error = makeIoError(proto::ERROR_UNKNOWN, "concurrent RPC not supported", 0);
+        out.error = makeIoError(proto::ERROR_UNKNOWN, "concurrent sync RPC not supported", 0);
         return out;
     }
 
@@ -242,6 +287,76 @@ RpcResult DuplexConnection::call(proto::WireMethod method,
     return out;
 }
 
+void DuplexConnection::setMaxOutstandingAsync(const std::size_t depth) {
+    max_outstanding_async_ = depth < 1 ? 1 : depth;
+}
+
+std::size_t DuplexConnection::maxOutstandingAsync() const {
+    return max_outstanding_async_;
+}
+
+void DuplexConnection::submitAsync(proto::WireMethod method,
+                                   const std::string& request_payload,
+                                   AsyncCallback on_complete) {
+    if (!on_complete) {
+        return;
+    }
+
+    auto fail = [&](const proto::ErrorInfo& err) {
+        RpcResult result;
+        result.ok = false;
+        result.error = err;
+        on_complete(std::move(result));
+    };
+
+    if (!attached_.load()) {
+        fail(makeIoError(proto::ERROR_DEVICE_DISCONNECTED, "not connected", 0));
+        return;
+    }
+
+    std::unique_lock<std::mutex> alk(async_mutex_);
+    async_cv_.wait(alk, [this] {
+        return !attached_.load()
+               || outstanding_async_.size() < max_outstanding_async_;
+    });
+    if (!attached_.load()) {
+        fail(makeIoError(proto::ERROR_DEVICE_DISCONNECTED, "not connected", 0));
+        return;
+    }
+
+    const std::uint64_t request_id = next_request_id_.fetch_add(1);
+    outstanding_async_.emplace(request_id, std::move(on_complete));
+    alk.unlock();
+
+    proto::WireRequest req;
+    req.set_method(method);
+    req.set_request_id(request_id);
+    req.set_payload(request_payload);
+
+    if (!writeRequest(req)) {
+#if defined(_WIN32)
+        const int err = static_cast<int>(GetLastError());
+#else
+        const int err = errno;
+#endif
+        const proto::ErrorInfo io_err =
+            makeIoError(proto::ERROR_DEVICE_IO, "transport write failed", err);
+        alk.lock();
+        auto it = outstanding_async_.find(request_id);
+        if (it != outstanding_async_.end()) {
+            AsyncCallback cb = std::move(it->second);
+            outstanding_async_.erase(it);
+            alk.unlock();
+            async_cv_.notify_all();
+            RpcResult result;
+            result.ok = false;
+            result.error = io_err;
+            cb(std::move(result));
+        }
+        return;
+    }
+}
+
 void DuplexConnection::handleServerPayload(const std::string& payload, int ancillary_fd) {
     proto::WireResponse response;
     proto::WireEvent event;
@@ -263,20 +378,35 @@ void DuplexConnection::handleServerPayload(const std::string& payload, int ancil
         return;
     }
 
-    std::lock_guard<std::mutex> lk(rpc_mutex_);
-    if (!pending_ || pending_->request_id != response.request_id()) {
+    AsyncCallback async_cb;
+    bool have_async = false;
+
+    {
+        std::lock_guard<std::mutex> lk(rpc_mutex_);
+        if (pending_ && pending_->request_id == response.request_id()) {
+            pending_->result = rpcResultFromResponse(response, ancillary_fd);
+            pending_->complete = true;
+            rpc_cv_.notify_all();
+            return;
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lk(async_mutex_);
+        auto it = outstanding_async_.find(response.request_id());
+        if (it != outstanding_async_.end()) {
+            async_cb = std::move(it->second);
+            outstanding_async_.erase(it);
+            have_async = true;
+        }
+    }
+    if (have_async) {
+        async_cv_.notify_all();
+        if (async_cb) {
+            async_cb(rpcResultFromResponse(response, ancillary_fd));
+        }
         return;
     }
-    if (response.error().code() != proto::ERROR_NONE) {
-        pending_->result.ok = false;
-        pending_->result.error = response.error();
-    } else {
-        pending_->result.ok = true;
-        pending_->result.payload = response.payload();
-        pending_->result.ancillary_fd = ancillary_fd;
-    }
-    pending_->complete = true;
-    rpc_cv_.notify_all();
 }
 
 void DuplexConnection::readerLoop() {
