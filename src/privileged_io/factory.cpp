@@ -16,10 +16,9 @@
 #include "backends/macos_xpc.h"
 #endif
 
-// Native Windows backend is opt-in and gated at build time so default Windows
-// builds/behavior are unchanged while it's brought up (§14.6, §14.11). The
-// define is only ever set on Windows builds (CMake gates it under WIN32), so
-// it doubles as the platform guard.
+// Native Windows backend is gated at build time. When built, the helper-routed
+// path is the default (opt out via RPI_IMAGER_USE_LEGACY_INPROCESS=1 or
+// RPI_IMAGER_USE_WINDOWS_HELPER=0).
 #if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
 #include "backends/windows_uac.h"
 #endif
@@ -54,10 +53,7 @@ PrivilegedWriterFactory::create(Config config) {
 #endif
 
 #if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
-    // On Windows the native helper is selected only when explicitly preferred
-    // (the glue sets prefer_helper from RPI_IMAGER_USE_WINDOWS_HELPER, default
-    // off). Otherwise control falls through to the LocalShimBackend below, so
-    // shipping this code does not change the default in-process path.
+    // WindowsUacBackend when prefer_helper (default).
     if (config.prefer_helper) {
         backends::WindowsUacBackend::Options win_opts;
         if (!config.app_bundle_path.empty()) {
@@ -75,7 +71,7 @@ PrivilegedWriterFactory::create(Config config) {
     }
 
 #if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
-    // pkexec-launched helper; opt-in at runtime via RPI_IMAGER_USE_LINUX_HELPER.
+    // pkexec-launched helper when prefer_helper (default).
     if (config.prefer_helper) {
         backends::LinuxPolkitBackend::Options linux_opts;
         if (!config.app_bundle_path.empty()) {

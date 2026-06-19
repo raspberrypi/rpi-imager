@@ -1,6 +1,6 @@
 # Linux privileged helper (developer guide)
 
-Linux privileged helper path: built by default; use `RPI_IMAGER_USE_LINUX_HELPER=1` at runtime. Pass `-DRPI_IMAGER_DISABLE_LINUX_HELPER=ON` at configure time to omit the helper.
+Linux privileged helper path is the default when built. Pass `-DRPI_IMAGER_DISABLE_LINUX_HELPER=ON` at configure time to omit the helper. Opt out at runtime with `RPI_IMAGER_USE_LEGACY_INPROCESS=1` or `RPI_IMAGER_USE_LINUX_HELPER=0`.
 
 AppImage shipping builds add embedded GPG signature verification and single-binary helper elevation; see [linux-appimage-signing.md](linux-appimage-signing.md).
 
@@ -28,14 +28,21 @@ cmake -S src -B build \
 
 ## Runtime
 
-**Polkit path** (unprivileged GUI):
+**Polkit path** (unprivileged GUI — default when the helper is built):
 
 ```bash
-export RPI_IMAGER_USE_LINUX_HELPER=1
 ./build/rpi-imager
 ```
 
-**AppImage** (recommended for end users): set `RPI_IMAGER_USE_LINUX_HELPER=1` and run the signed AppImage. Privileged operations launch `pkexec $APPIMAGE --privileged-helper …` (no separate writer binary in the AppDir).
+**AppImage** (recommended for end users): run the signed AppImage directly. Privileged operations launch `pkexec $APPIMAGE --privileged-helper …` (no separate writer binary in the AppDir).
+
+**Opt out** (legacy in-process I/O, e.g. for comparison):
+
+```bash
+export RPI_IMAGER_USE_LEGACY_INPROCESS=1
+# or: export RPI_IMAGER_USE_LINUX_HELPER=0
+./build/rpi-imager
+```
 
 **Native / deb path**: first privileged operation launches `pkexec rpi-imager-writer` (or the writer beside the client binary). Install `debian/com.raspberrypi.rpi-imager.writer.policy` to `/usr/share/polkit-1/actions/` for production.
 
@@ -50,7 +57,6 @@ Uses `LinuxEmbeddedBackend` in-process; no helper process.
 ## Diagnostics
 
 ```bash
-export RPI_IMAGER_USE_LINUX_HELPER=1
 ./build/rpi-imager --test-privileged-helper /dev/sdX \
   --test-privileged-helper-allow-write --test-privileged-helper-bulk
 ```
@@ -64,7 +70,6 @@ Verify AppImage embedded signature (helper-enabled build):
 ## Benchmark
 
 ```bash
-export RPI_IMAGER_USE_LINUX_HELPER=1
 ./build/rpi-imager --benchmark-write /dev/sdX --benchmark-verify
 ```
 

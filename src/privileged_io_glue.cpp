@@ -9,6 +9,20 @@
 
 namespace rpi_imager {
 
+bool preferNativePrivilegedHelper(const char* platform_opt_out_env) {
+    const char* legacy = std::getenv("RPI_IMAGER_USE_LEGACY_INPROCESS");
+    if (legacy && legacy[0] == '1') {
+        return false;
+    }
+    if (platform_opt_out_env) {
+        const char* use = std::getenv(platform_opt_out_env);
+        if (use && use[0] == '0') {
+            return false;
+        }
+    }
+    return true;
+}
+
 rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter() {
     static std::unique_ptr<rpi_imager::privileged::IPrivilegedWriter> writer = [] {
         rpi_imager::privileged::PrivilegedWriterFactory::Config config;
@@ -24,19 +38,11 @@ rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter() {
                              (use_xpc && use_xpc[0] == '0');
         config.prefer_helper = !opt_out;
 #elif defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
-        // On Windows the native helper (WindowsUacBackend) is opt-in while it
-        // is brought up (§14.11 rollout gate): default off, enabled with
-        // RPI_IMAGER_USE_WINDOWS_HELPER=1. When off, prefer_helper is false so
-        // the factory selects the LocalShimBackend, i.e. the existing
-        // in-process write path is unchanged.
-        const char* use_win = std::getenv("RPI_IMAGER_USE_WINDOWS_HELPER");
-        config.prefer_helper = (use_win && use_win[0] == '1');
+        config.prefer_helper =
+            preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER");
 #elif defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
-        // Linux polkit helper: opt-in via RPI_IMAGER_USE_LINUX_HELPER=1.
-        // When running as root the factory selects LinuxEmbeddedBackend
-        // regardless of this flag.
-        const char* use_linux = std::getenv("RPI_IMAGER_USE_LINUX_HELPER");
-        config.prefer_helper = (use_linux && use_linux[0] == '1');
+        config.prefer_helper =
+            preferNativePrivilegedHelper("RPI_IMAGER_USE_LINUX_HELPER");
 #else
         // No native privileged backend on this platform; the LocalShimBackend
         // is the active path. prefer_helper has no native branch to select.
