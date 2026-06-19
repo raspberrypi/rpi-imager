@@ -1,0 +1,22 @@
+# Copy to debian/release.conf and adjust for your machine.
+# Paths may be absolute or relative to the repository root.
+#
+# Where .dsc, .tar.xz and .deb files are written.
+OUTPUT_DIR=out/debian
+
+# Per-arch AppImage cache used by stage-appimages.sh and binary builds.
+APPIMAGE_ROOT=.debian/appimages
+
+# sbuild/schroot settings (only needed for isolated builds).
+SBUILD_DIST=trixie
+SBUILD_CHROOT_SUFFIX=sbuild
+# MIRROR=http://deb.debian.org/debian
+
+# Build backend: auto (sbuild if chroot exists, else local), sbuild, or local.
+BUILDER=auto
+
+# Default profiles for desktop/cli packages.
+DEB_BUILD_PROFILES=desktop cli
+
+# Optional upload target for: debian/release.sh repo
+# DPUT_HOST=pi-internal

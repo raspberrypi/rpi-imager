@@ -11,6 +11,7 @@ obj-**
 .idea
 
 # Debian packaging
+debian/release.conf
 debian/rpi-imager/**
 debian/rpi-imager-amd64/**
 debian/rpi-imager-embedded/**
@@ -59,3 +60,7 @@ test-cli-**
 # Python tooling
 .venv
 **/.venv
+
+# Debian release tooling (local paths; see debian/release.conf.example)
+.debian/
+out/
