@@ -26,6 +26,8 @@ if(NOT APPLE)
             server/wire_outbound.cpp
             server/drive_watch_service.h
             server/linux/drive_watch_linux.cpp
+            server/bulk_write_async.h
+            server/bulk_write_async.cpp
             server/linux/service_impl.h
             server/linux/service_impl.cpp
             server/linux/drivelist_linux_helper.h
@@ -91,6 +93,8 @@ if(NOT APPLE)
             server/wire_outbound.cpp
             server/drive_watch_service.h
             server/win/drive_watch_win.cpp
+            server/bulk_write_async.h
+            server/bulk_write_async.cpp
             server/win/service_impl.h
             server/win/service_impl.cpp
             server/win/peer_auth_win.h

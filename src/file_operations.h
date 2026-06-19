@@ -11,6 +11,7 @@
 #include <memory>
 #include <functional>
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <vector>
@@ -333,6 +334,22 @@ class FileOperations {
   struct DeviceIOLimits {
     size_t max_transfer_bytes = 0;   // Max single I/O request size in bytes (0 = unknown)
     int suggested_queue_depth = 0;   // Device/bus-informed queue depth limit (0 = unknown)
+
+    // Cap a requested async pipeline depth using the same 3× device rule as
+    // DownloadThread (see #1592). No-op when suggested_queue_depth is unknown.
+    int capAsyncQueueDepth(int requested_depth) const {
+      if (requested_depth <= 1) {
+        return requested_depth;
+      }
+      int depth = requested_depth;
+      if (suggested_queue_depth > 0) {
+        const int device_cap = std::max(4, suggested_queue_depth * 3);
+        if (device_cap < depth) {
+          depth = device_cap;
+        }
+      }
+      return depth;
+    }
   };
 
  protected:

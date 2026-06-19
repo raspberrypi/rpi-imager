@@ -69,7 +69,8 @@ public:
 
     // Bulk plane (concrete-class API, mirrors WindowsUacBackend / MacOSXpcBackend).
     Result<void>        mapBulkBuffer(const proto_ns::SessionId& sid,
-                                      std::size_t size_bytes);
+                                      std::size_t size_bytes,
+                                      std::uint32_t async_queue_depth = 0);
     void*               bulkBufferBase() const;
     std::size_t         bulkBufferSize() const;
     Result<std::size_t> bulkWriteFromBuffer(const proto_ns::SessionId& sid,

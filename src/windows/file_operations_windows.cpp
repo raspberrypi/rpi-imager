@@ -13,6 +13,7 @@
 #include <cstdlib>
 
 #if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+#include "../privileged_io_glue.h"
 #include "windows_helper_file_operations.h"
 #endif
 
@@ -1783,15 +1784,12 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
 
 // Platform-specific factory function implementation.
 //
-// The default Windows path is the in-process WindowsFileOperations. When the
-// native helper is compiled in (RPI_IMAGER_ENABLE_WINDOWS_HELPER) and the user
-// opts in (RPI_IMAGER_USE_WINDOWS_HELPER=1), writes route through the elevated
-// rpi-imager-writer.exe via WindowsHelperFileOperations (§14.6). The opt-in is
-// experimental while the bulk plane is brought up; see the design doc §14.
+// The default Windows path routes through the elevated rpi-imager-writer.exe
+// helper when built. Opt out with RPI_IMAGER_USE_LEGACY_INPROCESS=1 or
+// RPI_IMAGER_USE_WINDOWS_HELPER=0 for the in-process WindowsFileOperations path.
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
 #if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
-  const char* use_win = std::getenv("RPI_IMAGER_USE_WINDOWS_HELPER");
-  if (use_win && use_win[0] == '1') {
+  if (preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")) {
     return CreateWindowsHelperFileOperations();
   }
 #endif

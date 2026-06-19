@@ -34,9 +34,10 @@ public:
     }
     bool valid() const { return polkit_ || embedded_; }
 
-    priv::Result<void> mapBulkBuffer(const priv::proto::SessionId& sid, std::size_t n) {
-        if (polkit_) return polkit_->mapBulkBuffer(sid, n);
-        return embedded_->mapBulkBuffer(sid, n);
+    priv::Result<void> mapBulkBuffer(const priv::proto::SessionId& sid, std::size_t n,
+                                     std::uint32_t async_queue_depth = 0) {
+        if (polkit_) return polkit_->mapBulkBuffer(sid, n, async_queue_depth);
+        return embedded_->mapBulkBuffer(sid, n, async_queue_depth);
     }
     void* bulkBufferBase() const {
         return polkit_ ? polkit_->bulkBufferBase() : embedded_->bulkBufferBase();
@@ -77,8 +78,10 @@ std::size_t maxZeroCopyRingBytes() {
 
 bool useLinuxHelperPath() {
 #if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
-    const char* use = std::getenv("RPI_IMAGER_USE_LINUX_HELPER");
-    if (use && use[0] == '1') return true;
+    if (::geteuid() == 0) {
+        return true;
+    }
+    return preferNativePrivilegedHelper("RPI_IMAGER_USE_LINUX_HELPER");
 #endif
     return ::geteuid() == 0;
 }
@@ -226,7 +229,10 @@ FileError LinuxHelperFileOperations::OpenDevice(const std::string& path) {
         std::lock_guard<std::mutex> lk(state_->mutex);
         state_->total_size = limits.value.total_bytes();
         device_io_limits_.max_transfer_bytes = limits.value.max_transfer_bytes();
-        device_io_limits_.suggested_queue_depth = 0;  // helper handles it
+        if (limits.value.suggested_queue_depth() > 0) {
+            device_io_limits_.suggested_queue_depth =
+                static_cast<int>(limits.value.suggested_queue_depth());
+        }
     } else {
         std::lock_guard<std::mutex> lk(state_->mutex);
         state_->total_size = 0;
@@ -460,7 +466,9 @@ bool LinuxHelperFileOperations::SetAsyncQueueDepth(int depth) {
 
     const std::size_t ring_bytes =
         static_cast<std::size_t>(depth) * state_->slot_bytes;
-    auto map_r = bulk.mapBulkBuffer(state_->session_id, ring_bytes);
+    const int pipeline_depth = device_io_limits_.capAsyncQueueDepth(depth);
+    auto map_r = bulk.mapBulkBuffer(state_->session_id, ring_bytes,
+                                      static_cast<std::uint32_t>(pipeline_depth));
     if (!map_r.ok) {
         FileOperationsLog("LinuxHelperFileOperations: mapBulkBuffer failed: "
                           + map_r.error.detail());
@@ -491,6 +499,7 @@ bool LinuxHelperFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t
         return false;
     }
     const std::size_t ring_bytes = count * slotSize;
+    const int pipeline_depth = device_io_limits_.capAsyncQueueDepth(static_cast<int>(count));
 
     std::lock_guard<std::mutex> lk(state_->mutex);
     if (!state_->open) return false;        // copy-ring (if any) left intact
@@ -500,7 +509,8 @@ bool LinuxHelperFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t
     // NOTE: the client-side mapBulkBuffer tears down the prior (copy-ring)
     // mapping *before* establishing the new one, so once we call it the
     // copy ring is gone regardless of the outcome.
-    auto map_r = bulk.mapBulkBuffer(state_->session_id, ring_bytes);
+    auto map_r = bulk.mapBulkBuffer(state_->session_id, ring_bytes,
+                                      static_cast<std::uint32_t>(pipeline_depth));
     void* base = map_r.ok ? bulk.bulkBufferBase() : nullptr;
     if (!base || bulk.bulkBufferSize() < ring_bytes) {
         // Map failed and the copy ring is already gone. Degrade to the

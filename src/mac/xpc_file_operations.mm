@@ -204,7 +204,10 @@ FileError XpcFileOperations::OpenDevice(const std::string& path) {
         std::lock_guard<std::mutex> lk(state_->mutex);
         state_->total_size = limits.value.total_bytes();
         device_io_limits_.max_transfer_bytes = limits.value.max_transfer_bytes();
-        device_io_limits_.suggested_queue_depth = 0;  // helper handles it
+        if (limits.value.suggested_queue_depth() > 0) {
+            device_io_limits_.suggested_queue_depth =
+                static_cast<int>(limits.value.suggested_queue_depth());
+        }
     } else {
         std::lock_guard<std::mutex> lk(state_->mutex);
         state_->total_size = 0;
@@ -469,7 +472,9 @@ bool XpcFileOperations::SetAsyncQueueDepth(int depth) {
 
     const std::size_t ring_bytes =
         static_cast<std::size_t>(depth) * state_->slot_bytes;
-    auto map_r = xpc->mapBulkBuffer(state_->session_id, ring_bytes);
+    const int pipeline_depth = device_io_limits_.capAsyncQueueDepth(depth);
+    auto map_r = xpc->mapBulkBuffer(state_->session_id, ring_bytes,
+                                      static_cast<std::uint32_t>(pipeline_depth));
     if (!map_r.ok) {
         FileOperationsLog("XpcFileOperations: mapBulkBuffer failed: "
                           + map_r.error.detail());
@@ -500,6 +505,7 @@ bool XpcFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t slotSiz
         return false;
     }
     const std::size_t ring_bytes = count * slotSize;
+    const int pipeline_depth = device_io_limits_.capAsyncQueueDepth(static_cast<int>(count));
 
     std::lock_guard<std::mutex> lk(state_->mutex);
     if (!state_->open) return false;        // copy-ring (if any) left intact
@@ -509,7 +515,8 @@ bool XpcFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t slotSiz
     // NOTE: the client-side mapBulkBuffer tears down the prior (copy-ring)
     // mapping *before* establishing the new one, so once we call it the
     // copy ring is gone regardless of the outcome.
-    auto map_r = xpc->mapBulkBuffer(state_->session_id, ring_bytes);
+    auto map_r = xpc->mapBulkBuffer(state_->session_id, ring_bytes,
+                                      static_cast<std::uint32_t>(pipeline_depth));
     void* base = map_r.ok ? xpc->bulkBufferBase() : nullptr;
     if (!base || xpc->bulkBufferSize() < ring_bytes) {
         // Map failed and the copy ring is already gone. Degrade to the

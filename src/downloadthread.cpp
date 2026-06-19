@@ -416,17 +416,13 @@ bool DownloadThread::_openAndPrepareDevice()
         const auto& limits = _file->GetDeviceIOLimits();
         if (_debugAsyncIO && limits.suggested_queue_depth > 0 && !_debugIgnoreDeviceLimits)
         {
-            // Use 3x the device's queue depth for write-ahead latency hiding.
-            // Network downloads feed the write queue in bursts (jitter + decompression),
-            // so we need more headroom than pure sequential I/O to prevent device
-            // starvation during pipeline stalls.  See #1592.
-            int deviceCap = qMax(4, limits.suggested_queue_depth * 3);
-            if (deviceCap < _debugAsyncQueueDepth)
+            const int capped = limits.capAsyncQueueDepth(_debugAsyncQueueDepth);
+            if (capped < _debugAsyncQueueDepth)
             {
                 qDebug() << "Capping async queue depth from" << _debugAsyncQueueDepth
-                         << "to" << deviceCap
+                         << "to" << capped
                          << "(device suggested:" << limits.suggested_queue_depth << ")";
-                _debugAsyncQueueDepth = deviceCap;
+                _debugAsyncQueueDepth = capped;
             }
         }
         if (limits.max_transfer_bytes > 0)
