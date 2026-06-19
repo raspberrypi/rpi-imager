@@ -23,6 +23,7 @@ override_dh_clean:
 		debian/com.raspberrypi.rpi-imager.metainfo.xml
 	rm -f debian/files debian/*.substvars debian/*.debhelper.log \
 		debian/debhelper-build-stamp
+	rm -f rpi-imager-embedded*.deb screenshot.png
 
 # Desktop .deb installs pre-built AppImages and does not run a full CMake
 # build, but still needs metainfo.xml configured with the git version.

@@ -38,6 +38,7 @@ appimage-*
 # Embedded .deb build tree (created by create-embedded.sh)
 debroot-embedded-*
 rpi-imager-embedded*.deb
+screenshot.png
 
 # Qt related
 qt-build**
