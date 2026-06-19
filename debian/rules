@@ -1,6 +1,11 @@
 #!/usr/bin/make -f
 export DH_VERBOSE = 1
 
+# Reproducible source tarballs: dpkg-source clamps mtimes newer than this
+# value, but older checkout timestamps still differ across builders unless
+# we normalise tracked files here (clean runs immediately before dpkg-source).
+export SOURCE_DATE_EPOCH := $(shell dpkg-parsechangelog -STimestamp 2>/dev/null)
+
 # Get the list of packages that should be built based on build profiles
 PACKAGES := $(shell dh_listpackages)
 
@@ -26,6 +31,20 @@ override_dh_clean:
 	rm -f rpi-imager-embedded*.deb qt/language_filters.json \
 		src/.qmlls.ini
 	rm -f doc/performance/*.html
+	@if [ -n "$(SOURCE_DATE_EPOCH)" ]; then \
+		git ls-files -z | xargs -0 -r touch -hcd @$(SOURCE_DATE_EPOCH); \
+		git ls-files | awk -F/ '{ \
+			p=""; \
+			for (i=1; i<NF; i++) { \
+				p=(i>1 ? p "/" : "") $$i; \
+				dirs[p]; \
+			} \
+		} END { for (d in dirs) print d }' | sort -u | \
+			while IFS= read -r d; do \
+				touch -hcd @$(SOURCE_DATE_EPOCH) "$$d"; \
+			done; \
+		touch -hcd @$(SOURCE_DATE_EPOCH) .; \
+	fi
 
 # Desktop .deb installs pre-built AppImages and does not run a full CMake
 # build, but still needs metainfo.xml configured with the git version.
