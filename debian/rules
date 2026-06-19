@@ -23,7 +23,7 @@ override_dh_clean:
 		debian/com.raspberrypi.rpi-imager.metainfo.xml
 	rm -f debian/files debian/*.substvars debian/*.debhelper.log \
 		debian/debhelper-build-stamp debian/*debhelper*
-	rm -f rpi-imager-embedded*.deb screenshot.png qt/language_filters.json \
+	rm -f rpi-imager-embedded*.deb qt/language_filters.json \
 		src/.qmlls.ini
 	rm -f doc/performance/*.html
 
