@@ -25,6 +25,7 @@ WizardStepBase {
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
     title: qsTr("Customisation: Choose Wi‑Fi")
+    subtitle: qsTr("If you will use a network cable only, you can skip Wi‑Fi setup below.")
     showSkipButton: true
     nextButtonAccessibleDescription: qsTr("Save Wi-Fi settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
@@ -35,9 +36,19 @@ WizardStepBase {
     // Track whether we've already auto-detected SSID/PSK to avoid re-prompting
     property bool ssidAutoDetected: false
 
+    function useWiredEthernetOnly() {
+        fieldWifiSSID.text = ""
+        fieldWifiPassword.text = ""
+        fieldWifiPasswordConfirm.text = ""
+        chkWifiHidden.checked = false
+        wifiMode = "secure"
+        updatePasswordFieldUI()
+        root.nextClicked()
+    }
+
     Component.onCompleted: {
         root.registerFocusGroup("wifi_modes", function() {
-            return [tabSecure, tabOpen]
+            return [btnUseEthernet, tabSecure, tabOpen]
         }, 0)
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("wifi_fields", function(){
@@ -52,14 +63,10 @@ WizardStepBase {
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
 
-        // Set SSID placeholder before prefilling text content
         fieldWifiSSID.placeholderText = qsTr("Network name")
 
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings
-
-        // Set SSID placeholder first (before setting any text)
-        fieldWifiSSID.placeholderText = qsTr("Network name")
 
         // Then set text values after, so they properly override the placeholder
         if (settings.wifiSSID) {
@@ -232,6 +239,20 @@ WizardStepBase {
             width: wifiScroll.availableWidth
 
             WizardSectionContainer {
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacingSmall
+
+                    ImButton {
+                        id: btnUseEthernet
+                        text: qsTr("Use wired Ethernet only")
+                        accessibleDescription: qsTr("Clear Wi-Fi settings and continue to the next step. Other customisation settings are kept.")
+                        onClicked: root.useWiredEthernetOnly()
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Style.spacingSmall
