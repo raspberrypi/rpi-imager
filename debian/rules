@@ -26,10 +26,25 @@ prune-build-tree:
 	rm -f rpi-imager-embedded*.deb qt/language_filters.json \
 		src/.qmlls.ini
 	rm -f doc/performance/*.html
+	@parent="$$(cd .. && pwd)"; \
+		rm -rf "$$parent"/$$(basename "$(CURDIR)").orig.*
 
 .PHONY: override_dh_strip
 override_dh_strip:
 	dh_strip --exclude=rpi-imager
+
+# Desktop/cli packages ship self-contained AppImages; skip shlib scanning
+# (also avoids needing cross-arch objdump when packaging amd64 on arm64).
+.PHONY: override_dh_makeshlibs override_dh_shlibdeps
+override_dh_makeshlibs:
+ifneq (,$(filter rpi-imager-embedded,$(PACKAGES)))
+	dh_makeshlibs
+endif
+
+override_dh_shlibdeps:
+ifneq (,$(filter rpi-imager-embedded,$(PACKAGES)))
+	dh_shlibdeps
+endif
 
 .PHONY: override_dh_clean
 override_dh_clean:

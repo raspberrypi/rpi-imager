@@ -14,10 +14,13 @@ release-source:
 	./debian/release.sh source
 
 release-arm64:
-	./debian/release.sh arch arm64 --build
+	./debian/release.sh arch arm64
 
 release-amd64:
 	./debian/release.sh arch amd64
+
+release-appimages-%:
+	./debian/release.sh appimages $*
 
 release-repo:
 	./debian/release.sh repo

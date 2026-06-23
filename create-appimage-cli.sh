@@ -101,6 +101,18 @@ echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION) fo
 QT_VERSION=""
 QT_DIR=""
 
+# Reject desktop Qt paths — CLI AppImages must use gcc_*_cli builds only.
+validate_cli_qt_dir() {
+	_dir=$1
+	case "$_dir" in
+		*/gcc_64_cli|*/gcc_arm64_cli|*/gcc_arm32_cli) return 0 ;;
+	esac
+	echo "Error: CLI AppImages require a CLI-only Qt build (gcc_*_cli), not desktop Qt." >&2
+	echo "  Refusing: $_dir" >&2
+	echo "  Build one with: ./qt/build-qt-cli.sh" >&2
+	exit 1
+}
+
 # Check if Qt root is specified via command line argument (highest priority)
 if [ -n "$QT_ROOT_ARG" ]; then
     echo "Using Qt from command line argument: $QT_ROOT_ARG"
@@ -109,47 +121,48 @@ if [ -n "$QT_ROOT_ARG" ]; then
 elif [ -n "$Qt6_ROOT" ]; then
     echo "Using Qt from Qt6_ROOT environment variable: $Qt6_ROOT"
     QT_DIR="$Qt6_ROOT"
-# Auto-detect Qt installation in /opt/Qt (look for CLI-specific builds first)
+# Auto-detect CLI Qt in QT_CACHE, then /opt/Qt (gcc_*_cli only)
 else
-    if [ -d "/opt/Qt" ]; then
-        echo "Checking for Qt installations in /opt/Qt..."
-        # Find the newest Qt6 version installed
-        NEWEST_QT=$(find -L /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
+    _qt_search_dirs=""
+    if [ -n "${QT_CACHE:-}" ] && [ -d "$QT_CACHE" ]; then
+        case "$ARCH" in
+            x86_64) _qt_deb_arch=amd64 ;;
+            aarch64) _qt_deb_arch=arm64 ;;
+            armv7l) _qt_deb_arch=armhf ;;
+            *) _qt_deb_arch="" ;;
+        esac
+        if [ -n "$_qt_deb_arch" ] && [ -d "$QT_CACHE/$_qt_deb_arch" ]; then
+            _qt_search_dirs="$QT_CACHE/$_qt_deb_arch"
+        fi
+    fi
+    if [ -z "$_qt_search_dirs" ] && [ -d "/opt/Qt" ]; then
+        _qt_search_dirs="/opt/Qt"
+    fi
+
+    if [ -n "$_qt_search_dirs" ]; then
+        echo "Checking for CLI Qt installations in $_qt_search_dirs..."
+        NEWEST_QT=$(find -L "$_qt_search_dirs" -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
         if [ -n "$NEWEST_QT" ]; then
             QT_VERSION=$(basename "$NEWEST_QT")
             
-            # Find appropriate compiler directory for the architecture
-            # Priority: CLI-specific builds, then regular builds
             if [ "$ARCH" = "x86_64" ]; then
                 if [ -d "$NEWEST_QT/gcc_64_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_64_cli"
-                    echo "Found CLI-optimized Qt build"
-                elif [ -d "$NEWEST_QT/gcc_64" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_64"
-                    echo "Using regular Qt build (consider building CLI-optimized version)"
                 fi
             elif [ "$ARCH" = "aarch64" ]; then
                 if [ -d "$NEWEST_QT/gcc_arm64_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm64_cli"
-                    echo "Found CLI-optimized Qt build"
-                elif [ -d "$NEWEST_QT/gcc_arm64" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_arm64"
-                    echo "Using regular Qt build (consider building CLI-optimized version)"
                 fi
             elif [ "$ARCH" = "armv7l" ]; then
                 if [ -d "$NEWEST_QT/gcc_arm32_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm32_cli"
-                    echo "Found CLI-optimized Qt build"
-                elif [ -d "$NEWEST_QT/gcc_arm32" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_arm32"
-                    echo "Using regular Qt build (consider building CLI-optimized version)"
                 fi
             fi
             
             if [ -n "$QT_DIR" ]; then
-                echo "Found Qt $QT_VERSION for $ARCH at $QT_DIR"
-            else
-                echo "Found Qt $QT_VERSION, but no binary directory for $ARCH"
+                echo "Found CLI Qt $QT_VERSION for $ARCH at $QT_DIR"
+            elif [ -n "$QT_VERSION" ]; then
+                echo "Found Qt $QT_VERSION, but no CLI build for $ARCH (gcc_*_cli)"
                 QT_VERSION=""
             fi
         fi
@@ -158,20 +171,23 @@ fi
 
 # If Qt not found, suggest building it
 if [ -z "$QT_DIR" ]; then
-    echo "Error: No suitable Qt installation found for $ARCH"
+    echo "Error: No CLI-only Qt installation found for $ARCH" >&2
+    echo "Desktop Qt (gcc_64, gcc_arm64, …) must not be used for CLI AppImages." >&2
     
     if [ -f "./qt/build-qt-cli.sh" ]; then
-        echo "You can build a CLI-optimized Qt using:"
-        echo "  ./qt/build-qt-cli.sh --version=6.9.1"
-        echo "Or specify the Qt location with:"
-        echo "  $0 --qt-root=/path/to/qt"
+        echo "Build a CLI-only Qt with:" >&2
+        echo "  debian/ensure-qt.sh <arch>" >&2
+        echo "Or specify the CLI Qt path with:" >&2
+        echo "  $0 --qt-root=/opt/Qt/VERSION/gcc_*_cli" >&2
     else
-        echo "You can specify the Qt location with:"
-        echo "  $0 --qt-root=/path/to/qt"
+        echo "Specify the CLI Qt path with:" >&2
+        echo "  $0 --qt-root=/path/to/gcc_*_cli" >&2
     fi
     
     exit 1
 fi
+
+validate_cli_qt_dir "$QT_DIR"
 
 # Check if Qt Version
 if [ -f "$QT_DIR/bin/qmake" ]; then

@@ -112,16 +112,29 @@ elif [ -n "$Qt6_ROOT" ]; then
         QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
         echo "Qt version: $QT_VERSION"
     fi
-# Auto-detect Qt installation in /opt/Qt
+# Auto-detect Qt in QT_CACHE (per-arch release cache), then /opt/Qt
 else
-    if [ -d "/opt/Qt" ]; then
-        echo "Checking for Qt installations in /opt/Qt..."
-        # Find the newest Qt6 version installed
-        NEWEST_QT=$(find -L /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
+    _qt_search_dirs=""
+    if [ -n "${QT_CACHE:-}" ] && [ -d "$QT_CACHE" ]; then
+        case "$ARCH" in
+            x86_64) _qt_deb_arch=amd64 ;;
+            aarch64) _qt_deb_arch=arm64 ;;
+            *) _qt_deb_arch="" ;;
+        esac
+        if [ -n "$_qt_deb_arch" ] && [ -d "$QT_CACHE/$_qt_deb_arch" ]; then
+            _qt_search_dirs="$QT_CACHE/$_qt_deb_arch"
+        fi
+    fi
+    if [ -z "$_qt_search_dirs" ] && [ -d "/opt/Qt" ]; then
+        _qt_search_dirs="/opt/Qt"
+    fi
+
+    if [ -n "$_qt_search_dirs" ]; then
+        echo "Checking for Qt installations in $_qt_search_dirs..."
+        NEWEST_QT=$(find -L "$_qt_search_dirs" -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
         if [ -n "$NEWEST_QT" ]; then
             QT_VERSION=$(basename "$NEWEST_QT")
             
-            # Find appropriate compiler directory for the architecture
             if [ "$ARCH" = "x86_64" ]; then
                 if [ -d "$NEWEST_QT/gcc_64" ]; then
                     QT_DIR="$NEWEST_QT/gcc_64"
@@ -148,7 +161,8 @@ if [ -z "$QT_DIR" ]; then
     
     if [ -f "./qt/build-qt.sh" ]; then
         echo "You can build Qt using the provided script:"
-        echo "  ./qt/build-qt.sh --version=6.9.1"
+        echo "  debian/ensure-qt.sh <arch>"
+        echo "  ./qt/build-qt.sh"
         echo "Or specify the Qt location with:"
         echo "  $0 --qt-root=/path/to/qt"
         echo "  export Qt6_ROOT=/path/to/qt"

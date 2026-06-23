@@ -2,7 +2,8 @@
 # Optional one-time sbuild/schroot setup for isolated builds.
 #
 # Reads debian/release.conf when present so paths match release.sh.
-# Creates chroots for the host architecture and, when possible, amd64.
+# Creates chroots for arm64 and amd64, provisions build deps, and bind-mounts
+# the AppImage and Qt caches at the same absolute paths inside chroots.
 #
 # Usage:
 #   sudo debian/sbuild-setup.sh
@@ -32,6 +33,8 @@ OUTPUT_DIR=${OUTPUT_DIR:-out/debian}
 OUTPUT_DIR=$(resolve_repo_path "$OUTPUT_DIR")
 APPIMAGE_ROOT=${APPIMAGE_ROOT:-.debian/appimages}
 APPIMAGE_ROOT=$(resolve_repo_path "$APPIMAGE_ROOT")
+QT_CACHE=${QT_CACHE:-.debian/qt}
+QT_CACHE=$(resolve_repo_path "$QT_CACHE")
 SBUILD_DIST=${SBUILD_DIST:-trixie}
 SBUILD_CHROOT_SUFFIX=${SBUILD_CHROOT_SUFFIX:-sbuild}
 MIRROR=${MIRROR:-http://deb.debian.org/debian}
@@ -47,19 +50,27 @@ apt-get update
 apt-get install -y sbuild schroot debootstrap qemu-user-static binfmt-support \
 	uidmap git-buildpackage
 
-install -d -m 0755 "$OUTPUT_DIR" "$APPIMAGE_ROOT/arm64" \
-	"$APPIMAGE_ROOT/amd64" "$APPIMAGE_ROOT/armhf"
-chown -R "$SBUILD_USER:$SBUILD_USER" "$OUTPUT_DIR" "$APPIMAGE_ROOT"
+install -d -m 0755 "$OUTPUT_DIR" \
+	"$APPIMAGE_ROOT/arm64" "$APPIMAGE_ROOT/amd64" "$APPIMAGE_ROOT/armhf" \
+	"$QT_CACHE/arm64" "$QT_CACHE/amd64" "$QT_CACHE/armhf"
+chown -R "$SBUILD_USER:$SBUILD_USER" "$OUTPUT_DIR" "$APPIMAGE_ROOT" "$QT_CACHE"
 
-# Bind-mount the configured AppImage cache at the same absolute path in chroots.
+# Bind-mount release caches at identical absolute paths inside chroots.
 FSTAB=/etc/schroot/default/fstab
-if ! grep -q "$APPIMAGE_ROOT" "$FSTAB" 2>/dev/null; then
-	cat >>"$FSTAB" <<EOF
+bind_fstab() {
+	_path=$1
+	_label=$2
+	if ! grep -q "$_path" "$FSTAB" 2>/dev/null; then
+		cat >>"$FSTAB" <<EOF
 
-# rpi-imager AppImage cache (host -> chroot)
-$APPIMAGE_ROOT $APPIMAGE_ROOT none rw,bind 0 0
+# rpi-imager $_label (host -> chroot)
+$_path $_path none rw,bind 0 0
 EOF
-fi
+	fi
+}
+
+bind_fstab "$APPIMAGE_ROOT" "AppImage cache"
+bind_fstab "$QT_CACHE" "Qt cache"
 
 create_chroot() {
 	arch=$1
@@ -85,10 +96,10 @@ create_chroot() {
 	fi
 }
 
-create_chroot "$HOST_ARCH"
-if [ "$HOST_ARCH" != amd64 ]; then
-	create_chroot amd64
-fi
+for arch in arm64 amd64; do
+	create_chroot "$arch"
+	"$TOP/debian/sbuild-provision-chroot.sh" "$arch"
+done
 
 sbuild-adduser "$SBUILD_USER"
 
@@ -98,10 +109,14 @@ sbuild-setup: done.
 Configured paths (from debian/release.conf or defaults):
   OUTPUT_DIR=$OUTPUT_DIR
   APPIMAGE_ROOT=$APPIMAGE_ROOT
+  QT_CACHE=$QT_CACHE
+
+Qt is built on first AppImage build (debian/ensure-qt.sh) and cached per arch.
 
 Next steps (as ${SBUILD_USER}):
   debian/release.sh status
   debian/release.sh source
-  debian/release.sh arch ${HOST_ARCH} --build
+  debian/release.sh arch amd64
+  debian/release.sh arch arm64
 
 EOF

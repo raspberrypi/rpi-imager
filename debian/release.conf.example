@@ -7,6 +7,13 @@ OUTPUT_DIR=out/debian
 # Per-arch AppImage cache used by stage-appimages.sh and binary builds.
 APPIMAGE_ROOT=.debian/appimages
 
+# Per-arch Qt cache (desktop + CLI trees). Built automatically on first use.
+QT_CACHE=.debian/qt
+# QT_VERSION=6.11.1
+
+# Qt build policy: auto (default, build on cache miss), cached, or always.
+# QT_BUILD=auto
+
 # sbuild/schroot settings (only needed for isolated builds).
 SBUILD_DIST=trixie
 SBUILD_CHROOT_SUFFIX=sbuild
@@ -17,6 +24,18 @@ BUILDER=auto
 
 # Default profiles for desktop/cli packages.
 DEB_BUILD_PROFILES=desktop cli
+
+# AppImage build policy: always (default) or cached (sync staged files only).
+APPIMAGE_BUILD=always
+
+# Cross-arch AppImage builders (SSH fallback when no sbuild chroot exists).
+# APPIMAGE_REMOTE_arm64=tdewey@pi5
+# APPIMAGE_REMOTE_DIR_arm64=/home/tdewey/rpi-imager
+# Or combined:
+# APPIMAGE_REMOTE_amd64=builder@amd64-vm:/home/builder/rpi-imager
+
+# Architectures for: debian/release.sh repo
+# RELEASE_ARCHES="arm64 amd64"
 
 # Optional upload target for: debian/release.sh repo
 # DPUT_HOST=pi-internal

@@ -15,10 +15,11 @@ ARCH="${1:?usage: sync-appimages.sh <arm64|amd64|armhf>}"
 SRC_DIR=${SRC_DIR:-$TOP}
 DEST="$APPIMAGE_ROOT/$ARCH"
 
-pick_newest() {
-	pattern=$1
+pick_in_dir() {
+	_dir=$1
+	_pattern=$2
 	# shellcheck disable=SC2086
-	ls -1t $SRC_DIR/$pattern 2>/dev/null | head -1
+	ls -1t $_dir/$_pattern 2>/dev/null | head -1
 }
 
 IMG_ARCH=$(deb_to_image_arch "$ARCH")
@@ -31,8 +32,14 @@ copy_one() {
 	dest_name=$3
 
 	if [ -z "$src" ] || [ ! -e "$src" ]; then
-		echo "sync-appimages: missing $label for $ARCH (tried $SRC_DIR)" >&2
+		echo "sync-appimages: missing $label for $ARCH (tried $SRC_DIR and $DEST)" >&2
 		return 1
+	fi
+
+	if [ "$(dirname "$src")" = "$DEST" ]; then
+		ln -sfn "$(basename "$src")" "$DEST/$dest_name"
+		echo "sync-appimages: $dest_name -> $DEST/$(basename "$src")"
+		return 0
 	fi
 
 	cp -f "$src" "$DEST/$(basename "$src")"
@@ -40,8 +47,16 @@ copy_one() {
 	echo "sync-appimages: $dest_name -> $DEST/$(basename "$src")"
 }
 
-DESKTOP=$(pick_newest "Raspberry_Pi_Imager-*-desktop-${IMG_ARCH}.AppImage")
-CLI=$(pick_newest "Raspberry_Pi_Imager-*-cli-${IMG_ARCH}.AppImage")
+DESKTOP=$(pick_in_dir "$SRC_DIR" "Raspberry_Pi_Imager-*-desktop-${IMG_ARCH}.AppImage")
+CLI=$(pick_in_dir "$SRC_DIR" "Raspberry_Pi_Imager-*-cli-${IMG_ARCH}.AppImage")
+
+# Fall back to files already placed in the cache directory.
+if [ -z "$DESKTOP" ]; then
+	DESKTOP=$(pick_in_dir "$DEST" "Raspberry_Pi_Imager-*-desktop-${IMG_ARCH}.AppImage")
+fi
+if [ -z "$CLI" ]; then
+	CLI=$(pick_in_dir "$DEST" "Raspberry_Pi_Imager-*-cli-${IMG_ARCH}.AppImage")
+fi
 
 copy_one desktop "$DESKTOP" "rpi-imager-${IMG_ARCH}.AppImage"
 copy_one cli "$CLI" "rpi-imager-cli-${IMG_ARCH}.AppImage"

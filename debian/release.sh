@@ -4,9 +4,8 @@
 # Usage:
 #   debian/release.sh status
 #   debian/release.sh source [git-ref]
-#   debian/release.sh appimages <arch> [--build]
-#   debian/release.sh binary <arch>
-#   debian/release.sh arch <arch> [--build]
+#   debian/release.sh appimages <arch> [--use-cache]
+#   debian/release.sh arch <arch> [--use-cache]
 #   debian/release.sh repo
 #
 # Configuration (first match wins):
@@ -29,30 +28,53 @@ Usage: debian/release.sh <command> [args]
 Configuration file: $TOP/debian/release.conf (optional)
   OUTPUT_DIR=$OUTPUT_DIR
   APPIMAGE_ROOT=$APPIMAGE_ROOT
+  QT_CACHE=$QT_CACHE
+  QT_VERSION=$QT_VERSION
   BUILDER=$BUILDER
+  APPIMAGE_BUILD=$APPIMAGE_BUILD
+  QT_BUILD=$QT_BUILD
 
 Commands:
   status                 show version, artifacts, AppImages, builder
   source [git-ref]       build quilt source package (default: HEAD)
-  appimages <arch>       sync AppImages to cache
-                         pass --build on native arch to create them first
+  appimages <arch>       build AppImages and sync to cache
+                         --use-cache to skip build and sync staged files only
   binary <arch>          build binary packages (sbuild or local)
-  arch <arch> [--build]  appimages + binary
+  arch <arch> [--use-cache]  appimages + binary
   repo                   source, then arch for each arch in RELEASE_ARCHES
+
+AppImage build (APPIMAGE_BUILD=$APPIMAGE_BUILD):
+  always     rebuild before every sync (default)
+  cached     sync only; use with pre-staged AppImages
+
+Cross-arch AppImages (foreign host): schroot/qemu when a chroot exists,
+then APPIMAGE_REMOTE_<arch> as fallback:
+  APPIMAGE_REMOTE_arm64=user@pi5:/home/tdewey/rpi-imager
 
 Examples:
   cp debian/release.conf.example debian/release.conf
   debian/release.sh status
-  debian/release.sh arch arm64 --build
+  debian/release.sh arch arm64
+  debian/release.sh appimages amd64 --use-cache
   RELEASE_ARCHES="arm64 amd64" debian/release.sh repo
 EOF
 }
 
 artifact_ok() {
-	_dir=$1
-	_img_arch=$2
-	test -e "$_dir/rpi-imager-${_img_arch}.AppImage" && \
-		test -e "$_dir/rpi-imager-cli-${_img_arch}.AppImage"
+	appimage_cache_ok "$1"
+}
+
+should_build_appimages() {
+	_explicit=${1:-}
+
+	case "$_explicit" in
+		--use-cache) return 1 ;;
+	esac
+
+	case "$APPIMAGE_BUILD" in
+		cached|use-cache|never) return 1 ;;
+	esac
+	return 0
 }
 
 cmd_status() {
@@ -62,7 +84,9 @@ cmd_status() {
 	echo "tree:          $TOP"
 	echo "output dir:    $OUTPUT_DIR"
 	echo "appimage root: $APPIMAGE_ROOT"
+	echo "qt cache:      $QT_CACHE (Qt $QT_VERSION, QT_BUILD=$QT_BUILD)"
 	echo "builder:       $BUILDER (next build for $HOST_ARCH: $_builder)"
+	echo "appimage build: $APPIMAGE_BUILD"
 	if git -C "$TOP" diff --quiet && git -C "$TOP" diff --cached --quiet; then
 		echo "git:           clean"
 	else
@@ -90,12 +114,25 @@ cmd_status() {
 	echo
 	echo "AppImage cache:"
 	for arch in arm64 amd64 armhf; do
-		img=$(deb_to_image_arch "$arch")
 		dir="$APPIMAGE_ROOT/$arch"
-		if artifact_ok "$dir" "$img"; then
+		if appimage_cache_ok "$arch"; then
 			echo "  ok  $arch ($dir)"
 		elif [ -d "$dir" ]; then
 			echo "  ??  $arch (incomplete, $dir)"
+		else
+			echo "  --  $arch"
+		fi
+		if appimage_remote_host "$arch" 2>/dev/null; then
+			echo "       remote: $APPIMAGE_REMOTE_HOST ($APPIMAGE_REMOTE_DIR)"
+		fi
+	done
+	echo
+	echo "Qt cache (desktop + cli, version $QT_VERSION):"
+	for arch in arm64 amd64 armhf; do
+		if qt_cache_ok "$arch"; then
+			echo "  ok  $arch ($QT_CACHE/$arch/$QT_VERSION)"
+		elif [ -d "$QT_CACHE/$arch" ]; then
+			echo "  ??  $arch (incomplete, $QT_CACHE/$arch)"
 		else
 			echo "  --  $arch"
 		fi
@@ -122,24 +159,12 @@ cmd_source() {
 
 cmd_appimages() {
 	arch=$1
-	build=${2:-}
-	img_arch=$(deb_to_image_arch "$arch")
+	shift
+	explicit=${1:-}
 
-	case "$build" in
-		--build)
-			if [ "$arch" != "$HOST_ARCH" ]; then
-				echo "release: --build only supported for native arch ($HOST_ARCH)" >&2
-				exit 1
-			fi
-			"$TOP/create-appimage.sh" --arch="$img_arch"
-			"$TOP/create-appimage-cli.sh" --arch="$img_arch"
-			;;
-		"") ;;
-		*)
-			echo "release: unknown option: $build" >&2
-			exit 1
-			;;
-	esac
+	if should_build_appimages "$explicit"; then
+		"$TOP/debian/build-appimages.sh" "$arch"
+	fi
 
 	"$TOP/debian/sync-appimages.sh" "$arch"
 }

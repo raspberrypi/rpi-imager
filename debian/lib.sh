@@ -34,11 +34,19 @@ OUTPUT_DIR=$(resolve_repo_path "$OUTPUT_DIR")
 APPIMAGE_ROOT=${APPIMAGE_ROOT:-.debian/appimages}
 APPIMAGE_ROOT=$(resolve_repo_path "$APPIMAGE_ROOT")
 
+QT_CACHE=${QT_CACHE:-.debian/qt}
+QT_CACHE=$(resolve_repo_path "$QT_CACHE")
+QT_VERSION=${QT_VERSION:-6.11.1}
+# auto: build Qt on cache miss (default); cached: require pre-built Qt; always: force rebuild
+QT_BUILD=${QT_BUILD:-auto}
+
 SBUILD_DIST=${SBUILD_DIST:-trixie}
 SBUILD_CHROOT_SUFFIX=${SBUILD_CHROOT_SUFFIX:-sbuild}
 BUILDER=${BUILDER:-auto}
 DEB_BUILD_PROFILES=${DEB_BUILD_PROFILES:-desktop cli}
 DPUT_HOST=${DPUT_HOST:-}
+# always: rebuild AppImages every time (default); cached: sync staged cache only
+APPIMAGE_BUILD=${APPIMAGE_BUILD:-always}
 
 CHANGELOG="$TOP/debian/changelog"
 PACKAGE=$(dpkg-parsechangelog -l"$CHANGELOG" -SSource)
@@ -84,6 +92,110 @@ deb_to_image_arch() {
 	esac
 }
 
+# create-appimage-cli.sh expects armv7l, not armhf.
+cli_image_arch() {
+	case "$1" in
+		armhf) printf '%s\n' armv7l ;;
+		*) deb_to_image_arch "$1" ;;
+	esac
+}
+
+qt_desktop_gcc_dir() {
+	_arch=$1
+	case "$_arch" in
+		amd64) printf '%s\n' gcc_64 ;;
+		arm64) printf '%s\n' gcc_arm64 ;;
+		armhf) printf '%s\n' gcc_arm32 ;;
+		*) return 1 ;;
+	esac
+}
+
+qt_cli_gcc_dir() {
+	_arch=$1
+	case "$_arch" in
+		amd64) printf '%s\n' gcc_64_cli ;;
+		arm64) printf '%s\n' gcc_arm64_cli ;;
+		armhf) printf '%s\n' gcc_arm32_cli ;;
+		*) return 1 ;;
+	esac
+}
+
+qt_version_tree() {
+	_arch=$1
+	printf '%s/%s/%s\n' "$QT_CACHE" "$_arch" "$QT_VERSION"
+}
+
+qt_desktop_path() {
+	_arch=$1
+	_gcc=$(qt_desktop_gcc_dir "$_arch") || return 1
+	printf '%s/%s\n' "$(qt_version_tree "$_arch")" "$_gcc"
+}
+
+qt_cli_path() {
+	_arch=$1
+	_gcc=$(qt_cli_gcc_dir "$_arch") || return 1
+	printf '%s/%s\n' "$(qt_version_tree "$_arch")" "$_gcc"
+}
+
+qt_qmake_ok() {
+	_dir=$1
+	[ -x "$_dir/bin/qmake" ] || return 1
+	_built=$("$_dir/bin/qmake" -query QT_VERSION 2>/dev/null) || return 1
+	[ "$_built" = "$QT_VERSION" ]
+}
+
+qt_desktop_ok() {
+	qt_qmake_ok "$(qt_desktop_path "$1")"
+}
+
+qt_cli_ok() {
+	qt_qmake_ok "$(qt_cli_path "$1")"
+}
+
+qt_cache_ok() {
+	qt_desktop_ok "$1" && qt_cli_ok "$1"
+}
+
 ensure_dirs() {
-	mkdir -p "$OUTPUT_DIR" "$APPIMAGE_ROOT"
+	mkdir -p "$OUTPUT_DIR" "$APPIMAGE_ROOT" \
+		"$QT_CACHE/arm64" "$QT_CACHE/amd64" "$QT_CACHE/armhf"
+}
+
+appimage_cache_ok() {
+	_arch=$1
+	_img_arch=$(deb_to_image_arch "$_arch")
+	_dir="$APPIMAGE_ROOT/$_arch"
+	test -e "$_dir/rpi-imager-${_img_arch}.AppImage" && \
+		test -e "$_dir/rpi-imager-cli-${_img_arch}.AppImage"
+}
+
+# Parse APPIMAGE_REMOTE_<arch> into APPIMAGE_REMOTE_HOST and APPIMAGE_REMOTE_DIR.
+# Formats: user@host  or  user@host:/path/to/rpi-imager
+# APPIMAGE_REMOTE_DIR_<arch> overrides the path when host-only form is used.
+appimage_remote_host() {
+	_arch=$1
+	_spec_var="APPIMAGE_REMOTE_${_arch}"
+	_dir_var="APPIMAGE_REMOTE_DIR_${_arch}"
+
+	eval "_spec=\${$_spec_var:-}"
+	eval "_dir_override=\${$_dir_var:-}"
+
+	APPIMAGE_REMOTE_HOST=
+	APPIMAGE_REMOTE_DIR=
+
+	[ -n "$_spec" ] || return 1
+
+	case "$_spec" in
+		*:*)
+			APPIMAGE_REMOTE_HOST=${_spec%%:*}
+			APPIMAGE_REMOTE_DIR=${_spec#*:}
+			;;
+		*)
+			APPIMAGE_REMOTE_HOST=$_spec
+			APPIMAGE_REMOTE_DIR=${_dir_override:-$TOP}
+			;;
+	esac
+
+	[ -n "$APPIMAGE_REMOTE_HOST" ] || return 1
+	return 0
 }
