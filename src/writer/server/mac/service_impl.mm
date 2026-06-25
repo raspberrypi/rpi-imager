@@ -970,19 +970,37 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     pid_t client_pid = conn ? conn.processIdentifier : 0;
 
     std::string path = devicePath.UTF8String;
-    auto result = da::unmountDisk(path);
-    if (result == da::Result::Success) {
-        auditLogf(@"OK unmount path=%s pid=%d", path.c_str(), client_pid);
-        reply(YES, nil, 0);
-        return;
-    }
 
-    int32_t status = da::lastKernelStatus();
-    auditLogf(@"FAIL unmount path=%s pid=%d kernel_status=%d detail=%s",
-              path.c_str(), client_pid, status,
-              da::lastErrorDetail().c_str());
-    NSString* detail = [NSString stringWithUTF8String:da::lastErrorDetail().c_str()];
-    reply(NO, detail, status);
+    // DiskArbitration must run on the helper main run loop. NSXPC may
+    // deliver this method on a worker thread; hop to the main queue
+    // asynchronously so we never dispatch_sync(main) while the main
+    // thread is parked in CFRunLoopRun (that deadlocks and stalls the
+    // client on "Unmounting drive...").
+    auto finish = ^(da::Result result) {
+        if (result == da::Result::Success) {
+            auditLogf(@"OK unmount path=%s pid=%d", path.c_str(), client_pid);
+            reply(YES, nil, 0);
+            return;
+        }
+
+        int32_t status = da::lastKernelStatus();
+        auditLogf(@"FAIL unmount path=%s pid=%d kernel_status=%d detail=%s",
+                  path.c_str(), client_pid, status,
+                  da::lastErrorDetail().c_str());
+        NSString* detail =
+            [NSString stringWithUTF8String:da::lastErrorDetail().c_str()];
+        reply(NO, detail, status);
+    };
+
+    dispatch_block_t work = ^{
+        finish(da::unmountDisk(path));
+    };
+
+    if ([NSThread isMainThread]) {
+        work();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), work);
+    }
 }
 
 - (void)openDevice:(NSString*)devicePath

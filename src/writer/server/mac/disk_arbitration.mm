@@ -8,9 +8,6 @@
 #import <Foundation/Foundation.h>
 #include <os/log.h>
 
-#include <chrono>
-#include <thread>
-
 namespace rpi_imager::writer::da {
 
 namespace {
@@ -74,14 +71,12 @@ void unmountCallback(DADiskRef /*disk*/, DADissenterRef dissenter, void* context
     auto* ctx = static_cast<DiskOpContext*>(context);
     ctx->result = translateDissenter(dissenter, &ctx->status, &ctx->detail);
     ctx->completed = true;
-    CFRunLoopStop(CFRunLoopGetCurrent());
 }
 
 void ejectCallback(DADiskRef /*disk*/, DADissenterRef dissenter, void* context) {
     auto* ctx = static_cast<DiskOpContext*>(context);
     ctx->result = translateDissenter(dissenter, &ctx->status, &ctx->detail);
     ctx->completed = true;
-    CFRunLoopStop(CFRunLoopGetCurrent());
 }
 
 void ejectAfterUnmountCallback(DADiskRef disk, DADissenterRef dissenter, void* context) {
@@ -89,15 +84,11 @@ void ejectAfterUnmountCallback(DADiskRef disk, DADissenterRef dissenter, void* c
     if (dissenter) {
         ctx->result = translateDissenter(dissenter, &ctx->status, &ctx->detail);
         ctx->completed = true;
-        CFRunLoopStop(CFRunLoopGetCurrent());
     } else {
         DADiskEject(disk, kDADiskEjectOptionDefault, ejectCallback, context);
     }
 }
 
-// Strip /dev/ prefix and validate it's a sane disk identifier. DA wants
-// the BSD name (e.g. "disk7") not the full path. Reject anything that
-// looks like a path traversal attempt.
 bool deviceToBsdName(const std::string& device_path, std::string& bsd) {
     constexpr std::string_view kPrefix = "/dev/";
     if (device_path.compare(0, kPrefix.size(), kPrefix) != 0) {
@@ -107,23 +98,32 @@ bool deviceToBsdName(const std::string& device_path, std::string& bsd) {
     if (bsd.empty() || bsd.find('/') != std::string::npos) {
         return false;
     }
-    // /dev/rdiskN is the raw character device; DA wants the block device
-    // /dev/diskN, so strip the leading 'r' if present.
     if (bsd.size() > 1 && bsd[0] == 'r' && bsd.compare(0, 5, "rdisk") == 0) {
         bsd = bsd.substr(1);
     }
     return true;
 }
 
+// DiskArbitration callbacks are delivered on the run loop the session is
+// scheduled on. The helper's drive-subscription session uses mainRunLoop
+// for the same reason (see service_impl.mm).
 Result runDiskOperation(const std::string& device_path,
                          DADiskUnmountCallback callback,
                          int max_retries = 12) {
+    if (![NSThread isMainThread]) {
+        g_last_status = 0;
+        g_last_detail = "DiskArbitration must run on the main thread";
+        return Result::Error;
+    }
+
     std::string bsd;
     if (!deviceToBsdName(device_path, bsd)) {
         g_last_status = 0;
         g_last_detail = "invalid device path: " + device_path;
         return Result::InvalidDrive;
     }
+
+    CFRunLoopRef run_loop = [[NSRunLoop mainRunLoop] getCFRunLoop];
 
     DiskOpContext context;
     DASessionRef session = DASessionCreate(kCFAllocatorDefault);
@@ -141,28 +141,28 @@ Result runDiskOperation(const std::string& device_path,
         return Result::InvalidDrive;
     }
 
+    DASessionScheduleWithRunLoop(session, run_loop, kCFRunLoopDefaultMode);
+
     DADiskUnmount(disk,
                   kDADiskUnmountOptionWhole | kDADiskUnmountOptionForce,
                   callback, &context);
 
-    DASessionScheduleWithRunLoop(session, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-
     int retries = 0;
     while (!context.completed && retries < max_retries * 100) {
-        SInt32 status = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
-        if (status == kCFRunLoopRunStopped || status == kCFRunLoopRunFinished) {
-            break;
-        }
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
         retries++;
     }
 
-    DASessionUnscheduleFromRunLoop(session, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    DASessionUnscheduleFromRunLoop(session, run_loop, kCFRunLoopDefaultMode);
     CFRelease(disk);
     CFRelease(session);
 
     if (!context.completed) {
         g_last_status = 0;
         g_last_detail = "timeout";
+        os_log_error(writer_log(),
+                     "runDiskOperation: timeout on %{public}s after %d iterations",
+                     bsd.c_str(), retries);
         return Result::Busy;
     }
 
