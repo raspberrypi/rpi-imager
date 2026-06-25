@@ -491,4 +491,9 @@ qreal fontDpiCorrection()
     return 1.0;
 }
 
+void logFontEngine()
+{
+    qDebug() << "Font engine: Core Text";
+}
+
 } // namespace PlatformQuirks

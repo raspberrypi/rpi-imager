@@ -24,6 +24,7 @@
 #include <QDebug>
 #include <QFont>
 #include <QFontDatabase>
+#include <QString>
 
 namespace {
     // Network monitoring state
@@ -212,6 +213,66 @@ static bool hasNvidiaGraphicsCard() {
     return foundNvidia;
 }
 
+// Qt 6.11 defaults to DirectWrite on Windows, which corrupts uppercase button
+// text on some systems (https://github.com/raspberrypi/rpi-imager/issues/1648).
+// Force the cross-platform FreeType engine before QGuiApplication starts.
+static QByteArray ensureWindowsFreeTypeFontEngine()
+{
+    static constexpr char kFreeTypeArg[] = "fontengine=freetype";
+    QByteArray platform = qgetenv("QT_QPA_PLATFORM");
+
+    if (platform.isEmpty()) {
+        return QByteArrayLiteral("windows:") + kFreeTypeArg;
+    }
+
+    if (platform.contains(kFreeTypeArg)) {
+        return platform;
+    }
+
+    const int fontEngineIdx = platform.indexOf("fontengine=");
+    if (fontEngineIdx >= 0) {
+        const int commaIdx = platform.indexOf(',', fontEngineIdx);
+        platform.remove(fontEngineIdx,
+                        (commaIdx < 0 ? platform.size() : commaIdx) - fontEngineIdx);
+        if (platform.endsWith(',')) {
+            platform.chop(1);
+        }
+    }
+
+    if (!platform.contains(':')) {
+        if (platform == "windows") {
+            platform = QByteArrayLiteral("windows:");
+        } else {
+            platform = QByteArrayLiteral("windows:") + platform;
+        }
+    }
+
+    if (!platform.endsWith(':') && !platform.endsWith(',')) {
+        platform += ',';
+    }
+
+    return platform + kFreeTypeArg;
+}
+
+static QString windowsFontEngineFromPlatformArgs(const QByteArray &platformArgs)
+{
+    const QString args = QString::fromLatin1(platformArgs);
+    const int idx = args.indexOf(QStringLiteral("fontengine="), Qt::CaseInsensitive);
+    if (idx < 0) {
+        if (args.contains(QStringLiteral("nodirectwrite"), Qt::CaseInsensitive)) {
+            return QStringLiteral("gdi");
+        }
+        return QStringLiteral("directwrite (default)");
+    }
+
+    const int start = idx + QStringLiteral("fontengine=").size();
+    int end = args.indexOf(QLatin1Char(','), start);
+    if (end < 0) {
+        end = args.size();
+    }
+    return args.mid(start, end - start);
+}
+
 void applyQuirks() {
     // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
     // for the main thread. This prevents Windows from showing modal dialogs
@@ -228,6 +289,9 @@ void applyQuirks() {
     if (hasNvidiaGraphicsCard()) {
         SetEnvironmentVariableA("QSG_RHI_PREFER_SOFTWARE_RENDERER", "1");
     }
+
+    const QByteArray fontPlatform = ensureWindowsFreeTypeFontEngine();
+    qputenv("QT_QPA_PLATFORM", fontPlatform);
 
     // make imager single instance because of rpi-connect callback server
     // will be automatically released once the process exits cleanly or crashes
@@ -809,6 +873,13 @@ qreal detectTextScaleFactor()
 qreal fontDpiCorrection()
 {
     return 72.0 / 96.0;
+}
+
+void logFontEngine()
+{
+    const QByteArray platform = qgetenv("QT_QPA_PLATFORM");
+    qDebug() << "Font engine:" << windowsFontEngineFromPlatformArgs(platform)
+             << "(QT_QPA_PLATFORM =" << platform << ")";
 }
 
 } // namespace PlatformQuirks

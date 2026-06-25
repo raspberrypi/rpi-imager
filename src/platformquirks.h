@@ -135,6 +135,14 @@ namespace PlatformQuirks {
     bool prefersReducedMotion();
 
     /**
+     * Log the configured font engine for the current platform.
+     *
+     * On Windows this reflects the fontengine= value in QT_QPA_PLATFORM
+     * (set by applyQuirks()). Must be called AFTER QGuiApplication is created.
+     */
+    void logFontEngine();
+
+    /**
      * Detect the platform's preferred text scaling factor.
      *
      * Returns a multiplier (1.0 = no scaling, 1.5 = 150%, etc.) reflecting
