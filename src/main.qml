@@ -361,8 +361,8 @@ ApplicationWindow {
     }
 
     // Privileged-helper UX (macOS SMAppService). Shown automatically when
-    // the helper isn't ready: either we need to register it for the first
-    // time, or the user has to flip the toggle in System Settings.
+    // the helper isn't ready: first-time install, disabled in Settings,
+    // or registered but unreachable over XPC.
     PrivilegedHelperDialog {
         id: privilegedHelperDialog
         parent: overlayRoot
@@ -382,7 +382,8 @@ ApplicationWindow {
         if (!ImageWriterSingleton) return
         const s = ImageWriterSingleton.privilegedHelperState
         if (s === ImageWriter.NeedsInstall ||
-            s === ImageWriter.NeedsApproval) {
+            s === ImageWriter.NeedsApproval ||
+            s === ImageWriter.Unknown) {
             if (!privilegedHelperDialog.opened) privilegedHelperDialog.open()
         } else if (privilegedHelperDialog.opened) {
             privilegedHelperDialog.close()
@@ -402,15 +403,15 @@ ApplicationWindow {
         }
     }
     Timer {
-        // While the user is parked on the "open System Settings" dialog,
-        // re-probe periodically so that flipping the toggle closes the
-        // dialog without further interaction. Cheap (one SMAppService.status
-        // read) so 2 s polling is fine.
+        // While the user is parked on the helper dialog, re-probe
+        // periodically so that enabling it in Settings closes the
+        // dialog without further interaction.
         interval: 2000
         repeat: true
         running: privilegedHelperDialog.opened
                   && ImageWriterSingleton
-                  && ImageWriterSingleton.privilegedHelperState === ImageWriter.NeedsApproval
+                  && (ImageWriterSingleton.privilegedHelperState === ImageWriter.NeedsApproval
+                      || ImageWriterSingleton.privilegedHelperState === ImageWriter.Unknown)
         onTriggered: {
             ImageWriterSingleton.refreshPrivilegedHelperState()
         }

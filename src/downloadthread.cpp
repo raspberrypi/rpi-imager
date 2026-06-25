@@ -16,6 +16,7 @@
 #include "timeout_utils.h"
 #include "platformquirks.h"
 #include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
 #include "drivelist/drivelist.h"
 #include <fstream>
 #include <sstream>
@@ -233,6 +234,7 @@ bool DownloadThread::_openAndPrepareDevice()
         // all child volumes (APFS containers, partitions, etc.)
         QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
         qDebug() << "Unmounting via PAL:" << unmountPath;
+
         // Route through IPrivilegedWriter rather than calling
         // PlatformQuirks::unmountDisk directly, so the active backend (the
         // macOS helper, or the LocalShimBackend elsewhere) handles it
@@ -247,6 +249,13 @@ bool DownloadThread::_openAndPrepareDevice()
                      << QString::fromStdString(unmountResult.error.detail())
                      << "(code" << unmountResult.error.code() << ")";
 #ifdef Q_OS_DARWIN
+            if (unmountResult.error.code()
+                    == rpi_imager::privileged::proto::ERROR_HELPER_NOT_INSTALLED) {
+                emit privilegedHelperRequired();
+                emit error(tr("Raspberry Pi Imager cannot write to storage devices "
+                              "because the privileged helper is not available."));
+                return false;
+            }
             emit error(tr("Failed to unmount disk '%1'. Please close any applications using the disk and try again.").arg(unmountPath));
 #else
             emit error(tr("Failed to unmount disk '%1'.").arg(unmountPath));

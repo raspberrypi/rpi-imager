@@ -254,7 +254,12 @@ signals:
     void eventDrainAndHotSwap(quint32 durationMs, int pendingBefore, bool success); // Drained queue and switched to sync
     void syncFallbackActivated(QString reason); // Async I/O stalled, fell back to sync mode
     void requestWriteRestart(QString reason);  // Request ImageWriter to restart write from scratch
-    
+
+    // macOS: helper not installed, disabled, or unreachable. ImageWriter
+    // refreshes privilegedHelperState so QML can surface the helper dialog
+    // instead of a misleading "failed to unmount" message.
+    void privilegedHelperRequired();
+
     // Write timing breakdown signals (for hypothesis testing)
     void eventWriteTimingBreakdown(quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
                                    quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount);

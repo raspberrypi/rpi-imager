@@ -1189,6 +1189,8 @@ void ImageWriter::_configureWriteThread()
 
     connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
+    connect(_thread, &DownloadThread::privilegedHelperRequired,
+            this, &ImageWriter::refreshPrivilegedHelperState);
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
     connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);

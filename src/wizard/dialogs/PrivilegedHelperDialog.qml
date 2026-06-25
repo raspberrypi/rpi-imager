@@ -11,7 +11,7 @@ import QtQuick.Layouts
 import "../../qmlcomponents"
 import RpiImager
 
-// Two states served by one dialog:
+// Three states served by one dialog:
 //
 //   1. NeedsInstall  – SMAppService has never been registered for this
 //      bundle. The "Continue" button calls the C++ side which invokes
@@ -23,8 +23,12 @@ import RpiImager
 //      prompt, or they disabled it later). Offers a deep-link button
 //      that opens the Login Items pane.
 //
+//   3. Unknown – Registered/enabled according to SMAppService but the
+//      helper did not respond over XPC (disabled in Background Items,
+//      mismatched/unsigned build, etc.).
+//
 // The owning view binds `state` to ImageWriter.privilegedHelperState
-// and shows the dialog when state ∈ { NeedsInstall, NeedsApproval }.
+// and shows the dialog when state ∈ { NeedsInstall, NeedsApproval, Unknown }.
 BaseDialog {
     id: root
 
@@ -33,6 +37,8 @@ BaseDialog {
         helperState === ImageWriter.NeedsInstall
     readonly property bool isNeedsApproval:
         helperState === ImageWriter.NeedsApproval
+    readonly property bool isNeedsAttention:
+        helperState === ImageWriter.Unknown
 
     function escapePressed() {
         root.reject()
@@ -43,17 +49,20 @@ BaseDialog {
             return [titleText, descriptionText, hintText]
         }, 0)
         registerFocusGroup("buttons", function(){
-            return root.isNeedsApproval
-                ? [cancelButton, openSettingsButton]
-                : [cancelButton, primaryButton]
+            if (root.isNeedsApproval || root.isNeedsAttention) {
+                return [cancelButton, openSettingsButton]
+            }
+            return [cancelButton, primaryButton]
         }, 1)
     }
 
     Text {
         id: titleText
-        text: root.isNeedsApproval
-              ? qsTr("Allow Raspberry Pi Imager Privileged Helper")
-              : qsTr("Privileged Helper required")
+        text: root.isNeedsAttention
+              ? qsTr("Privileged Helper unavailable")
+              : (root.isNeedsApproval
+                 ? qsTr("Allow Raspberry Pi Imager Privileged Helper")
+                 : qsTr("Privileged Helper required"))
         font.pointSize: Style.fontSizeHeading
         font.family: Style.fontFamilyBold
         font.bold: true
@@ -65,18 +74,25 @@ BaseDialog {
 
     Text {
         id: descriptionText
-        text: root.isNeedsApproval
-              ? qsTr("Raspberry Pi Imager has a privileged helper service "
-                     + "that handles writing to your storage device, but "
-                     + "macOS is currently blocking it.\n\n"
-                     + "Please enable \"Raspberry Pi Imager\" under "
-                     + "Allow in the Background, then return to this app.")
-              : qsTr("Raspberry Pi Imager uses a privileged helper "
-                     + "service to write to storage devices safely. "
-                     + "macOS will ask you to allow it in the next step.\n\n"
-                     + "You only need to do this once - the helper is "
-                     + "automatically launched when needed and exits "
-                     + "when you're done.")
+        text: root.isNeedsAttention
+              ? qsTr("Raspberry Pi Imager could not communicate with its "
+                     + "privileged helper service, which is required to "
+                     + "unmount and write to storage devices.\n\n"
+                     + "This usually means the helper is disabled under "
+                     + "Login Items, or you are running an unsigned build "
+                     + "that cannot talk to the installed helper.")
+              : (root.isNeedsApproval
+                 ? qsTr("Raspberry Pi Imager has a privileged helper service "
+                        + "that handles writing to your storage device, but "
+                        + "macOS is currently blocking it.\n\n"
+                        + "Please enable \"Raspberry Pi Imager\" under "
+                        + "Allow in the Background, then return to this app.")
+                 : qsTr("Raspberry Pi Imager uses a privileged helper "
+                        + "service to write to storage devices safely. "
+                        + "macOS will ask you to allow it in the next step.\n\n"
+                        + "You only need to do this once - the helper is "
+                        + "automatically launched when needed and exits "
+                        + "when you're done."))
         wrapMode: Text.WordWrap
         color: Style.textDescriptionColor
         font.pointSize: Style.fontSizeDescription
@@ -87,9 +103,13 @@ BaseDialog {
 
     Text {
         id: hintText
-        text: root.isNeedsApproval
-              ? qsTr("Look for it under General → Login Items & Extensions → Allow in the Background.")
-              : qsTr("The system prompt may appear behind this window.")
+        text: root.isNeedsAttention
+              ? qsTr("Use the signed app from /Applications if you are "
+                     + "developing locally, or enable the helper under "
+                     + "General → Login Items & Extensions → Allow in the Background.")
+              : (root.isNeedsApproval
+                 ? qsTr("Look for it under General → Login Items & Extensions → Allow in the Background.")
+                 : qsTr("The system prompt may appear behind this window."))
         visible: text.length > 0
         wrapMode: Text.WordWrap
         color: Style.textMetadataColor
@@ -115,7 +135,7 @@ BaseDialog {
 
         ImButtonRed {
             id: openSettingsButton
-            visible: root.isNeedsApproval
+            visible: root.isNeedsApproval || root.isNeedsAttention
             text: qsTr("Open System Settings")
             accessibleDescription: qsTr("Open the Login Items pane in System Settings so you can allow the helper")
             Layout.preferredWidth: 200
