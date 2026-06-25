@@ -72,6 +72,59 @@ public:
      */
     static QByteArray ssidOctetsFromSettings(const QVariantMap& settings, bool wifiConfigured);
 
+    // -------------------------------------------------------------------
+    // Credential derivation
+    //
+    // This class is the single home for turning a plaintext secret into the
+    // form that ends up in the generated artifacts. Keep all password/PSK
+    // hashing here so the UI layer never touches crypto and there is exactly
+    // one implementation of each algorithm.
+    // -------------------------------------------------------------------
+
+    /**
+     * @brief Hash a plaintext account password for /etc/shadow-style consumers.
+     *
+     * Picks yescrypt for OS images released on/after 2023-01-01 and sha256crypt
+     * otherwise. CR/LF are stripped first: pasted secrets can carry a trailing
+     * newline that PAM discards at login, which would otherwise yield a hash
+     * that never matches (issue #1627).
+     *
+     * @param password Plaintext password (UTF-8 bytes)
+     * @param osReleaseDate Target OS release date in "yyyy-MM-dd" form (may be empty)
+     * @return crypt(3)-style hash string, or empty on failure
+     */
+    static QString cryptPassword(const QByteArray& password, const QString& osReleaseDate);
+
+    /**
+     * @brief Derive a WPA PSK from a passphrase (PBKDF2-HMAC-SHA1, 4096 iters).
+     *
+     * @param password Plaintext Wi-Fi passphrase (UTF-8 bytes)
+     * @param ssid SSID octets used as the PBKDF2 salt
+     * @return Hex-encoded 32-byte PSK
+     */
+    static QString pbkdf2(const QByteArray& password, const QByteArray& ssid);
+
+    /**
+     * @brief Whether the OS image's release date selects yescrypt over sha256crypt.
+     *
+     * yescrypt is used for images released on/after 2023-01-01; older (or
+     * undated) images get sha256crypt, which every target understands. This is
+     * the single source of truth for the algorithm decision, shared by
+     * cryptPassword() and the hash-compatibility check.
+     */
+    static bool osUsesYescrypt(const QString& osReleaseDate);
+
+    /**
+     * @brief Whether a crypt() hash string is a yescrypt hash.
+     *
+     * crypt strings are self-describing via their "$id$" prefix, so the
+     * algorithm never needs to be stored separately: yescrypt hashes begin with
+     * "$y$" (we only ever emit "$y$" or sha256crypt's "$5$"). A yescrypt hash is
+     * unusable on images that predate yescrypt support, whereas sha256crypt is
+     * accepted everywhere - so only yescrypt hashes need a compatibility check.
+     */
+    static bool isYescryptHash(const QString& cryptHash);
+
 private:
     /**
      * @brief Shell-quote a string for safe use in bash scripts
@@ -80,16 +133,27 @@ private:
      * @return Quoted string safe for shell use
      */
     static QString shellQuote(const QString& value);
-    
+
     /**
-     * @brief Generate password hash using pbkdf2
-     * 
-     * @param password Plain text password
-     * @param ssid SSID for WiFi password hashing
-     * @return Hashed password
+     * @brief Resolve the crypted account password from settings.
+     *
+     * Prefers a freshly entered plaintext password ("sshUserPasswordPlain"),
+     * hashing it with cryptPassword() using "osReleaseDate"; otherwise falls
+     * back to an already-crypted value carried in "sshUserPassword" (e.g. a
+     * password reused from saved settings).
      */
-    static QString pbkdf2(const QByteArray& password, const QByteArray& ssid);
-    
+    static QString resolveUserPasswordCrypt(const QVariantMap& settings);
+
+    /**
+     * @brief Resolve the crypted Wi-Fi PSK from settings.
+     *
+     * Prefers an already-derived PSK ("wifiPasswordCrypt"); otherwise derives
+     * one from the plaintext "wifiPassword" using the SSID octets as salt. A
+     * value that is not a passphrase length (8..63) is treated as a raw PSK and
+     * passed through unchanged.
+     */
+    static QString resolveWifiPskCrypt(const QVariantMap& settings, const QByteArray& ssidOctets, bool wifiConfigured);
+
     static QString yamlEscapeString(const QString& value);
 };
 

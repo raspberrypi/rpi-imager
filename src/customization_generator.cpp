@@ -4,11 +4,17 @@
  */
 
 #include "customization_generator.h"
+#include "dependencies/sha256crypt/sha256crypt.h"
+#include "dependencies/yescrypt/yescrypt_wrapper.h"
 #include <QPasswordDigestor>
 #include <QCryptographicHash>
+#include <QDate>
+#include <QDateTime>
 #include <QRegularExpression>
 #include <QStringList>
 #include <QStringConverter>
+#include <QDebug>
+#include <random>
 
 namespace rpi_imager {
 
@@ -68,6 +74,92 @@ QString CustomisationGenerator::shellQuote(const QString& value) {
 
 QString CustomisationGenerator::pbkdf2(const QByteArray& password, const QByteArray& ssid) {
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, password, ssid, 4096, 32).toHex();
+}
+
+QString CustomisationGenerator::cryptPassword(const QByteArray& passwordInput, const QString& osReleaseDate) {
+    // Strip CR/LF before hashing. Pasted clipboard content can carry a trailing
+    // newline (single-line text fields do not sanitise pasted text), and PAM
+    // always discards the line terminator when reading a password. Hashing the
+    // raw value would then produce a hash that can never be matched at login
+    // (see issue #1627). These characters can never form part of a usable
+    // password, so removing them everywhere is safe.
+    QByteArray password = passwordInput;
+    password.removeIf([](char c) { return c == '\r' || c == '\n'; });
+
+    const QByteArray saltchars =
+      "./0123456789ABCDEFGHIJKLMNOPQRST"
+      "UVWXYZabcdefghijklmnopqrstuvwxyz";
+    std::mt19937 gen(static_cast<unsigned>(QDateTime::currentMSecsSinceEpoch()));
+    std::uniform_int_distribution<> uid(0, saltchars.length() - 1);
+
+    if (osUsesYescrypt(osReleaseDate)) {
+        QByteArray salt;
+        for (int i = 0; i < 16; i++)  // yescrypt uses longer salts
+            salt += saltchars[uid(gen)];
+
+        char *result = yescrypt_crypt(password.constData(), salt.constData());
+        return result ? QString(result) : QString();
+    }
+
+    QByteArray salt = "$5$";
+    for (int i = 0; i < 10; i++)
+        salt += saltchars[uid(gen)];
+
+    return sha256_crypt(password.constData(), salt.constData());
+}
+
+bool CustomisationGenerator::osUsesYescrypt(const QString& osReleaseDate) {
+    if (osReleaseDate.isEmpty())
+        return false;
+    const QDate releaseDate = QDate::fromString(osReleaseDate, "yyyy-MM-dd");
+    const QDate cutoffDate(2023, 1, 1);
+    return releaseDate.isValid() && releaseDate >= cutoffDate;
+}
+
+bool CustomisationGenerator::isYescryptHash(const QString& cryptHash) {
+    // We only ever emit "$y$" (yescrypt) or "$5$" (sha256crypt). "$7$" is the
+    // other yescrypt/scrypt prefix the wrapper accepts, so treat it as yescrypt too.
+    return cryptHash.startsWith(QStringLiteral("$y$"))
+        || cryptHash.startsWith(QStringLiteral("$7$"));
+}
+
+QString CustomisationGenerator::resolveUserPasswordCrypt(const QVariantMap& settings) {
+    const QString plain = settings.value(QStringLiteral("sshUserPasswordPlain")).toString();
+    if (!plain.isEmpty()) {
+        const QString releaseDate = settings.value(QStringLiteral("osReleaseDate")).toString();
+        return cryptPassword(plain.toUtf8(), releaseDate);
+    }
+    // Already-crypted password reused from saved settings. The UI is expected to
+    // have invalidated any hash that is incompatible with the selected OS (a
+    // yescrypt hash cannot authenticate on a pre-2023 image); if one slips
+    // through here - e.g. the OS was changed after the user step was skipped -
+    // log it loudly, since we have no plaintext left to re-hash.
+    const QString crypted = settings.value(QStringLiteral("sshUserPassword")).toString();
+    if (!crypted.isEmpty() && isYescryptHash(crypted)
+        && !osUsesYescrypt(settings.value(QStringLiteral("osReleaseDate")).toString())) {
+        qWarning() << "Account password hash is yescrypt but the selected OS predates "
+                      "yescrypt support; login may fail. The password should have been "
+                      "re-entered for this OS.";
+    }
+    return crypted;
+}
+
+QString CustomisationGenerator::resolveWifiPskCrypt(const QVariantMap& settings, const QByteArray& ssidOctets, bool wifiConfigured) {
+    if (!wifiConfigured)
+        return {};
+
+    const QString crypted = settings.value(QStringLiteral("wifiPasswordCrypt")).toString();
+    if (!crypted.isEmpty())
+        return crypted;
+
+    const QString plain = settings.value(QStringLiteral("wifiPassword")).toString();
+    if (plain.isEmpty())
+        return {};
+
+    // Passphrase length per WPA spec is 8..63; anything else is taken to be a
+    // pre-computed 64-hex-digit PSK (or open-network sentinel) and passed through.
+    const bool isPassphrase = (plain.length() >= 8 && plain.length() < 64);
+    return isPassphrase ? pbkdf2(plain.toUtf8(), ssidOctets) : plain;
 }
 
 QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
@@ -146,26 +238,18 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     const bool sshEnabled = s.value("sshEnabled").toBool();
     const bool sshPasswordAuth = s.value("sshPasswordAuth").toBool();
     const QString userName = s.value("sshUserName").toString().trimmed();
-    const QString userPass = s.value("sshUserPassword").toString(); // crypted if present
+    const QString userPass = resolveUserPasswordCrypt(s); // crypted (hashes plaintext if present)
     const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
     const bool wifiConfigured = s.value("wifiConfigured", true).toBool();
     const QByteArray ssidOctets = ssidOctetsFromSettings(s, wifiConfigured);
-    const QString cryptedPskFromSettings = wifiConfigured ? s.value("wifiPasswordCrypt").toString() : QString();
     bool hidden = wifiConfigured ? s.value("wifiHidden").toBool() : false;
     if (!hidden)
         hidden = s.value("wifiSSIDHidden").toBool();
     const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
-    
-    // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
-    QString cryptedPsk = cryptedPskFromSettings;
-    if (cryptedPsk.isEmpty()) {
-        const QString legacyPwd = s.value("wifiPassword").toString();
-        if (!legacyPwd.isEmpty()) {
-            const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
-            cryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssidOctets) : legacyPwd;
-        }
-    }
+
+    // Crypted PSK: prefer a pre-derived value, else derive from the plaintext passphrase.
+    const QString cryptedPsk = resolveWifiPskCrypt(s, ssidOctets, wifiConfigured);
     
     // Prepare SSH key arguments for imager_custom
     QStringList keyList;
@@ -451,7 +535,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     
     const bool sshPasswordAuth = settings.value("sshPasswordAuth").toBool();
     const QString userName = settings.value("sshUserName").toString().trimmed();
-    const QString userPass = settings.value("sshUserPassword").toString(); // expected crypted if present
+    const QString userPass = resolveUserPasswordCrypt(settings); // crypted (hashes plaintext if present)
     const QString sshPublicKey = settings.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = settings.value("sshAuthorizedKeys").toString().trimmed();
     const bool passwordlessSudo = settings.value("passwordlessSudo").toBool();
@@ -681,7 +765,6 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     
     const bool wifiConfigured = settings.value("wifiConfigured", true).toBool();
     const QByteArray ssidOctets = ssidOctetsFromSettings(settings, wifiConfigured);
-    const QString cryptedPskFromSettings = wifiConfigured ? settings.value("wifiPasswordCrypt").toString() : QString();
     const bool hidden = wifiConfigured ? settings.value("wifiHidden").toBool() : false;
     const QString regDom = settings.value("recommendedWifiCountry").toString().trimmed().toUpper();
     
@@ -721,15 +804,8 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
-        // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
-        QString effectiveCryptedPsk = cryptedPskFromSettings;
-        if (effectiveCryptedPsk.isEmpty()) {
-            const QString legacyPwd = settings.value("wifiPassword").toString();
-            if (!legacyPwd.isEmpty()) {
-                const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
-                effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssidOctets) : legacyPwd;
-            }
-        }
+        // Crypted PSK: prefer a pre-derived value, else derive from the plaintext passphrase.
+        QString effectiveCryptedPsk = resolveWifiPskCrypt(settings, ssidOctets, wifiConfigured);
         if (effectiveCryptedPsk.isEmpty()) {
             // Open network (no password) - use auth block with key-management: none
             // See: https://github.com/raspberrypi/rpi-imager/issues/1396
