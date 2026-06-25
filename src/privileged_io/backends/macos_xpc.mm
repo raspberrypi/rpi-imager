@@ -222,9 +222,10 @@ Result<proto::HelperStatus> MacOSXpcBackend::queryHelperStatus() {
 
         NSXPCConnection* conn = state_->ensureConnection();
         if (!conn) {
-            return Result<proto::HelperStatus>::failure(
-                makeError(proto::ERROR_HELPER_NOT_INSTALLED,
-                          "could not create XPC connection"));
+            proto::HelperStatus s;
+            s.set_state(proto::HELPER_STATE_UNKNOWN);
+            s.set_client_version("phase-1b-poc");
+            return Result<proto::HelperStatus>::success(std::move(s));
         }
 
         // Use a heap-allocated synchronisation block so the lambdas can
@@ -265,15 +266,39 @@ Result<proto::HelperStatus> MacOSXpcBackend::queryHelperStatus() {
                                                     : state_->opts.handshake_timeout_ms);
         std::unique_lock<std::mutex> lk(sync->m);
         if (!sync->cv.wait_for(lk, timeout, [&] { return sync->done; })) {
-            return Result<proto::HelperStatus>::failure(
-                makeError(proto::ERROR_HELPER_NOT_INSTALLED,
-                          "helper handshake timed out"));
+            proto::HelperStatus s;
+            s.set_client_version("phase-1b-poc");
+            if (@available(macOS 13.0, *)) {
+                SMAppService* svc = [SMAppService daemonServiceWithPlistName:
+                    @"com.raspberrypi.rpi-imager.writer.plist"];
+                if (svc && svc.status == SMAppServiceStatusEnabled) {
+                    // macOS reports the daemon enabled but it did not respond;
+                    // usually disabled under Login Items / Background Items.
+                    s.set_state(proto::HELPER_STATE_INSTALLED_DISABLED);
+                } else {
+                    s.set_state(proto::HELPER_STATE_UNKNOWN);
+                }
+            } else {
+                s.set_state(proto::HELPER_STATE_UNKNOWN);
+            }
+            return Result<proto::HelperStatus>::success(std::move(s));
         }
 
         if (sync->connection_error) {
-            return Result<proto::HelperStatus>::failure(
-                makeError(proto::ERROR_HELPER_NOT_INSTALLED,
-                          "XPC error: " + sync->err_detail));
+            proto::HelperStatus s;
+            s.set_client_version("phase-1b-poc");
+            if (@available(macOS 13.0, *)) {
+                SMAppService* svc = [SMAppService daemonServiceWithPlistName:
+                    @"com.raspberrypi.rpi-imager.writer.plist"];
+                if (svc && svc.status == SMAppServiceStatusEnabled) {
+                    s.set_state(proto::HELPER_STATE_INSTALLED_DISABLED);
+                } else {
+                    s.set_state(proto::HELPER_STATE_UNKNOWN);
+                }
+            } else {
+                s.set_state(proto::HELPER_STATE_UNKNOWN);
+            }
+            return Result<proto::HelperStatus>::success(std::move(s));
         }
 
         state_->helper_version = sync->version;
