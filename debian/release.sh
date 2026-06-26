@@ -154,7 +154,7 @@ cmd_status() {
 
 cmd_source() {
 	ref="${1:-HEAD}"
-	"$TOP/debian/build-source.sh" "$ref"
+	sh "$TOP/debian/build-source.sh" "$ref"
 }
 
 cmd_appimages() {
@@ -163,7 +163,7 @@ cmd_appimages() {
 	explicit=${1:-}
 
 	if should_build_appimages "$explicit"; then
-		"$TOP/debian/build-appimages.sh" "$arch"
+		sh "$TOP/debian/build-appimages.sh" "$arch"
 	fi
 
 	"$TOP/debian/sync-appimages.sh" "$arch"
@@ -174,8 +174,8 @@ cmd_binary() {
 	_builder=$(choose_builder "$arch")
 	echo "release: using $_builder builder for $arch"
 	case "$_builder" in
-		sbuild) "$TOP/debian/build-sbuild.sh" binary "$arch" ;;
-		local) "$TOP/debian/build-binary-local.sh" "$arch" ;;
+		sbuild) sh "$TOP/debian/build-sbuild.sh" binary "$arch" ;;
+		local) sh "$TOP/debian/build-binary-local.sh" "$arch" ;;
 		*)
 			echo "release: unknown builder: $_builder" >&2
 			exit 1

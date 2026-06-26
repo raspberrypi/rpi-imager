@@ -47,6 +47,7 @@ qt-src**
 qt/language_filters.json
 build
 build-**
+!debian/build-*.sh
 
 # IANA Timezone database generated as part of build
 timezones.txt
