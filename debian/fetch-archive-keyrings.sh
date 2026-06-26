@@ -61,6 +61,10 @@ copy_or_use() {
 	if [ ! -f "$_src" ]; then
 		return 1
 	fi
+	if [ "$_src" -ef "$_dest" ]; then
+		echo "fetch-archive-keyrings: using $_src"
+		return 0
+	fi
 	install -m 0644 "$_src" "$_dest"
 	echo "fetch-archive-keyrings: using $_src"
 	return 0
@@ -121,7 +125,7 @@ _fetch_ascii_key() {
 		echo "fetch-archive-keyrings: gpg required to convert $_url" >&2
 		return 1
 	fi
-	install -m 0644 "$_dest" "$_dest"
+	chmod 0644 "$_dest"
 	echo "fetch-archive-keyrings: installed $_label -> $_dest"
 }
 
@@ -191,3 +195,6 @@ case "$TARGET" in
 		exit 1
 		;;
 esac
+
+chown -R "$(id -u):$(id -g)" "$KEYRING_CACHE" 2>/dev/null || true
+chmod -R a+rX "$KEYRING_CACHE"

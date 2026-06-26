@@ -138,67 +138,63 @@ sbuild_fetch_archive_keyrings() {
 	sh "$TOP/debian/fetch-archive-keyrings.sh" "$_which"
 }
 
-# Directory passed to mmdebstrap --keyring= (host paths for unshared apt).
-sbuild_mmdebstrap_keyring_dir() {
+sbuild_keyring_abs_path() {
+	_file=$1
+	_dir=$(CDPATH= cd -- "$(dirname "$_file")" && pwd)
+	printf '%s/%s\n' "$_dir" "$(basename "$_file")"
+}
+
+# Primary archive key for mmdebstrap --keyring= (host path, readable by unshared apt).
+sbuild_mmdebstrap_keyring_file() {
 	_arch=$1
 	_cache=$(sbuild_keyring_cache_dir)
-	_stage="$_cache/mmdebstrap-trusted"
 
-	install -d "$_cache" "$_stage"
+	install -d "$_cache"
 	sbuild_fetch_archive_keyrings all
-
-	for _name in debian-archive-keyring.gpg raspberrypi-archive-keyring.gpg raspbian-archive-keyring.gpg; do
-		[ -f "$_cache/$_name" ] || continue
-		ln -sf "$_cache/$_name" "$_stage/$_name"
-	done
+	chown -R "$(id -u):$(id -g)" "$_cache" 2>/dev/null || true
+	chmod -R a+rX "$_cache"
 
 	case "$_arch" in
-		armhf)
-			[ -f "$_stage/raspbian-archive-keyring.gpg" ] || {
-				echo "sbuild-mirrors: missing raspbian keyring (run fetch-archive-keyrings.sh)" >&2
-				return 1
-			}
-			;;
-		arm64|amd64)
-			[ -f "$_stage/debian-archive-keyring.gpg" ] || {
-				echo "sbuild-mirrors: missing debian keyring (run fetch-archive-keyrings.sh)" >&2
-				return 1
-			}
-			;;
+		armhf) _file="$_cache/raspbian-archive-keyring.gpg" ;;
+		arm64|amd64) _file="$_cache/debian-archive-keyring.gpg" ;;
 		*)
 			echo "sbuild-mirrors: unsupported arch: $_arch" >&2
 			return 1
 			;;
 	esac
 
-	printf '%s\n' "$_stage"
+	[ -f "$_file" ] || {
+		echo "sbuild-mirrors: missing keyring $_file (run fetch-archive-keyrings.sh)" >&2
+		return 1
+	}
+
+	sbuild_keyring_abs_path "$_file"
 }
 
-sbuild_mmdebstrap_bootstrap_mirror() {
+# One-line apt sources for mmdebstrap (all suites signed-by the bootstrap key).
+sbuild_mmdebstrap_write_mirrors() {
 	_arch=$1
-	_keydir=$2
+	_key=$2
+	_out=$3
 	_suite=$SBUILD_DIST
 
 	case "$_arch" in
 		armhf)
-			_key="$_keydir/raspbian-archive-keyring.gpg"
 			_mirror=${SBUILD_RASPBIAN_MIRROR%/}
 			case "$_mirror" in
 				*/raspbian) ;;
 				*) _mirror="${_mirror}/raspbian" ;;
 			esac
-			printf 'deb [signed-by=%s arch=armhf] %s %s main contrib non-free rpi\n' \
-				"$_key" "$_mirror" "$_suite"
+			cat >"$_out" <<EOF
+deb [signed-by=${_key} arch=armhf] ${_mirror} ${_suite} main contrib non-free rpi
+EOF
 			;;
-		arm64)
-			_key="$_keydir/debian-archive-keyring.gpg"
-			printf 'deb [signed-by=%s arch=arm64] %s %s main contrib non-free non-free-firmware\n' \
-				"$_key" "${SBUILD_DEBIAN_MIRROR%/}" "$_suite"
-			;;
-		amd64)
-			_key="$_keydir/debian-archive-keyring.gpg"
-			printf 'deb [signed-by=%s arch=amd64] %s %s main contrib non-free non-free-firmware\n' \
-				"$_key" "${SBUILD_DEBIAN_MIRROR%/}" "$_suite"
+		arm64|amd64)
+			cat >"$_out" <<EOF
+deb [signed-by=${_key} arch=${_arch}] ${SBUILD_DEBIAN_MIRROR%/} ${_suite} main contrib non-free non-free-firmware
+deb [signed-by=${_key} arch=${_arch}] ${SBUILD_DEBIAN_MIRROR%/} ${_suite}-updates main contrib non-free non-free-firmware
+deb [signed-by=${_key} arch=${_arch}] http://deb.debian.org/debian-security ${_suite}-security main contrib non-free non-free-firmware
+EOF
 			;;
 		*)
 			return 1

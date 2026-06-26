@@ -75,11 +75,13 @@ fi
 
 . "$TOP/debian/sbuild-mirrors.sh"
 
-_KEYRING_DIR=$(sbuild_mmdebstrap_keyring_dir "$ARCH") || exit 1
-_MIRROR=$(sbuild_mmdebstrap_bootstrap_mirror "$ARCH" "$_KEYRING_DIR") || exit 1
+_KEYRING=$(sbuild_mmdebstrap_keyring_file "$ARCH") || exit 1
+_MIRROR_FILE=$(mktemp "${TMPDIR:-/tmp}/rpi-imager-mmdebstrap-mirrors.XXXXXX")
+trap 'rm -f "$_MIRROR_FILE"' EXIT INT HUP TERM
+sbuild_mmdebstrap_write_mirrors "$ARCH" "$_KEYRING" "$_MIRROR_FILE" || exit 1
 
 echo "mmdebstrap-ensure: creating $NAME (mode=$MODE, tar -> $ROOT)..."
-echo "mmdebstrap-ensure: host keyrings: $_KEYRING_DIR"
+echo "mmdebstrap-ensure: host keyring: $_KEYRING"
 
 _cleanup_partial() {
 	if [ -f "$_TAR" ]; then
@@ -95,7 +97,7 @@ trap _cleanup_partial EXIT INT HUP TERM
 # shellcheck disable=SC2086
 mmdebstrap --mode="$MODE" --format=tar --variant=minbase \
 	--arch="$ARCH" \
-	--keyring="$_KEYRING_DIR" \
+	--keyring="$_KEYRING" \
 	--components="$_COMPONENTS" \
 	--include="$_INCLUDE" \
 	${_SKIP_QEMU:+--skip="$_SKIP_QEMU"} \
@@ -103,7 +105,10 @@ mmdebstrap --mode="$MODE" --format=tar --variant=minbase \
 	--customize-hook="chroot \"\$1\" apt-get update" \
 	--customize-hook="chroot \"\$1\" apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")" \
 	--customize-hook="touch \"\$1/.rpi-imager-chroot-ok\"" \
-	"$SBUILD_DIST" "$_TAR" "$_MIRROR"
+	"$SBUILD_DIST" "$_TAR" "$_MIRROR_FILE"
+
+rm -f "$_MIRROR_FILE"
+trap - EXIT INT HUP TERM
 
 rm -rf "$ROOT"
 mkdir -p "$ROOT"
