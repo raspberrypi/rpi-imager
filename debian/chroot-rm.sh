@@ -16,25 +16,50 @@ fi
 
 . "$TOP/debian/lib.sh"
 
-subuid_ids() {
-	_user=$(id -un)
-	_uid=$(awk -F: -v u="$_user" '$1 == u { print $2; exit }' /etc/subuid 2>/dev/null)
-	_gid=$(awk -F: -v u="$_user" '$1 == u { print $2; exit }' /etc/subgid 2>/dev/null)
-	[ -n "$_uid" ] && [ -n "$_gid" ] || return 1
-	printf '%s %s\n' "$_uid" "$_gid"
-}
-
 chroot_rm_mmdebstrap_teardown() {
 	_path=$1
+	_owner=$(id -u):$(id -g)
 
 	command -v mmdebstrap >/dev/null 2>&1 || return 1
-	_mode=$(mmdebstrap_run_mode)
 
-	echo "chroot-rm: mmdebstrap teardown (mode=$_mode) for $_path" >&2
-	mmdebstrap --mode="$_mode" --variant=custom \
-		--skip=check/empty,setup,update,download,extract,essential,configure,cleanup \
-		--customize-hook='rm -rf "$1"' \
-		"$SBUILD_DIST" "$_path" "$SBUILD_DEBIAN_MIRROR"
+	for _mode in unshare "$(mmdebstrap_run_mode)"; do
+		[ -n "$_mode" ] || continue
+		echo "chroot-rm: mmdebstrap teardown (mode=$_mode) for $_path" >&2
+		if mmdebstrap --mode="$_mode" --variant=custom \
+			--skip=check/empty,setup,update,download,extract,essential,configure,cleanup \
+			--customize-hook="chown -R ${_owner} \"\$1\" 2>/dev/null || true" \
+			--customize-hook='chmod -R u+rwX "$1" 2>/dev/null || true' \
+			--customize-hook='rm -rf "$1"' \
+			"$SBUILD_DIST" "$_path" "$SBUILD_DEBIAN_MIRROR"; then
+			[ -e "$_path" ] || return 0
+		fi
+	done
+	return 1
+}
+
+chroot_rm_with_uids() {
+	_path=$1
+
+	command -v setpriv >/dev/null 2>&1 || return 1
+
+	for _uid in $(find "$_path" -mindepth 1 -printf '%u\n' 2>/dev/null | sort -nu); do
+		_gid=$_uid
+		echo "chroot-rm: trying setpriv --reuid=$_uid for $_path" >&2
+		if setpriv --reuid="$_uid" --regid="$_gid" --clear-groups -- \
+			rm -rf "$_path" 2>/dev/null; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+chroot_rm_clear_immutable() {
+	_path=$1
+	command -v lsattr >/dev/null 2>&1 && command -v chattr >/dev/null 2>&1 || return 1
+	if find "$_path" -exec lsattr -d {} + 2>/dev/null | grep -q '[i]'; then
+		echo "chroot-rm: clearing immutable flag on $_path" >&2
+		chattr -R -i "$_path" 2>/dev/null || true
+	fi
 }
 
 chroot_rm_path() {
@@ -42,30 +67,25 @@ chroot_rm_path() {
 
 	[ -e "$_path" ] || return 0
 
+	chroot_rm_clear_immutable "$_path"
+
 	if rm -rf "$_path" 2>/dev/null; then
 		return 0
 	fi
 
-	if _ids=$(subuid_ids 2>/dev/null); then
-		# shellcheck disable=SC2086
-		set -- $_ids
-		_subuid=$1
-		_subgid=$2
-		if command -v setpriv >/dev/null 2>&1; then
-			echo "chroot-rm: trying setpriv --reuid=$_subuid for $_path" >&2
-			if setpriv --reuid="$_subuid" --regid="$_subgid" --clear-groups -- \
-				rm -rf "$_path" 2>/dev/null; then
-				return 0
-			fi
-		fi
+	chroot_rm_mmdebstrap_teardown "$_path" || true
+	[ -e "$_path" ] || return 0
+
+	chroot_rm_clear_immutable "$_path"
+	if rm -rf "$_path" 2>/dev/null; then
+		return 0
 	fi
 
-	if chroot_rm_mmdebstrap_teardown "$_path" 2>/dev/null; then
-		[ -e "$_path" ] || return 0
-	fi
+	chroot_rm_with_uids "$_path" || true
+	[ -e "$_path" ] || return 0
 
-	echo "chroot-rm: trying unshare --map-root-user for $_path" >&2
 	if command -v unshare >/dev/null 2>&1; then
+		echo "chroot-rm: trying unshare --map-root-user for $_path" >&2
 		if unshare --user --map-root-user rm -rf "$_path" 2>/dev/null; then
 			return 0
 		fi
@@ -79,7 +99,9 @@ chroot_rm_path() {
 	fi
 
 	if [ -e "$_path" ]; then
-		echo "chroot-rm: could not remove $_path (try: sudo rm -rf '$_path')" >&2
+		echo "chroot-rm: could not remove $_path" >&2
+		echo "chroot-rm: file owners: $(find "$_path" -mindepth 1 -printf '%u ' 2>/dev/null | tr ' ' '\n' | sort -nu | tr '\n' ' ')" >&2
+		echo "chroot-rm: ask an admin to run: sudo rm -rf '$_path'" >&2
 		return 1
 	fi
 }
@@ -124,8 +146,7 @@ case "${1:-}" in
 		cat <<EOF
 Usage: debian/chroot-rm.sh <arm64|amd64|armhf|--path DIR|--all>
 
-mmdebstrap --mode=unshare leaves files owned by your subuid-mapped root.
-This script removes them using setpriv, mmdebstrap teardown, or unshare.
+Removes mmdebstrap chroots, including subuid-owned trees from unshare mode.
 EOF
 		;;
 	*)

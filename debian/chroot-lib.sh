@@ -27,7 +27,9 @@ chroot_mmdebstrap_ok() {
 
 chroot_rm_mmdebstrap() {
 	_arch=$1
-	sh "$TOP/debian/chroot-rm.sh" "$_arch"
+	_root=$(chroot_mmdebstrap_root "$_arch")
+	sh "$TOP/debian/chroot-rm.sh" --path "$_root"
+	rm -f "${_root}.bootstrap.tar"
 }
 
 have_schroot_chroot() {

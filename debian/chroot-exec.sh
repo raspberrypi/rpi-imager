@@ -44,7 +44,7 @@ for _bind in '$TOP' '$QT_CACHE' '$APPIMAGE_ROOT'; do
 		}
 	fi
 done
-chroot "\$root" env \\
+	chroot "\$root" env \\
 	RPI_IMAGER_CHROOT=1 \\
 	SCHROOT_CHROOT_NAME=$NAME \\
 	QT_CACHE='$QT_CACHE' \\
@@ -52,6 +52,7 @@ chroot "\$root" env \\
 	APPIMAGE_ROOT='$APPIMAGE_ROOT' \\
 	TOP='$TOP' \\
 	bash -lc "$_cmd"
+chown -R $(id -u):$(id -g) "\$root" 2>/dev/null || true
 EOF
 chmod +x "$_hook"
 

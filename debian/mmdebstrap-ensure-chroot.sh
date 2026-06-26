@@ -1,6 +1,9 @@
 #!/bin/sh
 # Create a rootless cross-build chroot with mmdebstrap (no sudo required).
 #
+# Bootstrap writes a tarball in unshare mode, then extracts it as the current
+# user so the tree is always removable without sudo.
+#
 # Usage:
 #   debian/mmdebstrap-ensure-chroot.sh <arm64|amd64|armhf>
 #
@@ -20,15 +23,19 @@ ARCH="${1:?usage: mmdebstrap-ensure-chroot.sh <arm64|amd64|armhf>}"
 NAME=$(chroot_name "$ARCH")
 ROOT=$(chroot_mmdebstrap_root "$ARCH")
 MODE=$(mmdebstrap_run_mode)
+_TAR="${ROOT}.bootstrap.tar"
+_OWNER_UID=$(id -u)
+_OWNER_GID=$(id -g)
 
 if chroot_mmdebstrap_ok "$ARCH"; then
 	echo "mmdebstrap-ensure: $NAME already exists at $ROOT"
 	exit 0
 fi
 
-if [ -d "$ROOT" ]; then
-	echo "mmdebstrap-ensure: removing incomplete $NAME at $ROOT..."
-	chroot_rm_mmdebstrap "$ARCH"
+if [ -d "$ROOT" ] || [ -f "$_TAR" ]; then
+	echo "mmdebstrap-ensure: removing incomplete $NAME..."
+	chroot_rm_mmdebstrap "$ARCH" || true
+	rm -f "$_TAR"
 fi
 
 if ! command -v mmdebstrap >/dev/null 2>&1; then
@@ -70,13 +77,14 @@ fi
 
 _KEYRING_DIR=$(sbuild_mmdebstrap_keyring_dir "$ARCH") || exit 1
 _MIRROR=$(sbuild_mmdebstrap_bootstrap_mirror "$ARCH" "$_KEYRING_DIR") || exit 1
-_OWNER_UID=$(id -u)
-_OWNER_GID=$(id -g)
 
-echo "mmdebstrap-ensure: creating $NAME at $ROOT (mode=$MODE)..."
+echo "mmdebstrap-ensure: creating $NAME (mode=$MODE, tar -> $ROOT)..."
 echo "mmdebstrap-ensure: host keyrings: $_KEYRING_DIR"
 
 _cleanup_partial() {
+	if [ -f "$_TAR" ]; then
+		rm -f "$_TAR"
+	fi
 	if [ -d "$ROOT" ] && ! chroot_mmdebstrap_ok "$ARCH"; then
 		echo "mmdebstrap-ensure: cleaning up failed $NAME at $ROOT..." >&2
 		chroot_rm_mmdebstrap "$ARCH" || true
@@ -85,7 +93,7 @@ _cleanup_partial() {
 trap _cleanup_partial EXIT INT HUP TERM
 
 # shellcheck disable=SC2086
-mmdebstrap --mode="$MODE" --variant=minbase \
+mmdebstrap --mode="$MODE" --format=tar --variant=minbase \
 	--arch="$ARCH" \
 	--keyring="$_KEYRING_DIR" \
 	--components="$_COMPONENTS" \
@@ -95,8 +103,13 @@ mmdebstrap --mode="$MODE" --variant=minbase \
 	--customize-hook="chroot \"\$1\" apt-get update" \
 	--customize-hook="chroot \"\$1\" apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")" \
 	--customize-hook="touch \"\$1/.rpi-imager-chroot-ok\"" \
-	--customize-hook="chown -R ${_OWNER_UID}:${_OWNER_GID} \"\$1\"" \
-	"$SBUILD_DIST" "$ROOT" "$_MIRROR"
+	"$SBUILD_DIST" "$_TAR" "$_MIRROR"
+
+rm -rf "$ROOT"
+mkdir -p "$ROOT"
+tar --no-same-owner --no-same-permissions -xf "$_TAR" -C "$ROOT"
+rm -f "$_TAR"
+chown -R "$_OWNER_UID:$_OWNER_GID" "$ROOT"
 
 trap - EXIT INT HUP TERM
 echo "mmdebstrap-ensure: $NAME ready at $ROOT"
