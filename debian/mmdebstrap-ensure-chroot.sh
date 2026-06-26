@@ -78,7 +78,21 @@ fi
 _KEYRING=$(sbuild_mmdebstrap_stage_keyring "$ARCH") || exit 1
 _KEYRING_STAGE=$(dirname "$_KEYRING")
 _BOOTSTRAP_URI=$(sbuild_mmdebstrap_bootstrap_uri "$ARCH") || exit 1
-trap 'rm -rf "$_KEYRING_STAGE"' EXIT INT HUP TERM
+
+_CUSTOMIZE_HOOK=$(mktemp "${TMPDIR:-/tmp}/rpi-imager-mmdebstrap-customize.XXXXXX")
+trap 'rm -rf "$_KEYRING_STAGE" "$_CUSTOMIZE_HOOK"' EXIT INT HUP TERM
+
+cat >"$_CUSTOMIZE_HOOK" <<EOF
+#!/bin/sh
+set -eu
+root=\$1
+export DEBIAN_FRONTEND=noninteractive
+sh '$TOP/debian/mmdebstrap-configure-apt.sh' "\$root" '$ARCH'
+chroot "\$root" apt-get update
+chroot "\$root" apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")
+touch "\$root/.rpi-imager-chroot-ok"
+EOF
+chmod +x "$_CUSTOMIZE_HOOK"
 
 echo "mmdebstrap-ensure: creating $NAME (mode=$MODE, tar -> $ROOT)..."
 echo "mmdebstrap-ensure: bootstrap keyring: $_KEYRING"
@@ -95,22 +109,22 @@ _cleanup_partial() {
 }
 trap _cleanup_partial EXIT INT HUP TERM
 
+# mmdebstrap auto-adds Signed-By to in-chroot paths without copying keyrings;
+# apt then ignores --keyring and fails with NO_PUBKEY. Skip that and trust
+# --keyring (staged under /tmp) for the bootstrap apt run.
 # shellcheck disable=SC2086
 mmdebstrap --mode="$MODE" --format=tar --variant=minbase \
 	--arch="$ARCH" \
 	--keyring="$_KEYRING" \
+	--skip=check/signed-by \
 	--aptopt='APT::Sandbox::User "root"' \
 	--components="$_COMPONENTS" \
 	--include="$_INCLUDE" \
 	${_SKIP_QEMU:+--skip="$_SKIP_QEMU"} \
-	--setup-hook="sh '$TOP/debian/mmdebstrap-setup-hook.sh' \"\$1\" '$ARCH' '$_KEYRING'" \
-	--customize-hook="sh '$TOP/debian/mmdebstrap-configure-apt.sh' \"\$1\" '$ARCH'" \
-	--customize-hook="chroot \"\$1\" apt-get update" \
-	--customize-hook="chroot \"\$1\" apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")" \
-	--customize-hook="touch \"\$1/.rpi-imager-chroot-ok\"" \
+	--customize-hook="$_CUSTOMIZE_HOOK \"\$1\"" \
 	"$SBUILD_DIST" "$_TAR" "$_BOOTSTRAP_URI"
 
-rm -rf "$_KEYRING_STAGE"
+rm -rf "$_KEYRING_STAGE" "$_CUSTOMIZE_HOOK"
 trap - EXIT INT HUP TERM
 
 rm -rf "$ROOT"

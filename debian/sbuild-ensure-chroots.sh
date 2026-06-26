@@ -95,9 +95,10 @@ EOF
 create_chroot() {
 	arch=$1
 	name=$(chroot_name "$arch")
+	target=$(sbuild_chroot_target_dir "$arch")
 	mirror=$(sbuild_debootstrap_mirror "$arch")
 	keyring=$(sbuild_debootstrap_keyring "$arch")
-	extra_opt=$(sbuild_debootstrap_extra_options "$arch")
+	components=$(sbuild_debootstrap_components "$arch")
 
 	if schroot -l 2>/dev/null | grep -q "^${name}\$"; then
 		echo "sbuild-ensure: chroot ${name} already exists"
@@ -109,22 +110,22 @@ create_chroot() {
 		return 0
 	fi
 
-	echo "sbuild-ensure: creating ${name} (debootstrap mirror: ${mirror})..."
+	echo "sbuild-ensure: creating ${name} at ${target} (debootstrap mirror: ${mirror})..."
 	if sbuild_foreign_debootstrap "$arch"; then
 		sbuild-adduser "$SBUILD_USER" 2>/dev/null || true
-		# shellcheck disable=SC2086
-		sbuild-createchroot --arch="$arch" "$name" "$mirror" \
-			"--include=git,ca-certificates" \
-			$extra_opt \
-			"--foreign" \
-			"--keyring=$keyring"
+		sbuild-createchroot --arch="$arch" \
+			--components="$components" \
+			--include=git,ca-certificates \
+			--foreign \
+			--keyring="$keyring" \
+			"$SBUILD_DIST" "$target" "$mirror"
 		schroot -c "$name" -- bash -c \
 			'apt-get update && apt-get install -y qemu-user-static binfmt-support && /debootstrap/debootstrap --second-stage'
 	else
-		# shellcheck disable=SC2086
-		sbuild-createchroot --arch="$arch" "$name" "$mirror" \
-			"--include=git,ca-certificates" \
-			$extra_opt
+		sbuild-createchroot --arch="$arch" \
+			--components="$components" \
+			--include=git,ca-certificates \
+			"$SBUILD_DIST" "$target" "$mirror"
 	fi
 
 	sbuild_configure_apt "$arch" "$name"

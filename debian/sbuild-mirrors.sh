@@ -104,14 +104,18 @@ sbuild_debootstrap_keyring() {
 	esac
 }
 
-sbuild_debootstrap_extra_options() {
+sbuild_debootstrap_components() {
 	case "$1" in
-		armhf) printf '%s\n' --extra-debootstrap-option=--components=main,contrib,non-free,rpi ;;
-		arm64|amd64)
-			printf '%s\n' --extra-debootstrap-option=--components=main,contrib,non-free,non-free-firmware
-			;;
+		armhf) printf '%s' main,contrib,non-free,rpi ;;
+		arm64|amd64) printf '%s' main,contrib,non-free,non-free-firmware ;;
 		*) return 1 ;;
 	esac
+}
+
+sbuild_chroot_target_dir() {
+	_name=$(chroot_name "$1")
+	_base=${SBUILD_CHROOT_DIR:-/var/lib/sbuild/chroot}
+	printf '%s/%s\n' "$_base" "$_name"
 }
 
 sbuild_foreign_debootstrap() {
