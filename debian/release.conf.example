@@ -17,7 +17,14 @@ QT_CACHE=.debian/qt
 # sbuild/schroot settings (only needed for isolated builds).
 SBUILD_DIST=trixie
 SBUILD_CHROOT_SUFFIX=sbuild
-# MIRROR=http://deb.debian.org/debian
+# Chroot apt repository cascade (see debian/sbuild-apt/preferences-*.pref):
+#   armhf — raspbian > rpi > debian
+#   arm64 — rpi > debian
+#   amd64 — debian only
+# SBUILD_CHROOT_ARCHES="arm64 amd64 armhf"
+# SBUILD_DEBIAN_MIRROR=http://deb.debian.org/debian
+# SBUILD_RASPBIAN_MIRROR=http://raspbian.raspberrypi.com/raspbian
+# SBUILD_RPI_MIRROR=http://archive.raspberrypi.com/debian
 
 # Build backend: auto (sbuild if chroot exists, else local), sbuild, or local.
 BUILDER=auto

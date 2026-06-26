@@ -19,6 +19,9 @@ release-arm64:
 release-amd64:
 	./debian/release.sh arch amd64
 
+release-armhf:
+	./debian/release.sh arch armhf
+
 release-appimages-%:
 	./debian/release.sh appimages $*
 

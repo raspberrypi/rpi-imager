@@ -42,6 +42,10 @@ QT_BUILD=${QT_BUILD:-auto}
 
 SBUILD_DIST=${SBUILD_DIST:-trixie}
 SBUILD_CHROOT_SUFFIX=${SBUILD_CHROOT_SUFFIX:-sbuild}
+SBUILD_DEBIAN_MIRROR=${SBUILD_DEBIAN_MIRROR:-http://deb.debian.org/debian}
+SBUILD_RASPBIAN_MIRROR=${SBUILD_RASPBIAN_MIRROR:-http://raspbian.raspberrypi.com/raspbian}
+SBUILD_RPI_MIRROR=${SBUILD_RPI_MIRROR:-http://archive.raspberrypi.com/debian}
+SBUILD_CHROOT_ARCHES=${SBUILD_CHROOT_ARCHES:-arm64 amd64 armhf}
 BUILDER=${BUILDER:-auto}
 DEB_BUILD_PROFILES=${DEB_BUILD_PROFILES:-desktop cli}
 DPUT_HOST=${DPUT_HOST:-}
@@ -92,11 +96,14 @@ deb_to_image_arch() {
 	esac
 }
 
-# create-appimage-cli.sh expects armv7l, not armhf.
-cli_image_arch() {
+# Normalise kernel uname values on 32-bit Raspberry Pi OS to Debian armhf.
+normalize_image_arch() {
 	case "$1" in
-		armhf) printf '%s\n' armv7l ;;
-		*) deb_to_image_arch "$1" ;;
+		amd64) printf '%s\n' x86_64 ;;
+		arm64) printf '%s\n' aarch64 ;;
+		armhf|armv6l|armv7l) printf '%s\n' armhf ;;
+		x86_64|aarch64) printf '%s\n' "$1" ;;
+		*) printf '%s\n' "$1" ;;
 	esac
 }
 

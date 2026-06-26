@@ -2,8 +2,10 @@
 # Optional one-time sbuild/schroot setup for isolated builds.
 #
 # Reads debian/release.conf when present so paths match release.sh.
-# Creates chroots for arm64 and amd64, provisions build deps, and bind-mounts
-# the AppImage and Qt caches at the same absolute paths inside chroots.
+# Creates chroots aligned with Raspberry Pi OS apt archives:
+#   armhf  — raspbian > rpi > debian
+#   arm64  — rpi > debian
+#   amd64  — debian only
 #
 # Usage:
 #   sudo debian/sbuild-setup.sh
@@ -22,6 +24,8 @@ if [ -f "$TOP/debian/release.conf" ]; then
 	. "$TOP/debian/release.conf"
 fi
 
+. "$TOP/debian/sbuild-mirrors.sh"
+
 resolve_repo_path() {
 	case "$1" in
 		/*) printf '%s\n' "$1" ;;
@@ -37,7 +41,6 @@ QT_CACHE=${QT_CACHE:-.debian/qt}
 QT_CACHE=$(resolve_repo_path "$QT_CACHE")
 SBUILD_DIST=${SBUILD_DIST:-trixie}
 SBUILD_CHROOT_SUFFIX=${SBUILD_CHROOT_SUFFIX:-sbuild}
-MIRROR=${MIRROR:-http://deb.debian.org/debian}
 HOST_ARCH=$(dpkg --print-architecture)
 SBUILD_USER=${SBUILD_USER:-${SUDO_USER:-$USER}}
 
@@ -49,6 +52,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y sbuild schroot debootstrap qemu-user-static binfmt-support \
 	uidmap git-buildpackage
+install_host_archive_keyrings
 
 install -d -m 0755 "$OUTPUT_DIR" \
 	"$APPIMAGE_ROOT/arm64" "$APPIMAGE_ROOT/amd64" "$APPIMAGE_ROOT/armhf" \
@@ -75,28 +79,37 @@ bind_fstab "$QT_CACHE" "Qt cache"
 create_chroot() {
 	arch=$1
 	name=$(chroot_name "$arch")
+	mirror=$(sbuild_debootstrap_mirror "$arch")
+	keyring=$(sbuild_debootstrap_keyring "$arch")
+	extra_opt=$(sbuild_debootstrap_extra_options "$arch")
 
 	if schroot -l | grep -q "^${name}\$"; then
 		echo "sbuild-setup: chroot ${name} already exists"
 		return 0
 	fi
 
-	echo "sbuild-setup: creating ${name}..."
-	if [ "$arch" = "$HOST_ARCH" ]; then
-		sbuild-createchroot --arch="$arch" "$name" "$MIRROR" \
-			"--include=git,ca-certificates"
-	else
+	echo "sbuild-setup: creating ${name} (debootstrap mirror: ${mirror})..."
+	if sbuild_foreign_debootstrap "$arch"; then
 		sbuild-adduser "$SBUILD_USER"
-		sbuild-createchroot --arch="$arch" "$name" "$MIRROR" \
+		# shellcheck disable=SC2086
+		sbuild-createchroot --arch="$arch" "$name" "$mirror" \
 			"--include=git,ca-certificates" \
+			$extra_opt \
 			"--foreign" \
-			"--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
+			"--keyring=$keyring"
 		schroot -c "$name" -- bash -c \
 			'apt-get update && apt-get install -y qemu-user-static binfmt-support && /debootstrap/debootstrap --second-stage'
+	else
+		# shellcheck disable=SC2086
+		sbuild-createchroot --arch="$arch" "$name" "$mirror" \
+			"--include=git,ca-certificates" \
+			$extra_opt
 	fi
+
+	sbuild_configure_apt "$arch" "$name"
 }
 
-for arch in arm64 amd64; do
+for arch in $SBUILD_CHROOT_ARCHES; do
 	create_chroot "$arch"
 	"$TOP/debian/sbuild-provision-chroot.sh" "$arch"
 done
@@ -111,6 +124,11 @@ Configured paths (from debian/release.conf or defaults):
   APPIMAGE_ROOT=$APPIMAGE_ROOT
   QT_CACHE=$QT_CACHE
 
+Chroot repository cascade (apt pinning):
+  armhf  Raspbian ($SBUILD_RASPBIAN_MIRROR) > RPi ($SBUILD_RPI_MIRROR) > Debian ($SBUILD_DEBIAN_MIRROR)
+  arm64  RPi ($SBUILD_RPI_MIRROR) > Debian ($SBUILD_DEBIAN_MIRROR)
+  amd64  Debian ($SBUILD_DEBIAN_MIRROR)
+
 Qt is built on first AppImage build (debian/ensure-qt.sh) and cached per arch.
 
 Next steps (as ${SBUILD_USER}):
@@ -118,5 +136,6 @@ Next steps (as ${SBUILD_USER}):
   debian/release.sh source
   debian/release.sh arch amd64
   debian/release.sh arch arm64
+  debian/release.sh arch armhf
 
 EOF

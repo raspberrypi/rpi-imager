@@ -140,7 +140,7 @@ cmd_status() {
 	echo
 	echo "sbuild chroots (optional):"
 	if have_sbuild; then
-		for arch in arm64 amd64; do
+		for arch in $SBUILD_CHROOT_ARCHES; do
 			if have_chroot "$arch"; then
 				echo "  ok  $(chroot_name "$arch")"
 			else

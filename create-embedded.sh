@@ -20,7 +20,7 @@ INCLUDE_CJK_FONTS=0  # Default: do not include 4MB CJK font
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armv7l)"
+    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armhf)"
     echo "  --qt-root=PATH         Path to Qt installation directory"
     echo "  --no-clean             Don't clean build directory"
     echo "  --include-cjk-fonts    Include DroidSansFallbackFull.ttf for CJK support (+4MB)"
@@ -77,9 +77,12 @@ if [ -n "$QT_ROOT_ARG" ]; then
     fi
 fi
 
-# Validate architecture
-if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
-    echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
+# Validate architecture (armv6l/armv7l from uname on 32-bit Pi OS → armhf)
+case "$ARCH" in
+    armv6l|armv7l) ARCH=armhf ;;
+esac
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armhf" ]; then
+    echo "Error: Architecture must be one of: x86_64, aarch64, armhf" >&2
     exit 1
 fi
 
@@ -139,7 +142,7 @@ else
                 if [ -d "$NEWEST_QT/gcc_arm64_embedded" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm64_embedded"
                 fi
-            elif [ "$ARCH" = "armv7l" ]; then
+            elif [ "$ARCH" = "armhf" ]; then
                 if [ -d "$NEWEST_QT/gcc_arm32_embedded" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm32_embedded"
                 fi
@@ -220,7 +223,7 @@ OPTDIR="$DEBDIR/opt/rpi-imager-embedded"
 case "$ARCH" in
     aarch64) DEB_ARCH="arm64" ;;
     x86_64)  DEB_ARCH="amd64" ;;
-    armv7l)  DEB_ARCH="armhf" ;;
+    armhf)   DEB_ARCH="armhf" ;;
     *)       DEB_ARCH="$ARCH" ;;
 esac
 
@@ -251,8 +254,8 @@ if [ "$ARCH" = "aarch64" ] && [ "$(uname -m)" = "x86_64" ]; then
     # Cross-compiling from x86_64 to aarch64
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
-elif [ "$ARCH" = "armv7l" ] && [ "$(uname -m)" = "x86_64" ]; then
-    # Cross-compiling from x86_64 to armv7l
+elif [ "$ARCH" = "armhf" ] && [ "$(uname -m)" = "x86_64" ]; then
+    # Cross-compiling from x86_64 to armhf (Pi 1 / Pi 2 32-bit OS)
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=arm"
 fi

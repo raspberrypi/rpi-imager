@@ -10,6 +10,8 @@ flex
 gperf
 curl
 ca-certificates
+raspbian-archive-keyring
+raspberrypi-archive-keyring
 libgnutls28-dev
 libx11-dev
 libx11-xcb-dev

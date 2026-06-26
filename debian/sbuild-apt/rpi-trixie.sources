@@ -1,0 +1,6 @@
+# Raspberry Pi archive (archive.raspberrypi.com) — arm64 and armhf.
+Types: deb
+URIs: http://archive.raspberrypi.com/debian
+Suites: trixie
+Components: main
+Signed-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg

@@ -1,0 +1,172 @@
+#!/bin/sh
+# sbuild/debootstrap mirror selection for Raspberry Pi OS-aligned chroots.
+#
+# Source after TOP (and optional debian/release.conf) are set:
+#   . "$TOP/debian/sbuild-mirrors.sh"
+#
+# Apt repository cascade (via preferences.d pinning):
+#   armhf  raspbian > rpi > debian
+#   arm64  rpi > debian
+#   amd64  debian only
+
+SBUILD_DEBIAN_MIRROR=${SBUILD_DEBIAN_MIRROR:-http://deb.debian.org/debian}
+SBUILD_RASPBIAN_MIRROR=${SBUILD_RASPBIAN_MIRROR:-http://raspbian.raspberrypi.com/raspbian}
+SBUILD_RPI_MIRROR=${SBUILD_RPI_MIRROR:-http://archive.raspberrypi.com/debian}
+SBUILD_CHROOT_ARCHES=${SBUILD_CHROOT_ARCHES:-arm64 amd64 armhf}
+
+SBUILD_APT_DIR=${SBUILD_APT_DIR:-$TOP/debian/sbuild-apt}
+
+schroot_root() {
+	_name=$1
+	schroot --info -c "$_name" 2>/dev/null | awk -F': ' '/^[[:space:]]*Directory:/ {print $2; exit}'
+}
+
+sbuild_debootstrap_mirror() {
+	case "$1" in
+		armhf) printf '%s\n' "$SBUILD_RASPBIAN_MIRROR" ;;
+		arm64|amd64) printf '%s\n' "$SBUILD_DEBIAN_MIRROR" ;;
+		*) return 1 ;;
+	esac
+}
+
+sbuild_debootstrap_keyring() {
+	case "$1" in
+		armhf)
+			if [ -f /usr/share/keyrings/raspbian-archive-keyring.gpg ]; then
+				printf '%s\n' /usr/share/keyrings/raspbian-archive-keyring.gpg
+			else
+				printf '%s\n' /usr/share/keyrings/debian-archive-keyring.gpg
+			fi
+			;;
+		*)
+			printf '%s\n' /usr/share/keyrings/debian-archive-keyring.gpg
+			;;
+	esac
+}
+
+sbuild_debootstrap_extra_options() {
+	case "$1" in
+		armhf) printf '%s\n' --extra-debootstrap-option=--components=main,contrib,non-free,rpi ;;
+		arm64|amd64)
+			printf '%s\n' --extra-debootstrap-option=--components=main,contrib,non-free,non-free-firmware
+			;;
+		*) return 1 ;;
+	esac
+}
+
+sbuild_foreign_debootstrap() {
+	_arch=$1
+	[ "$_arch" != "$HOST_ARCH" ]
+}
+
+install_host_archive_keyrings() {
+	# Best-effort: keyrings may only be on the build host's own apt sources.
+	apt-get install -y debian-archive-keyring raspbian-archive-keyring raspberrypi-archive-keyring 2>/dev/null || true
+}
+
+install_keyring_into_chroot() {
+	_root=$1
+	_host_key=$2
+	_dest_name=$3
+
+	[ -f "$_host_key" ] || return 0
+	install -d "$_root/usr/share/keyrings"
+	install -m 0644 "$_host_key" "$_root/usr/share/keyrings/$_dest_name"
+}
+
+install_apt_sources_into_chroot() {
+	_root=$1
+	_src=$2
+	_dest=$3
+
+	install -d "$_root/etc/apt/sources.list.d"
+	install -m 0644 "$_src" "$_root/etc/apt/sources.list.d/$_dest"
+}
+
+install_apt_preferences_into_chroot() {
+	_root=$1
+	_src=$2
+	_dest=$3
+
+	install -d "$_root/etc/apt/preferences.d"
+	install -m 0644 "$_src" "$_root/etc/apt/preferences.d/$_dest"
+}
+
+sbuild_normalize_apt_list() {
+	_root=$1
+	cat >"$_root/etc/apt/sources.list" <<'EOF'
+# Managed by debian/sbuild-mirrors.sh — repositories live in sources.list.d/
+EOF
+}
+
+sbuild_install_keyrings() {
+	_root=$1
+	_arch=$2
+
+	install_keyring_into_chroot "$_root" \
+		/usr/share/keyrings/debian-archive-keyring.gpg \
+		debian-archive-keyring.gpg
+
+	case "$_arch" in
+		arm64|armhf)
+			install_keyring_into_chroot "$_root" \
+				/usr/share/keyrings/raspberrypi-archive-keyring.gpg \
+				raspberrypi-archive-keyring.gpg
+			;;
+	esac
+
+	case "$_arch" in
+		armhf)
+			install_keyring_into_chroot "$_root" \
+				/usr/share/keyrings/raspbian-archive-keyring.gpg \
+				raspbian-archive-keyring.gpg
+			;;
+	esac
+}
+
+# Configure the full apt repository cascade after debootstrap.
+sbuild_configure_apt() {
+	arch=$1
+	name=$2
+
+	root=$(schroot_root "$name")
+	if [ -z "$root" ]; then
+		echo "sbuild-mirrors: cannot find schroot root for $name" >&2
+		return 1
+	fi
+
+	sbuild_normalize_apt_list "$root"
+	sbuild_install_keyrings "$root" "$arch"
+
+	case "$arch" in
+		amd64)
+			install_apt_sources_into_chroot "$root" \
+				"$SBUILD_APT_DIR/debian-trixie.sources" debian.sources
+			;;
+		arm64)
+			install_apt_sources_into_chroot "$root" \
+				"$SBUILD_APT_DIR/debian-trixie.sources" debian.sources
+			install_apt_sources_into_chroot "$root" \
+				"$SBUILD_APT_DIR/rpi-trixie.sources" raspberrypi.sources
+			install_apt_preferences_into_chroot "$root" \
+				"$SBUILD_APT_DIR/preferences-arm64.pref" 10-rpi-imager-cascade.pref
+			;;
+		armhf)
+			install_apt_sources_into_chroot "$root" \
+				"$SBUILD_APT_DIR/raspbian-trixie.sources" raspbian.sources
+			install_apt_sources_into_chroot "$root" \
+				"$SBUILD_APT_DIR/rpi-trixie.sources" raspberrypi.sources
+			install_apt_sources_into_chroot "$root" \
+				"$SBUILD_APT_DIR/debian-trixie.sources" debian.sources
+			install_apt_preferences_into_chroot "$root" \
+				"$SBUILD_APT_DIR/preferences-armhf.pref" 10-rpi-imager-cascade.pref
+			;;
+		*)
+			echo "sbuild-mirrors: unsupported arch for apt configuration: $arch" >&2
+			return 1
+			;;
+	esac
+
+	export DEBIAN_FRONTEND=noninteractive
+	schroot -c "$name" -- apt-get update
+}

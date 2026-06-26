@@ -12,7 +12,7 @@ QT_ROOT_ARG=""
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armv7l)"
+    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armhf)"
     echo "  --qt-root=PATH         Path to Qt installation directory"
     echo "  --no-clean             Don't clean build directory"
     echo "  -h, --help             Show this help message"
@@ -62,9 +62,12 @@ if [ -n "$QT_ROOT_ARG" ]; then
     fi
 fi
 
-# Validate architecture
-if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
-    echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
+# Validate architecture (armv6l/armv7l from uname on 32-bit Pi OS → armhf)
+case "$ARCH" in
+    armv6l|armv7l) ARCH=armhf ;;
+esac
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armhf" ]; then
+    echo "Error: Architecture must be one of: x86_64, aarch64, armhf" >&2
     exit 1
 fi
 
@@ -128,7 +131,7 @@ else
         case "$ARCH" in
             x86_64) _qt_deb_arch=amd64 ;;
             aarch64) _qt_deb_arch=arm64 ;;
-            armv7l) _qt_deb_arch=armhf ;;
+            armhf) _qt_deb_arch=armhf ;;
             *) _qt_deb_arch="" ;;
         esac
         if [ -n "$_qt_deb_arch" ] && [ -d "$QT_CACHE/$_qt_deb_arch" ]; then
@@ -153,7 +156,7 @@ else
                 if [ -d "$NEWEST_QT/gcc_arm64_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm64_cli"
                 fi
-            elif [ "$ARCH" = "armv7l" ]; then
+            elif [ "$ARCH" = "armhf" ]; then
                 if [ -d "$NEWEST_QT/gcc_arm32_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm32_cli"
                 fi
@@ -226,9 +229,9 @@ elif [ "$ARCH" = "aarch64" ]; then
         curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-aarch64.AppImage"
         chmod +x "$LINUXDEPLOY"
     fi
-elif [ "$ARCH" = "armv7l" ]; then
-    # Note: linuxdeploy may not have armv7l builds, fallback to manual deployment
-    echo "Warning: linuxdeploy may not support armv7l, attempting manual deployment"
+elif [ "$ARCH" = "armhf" ]; then
+    # Note: linuxdeploy has no armhf build; bundle libraries manually.
+    echo "Warning: linuxdeploy does not support armhf, attempting manual deployment"
     LINUXDEPLOY=""
 fi
 
@@ -254,8 +257,8 @@ if [ "$ARCH" = "aarch64" ] && [ "$(uname -m)" = "x86_64" ]; then
     # Cross-compiling from x86_64 to aarch64
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
-elif [ "$ARCH" = "armv7l" ] && [ "$(uname -m)" = "x86_64" ]; then
-    # Cross-compiling from x86_64 to armv7l
+elif [ "$ARCH" = "armhf" ] && [ "$(uname -m)" = "x86_64" ]; then
+    # Cross-compiling from x86_64 to armhf (Pi 1 / Pi 2 32-bit OS)
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=arm"
 fi

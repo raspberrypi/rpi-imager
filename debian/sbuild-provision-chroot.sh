@@ -2,7 +2,7 @@
 # Install AppImage/Qt build dependencies inside an sbuild chroot.
 #
 # Usage (as root):
-#   debian/sbuild-provision-chroot.sh <arm64|amd64>
+#   debian/sbuild-provision-chroot.sh <arm64|amd64|armhf>
 set -eu
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -11,12 +11,14 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 TOP=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
-ARCH="${1:?usage: sbuild-provision-chroot.sh <arm64|amd64>}"
+ARCH="${1:?usage: sbuild-provision-chroot.sh <arm64|amd64|armhf>}"
 
 if [ -f "$TOP/debian/release.conf" ]; then
 	# shellcheck disable=SC1091
 	. "$TOP/debian/release.conf"
 fi
+
+. "$TOP/debian/sbuild-mirrors.sh"
 
 SBUILD_DIST=${SBUILD_DIST:-trixie}
 SBUILD_CHROOT_SUFFIX=${SBUILD_CHROOT_SUFFIX:-sbuild}
@@ -28,6 +30,9 @@ if ! schroot -l | grep -q "^${CHROOT}\$"; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+echo "sbuild-provision: ensuring apt repository cascade in ${CHROOT}..."
+sbuild_configure_apt "$ARCH" "$CHROOT"
+
 echo "sbuild-provision: installing packages in ${CHROOT}..."
 schroot -c "$CHROOT" -- bash -c \
 	"apt-get update && apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")"

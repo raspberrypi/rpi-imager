@@ -1,14 +1,16 @@
 # Qt Cross-Compilation for armhf (ARM Hard-Float)
 
-This document describes how to cross-compile Qt for the armhf architecture, enabling cross-compilation of Raspberry Pi Imager for older Raspberry Pi models and other armhf-based systems.
+This document describes how to cross-compile Qt for the armhf architecture, enabling cross-compilation of Raspberry Pi Imager for Raspberry Pi 1, Pi 2, and other armhf-based systems.
 
 ## Overview
 
-The `build-qt-armhf.sh` script provides automated cross-compilation of Qt 6.9.3 for the armhf (ARM hard-float) architecture. This is particularly useful for:
+The `build-qt-armhf.sh` script provides automated cross-compilation of Qt for the armhf (ARM hard-float) architecture. This is particularly useful for:
 
-- Raspberry Pi 2, 3, and 4 (32-bit mode)
-- Other ARM-based systems using hard-float ABI
+- Raspberry Pi 1 and Raspberry Pi 2 (32-bit Raspberry Pi OS, Debian `armhf`)
+- Other ARM-based systems using the hard-float ABI
 - Cross-compiling applications from x86_64 Linux hosts
+
+On 32-bit Raspberry Pi OS, `uname -m` reports `armv6l` (Pi 1) or `armv7l` (Pi 2); the Debian architecture for both is **armhf**.
 
 ## Prerequisites
 
