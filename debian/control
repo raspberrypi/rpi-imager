@@ -8,7 +8,7 @@ Homepage: https://www.raspberrypi.com/software
 
 Package: rpi-imager
 Build-Profiles: <desktop>
-Architecture: amd64 arm64
+Architecture: amd64 arm64 armhf
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2,
          util-linux (>= 2.37), pkexec,
          libfontconfig1, libx11-6, libegl1, libgl1

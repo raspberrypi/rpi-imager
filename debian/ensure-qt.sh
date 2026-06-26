@@ -4,6 +4,9 @@
 # Builds on cache miss (QT_BUILD=auto, default). Installs build dependencies
 # when needed. Safe to call from native host or inside schroot.
 #
+# armhf desktop Qt is attempted by default (QT_DESKTOP_BUILD=try). If the
+# vendored build fails, system Qt6 from apt is accepted when available.
+#
 # Usage:
 #   debian/ensure-qt.sh <arm64|amd64|armhf>
 set -eu
@@ -11,6 +14,7 @@ set -eu
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 cd "$TOP"
 . "$TOP/debian/lib.sh"
+. "$TOP/debian/qt-resolve.sh"
 
 ARCH="${1:?usage: ensure-qt.sh <arm64|amd64|armhf>}"
 ensure_dirs
@@ -20,7 +24,6 @@ qt_prefix() {
 }
 
 import_qt_from_opt() {
-	# Reuse an existing native /opt/Qt install in the per-arch cache (symlinks).
 	[ "$ARCH" = "$HOST_ARCH" ] || return 1
 	[ -d /opt/Qt ] || return 1
 	_opt_tree="/opt/Qt/$QT_VERSION"
@@ -73,6 +76,11 @@ install_build_deps() {
 	run_apt update
 	# shellcheck disable=SC2046
 	run_apt install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")
+	# Optional system Qt6 for armhf desktop fallback (best-effort).
+	if [ "$ARCH" = armhf ] && ! qt_desktop_build_required "$ARCH"; then
+		run_apt install -y qt6-base-dev qt6-declarative-dev 2>/dev/null || \
+			echo "ensure-qt: system Qt6 dev packages not available (optional)" >&2
+	fi
 }
 
 need_desktop=1
@@ -81,6 +89,9 @@ need_cli=1
 import_qt_from_opt || true
 
 if qt_desktop_ok "$ARCH"; then
+	need_desktop=0
+elif ! qt_desktop_build_required "$ARCH" && system_qt6_desktop_ok; then
+	echo "ensure-qt: using system Qt6 for desktop ($ARCH)"
 	need_desktop=0
 fi
 if qt_cli_ok "$ARCH"; then
@@ -103,7 +114,7 @@ fi
 case "$QT_BUILD" in
 	cached|use-cache|never)
 		echo "ensure-qt: Qt cache incomplete for $ARCH (QT_BUILD=$QT_BUILD)" >&2
-		echo "ensure-qt: expected desktop: $(qt_desktop_path "$ARCH")" >&2
+		echo "ensure-qt: expected desktop: $(qt_desktop_path "$ARCH") (or system qmake6)" >&2
 		echo "ensure-qt: expected cli:     $(qt_cli_path "$ARCH")" >&2
 		exit 1
 		;;
@@ -121,10 +132,20 @@ _prefix=$(qt_prefix)
 if [ "$need_desktop" -eq 1 ]; then
 	echo "ensure-qt: building desktop Qt $QT_VERSION for $ARCH..."
 	echo "ensure-qt: install prefix $_prefix"
-	"$TOP/qt/build-qt.sh" \
+	if ! "$TOP/qt/build-qt.sh" \
 		--version="$QT_VERSION" \
 		--prefix="$_prefix" \
-		--skip-dependencies
+		--skip-dependencies; then
+		if qt_desktop_build_required "$ARCH"; then
+			echo "ensure-qt: desktop Qt build failed (required for $ARCH)" >&2
+			exit 1
+		fi
+		echo "ensure-qt: desktop Qt build failed; will use system Qt6 if available" >&2
+		if ! system_qt6_desktop_ok; then
+			echo "ensure-qt: warning: no vendored or system desktop Qt6 for $ARCH" >&2
+			echo "ensure-qt: desktop AppImage may fail; CLI builds can still proceed" >&2
+		fi
+	fi
 fi
 
 if [ "$need_cli" -eq 1 ]; then
@@ -135,9 +156,19 @@ if [ "$need_cli" -eq 1 ]; then
 		--skip-dependencies
 fi
 
-if ! qt_cache_ok "$ARCH"; then
-	echo "ensure-qt: Qt build finished but cache check failed for $ARCH" >&2
+if ! qt_cli_ok "$ARCH"; then
+	echo "ensure-qt: CLI Qt build finished but cache check failed for $ARCH" >&2
 	exit 1
+fi
+
+if qt_desktop_build_required "$ARCH" && ! qt_desktop_ok "$ARCH"; then
+	echo "ensure-qt: desktop Qt cache check failed for $ARCH" >&2
+	exit 1
+fi
+
+if ! qt_desktop_build_required "$ARCH" && ! qt_desktop_ready "$ARCH"; then
+	echo "ensure-qt: ready for CLI on $ARCH; desktop Qt not available (optional)" >&2
+	exit 0
 fi
 
 echo "ensure-qt: ready for $ARCH at $QT_CACHE/$ARCH/$QT_VERSION"

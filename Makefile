@@ -1,11 +1,13 @@
 # Debian release helpers. Configure paths in debian/release.conf (optional).
 #
 #   cp debian/release.conf.example debian/release.conf
-#   make release-status
-#   make release-source
-#   make release-arm64
+#   sudo debian/sbuild-setup.sh          # once
+#   make release                         # everything
 
-.PHONY: release-status release-source release-arm64 release-amd64 release-repo
+.PHONY: release release-status release-source release-arm64 release-amd64 release-armhf release-repo release-appimages-%
+
+# Build every release target (source + all arch AppImages + binary debs).
+release: release-repo
 
 release-status:
 	./debian/release.sh status
@@ -26,4 +28,4 @@ release-appimages-%:
 	./debian/release.sh appimages $*
 
 release-repo:
-	./debian/release.sh repo
+	RELEASE_ARCHES="$${RELEASE_ARCHES:-arm64 amd64 armhf}" ./debian/release.sh repo

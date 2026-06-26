@@ -13,6 +13,9 @@ QT_CACHE=.debian/qt
 
 # Qt build policy: auto (default, build on cache miss), cached, or always.
 # QT_BUILD=auto
+# armhf desktop Qt: try (default) builds vendored Qt but accepts system qmake6 on failure.
+# QT_DESKTOP_BUILD=try
+# QT_DESKTOP_BUILD=required
 
 # sbuild/schroot settings (only needed for isolated builds).
 SBUILD_DIST=trixie
@@ -42,7 +45,7 @@ APPIMAGE_BUILD=always
 # APPIMAGE_REMOTE_amd64=builder@amd64-vm:/home/builder/rpi-imager
 
 # Architectures for: debian/release.sh repo
-# RELEASE_ARCHES="arm64 amd64"
+RELEASE_ARCHES="arm64 amd64 armhf"
 
 # Optional upload target for: debian/release.sh repo
 # DPUT_HOST=pi-internal

@@ -159,8 +159,52 @@ qt_cli_ok() {
 	qt_qmake_ok "$(qt_cli_path "$1")"
 }
 
+system_qt6_qmake() {
+	if command -v qmake6 >/dev/null 2>&1; then
+		command -v qmake6
+		return 0
+	fi
+	if command -v qmake >/dev/null 2>&1; then
+		_ver=$(qmake -query QT_VERSION 2>/dev/null) || return 1
+		case "$_ver" in 6.*) command -v qmake; return 0 ;; esac
+	fi
+	return 1
+}
+
+system_qt6_desktop_ok() {
+	_qmake=$(system_qt6_qmake) || return 1
+	_ver=$("$_qmake" -query QT_VERSION 2>/dev/null) || return 1
+	case "$_ver" in 6.*) return 0 ;; esac
+	return 1
+}
+
+# Vendored desktop Qt and/or system Qt6 (qmake6 from apt).
+qt_desktop_ready() {
+	_arch=$1
+	qt_desktop_ok "$_arch" || system_qt6_desktop_ok
+}
+
+qt_desktop_build_required() {
+	_arch=$1
+	case "$_arch" in
+		armhf)
+			case "${QT_DESKTOP_BUILD:-try}" in
+				try|optional|best-effort) return 1 ;;
+				*) return 0 ;;
+			esac
+			;;
+		*) return 0 ;;
+	esac
+}
+
 qt_cache_ok() {
-	qt_desktop_ok "$1" && qt_cli_ok "$1"
+	_arch=$1
+	qt_cli_ok "$_arch" || return 1
+	if qt_desktop_build_required "$_arch"; then
+		qt_desktop_ok "$_arch"
+	else
+		qt_desktop_ready "$_arch"
+	fi
 }
 
 ensure_dirs() {

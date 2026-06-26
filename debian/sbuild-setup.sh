@@ -75,6 +75,7 @@ EOF
 
 bind_fstab "$APPIMAGE_ROOT" "AppImage cache"
 bind_fstab "$QT_CACHE" "Qt cache"
+bind_fstab "$TOP" "source tree"
 
 create_chroot() {
 	arch=$1
