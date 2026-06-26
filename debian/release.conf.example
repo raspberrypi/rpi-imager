@@ -22,6 +22,7 @@ SBUILD_DIST=trixie
 SBUILD_CHROOT_SUFFIX=sbuild
 # Rootless chroots (default): mmdebstrap under CHROOT_ROOT — no sudo required.
 # CHROOT_ROOT=.debian/chroots
+# KEYRING_CACHE=.debian/archive-keyrings   # fetched from archives for mmdebstrap --keyring
 # CHROOT_BACKEND=auto          # auto|mmdebstrap|schroot
 # MMDEBSTRAP_MODE=auto           # auto uses unshare when not root
 # Chroot apt repository cascade (see debian/sbuild-apt/preferences-*.pref):

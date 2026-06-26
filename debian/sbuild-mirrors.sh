@@ -124,10 +124,98 @@ install_host_archive_keyrings() {
 	apt-get install -y debian-archive-keyring raspbian-archive-keyring raspberrypi-archive-keyring 2>/dev/null || true
 }
 
+# Host-side keyring cache for mmdebstrap (--keyring, unshare namespace — not in chroot).
+sbuild_keyring_cache_dir() {
+	_cache=${KEYRING_CACHE:-.debian/archive-keyrings}
+	case "$_cache" in
+		/*) printf '%s\n' "$_cache" ;;
+		*) printf '%s/%s\n' "$TOP" "$_cache" ;;
+	esac
+}
+
+sbuild_fetch_archive_keyrings() {
+	_which=${1:-all}
+	sh "$TOP/debian/fetch-archive-keyrings.sh" "$_which"
+}
+
+# Directory passed to mmdebstrap --keyring= (host paths for unshared apt).
+sbuild_mmdebstrap_keyring_dir() {
+	_arch=$1
+	_cache=$(sbuild_keyring_cache_dir)
+	_stage="$_cache/mmdebstrap-trusted"
+
+	install -d "$_cache" "$_stage"
+	sbuild_fetch_archive_keyrings all
+
+	for _name in debian-archive-keyring.gpg raspberrypi-archive-keyring.gpg raspbian-archive-keyring.gpg; do
+		[ -f "$_cache/$_name" ] || continue
+		ln -sf "$_cache/$_name" "$_stage/$_name"
+	done
+
+	case "$_arch" in
+		armhf)
+			[ -f "$_stage/raspbian-archive-keyring.gpg" ] || {
+				echo "sbuild-mirrors: missing raspbian keyring (run fetch-archive-keyrings.sh)" >&2
+				return 1
+			}
+			;;
+		arm64|amd64)
+			[ -f "$_stage/debian-archive-keyring.gpg" ] || {
+				echo "sbuild-mirrors: missing debian keyring (run fetch-archive-keyrings.sh)" >&2
+				return 1
+			}
+			;;
+		*)
+			echo "sbuild-mirrors: unsupported arch: $_arch" >&2
+			return 1
+			;;
+	esac
+
+	printf '%s\n' "$_stage"
+}
+
+sbuild_mmdebstrap_bootstrap_mirror() {
+	_arch=$1
+	_keydir=$2
+	_suite=$SBUILD_DIST
+
+	case "$_arch" in
+		armhf)
+			_key="$_keydir/raspbian-archive-keyring.gpg"
+			_mirror=${SBUILD_RASPBIAN_MIRROR%/}
+			case "$_mirror" in
+				*/raspbian) ;;
+				*) _mirror="${_mirror}/raspbian" ;;
+			esac
+			printf 'deb [signed-by=%s arch=armhf] %s %s main contrib non-free rpi\n' \
+				"$_key" "$_mirror" "$_suite"
+			;;
+		arm64)
+			_key="$_keydir/debian-archive-keyring.gpg"
+			printf 'deb [signed-by=%s arch=arm64] %s %s main contrib non-free non-free-firmware\n' \
+				"$_key" "${SBUILD_DEBIAN_MIRROR%/}" "$_suite"
+			;;
+		amd64)
+			_key="$_keydir/debian-archive-keyring.gpg"
+			printf 'deb [signed-by=%s arch=amd64] %s %s main contrib non-free non-free-firmware\n' \
+				"$_key" "${SBUILD_DEBIAN_MIRROR%/}" "$_suite"
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
 install_keyring_into_chroot() {
 	_root=$1
 	_host_key=$2
 	_dest_name=$3
+	_cache=$(sbuild_keyring_cache_dir)
+	_cached="$_cache/$_dest_name"
+
+	if [ ! -f "$_host_key" ] && [ -f "$_cached" ]; then
+		_host_key=$_cached
+	fi
 
 	[ -f "$_host_key" ] || return 0
 	install -d "$_root/usr/share/keyrings"

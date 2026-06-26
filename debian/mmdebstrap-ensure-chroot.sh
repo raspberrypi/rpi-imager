@@ -43,14 +43,8 @@ fi
 ensure_chroot_dirs
 
 case "$ARCH" in
-	armhf)
-		_MIRROR=$SBUILD_RASPBIAN_MIRROR
-		_COMPONENTS=main,contrib,non-free,rpi
-		;;
-	arm64|amd64)
-		_MIRROR=$SBUILD_DEBIAN_MIRROR
-		_COMPONENTS=main,contrib,non-free,non-free-firmware
-		;;
+	armhf) _COMPONENTS=main,contrib,non-free,rpi ;;
+	arm64|amd64) _COMPONENTS=main,contrib,non-free,non-free-firmware ;;
 	*)
 		echo "mmdebstrap-ensure: unsupported arch: $ARCH" >&2
 		exit 1
@@ -67,11 +61,18 @@ if [ "$ARCH" != "$HOST_ARCH" ] && ! command -v arch-test >/dev/null 2>&1; then
 	_SKIP_QEMU=check/qemu
 fi
 
-echo "mmdebstrap-ensure: creating $NAME at $ROOT (mode=$MODE, mirror=$_MIRROR)..."
+. "$TOP/debian/sbuild-mirrors.sh"
+
+_KEYRING_DIR=$(sbuild_mmdebstrap_keyring_dir "$ARCH") || exit 1
+_MIRROR=$(sbuild_mmdebstrap_bootstrap_mirror "$ARCH" "$_KEYRING_DIR") || exit 1
+
+echo "mmdebstrap-ensure: creating $NAME at $ROOT (mode=$MODE)..."
+echo "mmdebstrap-ensure: host keyrings: $_KEYRING_DIR"
 
 # shellcheck disable=SC2086
 mmdebstrap --mode="$MODE" --variant=minbase \
 	--arch="$ARCH" \
+	--keyring="$_KEYRING_DIR" \
 	--components="$_COMPONENTS" \
 	--include="$_INCLUDE" \
 	${_SKIP_QEMU:+--skip="$_SKIP_QEMU"} \
