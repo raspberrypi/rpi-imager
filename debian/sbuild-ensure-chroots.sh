@@ -10,11 +10,14 @@
 # Execute only — do not source (exit/return handling and apt-get need a subshell).
 set -eu
 
-if (return 0 2>/dev/null); then
-	echo "debian/sbuild-ensure-chroots.sh: execute this script, do not source it." >&2
-	echo "  sudo debian/sbuild-ensure-chroots.sh [arch...]" >&2
-	return 1
-fi
+case "$0" in
+	*sbuild-ensure-chroots.sh) ;;
+	*)
+		echo "debian/sbuild-ensure-chroots.sh: execute this script, do not source it." >&2
+		echo "  sudo debian/sbuild-ensure-chroots.sh [arch...]" >&2
+		return 1 2>/dev/null || exit 1
+		;;
+esac
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "Run as root: sudo debian/sbuild-ensure-chroots.sh [arch...]" >&2

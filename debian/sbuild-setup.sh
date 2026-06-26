@@ -15,11 +15,14 @@
 # release.sh also creates mmdebstrap chroots automatically when missing.
 set -eu
 
-if (return 0 2>/dev/null); then
-	echo "debian/sbuild-setup.sh must be executed, not sourced." >&2
-	echo "  sudo debian/sbuild-setup.sh" >&2
-	return 1
-fi
+case "$0" in
+	*sbuild-setup.sh) ;;
+	*)
+		echo "debian/sbuild-setup.sh must be executed, not sourced." >&2
+		echo "  sudo debian/sbuild-setup.sh" >&2
+		return 1 2>/dev/null || exit 1
+		;;
+esac
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "Run as root: sudo debian/sbuild-setup.sh" >&2

@@ -7,11 +7,6 @@
 # Chroots live under CHROOT_ROOT (default: .debian/chroots/).
 set -eu
 
-if (return 0 2>/dev/null); then
-	echo "debian/mmdebstrap-ensure-chroot.sh: execute this script, do not source it." >&2
-	return 1
-fi
-
 TOP=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 
 if [ -f "$TOP/debian/release.conf" ]; then
