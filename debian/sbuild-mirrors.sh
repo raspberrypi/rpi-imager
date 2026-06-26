@@ -184,13 +184,9 @@ sbuild_mmdebstrap_stage_keyring() {
 	printf '%s\n' "$_stage/$_basename"
 }
 
-# One-line apt sources for mmdebstrap (all suites signed-by the bootstrap key).
-sbuild_mmdebstrap_write_mirrors() {
+# Bootstrap mirror URI passed to mmdebstrap (setup-hook replaces sources.list).
+sbuild_mmdebstrap_bootstrap_uri() {
 	_arch=$1
-	_key=$2
-	_out=$3
-	_suite=$SBUILD_DIST
-
 	case "$_arch" in
 		armhf)
 			_mirror=${SBUILD_RASPBIAN_MIRROR%/}
@@ -198,16 +194,10 @@ sbuild_mmdebstrap_write_mirrors() {
 				*/raspbian) ;;
 				*) _mirror="${_mirror}/raspbian" ;;
 			esac
-			cat >"$_out" <<EOF
-deb [signed-by=${_key} arch=armhf] ${_mirror} ${_suite} main contrib non-free rpi
-EOF
+			printf '%s\n' "$_mirror"
 			;;
 		arm64|amd64)
-			cat >"$_out" <<EOF
-deb [signed-by=${_key} arch=${_arch}] ${SBUILD_DEBIAN_MIRROR%/} ${_suite} main contrib non-free non-free-firmware
-deb [signed-by=${_key} arch=${_arch}] ${SBUILD_DEBIAN_MIRROR%/} ${_suite}-updates main contrib non-free non-free-firmware
-deb [signed-by=${_key} arch=${_arch}] http://deb.debian.org/debian-security ${_suite}-security main contrib non-free non-free-firmware
-EOF
+			printf '%s\n' "${SBUILD_DEBIAN_MIRROR%/}"
 			;;
 		*)
 			return 1

@@ -77,12 +77,12 @@ fi
 
 _KEYRING=$(sbuild_mmdebstrap_stage_keyring "$ARCH") || exit 1
 _KEYRING_STAGE=$(dirname "$_KEYRING")
-_MIRROR_FILE=$(mktemp "${TMPDIR:-/tmp}/rpi-imager-mmdebstrap-mirrors.XXXXXX")
-trap 'rm -rf "$_KEYRING_STAGE" "$_MIRROR_FILE"' EXIT INT HUP TERM
-sbuild_mmdebstrap_write_mirrors "$ARCH" "$_KEYRING" "$_MIRROR_FILE" || exit 1
+_BOOTSTRAP_URI=$(sbuild_mmdebstrap_bootstrap_uri "$ARCH") || exit 1
+trap 'rm -rf "$_KEYRING_STAGE"' EXIT INT HUP TERM
 
 echo "mmdebstrap-ensure: creating $NAME (mode=$MODE, tar -> $ROOT)..."
-echo "mmdebstrap-ensure: apt keyring (staged for unshare): $_KEYRING"
+echo "mmdebstrap-ensure: bootstrap keyring: $_KEYRING"
+echo "mmdebstrap-ensure: bootstrap mirror: $_BOOTSTRAP_URI"
 
 _cleanup_partial() {
 	if [ -f "$_TAR" ]; then
@@ -99,16 +99,18 @@ trap _cleanup_partial EXIT INT HUP TERM
 mmdebstrap --mode="$MODE" --format=tar --variant=minbase \
 	--arch="$ARCH" \
 	--keyring="$_KEYRING" \
+	--aptopt='APT::Sandbox::User "root"' \
 	--components="$_COMPONENTS" \
 	--include="$_INCLUDE" \
 	${_SKIP_QEMU:+--skip="$_SKIP_QEMU"} \
+	--setup-hook="sh '$TOP/debian/mmdebstrap-setup-hook.sh' \"\$1\" '$ARCH' '$_KEYRING'" \
 	--customize-hook="sh '$TOP/debian/mmdebstrap-configure-apt.sh' \"\$1\" '$ARCH'" \
 	--customize-hook="chroot \"\$1\" apt-get update" \
 	--customize-hook="chroot \"\$1\" apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")" \
 	--customize-hook="touch \"\$1/.rpi-imager-chroot-ok\"" \
-	"$SBUILD_DIST" "$_TAR" "$_MIRROR_FILE"
+	"$SBUILD_DIST" "$_TAR" "$_BOOTSTRAP_URI"
 
-rm -rf "$_KEYRING_STAGE" "$_MIRROR_FILE"
+rm -rf "$_KEYRING_STAGE"
 trap - EXIT INT HUP TERM
 
 rm -rf "$ROOT"
