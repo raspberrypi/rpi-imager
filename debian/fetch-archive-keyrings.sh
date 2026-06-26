@@ -62,11 +62,11 @@ copy_or_use() {
 		return 1
 	fi
 	if [ "$_src" -ef "$_dest" ]; then
-		echo "fetch-archive-keyrings: using $_src"
+		echo "fetch-archive-keyrings: using $_src" >&2
 		return 0
 	fi
 	install -m 0644 "$_src" "$_dest"
-	echo "fetch-archive-keyrings: using $_src"
+	echo "fetch-archive-keyrings: using $_src" >&2
 	return 0
 }
 
@@ -88,7 +88,7 @@ _fetch_pool_deb_keyring() {
 	# shellcheck disable=SC2064
 	trap "rm -rf '$_tmp'" EXIT INT HUP TERM
 
-	echo "fetch-archive-keyrings: downloading $_pkg from ${_mirror%/}/$_file"
+	echo "fetch-archive-keyrings: downloading $_pkg from ${_mirror%/}/$_file" >&2
 	curl -fsSL "${_mirror%/}/$_file" -o "$_deb"
 
 	if command -v dpkg-deb >/dev/null 2>&1; then
@@ -110,7 +110,7 @@ _fetch_pool_deb_keyring() {
 	}
 
 	install -m 0644 "$_gpg" "$_dest"
-	echo "fetch-archive-keyrings: installed $_label -> $_dest"
+	echo "fetch-archive-keyrings: installed $_label -> $_dest" >&2
 }
 
 _fetch_ascii_key() {
@@ -118,7 +118,7 @@ _fetch_ascii_key() {
 	_dest=$2
 	_url=$3
 
-	echo "fetch-archive-keyrings: downloading $_label from $_url"
+	echo "fetch-archive-keyrings: downloading $_label from $_url" >&2
 	if command -v gpg >/dev/null 2>&1; then
 		curl -fsSL "$_url" | gpg --dearmor >"$_dest"
 	else
@@ -126,7 +126,7 @@ _fetch_ascii_key() {
 		return 1
 	fi
 	chmod 0644 "$_dest"
-	echo "fetch-archive-keyrings: installed $_label -> $_dest"
+	echo "fetch-archive-keyrings: installed $_label -> $_dest" >&2
 }
 
 debian_keyring_has_trixie_keys() {
@@ -146,7 +146,7 @@ ensure_keyring() {
 		case "$_label" in
 			debian-archive-keyring)
 				debian_keyring_has_trixie_keys "$_dest" && return 0
-				echo "fetch-archive-keyrings: refreshing stale $_dest"
+				echo "fetch-archive-keyrings: refreshing stale $_dest" >&2
 				rm -f "$_dest"
 				;;
 			*) return 0 ;;
