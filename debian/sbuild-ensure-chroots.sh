@@ -31,6 +31,9 @@ if [ -f "$TOP/debian/release.conf" ]; then
 	. "$TOP/debian/release.conf"
 fi
 
+SBUILD_DIST=${SBUILD_DIST:-trixie}
+SBUILD_CHROOT_SUFFIX=${SBUILD_CHROOT_SUFFIX:-sbuild}
+
 . "$TOP/debian/sbuild-mirrors.sh"
 
 resolve_repo_path() {
