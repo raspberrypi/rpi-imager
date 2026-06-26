@@ -176,8 +176,20 @@ sbuild_mmdebstrap_keyring_cached() {
 	sbuild_keyring_abs_path "$_file"
 }
 
-# mmdebstrap --mode=unshare runs apt as a subuid user that cannot traverse
-# $HOME (typically mode 700). Copy the keyring to a world-readable /tmp path.
+# mmdebstrap --mode=unshare runs hooks and apt as a subuid user that cannot
+# traverse $HOME (typically mode 700). Stage scripts and keyrings under /tmp.
+sbuild_mmdebstrap_stage_hook_tree() {
+	_dest=$(mktemp -d "${TMPDIR:-/tmp}/rpi-imager-mmdebstrap-hooks.XXXXXX")
+	chmod 0755 "$_dest"
+	mkdir -p "$_dest/debian"
+	for _f in mmdebstrap-setup-hook.sh mmdebstrap-configure-apt.sh sbuild-mirrors.sh; do
+		install -m 0755 "$TOP/debian/$_f" "$_dest/debian/$_f"
+	done
+	cp -a "$TOP/debian/sbuild-apt" "$_dest/debian/"
+	chmod -R a+rX "$_dest"
+	printf '%s\n' "$_dest"
+}
+
 sbuild_mmdebstrap_stage_keyring() {
 	_arch=$1
 	_cached=$(sbuild_mmdebstrap_keyring_cached "$_arch") || return 1

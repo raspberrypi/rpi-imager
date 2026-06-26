@@ -129,13 +129,29 @@ _fetch_ascii_key() {
 	echo "fetch-archive-keyrings: installed $_label -> $_dest"
 }
 
+debian_keyring_has_trixie_keys() {
+	_file=$1
+	[ -f "$_file" ] || return 1
+	command -v gpg >/dev/null 2>&1 || return 0
+	gpg --no-default-keyring --keyring "$_file" --list-keys 78DBA3BC47EF2265 >/dev/null 2>&1
+}
+
 ensure_keyring() {
 	_label=$1
 	_dest=$2
 	_host=$3
 	shift 3
 
-	[ -f "$_dest" ] && return 0
+	if [ -f "$_dest" ]; then
+		case "$_label" in
+			debian-archive-keyring)
+				debian_keyring_has_trixie_keys "$_dest" && return 0
+				echo "fetch-archive-keyrings: refreshing stale $_dest"
+				rm -f "$_dest"
+				;;
+			*) return 0 ;;
+		esac
+	fi
 	copy_or_use "$_dest" "$_host" && return 0
 	"$@"
 }
