@@ -20,6 +20,10 @@ QT_CACHE=.debian/qt
 # sbuild/schroot settings (only needed for isolated builds).
 SBUILD_DIST=trixie
 SBUILD_CHROOT_SUFFIX=sbuild
+# Rootless chroots (default): mmdebstrap under CHROOT_ROOT — no sudo required.
+# CHROOT_ROOT=.debian/chroots
+# CHROOT_BACKEND=auto          # auto|mmdebstrap|schroot
+# MMDEBSTRAP_MODE=auto           # auto uses unshare when not root
 # Chroot apt repository cascade (see debian/sbuild-apt/preferences-*.pref):
 #   armhf — raspbian > rpi > debian
 #   arm64 — rpi > debian
@@ -29,9 +33,9 @@ SBUILD_CHROOT_SUFFIX=sbuild
 # SBUILD_RASPBIAN_MIRROR=http://raspbian.raspberrypi.com/raspbian
 # SBUILD_RPI_MIRROR=http://archive.raspberrypi.com/debian
 
-# Build backend: auto (sbuild if chroot exists, else local), sbuild, or local.
+# Build backend: auto (sbuild if schroot exists, else local), sbuild, or local.
 BUILDER=auto
-# auto (default): sudo debian/sbuild-ensure-chroots.sh when schroots are missing
+# auto (default): create missing chroots via mmdebstrap (no sudo) or schroot (sudo)
 # SBUILD_AUTO_CHROOTS=auto
 # SBUILD_AUTO_CHROOTS=0
 
@@ -41,7 +45,7 @@ DEB_BUILD_PROFILES=desktop cli
 # AppImage build policy: always (default) or cached (sync staged files only).
 APPIMAGE_BUILD=always
 
-# Cross-arch AppImage builders (SSH fallback when no sbuild chroot exists).
+# Cross-arch AppImage builders (SSH fallback when no local chroot exists).
 # APPIMAGE_REMOTE_arm64=tdewey@pi5
 # APPIMAGE_REMOTE_DIR_arm64=/home/tdewey/rpi-imager
 # Or combined:

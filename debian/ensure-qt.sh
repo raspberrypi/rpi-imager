@@ -51,7 +51,7 @@ import_qt_from_opt() {
 }
 
 in_schroot() {
-	[ -n "${SCHROOT_CHROOT_NAME:-}" ]
+	[ -n "${SCHROOT_CHROOT_NAME:-}" ] || [ -n "${RPI_IMAGER_CHROOT:-}" ]
 }
 
 run_apt() {

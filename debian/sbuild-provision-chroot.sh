@@ -1,40 +1,40 @@
 #!/bin/sh
-# Install AppImage/Qt build dependencies inside an sbuild chroot.
+# Install AppImage/Qt build dependencies inside a build chroot.
 #
-# Usage (as root):
+# Usage:
 #   debian/sbuild-provision-chroot.sh <arm64|amd64|armhf>
 set -eu
 
-if [ "$(id -u)" -ne 0 ]; then
-	echo "Run as root: sudo debian/sbuild-provision-chroot.sh <arch>" >&2
-	exit 1
-fi
-
 TOP=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$TOP"
+. "$TOP/debian/lib.sh"
+
 ARCH="${1:?usage: sbuild-provision-chroot.sh <arm64|amd64|armhf>}"
-
-if [ -f "$TOP/debian/release.conf" ]; then
-	# shellcheck disable=SC1091
-	. "$TOP/debian/release.conf"
-fi
-
-. "$TOP/debian/sbuild-mirrors.sh"
-
-SBUILD_DIST=${SBUILD_DIST:-trixie}
-SBUILD_CHROOT_SUFFIX=${SBUILD_CHROOT_SUFFIX:-sbuild}
 CHROOT="${SBUILD_DIST}-${ARCH}-${SBUILD_CHROOT_SUFFIX}"
 
-if ! schroot -l | grep -q "^${CHROOT}\$"; then
-	echo "sbuild-provision: chroot ${CHROOT} not found; run debian/sbuild-setup.sh first" >&2
+if ! have_chroot "$ARCH"; then
+	echo "sbuild-provision: chroot ${CHROOT} not found; run debian/mmdebstrap-ensure-chroot.sh or debian/sbuild-setup.sh" >&2
 	exit 1
 fi
 
 export DEBIAN_FRONTEND=noninteractive
 echo "sbuild-provision: ensuring apt repository cascade in ${CHROOT}..."
-sbuild_configure_apt "$ARCH" "$CHROOT"
 
-echo "sbuild-provision: installing packages in ${CHROOT}..."
-schroot -c "$CHROOT" -- bash -c \
-	"apt-get update && apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")"
+case "$(chroot_backend_for "$ARCH")" in
+	schroot)
+		sbuild_configure_apt "$ARCH" "$CHROOT"
+		schroot -c "$CHROOT" -- bash -c \
+			"apt-get update && apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")"
+		;;
+	mmdebstrap)
+		sh "$TOP/debian/mmdebstrap-configure-apt.sh" "$(chroot_mmdebstrap_root "$ARCH")" "$ARCH"
+		chroot_run "$ARCH" bash -c \
+			"apt-get update && apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")"
+		;;
+	*)
+		echo "sbuild-provision: no chroot backend for $ARCH" >&2
+		exit 1
+		;;
+esac
 
 echo "sbuild-provision: ${CHROOT} ready for Qt/AppImage builds"

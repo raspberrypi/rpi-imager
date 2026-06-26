@@ -47,7 +47,7 @@ AppImage build (APPIMAGE_BUILD=$APPIMAGE_BUILD):
   always     rebuild before every sync (default)
   cached     sync only; use with pre-staged AppImages
 
-Cross-arch AppImages (foreign host): schroot/qemu when a chroot exists,
+Cross-arch AppImages (foreign host): mmdebstrap/schroot chroot, or
 then APPIMAGE_REMOTE_<arch> as fallback:
   APPIMAGE_REMOTE_arm64=user@pi5:/home/tdewey/rpi-imager
 
@@ -138,17 +138,20 @@ cmd_status() {
 		fi
 	done
 	echo
-	echo "sbuild chroots (optional):"
-	if have_sbuild; then
-		for arch in $SBUILD_CHROOT_ARCHES; do
-			if have_chroot "$arch"; then
-				echo "  ok  $(chroot_name "$arch")"
-			else
-				echo "  --  $(chroot_name "$arch")"
-			fi
-		done
-	else
-		echo "  --  sbuild not installed (local builds only)"
+	echo "build chroots:"
+	for arch in $SBUILD_CHROOT_ARCHES; do
+		_backend=$(chroot_backend_for "$arch")
+		case "$_backend" in
+			schroot) echo "  ok  $(chroot_name "$arch") (schroot)" ;;
+			mmdebstrap) echo "  ok  $(chroot_name "$arch") (mmdebstrap, $(chroot_mmdebstrap_root "$arch"))" ;;
+			*) echo "  --  $(chroot_name "$arch")" ;;
+		esac
+	done
+	if ! command -v mmdebstrap >/dev/null 2>&1; then
+		echo "  note: apt install mmdebstrap for rootless chroots"
+	fi
+	if ! have_sbuild; then
+		echo "  note: sbuild optional (needed for schroot .deb builds only)"
 	fi
 }
 

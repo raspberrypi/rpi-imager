@@ -26,17 +26,18 @@ run_in_build_context() {
 		return $?
 	fi
 
-	if ! ensure_schroot "$ARCH"; then
+	if ! ensure_chroot "$ARCH"; then
 		exit 1
 	fi
 
-	if have_chroot "$ARCH"; then
-		if ! schroot -c "$CHROOT" -- test -d "$TOP"; then
-			echo "build-appimages: $TOP not visible inside $CHROOT" >&2
-			echo "build-appimages: re-run: sudo debian/sbuild-setup.sh (bind-mounts source tree)" >&2
+	_backend=$(chroot_backend_for "$ARCH")
+	if [ "$_backend" != none ]; then
+		if ! chroot_run "$ARCH" test -d "$TOP"; then
+			echo "build-appimages: $TOP not visible inside $(chroot_name "$ARCH")" >&2
+			echo "build-appimages: re-run: debian/mmdebstrap-ensure-chroot.sh $ARCH" >&2
 			exit 1
 		fi
-		schroot -c "$CHROOT" -- bash -lc \
+		chroot_run "$ARCH" bash -lc \
 			"cd '$TOP' && QT_CACHE='$QT_CACHE' QT_VERSION='$QT_VERSION' APPIMAGE_ROOT='$APPIMAGE_ROOT' $(printf '%q ' "$@")"
 		return $?
 	fi
@@ -48,8 +49,8 @@ run_in_build_context() {
 		return $?
 	fi
 
-	echo "build-appimages: no schroot or remote builder for $ARCH (host: $HOST_ARCH)" >&2
-	echo "build-appimages: expected schroot: $(chroot_name "$ARCH")" >&2
+	echo "build-appimages: no chroot or remote builder for $ARCH (host: $HOST_ARCH)" >&2
+	echo "build-appimages: expected: $(chroot_name "$ARCH") under schroot or $CHROOT_ROOT" >&2
 	exit 1
 }
 

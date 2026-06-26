@@ -1,17 +1,25 @@
 #!/bin/sh
-# One-time sbuild/schroot setup for isolated builds (wrapper).
+# One-time sbuild/schroot setup for isolated .deb builds (requires root).
 #
-# Creates chroots aligned with Raspberry Pi OS apt archives:
+# For AppImage/cross-arch builds without sudo, use mmdebstrap instead:
+#   debian/mmdebstrap-ensure-chroot.sh arm64 armhf
+#
+# Creates schroots aligned with Raspberry Pi OS apt archives:
 #   armhf  — raspbian > rpi > debian
 #   arm64  — rpi > debian
 #   amd64  — debian only
 #
-# Usage:
+# Usage (execute — do not source; sourcing runs exit in your shell):
 #   sudo debian/sbuild-setup.sh
 #
-# release.sh also invokes debian/sbuild-ensure-chroots.sh automatically
-# when schroots are missing.
+# release.sh also creates mmdebstrap chroots automatically when missing.
 set -eu
+
+if (return 0 2>/dev/null); then
+	echo "debian/sbuild-setup.sh must be executed, not sourced." >&2
+	echo "  sudo debian/sbuild-setup.sh" >&2
+	return 1
+fi
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "Run as root: sudo debian/sbuild-setup.sh" >&2

@@ -22,6 +22,12 @@ if ! have_chroot "$ARCH"; then
 	exit 1
 fi
 
+if ! have_schroot_chroot "$ARCH"; then
+	echo "build-sbuild: schroot $(chroot_name "$ARCH") required for sbuild (mmdebstrap is AppImage-only)" >&2
+	echo "build-sbuild: run: sudo debian/sbuild-setup.sh $ARCH" >&2
+	exit 1
+fi
+
 ensure_dirs
 _dsc="$OUTPUT_DIR/${PACKAGE}_${VERSION}.dsc"
 if [ ! -f "$_dsc" ]; then
