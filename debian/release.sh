@@ -191,8 +191,14 @@ cmd_arch() {
 }
 
 cmd_repo() {
+	_missing=$(missing_release_chroots)
+	if [ -n "$_missing" ]; then
+		# shellcheck disable=SC2086
+		ensure_release_chroots $_missing || exit 1
+	fi
 	cmd_source
-	for arch in $RELEASE_ARCHES; do
+	# shellcheck disable=SC2046
+	for arch in $(release_arch_order); do
 		cmd_arch "$arch"
 	done
 	if [ -n "$DPUT_HOST" ]; then

@@ -47,6 +47,8 @@ SBUILD_RASPBIAN_MIRROR=${SBUILD_RASPBIAN_MIRROR:-http://raspbian.raspberrypi.com
 SBUILD_RPI_MIRROR=${SBUILD_RPI_MIRROR:-http://archive.raspberrypi.com/debian}
 SBUILD_CHROOT_ARCHES=${SBUILD_CHROOT_ARCHES:-arm64 amd64 armhf}
 BUILDER=${BUILDER:-auto}
+# auto: create missing schroots via sudo (default); 0: require manual setup
+SBUILD_AUTO_CHROOTS=${SBUILD_AUTO_CHROOTS:-auto}
 DEB_BUILD_PROFILES=${DEB_BUILD_PROFILES:-desktop cli}
 DPUT_HOST=${DPUT_HOST:-}
 # always: rebuild AppImages every time (default); cached: sync staged cache only
@@ -69,6 +71,148 @@ have_sbuild() {
 have_chroot() {
 	_arch=$1
 	schroot -l 2>/dev/null | grep -q "^$(chroot_name "$_arch")\$"
+}
+
+# Put the native host arch first so AppImage/Qt builds can run without schroot.
+release_arch_order() {
+	_native=$HOST_ARCH
+	_out=""
+
+	for _arch in $RELEASE_ARCHES; do
+		if [ "$_arch" = "$_native" ]; then
+			_out="$_arch"
+			break
+		fi
+	done
+
+	for _arch in $RELEASE_ARCHES; do
+		if [ "$_arch" = "$_native" ]; then
+			continue
+		fi
+		_out="$_out $_arch"
+	done
+
+	# shellcheck disable=SC2086
+	set -- $_out
+	printf '%s\n' "$@"
+}
+
+# Foreign arches need a schroot or APPIMAGE_REMOTE_<arch>.
+# SBUILD_AUTO_CHROOTS=auto (default) runs sudo debian/sbuild-ensure-chroots.sh when missing.
+# Returns a space-separated list of foreign RELEASE_ARCHES missing schroot/remote.
+missing_release_chroots() {
+	_missing=""
+	for _arch in $RELEASE_ARCHES; do
+		if [ "$_arch" = "$HOST_ARCH" ]; then
+			continue
+		fi
+		if have_chroot "$_arch"; then
+			continue
+		fi
+		if appimage_remote_host "$_arch" 2>/dev/null; then
+			continue
+		fi
+		_missing="$_missing $_arch"
+	done
+	printf '%s' "$_missing"
+}
+
+run_sbuild_ensure_chroots() {
+	# shellcheck disable=SC2048,SC2086
+	_sudo=${1:-}
+	shift
+
+	if [ "$#" -eq 0 ]; then
+		return 0
+	fi
+
+	echo "release: ensuring schroots for:$*"
+	if [ -n "$_sudo" ]; then
+		"$_sudo" "$TOP/debian/sbuild-ensure-chroots.sh" "$@"
+	elif [ "$(id -u)" -eq 0 ]; then
+		sh "$TOP/debian/sbuild-ensure-chroots.sh" "$@"
+	else
+		echo "release: root required to create schroots; install sudo or run as root" >&2
+		return 1
+	fi
+}
+
+ensure_schroot() {
+	_arch=$1
+
+	if [ "$_arch" = "$HOST_ARCH" ]; then
+		return 0
+	fi
+	if have_chroot "$_arch"; then
+		return 0
+	fi
+	if appimage_remote_host "$_arch" 2>/dev/null; then
+		return 0
+	fi
+
+	case "${SBUILD_AUTO_CHROOTS:-auto}" in
+		0|no|never|false|disabled)
+			echo "release: missing schroot $(chroot_name "$_arch") (SBUILD_AUTO_CHROOTS disabled)" >&2
+			return 1
+			;;
+	esac
+
+	if ! have_sbuild && [ "$(id -u)" -ne 0 ]; then
+		echo "release: sbuild not installed; creating schroots requires root" >&2
+	fi
+
+	if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
+		if sudo -n true 2>/dev/null; then
+			run_sbuild_ensure_chroots sudo "$_arch" || return 1
+		else
+			echo "release: sudo password required to create $(chroot_name "$_arch")..."
+			run_sbuild_ensure_chroots sudo "$_arch" || return 1
+		fi
+	else
+		run_sbuild_ensure_chroots "" "$_arch" || return 1
+	fi
+
+	if ! have_chroot "$_arch"; then
+		echo "release: failed to create schroot $(chroot_name "$_arch")" >&2
+		return 1
+	fi
+}
+
+ensure_release_chroots() {
+	missing_release_chroots
+	# shellcheck disable=SC2181
+	if [ "$#" -eq 0 ]; then
+		return 0
+	fi
+
+	case "${SBUILD_AUTO_CHROOTS:-auto}" in
+		0|no|never|false|disabled)
+			echo "release: cross-arch AppImages require schroot or APPIMAGE_REMOTE for:$*" >&2
+			for _arch in "$@"; do
+				echo "release:   missing: $(chroot_name "$_arch")  (or APPIMAGE_REMOTE_${_arch})" >&2
+			done
+			echo "release: run: sudo debian/sbuild-setup.sh  or set SBUILD_AUTO_CHROOTS=auto" >&2
+			return 1
+			;;
+	esac
+
+	if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
+		if sudo -n true 2>/dev/null; then
+			run_sbuild_ensure_chroots sudo "$@" || return 1
+		else
+			echo "release: sudo password required to create schroots..."
+			run_sbuild_ensure_chroots sudo "$@" || return 1
+		fi
+	else
+		run_sbuild_ensure_chroots "" "$@" || return 1
+	fi
+
+	for _arch in "$@"; do
+		if ! have_chroot "$_arch"; then
+			echo "release: schroot $(chroot_name "$_arch") still missing after ensure" >&2
+			return 1
+		fi
+	done
 }
 
 choose_builder() {

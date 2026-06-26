@@ -31,6 +31,9 @@ SBUILD_CHROOT_SUFFIX=sbuild
 
 # Build backend: auto (sbuild if chroot exists, else local), sbuild, or local.
 BUILDER=auto
+# auto (default): sudo debian/sbuild-ensure-chroots.sh when schroots are missing
+# SBUILD_AUTO_CHROOTS=auto
+# SBUILD_AUTO_CHROOTS=0
 
 # Default profiles for desktop/cli packages.
 DEB_BUILD_PROFILES=desktop cli
@@ -45,7 +48,7 @@ APPIMAGE_BUILD=always
 # APPIMAGE_REMOTE_amd64=builder@amd64-vm:/home/builder/rpi-imager
 
 # Architectures for: debian/release.sh repo
-RELEASE_ARCHES="arm64 amd64 armhf"
+RELEASE_ARCHES="amd64 arm64 armhf"
 
 # Optional upload target for: debian/release.sh repo
 # DPUT_HOST=pi-internal

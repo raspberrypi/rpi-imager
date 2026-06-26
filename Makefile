@@ -28,4 +28,4 @@ release-appimages-%:
 	./debian/release.sh appimages $*
 
 release-repo:
-	RELEASE_ARCHES="$${RELEASE_ARCHES:-arm64 amd64 armhf}" ./debian/release.sh repo
+	RELEASE_ARCHES="$${RELEASE_ARCHES:-amd64 arm64 armhf}" ./debian/release.sh repo
