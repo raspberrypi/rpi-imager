@@ -75,13 +75,14 @@ fi
 
 . "$TOP/debian/sbuild-mirrors.sh"
 
-_KEYRING=$(sbuild_mmdebstrap_keyring_file "$ARCH") || exit 1
+_KEYRING=$(sbuild_mmdebstrap_stage_keyring "$ARCH") || exit 1
+_KEYRING_STAGE=$(dirname "$_KEYRING")
 _MIRROR_FILE=$(mktemp "${TMPDIR:-/tmp}/rpi-imager-mmdebstrap-mirrors.XXXXXX")
-trap 'rm -f "$_MIRROR_FILE"' EXIT INT HUP TERM
+trap 'rm -rf "$_KEYRING_STAGE" "$_MIRROR_FILE"' EXIT INT HUP TERM
 sbuild_mmdebstrap_write_mirrors "$ARCH" "$_KEYRING" "$_MIRROR_FILE" || exit 1
 
 echo "mmdebstrap-ensure: creating $NAME (mode=$MODE, tar -> $ROOT)..."
-echo "mmdebstrap-ensure: host keyring: $_KEYRING"
+echo "mmdebstrap-ensure: apt keyring (staged for unshare): $_KEYRING"
 
 _cleanup_partial() {
 	if [ -f "$_TAR" ]; then
@@ -107,7 +108,7 @@ mmdebstrap --mode="$MODE" --format=tar --variant=minbase \
 	--customize-hook="touch \"\$1/.rpi-imager-chroot-ok\"" \
 	"$SBUILD_DIST" "$_TAR" "$_MIRROR_FILE"
 
-rm -f "$_MIRROR_FILE"
+rm -rf "$_KEYRING_STAGE" "$_MIRROR_FILE"
 trap - EXIT INT HUP TERM
 
 rm -rf "$ROOT"

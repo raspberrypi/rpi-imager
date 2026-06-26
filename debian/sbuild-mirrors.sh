@@ -144,8 +144,8 @@ sbuild_keyring_abs_path() {
 	printf '%s/%s\n' "$_dir" "$(basename "$_file")"
 }
 
-# Primary archive key for mmdebstrap --keyring= (host path, readable by unshared apt).
-sbuild_mmdebstrap_keyring_file() {
+# Primary archive key for mmdebstrap (cached under KEYRING_CACHE).
+sbuild_mmdebstrap_keyring_cached() {
 	_arch=$1
 	_cache=$(sbuild_keyring_cache_dir)
 
@@ -155,20 +155,33 @@ sbuild_mmdebstrap_keyring_file() {
 	chmod -R a+rX "$_cache"
 
 	case "$_arch" in
-		armhf) _file="$_cache/raspbian-archive-keyring.gpg" ;;
-		arm64|amd64) _file="$_cache/debian-archive-keyring.gpg" ;;
+		armhf) _name=raspbian-archive-keyring.gpg ;;
+		arm64|amd64) _name=debian-archive-keyring.gpg ;;
 		*)
 			echo "sbuild-mirrors: unsupported arch: $_arch" >&2
 			return 1
 			;;
 	esac
 
+	_file="$_cache/$_name"
 	[ -f "$_file" ] || {
 		echo "sbuild-mirrors: missing keyring $_file (run fetch-archive-keyrings.sh)" >&2
 		return 1
 	}
 
 	sbuild_keyring_abs_path "$_file"
+}
+
+# mmdebstrap --mode=unshare runs apt as a subuid user that cannot traverse
+# $HOME (typically mode 700). Copy the keyring to a world-readable /tmp path.
+sbuild_mmdebstrap_stage_keyring() {
+	_arch=$1
+	_cached=$(sbuild_mmdebstrap_keyring_cached "$_arch") || return 1
+	_basename=$(basename "$_cached")
+	_stage=$(mktemp -d "${TMPDIR:-/tmp}/rpi-imager-mmdebstrap-keys.XXXXXX")
+	chmod 0755 "$_stage"
+	install -m 0644 "$_cached" "$_stage/$_basename"
+	printf '%s\n' "$_stage/$_basename"
 }
 
 # One-line apt sources for mmdebstrap (all suites signed-by the bootstrap key).
