@@ -76,6 +76,14 @@ _OWNER_GID=$(id -g)
 echo "mmdebstrap-ensure: creating $NAME at $ROOT (mode=$MODE)..."
 echo "mmdebstrap-ensure: host keyrings: $_KEYRING_DIR"
 
+_cleanup_partial() {
+	if [ -d "$ROOT" ] && ! chroot_mmdebstrap_ok "$ARCH"; then
+		echo "mmdebstrap-ensure: cleaning up failed $NAME at $ROOT..." >&2
+		chroot_rm_mmdebstrap "$ARCH" || true
+	fi
+}
+trap _cleanup_partial EXIT INT HUP TERM
+
 # shellcheck disable=SC2086
 mmdebstrap --mode="$MODE" --variant=minbase \
 	--arch="$ARCH" \
@@ -90,4 +98,5 @@ mmdebstrap --mode="$MODE" --variant=minbase \
 	--customize-hook="chown -R ${_OWNER_UID}:${_OWNER_GID} \"\$1\"" \
 	"$SBUILD_DIST" "$ROOT" "$_MIRROR"
 
+trap - EXIT INT HUP TERM
 echo "mmdebstrap-ensure: $NAME ready at $ROOT"
