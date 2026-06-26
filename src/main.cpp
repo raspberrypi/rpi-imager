@@ -242,6 +242,7 @@ int main(int argc, char *argv[])
 
     // Log text scaling factor for debugging (all modes)
     qDebug() << "Text scale factor:" << PlatformQuirks::detectTextScaleFactor();
+    PlatformQuirks::logFontEngine();
 
     // Log display scaling information for debugging (embedded mode only)
     if (::isEmbeddedMode()) {

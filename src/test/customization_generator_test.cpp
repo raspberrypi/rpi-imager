@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include "customization_generator.h"
+#include "dependencies/sha256crypt/sha256crypt.h"
 #include <QVariantMap>
 #include <QString>
 #include <QByteArray>
@@ -2011,5 +2012,140 @@ TEST_CASE("CustomisationGenerator cloud-init handles empty Pi Connect token", "[
     // Should not include write_files or runcmd for Pi Connect
     REQUIRE_FALSE(yaml.contains("write_files:"));
     REQUIRE_FALSE(yaml.contains(PI_CONNECT_CONFIG_PATH));
+}
+
+// ===========================================================================
+// Credential derivation (cryptPassword / pbkdf2) - moved here from the UI/
+// ImageWriter layer. See issue #1627 for the CR/LF stripping rationale.
+// ===========================================================================
+
+TEST_CASE("cryptPassword selects algorithm by OS release date", "[customization][password][crypt]") {
+    SECTION("OS released on/after 2023-01-01 uses yescrypt") {
+        const QString hash = CustomisationGenerator::cryptPassword("hunter2", "2023-06-01");
+        REQUIRE_THAT(hash.toStdString(), ContainsSubstring("$y$"));
+    }
+
+    SECTION("OS released before 2023-01-01 uses sha256crypt") {
+        const QString hash = CustomisationGenerator::cryptPassword("hunter2", "2022-12-31");
+        REQUIRE(hash.startsWith("$5$"));
+    }
+
+    SECTION("Missing release date defaults to sha256crypt") {
+        const QString hash = CustomisationGenerator::cryptPassword("hunter2", QString());
+        REQUIRE(hash.startsWith("$5$"));
+    }
+}
+
+TEST_CASE("cryptPassword strips CR/LF before hashing", "[customization][password][crypt]") {
+    // A pasted password may carry a trailing newline. PAM discards it at login,
+    // so the stored hash must correspond to the password WITHOUT the newline,
+    // otherwise sudo/login can never succeed (issue #1627).
+    // Verify via crypt(3) semantics: re-hashing against the produced hash's
+    // embedded salt reproduces it only for the stripped password.
+    const QString hash = CustomisationGenerator::cryptPassword(QByteArray("hunter2\n"), "2022-01-01");
+    REQUIRE(hash.startsWith("$5$"));
+
+    const QByteArray hashBytes = hash.toUtf8();
+    const QString rehashStripped = QString::fromUtf8(sha256_crypt("hunter2", hashBytes.constData()));
+    const QString rehashRaw = QString::fromUtf8(sha256_crypt("hunter2\n", hashBytes.constData()));
+
+    REQUIRE(rehashStripped == hash);   // stored hash matches the newline-free password
+    REQUIRE(rehashRaw != hash);        // and not the raw pasted value
+}
+
+TEST_CASE("osUsesYescrypt picks the algorithm by release date", "[customization][password][crypt]") {
+    REQUIRE(CustomisationGenerator::osUsesYescrypt("2023-01-01"));   // cutoff is inclusive
+    REQUIRE(CustomisationGenerator::osUsesYescrypt("2024-06-01"));
+    REQUIRE_FALSE(CustomisationGenerator::osUsesYescrypt("2022-12-31"));
+    REQUIRE_FALSE(CustomisationGenerator::osUsesYescrypt(QString()));   // unknown -> conservative
+    REQUIRE_FALSE(CustomisationGenerator::osUsesYescrypt("not-a-date"));
+}
+
+TEST_CASE("isYescryptHash detects the algorithm from the crypt prefix", "[customization][password][crypt]") {
+    // The crypt string is self-describing, so the algorithm is never stored
+    // separately. Only a yescrypt hash needs an OS-compatibility check; sha256crypt
+    // is accepted everywhere.
+    const QString yescrypt = CustomisationGenerator::cryptPassword("hunter2", "2024-03-01");
+    const QString sha256 = CustomisationGenerator::cryptPassword("hunter2", "2021-01-01");
+    REQUIRE(yescrypt.startsWith("$y$"));
+    REQUIRE(sha256.startsWith("$5$"));
+
+    REQUIRE(CustomisationGenerator::isYescryptHash(yescrypt));
+    REQUIRE(CustomisationGenerator::isYescryptHash("$7$abc$def"));
+    REQUIRE_FALSE(CustomisationGenerator::isYescryptHash(sha256));
+    REQUIRE_FALSE(CustomisationGenerator::isYescryptHash("$6$salt$hash"));
+    REQUIRE_FALSE(CustomisationGenerator::isYescryptHash(QString()));
+}
+
+TEST_CASE("Generator hashes plaintext account password at generation time", "[customization][password]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPasswordPlain"] = "s3cr3tpw";
+
+    SECTION("yescrypt for a recent OS") {
+        settings["osReleaseDate"] = "2024-03-01";
+        const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+
+        // The plaintext must never appear; only the derived hash is emitted.
+        REQUIRE_THAT(script.toStdString(), !ContainsSubstring("s3cr3tpw"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("/usr/lib/userconf-pi/userconf"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("'$y$"));
+    }
+
+    SECTION("sha256crypt for an older OS") {
+        settings["osReleaseDate"] = "2021-01-01";
+        const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+
+        REQUIRE_THAT(script.toStdString(), !ContainsSubstring("s3cr3tpw"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("'$5$"));
+    }
+}
+
+TEST_CASE("Generator prefers plaintext password over a stale crypted value", "[customization][password]") {
+    // When both a freshly entered plaintext and an old crypted value are present,
+    // the plaintext wins (the UI clears the crypted value, but be defensive).
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$5$stalesalt$stalehash";
+    settings["sshUserPasswordPlain"] = "freshpw1";
+    settings["osReleaseDate"] = "2021-01-01";
+
+    const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+
+    REQUIRE_THAT(script.toStdString(), !ContainsSubstring("$5$stalesalt$stalehash"));
+    REQUIRE_THAT(script.toStdString(), !ContainsSubstring("freshpw1"));
+    REQUIRE_THAT(script.toStdString(), ContainsSubstring("'$5$"));
+}
+
+TEST_CASE("Generator falls back to crypted password when no plaintext present", "[customization][password]") {
+    // Reused-from-saved-settings path: an already-crypted value passes through.
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$5$savedsalt$savedhash";
+
+    const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+    REQUIRE_THAT(script.toStdString(), ContainsSubstring("$5$savedsalt$savedhash"));
+}
+
+TEST_CASE("Generator derives Wi-Fi PSK from plaintext passphrase", "[customization][wifi][password]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "TestNet";
+    settings["wifiPassword"] = "supersecret"; // 11 chars -> passphrase
+
+    const QString expectedPsk = CustomisationGenerator::pbkdf2(
+        QByteArray("supersecret"), QByteArray("TestNet"));
+
+    const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+    REQUIRE_THAT(script.toStdString(), !ContainsSubstring("supersecret"));
+    REQUIRE_THAT(script.toStdString(), ContainsSubstring("psk=" + expectedPsk.toStdString()));
+}
+
+TEST_CASE("Generator passes through a pre-derived Wi-Fi PSK unchanged", "[customization][wifi][password]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "TestNet";
+    settings["wifiPasswordCrypt"] = "deadbeefcafef00d";
+
+    const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+    REQUIRE_THAT(script.toStdString(), ContainsSubstring("psk=deadbeefcafef00d"));
 }
 

@@ -13,8 +13,6 @@
 #include "drivelistitem.h"
 #include "customization_generator.h"
 #include "drivelist/drivelist.h"
-#include "dependencies/sha256crypt/sha256crypt.h"
-#include "dependencies/yescrypt/yescrypt_wrapper.h"
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
 #include "systemmemorymanager.h"
@@ -69,7 +67,6 @@
 #include <QDebug>
 #include <QJsonObject>
 #include <QTranslator>
-#include <QPasswordDigestor>
 #include <QVersionNumber>
 #include <QCryptographicHash>
 #include <QRandomGenerator>
@@ -3882,11 +3879,17 @@ void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
         return;
     }
 
+    // Make the selected OS release date available to the generator so it can
+    // choose the right password hashing algorithm (yescrypt vs sha256crypt)
+    // when hashing a freshly entered plaintext password at generation time.
+    QVariantMap s = settings;
+    s.insert(QStringLiteral("osReleaseDate"), _osReleaseDate);
+
     if (_initFormat == "systemd") {
-        _applySystemdCustomisationFromSettings(settings);
+        _applySystemdCustomisationFromSettings(s);
     } else {
         // customisation for cloudinit and cloudinit-rpi
-        _applyCloudInitCustomisationFromSettings(settings);
+        _applyCloudInitCustomisationFromSettings(s);
     }
 }
 
@@ -3957,46 +3960,37 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
 }
 
-QString ImageWriter::crypt(const QByteArray &password)
+QString ImageWriter::hashUserPassword(const QString &plaintext)
 {
-    QByteArray saltchars =
-      "./0123456789ABCDEFGHIJKLMNOPQRST"
-      "UVWXYZabcdefghijklmnopqrstuvwxyz";
-    std::mt19937 gen(static_cast<unsigned>(QDateTime::currentMSecsSinceEpoch()));
-    std::uniform_int_distribution<> uid(0, saltchars.length()-1);
-
-    // Determine whether to use yescrypt (for OS released after Jan 1, 2023) or sha256crypt
-    bool useYescrypt = false;
-    if (!_osReleaseDate.isEmpty()) {
-        // Parse release date in format "YYYY-MM-DD"
-        QDate releaseDate = QDate::fromString(_osReleaseDate, "yyyy-MM-dd");
-        QDate cutoffDate(2023, 1, 1);
-        if (releaseDate.isValid() && releaseDate >= cutoffDate) {
-            useYescrypt = true;
-        }
-    }
-
-    if (useYescrypt) {
-        // Use yescrypt for newer OS releases
-        QByteArray salt;
-        for (int i=0; i<16; i++)  // yescrypt uses longer salts
-            salt += saltchars[uid(gen)];
-        
-        char *result = yescrypt_crypt(password.constData(), salt.constData());
-        return result ? QString(result) : QString();
-    } else {
-        // Use sha256crypt for older OS releases
-        QByteArray salt = "$5$";
-        for (int i=0; i<10; i++)
-            salt += saltchars[uid(gen)];
-        
-        return sha256_crypt(password.constData(), salt.constData());
-    }
+    // Hash eagerly so the caller can discard the plaintext immediately and keep
+    // only the hash. The algorithm choice (yescrypt vs sha256crypt) follows the
+    // currently selected OS's release date. Crypto lives in CustomisationGenerator.
+    if (plaintext.isEmpty())
+        return QString();
+    return rpi_imager::CustomisationGenerator::cryptPassword(plaintext.toUtf8(), _osReleaseDate);
 }
 
-QString ImageWriter::pbkdf2(const QByteArray &psk, const QByteArray &ssid)
+bool ImageWriter::savedUserPasswordUsableWithCurrentOs(const QString &cryptHash) const
 {
-    return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, psk, ssid, 4096, 32).toHex();
+    if (cryptHash.isEmpty())
+        return true;
+    // sha256crypt is accepted on every target; only a yescrypt hash can be
+    // incompatible, and only when the selected OS predates yescrypt support.
+    if (!rpi_imager::CustomisationGenerator::isYescryptHash(cryptHash))
+        return true;
+    return rpi_imager::CustomisationGenerator::osUsesYescrypt(_osReleaseDate);
+}
+
+QString ImageWriter::deriveWifiPsk(const QString &ssid, const QString &plaintext)
+{
+    if (plaintext.isEmpty())
+        return QString();
+    // Passphrase length per WPA spec is 8..63; anything else is taken to be a
+    // pre-computed PSK and returned verbatim.
+    const bool isPassphrase = (plaintext.length() >= 8 && plaintext.length() < 64);
+    return isPassphrase
+        ? rpi_imager::CustomisationGenerator::pbkdf2(plaintext.toUtf8(), ssid.toUtf8())
+        : plaintext;
 }
 
 QString ImageWriter::wifiSsidOctetsBase64(const QString &ssid) const

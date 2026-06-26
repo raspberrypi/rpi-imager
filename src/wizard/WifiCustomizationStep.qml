@@ -80,7 +80,9 @@ WizardStepBase {
         }
 
         originalSavedSSID = settings.wifiSSID || ""
-        // Remember if a crypted PSK is already saved (affects placeholder/keep semantics)
+        // Remember if a derived PSK is already saved (affects placeholder/keep
+        // semantics and keychain auto-prefill). Only the derived PSK is ever
+        // stored; the plaintext passphrase is never kept in the settings map.
         hadSavedCrypt = !!settings.wifiPasswordCrypt
 
         // if no saved crypt, try to prefill a PSK from system
@@ -458,6 +460,20 @@ WizardStepBase {
         var hadCryptBefore = !!wizardContainer.customizationSettings.wifiPasswordCrypt
         var sameSSID = ssidUnchanged(ssid, prevSSID)
 
+        // Derive the PSK once, eagerly, in C++/generator if a new passphrase was
+        // entered. Only the derived PSK is ever stored; the plaintext passphrase
+        // is never copied into the settings map and stays solely in the password
+        // field (which the show-password toggle relies on and which is destroyed
+        // on navigation).
+        var newCrypt = ""
+        var haveNewCrypt = false
+        if (ssid.length > 0 && wifiMode !== "open" && pwd.length > 0) {
+            // extra safety; normally unreachable because nextButtonEnabled prevents this
+            if (pwd !== fieldWifiPasswordConfirm.text) return;
+            newCrypt = ImageWriterSingleton.deriveWifiPsk(ssid, pwd)
+            haveNewCrypt = true
+        }
+
         // Update conserved customization settings (runtime state)
         wizardContainer.customizationSettings.wifiMode = wifiMode
         
@@ -469,21 +485,14 @@ WizardStepBase {
             if (wifiMode === "open") {
                // always clear in open mode
                delete wizardContainer.customizationSettings.wifiPasswordCrypt
+            } else if (haveNewCrypt) {
+               // overwrite with the freshly derived PSK
+               wizardContainer.customizationSettings.wifiPasswordCrypt = newCrypt
+            } else if (hadCryptBefore && sameSSID) {
+               // keep the existing crypt (do nothing)
             } else {
-               // secure / closed mode
-               if (pwd.length > 0) {
-                   // extra safety; normally unreachable because nextButtonEnabled prevents this
-                   if (pwd !== fieldWifiPasswordConfirm.text) return;
-                   // overwrite with new password
-                   var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
-                   wizardContainer.customizationSettings.wifiPasswordCrypt = isPassphrase ? ImageWriterSingleton.pbkdf2(pwd, ssid) : pwd
-               } else if (hadCryptBefore && sameSSID) {
-                   // keep the existing crypt
-                   // (do nothing)
-               } else {
-                   // no password provided and can't keep -> ensure cleared
-                   delete wizardContainer.customizationSettings.wifiPasswordCrypt
-               }
+               // no password provided and can't keep -> ensure cleared
+               delete wizardContainer.customizationSettings.wifiPasswordCrypt
             }
 
             wizardContainer.customizationSettings.wifiHidden = hidden
@@ -497,7 +506,8 @@ WizardStepBase {
             wizardContainer.wifiConfigured = false
         }
         
-        // Also persist for future sessions
+        // Also persist for future sessions. Only the derived PSK is ever written
+        // to disk - the plaintext passphrase is not.
         var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         saved.wifiMode = wifiMode
         if (ssid.length > 0) {
@@ -505,15 +515,12 @@ WizardStepBase {
             saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
             if (wifiMode === "open") {
                delete saved.wifiPasswordCrypt
+            } else if (haveNewCrypt) {
+               saved.wifiPasswordCrypt = newCrypt
+            } else if (hadCryptBefore && sameSSID) {
+               // keep existing persisted crypt
             } else {
-               if (pwd.length > 0) {
-                   var isPassphrase2 = (pwd.length >= 8 && pwd.length < 64)
-                   saved.wifiPasswordCrypt = isPassphrase2 ? ImageWriterSingleton.pbkdf2(pwd, ssid) : pwd
-               } else if (hadCryptBefore && sameSSID) {
-                   // keep existing
-               } else {
-                   delete saved.wifiPasswordCrypt
-               }
+               delete saved.wifiPasswordCrypt
             }
             saved.wifiHidden = hidden
         } else {
