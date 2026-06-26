@@ -25,6 +25,11 @@ chroot_mmdebstrap_ok() {
 	[ -f "$_root/.rpi-imager-chroot-ok" ] && [ -d "$_root/usr/bin/dpkg" ]
 }
 
+chroot_rm_mmdebstrap() {
+	_arch=$1
+	sh "$TOP/debian/chroot-rm.sh" "$_arch"
+}
+
 have_schroot_chroot() {
 	_arch=$1
 	schroot -l 2>/dev/null | grep -q "^$(chroot_name "$_arch")\$"

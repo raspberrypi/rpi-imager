@@ -26,6 +26,11 @@ if chroot_mmdebstrap_ok "$ARCH"; then
 	exit 0
 fi
 
+if [ -d "$ROOT" ]; then
+	echo "mmdebstrap-ensure: removing incomplete $NAME at $ROOT..."
+	chroot_rm_mmdebstrap "$ARCH"
+fi
+
 if ! command -v mmdebstrap >/dev/null 2>&1; then
 	echo "mmdebstrap-ensure: install mmdebstrap (apt install mmdebstrap)" >&2
 	exit 1
@@ -65,6 +70,8 @@ fi
 
 _KEYRING_DIR=$(sbuild_mmdebstrap_keyring_dir "$ARCH") || exit 1
 _MIRROR=$(sbuild_mmdebstrap_bootstrap_mirror "$ARCH" "$_KEYRING_DIR") || exit 1
+_OWNER_UID=$(id -u)
+_OWNER_GID=$(id -g)
 
 echo "mmdebstrap-ensure: creating $NAME at $ROOT (mode=$MODE)..."
 echo "mmdebstrap-ensure: host keyrings: $_KEYRING_DIR"
@@ -80,6 +87,7 @@ mmdebstrap --mode="$MODE" --variant=minbase \
 	--customize-hook="chroot \"\$1\" apt-get update" \
 	--customize-hook="chroot \"\$1\" apt-get install -y $(tr '\n' ' ' <"$TOP/debian/sbuild-chroot-packages")" \
 	--customize-hook="touch \"\$1/.rpi-imager-chroot-ok\"" \
+	--customize-hook="chown -R ${_OWNER_UID}:${_OWNER_GID} \"\$1\"" \
 	"$SBUILD_DIST" "$ROOT" "$_MIRROR"
 
 echo "mmdebstrap-ensure: $NAME ready at $ROOT"
