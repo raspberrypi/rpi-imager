@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MIME type for Raspberry Pi Imager manifest files.
+     Extension and MIME type defined in src/config.h (MANIFEST_EXTENSION, MANIFEST_MIME_TYPE) -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.raspberrypi.imager-manifest+json">
+    <comment>Raspberry Pi Imager Manifest</comment>
+    <comment xml:lang="zh_CN">树莓派启动盘制作工具清单</comment>
+    <glob pattern="*.rpi-imager-manifest"/>
+    <sub-class-of type="application/json"/>
+    <icon name="rpi-imager"/>
+  </mime-type>
+</mime-info>
+
