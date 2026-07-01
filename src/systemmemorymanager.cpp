@@ -184,6 +184,38 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
     return 0; // Detection failed
 }
 
+#elif defined(Q_OS_FREEBSD)
+qint64 SystemMemoryManager::getPlatformTotalMemoryMB()
+{
+	int64_t memsize = 0;
+	size_t size = sizeof(memsize);
+
+	if (sysctlbyname("hw.physmem", &memsize, &size, NULL, 0) == 0) {
+		return static_cast<qint64>(memsize / (1024 * 1024));
+	}
+
+	return 0; // Detection failed
+}
+
+qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
+{
+	int64_t v_free{}, v_inac{};
+	size_t v_free_sz{sizeof(v_free)}, v_inac_sz{sizeof(v_inac)};
+	size_t page_size{getSystemPageSize()};
+
+	if (sysctlbyname("vm.stats.vm.v_free_count", &v_free, &v_free_sz, NULL, 0) != 0) {
+		return 0;
+	}
+
+	if (sysctlbyname("vm.stats.vm.v_inactive_count", &v_inac, &v_inac_sz, NULL, 0) != 0) {
+		return 0;
+	}
+
+	int64_t available_pages = v_free + v_inac;
+	int64_t available_bytes = available_pages * page_size;
+	return static_cast<qint64>(available_bytes / (1024 * 1024));
+}
+
 #elif defined(Q_OS_LINUX)
 qint64 SystemMemoryManager::getPlatformTotalMemoryMB()
 {
