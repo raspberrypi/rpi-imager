@@ -8,6 +8,9 @@ OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 OPTION (BUILD_EMBEDDED "Build for Embedded Imager" OFF)
 OPTION (BUILD_CLI_ONLY "Build CLI-only version without GUI components" OFF)
+OPTION (BUILD_REPO_PACKAGE "Building without compile-time fetched dependencies, as for a package repository" OFF)
+
+set(DEFAULT_VERSION_STR "0.0.0-unknown" CACHE STRING "Fallback version string for when git describe fails")
 
 # We use FetchContent_Populate() instead of FetchContent_MakeAvailable() to allow EXCLUDE_FROM_ALL
 # This prevents the dependencies from being built by default, which is our desired behavior
@@ -28,7 +31,14 @@ set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectur
 
 project(rpi-imager LANGUAGES CXX C)
 
-find_package(Git QUIET)
+if (NOT BUILD_REPO_PACKAGE)
+    find_library(Git QUIET)
+else()
+    set(Git_FOUND OFF)
+    set(GIT_EXECUTABLE "")
+
+    set(USE_LOCAL_ONLY ON)
+endif()
 
 # Build-time version: re-runs `git describe` on every build so that dirty
 # state and new commits are detected without needing to re-configure.
@@ -41,6 +51,7 @@ add_custom_target(generate_version ALL
         -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
         -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        -DDEFAULT_VERSION_STR=${DEFAULT_VERSION_STR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake
     BYPRODUCTS
         ${CMAKE_CURRENT_BINARY_DIR}/imager_version.h
@@ -64,8 +75,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # One place to define the Windows callback IPC port
 set(IMAGER_CALLBACK_PORT "49629" CACHE STRING "TCP port for rpi-imager callback relay on Windows")
 
-# Apply optimization flags globally to all targets (including bundled dependencies)
-if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+# Apply optimization flags globally to all targets (including bundled dependencies),
+# but only if the current build is not for a package repository (in which case build
+# flags should respect the environment)
+if(NOT BUILD_REPO_PACKAGE AND (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel"))
     # Use -Os instead of -O3 for better code size vs performance balance
     # Enable function and data sections for dead code elimination
     add_compile_options(-Os -ffunction-sections -fdata-sections)
@@ -155,29 +168,51 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
 
-include(FetchContent)
+if(USE_LOCAL_ONLY)
+    # For packaging and build processes that cannot fetch remote resources at
+    # build time, use local libraries only
+    # e.g. FreeBSD ports requires all dependencies be installed as packages
 
-# Bundled liblzma
-include(dependencies/xz.cmake)
+    if(NOT BSD STREQUAL "FreeBSD")
+        message(FATAL_ERROR "Local-only packaging implemented only for FreeBSD!")
+    endif()
 
-# Bundled zstd
-include(dependencies/zstd.cmake)
+    # System LibLZMA
+    find_package(LibLZMA REQUIRED)
 
-# Remote nghttp2
-include(dependencies/nghttp2.cmake)
+    # System ZSTD resolved in freebsd/Platform.cmake
+
+    # nghttp2 not required for FreeBSD
+
+    # System ZLIB
+    find_package(ZLIB REQUIRED)
+
+    # System LibArchive
+    find_package(LibArchive REQUIRED)
+else()
+    include(FetchContent)
+
+    # Bundled liblzma
+    include(dependencies/xz.cmake)
+
+    # Bundled zstd
+    include(dependencies/zstd.cmake)
+
+    # Remote nghttp2
+    include(dependencies/nghttp2.cmake)
+
+    # Bundled zlib
+    include(dependencies/zlib.cmake)
+
+    # Bundled libarchive
+    include(dependencies/libarchive.cmake)
+endif()
 
 # Bundled yescrypt
 include(dependencies/yescrypt.cmake)
 
-
-# Bundled zlib
-include(dependencies/zlib.cmake)
-
-# Bundled libarchive
-include(dependencies/libarchive.cmake)
-
 # libcurl
-if(APPLE)
+if(APPLE OR USE_LOCAL_ONLY)
     # In version 8.15.0, libcurl dropped support for Secure Transport, because it
     # does not implement TLS 1.3. Unfortunately, there was no replacement Network.framework implementation,
     # so on macOS we're forced to use the macOS SDK version of libcurl, including libcurl's own OpenSSL-analogue.
@@ -193,12 +228,22 @@ endif()
 
 
 # Bundled libusb (for rpiboot Compute Module support)
-include(dependencies/libusb.cmake)
+if(BSD STREQUAL "FreeBSD")
+    # FreeBSD has an implementation of libusb in its base system and moreover
+    # the libusb project does not officially support FreeBSD
+
+    set(LIBUSB_INCLUDE_DIR "/usr/include/libusb.h")
+    set(LIBUSB_LIBRARIES "/usr/lib/libusb.a")
+else()
+    include(dependencies/libusb.cmake)
+endif()
 
 # Add dependencies
 if (APPLE)
     include(mac/Platform.cmake)
-elseif (UNIX)
+elseif (BSD STREQUAL "FreeBSD")
+    include(freebsd/Platform.cmake)
+elseif (LINUX)
     include(linux/Platform.cmake)
 elseif (WIN32)
     include(windows/Platform.cmake)
@@ -531,12 +576,26 @@ if (WIN32)
     include(windows/PlatformPackaging.cmake)
 elseif(APPLE)
     include(mac/PlatformPackaging.cmake)
+elseif(BSD STREQUAL "FreeBSD")
+    include(freebsd/PlatformPackaging.cmake)
 else()
     include(linux/PlatformPackaging.cmake)
 endif()
 
-add_dependencies(${PROJECT_NAME} zlibstatic yescrypt usb-1.0-static)
-include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR} ${YESCRYPT_INCLUDE_DIR} ${LIBUSB_INCLUDE_DIR})
+add_dependencies(${PROJECT_NAME} yescrypt)
+
+if(NOT BSD STREQUAL "FreeBSD")
+    add_dependencies(${PROJECT_NAME} zlibstatic)
+    add_dependencies(${PROJECT_NAME} usb-1.0-static)
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE geom)
+    target_link_libraries(${PROJECT_NAME} PRIVATE cam)
+endif()
+
+include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${YESCRYPT_INCLUDE_DIR} ${LIBUSB_INCLUDE_DIR})
+if(NOT BSD STREQUAL "FreeBSD")
+    include_directories(${ZSTD_INCLUDE_DIR})
+endif()
 
 # Link different Qt components based on build type
 # rpiboot link libraries (libusb)
@@ -544,15 +603,19 @@ set(RPIBOOT_LIBS ${LIBUSB_LIBRARIES})
 
 if(BUILD_CLI_ONLY)
     # CLI-only build: link Core, Network and essential libraries
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
 else()
     # Regular GUI build: link all GUI components
     # Add DBus on Linux for suspend inhibitor and native file dialogs (portals)
     if(UNIX AND NOT APPLE)
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${QT}::DBus ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${QT}::DBus ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
     else()
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
     endif()
+endif()
+
+if(NOT BSD STREQUAL "FreeBSD")
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${ZSTD_LIBRARIES})
 endif()
 
 # Testing

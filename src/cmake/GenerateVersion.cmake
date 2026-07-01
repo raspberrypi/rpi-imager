@@ -2,15 +2,16 @@
 # Writes a C++ header and a CMake include file derived from `git describe`.
 #
 # Expected -D inputs:
-#   GIT_EXECUTABLE   — path to git
-#   SOURCE_DIR       — repo root (for git describe)
-#   OUTPUT_DIR       — directory for generated files
+#   GIT_EXECUTABLE        — path to git
+#   SOURCE_DIR            — repo root (for git describe)
+#   OUTPUT_DIR            — directory for generated files
+#   DEFAULT_VERSION_STR   — default version string for when git describe fails
 
-find_package(Git QUIET)
-
-set(VERSION_STR "0.0.0-unknown")
+set(VERSION_STR ${DEFAULT_VERSION_STR})
 
 if(GIT_EXECUTABLE)
+    find_package(Git QUIET)
+
     execute_process(
         COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
         WORKING_DIRECTORY "${SOURCE_DIR}"
