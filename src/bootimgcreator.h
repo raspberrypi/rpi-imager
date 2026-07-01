@@ -19,6 +19,7 @@
  * Platform-specific implementations are in:
  * - mac/bootimgcreator_macos.cpp
  * - linux/bootimgcreator_linux.cpp
+ * - freebsd/bootimgcreator_freebsd.cpp
  * - windows/bootimgcreator_windows.cpp
  */
 class BootImgCreator
