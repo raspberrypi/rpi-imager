@@ -23,6 +23,9 @@ debian/debhelper**
 debian/tmp
 debian/com.raspberrypi.rpi-imager.metainfo.xml
 
+# FreeBSD packaging
+freebsd/com.raspberrypi.rpi-imager.metainfo.xml
+
 # macOS
 .DS_Store
 *.DS_Store
