@@ -1,0 +1,7 @@
+# Raspbian archive (raspbian.raspberrypi.com) for 32-bit Raspberry Pi OS armhf.
+Types: deb
+URIs: http://raspbian.raspberrypi.com/raspbian/
+Suites: trixie
+Components: main contrib non-free rpi
+Architectures: armhf
+Signed-By: /usr/share/keyrings/raspbian-archive-keyring.gpg

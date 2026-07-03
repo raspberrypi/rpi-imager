@@ -12,7 +12,7 @@ QT_ROOT_ARG=""
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armv7l)"
+    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armhf)"
     echo "  --qt-root=PATH         Path to Qt installation directory"
     echo "  --no-clean             Don't clean build directory"
     echo "  -h, --help             Show this help message"
@@ -35,6 +35,9 @@ for arg in "$@"; do
             ;;
         --no-clean)
             CLEAN_BUILD=0
+            ;;
+        --packaging=*)
+            APPIMAGE_PACKAGING="${arg#*=}"
             ;;
         -h|--help)
             usage
@@ -62,13 +65,29 @@ if [ -n "$QT_ROOT_ARG" ]; then
     fi
 fi
 
-# Validate architecture
-if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
-    echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
+# Validate architecture (armv6l/armv7l from uname on 32-bit Pi OS → armhf)
+case "$ARCH" in
+    armv6l|armv7l) ARCH=armhf ;;
+esac
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armhf" ]; then
+    echo "Error: Architecture must be one of: x86_64, aarch64, armhf" >&2
     exit 1
 fi
 
-echo "Building CLI-only AppImage for architecture: $ARCH"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TOP="$SCRIPT_DIR"
+# shellcheck disable=SC1091
+. "$TOP/debian/lib.sh"
+export_cmake_parallel
+sh "$TOP/debian/fetch-vendor-deps.sh"
+
+APPIMAGE_PACKAGING=${APPIMAGE_PACKAGING:-all}
+TOOL_ARCH=$(appimage_resolve_tool_arch)
+
+echo "Building CLI-only AppImage for architecture: $ARCH (packaging tools: $TOOL_ARCH, mode: $APPIMAGE_PACKAGING)"
+if [ "$ARCH" != "$TOOL_ARCH" ]; then
+    echo "create-appimage-cli: cross packaging — build in chroot, pack with $TOOL_ARCH tools on the host"
+fi
 
 # Extract project information from CMakeLists.txt
 SOURCE_DIR="src/"
@@ -101,6 +120,19 @@ echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION) fo
 QT_VERSION=""
 QT_DIR=""
 
+# Reject desktop Qt paths — CLI AppImages must use gcc_*_cli builds only.
+validate_cli_qt_dir() {
+	_dir=$1
+	case "$_dir" in
+		*/gcc_64_cli|*/gcc_arm64_cli|*/gcc_arm32_cli) return 0 ;;
+	esac
+	echo "Error: CLI AppImages require a CLI-only Qt build (gcc_*_cli), not desktop Qt." >&2
+	echo "  Refusing: $_dir" >&2
+	echo "  Build one with: ./qt/build-qt-cli.sh" >&2
+	exit 1
+}
+
+if [ "$APPIMAGE_PACKAGING" != pack ] || [ "$ARCH" = "$TOOL_ARCH" ]; then
 # Check if Qt root is specified via command line argument (highest priority)
 if [ -n "$QT_ROOT_ARG" ]; then
     echo "Using Qt from command line argument: $QT_ROOT_ARG"
@@ -109,47 +141,48 @@ if [ -n "$QT_ROOT_ARG" ]; then
 elif [ -n "$Qt6_ROOT" ]; then
     echo "Using Qt from Qt6_ROOT environment variable: $Qt6_ROOT"
     QT_DIR="$Qt6_ROOT"
-# Auto-detect Qt installation in /opt/Qt (look for CLI-specific builds first)
+# Auto-detect CLI Qt in QT_CACHE, then /opt/Qt (gcc_*_cli only)
 else
-    if [ -d "/opt/Qt" ]; then
-        echo "Checking for Qt installations in /opt/Qt..."
-        # Find the newest Qt6 version installed
-        NEWEST_QT=$(find -L /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
+    _qt_search_dirs=""
+    if [ -n "${QT_CACHE:-}" ] && [ -d "$QT_CACHE" ]; then
+        case "$ARCH" in
+            x86_64) _qt_deb_arch=amd64 ;;
+            aarch64) _qt_deb_arch=arm64 ;;
+            armhf) _qt_deb_arch=armhf ;;
+            *) _qt_deb_arch="" ;;
+        esac
+        if [ -n "$_qt_deb_arch" ] && [ -d "$QT_CACHE/$_qt_deb_arch" ]; then
+            _qt_search_dirs="$QT_CACHE/$_qt_deb_arch"
+        fi
+    fi
+    if [ -z "$_qt_search_dirs" ] && [ -d "/opt/Qt" ]; then
+        _qt_search_dirs="/opt/Qt"
+    fi
+
+    if [ -n "$_qt_search_dirs" ]; then
+        echo "Checking for CLI Qt installations in $_qt_search_dirs..."
+        NEWEST_QT=$(find -L "$_qt_search_dirs" -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
         if [ -n "$NEWEST_QT" ]; then
             QT_VERSION=$(basename "$NEWEST_QT")
             
-            # Find appropriate compiler directory for the architecture
-            # Priority: CLI-specific builds, then regular builds
             if [ "$ARCH" = "x86_64" ]; then
                 if [ -d "$NEWEST_QT/gcc_64_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_64_cli"
-                    echo "Found CLI-optimized Qt build"
-                elif [ -d "$NEWEST_QT/gcc_64" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_64"
-                    echo "Using regular Qt build (consider building CLI-optimized version)"
                 fi
             elif [ "$ARCH" = "aarch64" ]; then
                 if [ -d "$NEWEST_QT/gcc_arm64_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm64_cli"
-                    echo "Found CLI-optimized Qt build"
-                elif [ -d "$NEWEST_QT/gcc_arm64" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_arm64"
-                    echo "Using regular Qt build (consider building CLI-optimized version)"
                 fi
-            elif [ "$ARCH" = "armv7l" ]; then
+            elif [ "$ARCH" = "armhf" ]; then
                 if [ -d "$NEWEST_QT/gcc_arm32_cli" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm32_cli"
-                    echo "Found CLI-optimized Qt build"
-                elif [ -d "$NEWEST_QT/gcc_arm32" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_arm32"
-                    echo "Using regular Qt build (consider building CLI-optimized version)"
                 fi
             fi
             
             if [ -n "$QT_DIR" ]; then
-                echo "Found Qt $QT_VERSION for $ARCH at $QT_DIR"
-            else
-                echo "Found Qt $QT_VERSION, but no binary directory for $ARCH"
+                echo "Found CLI Qt $QT_VERSION for $ARCH at $QT_DIR"
+            elif [ -n "$QT_VERSION" ]; then
+                echo "Found Qt $QT_VERSION, but no CLI build for $ARCH (gcc_*_cli)"
                 QT_VERSION=""
             fi
         fi
@@ -158,25 +191,38 @@ fi
 
 # If Qt not found, suggest building it
 if [ -z "$QT_DIR" ]; then
-    echo "Error: No suitable Qt installation found for $ARCH"
+    echo "Error: No CLI-only Qt installation found for $ARCH" >&2
+    echo "Desktop Qt (gcc_64, gcc_arm64, …) must not be used for CLI AppImages." >&2
     
     if [ -f "./qt/build-qt-cli.sh" ]; then
-        echo "You can build a CLI-optimized Qt using:"
-        echo "  ./qt/build-qt-cli.sh --version=6.9.1"
-        echo "Or specify the Qt location with:"
-        echo "  $0 --qt-root=/path/to/qt"
+        echo "Build a CLI-only Qt with:" >&2
+        echo "  debian/ensure-qt.sh <arch>" >&2
+        echo "Or specify the CLI Qt path with:" >&2
+        echo "  $0 --qt-root=/opt/Qt/VERSION/gcc_*_cli" >&2
     else
-        echo "You can specify the Qt location with:"
-        echo "  $0 --qt-root=/path/to/qt"
+        echo "Specify the CLI Qt path with:" >&2
+        echo "  $0 --qt-root=/path/to/gcc_*_cli" >&2
     fi
     
     exit 1
 fi
 
-# Check if Qt Version
+validate_cli_qt_dir "$QT_DIR"
+
+# Check Qt version (do not execute foreign-arch qmake on the build host)
 if [ -f "$QT_DIR/bin/qmake" ]; then
-    QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
-    echo "Qt version: $QT_VERSION"
+    if [ "$ARCH" = "$TOOL_ARCH" ] || [ -n "${RPI_IMAGER_CHROOT:-}" ]; then
+        QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
+        echo "Qt version: $QT_VERSION"
+    elif [ -z "$QT_VERSION" ]; then
+        QT_VERSION=$(basename "$(dirname "$QT_DIR")")
+        echo "Qt version: $QT_VERSION (from cache path; foreign-arch qmake not executed on host)"
+    fi
+fi
+fi
+
+if [ "$APPIMAGE_PACKAGING" = pack ] && [ "$ARCH" != "$TOOL_ARCH" ]; then
+    echo "create-appimage-cli: using AppDir from build stage (cross pack)"
 fi
 
 # Configuration
@@ -193,29 +239,26 @@ mkdir -p "$TOOLS_DIR"
 # Download linuxdeploy and plugins if they don't exist
 echo "Ensuring linuxdeploy tools are available..."
 
-# Choose the right linuxdeploy tools based on architecture
-if [ "$ARCH" = "x86_64" ]; then
-    LINUXDEPLOY="$TOOLS_DIR/linuxdeploy-x86_64.AppImage"
-    
-    if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for x86_64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-        chmod +x "$LINUXDEPLOY"
-    fi
-elif [ "$ARCH" = "aarch64" ]; then
-    LINUXDEPLOY="$TOOLS_DIR/linuxdeploy-aarch64.AppImage"
-    
-    if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for aarch64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-aarch64.AppImage"
-        chmod +x "$LINUXDEPLOY"
-    fi
-elif [ "$ARCH" = "armv7l" ]; then
-    # Note: linuxdeploy may not have armv7l builds, fallback to manual deployment
-    echo "Warning: linuxdeploy may not support armv7l, attempting manual deployment"
-    LINUXDEPLOY=""
+# Choose packaging tools for the machine running this script (TOOL_ARCH).
+LINUXDEPLOY=""
+APPIMAGETOOL=""
+# linuxdeploy has no armhf build; those targets fall back to appimagetool below.
+if [ "$ARCH" = "$TOOL_ARCH" ] && { [ "$TOOL_ARCH" = "x86_64" ] || [ "$TOOL_ARCH" = "aarch64" ]; }; then
+    LINUXDEPLOY="$TOOLS_DIR/linuxdeploy-$TOOL_ARCH.AppImage"
+    appimage_download_tool "$LINUXDEPLOY" \
+        "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$TOOL_ARCH.AppImage"
 fi
 
+APPIMAGETOOL="$TOOLS_DIR/appimagetool-$TOOL_ARCH.AppImage"
+appimage_download_tool "$APPIMAGETOOL" \
+    "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$TOOL_ARCH.AppImage"
+
+if [ "$APPIMAGE_PACKAGING" = pack ] && [ ! -d "$APPDIR/usr/bin" ]; then
+    echo "Error: AppDir missing for pack stage: $APPDIR" >&2
+    exit 1
+fi
+
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
 # Set up build directory
 BUILD_DIR="build-cli-$ARCH"
 
@@ -238,8 +281,8 @@ if [ "$ARCH" = "aarch64" ] && [ "$(uname -m)" = "x86_64" ]; then
     # Cross-compiling from x86_64 to aarch64
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
-elif [ "$ARCH" = "armv7l" ] && [ "$(uname -m)" = "x86_64" ]; then
-    # Cross-compiling from x86_64 to armv7l
+elif [ "$ARCH" = "armhf" ] && [ "$(uname -m)" = "x86_64" ]; then
+    # Cross-compiling from x86_64 to armhf (Pi 1 / Pi 2 32-bit OS)
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=arm"
 fi
@@ -251,12 +294,12 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
 CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DBUILD_CLI_ONLY=ON"
 
 # shellcheck disable=SC2086
-cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
-make -j"$(nproc)"
+cmake -G Ninja "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
+cmake --build . --parallel "$(cmake_build_jobs)"
 
 echo "Creating CLI-only AppDir..."
 # Install to AppDir
-make DESTDIR="$APPDIR" install
+DESTDIR="$APPDIR" cmake --install .
 cd ..
 
 # Desktop file and icon are already installed by CMake
@@ -329,13 +372,20 @@ if [ -n "$SO_FILES" ]; then
     strip --strip-unneeded $SO_FILES 2>/dev/null || true
 fi
 cd "$SAVED_DIR"
+fi
+
+if [ "$APPIMAGE_PACKAGING" = build ]; then
+    prepare_appdir_for_appimagetool "$APPDIR" com.raspberrypi.rpi-imager-cli
+    echo "create-appimage-cli: build stage complete (AppDir at $APPDIR)"
+    exit 0
+fi
 
 echo "Creating CLI-only AppImage..."
 # Remove old symlinks for CLI variant only
 rm -f "$PWD/rpi-imager-cli.AppImage"
 rm -f "$PWD/rpi-imager-cli-$ARCH.AppImage"
 
-if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
+if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ]; then
     # Create AppImage using linuxdeploy
     # Explicitly specify the desktop file to ensure correct naming
     LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" \
@@ -370,6 +420,9 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         echo "Looking for any matching AppImage..."
         ls -la ./*.AppImage 2>/dev/null || true
     fi
+elif [ -n "${APPIMAGETOOL:-}" ] && [ -f "$APPIMAGETOOL" ]; then
+    appimage_pack_with_tool "$APPIMAGETOOL" "$APPDIR" "$OUTPUT_FILE" \
+        "$ARCH" "$TOOL_ARCH" com.raspberrypi.rpi-imager-cli || exit 1
 else
     # Manual AppImage creation (basic implementation)
     echo "Creating AppImage manually (basic implementation)..."

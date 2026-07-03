@@ -11,6 +11,7 @@ obj-**
 .idea
 
 # Debian packaging
+debian/release.conf
 debian/rpi-imager/**
 debian/rpi-imager-amd64/**
 debian/rpi-imager-embedded/**
@@ -46,6 +47,7 @@ qt-src**
 qt/language_filters.json
 build
 build-**
+!debian/build-*.sh
 
 # IANA Timezone database generated as part of build
 timezones.txt
@@ -59,3 +61,7 @@ test-cli-**
 # Python tooling
 .venv
 **/.venv
+
+# Debian release tooling (local paths; see debian/release.conf.example)
+.debian/
+out/

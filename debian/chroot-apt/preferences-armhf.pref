@@ -1,0 +1,12 @@
+# Repository cascade for armhf chroots: raspbian > rpi > debian
+Package: *
+Pin: origin raspbian.raspberrypi.com
+Pin-Priority: 700
+
+Package: *
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 600
+
+Package: *
+Pin: release o=Debian
+Pin-Priority: 500
