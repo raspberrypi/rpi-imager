@@ -2,10 +2,11 @@
 
 set(CURL_VERSION "8.20.0")
 string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
-FetchContent_Declare(curl
+rpi_imager_fetch_git_or_vendor(curl
+    VENDOR_DIR curl
+    VENDOR_MARKER CMakeLists.txt
     GIT_REPOSITORY https://github.com/curl/curl.git
     GIT_TAG curl-${CURL_TAG}
-    ${USE_OVERRIDE_FIND_PACKAGE}
 )
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)

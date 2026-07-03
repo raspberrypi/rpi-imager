@@ -1,10 +1,11 @@
 # Remote nghttp2
 
 set(NGHTTP2_VERSION "1.69.0")
-FetchContent_Declare(nghttp2
+rpi_imager_fetch_git_or_vendor(nghttp2
+    VENDOR_DIR nghttp2
+    VENDOR_MARKER lib/CMakeLists.txt
     GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
-    GIT_TAG        v${NGHTTP2_VERSION}
-    ${USE_OVERRIDE_FIND_PACKAGE}
+    GIT_TAG v${NGHTTP2_VERSION}
 )
 set(BUILD_EXAMPLES OFF)
 set(ENABLE_LIB_ONLY ON)
@@ -22,5 +23,4 @@ set(NGHTTP2_LIBRARY nghttp2_static CACHE FILEPATH "" FORCE)
 set(NGHTTP2_INCLUDE_DIR ${nghttp2_SOURCE_DIR}/lib CACHE PATH "" FORCE)
 set(NGHTTP2_INCLUDE_DIRS ${nghttp2_SOURCE_DIR}/lib CACHE PATH "" FORCE)
 set(NGHTTP2_FOUND true CACHE BOOL "" FORCE)
-
 
