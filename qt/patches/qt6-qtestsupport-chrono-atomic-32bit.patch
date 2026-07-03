@@ -1,0 +1,11 @@
+--- a/qtbase/src/corelib/kernel/qtestsupport_core.cpp
++++ b/qtbase/src/corelib/kernel/qtestsupport_core.cpp
+@@ -10,6 +10,8 @@ using namespace std::chrono_literals;
+ 
+ // Assert that this instantiation of std::atomic is always lock-free so we
+ // know that no code will execute on destruction.
++#if __SIZEOF_POINTER__ >= 8
+ static_assert(std::atomic<std::chrono::milliseconds>::is_always_lock_free);
++#endif
+ 
+ QT_BEGIN_NAMESPACE
