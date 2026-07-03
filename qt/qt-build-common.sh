@@ -87,6 +87,7 @@ init_common_variables() {
     
     # Export for use in subprocesses
     export QT_VERSION QT_MAJOR_VERSION PREFIX CORES BUILD_TYPE BASE_DIR
+    export CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-$CORES}"
 }
 
 # Function to parse common command line arguments
@@ -264,6 +265,49 @@ download_qt_source() {
     fi
     
     cd "$_orig_dir" || return 1
+    
+    apply_qt_patches
+}
+
+# Apply distro patches to extracted Qt sources (idempotent).
+apply_qt_patches() {
+    _src="$DOWNLOAD_DIR/qt-everywhere-src-$QT_VERSION"
+    _patch_dir="$BASE_DIR/patches"
+    _target="$_src/qtbase/src/corelib/kernel/qtestsupport_core.cpp"
+
+    if [ ! -d "$_src" ]; then
+        return 0
+    fi
+
+    # 32-bit hosts: std::atomic<std::chrono::milliseconds> is not always lock-free.
+    case "$ARCH" in
+        arm|armv6l|armv7l|armhf)
+            if [ -f "$_target" ] && ! grep -q '__SIZEOF_POINTER__ >= 8' "$_target"; then
+                echo "Applying Qt arm32 patch: qtestsupport chrono atomic static_assert"
+                if [ -f "$_patch_dir/qt6-qtestsupport-chrono-atomic-32bit.patch" ]; then
+                    (cd "$_src" && patch -p1 -N -i "$_patch_dir/qt6-qtestsupport-chrono-atomic-32bit.patch") || true
+                else
+                    sed -i '/static_assert(std::atomic<std::chrono::milliseconds>::is_always_lock_free);/i\
+#if __SIZEOF_POINTER__ >= 8' "$_target"
+                    sed -i '/static_assert(std::atomic<std::chrono::milliseconds>::is_always_lock_free);/a\
+#endif' "$_target"
+                fi
+            fi
+            ;;
+    esac
+
+    if [ -d "$_patch_dir" ]; then
+        for _patch in "$_patch_dir"/*.patch; do
+            [ -f "$_patch" ] || continue
+            case "$(basename "$_patch")" in
+                qt6-qtestsupport-chrono-atomic-32bit.patch)
+                    continue
+                    ;;
+            esac
+            echo "Applying Qt patch: $(basename "$_patch")"
+            (cd "$_src" && patch -p1 -N -i "$_patch") || true
+        done
+    fi
 }
 
 # Function to clean build directory if requested
@@ -308,7 +352,13 @@ get_build_type_opts() {
 # build_examples: ON or OFF (default: OFF)
 get_cmake_opts() {
     build_examples="${1:-OFF}"
-    echo "-- -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=$build_examples"
+    _link_extra=""
+    case "$ARCH" in
+        arm|armv6l|armv7l|armhf)
+            _link_extra="-DCMAKE_EXE_LINKER_FLAGS=-latomic -DCMAKE_SHARED_LINKER_FLAGS=-latomic"
+            ;;
+    esac
+    echo "-- -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=$build_examples -DCMAKE_BUILD_PARALLEL_LEVEL=$CORES $_link_extra"
 }
 
 # Function to get common module skip options
@@ -482,6 +532,7 @@ run_qt_configure() {
     config_opts="$1"
     
     echo "Configuring Qt with options: $config_opts"
+    echo "Note: configure is single-threaded; compile will use $CORES jobs (CMAKE_BUILD_PARALLEL_LEVEL=$CORES)"
     
     if [ "$VERBOSE_BUILD" -eq 1 ]; then
         eval "\"$DOWNLOAD_DIR/qt-everywhere-src-$QT_VERSION/configure\" $config_opts -verbose"
