@@ -1,0 +1,57 @@
+# Copy to debian/release.conf and adjust for your machine.
+# Paths may be absolute or relative to the repository root.
+#
+# Where .dsc, .tar.xz and .deb files are written.
+OUTPUT_DIR=out/debian
+
+# Per-arch AppImage cache used by stage-appimages.sh and binary builds.
+APPIMAGE_ROOT=.debian/appimages
+
+# Per-arch Qt cache (desktop + CLI trees). Built automatically on first use.
+QT_CACHE=.debian/qt
+# QT_VERSION=6.11.1
+
+# Qt build policy: auto (default, build on cache miss), cached, or always.
+# QT_BUILD=auto
+# armhf desktop Qt: try (default) builds vendored Qt but accepts system qmake6 on failure.
+# QT_DESKTOP_BUILD=try
+# QT_DESKTOP_BUILD=required
+
+# Rootless cross-build chroot settings (mmdebstrap under CHROOT_ROOT, no sudo).
+CHROOT_DIST=trixie
+CHROOT_SUFFIX=rpi-imager
+# CHROOT_ROOT=.debian/chroots
+# KEYRING_CACHE=.debian/archive-keyrings   # fetched from archives for mmdebstrap --keyring
+# MMDEBSTRAP_MODE=auto           # auto uses unshare when not root
+# Chroot apt repository cascade (see debian/chroot-apt/preferences-*.pref):
+#   armhf — raspbian > rpi > debian
+#   arm64 — rpi > debian
+#   amd64 — debian only
+# CHROOT_ARCHES="arm64 amd64 armhf"
+# DEBIAN_MIRROR=http://deb.debian.org/debian
+# RASPBIAN_MIRROR=http://raspbian.raspberrypi.com/raspbian
+# RPI_MIRROR=http://archive.raspberrypi.com/debian
+
+# Build backend: auto/local (host builds locally, foreign in mmdebstrap chroot) or chroot.
+BUILDER=auto
+# auto (default): create missing chroots via mmdebstrap (rootless, no sudo)
+# CHROOT_AUTO_CREATE=auto
+# CHROOT_AUTO_CREATE=0
+
+# Default profiles for desktop/cli packages.
+DEB_BUILD_PROFILES=desktop cli
+
+# AppImage build policy: always (default) or cached (sync staged files only).
+APPIMAGE_BUILD=always
+
+# Cross-arch AppImage builders (SSH fallback when no local chroot exists).
+# APPIMAGE_REMOTE_arm64=tdewey@pi5
+# APPIMAGE_REMOTE_DIR_arm64=/home/tdewey/rpi-imager
+# Or combined:
+# APPIMAGE_REMOTE_amd64=builder@amd64-vm:/home/builder/rpi-imager
+
+# Architectures for: debian/release.sh repo
+RELEASE_ARCHES="amd64 arm64 armhf"
+
+# Optional upload target for: debian/release.sh repo
+# DPUT_HOST=pi-internal

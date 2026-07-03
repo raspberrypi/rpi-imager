@@ -1,0 +1,4 @@
+man-db
+debhelper
+dh-exec
+fakeroot

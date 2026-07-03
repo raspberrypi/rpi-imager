@@ -1,0 +1,8 @@
+# Repository cascade for arm64 chroots: rpi > debian
+Package: *
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 600
+
+Package: *
+Pin: release o=Debian
+Pin-Priority: 500
