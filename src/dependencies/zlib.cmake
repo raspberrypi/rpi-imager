@@ -6,10 +6,11 @@ set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
-FetchContent_Declare(zlib
+rpi_imager_fetch_git_or_vendor(zlib
+    VENDOR_DIR zlib
+    VENDOR_MARKER CMakeLists.txt
     GIT_REPOSITORY https://github.com/madler/zlib.git
     GIT_TAG v${ZLIB_VERSION}
-    ${USE_OVERRIDE_FIND_PACKAGE}
 )
 FetchContent_GetProperties(zlib)
 if(NOT zlib_POPULATED)
@@ -62,5 +63,4 @@ else()
     )
     add_dependencies(ZLIB::ZLIB zlibstatic)
 endif()
-
 

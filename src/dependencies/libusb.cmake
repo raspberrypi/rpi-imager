@@ -1,7 +1,9 @@
 # Bundled libusb for rpiboot USB communication
 
 set(LIBUSB_VERSION "1.0.30")
-FetchContent_Declare(libusb
+rpi_imager_fetch_git_or_vendor(libusb
+    VENDOR_DIR libusb
+    VENDOR_MARKER libusb/libusb.h
     GIT_REPOSITORY https://github.com/libusb/libusb.git
     GIT_TAG v${LIBUSB_VERSION}
 )

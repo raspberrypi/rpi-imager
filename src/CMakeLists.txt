@@ -156,6 +156,7 @@ set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
 
 include(FetchContent)
+include(dependencies/fetch-vendor.cmake)
 
 # Bundled liblzma
 include(dependencies/xz.cmake)
