@@ -7,6 +7,11 @@ set -e
 
 # Source common build functions for ICU version detection
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TOP="$SCRIPT_DIR"
+# shellcheck disable=SC1091
+. "$TOP/debian/lib.sh"
+export_cmake_parallel
+sh "$TOP/debian/fetch-vendor-deps.sh"
 if [ -f "$SCRIPT_DIR/qt/qt-build-common.sh" ]; then
     . "$SCRIPT_DIR/qt/qt-build-common.sh"
 fi
@@ -20,7 +25,7 @@ INCLUDE_CJK_FONTS=0  # Default: do not include 4MB CJK font
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armv7l)"
+    echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armhf)"
     echo "  --qt-root=PATH         Path to Qt installation directory"
     echo "  --no-clean             Don't clean build directory"
     echo "  --include-cjk-fonts    Include DroidSansFallbackFull.ttf for CJK support (+4MB)"
@@ -77,9 +82,12 @@ if [ -n "$QT_ROOT_ARG" ]; then
     fi
 fi
 
-# Validate architecture
-if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
-    echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
+# Validate architecture (armv6l/armv7l from uname on 32-bit Pi OS → armhf)
+case "$ARCH" in
+    armv6l|armv7l) ARCH=armhf ;;
+esac
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armhf" ]; then
+    echo "Error: Architecture must be one of: x86_64, aarch64, armhf" >&2
     exit 1
 fi
 
@@ -139,7 +147,7 @@ else
                 if [ -d "$NEWEST_QT/gcc_arm64_embedded" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm64_embedded"
                 fi
-            elif [ "$ARCH" = "armv7l" ]; then
+            elif [ "$ARCH" = "armhf" ]; then
                 if [ -d "$NEWEST_QT/gcc_arm32_embedded" ]; then
                     QT_DIR="$NEWEST_QT/gcc_arm32_embedded"
                 fi
@@ -196,9 +204,21 @@ if [ -f "$QT_DIR/bin/qmake" ]; then
     echo "Qt version: $QT_VERSION"
 fi
 
-# Detect ICU version for this Qt version
-# Check if the function exists (was sourced from qt-build-common.sh)
-if type get_icu_version_for_qt >/dev/null 2>&1; then
+# Detect ICU version for this Qt build.
+# The ICU major is read directly from what libQt6Core links against: the
+# vendored release Qt (QT_CACHE) is built against the distro's system ICU,
+# which can differ from the source-build map in get_icu_version_for_qt().
+ICU_MAJOR_VERSION=""
+ICU_QT_CORE=$(ls "$QT_DIR"/lib/libQt6Core.so.6.* 2>/dev/null | head -n 1)
+if [ -n "$ICU_QT_CORE" ] && command -v readelf >/dev/null 2>&1; then
+    ICU_MAJOR_VERSION=$(readelf -d "$ICU_QT_CORE" 2>/dev/null \
+        | sed -n 's/.*libicuuc\.so\.\([0-9][0-9]*\).*/\1/p' | head -n 1)
+fi
+
+if [ -n "$ICU_MAJOR_VERSION" ]; then
+    ICU_VERSION="$ICU_MAJOR_VERSION"
+    echo "Using ICU major $ICU_MAJOR_VERSION (from $(basename "$ICU_QT_CORE"))"
+elif type get_icu_version_for_qt >/dev/null 2>&1; then
     ICU_VERSION=$(get_icu_version_for_qt "$QT_VERSION")
     ICU_MAJOR_VERSION="${ICU_VERSION%%.*}"  # Extract major version (e.g., 76 from 76.1)
     echo "Using ICU version: $ICU_VERSION (major: $ICU_MAJOR_VERSION)"
@@ -220,7 +240,7 @@ OPTDIR="$DEBDIR/opt/rpi-imager-embedded"
 case "$ARCH" in
     aarch64) DEB_ARCH="arm64" ;;
     x86_64)  DEB_ARCH="amd64" ;;
-    armv7l)  DEB_ARCH="armhf" ;;
+    armhf)   DEB_ARCH="armhf" ;;
     *)       DEB_ARCH="$ARCH" ;;
 esac
 
@@ -251,8 +271,8 @@ if [ "$ARCH" = "aarch64" ] && [ "$(uname -m)" = "x86_64" ]; then
     # Cross-compiling from x86_64 to aarch64
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
-elif [ "$ARCH" = "armv7l" ] && [ "$(uname -m)" = "x86_64" ]; then
-    # Cross-compiling from x86_64 to armv7l
+elif [ "$ARCH" = "armhf" ] && [ "$(uname -m)" = "x86_64" ]; then
+    # Cross-compiling from x86_64 to armhf (Pi 1 / Pi 2 32-bit OS)
     echo "Cross-compiling from $(uname -m) to $ARCH"
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=arm"
 fi
@@ -264,8 +284,8 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
 CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DBUILD_EMBEDDED=ON"
 
 # shellcheck disable=SC2086
-cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
-make -j"$(nproc)"
+cmake -G Ninja "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
+cmake --build . --parallel "$(cmake_build_jobs)"
 cd ..
 
 echo "Populating .deb staging tree..."
@@ -473,27 +493,40 @@ cp "$QT_DIR/qml/QtQuick/Controls/Basic/impl/libqtquickcontrols2basicstyleimplplu
 cp "$QT_DIR/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so" "$OPTDIR/qml/QtQuick/Controls/Basic/" 2>/dev/null || true
 cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so" "$OPTDIR/qml/QtQuick/Controls/Material/" 2>/dev/null || true
 
-# Copy ICU libraries (using detected version)
+# Copy ICU libraries (using detected version).
+# Search order: a from-source ICU build (qt/icu), then the Qt build's own lib
+# dir, then the target's system multiarch dirs. The vendored release Qt links
+# against system ICU, so the multiarch fallback is what actually gets used here.
 echo "Copying ICU $ICU_VERSION libraries..."
-ICU_LIB_DIR="$PWD/qt/icu/install/lib"
-if [ ! -d "$ICU_LIB_DIR" ]; then
-    ICU_LIB_DIR="$PWD/qt/icu/icu4c/source/lib"
-fi
-if [ -d "$ICU_LIB_DIR" ]; then
-    cp "$ICU_LIB_DIR/libicudata.so.$ICU_MAJOR_VERSION" "$OPTDIR/lib/" 2>/dev/null || \
-        echo "Warning: Could not find libicudata.so.$ICU_MAJOR_VERSION"
-    cp "$ICU_LIB_DIR/libicui18n.so.$ICU_MAJOR_VERSION" "$OPTDIR/lib/" 2>/dev/null || \
-        echo "Warning: Could not find libicui18n.so.$ICU_MAJOR_VERSION"
-    cp "$ICU_LIB_DIR/libicuuc.so.$ICU_MAJOR_VERSION" "$OPTDIR/lib/" 2>/dev/null || \
-        echo "Warning: Could not find libicuuc.so.$ICU_MAJOR_VERSION"
+ICU_LIB_DIR=""
+for _icu_dir in \
+    "$PWD/qt/icu/install/lib" \
+    "$PWD/qt/icu/icu4c/source/lib" \
+    "$QT_DIR/lib" \
+    "/usr/lib/${ARCH}-linux-gnu" \
+    "/lib/${ARCH}-linux-gnu"
+do
+    if [ -f "$_icu_dir/libicuuc.so.$ICU_MAJOR_VERSION" ]; then
+        ICU_LIB_DIR="$_icu_dir"
+        break
+    fi
+done
 
-    # Create symlinks without version for compatibility
-    (cd "$OPTDIR/lib" && \
-        [ -f "libicudata.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicudata.so.$ICU_MAJOR_VERSION" "libicudata.so" || true && \
-        [ -f "libicui18n.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicui18n.so.$ICU_MAJOR_VERSION" "libicui18n.so" || true && \
-        [ -f "libicuuc.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicuuc.so.$ICU_MAJOR_VERSION" "libicuuc.so" || true)
+if [ -n "$ICU_LIB_DIR" ]; then
+    echo "Using ICU libraries from: $ICU_LIB_DIR"
+    for _icu in libicudata libicui18n libicuuc; do
+        cp -d "$ICU_LIB_DIR/$_icu.so.$ICU_MAJOR_VERSION"* "$OPTDIR/lib/" 2>/dev/null || \
+            echo "Warning: Could not find $_icu.so.$ICU_MAJOR_VERSION in $ICU_LIB_DIR"
+    done
+
+    # Create unversioned symlinks for compatibility (only if missing)
+    for _icu in libicudata libicui18n libicuuc; do
+        if [ -e "$OPTDIR/lib/$_icu.so.$ICU_MAJOR_VERSION" ] && [ ! -e "$OPTDIR/lib/$_icu.so" ]; then
+            ln -sf "$_icu.so.$ICU_MAJOR_VERSION" "$OPTDIR/lib/$_icu.so"
+        fi
+    done
 else
-    echo "Warning: ICU libraries not found at $ICU_LIB_DIR"
+    echo "Warning: ICU $ICU_MAJOR_VERSION libraries not found in any known location"
     echo "You may need to build Qt with ICU support first"
 fi
 
