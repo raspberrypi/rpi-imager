@@ -1,0 +1,21 @@
+[submodule "src/dependencies/vendor/xz"]
+	path = src/dependencies/vendor/xz
+	url = https://github.com/tukaani-project/xz.git
+[submodule "src/dependencies/vendor/zstd"]
+	path = src/dependencies/vendor/zstd
+	url = https://github.com/facebook/zstd.git
+[submodule "src/dependencies/vendor/zlib"]
+	path = src/dependencies/vendor/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "src/dependencies/vendor/nghttp2"]
+	path = src/dependencies/vendor/nghttp2
+	url = https://github.com/nghttp2/nghttp2.git
+[submodule "src/dependencies/vendor/libarchive"]
+	path = src/dependencies/vendor/libarchive
+	url = https://github.com/libarchive/libarchive.git
+[submodule "src/dependencies/vendor/curl"]
+	path = src/dependencies/vendor/curl
+	url = https://github.com/curl/curl.git
+[submodule "src/dependencies/vendor/libusb"]
+	path = src/dependencies/vendor/libusb
+	url = https://github.com/libusb/libusb.git

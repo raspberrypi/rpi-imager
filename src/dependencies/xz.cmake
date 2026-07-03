@@ -1,10 +1,11 @@
 # Bundled liblzma (xz)
 
 set(LIBLZMA_VERSION "5.8.3")
-FetchContent_Declare(xz
+rpi_imager_fetch_git_or_vendor(xz
+    VENDOR_DIR xz
+    VENDOR_MARKER CMakeLists.txt
     GIT_REPOSITORY https://github.com/tukaani-project/xz.git
     GIT_TAG v${LIBLZMA_VERSION}
-    ${USE_OVERRIDE_FIND_PACKAGE}
 )
 set(XZ_MICROLZMA_DECODER OFF CACHE BOOL "" FORCE)
 set(XZ_MICROLZMA_ENCODER OFF CACHE BOOL "" FORCE)
@@ -45,5 +46,4 @@ set(LIBLZMA_LIBRARIES ${xz_BINARY_DIR}/liblzma.a CACHE FILEPATH "" FORCE)
 set(LIBLZMA_HAS_AUTO_DECODER true CACHE BOOL "" FORCE)
 set(LIBLZMA_HAS_EASY_ENCODER true CACHE BOOL "" FORCE)
 set(LIBLZMA_HAS_LZMA_PRESET true CACHE BOOL "" FORCE)
-
 
