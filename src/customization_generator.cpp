@@ -24,8 +24,16 @@ bool isValidUtf8(const QByteArray& data)
 {
     if (data.isEmpty())
         return true;
-    auto converter = QStringDecoder(QStringConverter::Utf8);
-    converter(data);
+    // QStringDecoder::operator() returns a lazy proxy; the decode (and therefore
+    // error detection) only runs when it is materialised into a QString. The
+    // result must be consumed or hasError() always stays false and arbitrary
+    // octets are wrongly reported as valid UTF-8. Flag::Stateless additionally
+    // makes a trailing incomplete multi-byte sequence an error, which is correct
+    // when validating a complete SSID/string buffer.
+    auto converter = QStringDecoder(QStringConverter::Utf8,
+                                    QStringConverter::Flag::Stateless);
+    const QString decoded = converter(data);
+    Q_UNUSED(decoded)
     return !converter.hasError();
 }
 
@@ -34,6 +42,35 @@ bool ssidOctetsSafeForImagerCustom(const QByteArray& ssidOctets)
     if (ssidOctets.contains('\0'))
         return false;
     return isValidUtf8(ssidOctets);
+}
+
+// tomlQuote VALUE — render VALUE as an rpi-preseed TOML basic string.
+// rpi-preseed's parser only unescapes \\ and \" and keeps values single-line,
+// so we escape exactly those two characters and drop any embedded newlines
+// (callers already split multi-value inputs such as SSH keys line-by-line).
+QString tomlQuote(const QString& value)
+{
+    QString v = value;
+    v.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
+    v.replace(QLatin1Char('"'), QLatin1String("\\\""));
+    v.remove(QLatin1Char('\r'));
+    v.remove(QLatin1Char('\n'));
+    return QLatin1Char('"') + v + QLatin1Char('"');
+}
+
+// tomlIsHex VALUE — true if VALUE is a non-empty run of hex digits. Used to tell
+// a raw 64-char PMK (encrypted PSK) apart from a plaintext Wi-Fi passphrase.
+bool tomlIsHex(const QString& value)
+{
+    if (value.isEmpty())
+        return false;
+    for (const QChar qc : value) {
+        const char c = qc.toLatin1();
+        const bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        if (!hex)
+            return false;
+    }
+    return true;
 }
 
 QByteArray wpaSupplicantSsidField(const QByteArray& ssidOctets)
@@ -824,6 +861,210 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     }
     
     return netcfg;
+}
+
+QByteArray CustomisationGenerator::generateRpiPreseedToml(const QVariantMap& s,
+                                                          const QString& piConnectToken,
+                                                          bool hasCcRpi,
+                                                          bool sshEnabled,
+                                                          const QString& currentUser)
+{
+    Q_UNUSED(hasCcRpi);
+    Q_UNUSED(currentUser);
+
+    // Build the section bodies into a single buffer. Each section is only
+    // emitted when it has content, and if nothing is configured we return an
+    // empty payload so that no rpi-preseed.toml is written to the device.
+    QByteArray body;
+    auto push = [](const QString& line, QByteArray& out) {
+        out += line.toUtf8();
+        out += '\n';
+    };
+
+    // ---- [system] ----
+    const QString hostname = s.value("hostname").toString().trimmed();
+    if (!hostname.isEmpty()) {
+        push(QStringLiteral("[system]"), body);
+        push(QStringLiteral("hostname = ") + tomlQuote(hostname), body);
+        push(QString(), body);
+    }
+
+    // ---- [user] ----
+    // The wizard collects the account name and an already-crypted password hash
+    // (yescrypt / sha256crypt). rpi-preseed only touches the account when
+    // user.name is present, so emit a name whenever a password is configured.
+    const QString userName = s.value("sshUserName").toString().trimmed();
+    const QString userPass = s.value("sshUserPassword").toString();
+    const bool passwordlessSudo = s.value("passwordlessSudo").toBool();
+    if (!userName.isEmpty() || !userPass.isEmpty()) {
+        const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
+        push(QStringLiteral("[user]"), body);
+        push(QStringLiteral("name = ") + tomlQuote(effectiveUser), body);
+        if (!userPass.isEmpty()) {
+            push(QStringLiteral("password = ") + tomlQuote(userPass), body);
+            push(QStringLiteral("password_encrypted = true"), body);
+        }
+        if (passwordlessSudo) {
+            push(QStringLiteral("passwordless_sudo = true"), body);
+        }
+        push(QString(), body);
+    }
+
+    // ---- [ssh] ----
+    // Mirror the cloud-init generator: SSH keys are only meaningful when SSH is
+    // enabled, so the whole section is gated on sshEnabled.
+    if (sshEnabled) {
+        const bool sshPasswordAuth = s.value("sshPasswordAuth").toBool();
+        const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
+        const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
+
+        QStringList keyList;
+        const QString rawKeys = !sshAuthorizedKeys.isEmpty() ? sshAuthorizedKeys : sshPublicKey;
+        if (!rawKeys.isEmpty()) {
+            const QStringList lines = rawKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+            for (const QString& k : lines) {
+                const QString trimmed = k.trimmed();
+                if (!trimmed.isEmpty())
+                    keyList.append(trimmed);
+            }
+        }
+
+        push(QStringLiteral("[ssh]"), body);
+        push(QStringLiteral("enabled = true"), body);
+        push(QStringLiteral("password_authentication = ")
+                 + (sshPasswordAuth ? QStringLiteral("true") : QStringLiteral("false")), body);
+        if (!keyList.isEmpty()) {
+            // Multi-line array of basic strings; rpi-preseed's parser ignores
+            // the commas/whitespace/newlines between literals and tolerates the
+            // trailing comma.
+            push(QStringLiteral("authorized_keys = ["), body);
+            for (const QString& k : keyList) {
+                push(QStringLiteral("  ") + tomlQuote(k) + QStringLiteral(","), body);
+            }
+            push(QStringLiteral("]"), body);
+        }
+        push(QString(), body);
+    }
+
+    // ---- [wlan] ----
+    const bool wifiConfigured = s.value("wifiConfigured", true).toBool();
+    const QByteArray ssidOctets = ssidOctetsFromSettings(s, wifiConfigured);
+    if (!ssidOctets.isEmpty()) {
+        // TOML strings must be valid UTF-8. A normal SSID goes into wlan.ssid;
+        // an exotic non-UTF-8 SSID (arbitrary 802.11 octets) can't be a TOML
+        // string, so we hand the raw octets to rpi-preseed as lowercase hex via
+        // wlan.ssid_hex, which it decodes and writes as a NetworkManager
+        // byte-array SSID.
+        const bool ssidIsUtf8 = isValidUtf8(ssidOctets);
+        const bool hidden = wifiConfigured
+                                ? (s.value("wifiHidden").toBool() || s.value("wifiSSIDHidden").toBool())
+                                : false;
+        const QString country = s.value("recommendedWifiCountry").toString().trimmed();
+        const bool openNetwork = s.value("wifiMode").toString() == QLatin1String("open");
+
+        // Resolve the passphrase/PSK. The wizard normally stores a 64-hex PMK in
+        // wifiPasswordCrypt (an encrypted PSK); fall back to the legacy plaintext
+        // wifiPassword. rpi-preseed rejects a password on an open network, so we
+        // only emit one when the network is not explicitly open.
+        QString psk;
+        bool pskEncrypted = false;
+        if (!openNetwork) {
+            psk = wifiConfigured ? s.value("wifiPasswordCrypt").toString() : QString();
+            if (!psk.isEmpty()) {
+                pskEncrypted = true;
+            } else {
+                const QString legacy = s.value("wifiPassword").toString();
+                if (!legacy.isEmpty()) {
+                    psk = legacy;
+                    // A 64-hex value is a raw PMK; anything shorter is a passphrase
+                    // that rpi-preseed/imager_custom will hash on-device.
+                    pskEncrypted = (legacy.length() == 64) && tomlIsHex(legacy);
+                }
+            }
+        }
+
+        push(QStringLiteral("[wlan]"), body);
+        if (ssidIsUtf8) {
+            push(QStringLiteral("ssid = ") + tomlQuote(QString::fromUtf8(ssidOctets)), body);
+        } else {
+            push(QStringLiteral("ssid_hex = ") + tomlQuote(QString::fromLatin1(ssidOctets.toHex())), body);
+        }
+        if (!psk.isEmpty()) {
+            push(QStringLiteral("password = ") + tomlQuote(psk), body);
+            push(QStringLiteral("password_encrypted = ")
+                     + (pskEncrypted ? QStringLiteral("true") : QStringLiteral("false")), body);
+        }
+        push(QStringLiteral("hidden = ") + (hidden ? QStringLiteral("true") : QStringLiteral("false")), body);
+        if (!country.isEmpty()) {
+            push(QStringLiteral("country = ") + tomlQuote(country), body);
+        }
+        // key_mgmt is left implicit: rpi-preseed defaults to wpa-psk when a
+        // password is present and none otherwise, which matches the two modes
+        // (secure/open) the wizard can produce.
+        push(QString(), body);
+    }
+
+    // ---- [locale] ----
+    const QString timezone = s.value("timezone").toString().trimmed();
+    const QString keymap = s.value("keyboard").toString().trimmed();
+    if (!timezone.isEmpty() || !keymap.isEmpty()) {
+        push(QStringLiteral("[locale]"), body);
+        if (!keymap.isEmpty()) {
+            push(QStringLiteral("keymap = ") + tomlQuote(keymap), body);
+        }
+        if (!timezone.isEmpty()) {
+            push(QStringLiteral("timezone = ") + tomlQuote(timezone), body);
+        }
+        push(QString(), body);
+    }
+
+    // ---- [connect] ----
+    if (s.value("piConnectEnabled").toBool()) {
+        const QString token = piConnectToken.trimmed();
+        push(QStringLiteral("[connect]"), body);
+        push(QStringLiteral("enabled = true"), body);
+        if (!token.isEmpty()) {
+            push(QStringLiteral("mode = ") + tomlQuote(QStringLiteral("token")), body);
+            push(QStringLiteral("token = ") + tomlQuote(token), body);
+        } else {
+            push(QStringLiteral("mode = ") + tomlQuote(QStringLiteral("device-identity")), body);
+        }
+        push(QString(), body);
+    }
+
+    // ---- [interfaces] ----
+    const bool enableI2C = s.value("enableI2C").toBool();
+    const bool enableSPI = s.value("enableSPI").toBool();
+    const bool enable1Wire = s.value("enable1Wire").toBool();
+    const bool enableUsbGadget = s.value("enableUsbGadget").toBool();
+    const QString serialRaw = s.value("enableSerial").toString();
+    QString serialValue;
+    if (serialRaw == QLatin1String("Default"))              serialValue = QStringLiteral("default");
+    else if (serialRaw == QLatin1String("Console"))         serialValue = QStringLiteral("console");
+    else if (serialRaw == QLatin1String("Hardware"))        serialValue = QStringLiteral("hardware");
+    else if (serialRaw == QLatin1String("Console & Hardware")) serialValue = QStringLiteral("console_hardware");
+    // "Disabled"/empty: leave serial unset rather than forcing it off.
+
+    if (enableI2C || enableSPI || enable1Wire || enableUsbGadget || !serialValue.isEmpty()) {
+        push(QStringLiteral("[interfaces]"), body);
+        if (enableI2C)        push(QStringLiteral("i2c = true"), body);
+        if (enableSPI)        push(QStringLiteral("spi = true"), body);
+        if (enable1Wire)      push(QStringLiteral("onewire = true"), body);
+        if (enableUsbGadget)  push(QStringLiteral("usb_gadget = true"), body);
+        if (!serialValue.isEmpty())
+            push(QStringLiteral("serial = ") + tomlQuote(serialValue), body);
+        push(QString(), body);
+    }
+
+    if (body.isEmpty())
+        return {};
+
+    QByteArray out = "config_version = \"1.0\"\n\n";
+    out += body;
+    // Collapse the trailing blank line left by the last section.
+    while (out.endsWith("\n\n"))
+        out.chop(1);
+    return out;
 }
 
 } // namespace rpi_imager

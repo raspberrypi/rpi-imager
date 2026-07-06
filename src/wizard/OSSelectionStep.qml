@@ -736,8 +736,10 @@ WizardStepBase {
                 root.wizardContainer.passwordlessSudoAvailable = ImageWriterSingleton.checkSWCapability("passwordless_sudo")
                 root.wizardContainer.ccRpiAvailable = ImageWriterSingleton.imageSupportsCcRpi()
                 
-                // Check if any interface/feature capabilities are available (requires both HW and SW support)
-                if (root.wizardContainer.ccRpiAvailable) {
+                // Check if any interface/feature capabilities are available (requires both HW and SW support).
+                // Gated on the OS being able to apply the toggles at all: cloud-init via cc_raspberry_pi,
+                // or rpi-preseed natively via raspi-config.
+                if (ImageWriterSingleton.imageSupportsInterfaceCustomisation()) {
                     var hasAnyIfFeatures = ImageWriterSingleton.checkHWAndSWCapability("i2c") ||
                                            ImageWriterSingleton.checkHWAndSWCapability("spi") ||
                                            ImageWriterSingleton.checkHWAndSWCapability("onewire") ||

@@ -2369,6 +2369,11 @@ bool DownloadThread::_customizeImage()
             if (_initFormat == "systemd") {
                 fat->writeFile("firstrun.sh", _firstrun);
                 _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
+            } else if (_initFormat == "rpi-preseed") {
+                // rpi-preseed applies /boot/firmware/rpi-preseed.toml on first
+                // boot; its units are gated on the file's presence, so no
+                // cmdline entry is required.
+                fat->writeFile("rpi-preseed.toml", _firstrun);
             }
         }
 
@@ -2476,10 +2481,11 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
     // Separate customization files from boot files
     // Customization files must remain alongside boot.img and boot.sig
     QStringList customizationFiles = {
-        "firstrun.sh",      // systemd init customization
-        "user-data",        // cloud-init customization
-        "meta-data",        // cloud-init metadata
-        "network-config"    // cloud-init network customization
+        "firstrun.sh",       // systemd init customization
+        "user-data",         // cloud-init customization
+        "meta-data",         // cloud-init metadata
+        "network-config",    // cloud-init network customization
+        "rpi-preseed.toml"   // rpi-preseed customization
     };
     
     QMap<QString, QByteArray> bootFiles;

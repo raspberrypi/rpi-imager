@@ -3887,6 +3887,8 @@ void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
 
     if (_initFormat == "systemd") {
         _applySystemdCustomisationFromSettings(s);
+    } else if (_initFormat == "rpi-preseed") {
+        _applyRpiPreseedCustomisationFromSettings(s);
     } else {
         // customisation for cloudinit and cloudinit-rpi
         _applyCloudInitCustomisationFromSettings(s);
@@ -3958,6 +3960,50 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     }
 
     setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
+}
+
+void ImageWriter::_applyRpiPreseedCustomisationFromSettings(const QVariantMap &s)
+{
+    // Use CustomisationGenerator for rpi-preseed.toml generation
+    const bool sshEnabled = s.value("sshEnabled").toBool();
+    const bool hasCcRpi = imageSupportsCcRpi();
+
+    QByteArray toml = rpi_imager::CustomisationGenerator::generateRpiPreseedToml(
+        s, _piConnectToken, hasCcRpi, sshEnabled, getCurrentUser());
+
+    QByteArray cmdlineAppend;
+    ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
+
+    // Only emit cmdline / advanced options when there is actual content to
+    // customise, so a stale persisted recommendedWifiCountry cannot trigger a
+    // device write when customisation was skipped.
+    if (!toml.isEmpty()) {
+        // Set the Wi-Fi regulatory domain on the kernel cmdline, as the systemd
+        // and cloud-init paths do. rpi-preseed's [wlan] applier also sets the
+        // country, but only when an SSID is present; doing it here additionally
+        // covers the country-without-SSID case and is harmless when both apply.
+        const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
+        if (!wifiCountry.isEmpty()) {
+            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+        }
+
+        // Check if secure boot should be enabled
+        // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+        // iCloud-synced or network paths. The actual write operation will validate the file.
+        bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+        QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+        if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
+            advOpts |= ImageOptions::EnableSecureBoot;
+            qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+        }
+    }
+
+    // rpi-preseed consumes a single /boot/firmware/rpi-preseed.toml on first
+    // boot, so the payload is staged in the firstrun slot; the device writers
+    // pick the destination filename from _initFormat. No cmdline pointer to the
+    // file is needed (unlike systemd.run= or ds=nocloud): rpi-preseed's units
+    // are triggered by the file's presence on the boot partition.
+    setImageCustomisation(QByteArray(), cmdlineAppend, toml, QByteArray(), QByteArray(), advOpts);
 }
 
 QString ImageWriter::hashUserPassword(const QString &plaintext)
@@ -4081,6 +4127,11 @@ bool ImageWriter::imageSupportsCustomization()
 bool ImageWriter::imageSupportsCcRpi()
 {
     return _initFormat == "cloudinit-rpi";
+}
+
+bool ImageWriter::imageSupportsInterfaceCustomisation()
+{
+    return _initFormat == "cloudinit-rpi" || _initFormat == "rpi-preseed";
 }
 
 QStringList ImageWriter::getTranslations()

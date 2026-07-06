@@ -63,6 +63,29 @@ public:
                                                     bool hasCcRpi = false);
 
     /**
+     * @brief Generate an rpi-preseed.toml file from settings
+     *
+     * Produces the TOML customisation file consumed by rpi-preseed on first
+     * boot (system/user/ssh/wlan/locale/connect/interfaces sections). The
+     * output is restricted to the TOML subset rpi-preseed's own POSIX-sh parser
+     * understands (basic "" strings escaping only \\ and \", bare booleans and
+     * single-/multi-line arrays of strings). Returns an empty QByteArray when
+     * nothing was configured, so no file is written.
+     *
+     * @param settings Map containing customisation settings
+     * @param piConnectToken Optional Raspberry Pi Connect token
+     * @param hasCcRpi Unused (interfaces are always supported by rpi-preseed)
+     * @param sshEnabled Whether SSH is enabled
+     * @param currentUser Fallback user name when none is configured
+     * @return QByteArray containing the generated rpi-preseed.toml
+     */
+    static QByteArray generateRpiPreseedToml(const QVariantMap& settings,
+                                             const QString& piConnectToken = QString(),
+                                             bool hasCcRpi = false,
+                                             bool sshEnabled = false,
+                                             const QString& currentUser = QString());
+
+    /**
      * @brief Escape IEEE 802.11 SSID octets for YAML double-quoted strings
      */
     static QByteArray yamlEscapeSsidOctets(const QByteArray& ssidOctets);

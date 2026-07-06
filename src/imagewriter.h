@@ -334,6 +334,10 @@ public:
     Q_INVOKABLE void clearSavedCustomisationSettings();
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
+    // Whether the selected OS can apply the GPIO/hardware interface toggles
+    // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
+    // module; rpi-preseed configures them natively via raspi-config.
+    Q_INVOKABLE bool imageSupportsInterfaceCustomisation();
 
     // Derive account/Wi-Fi credentials from plaintext for the UI. Hashing is
     // delegated to CustomisationGenerator (the single home for credential
@@ -626,6 +630,7 @@ protected:
     QString _sshKeyGen();
     void _applySystemdCustomisationFromSettings(const QVariantMap &s);
     void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
+    void _applyRpiPreseedCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
     void _handleMemoryAllocationFailure(const char* what);
