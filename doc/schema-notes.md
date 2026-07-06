@@ -1037,6 +1037,7 @@ echo "All files validated successfully!"
    - Set `init_format` to enable the customization wizard
    - Use `"systemd"` for most Raspberry Pi OS derivatives
    - Use `"cloudinit"` or `"cloudinit-rpi"` for cloud-init based systems
+   - Use `"rpi-preseed"` for images that ship the rpi-preseed package
    - Use `"none"` or `""` to explicitly disable
 
 5. **Compressed Image Formats**
@@ -1137,6 +1138,7 @@ The sizes must be in **bytes**, not megabytes or gigabytes:
 "init_format": "systemd"
 "init_format": "cloudinit"
 "init_format": "cloudinit-rpi"
+"init_format": "rpi-preseed"
 "init_format": "none"
 "init_format": ""  // Empty string to disable
 ```
