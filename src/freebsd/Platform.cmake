@@ -16,11 +16,9 @@ pkg_check_modules(LIBIDN2 REQUIRED IMPORTED_TARGET libidn2)
 
 set(PLATFORM_SOURCES
     drivelist/drivelist_freebsd.cpp
-    freebsd/stpanalyzer.h
-    freebsd/stpanalyzer.cpp
-    freebsd/acceleratedcryptographichash_gnutls.cpp
+    linux/acceleratedcryptographichash_gnutls.cpp
     freebsd/bootimgcreator_freebsd.cpp
-    freebsd/secureboot_crypto_freebsd.cpp
+    linux/secureboot_crypto_linux.cpp
     freebsd/file_operations_freebsd.cpp
     freebsd/platformquirks_freebsd.cpp
 )
@@ -28,18 +26,18 @@ set(PLATFORM_SOURCES
 # Only include DBus-dependent and GUI components for non-CLI builds
 if(NOT BUILD_CLI_ONLY)
     list(APPEND PLATFORM_SOURCES
-        freebsd/freebsd_suspend_inhibitor.cpp
-        freebsd/networkmanagerapi.h
-        freebsd/networkmanagerapi.cpp
-        freebsd/nativefiledialog_freebsd.cpp
-        freebsd/urihandler_dbus.h
-        freebsd/urihandler_dbus.cpp
+        linux/linux_suspend_inhibitor.cpp
+        linux/networkmanagerapi.h
+        linux/networkmanagerapi.cpp
+        linux/nativefiledialog_linux.cpp
+        linux/urihandler_dbus.h
+        linux/urihandler_dbus.cpp
     )
 else()
     # Use stub implementations for CLI builds (no DBus dependency)
     list(APPEND PLATFORM_SOURCES
-        freebsd/suspend_inhibitor_stub.cpp
-        freebsd/wlancredentials_stub.cpp
+        linux/suspend_inhibitor_stub.cpp
+        linux/wlancredentials_stub.cpp
     )
 endif()
 
