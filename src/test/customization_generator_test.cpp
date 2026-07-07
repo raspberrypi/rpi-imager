@@ -2055,6 +2055,7 @@ TEST_CASE("rpi-preseed user section marks pre-hashed password encrypted", "[pres
     REQUIRE_THAT(s, ContainsSubstring("name = \"jig\""));
     REQUIRE_THAT(s, ContainsSubstring("password = \"$5$abc$def\""));
     REQUIRE_THAT(s, ContainsSubstring("password_encrypted = true"));
+    REQUIRE_THAT(s, ContainsSubstring("groups = [\"sudo\"]"));
     REQUIRE_THAT(s, ContainsSubstring("passwordless_sudo = true"));
 }
 
@@ -2068,6 +2069,9 @@ TEST_CASE("rpi-preseed user without password omits password keys", "[preseed][us
     REQUIRE_THAT(s, ContainsSubstring("name = \"jig\""));
     REQUIRE_THAT(s, !ContainsSubstring("password ="));
     REQUIRE_THAT(s, !ContainsSubstring("passwordless_sudo"));
+    // The account is always made a sudoer (parity with the admin default),
+    // independent of whether a password or passwordless sudo is configured.
+    REQUIRE_THAT(s, ContainsSubstring("groups = [\"sudo\"]"));
 }
 
 TEST_CASE("rpi-preseed ssh section is gated on sshEnabled", "[preseed][ssh]") {

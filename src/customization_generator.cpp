@@ -904,6 +904,17 @@ QByteArray CustomisationGenerator::generateRpiPreseedToml(const QVariantMap& s,
             push(QStringLiteral("password = ") + tomlQuote(userPass), body);
             push(QStringLiteral("password_encrypted = true"), body);
         }
+        // Explicitly make the configured account an admin by adding it to the
+        // 'sudo' group. On stock Raspberry Pi OS the renamed UID 1000 user is
+        // already a sudoer, so this is a harmless no-op there; the reason we
+        // emit it is images (e.g. the CM5 programming jig) whose UID 1000 is
+        // deliberately NOT in sudo, where a rename alone would leave the
+        // operator unable to escalate. This is intentionally stronger than the
+        // cloud-init / firstrun.sh paths, which only preserve existing
+        // memberships. rpi-preseed membership is append-only and silently skips
+        // the group if the image does not ship it. passwordless_sudo below is
+        // the separate, stronger opt-in that also drops a NOPASSWD sudoers rule.
+        push(QStringLiteral("groups = [\"sudo\"]"), body);
         if (passwordlessSudo) {
             push(QStringLiteral("passwordless_sudo = true"), body);
         }
