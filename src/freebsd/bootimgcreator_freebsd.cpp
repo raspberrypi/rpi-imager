@@ -56,7 +56,7 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
     if (!newfsProc.waitForFinished(30000) || newfsProc.exitCode() != 0) {
         qDebug() << "BootImgCreator (FreeBSD): newfs_msdos failed:"
                  << newfsProc.readAllStandardError();
-        QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << "device");
+        QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << device);
         return false;
     }
 
@@ -64,7 +64,7 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
     QTemporaryDir tempDir;
     if (!tempDir.isValid()) {
         qDebug() << "BootImgCreator (FreeBSD): failed to create temp directory";
-        QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << "device");
+        QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << device);
         return false;
     }
 
@@ -75,7 +75,7 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
     mountProc.start("mount", QStringList() << "-t" << "msdosfs" << device << mountPoint);
     if (!mountProc.waitForFinished(10000) || mountProc.exitCode() != 0) {
         qDebug() << "BootImgCreator (FreeBSD): mount failed:" << mountProc.readAllStandardError();
-        QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << "device");
+        QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << device);
         return false;
     }
 
@@ -98,7 +98,7 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
 
     // Unmount and detach
     QProcess::execute("umount", QStringList() << mountPoint);
-    QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << "device");
+    QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << device);
 
     qDebug() << "BootImgCreator (FreeBSD): boot.img created successfully";
     return true;
