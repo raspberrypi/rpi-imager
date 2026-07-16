@@ -17,6 +17,7 @@ pkg_check_modules(LIBIDN2 REQUIRED IMPORTED_TARGET libidn2)
 set(PLATFORM_SOURCES
     drivelist/drivelist_freebsd.cpp
     linux/acceleratedcryptographichash_gnutls.cpp
+    unix/bootimgcreator_unix.cpp
     freebsd/bootimgcreator_freebsd.cpp
     linux/secureboot_crypto_linux.cpp
     unix/file_operations_unix.cpp

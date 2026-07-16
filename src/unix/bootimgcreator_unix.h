@@ -1,5 +1,5 @@
-#ifndef BOOTIMGCREATOR_H
-#define BOOTIMGCREATOR_H
+#ifndef BOOTIMGCREATORUNIX_H
+#define BOOTIMGCREATORUNIX_H
 
 /*
  * SPDX-License-Identifier: Apache-2.0
@@ -12,21 +12,11 @@
 
 /**
  * @brief Platform-specific boot.img creation helper
- * 
+ *
  * This class provides platform-specific implementations for creating
  * FAT32 disk images and copying files with directory hierarchy preservation.
- * 
- * Platform-specific implementations are in:
- * - mac/bootimgcreator_macos.cpp
- * - linux/bootimgcreator_linux.cpp
- * - freebsd/bootimgcreator_freebsd.cpp
- * - windows/bootimgcreator_windows.cpp
- *
- * Note:
- * FreeBSD and OSX share common code found in:
- * - unix/bootimgcreator_unix.cpp
  */
-class BootImgCreator
+class BootImgCreatorUnix
 {
 public:
     /**
@@ -36,10 +26,20 @@ public:
      * @param totalSize Size in bytes for the boot.img file
      * @return true if successful, false otherwise
      */
-    static bool createBootImg(const QMap<QString, QByteArray> &files, 
-                             const QString &outputPath, 
+    static bool createBootImg(const QMap<QString, QByteArray> &files,
+                             const QString &outputPath,
                              qint64 totalSize);
+
+    static void setPlatformName(const QString& name) { platformName = name; }
+private:
+    static QString platformName;
+
+    static bool attachDiskImage(const QString&, QString&);
+
+    static bool detachDiskImage(const QString&);
+
+    static bool mountFilesystem(const QString&, const QString&);
 };
 
-#endif // BOOTIMGCREATOR_H
+#endif // BOOTIMGCREATORUNIX_H
 
