@@ -571,6 +571,11 @@ if(NOT BUILD_CLI_ONLY)
     )
 endif()
 
+# Include common install metainfo generation for Linux and FreeBSD
+if (UNIX AND NOT APPLE)
+    include(unix/PlatformPackaging.cmake)
+endif()
+
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
     include(windows/PlatformPackaging.cmake)
