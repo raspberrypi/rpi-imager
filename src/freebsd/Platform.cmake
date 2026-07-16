@@ -19,6 +19,7 @@ set(PLATFORM_SOURCES
     linux/acceleratedcryptographichash_gnutls.cpp
     freebsd/bootimgcreator_freebsd.cpp
     linux/secureboot_crypto_linux.cpp
+    unix/file_operations_unix.cpp
     freebsd/file_operations_freebsd.cpp
     freebsd/platformquirks_freebsd.cpp
 )

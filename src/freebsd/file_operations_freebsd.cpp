@@ -46,11 +46,15 @@ static void Log(const std::string& msg) {
 }
 
 FreeBSDFileOperations::FreeBSDFileOperations()
-    : fd_(-1), last_error_code_(0), using_direct_io_(false), direct_io_attempted_(false),
-      async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
-      async_write_offset_(0), next_write_id_(0), is_destr_(0) {
+    : UnixFileOperations(), is_destr_(0) {
 }
 
+FreeBSDFileOperations::~FreeBSDFileOperations() {
+  is_destr_ = 1;
+  Close();
+}
+
+// Block device detection using libgeom
 bool FreeBSDFileOperations::IsBlockDevicePath(const std::string& path) {
     struct gmesh devtree;
     struct gclass *geom_class;
@@ -82,9 +86,72 @@ bool FreeBSDFileOperations::IsBlockDevicePath(const std::string& path) {
     return false;
 }
 
-FreeBSDFileOperations::~FreeBSDFileOperations() {
-  is_destr_ = 1;
-  Close();
+// Device size query using DIOCGMEDIASIZE ioctl
+FileError FreeBSDFileOperations::GetDeviceSize(std::uint64_t& size) {
+    if (ioctl(fd_, DIOCGMEDIASIZE, &size) == -1) {
+        std::cerr << "FreeBSDFileOperations::GetDeviceSize: "
+                  << "Failed to get device size"
+                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
+                  << std::endl;
+        last_error_code_ = errno;
+        return FileError::kSizeError;
+    }
+    return FileError::kSuccess;
+}
+
+// Device I/O limits query using camlib
+FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
+    FileOperations::DeviceIOLimits limits;
+    struct cam_device *dev;
+    union ccb *ccb;
+    int val;
+    size_t len = sizeof(val);
+
+    // camcontrol has soft queue depth
+    dev = cam_open_device(path.c_str(), O_RDWR);
+    if (dev == NULL)
+        return limits;
+
+    ccb = cam_getccb(dev);
+    if (ccb == NULL)
+        return limits;
+
+    CCB_CLEAR_ALL_EXCEPT_HDR(&ccb->cgds);
+
+	ccb->ccb_h.func_code = XPT_GDEV_STATS;
+	if (cam_send_ccb(dev, ccb) < 0)
+		goto bail;
+
+	if ((ccb->ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP)
+		goto bail;
+
+    limits.suggested_queue_depth = ccb->cgds.dev_openings +
+        ccb->cgds.dev_active;
+
+    // Get max single I/O
+    if(sysctlbyname("kern.maxphys", &val, &len, nullptr, 0) == -1) {
+        goto bail;
+    }
+
+    if (val > 0)
+        limits.max_transfer_bytes = static_cast<size_t>(val);
+
+bail:
+    cam_freeccb(ccb);
+    return limits;
+}
+
+// All functions below concern themselves with aio
+bool FreeBSDFileOperations::SetAsyncQueueDepth(int depth) {
+    int old, nlen = sizeof(depth);
+    size_t olen = sizeof(old);
+
+    // Since we're doing raw disk I/O, only set values for that pool
+    if (sysctlbyname("vfs.aio.max_buf_aio", &old, &olen,
+        &depth, nlen) == -1)
+        return false;
+    async_queue_depth_ = depth;
+    return true;
 }
 
 void FreeBSDFileOperations::ProcessCompletions(bool wait) {
@@ -218,428 +285,6 @@ recheck:
     }
 }
 
-FileError FreeBSDFileOperations::OpenDevice(const std::string& path) {
-    std::cout << "FreeBSDFileOperations::OpenDevice: "
-              << "Opening FreeBSD device: " << path
-              << std::endl;
-
-    // Reset direct I/O tracking for new device
-    direct_io_attempted_ = false;
-
-    // Use O_DIRECT for block devices to bypass the page cache
-    int flags = O_RDWR;
-    bool isBlockDevice = IsBlockDevicePath(path);
-
-    if (isBlockDevice) {
-        flags |= O_DIRECT;
-        using_direct_io_ = true;
-        direct_io_attempted_ = true;
-    }
-
-    FileError result = OpenInternal(path.c_str(), flags);
-
-    // If O_DIRECT fails, fall back to regular I/O
-    if (result != FileError::kSuccess && isBlockDevice && using_direct_io_) {
-        using_direct_io_ = false;
-        result = OpenInternal(path.c_str(), O_RDWR);
-    }
-
-    // Reset async state for new file
-    async_write_offset_ = 0;
-    first_async_error_ = FileError::kSuccess;
-    cancelled_.store(false);
-    write_latency_stats_.reset();
-
-    if (result == FileError::kSuccess) {
-        device_io_limits_ = QueryPlatformDeviceIOLimits(current_path_);
-        if (device_io_limits_.max_transfer_bytes > 0 || device_io_limits_.suggested_queue_depth > 0) {
-            std::ostringstream oss;
-            oss << "Device I/O limits: max_transfer=" << device_io_limits_.max_transfer_bytes
-                << " bytes, suggested_queue_depth=" << device_io_limits_.suggested_queue_depth;
-            Log(oss.str());
-        }
-    }
-
-    return result;
-}
-
-FileError FreeBSDFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
-    // Create an empty file with 644 permissions
-    FileError result = OpenInternal(path.c_str(),
-                                    O_CREAT | O_RDWR | O_TRUNC,
-                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    if (result != FileError::kSuccess) {
-        return result;
-    }
-
-    // Extend file to desired size
-    if (ftruncate(fd_, static_cast<off_t>(size)) != 0) {
-        std::cerr << "FreeBSDFileOperations::CreateTestFile: "
-                  << "Failed to increase file size to " << size
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        Close();
-        return FileError::kSizeError;
-    }
-
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::WriteAtOffset(std::uint64_t offset,
-                                               const std::uint8_t* data,
-                                               std::size_t size) {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::WriteAtOffset: "
-                  << "Device not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    if (lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == -1) {
-        std::cerr << "FreeBSDFileOperations::WriteAtOffset: "
-                  << "lseek failed"
-                  << ", offset=" << offset
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        return FileError::kSeekError;
-    }
-
-    std::size_t bytes_written = 0;
-    while (bytes_written < size) {
-        ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
-        if (result <= 0) {
-            std::cerr << "FreeBSDFileOperations::WriteAtOffset: "
-                      << "write failed"
-                      << ", bytes_written=" << bytes_written
-                      << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                      << std::endl;
-            return FileError::kWriteError;
-        }
-        bytes_written += static_cast<std::size_t>(result);
-    }
-
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::GetSize(std::uint64_t& size) {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::GetSize: "
-                  << "Device not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    struct stat st;
-    if (fstat(fd_, &st) != 0) {
-        std::cerr << "FreeBSDFileOperations::GetSize: "
-                  << "Failed to get file status"
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        last_error_code_ = errno;
-        return FileError::kSizeError;
-    }
-
-    if (S_ISBLK(st.st_mode) || S_ISCHR(st.st_mode)) {
-        std::uint64_t device_size = 0;
-        if (ioctl(fd_, DIOCGMEDIASIZE, &device_size) == -1) {
-            std::cerr << "FreeBSDFileOperations::GetSize: "
-                      << "Failed to get device size"
-                      << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                      << std::endl;
-            last_error_code_ = errno;
-            return FileError::kSizeError;
-        }
-        size = device_size;
-    } else {
-        size = static_cast<std::uint64_t>(st.st_size);
-    }
-
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::Close() {
-    WaitForPendingWrites();
-
-    if (IsOpen()) {
-        if (close(fd_) != 0) {
-            std::cerr << "FreeBSDFileOperations::Close: "
-                      << "Failed to close fd"
-                      << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                      << std::endl;
-            fd_ = -1;
-            using_direct_io_ = false;
-            return FileError::kCloseError;
-        }
-        fd_ = -1;
-    }
-
-    current_path_.clear();
-    using_direct_io_ = false;
-    async_write_offset_ = 0;
-    return FileError::kSuccess;
-}
-
-bool FreeBSDFileOperations::IsOpen() const {
-    return fd_ >= 0;
-}
-
-FileError FreeBSDFileOperations::SetDirectIOEnabled(bool enabled) {
-    if (!IsOpen() || current_path_.empty()) {
-        std::cerr << "FreeBSDFileOpeartions::SetDirectIOEnabled: "
-                  << "File not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    if (using_direct_io_ == enabled) {
-        return FileError::kSuccess;
-    }
-
-    // Save current position before reopening
-    off_t currentPos = lseek(fd_, 0, SEEK_CUR);
-    std::string savedPath = current_path_;
-
-    close(fd_);
-    fd_ = -1;
-
-    int flags = O_RDWR;
-    if (enabled && IsBlockDevicePath(savedPath)) {
-        flags |= O_DIRECT;
-    }
-
-    FileError result = OpenInternal(savedPath.c_str(), flags);
-    if (result != FileError::kSuccess) {
-        if (enabled) {
-            result = OpenInternal(savedPath.c_str(), O_RDWR);
-            using_direct_io_ = false;
-            Log("Failed to enable O_DIRECT, reopened without it");
-        }
-        if (result != FileError::kSuccess) {
-            return result;
-        }
-    } else {
-        using_direct_io_ = enabled;
-    }
-
-    if (currentPos > 0) {
-        lseek(fd_, currentPos, SEEK_SET);
-    }
-
-    std::ostringstream oss;
-    oss << "O_DIRECT " << (using_direct_io_ ? "enabled" : "disabled");
-    Log(oss.str());
-
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::OpenInternal(const char* path, int flags, mode_t mode) {
-    Close();
-
-    fd_ = open(path, flags, mode);
-    if (fd_ < 0) {
-        std::cerr << "FreeBSDFileOperations::OpenInternal: "
-                  << "Failed to open file"
-                  << ", path=" << path
-                  << ", flags=" << flags
-                  << ", mode=" << mode
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        last_error_code_ = errno;
-        return FileError::kOpenError;
-    }
-
-    current_path_ = path;
-    last_error_code_ = 0;
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::WriteSequential(const std::uint8_t* data, std::size_t size) {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::WriteSequential: "
-                  << "File not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    std::size_t bytes_written = 0;
-    while (bytes_written < size) {
-        ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
-        if (result <= 0) {
-            if (result == 0 || errno != EINTR) {
-                std::cerr << "FreeBSDFileOperations::WriteSequential: "
-                          << "Failed to write to file"
-                          << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                          << std::endl;
-                last_error_code_ = errno;
-                return FileError::kWriteError;
-            }
-            continue;
-        }
-        bytes_written += static_cast<std::size_t>(result);
-    }
-
-    last_error_code_ = 0;
-
-    // Update async_write_offset_ so Tell() returns correct position
-    // This is needed because Seek() sets async_write_offset_, and Tell()
-    // uses it if > 0. Without this update, Tell() would return a stale value.
-    async_write_offset_ += size;
-
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::ReadSequential: "
-                  << "File not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    ssize_t result = read(fd_, data, size);
-    if (result < 0) {
-        std::cerr << "FreeBSDFileOperations::ReadSequential: "
-                  << "Failed to read from fd"
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        bytes_read = 0;
-        return FileError::kReadError;
-    }
-
-    bytes_read = static_cast<std::size_t>(result);
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::Seek(std::uint64_t position) {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::Seek: "
-                  << "File not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    // Wait for pending async writes before seeking
-    WaitForPendingWrites();
-
-    if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
-        std::cerr << "FreeBSDFileOperations::Seek: "
-                  << "Seek failed"
-                  << ", position=" << position
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        return FileError::kSeekError;
-    }
-
-    // Also update async write offset
-    async_write_offset_ = position;
-
-    return FileError::kSuccess;
-}
-
-std::uint64_t FreeBSDFileOperations::Tell() const {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::Tell: "
-                  << "File not open"
-                  << std::endl;
-        return 0;
-    }
-
-    if (async_write_offset_ > 0) {
-        return async_write_offset_;
-    }
-
-    off_t pos = lseek(fd_, 0, SEEK_CUR);
-    return (pos == -1) ? 0 : static_cast<std::uint64_t>(pos);
-}
-
-FileError FreeBSDFileOperations::ForceSync() {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::ForceSync: "
-                  << "File not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    WaitForPendingWrites();
-
-    if (fsync(fd_) != 0) {
-        std::cerr << "FreeBSDFileOperations::ForceSync: "
-                  << "Sync failed"
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        return FileError::kSyncError;
-    }
-
-    return FileError::kSuccess;
-}
-
-FileError FreeBSDFileOperations::Flush() {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::Flush: "
-                  << "File not open"
-                  << std::endl;
-        return FileError::kOpenError;
-    }
-
-    WaitForPendingWrites();
-
-    if (fdatasync(fd_) != 0) {
-        std::cerr << "FreeBSDFileOperations::Flush: "
-                  << "Sync failed"
-                  << ", errno=" << errno << " (" << std::strerror(errno) << ")"
-                  << std::endl;
-        return FileError::kFlushError;
-    }
-
-    return FileError::kSuccess;
-}
-
-void FreeBSDFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) {
-    if (!IsOpen()) {
-        std::cerr << "FreeBSDFileOperations::PrepareForSequentialRead: "
-                  << "File not open"
-                  << std::endl;
-        return;
-    }
-
-    // Invalidate cache and set up read-ahead
-    int ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_DONTNEED);
-    if (ret != 0) {
-        std::ostringstream oss;
-        oss << "Warning: posix_fadvise(DONTNEED) failed: " << ret;
-        Log(oss.str());
-    }
-
-    ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_SEQUENTIAL);
-    if (ret != 0) {
-        std::ostringstream oss;
-        oss << "Warning: posix_fadvise(SEQUENTIAL) failed: " << ret;
-        Log(oss.str());
-    }
-}
-
-int FreeBSDFileOperations::GetHandle() const {
-    return fd_;
-}
-
-int FreeBSDFileOperations::GetLastErrorCode() const {
-    return last_error_code_;
-}
-
-// ============= Async I/O Implementation (using aio) =============
-
-bool FreeBSDFileOperations::SetAsyncQueueDepth(int depth) {
-    int old, nlen = sizeof(depth);
-    size_t olen = sizeof(old);
-
-    // Since we're doing raw disk I/O, only set values for that pool
-    if (sysctlbyname("vfs.aio.max_buf_aio", &old, &olen,
-        &depth, nlen) == -1)
-        return false;
-    async_queue_depth_ = depth;
-    return true;
-}
-
 FileError FreeBSDFileOperations::AsyncWriteSequential(const std::uint8_t* data, std::size_t size,
                                                       AsyncWriteCallback callback) {
     if (fd_ < 0) {
@@ -714,75 +359,8 @@ FileError FreeBSDFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
     return FileError::kSuccess;
 }
 
-void FreeBSDFileOperations::PollAsyncCompletions() {
-    // No op.
-}
-
 void FreeBSDFileOperations::CancelAsyncIO() {
   cancelled_.store(true);
-
-  // Note: we do NOT call ProcessCompletions here. CancelAsyncIO may be
-  // called from any thread (e.g. main thread via cancelDownload), but the
-  // extract thread is the sole consumer. The cancelled_ flag will cause
-  // the extract thread to exit its write loop, and WaitForPendingWrites
-  // will drain the completions.
-}
-
-
-FileError FreeBSDFileOperations::WaitForPendingWrites() {
-  // Wait for pending writes to complete or be cancelled.
-  //
-  // DESIGN: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
-  // This function simply waits, responding to cancellation. We keep a very long safety-net
-  // timeout (5 minutes) only as emergency fallback if cancellation somehow fails.
-  constexpr int kEmergencyTimeoutSeconds = 300;  // 5 minute emergency fallback
-  auto startTime = std::chrono::steady_clock::now();
-  int lastLogSecond = 0;
-
-  while (pending_writes_.load() > 0) {
-    ProcessCompletions(true);
-
-    // Emergency safety-net: if we've been waiting 5 minutes, something is very wrong
-    auto elapsed = std::chrono::steady_clock::now() - startTime;
-    int elapsedSeconds = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
-
-    if (elapsedSeconds >= kEmergencyTimeoutSeconds) {
-      int remaining = pending_writes_.load();
-      Log("WaitForPendingWrites: EMERGENCY timeout after " + std::to_string(elapsedSeconds) +
-          "s with " + std::to_string(remaining) + " writes still pending - forcing sync fallback");
-      return AttemptSyncFallback();
-    }
-
-    // Log progress every 30 seconds (informational only, not stall detection)
-    if (elapsedSeconds >= 30 && elapsedSeconds % 30 == 0 && elapsedSeconds != lastLogSecond) {
-      lastLogSecond = elapsedSeconds;
-      Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) +
-          " writes pending after " + std::to_string(elapsedSeconds) + "s");
-    }
-  }
-
-  return first_async_error_;
-}
-
-// GetAsyncIOStats() inherited from FileOperations base class
-
-std::vector<FileOperations::PendingWriteInfo> FreeBSDFileOperations::GetPendingWritesSorted() const {
-  std::vector<PendingWriteInfo> result;
-
-  std::lock_guard<std::mutex> lock(pending_mutex_);
-  result.reserve(pending_callbacks_.size());
-
-  for (const auto& [write_id, pw] : pending_callbacks_) {
-    result.push_back(PendingWriteInfo{pw.offset, pw.data, pw.size, pw.callback});
-  }
-
-  // Sort by offset for sequential replay
-  std::sort(result.begin(), result.end(),
-            [](const PendingWriteInfo& a, const PendingWriteInfo& b) {
-              return a.offset < b.offset;
-            });
-
-  return result;
 }
 
 // DESIGN:
@@ -879,108 +457,6 @@ FileError FreeBSDFileOperations::AttemptSyncFallback() {
 
   Log("Sync fallback successful - continuing in sync mode");
   return FileError::kSuccess;
-}
-
-bool FreeBSDFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
-  // First, prevent new async writes by switching to sync mode
-  sync_fallback_mode_ = true;
-
-  int pending = pending_writes_.load();
-  if (pending == 0) {
-    Log("DrainAndSwitchToSync: No pending writes, switching to sync mode");
-    return true;
-  }
-
-  Log("DrainAndSwitchToSync: Waiting for " + std::to_string(pending) +
-      " pending writes to drain (stall timeout: " + std::to_string(stallTimeoutSeconds) + "s per completion)");
-
-  auto startTime = std::chrono::steady_clock::now();
-  auto lastProgressTime = startTime;
-  int lastPending = pending;
-
-  // Wait for the extract thread to drain pending writes.
-  // Once sync_fallback_mode_ is set above, the extract thread will stop
-  // submitting new writes and drain the remaining ones via its own
-  // ProcessCompletions calls in AsyncWriteSequential/WaitForPendingWrites.
-  while (pending_writes_.load() > 0) {
-    int currentPending = pending_writes_.load();
-    auto now = std::chrono::steady_clock::now();
-
-    if (currentPending < lastPending) {
-      // Progress! Reset the stall timer
-      Log("DrainAndSwitchToSync: Draining... " + std::to_string(currentPending) + " remaining");
-      lastPending = currentPending;
-      lastProgressTime = now;
-    } else {
-      // No progress - check stall timeout
-      auto stallDuration = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressTime);
-      if (stallDuration.count() >= stallTimeoutSeconds) {
-        int remaining = pending_writes_.load();
-        auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
-        Log("DrainAndSwitchToSync: Stalled - no completions for " +
-            std::to_string(stallTimeoutSeconds) + "s, " + std::to_string(remaining) +
-            " writes still pending after " + std::to_string(totalElapsed.count()) + "s total");
-        return false;
-      }
-    }
-
-    // Brief sleep to avoid spinning — the extract thread is doing the actual draining
-    usleep(100000);  // 100ms
-  }
-
-  auto elapsed = std::chrono::steady_clock::now() - startTime;
-  int elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
-
-  Log("DrainAndSwitchToSync: Successfully drained all writes in " +
-      std::to_string(elapsedMs) + "ms - now in sync mode");
-  return true;
-}
-
-void FreeBSDFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
-    if (newDepth >= async_queue_depth_)
-        return;
-    (void) SetAsyncQueueDepth(newDepth);
-}
-
-FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
-    FileOperations::DeviceIOLimits limits;
-    struct cam_device *dev;
-    union ccb *ccb;
-    int val;
-    size_t len = sizeof(val);
-
-    // camcontrol has soft queue depth
-    dev = cam_open_device(path.c_str(), O_RDWR);
-    if (dev == NULL)
-        return limits;
-
-    ccb = cam_getccb(dev);
-    if (ccb == NULL)
-        return limits;
-
-    CCB_CLEAR_ALL_EXCEPT_HDR(&ccb->cgds);
-
-	ccb->ccb_h.func_code = XPT_GDEV_STATS;
-	if (cam_send_ccb(dev, ccb) < 0)
-		goto bail;
-
-	if ((ccb->ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP)
-		goto bail;
-
-    limits.suggested_queue_depth = ccb->cgds.dev_openings +
-        ccb->cgds.dev_active;
-
-    // Get max single I/O
-    if(sysctlbyname("kern.maxphys", &val, &len, nullptr, 0) == -1) {
-        goto bail;
-    }
-
-    if (val > 0)
-        limits.max_transfer_bytes = static_cast<size_t>(val);
-
-bail:
-    cam_freeccb(ccb);
-    return limits;
 }
 
 // Platform-specific factory function implementation
