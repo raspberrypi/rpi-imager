@@ -166,23 +166,31 @@ ColumnLayout {
                 id: keyRow
                 Layout.fillWidth: true
                 spacing: Style.spacingSmall
-                
+
+                // Model data injected by the Repeater. These must be declared as
+                // required properties under `pragma ComponentBehavior: Bound`;
+                // otherwise the implicitly-injected context properties resolve to
+                // undefined in compiled bindings, leaving the key text blank and
+                // the Remove button inert. See issue #1664.
+                required property int index
+                required property var modelData
+
                 // Accessibility for the row as a list item
                 Accessible.role: Accessible.ListItem
                 Accessible.name: {
                     // Provide full key info for screen readers
-                    var keyText = modelData
+                    var keyText = keyRow.modelData
                     var parts = keyText.split(/\s+/)
                     if (parts.length >= 2) {
                         var keyType = parts[0]
                         var comment = parts.length > 2 ? parts.slice(2).join(" ") : ""
                         if (comment) {
-                            return qsTr("SSH key %1: %2, %3").arg(index + 1).arg(keyType).arg(comment)
+                            return qsTr("SSH key %1: %2, %3").arg(keyRow.index + 1).arg(keyType).arg(comment)
                         } else {
-                            return qsTr("SSH key %1: %2").arg(index + 1).arg(keyType)
+                            return qsTr("SSH key %1: %2").arg(keyRow.index + 1).arg(keyType)
                         }
                     }
-                    return qsTr("SSH key %1").arg(index + 1)
+                    return qsTr("SSH key %1").arg(keyRow.index + 1)
                 }
                 Accessible.ignored: false
                 Accessible.focusable: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
@@ -192,8 +200,9 @@ ColumnLayout {
                 // Key text (truncated for display)
                 Text {
                     Layout.fillWidth: true
+                    Layout.maximumWidth: parent ? parent.width - 100 : 500
                     text: {
-                        var keyText = modelData
+                        var keyText = keyRow.modelData
                         // Parse SSH key format: keytype keydata [comment]
                         var parts = keyText.split(/\s+/)
                         if (parts.length >= 2) {
@@ -234,14 +243,14 @@ ColumnLayout {
                 ImButton {
                     text: qsTr("Remove")
                     Layout.minimumWidth: 80
-                    onClicked: root.removeKey(index)
+                    onClicked: root.removeKey(keyRow.index)
                     accessibleDescription: {
-                        var keyText = modelData
+                        var keyText = keyRow.modelData
                         var parts = keyText.split(/\s+/)
                         if (parts.length > 2) {
                             return qsTr("Remove SSH key: %1").arg(parts.slice(2).join(" "))
                         }
-                        return qsTr("Remove SSH key %1").arg(index + 1)
+                        return qsTr("Remove SSH key %1").arg(keyRow.index + 1)
                     }
                 }
             }
