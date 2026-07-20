@@ -2938,58 +2938,28 @@ void ImageWriter::_parseZstdFile()
         return;
     }
 
-    // Two-stage: read just enough bytes to query the actual frame header size,
-    // then read the remainder. ZSTD_FRAMEHEADERSIZE_PREFIX is the minimum input
-    // size required to call ZSTD_frameHeaderSize().
-    constexpr qint64 prefixSize = ZSTD_FRAMEHEADERSIZE_PREFIX(ZSTD_f_zstd1);
-    QByteArray header = f.read(prefixSize);
-    if (header.size() < prefixSize)
-    {
-        qDebug() << "Unable to read .zst frame prefix";
-        f.close();
-        return;
-    }
-
-    size_t hdrSize = ZSTD_frameHeaderSize(header.constData(), header.size());
-    if (ZSTD_isError(hdrSize))
-    {
-        qDebug() << "Invalid .zst frame header:" << ZSTD_getErrorName(hdrSize);
-        f.close();
-        return;
-    }
-
-    if (static_cast<qint64>(hdrSize) > prefixSize)
-    {
-        header.append(f.read(static_cast<qint64>(hdrSize) - prefixSize));
-    }
+    // ZSTD_findDecompressedSize() iterates through all concatenated frames
+    // to compute the total decompressed size. It requires the full compressed
+    // data in memory, but this is acceptable for custom file size estimates.
+    QByteArray data = f.readAll();
     f.close();
 
-    if (static_cast<size_t>(header.size()) < hdrSize)
+    if (data.isEmpty())
     {
-        qDebug() << "Truncated .zst frame header";
+        qDebug() << "Empty .zst file";
         return;
     }
 
-    unsigned long long fcs = ZSTD_getFrameContentSize(header.constData(),
-                                                     static_cast<size_t>(header.size()));
+    unsigned long long fcs = ZSTD_findDecompressedSize(data.constData(), data.size());
 
-    if (fcs == ZSTD_CONTENTSIZE_ERROR)
+    if (fcs == 0)
     {
-        qDebug() << "Unable to parse .zst frame header";
-        return;
-    }
-    if (fcs == ZSTD_CONTENTSIZE_UNKNOWN)
-    {
-        // First-frame Frame_Content_Size is absent; can't determine without
-        // decompressing. Leave _extrLen=0 and progress will fall back to the
-        // download size (the existing behaviour, with progress > 100%).
-        qDebug() << "Parsed .zst file. Uncompressed size: unknown (FCS not present)";
+        // Could be ZSTD_CONTENTSIZE_ERROR or ZSTD_CONTENTSIZE_UNKNOWN,
+        // or a valid zero-size file. Fall back to unknown.
+        qDebug() << "Unable to determine decompressed size of .zst file";
         return;
     }
 
-    // Note: this is the size of the FIRST zstd frame only. Multi-frame .zst
-    // files would understate the total decompressed size. Single-frame is
-    // the standard case for OS images.
     _extrLen = fcs;
     qDebug() << "Parsed .zst file. Uncompressed size:" << _extrLen;
 }
