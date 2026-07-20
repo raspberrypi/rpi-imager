@@ -98,6 +98,11 @@ class WindowsFileOperations : public FileOperations {
   int last_error_code_;
   bool using_direct_io_;
   DirectIOInfo direct_io_info_;
+  // Share mode the device was opened with. Physical drives are opened with
+  // exclusive write access (FILE_SHARE_READ only) so the OS cannot mount the
+  // partition mid-write; remembered here so reopens (e.g. toggling direct I/O)
+  // preserve exclusivity. See OpenDevice().
+  DWORD current_share_mode_ = FILE_SHARE_READ | FILE_SHARE_WRITE;
   
   // IOCP async I/O state
   int async_queue_depth_;
@@ -125,7 +130,7 @@ class WindowsFileOperations : public FileOperations {
   
   FileError LockVolume();
   FileError UnlockVolume();
-  FileError OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags = FILE_ATTRIBUTE_NORMAL);
+  FileError OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags = FILE_ATTRIBUTE_NORMAL, DWORD share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE);
   
   static bool IsPhysicalDrivePath(const std::string& path);
   
