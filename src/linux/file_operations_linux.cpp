@@ -254,22 +254,45 @@ FileError LinuxFileOperations::OpenDevice(const std::string& path) {
   // Reset direct I/O tracking for new device
   direct_io_attempted_ = false;
   
-  // Use O_DIRECT for block devices to bypass the page cache
-  int flags = O_RDWR;
   bool isBlockDevice = IsBlockDevicePath(path);
-  
-  if (isBlockDevice) {
-    flags |= O_DIRECT;
-    using_direct_io_ = true;
-    direct_io_attempted_ = true;
-  }
-  
-  FileError result = OpenInternal(path.c_str(), flags);
-  
-  // If O_DIRECT fails, fall back to regular I/O
-  if (result != FileError::kSuccess && isBlockDevice && using_direct_io_) {
-    using_direct_io_ = false;
-    result = OpenInternal(path.c_str(), O_RDWR);
+
+  // One open attempt at a given set of extra flags: try O_DIRECT first (block
+  // devices) to bypass the page cache, falling back to buffered I/O if O_DIRECT
+  // is rejected. extraFlags (e.g. O_EXCL) are preserved across that fallback.
+  auto tryOpenWithFlags = [&](int extraFlags) -> FileError {
+    int flags = O_RDWR | extraFlags;
+    if (isBlockDevice) {
+      flags |= O_DIRECT;
+      using_direct_io_ = true;
+      direct_io_attempted_ = true;
+    }
+
+    FileError r = OpenInternal(path.c_str(), flags);
+
+    // If O_DIRECT fails, fall back to regular (buffered) I/O, keeping extraFlags.
+    if (r != FileError::kSuccess && isBlockDevice && using_direct_io_) {
+      using_direct_io_ = false;
+      r = OpenInternal(path.c_str(), O_RDWR | extraFlags);
+    }
+    return r;
+  };
+
+  // Prefer EXCLUSIVE access for block devices (O_EXCL). On Linux, holding a
+  // block device open with O_EXCL stops the kernel from mounting any of its
+  // partitions (mount() returns EBUSY), so udisks/udev cannot auto-mount the
+  // partition we are in the middle of writing. This is the Linux equivalent of
+  // the exclusive share mode used on Windows. The disk is unmounted before we
+  // get here, so O_EXCL should succeed; if it doesn't (something still holds the
+  // device), fall back to a shared open so the write still proceeds.
+  FileError result = tryOpenWithFlags(isBlockDevice ? O_EXCL : 0);
+  opened_exclusive_ = (result == FileError::kSuccess && isBlockDevice);
+  if (result != FileError::kSuccess && isBlockDevice) {
+    int err = last_error_code_;
+    if (err == EBUSY || err == EACCES || err == EPERM) {
+      Log("Exclusive (O_EXCL) open failed with errno " + std::to_string(err) +
+          " - retrying without O_EXCL");
+      result = tryOpenWithFlags(0);
+    }
   }
   
   // Reset async state for new file
@@ -396,15 +419,19 @@ FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
   close(fd_);
   fd_ = -1;
   
-  int flags = O_RDWR;
+  // Preserve exclusive access (O_EXCL) across the reopen if the device was
+  // originally opened exclusively — otherwise toggling direct I/O would drop the
+  // lock and let udisks mount the partition mid-write. See OpenDevice().
+  int exclFlag = opened_exclusive_ ? O_EXCL : 0;
+  int flags = O_RDWR | exclFlag;
   if (enabled && IsBlockDevicePath(savedPath)) {
     flags |= O_DIRECT;
   }
-  
+
   FileError result = OpenInternal(savedPath.c_str(), flags);
   if (result != FileError::kSuccess) {
     if (enabled) {
-      result = OpenInternal(savedPath.c_str(), O_RDWR);
+      result = OpenInternal(savedPath.c_str(), O_RDWR | exclFlag);
       using_direct_io_ = false;
       Log("Failed to enable O_DIRECT, reopened without it");
     }
