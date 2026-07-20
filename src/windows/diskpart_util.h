@@ -97,19 +97,26 @@ DiskpartResult cleanDisk(const QByteArray &device, std::chrono::milliseconds tim
 DiskpartResult cleanDiskFast(const QByteArray &device, TimingCallback timingCallback = nullptr);
 
 /**
- * Unmount and lock all volumes on a physical drive.
+ * Unmount all volumes on a physical drive, using the strategy appropriate to
+ * how Windows classifies the disk:
  *
- * Each volume is locked (FSCTL_LOCK_VOLUME) and dismounted (FSCTL_DISMOUNT_VOLUME),
- * then its handle is kept open and adopted into @p locked. The caller must keep
- * @p locked alive until the physical drive has been opened for writing; releasing
- * it (or letting it go out of scope) unlocks the volumes so Windows can re-mount
- * them and reassign their drive letters once the raw write completes.
+ *  - Fixed disks (card readers Windows treats as RMB=0): each volume is locked
+ *    (FSCTL_LOCK_VOLUME) and dismounted (FSCTL_DISMOUNT_VOLUME), then its handle
+ *    is kept open and adopted into @p locked. The caller must keep @p locked alive
+ *    until the physical drive has been opened for writing; releasing it unlocks the
+ *    volumes so Windows re-mounts them and reassigns their drive letters after the
+ *    write. We must NOT delete the mount point for this class — the Mount Manager
+ *    binding is persistent and deleting it strands the drive letter. See issue #1665.
  *
- * Unlike the previous implementation, this does NOT call DeleteVolumeMountPoint,
- * so the drive-letter binding survives the write. See issue #1665.
+ *  - Removable disks (RMB=1, shown by Explorer as "USB Drive"): each volume is
+ *    dismounted and its mount point deleted (DeleteVolumeMountPoint). Windows
+ *    auto-assigns a letter when removable media arrives, so the letter returns on
+ *    its own after the write; deleting it stops Explorer polling the now-empty
+ *    volume, which otherwise pops a "Please insert a disk in drive X:" dialog.
+ *    Nothing is adopted into @p locked for this class.
  *
  * @param device - Windows physical drive path (e.g., "\\\\.\\PHYSICALDRIVE0")
- * @param locked - Receives the locked+dismounted volume handles to hold open
+ * @param locked - Receives held volume handles for fixed disks (empty for removable)
  * @param timingCallback - Optional callback for performance event reporting
  * @return DiskpartResult with success status and error message if failed
  */
