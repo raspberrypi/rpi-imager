@@ -13,7 +13,6 @@ import QtQuick.Window
 import "../qmlcomponents"
 
 import RpiImager
-import ImageOptions
 
 WizardStepBase {
     id: root
