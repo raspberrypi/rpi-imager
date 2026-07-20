@@ -98,6 +98,10 @@ class LinuxFileOperations : public FileOperations {
   int last_error_code_;
   bool using_direct_io_;
   bool direct_io_attempted_;  // True if O_DIRECT was attempted for this device
+  // True if the device was opened with O_EXCL (exclusive block-device access).
+  // Remembered so reopens (e.g. toggling direct I/O) preserve exclusivity, which
+  // stops udisks/udev from mounting the partition mid-write. See OpenDevice().
+  bool opened_exclusive_ = false;
   
   // io_uring state
   int async_queue_depth_;
