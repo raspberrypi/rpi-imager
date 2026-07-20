@@ -227,6 +227,12 @@ bool DownloadThread::_openAndPrepareDevice()
 #ifdef Q_OS_WIN
     qDebug() << "device" << _filename;
 
+    // Volumes on the target disk are locked+dismounted and held open for the
+    // duration of prepare (unmount -> clean -> open). Holding the lock keeps
+    // Windows from re-mounting them mid-operation without deleting their
+    // drive-letter bindings, so the letters return after the write. See #1665.
+    DiskpartUtil::LockedVolumes lockedVolumes;
+
     std::regex windriveregex("\\\\\\\\.\\\\PHYSICALDRIVE([0-9]+)", std::regex_constants::icase);
     std::cmatch m;
 
@@ -250,7 +256,7 @@ bool DownloadThread::_openAndPrepareDevice()
 
             // Unmount volumes first (with performance instrumentation)
             emit preparationStatusUpdate(tr("Unmounting volumes..."));
-            auto unmountResult = DiskpartUtil::unmountVolumes(_filename, timingCallback);
+            auto unmountResult = DiskpartUtil::unmountVolumes(_filename, lockedVolumes, timingCallback);
             if (!unmountResult.success)
             {
                 qDebug() << "Warning: Volume unmount had issues:" << unmountResult.errorMessage;
@@ -388,7 +394,21 @@ bool DownloadThread::_openAndPrepareDevice()
     
     // Emit authorization timing event (success case)
     emit eventDriveAuthorization(static_cast<quint32>(authOpenMs), true);
-    
+
+#ifdef Q_OS_WIN
+    // The physical drive is now open and held for the write, which suppresses
+    // partition re-scanning. Release the volume locks we held across prepare:
+    // the disk has been cleaned so there is nothing to re-mount now, and once
+    // the physical-drive handle is closed at the end of the write Windows will
+    // re-scan and reassign drive letters (their Mount Manager bindings were
+    // preserved rather than deleted). See #1665.
+    if (!lockedVolumes.empty())
+    {
+        qDebug() << "Releasing" << lockedVolumes.count() << "held volume lock(s) after opening drive";
+        lockedVolumes.release();
+    }
+#endif
+
     // Apply debug option for direct I/O after opening
     // By default, OpenDevice enables direct I/O for block devices
     // This allows toggling it off via the secret debug menu
