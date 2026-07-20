@@ -18,6 +18,9 @@ WizardStepBase {
     id: root
     
     property bool hasSavedUserPassword: false
+    // Set when a previously saved password was discarded because its hashing
+    // algorithm is incompatible with the currently selected OS (drives a hint).
+    property bool savedPasswordInvalidated: false
     property string savedUsername: ""
     
     title: qsTr("Customisation: Choose username")
@@ -90,6 +93,13 @@ WizardStepBase {
             WizardDescriptionText {
                 id: helpText
                 text: qsTr("The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
+            }
+
+            WizardDescriptionText {
+                id: invalidatedPasswordHint
+                visible: root.savedPasswordInvalidated
+                color: Style.formLabelErrorColor
+                text: qsTr("Your saved password isn't compatible with the selected operating system, so please enter it again.")
             }
 
             RowLayout {
@@ -168,8 +178,23 @@ WizardStepBase {
             root.savedUsername = settings.sshUserName
         }
         if (settings.sshUserPassword) {
-            // Indicate a saved (crypted) password exists; do not prefill fields
-            root.hasSavedUserPassword = true
+            if (ImageWriterSingleton.savedUserPasswordUsableWithCurrentOs(settings.sshUserPassword)) {
+                // Indicate a saved (crypted) password exists; do not prefill fields.
+                // Because the field stays empty, the show-password toggle is
+                // unavailable for restored passwords (we only hold the hash) - it is
+                // only available for passwords typed in the current session.
+                root.hasSavedUserPassword = true
+            } else {
+                // The saved hash uses yescrypt but the selected OS predates
+                // yescrypt support, so it could never authenticate. We hold no
+                // plaintext to re-hash, so drop the stale hash and require
+                // re-entry; re-hashing under this OS yields sha256crypt, which is
+                // accepted everywhere.
+                delete wizardContainer.customizationSettings.sshUserPassword
+                ImageWriterSingleton.removePersistedCustomisationSetting("sshUserPassword")
+                root.hasSavedUserPassword = false
+                root.savedPasswordInvalidated = true
+            }
         }
         // Note: passwordlessSudo is intentionally NOT loaded from persisted settings.
         // It must be explicitly enabled each session due to security implications.
@@ -193,14 +218,18 @@ WizardStepBase {
         
         // Update conserved customization settings (runtime state)
         if (usernameText.length > 0 && hasPasswords) {
-            // User entered both username and new password
-            var cryptedPwd = ImageWriterSingleton.crypt(fieldPassword.text)
+            // User entered both username and a new password. Hash it now (in C++/
+            // generator) and keep ONLY the hash: the plaintext is never copied
+            // into the long-lived settings map. The plaintext stays solely in the
+            // password field, which is destroyed on navigation - this bounds its
+            // RAM lifetime and is what the show-password toggle relies on.
+            var hashedPwd = ImageWriterSingleton.hashUserPassword(fieldPassword.text)
             wizardContainer.customizationSettings.sshUserName = usernameText
-            wizardContainer.customizationSettings.sshUserPassword = cryptedPwd
+            wizardContainer.customizationSettings.sshUserPassword = hashedPwd
             wizardContainer.userConfigured = true
-            // Persist for future sessions
+            // Persist for future sessions (stored hashed, never as plaintext)
             ImageWriterSingleton.setPersistedCustomisationSetting("sshUserName", usernameText)
-            ImageWriterSingleton.setPersistedCustomisationSetting("sshUserPassword", cryptedPwd)
+            ImageWriterSingleton.setPersistedCustomisationSetting("sshUserPassword", hashedPwd)
             // Passwordless sudo (session-only, never persisted)
             if (checkPasswordlessSudo.checked) {
                 wizardContainer.customizationSettings.passwordlessSudo = true
@@ -224,6 +253,7 @@ WizardStepBase {
             // User cleared all fields -> remove from runtime settings
             delete wizardContainer.customizationSettings.sshUserName
             delete wizardContainer.customizationSettings.sshUserPassword
+            delete wizardContainer.customizationSettings.sshUserPasswordPlain
             delete wizardContainer.customizationSettings.passwordlessSudo
             wizardContainer.userConfigured = false
             // Remove from persistence

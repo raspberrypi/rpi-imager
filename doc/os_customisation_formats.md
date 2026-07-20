@@ -14,12 +14,13 @@ The currently supported methods are:
  * `"init_format": "systemd"` - the OS image allows a "systemd" style customisation (using `firstrun.sh`)
  * `"init_format": "cloudinit"` - the OS image allows a standard "cloudinit" style customisation (often used by Ubuntu Server OS images)
  * `"init_format": "cloudinit-rpi"` - the OS image allows an enhanced "cloudinit-rpi" style customisation; for more information, see [Cloud-init on Raspberry Pi OS](https://www.raspberrypi.com/news/cloud-init-on-raspberry-pi-os/)
+ * `"init_format": "rpi-preseed"` - the OS image ships the [`rpi-preseed`](https://github.com/raspberrypi/rpi-preseed) package. Imager writes a single `rpi-preseed.toml` file to the FAT boot partition (read from `/boot/firmware/rpi-preseed.toml`), which `rpi-preseed` applies once on first boot. The TOML covers hostname, the operator account and password, SSH, Wi-Fi (written as a NetworkManager connection), locale, Raspberry Pi Connect enrolment and GPIO/hardware interfaces. Unlike the `systemd` and `cloudinit` formats, no `cmdline.txt` entry is added: `rpi-preseed`'s units are gated on the presence of the file.
 
 ## Raspberry Pi Imager customisations
 
 Raspberry Pi Imager 1.x only supports the `systemd` and `cloudinit` formats.
 
-Raspberry Pi Imager 2.x supports the full range of `init_format` options: `none`, `systemd`, `cloudinit` and `cloudinit-rpi`.
+Raspberry Pi Imager 2.x supports the full range of `init_format` options: `none`, `systemd`, `cloudinit`, `cloudinit-rpi` and `rpi-preseed`.
 
 ## Raspberry Pi OS customisations
 

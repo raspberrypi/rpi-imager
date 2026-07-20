@@ -334,10 +334,29 @@ public:
     Q_INVOKABLE void clearSavedCustomisationSettings();
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
+    // Whether the selected OS can apply the GPIO/hardware interface toggles
+    // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
+    // module; rpi-preseed configures them natively via raspi-config.
+    Q_INVOKABLE bool imageSupportsInterfaceCustomisation();
 
-    Q_INVOKABLE QString crypt(const QByteArray &password);
-    Q_INVOKABLE QString pbkdf2(const QByteArray &psk, const QByteArray &ssid);
+    // Derive account/Wi-Fi credentials from plaintext for the UI. Hashing is
+    // delegated to CustomisationGenerator (the single home for credential
+    // derivation); the UI hands over plaintext, gets back only the hashed/derived
+    // form, and never retains the plaintext in long-lived state. This keeps the
+    // plaintext's RAM lifetime bounded to the input field (needed for the
+    // show-password toggle) and guarantees only hashes reach disk or the
+    // generator. Both return an empty string for empty input.
+    Q_INVOKABLE QString hashUserPassword(const QString &plaintext);
+    Q_INVOKABLE QString deriveWifiPsk(const QString &ssid, const QString &plaintext);
     Q_INVOKABLE QString wifiSsidOctetsBase64(const QString &ssid) const;
+
+    // Whether a stored account-password hash can authenticate on the currently
+    // selected OS. The crypt string is self-describing, so we never store the
+    // algorithm separately: a yescrypt hash ("$y$") only works on images that
+    // support it (release date >= 2023-01-01), while sha256crypt works
+    // everywhere. The UI uses this to invalidate a restored/stale hash and force
+    // re-entry when the user targets an older OS. Empty input is "compatible".
+    Q_INVOKABLE bool savedUserPasswordUsableWithCurrentOs(const QString &cryptHash) const;
 
     Q_INVOKABLE QStringList getTranslations();
     Q_INVOKABLE QString getCurrentLanguage();
@@ -611,6 +630,7 @@ protected:
     QString _sshKeyGen();
     void _applySystemdCustomisationFromSettings(const QVariantMap &s);
     void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
+    void _applyRpiPreseedCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
     void _handleMemoryAllocationFailure(const char* what);

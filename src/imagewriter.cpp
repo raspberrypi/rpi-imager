@@ -13,8 +13,6 @@
 #include "drivelistitem.h"
 #include "customization_generator.h"
 #include "drivelist/drivelist.h"
-#include "dependencies/sha256crypt/sha256crypt.h"
-#include "dependencies/yescrypt/yescrypt_wrapper.h"
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
 #include "systemmemorymanager.h"
@@ -69,7 +67,6 @@
 #include <QDebug>
 #include <QJsonObject>
 #include <QTranslator>
-#include <QPasswordDigestor>
 #include <QVersionNumber>
 #include <QCryptographicHash>
 #include <QRandomGenerator>
@@ -3882,11 +3879,19 @@ void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
         return;
     }
 
+    // Make the selected OS release date available to the generator so it can
+    // choose the right password hashing algorithm (yescrypt vs sha256crypt)
+    // when hashing a freshly entered plaintext password at generation time.
+    QVariantMap s = settings;
+    s.insert(QStringLiteral("osReleaseDate"), _osReleaseDate);
+
     if (_initFormat == "systemd") {
-        _applySystemdCustomisationFromSettings(settings);
+        _applySystemdCustomisationFromSettings(s);
+    } else if (_initFormat == "rpi-preseed") {
+        _applyRpiPreseedCustomisationFromSettings(s);
     } else {
         // customisation for cloudinit and cloudinit-rpi
-        _applyCloudInitCustomisationFromSettings(settings);
+        _applyCloudInitCustomisationFromSettings(s);
     }
 }
 
@@ -3957,46 +3962,81 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
 }
 
-QString ImageWriter::crypt(const QByteArray &password)
+void ImageWriter::_applyRpiPreseedCustomisationFromSettings(const QVariantMap &s)
 {
-    QByteArray saltchars =
-      "./0123456789ABCDEFGHIJKLMNOPQRST"
-      "UVWXYZabcdefghijklmnopqrstuvwxyz";
-    std::mt19937 gen(static_cast<unsigned>(QDateTime::currentMSecsSinceEpoch()));
-    std::uniform_int_distribution<> uid(0, saltchars.length()-1);
+    // Use CustomisationGenerator for rpi-preseed.toml generation
+    const bool sshEnabled = s.value("sshEnabled").toBool();
+    const bool hasCcRpi = imageSupportsCcRpi();
 
-    // Determine whether to use yescrypt (for OS released after Jan 1, 2023) or sha256crypt
-    bool useYescrypt = false;
-    if (!_osReleaseDate.isEmpty()) {
-        // Parse release date in format "YYYY-MM-DD"
-        QDate releaseDate = QDate::fromString(_osReleaseDate, "yyyy-MM-dd");
-        QDate cutoffDate(2023, 1, 1);
-        if (releaseDate.isValid() && releaseDate >= cutoffDate) {
-            useYescrypt = true;
+    QByteArray toml = rpi_imager::CustomisationGenerator::generateRpiPreseedToml(
+        s, _piConnectToken, hasCcRpi, sshEnabled, getCurrentUser());
+
+    QByteArray cmdlineAppend;
+    ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
+
+    // Only emit cmdline / advanced options when there is actual content to
+    // customise, so a stale persisted recommendedWifiCountry cannot trigger a
+    // device write when customisation was skipped.
+    if (!toml.isEmpty()) {
+        // Set the Wi-Fi regulatory domain on the kernel cmdline, as the systemd
+        // and cloud-init paths do. rpi-preseed's [wlan] applier also sets the
+        // country, but only when an SSID is present; doing it here additionally
+        // covers the country-without-SSID case and is harmless when both apply.
+        const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
+        if (!wifiCountry.isEmpty()) {
+            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+        }
+
+        // Check if secure boot should be enabled
+        // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+        // iCloud-synced or network paths. The actual write operation will validate the file.
+        bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+        QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+        if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
+            advOpts |= ImageOptions::EnableSecureBoot;
+            qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
         }
     }
 
-    if (useYescrypt) {
-        // Use yescrypt for newer OS releases
-        QByteArray salt;
-        for (int i=0; i<16; i++)  // yescrypt uses longer salts
-            salt += saltchars[uid(gen)];
-        
-        char *result = yescrypt_crypt(password.constData(), salt.constData());
-        return result ? QString(result) : QString();
-    } else {
-        // Use sha256crypt for older OS releases
-        QByteArray salt = "$5$";
-        for (int i=0; i<10; i++)
-            salt += saltchars[uid(gen)];
-        
-        return sha256_crypt(password.constData(), salt.constData());
-    }
+    // rpi-preseed consumes a single /boot/firmware/rpi-preseed.toml on first
+    // boot, so the payload is staged in the firstrun slot; the device writers
+    // pick the destination filename from _initFormat. No cmdline pointer to the
+    // file is needed (unlike systemd.run= or ds=nocloud): rpi-preseed's units
+    // are triggered by the file's presence on the boot partition.
+    setImageCustomisation(QByteArray(), cmdlineAppend, toml, QByteArray(), QByteArray(), advOpts);
 }
 
-QString ImageWriter::pbkdf2(const QByteArray &psk, const QByteArray &ssid)
+QString ImageWriter::hashUserPassword(const QString &plaintext)
 {
-    return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, psk, ssid, 4096, 32).toHex();
+    // Hash eagerly so the caller can discard the plaintext immediately and keep
+    // only the hash. The algorithm choice (yescrypt vs sha256crypt) follows the
+    // currently selected OS's release date. Crypto lives in CustomisationGenerator.
+    if (plaintext.isEmpty())
+        return QString();
+    return rpi_imager::CustomisationGenerator::cryptPassword(plaintext.toUtf8(), _osReleaseDate);
+}
+
+bool ImageWriter::savedUserPasswordUsableWithCurrentOs(const QString &cryptHash) const
+{
+    if (cryptHash.isEmpty())
+        return true;
+    // sha256crypt is accepted on every target; only a yescrypt hash can be
+    // incompatible, and only when the selected OS predates yescrypt support.
+    if (!rpi_imager::CustomisationGenerator::isYescryptHash(cryptHash))
+        return true;
+    return rpi_imager::CustomisationGenerator::osUsesYescrypt(_osReleaseDate);
+}
+
+QString ImageWriter::deriveWifiPsk(const QString &ssid, const QString &plaintext)
+{
+    if (plaintext.isEmpty())
+        return QString();
+    // Passphrase length per WPA spec is 8..63; anything else is taken to be a
+    // pre-computed PSK and returned verbatim.
+    const bool isPassphrase = (plaintext.length() >= 8 && plaintext.length() < 64);
+    return isPassphrase
+        ? rpi_imager::CustomisationGenerator::pbkdf2(plaintext.toUtf8(), ssid.toUtf8())
+        : plaintext;
 }
 
 QString ImageWriter::wifiSsidOctetsBase64(const QString &ssid) const
@@ -4087,6 +4127,11 @@ bool ImageWriter::imageSupportsCustomization()
 bool ImageWriter::imageSupportsCcRpi()
 {
     return _initFormat == "cloudinit-rpi";
+}
+
+bool ImageWriter::imageSupportsInterfaceCustomisation()
+{
+    return _initFormat == "cloudinit-rpi" || _initFormat == "rpi-preseed";
 }
 
 QStringList ImageWriter::getTranslations()

@@ -102,12 +102,7 @@ TextField {
             enabled: !root.readOnly && ClipboardHelper.hasText
             Accessible.role: Accessible.MenuItem
             Accessible.name: text
-            onTriggered: {
-                var clipText = ClipboardHelper.getText()
-                if (clipText.length > 0) {
-                    root.insert(root.cursorPosition, clipText)
-                }
-            }
+            onTriggered: root.paste()
         }
         MenuSeparator {}
         MenuItem {

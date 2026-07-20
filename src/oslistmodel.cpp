@@ -27,6 +27,7 @@ namespace {
         QStringLiteral("systemd"),
         QStringLiteral("cloudinit"),
         QStringLiteral("cloudinit-rpi"),
+        QStringLiteral("rpi-preseed"),
         QStringLiteral("none")
     };
 
@@ -48,7 +49,7 @@ namespace {
                 QString name = entry["name"].toString();
                 qWarning() << "OSListModel: Pruning OS entry with invalid init_format '" 
                            << initFormat << "':" << name
-                           << "(valid values: '', 'systemd', 'cloudinit', 'cloudinit-rpi', 'none')";
+                           << "(valid values: '', 'systemd', 'cloudinit', 'cloudinit-rpi', 'rpi-preseed', 'none')";
                 continue;
             }
             

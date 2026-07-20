@@ -344,6 +344,17 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
                          " systemd.unit=kernel-command-line.target";
     }
 
+    // ── rpi-preseed.toml (rpi-preseed format) ──
+    // rpi-preseed applies /boot/firmware/rpi-preseed.toml on first boot; its
+    // units are gated on the file's presence, so no cmdline entry is required.
+    if (!_firstrun.isEmpty() && _initFormat == "rpi-preseed") {
+        if (!fb.writeDeviceFile(transport, BOOT + "rpi-preseed.toml", toSpan(_firstrun), _cancelled)) {
+            emit error(tr("Failed to write rpi-preseed.toml: %1")
+                       .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+    }
+
     // ── cloud-init files ──
     // Only write meta-data and the ds=nocloud cmdline when there is actual
     // cloud-init content.  A stale cmdline entry (e.g. recommendedWifiCountry)

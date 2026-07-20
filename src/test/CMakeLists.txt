@@ -18,17 +18,23 @@ list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
 # Add the customization generator test executable
+# Includes the bundled crypto sources the generator now depends on for
+# credential derivation (yescrypt/sha256crypt password hashing).
 add_executable(customization_generator_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../customization_generator.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../customization_generator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/sha256crypt/sha256crypt.c
     customization_generator_test.cpp
 )
 
-# Link against Catch2 and Qt
+# Link against Catch2, Qt and the bundled yescrypt static library
+# (yescrypt is defined in the parent scope via dependencies/yescrypt.cmake and
+# carries its include directory as a PUBLIC usage requirement).
 target_link_libraries(customization_generator_test PRIVATE 
     Catch2::Catch2WithMain
     Qt6::Core
     Qt6::Network
+    yescrypt
 )
 
 # Include parent directory for headers

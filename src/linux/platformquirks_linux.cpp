@@ -1912,6 +1912,11 @@ qreal fontDpiCorrection()
     return 72.0 / 96.0;
 }
 
+void logFontEngine()
+{
+    qDebug() << "Font engine: freetype (fontconfig)";
+}
+
 namespace {
 
 // Connected display, as read from /sys/class/drm. Physical dimensions are
