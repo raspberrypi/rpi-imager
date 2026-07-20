@@ -70,6 +70,9 @@ namespace {
     struct DiskOpContext {
         PlatformQuirks::DiskResult result = PlatformQuirks::DiskResult::Success;
         bool completed = false;
+        // Signalled by the callback when the operation finishes. Non-null only when a
+        // worker thread is waiting off the run loop; null when we pump inline on main.
+        dispatch_semaphore_t done = nullptr;
     };
     
     PlatformQuirks::DiskResult translateDissenter(DADissenterRef dissenter) {
@@ -107,27 +110,33 @@ namespace {
         }
     }
     
+    // Mark an operation complete and wake any worker thread waiting on it. The
+    // semaphore is only present on the worker-thread path; the main-thread path
+    // polls context.completed via a nested run loop instead.
+    void finishOp(DiskOpContext* ctx, PlatformQuirks::DiskResult result) {
+        ctx->result = result;
+        ctx->completed = true;
+        if (ctx->done) {
+            dispatch_semaphore_signal(ctx->done);
+        }
+    }
+
     void unmountCallback(DADiskRef disk, DADissenterRef dissenter, void* context) {
         (void)disk;
-        DiskOpContext* ctx = static_cast<DiskOpContext*>(context);
-        ctx->result = translateDissenter(dissenter);
-        ctx->completed = true;
+        finishOp(static_cast<DiskOpContext*>(context), translateDissenter(dissenter));
     }
-    
+
     void ejectCallback(DADiskRef disk, DADissenterRef dissenter, void* context) {
         (void)disk;
-        DiskOpContext* ctx = static_cast<DiskOpContext*>(context);
-        ctx->result = translateDissenter(dissenter);
-        ctx->completed = true;
+        finishOp(static_cast<DiskOpContext*>(context), translateDissenter(dissenter));
     }
-    
+
     void ejectUnmountCallback(DADiskRef disk, DADissenterRef dissenter, void* context) {
         DiskOpContext* ctx = static_cast<DiskOpContext*>(context);
         if (dissenter) {
-            ctx->result = translateDissenter(dissenter);
-            ctx->completed = true;
+            finishOp(ctx, translateDissenter(dissenter));
         } else {
-            // Unmount succeeded, now eject
+            // Unmount succeeded, now eject (its callback signals completion).
             DADiskEject(disk, kDADiskEjectOptionDefault, ejectCallback, context);
         }
     }
@@ -196,18 +205,81 @@ namespace {
         return context.result;
     }
 
+    // Worker-thread path: drive the DA session on the main run loop (always pumped
+    // by the app, so callbacks arrive reliably) but block THIS thread on a
+    // semaphore. No nested run loop -> no re-entrant Qt event processing, and the
+    // main thread stays free to keep the UI responsive during a slow unmount.
+    PlatformQuirks::DiskResult runDiskOperationOffMainThread(const char* device,
+                                                              DADiskUnmountCallback callback,
+                                                              int maxRetries) {
+        DiskOpContext context;
+        context.done = dispatch_semaphore_create(0);
+        DiskOpContext* ctxp = &context;   // stable pointer for the async callback
+
+        PLATFORM_LOG_INFO("runDiskOperation: starting operation on %{public}s", device);
+
+        __block DASessionRef session = nullptr;
+        __block DADiskRef disk = nullptr;
+
+        // Create the session and kick off the async unmount on the main thread.
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            session = DASessionCreate(kCFAllocatorDefault);
+            if (!session) {
+                PLATFORM_LOG_ERROR("runDiskOperation: failed to create DA session");
+                finishOp(ctxp, PlatformQuirks::DiskResult::Error);
+                return;
+            }
+            disk = DADiskCreateFromBSDName(kCFAllocatorDefault, session, device);
+            if (!disk) {
+                PLATFORM_LOG_ERROR("runDiskOperation: failed to create disk object for %{public}s", device);
+                finishOp(ctxp, PlatformQuirks::DiskResult::InvalidDrive);
+                return;
+            }
+            DASessionScheduleWithRunLoop(session, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+            DADiskUnmount(disk, kDADiskUnmountOptionWhole | kDADiskUnmountOptionForce,
+                          callback, ctxp);
+        });
+
+        // Wait off the run loop. Preserves the previous 60s budget (maxRetries * 5s).
+        dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW,
+                                                (int64_t)maxRetries * 5 * NSEC_PER_SEC);
+        bool timedOut = (dispatch_semaphore_wait(context.done, timeout) != 0);
+
+        // Tear down on the main thread. Callbacks are delivered there too, so this is
+        // serialized against them: once this block returns the session is unscheduled
+        // and released, and no further callback can reference `context`.
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            if (session) {
+                DASessionUnscheduleFromRunLoop(session, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+            }
+            if (disk) {
+                CFRelease(disk);
+            }
+            if (session) {
+                CFRelease(session);
+            }
+        });
+
+        dispatch_release(context.done);   // MRC: dispatch objects aren't auto-managed here
+
+        if (timedOut && !context.completed) {
+            PLATFORM_LOG_ERROR("runDiskOperation: timeout on %{public}s", device);
+            return PlatformQuirks::DiskResult::Busy;
+        }
+        PLATFORM_LOG_INFO("runDiskOperation: completed on %{public}s with result %d",
+                          device, static_cast<int>(context.result));
+        return context.result;
+    }
+
     PlatformQuirks::DiskResult runDiskOperation(const char* device,
                                                  DADiskUnmountCallback callback,
                                                  int maxRetries = 12) {
         if ([NSThread isMainThread]) {
+            // Can't block the main thread on a semaphore — the callback needs this
+            // very run loop — so pump it inline instead.
             return runDiskOperationOnMainRunLoop(device, callback, maxRetries);
         }
-
-        __block PlatformQuirks::DiskResult result = PlatformQuirks::DiskResult::Error;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = runDiskOperationOnMainRunLoop(device, callback, maxRetries);
-        });
-        return result;
+        return runDiskOperationOffMainThread(device, callback, maxRetries);
     }
 }
 
