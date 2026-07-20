@@ -164,9 +164,20 @@ namespace {
         DADiskUnmount(disk, kDADiskUnmountOptionWhole | kDADiskUnmountOptionForce,
                       callback, &context);
         
+        // Block for up to 50ms per iteration so the asynchronous DiskArbitration
+        // callback (delivered by diskarbitrationd via this run loop) actually has
+        // time to arrive. A zero timeout turns this into a busy-poll that races
+        // through all iterations in a few milliseconds and gives up before a real
+        // unmount completes, so the first attempt on a mounted volume always times
+        // out even though the unmount ultimately succeeds in the background.
+        //
+        // returnAfterSourceHandled must stay false: the callbacks deliberately do
+        // not call CFRunLoopStop() (this is the main run loop shared with Qt), so
+        // the retry count only maps to the intended 60s budget when each iteration
+        // waits out its full 50ms slice rather than returning early on any source.
         int retries = 0;
         while (!context.completed && retries < maxRetries * 100) {
-            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true);
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
             retries++;
         }
         
