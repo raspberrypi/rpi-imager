@@ -51,9 +51,22 @@ WizardStepBase {
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
             rightPadding: 20
+
+            // Holder that is at least as tall as the viewport so the content can be
+            // vertically centred when it fits, and scroll when it doesn't. Anchoring
+            // verticalCenter directly inside the ScrollView's flickable would be a
+            // no-op (the flickable content item is sized to the content itself).
+            Item {
+                id: ifAndFeatContentHolder
+                width: ifAndFeatScroll.availableWidth
+                implicitWidth: ifAndFeatScroll.availableWidth
+                implicitHeight: Math.max(ifAndFeatScroll.availableHeight, scrollContent.implicitHeight)
+
             ColumnLayout {
                 id: scrollContent
-                width: ifAndFeatScroll.availableWidth
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: Style.stepContentSpacing
 
                 // === Interfaces ===
@@ -165,6 +178,7 @@ WizardStepBase {
                         }
                     }
                 }
+            }
             }
         }
     ]

@@ -31,14 +31,24 @@ WizardStepBase {
         clip: true
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
         
+        // Holder that is at least as tall as the viewport so the content can be
+        // vertically centred when it fits, and scroll when it doesn't. Anchoring
+        // verticalCenter directly inside the ScrollView's flickable would be a
+        // no-op (the flickable content item is sized to the content itself).
+        Item {
+            id: sshContentHolder
+            width: sshScroll.availableWidth
+            implicitWidth: sshScroll.availableWidth
+            implicitHeight: Math.max(sshScroll.availableHeight, sshContentColumn.implicitHeight)
+
         ColumnLayout {
+            id: sshContentColumn
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             anchors.margins: Style.sectionPadding
             spacing: Style.spacingSmall  // Reduced spacing to trim whitespace under subtitle
-            width: sshScroll.availableWidth
-            
+
             WizardSectionContainer {
                 // Replace checkbox with an option pill and help link
                 ImOptionPill {
@@ -103,6 +113,7 @@ WizardStepBase {
                     }
                 }
             }
+        }
         }
     }
     ]
