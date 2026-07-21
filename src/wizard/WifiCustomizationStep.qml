@@ -225,13 +225,23 @@ WizardStepBase {
             }
         }
 
+        // Holder that is at least as tall as the viewport so the content can be
+        // vertically centred when it fits, and scroll when it doesn't. Anchoring
+        // verticalCenter directly inside the ScrollView's flickable would be a
+        // no-op (the flickable content item is sized to the content itself).
+        Item {
+            id: wifiContentHolder
+            width: wifiScroll.availableWidth
+            implicitWidth: wifiScroll.availableWidth
+            implicitHeight: Math.max(wifiScroll.availableHeight, wifiContentColumn.implicitHeight)
+
         ColumnLayout {
+            id: wifiContentColumn
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             anchors.margins: Style.sectionPadding
             spacing: Style.stepContentSpacing
-            width: wifiScroll.availableWidth
 
             WizardSectionContainer {
                 RowLayout {
@@ -380,6 +390,7 @@ WizardStepBase {
                     }
                 }
             }
+        }
         }
     }
     ]
