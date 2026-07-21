@@ -59,12 +59,32 @@ void DeviceWrapper::sync()
 
         if (block->dirty)
         {
+            /* Force every preceding filesystem write to physical media BEFORE the
+             * MBR/partition table becomes visible. On USB card readers the bridge
+             * or card write-cache can reorder writes, so without this flush the MBR
+             * (block 0) can reach the media ahead of the FAT blocks written above.
+             * Windows then sees a partition whose filesystem is still incomplete and
+             * pops "You need to format the disk in drive X:" mid-write — especially
+             * when Explorer is already watching the drive. Flushing here guarantees
+             * the partition only appears once its contents are durably on media.
+             * (This is why the bug reproduces on real card readers but never on a
+             * virtual disk, which has no reordering write-cache.) A device that does
+             * not support flush returns success from Flush(), so this is a no-op there.
+             * Crash-safe: unlike disabling AutoMount, this touches no global OS state. */
+            auto flushResult = _file_ops->Flush();
+            if (flushResult != rpi_imager::FileError::kSuccess) {
+                throw std::runtime_error("Error flushing filesystem to device before writing MBR");
+            }
+
             _seekToBlock(0);
             auto result = _file_ops->WriteSequential(reinterpret_cast<const std::uint8_t*>(block->block), 4096);
             if (result != rpi_imager::FileError::kSuccess) {
                 throw std::runtime_error("Error writing MBR to device");
             }
             block->dirty = false;
+
+            /* And flush the MBR itself so the now-complete partition is durable. */
+            _file_ops->Flush();
         }
     }
 

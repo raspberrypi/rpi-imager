@@ -1832,6 +1832,23 @@ void DownloadThread::_writeComplete()
     if (_firstBlock)
     {
         qDebug() << "Writing first block (which we skipped at first)";
+
+        // Force all preceding image data (including the filesystem) to physical
+        // media BEFORE writing the partition table. On write-caching USB card
+        // readers the MBR could otherwise reach the media ahead of the filesystem,
+        // making Windows briefly see a partition with an incomplete filesystem and
+        // pop "You need to format the disk in drive X:". Flushing first guarantees
+        // the partition only becomes visible once its contents are durable. (Same
+        // reasoning as DeviceWrapper::sync() for the customised path.)
+        rpi_imager::FileError preMbrFlush = _file->Flush();
+        if (preMbrFlush != rpi_imager::FileError::kSuccess)
+        {
+            qFreeAligned(_firstBlock);
+            _firstBlock = nullptr;
+            DownloadThread::_onDownloadError(_fileErrorToString(preMbrFlush, tr("flushing image before writing partition table")));
+            return;
+        }
+
         _file->Seek(0);
         rpi_imager::FileError writeResult = _file->WriteSequential(reinterpret_cast<const std::uint8_t*>(_firstBlock), _firstBlockSize);
         rpi_imager::FileError flushResult = (writeResult == rpi_imager::FileError::kSuccess) ? _file->Flush() : writeResult;
