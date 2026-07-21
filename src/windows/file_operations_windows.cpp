@@ -359,9 +359,33 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   if (result != FileError::kSuccess && isPhysicalDrive && preferredShare == FILE_SHARE_READ) {
     int err = last_error_code_;
     if (err == ERROR_SHARING_VIOLATION || err == ERROR_ACCESS_DENIED) {
-      Log("Exclusive (unshared-write) open failed with error " + std::to_string(err) +
-          " - retrying with shared write access");
-      result = tryOpenAtShareMode(FILE_SHARE_READ | FILE_SHARE_WRITE);
+      // Something is briefly holding the just-cleaned removable disk with write
+      // access — typically Explorer re-scanning it, an AV, or the search indexer.
+      // Do NOT immediately drop to a shared open: a shared open lets the OS mount
+      // the partition we are about to write and pop a "You need to format the disk"
+      // dialog mid-write. Instead retry the EXCLUSIVE open with geometric backoff
+      // (matching Rufus's DRIVE_ACCESS wait loop) so the transient holder has time
+      // to let go. Only fall back to shared if exclusivity genuinely can't be had.
+      constexpr int kExclusiveRetries = 6;
+      int delayMs = 100;  // 100+200+400+800+1600+3200 ≈ 6.3s total worst case
+      for (int attempt = 1; attempt <= kExclusiveRetries && result != FileError::kSuccess; attempt++) {
+        Log("Exclusive open failed (error " + std::to_string(err) + "), retry " +
+            std::to_string(attempt) + "/" + std::to_string(kExclusiveRetries) +
+            " for exclusive access in " + std::to_string(delayMs) + "ms");
+        Sleep(delayMs);
+        delayMs *= 2;
+        result = tryOpenAtShareMode(FILE_SHARE_READ);
+        if (result == FileError::kSuccess)
+          break;
+        err = last_error_code_;
+        if (err != ERROR_SHARING_VIOLATION && err != ERROR_ACCESS_DENIED)
+          break;  // non-transient error — retrying won't help
+      }
+      if (result != FileError::kSuccess) {
+        Log("Could not obtain exclusive access after retries - falling back to shared "
+            "write access (OS may mount partitions mid-write)");
+        result = tryOpenAtShareMode(FILE_SHARE_READ | FILE_SHARE_WRITE);
+      }
     }
   }
 
@@ -372,12 +396,18 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
     return result;
   }
 
-  // Enable extended DASD I/O for raw disk access
-  DWORD bytes_returned;
-  if (!DeviceIoControl(handle_, FSCTL_ALLOW_EXTENDED_DASD_IO, 
-                       nullptr, 0, nullptr, 0, &bytes_returned, nullptr)) {
-    // This may fail on some systems, but we can continue
-    Log("Warning: FSCTL_ALLOW_EXTENDED_DASD_IO failed, continuing anyway");
+  // Enable extended DASD I/O. This lifts filesystem boundary checks and is only
+  // meaningful for VOLUME handles (\\.\X:). A physical-drive handle already has
+  // unrestricted raw access to every sector, so the IOCTL is not applicable there
+  // and simply returns ERROR_INVALID_FUNCTION — don't issue it (it produced a
+  // spurious "failed" warning on every physical-drive write).
+  if (!isPhysicalDrive) {
+    DWORD bytes_returned;
+    if (!DeviceIoControl(handle_, FSCTL_ALLOW_EXTENDED_DASD_IO,
+                         nullptr, 0, nullptr, 0, &bytes_returned, nullptr)) {
+      // This may fail on some systems, but we can continue
+      Log("Warning: FSCTL_ALLOW_EXTENDED_DASD_IO failed, continuing anyway");
+    }
   }
 
   // Only try to lock volume if this is not a physical drive
