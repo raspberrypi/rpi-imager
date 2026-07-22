@@ -16,6 +16,7 @@
 #include <cstring>
 #include <deque>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace rpiboot::testing {
@@ -40,6 +41,9 @@ public:
 
     // Set whether the transport reports as open
     void setOpen(bool open) { _isOpen = open; }
+
+    // Set the USB interface string descriptor returned by interfaceString()
+    void setInterfaceString(std::string s) { _interfaceString = std::move(s); }
 
     // Configure a simulated failure on the next N bulk writes
     void failNextBulkWrites(int count) { _failBulkWriteCount = count; }
@@ -127,8 +131,11 @@ public:
 
     bool isOpen() const override { return _isOpen; }
 
+    std::string interfaceString() const override { return _interfaceString; }
+
 private:
     bool _isOpen = true;
+    std::string _interfaceString;
     int _failBulkWriteCount = 0;
     int _failControlCount = 0;
     std::deque<std::vector<uint8_t>> _bulkReadQueue;

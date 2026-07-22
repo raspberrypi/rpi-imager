@@ -157,6 +157,15 @@ constexpr int     DEFAULT_TIMEOUT_MS    = 3000;
 constexpr uint16_t FASTBOOT_VID         = 0x18d1;       // Google
 constexpr uint16_t FASTBOOT_PID         = 0x4e40;       // RPi Fastboot gadget
 
+// USB interface string descriptor (iInterface) advertised by the RPi
+// fastboot gadget — rpi-fastbootd's FASTBOOTD_INTERFACE_DESCRIPTOR.  The
+// VID/PID above are borrowed from Google, so they cannot distinguish a
+// genuine Pi from a non-Pi device in a colliding fastboot mode; this string
+// can.  Stock Android fastbootd advertises "fastbootd" / "Android Fastboot"
+// instead.  Read at open time (before any fastboot command) to positively
+// identify the gadget.
+constexpr const char* FASTBOOT_INTERFACE_DESCRIPTOR = "fastbootd-provisioner";
+
 // ── Progress callback ──────────────────────────────────────────────────
 // (current, total, status):
 //   - Percentage mode: current/total in [0,100] range (e.g. download progress)
