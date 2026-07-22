@@ -542,7 +542,7 @@ TEST_CASE("FastbootProtocol download invokes progress callback", "[fastboot][pro
 // Stage
 // ────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("FastbootProtocol stage sends data with stage prefix", "[fastboot][protocol]")
+TEST_CASE("FastbootProtocol stage sends data with the download verb", "[fastboot][protocol]")
 {
     MockUsbTransport mock;
 
@@ -557,11 +557,14 @@ TEST_CASE("FastbootProtocol stage sends data with stage prefix", "[fastboot][pro
     bool ok = fb.stage(mock, std::span<const uint8_t>(payload), nullptr, cancelled);
     CHECK(ok);
 
-    // First bulk write should be the command with "stage:" prefix
+    // stage() intentionally uses the "download:" verb, not "stage:".  On
+    // rpi-fastbootd both map to the same DownloadHandler (device keeps "stage"
+    // only for backward-compat with older imagers), and "download" is the only
+    // one accepted on a restricted TCP data-plane connection.  See
+    // rpi-fastbootd fastboot/device/fastboot_device.cpp BuildCommandMap().
     REQUIRE(!mock.capturedBulkWrites().empty());
     std::string cmd(mock.capturedBulkWrites()[0].begin(), mock.capturedBulkWrites()[0].end());
-    CHECK(cmd.substr(0, 6) == "stage:");
-    CHECK(cmd == "stage:00000100");
+    CHECK(cmd == "download:00000100");
 }
 
 TEST_CASE("FastbootProtocol stage fails when device returns FAIL", "[fastboot][protocol][negative]")
@@ -877,16 +880,17 @@ TEST_CASE("FastbootProtocol writeDeviceFile then readDeviceFile round-trip", "[f
     auto readBack = fb.readDeviceFile(mock, "/boot/firmware/config.txt", cancelled);
     CHECK(readBack == original);
 
-    // Verify all expected commands were sent
+    // Verify all expected commands were sent.  writeDeviceFile stages via
+    // stage(), which uses the "download:" verb (see the stage() test above).
     std::vector<std::string> commands;
     for (const auto& w : mock.capturedBulkWrites()) {
         std::string s(w.begin(), w.end());
         // Filter out raw data payloads (they won't start with known prefixes)
-        if (s.starts_with("stage:") || s.starts_with("oem ") || s == "upload")
+        if (s.starts_with("download:") || s.starts_with("oem ") || s == "upload")
             commands.push_back(s);
     }
     REQUIRE(commands.size() == 4);
-    CHECK(commands[0].starts_with("stage:"));
+    CHECK(commands[0].starts_with("download:"));
     CHECK(commands[1] == "oem download-file /boot/firmware/config.txt");
     CHECK(commands[2] == "oem upload-file /boot/firmware/config.txt");
     CHECK(commands[3] == "upload");
