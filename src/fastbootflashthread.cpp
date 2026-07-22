@@ -745,6 +745,20 @@ void FastbootFlashThread::runImpl()
 
     fastboot::FastbootProtocol fb;
 
+    // Safety gate: refuse to touch anything that is not a genuine
+    // rpi-fastbootd gadget. The device matched only on the 18d1:4e40 VID/PID
+    // the gadget borrows from Google, so verify its identity before issuing
+    // any destructive command (erase / partition / flash). isRpiFastboot()
+    // checks the authoritative USB interface descriptor ("fastbootd-provisioner")
+    // and falls back to the RPi-specific block-devices getvar. This ensures a
+    // non-Pi device in a colliding fastboot mode can never be written to,
+    // even if it somehow reached this point.
+    if (!fb.isRpiFastboot(*transport)) {
+        emit error(tr("Refusing to flash %1: the device did not identify as a "
+                      "Raspberry Pi fastboot device.").arg(_fastbootId));
+        return;
+    }
+
     // Special case: the "Erase" OS-list entry carries no image. Wipe the
     // device and write a fresh partition table instead of running the
     // download/decompress/flash pipeline.

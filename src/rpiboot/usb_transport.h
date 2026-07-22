@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 
 namespace rpiboot {
 
@@ -52,6 +53,14 @@ public:
     // Bulk IN endpoint address (e.g. 0x82).  Determined from the device's
     // active configuration descriptor; falls back to EP 2 if unknown.
     virtual uint8_t inEndpoint() const { return 0x82; }
+
+    // USB interface string descriptor (iInterface) for the active interface,
+    // decoded as ASCII, or an empty string if unavailable.  Used to
+    // positively identify the RPi fastboot gadget (whose descriptor is
+    // "fastbootd-provisioner").  The default returns empty, so transports
+    // that cannot supply it (e.g. non-USB) fall back to protocol-level
+    // identification.
+    virtual std::string interfaceString() const { return {}; }
 };
 
 } // namespace rpiboot
