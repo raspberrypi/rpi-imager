@@ -48,7 +48,7 @@ public:
     // Scan for Broadcom devices in USB boot mode
     std::vector<UsbDeviceInfo> scanBootDevices() const;
 
-    // Scan for devices in fastboot mode (Google VID 0x18d1, PID 0x4ee0)
+    // Scan for devices in fastboot mode (Google VID 0x18d1, PID 0x4e40)
     std::vector<UsbDeviceInfo> scanFastbootDevices() const;
 
     // Open a specific device for communication
@@ -97,6 +97,13 @@ public:
     // Diagnostic string built during construction (set_configuration result,
     // claim_interface result).  Included in performance-capture metadata.
     const QString& initDiagnostics() const { return _initDiag; }
+
+    // Read the USB interface string descriptor (iInterface) for the active
+    // interface, decoded as ASCII.  Returns an empty string on failure or if
+    // the interface advertises no string.  Used to positively identify the
+    // RPi fastboot gadget, whose interface descriptor is "fastbootd-provisioner"
+    // (see rpiboot::FASTBOOT_INTERFACE_DESCRIPTOR).
+    std::string interfaceString() const override;
 
 private:
     libusb_device_handle* _handle = nullptr;

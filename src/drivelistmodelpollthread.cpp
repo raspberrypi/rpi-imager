@@ -157,6 +157,25 @@ void DriveListModelPollThread::run()
                         cache.fastbootId = std::to_string(dev.busNumber) + ":" + std::to_string(dev.deviceAddress);
                         cache.portPath = dev.portPath;
 
+                        // Positively identify a genuine rpi-fastbootd gadget
+                        // before exposing it as a flashable target. The gadget
+                        // borrows Google's 18d1:4e40 VID/PID, so a non-Pi
+                        // device (e.g. an Android phone in a colliding fastboot
+                        // mode) could enumerate identically. isRpiFastboot()
+                        // checks the authoritative USB interface descriptor
+                        // ("fastbootd-provisioner") and falls back to the
+                        // RPi-specific block-devices getvar. If neither
+                        // confirms a Pi, cache a storage-less entry so the
+                        // device is neither listed as a target nor re-probed on
+                        // every tick, and skip it.
+                        if (!fb.isRpiFastboot(*transport)) {
+                            qDebug() << "Fastboot: ignoring non-RPi device at"
+                                     << QString::fromStdString(ppKey)
+                                     << "(did not identify as rpi-fastbootd)";
+                            _fastbootCache[ppKey] = std::move(cache);
+                            continue;
+                        }
+
                         // Query product name
                         auto product = fb.getVar(*transport, "product");
                         cache.productName = product.value_or("Compute Module");

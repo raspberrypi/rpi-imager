@@ -210,6 +210,32 @@ LibusbTransport::~LibusbTransport()
     }
 }
 
+std::string LibusbTransport::interfaceString() const
+{
+    if (!_handle)
+        return {};
+
+    libusb_config_descriptor* config = nullptr;
+    if (libusb_get_active_config_descriptor(libusb_get_device(_handle), &config) != LIBUSB_SUCCESS
+        || !config)
+        return {};
+
+    std::string result;
+    if (_interface < config->bNumInterfaces
+        && config->interface[_interface].num_altsetting > 0) {
+        uint8_t idx = config->interface[_interface].altsetting[0].iInterface;
+        if (idx != 0) {
+            unsigned char buf[256];
+            int n = libusb_get_string_descriptor_ascii(_handle, idx, buf, sizeof(buf));
+            if (n > 0)
+                result.assign(reinterpret_cast<const char*>(buf), static_cast<size_t>(n));
+        }
+    }
+
+    libusb_free_config_descriptor(config);
+    return result;
+}
+
 bool LibusbTransport::controlTransfer(uint8_t requestType, uint8_t request,
                                        uint16_t wValue, uint16_t wIndex,
                                        std::span<const uint8_t> data,

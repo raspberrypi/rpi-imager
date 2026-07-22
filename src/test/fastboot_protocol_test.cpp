@@ -183,6 +183,83 @@ TEST_CASE("FastbootProtocol getVar returns nullopt on FAIL", "[fastboot][protoco
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// Device identification (isRpiFastboot) — guards against a non-Pi device
+// that happens to enumerate as the borrowed 18d1:4e40 VID/PID.
+//
+// Primary signal: the USB interface descriptor "fastbootd-provisioner".
+// Fallback: the RPi-specific "block-devices" getvar.
+// ────────────────────────────────────────────────────────────────────────
+
+TEST_CASE("FastbootProtocol isRpiFastboot true on the fastbootd-provisioner interface descriptor", "[fastboot][protocol][identity]")
+{
+    MockUsbTransport mock;
+    mock.setInterfaceString("fastbootd-provisioner");
+
+    FastbootProtocol fb;
+    CHECK(fb.isRpiFastboot(mock));
+
+    // The descriptor is authoritative — no getvar probe should be sent.
+    CHECK(mock.capturedBulkWrites().empty());
+}
+
+TEST_CASE("FastbootProtocol isRpiFastboot false for a non-Pi interface descriptor with no block-devices", "[fastboot][protocol][identity][negative]")
+{
+    // e.g. a stock Android device that matched the borrowed VID/PID.
+    MockUsbTransport mock;
+    mock.setInterfaceString("Android Fastboot");
+    mock.queueBulkReadResponse(makeResponse("FAIL", "unknown variable"));
+
+    FastbootProtocol fb;
+    CHECK_FALSE(fb.isRpiFastboot(mock));
+}
+
+TEST_CASE("FastbootProtocol isRpiFastboot falls back to block-devices when the descriptor is unavailable", "[fastboot][protocol][identity]")
+{
+    // No interface descriptor (default empty) → protocol-level fallback.
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("OKAY", "mmcblk0,nvme0n1"));
+
+    FastbootProtocol fb;
+    CHECK(fb.isRpiFastboot(mock));
+
+    // Verify it probed the RPi-specific getvar
+    REQUIRE(!mock.capturedBulkWrites().empty());
+    std::string sent(mock.capturedBulkWrites()[0].begin(), mock.capturedBulkWrites()[0].end());
+    CHECK(sent == "getvar:block-devices");
+}
+
+TEST_CASE("FastbootProtocol isRpiFastboot true for a Pi with an empty block-devices list", "[fastboot][protocol][identity]")
+{
+    // A genuine Pi with no attached storage still OKAYs the getvar (empty
+    // value). Implementing the getvar at all is the positive signal.
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+
+    FastbootProtocol fb;
+    CHECK(fb.isRpiFastboot(mock));
+}
+
+TEST_CASE("FastbootProtocol isRpiFastboot false when block-devices FAILs", "[fastboot][protocol][identity][negative]")
+{
+    // Stock Android fastboot/fastbootd does not implement block-devices and
+    // returns FAIL — the device must be rejected.
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("FAIL", "unknown variable"));
+
+    FastbootProtocol fb;
+    CHECK_FALSE(fb.isRpiFastboot(mock));
+}
+
+TEST_CASE("FastbootProtocol isRpiFastboot false when the transport is dead", "[fastboot][protocol][identity][negative]")
+{
+    // No queued response → bulkRead fails → not identified as a Pi.
+    MockUsbTransport mock;
+
+    FastbootProtocol fb;
+    CHECK_FALSE(fb.isRpiFastboot(mock));
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // Transport failure tests
 // ────────────────────────────────────────────────────────────────────────
 
