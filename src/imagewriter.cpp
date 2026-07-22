@@ -4317,9 +4317,14 @@ QString ImageWriter::customRepoHost()
 
 bool ImageWriter::isValidRepoUrl(const QString &url) const
 {
-    // Validate: must be http/https URL ending with .json or manifest extension
+    // Validate: must be an http/https URL whose path ends with .json or the
+    // manifest extension. An optional query string and/or fragment is allowed
+    // after the extension so that pre-signed URLs (e.g. cloud blob storage with
+    // a SAS token: ".../manifest.json?sv=...&sig=...") are accepted. The path
+    // portion excludes '?' and '#' so the extension must appear before any
+    // query/fragment rather than merely somewhere in the URL.
     static const QRegularExpression repoUrlRe(
-        QStringLiteral("^https?://[^ \\t\\r\\n]+\\.(json|" MANIFEST_EXTENSION ")$"), 
+        QStringLiteral("^https?://[^ \\t\\r\\n?#]+\\.(json|" MANIFEST_EXTENSION ")([?#][^ \\t\\r\\n]*)?$"),
         QRegularExpression::CaseInsensitiveOption);
     return repoUrlRe.match(url).hasMatch();
 }
