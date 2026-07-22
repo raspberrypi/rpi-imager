@@ -79,6 +79,19 @@ private:
     bool applyCustomisation(class fastboot::FastbootProtocol& fb,
                              class rpiboot::IUsbTransport& transport);
 
+    // True when this is the special "Erase" OS-list entry
+    // (_imageUrl == "internal://format") rather than a real image flash.
+    bool isEraseOperation() const;
+
+    // Handle the "Erase" case for a fastboot device: bare-wipe the whole
+    // block device, then lay down a fresh MBR with a single FAT32-typed
+    // partition spanning the device, and reboot.  NB: rpi-fastbootd has no
+    // mkfs command, so the partition is *typed* FAT32 but left without a
+    // filesystem --- unlike the SD-card Erase path (DriveFormatThread),
+    // which writes a mountable FAT32.  Emits success()/error() itself.
+    bool performErase(class fastboot::FastbootProtocol& fb,
+                      class rpiboot::IUsbTransport& transport);
+
     // Best-effort: after the OS image has been flashed, set the
     // EEPROM's BOOT_ORDER so the chosen storage device boots first on
     // the next power cycle. Reads the device's existing EEPROM, edits

@@ -646,6 +646,74 @@ void FastbootFlashThread::run()
     }
 }
 
+bool FastbootFlashThread::isEraseOperation() const
+{
+    return _imageUrl.toString() == QLatin1String("internal://format");
+}
+
+bool FastbootFlashThread::performErase(fastboot::FastbootProtocol& fb,
+                                        rpiboot::IUsbTransport& transport)
+{
+    // The block device is the whole disk (e.g. "mmcblk0"); the flash path
+    // targets it directly and mounts "<dev>p1", so no partition suffix here.
+    const std::string dev = _blockDevice.toStdString();
+
+    // 1. Bare wipe of the whole device. The daemon's erase handler calls
+    //    wipe_block_device(), which issues BLKDISCARD (near-instant on eMMC
+    //    that supports it) or falls back to zeroing the device — which can
+    //    take minutes on a large eMMC — so give it a generous timeout.
+    emit preparationStatusUpdate(tr("Erasing storage device..."));
+    qDebug() << "FastbootFlashThread: erase:" << QString::fromStdString(dev);
+    auto resp = fb.sendCommand(transport, "erase:" + dev, 600000);
+    if (_cancelled.load()) {
+        emit error(tr("Cancelled"));
+        return false;
+    }
+    if (resp.type != fastboot::Response::Okay) {
+        emit error(tr("Failed to erase device: %1")
+                   .arg(QString::fromStdString(resp.message)));
+        return false;
+    }
+
+    // 2. Write a fresh MBR (msdos) partition table.
+    emit preparationStatusUpdate(tr("Writing partition table..."));
+    qDebug() << "FastbootFlashThread: oem partinit" << QString::fromStdString(dev) << "dos";
+    resp = fb.sendCommand(transport, "oem partinit " + dev + " dos", 60000);
+    if (resp.type != fastboot::Response::Okay) {
+        emit error(tr("Failed to write partition table: %1")
+                   .arg(QString::fromStdString(resp.message)));
+        return false;
+    }
+
+    // 3. Append a single FAT32-LBA partition spanning the whole device.
+    //    'c' is parsed as hex 0x0c (FAT32 LBA — matching DiskFormatter's
+    //    partition type) by the daemon's partapp handler; omitting the size
+    //    consumes all remaining space, and the daemon aligns the start to
+    //    4 MiB. This only writes the partition *entry* — rpi-fastbootd has
+    //    no mkfs, so the partition is typed FAT32 but has no filesystem.
+    emit preparationStatusUpdate(tr("Creating FAT32 partition..."));
+    qDebug() << "FastbootFlashThread: oem partapp" << QString::fromStdString(dev) << "c";
+    resp = fb.sendCommand(transport, "oem partapp " + dev + " c", 60000);
+    if (resp.type != fastboot::Response::Okay) {
+        emit error(tr("Failed to create partition: %1")
+                   .arg(QString::fromStdString(resp.message)));
+        return false;
+    }
+
+    // 4. Reboot out of fastboot mode.
+    emit finalizing();
+    resp = fb.sendCommand(transport, "reboot", 10000);
+    if (resp.type != fastboot::Response::Okay) {
+        qDebug() << "FastbootFlashThread: reboot command returned:"
+                 << QString::fromStdString(resp.message);
+        // Non-fatal — the erase + partitioning already succeeded.
+    }
+
+    qDebug() << "FastbootFlashThread: erase complete for" << QString::fromStdString(dev);
+    emit success();
+    return true;
+}
+
 void FastbootFlashThread::runImpl()
 {
     emit preparationStatusUpdate(tr("Connecting to fastboot device..."));
@@ -675,8 +743,19 @@ void FastbootFlashThread::runImpl()
         return;
     }
 
-    // 2. Query max-download-size
     fastboot::FastbootProtocol fb;
+
+    // Special case: the "Erase" OS-list entry carries no image. Wipe the
+    // device and write a fresh partition table instead of running the
+    // download/decompress/flash pipeline.
+    if (isEraseOperation()) {
+        emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), true,
+                                     QStringLiteral("erase"));
+        performErase(fb, *transport);
+        return;
+    }
+
+    // 2. Query max-download-size
     auto maxDlSizeStr = fb.getVar(*transport, "max-download-size");
     uint32_t maxDownloadSize = DEFAULT_MAX_DOWNLOAD_SIZE;
     if (maxDlSizeStr) {
