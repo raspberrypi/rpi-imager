@@ -61,8 +61,13 @@ public:
                   rpiboot::ProgressCallback progress,
                   std::atomic<bool>& cancelled);
 
-    // Stage data on the device (for use with oem commands).
-    // Identical wire format to download() but uses "stage:" prefix.
+    // Stage data on the device for a subsequent oem command to consume.
+    // Wire-identical to download() — it deliberately uses the "download:"
+    // verb, NOT "stage:".  On rpi-fastbootd both dispatch to the same
+    // DownloadHandler (the device keeps a "stage" alias only for backward
+    // compat with older imagers), and "download" is the only staging verb
+    // accepted on a restricted TCP data-plane connection.  Kept as a distinct
+    // name from download() to document staging intent at call sites.
     bool stage(rpiboot::IUsbTransport& transport,
                std::span<const uint8_t> data,
                rpiboot::ProgressCallback progress,

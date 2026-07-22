@@ -182,6 +182,9 @@ bool FastbootProtocol::stage(rpiboot::IUsbTransport& transport,
                               rpiboot::ProgressCallback progress,
                               std::atomic<bool>& cancelled)
 {
+    // Deliberately "download", not "stage" — see stage() in the header.
+    // rpi-fastbootd maps both verbs to the same DownloadHandler and only
+    // accepts "download" on restricted TCP data-plane connections.
     return sendData(transport, "download", data, progress, cancelled);
 }
 
