@@ -7,3 +7,8 @@
 src/linux/icon/rpi-imager.svg /usr/share/icons/hicolor/scalable/apps/
 
 debian/com.raspberrypi.rpi-imager-cli.desktop /usr/share/applications/
+
+# Install udev rules granting unprivileged USB access to rpiboot/fastboot
+# devices. Without these a non-root user cannot open the device and it
+# silently never appears in the drive list.
+src/linux/99-rpiboot.rules /usr/lib/udev/rules.d/
