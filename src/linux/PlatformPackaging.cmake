@@ -33,6 +33,12 @@ add_dependencies(${PROJECT_NAME} generate_metainfo)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
+# Install udev rules granting unprivileged USB access to rpiboot/fastboot
+# devices (a CM in rpiboot boot mode, and the fastboot gadget it re-enumerates
+# into). Without these, libusb_open() fails for non-root users and the device
+# silently never appears. Applies to both GUI and CLI builds.
+install(FILES "${CMAKE_CURRENT_LIST_DIR}/99-rpiboot.rules" DESTINATION lib/udev/rules.d)
+
 if(BUILD_CLI_ONLY)
     # CLI-only build: install CLI-specific desktop file (marked as NoDisplay)
     # Icon is still required for AppImage tooling (linuxdeploy) even though NoDisplay=true

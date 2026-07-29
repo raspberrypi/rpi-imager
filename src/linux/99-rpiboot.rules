@@ -1,9 +1,21 @@
-# udev rules for Raspberry Pi USB boot devices (Broadcom VID)
-# Grants user access without root for rpiboot functionality in Imager.
+# udev rules for Raspberry Pi USB device access from rpi-imager.
 #
-# Install to /etc/udev/rules.d/ and reload: sudo udevadm control --reload-rules
+# Two device classes need unprivileged (non-root) access:
+#   1. Broadcom boot ROM (VID 0a5c) — a Compute Module / Pi in rpiboot
+#      (USB-boot) mode, which the imager talks to in order to sideload the
+#      fastboot gadget.
+#   2. The fastboot gadget itself (VID 18d1, PID 4e40) — the mode the device
+#      re-enumerates into after sideload, and over which the imager flashes
+#      storage. The gadget borrows Google's VID; PID 4e40 is RPi-specific.
+#
+# Installed to /usr/lib/udev/rules.d/ by the rpi-imager package. For a bare
+# AppImage (which cannot install system files), copy this to /etc/udev/rules.d/
+# and reload:
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
 # SPDX-License-Identifier: Apache-2.0
 
+# ── Boot ROM (rpiboot / USB-boot mode), Broadcom VID ──────────────────────
 # BCM2835 (CM1, Pi Zero)
 SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2763", MODE="0666"
 # BCM2836/7 (CM3, Pi 2/3)
@@ -12,3 +24,6 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2764", MODE="0666"
 SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2711", MODE="0666"
 # BCM2712 (CM5, Pi 5)
 SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2712", MODE="0666"
+
+# ── Fastboot gadget (rpi-fastbootd) ───────────────────────────────────────
+SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", ATTR{idProduct}=="4e40", MODE="0666"
