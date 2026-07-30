@@ -100,6 +100,7 @@ public:
         
         // Customisation
         Customisation,         // Time to apply customisation (config, firstrun, etc.)
+        CustomisationVerify,   // Read-back check that the media kept the customisation files
         CloudInitGeneration,   // Time to generate cloud-init config
         FirstRunGeneration,    // Time to generate firstrun script
         SecureBootSetup,       // Time to set up secure boot files

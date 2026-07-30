@@ -1553,6 +1553,10 @@ void ImageWriter::startWrite()
             this, [this](quint32 durationMs, bool success, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
             });
+    connect(_thread, &DownloadThread::eventCustomisationVerify,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::CustomisationVerify, durationMs, success, metadata);
+            });
     connect(_thread, &DownloadThread::eventFinalSync,
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
@@ -4647,6 +4651,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     connect(_thread, &DownloadThread::eventCustomisation,
             this, [this](quint32 durationMs, bool success, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventCustomisationVerify,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::CustomisationVerify, durationMs, success, metadata);
             });
     connect(_thread, &DownloadThread::eventFinalSync,
             this, [this](quint32 durationMs, bool success){
