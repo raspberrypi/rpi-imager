@@ -1890,6 +1890,17 @@ void DownloadThread::_writeComplete()
 #endif
 
     emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), true);
+
+    /* Customisation is written after _verify() and after the MBR, so this is the
+       first point at which all of it is durable and can be read back. Do it
+       before success() -- the entire point is to not show a green card for a
+       device that dropped the settings. */
+    if (!_verifyCustomisation())
+    {
+        _closeFiles();
+        return;
+    }
+
     _closeFiles();
 
 #ifdef Q_OS_DARWIN
@@ -1905,6 +1916,169 @@ void DownloadThread::_writeComplete()
         QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
         PlatformQuirks::ejectDisk(ejectPath);
     }
+}
+
+namespace {
+/* Hash through the platform abstraction (CommonCrypto / GnuTLS / CNG) rather
+   than QCryptographicHash, as the rest of the write path does. */
+QByteArray customisationDigest(const QByteArray &contents)
+{
+    AcceleratedCryptographicHash hash(OSLIST_HASH_ALGORITHM);
+    hash.addData(contents);
+    return hash.result();
+}
+} // namespace
+
+/* Re-read the customisation files from the media and compare them against what
+ * we wrote. The whole-image _verify() pass runs *before* customisation, so
+ * without this the customisation writes are the only part of the card nothing
+ * ever checks -- and a card that quietly drops them produces a successful-looking
+ * write that simply won't accept SSH on first boot.
+ *
+ * Correctness depends on defeating three layers of cache:
+ *   1. DeviceWrapper::_blockcache never evicts on sync(), so reading back
+ *      through the same DeviceWrapper would compare our own buffer against
+ *      itself and always pass. We therefore build a *fresh* wrapper here,
+ *      whose cache starts empty.
+ *   2. The OS page cache: bypassed by direct I/O -- O_DIRECT on Linux,
+ *      F_NOCACHE on macOS, FILE_FLAG_NO_BUFFERING on Windows -- which is
+ *      normally already active for block devices but can have fallen back to
+ *      buffered at open time, so we re-assert it below and record whether it
+ *      actually took.
+ *   3. The card's or USB bridge's own write cache we cannot defeat. A device
+ *      that serves writes back out of DRAM it never committed will still pass
+ *      this check -- as it already passes _verify() for the same reason. This
+ *      catches the visible failures (dropped writes, truncation, bad geometry),
+ *      not a determined counterfeit.
+ *
+ * Note the asymmetry that makes this safe to ship: a cache we failed to defeat
+ * can only ever return the data we wrote, so caching can produce a false *pass*
+ * but never a false *failure*. A reported mismatch is therefore always real
+ * evidence of a problem, which is why it is safe to hard-fail on one.
+ */
+bool DownloadThread::_verifyCustomisation()
+{
+    if (_customisationDigests.isEmpty())
+        return true;
+
+    emit preparationStatusUpdate(tr("Verifying OS customisation..."));
+    QElapsedTimer verifyTimer;
+    verifyTimer.start();
+
+    /* DeviceWrapper reads in 4 KiB blocks, one seek + read syscall each, and with
+     * direct I/O none of it is cached. That is nothing for the customisation
+     * files themselves (kilobytes) but boot.img is tens of megabytes, i.e.
+     * thousands of syscalls added to every secure-boot write. So content-check
+     * large files only when the user already opted into the cost of a read-back
+     * by enabling verification; always content-check the small ones, whose whole
+     * purpose is the customisation that would otherwise fail silently. Size is
+     * checked for everything either way, since it needs no file read. */
+    constexpr qint64 kAlwaysVerifyMaxBytes = 1024 * 1024;
+
+    QStringList missing, mismatched, sizeMismatched, notContentChecked;
+
+    /* Make sure we are reading the media and not a cache. Direct I/O is normally
+       already on for block devices, in which case this is a no-op; it can have
+       fallen back to buffered at open time, though, so ask for it explicitly.
+       (SetDirectIOEnabled returns success immediately when already in the
+       requested state, so the common path costs nothing. On Windows a real
+       change reopens the handle -- acceptable here because everything is already
+       flushed and synced, and a lost handle only downgrades this check to
+       "not checked".) */
+    bool cacheBypassed = _file->IsDirectIOEnabled();
+    if (!cacheBypassed)
+    {
+        cacheBypassed = _file->SetDirectIOEnabled(true) == rpi_imager::FileError::kSuccess
+                        && _file->IsDirectIOEnabled();
+        qDebug() << "DownloadThread: direct I/O was off before customisation read-back; now"
+                 << (cacheBypassed ? "enabled" : "still off");
+    }
+
+    /* Belt and braces: drop any clean pages the OS may still be holding for this
+       range. Effective on Linux (fadvise DONTNEED); a flush-only no-op on
+       Windows. Everything was synced above, so no dirty pages should remain. */
+    _file->PrepareForSequentialRead(0, _bytesWritten.load());
+
+    try
+    {
+        DeviceWrapper dw(_file.get());
+        DeviceWrapperFatPartition *fat = dw.fatPartition(1);
+        if (!fat)
+            throw std::runtime_error("boot partition not found");
+
+        for (auto it = _customisationDigests.constBegin(); it != _customisationDigests.constEnd(); ++it)
+        {
+            if (_cancelled)
+                return true;
+
+            if (!fat->fileExists(it.key()))
+            {
+                missing << it.key();
+                continue;
+            }
+
+            if (it.value().size > kAlwaysVerifyMaxBytes && !_verifyEnabled)
+            {
+                notContentChecked << it.key();
+                continue;
+            }
+
+            const QByteArray actual = fat->readFile(it.key());
+            if (actual.size() != it.value().size)
+                sizeMismatched << it.key();
+            else if (customisationDigest(actual) != it.value().digest)
+                mismatched << it.key();
+        }
+
+        /* Read-only use never marks a block dirty, so the destructor's sync()
+           is a no-op and cannot write anything back. */
+    }
+    catch (std::runtime_error &err)
+    {
+        /* We could not perform the check at all (unreadable or unexpected
+           partition layout). That is not evidence the customisation is bad, so
+           warn and let the write stand rather than failing a good card. */
+        qDebug() << "DownloadThread: could not verify customisation:" << err.what();
+        emit eventCustomisationVerify(static_cast<quint32>(verifyTimer.elapsed()), false,
+                                      QString("%1 files; not checked: %2")
+                                          .arg(_customisationDigests.size()).arg(err.what()));
+        return true;
+    }
+
+    /* Never report full coverage when some files were only size-checked, and
+       always record whether the read actually bypassed the OS cache -- a pass is
+       only as strong as the cache bypass, whereas a failure is trustworthy
+       either way (see the asymmetry noted above). */
+    const QString coverage = QString("%1 files; content-checked: %2; cache-bypassed: %3")
+        .arg(_customisationDigests.size())
+        .arg(_customisationDigests.size() - notContentChecked.size())
+        .arg(cacheBypassed ? "yes" : "no");
+
+    if (missing.isEmpty() && mismatched.isEmpty() && sizeMismatched.isEmpty())
+    {
+        qDebug() << "DownloadThread: customisation verified;" << coverage
+                 << (notContentChecked.isEmpty() ? "" : "size-only: " + notContentChecked.join(","));
+        emit eventCustomisationVerify(static_cast<quint32>(verifyTimer.elapsed()), true, coverage);
+        return true;
+    }
+
+    QStringList affected = missing + sizeMismatched + mismatched;
+    affected.sort();
+    qDebug() << "DownloadThread: customisation verification FAILED - missing:" << missing
+             << "truncated:" << sizeMismatched << "corrupted:" << mismatched;
+    emit eventCustomisationVerify(static_cast<quint32>(verifyTimer.elapsed()), false,
+                                  QString("%1; missing: %2; truncated: %3; corrupted: %4")
+                                      .arg(coverage, missing.join(","),
+                                           sizeMismatched.join(","), mismatched.join(",")));
+
+    emit error(tr("The OS customisation settings were not stored correctly on the device. "
+                  "The following files are missing or damaged: %1.\n\n"
+                  "The device accepted the data but did not keep it, which usually means the "
+                  "SD card or USB adapter is failing or counterfeit. The image itself was "
+                  "written correctly, but the device would not have applied your settings on "
+                  "first boot (so you would not have been able to connect to it). Try a "
+                  "different card or card reader.").arg(affected.join(", ")));
+    return false;
 }
 
 bool DownloadThread::_verify()
@@ -2332,6 +2506,12 @@ void DownloadThread::setDebugIgnoreDeviceLimits(bool enabled)
     qDebug() << "DownloadThread: Ignore device I/O limits" << (enabled ? "enabled" : "disabled");
 }
 
+void DownloadThread::_recordCustomisationWrite(const QString &filename, const QByteArray &contents)
+{
+    _customisationDigests.insert(filename,
+        CustomisationExpectation{ contents.size(), customisationDigest(contents) });
+}
+
 bool DownloadThread::_customizeImage()
 {
     emit preparationStatusUpdate(tr("Customising OS..."));
@@ -2395,6 +2575,7 @@ bool DownloadThread::_customizeImage()
             }
 
             fat->writeFile("config.txt", config);
+            _recordCustomisationWrite("config.txt", config);
         }
 
         // init_format decision is owned by ImageWriter; no auto-detection here
@@ -2405,12 +2586,14 @@ bool DownloadThread::_customizeImage()
             // No need to add them here anymore
             if (_initFormat == "systemd") {
                 fat->writeFile("firstrun.sh", _firstrun);
+                _recordCustomisationWrite("firstrun.sh", _firstrun);
                 _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
             } else if (_initFormat == "rpi-preseed") {
                 // rpi-preseed applies /boot/firmware/rpi-preseed.toml on first
                 // boot; its units are gated on the file's presence, so no
                 // cmdline entry is required.
                 fat->writeFile("rpi-preseed.toml", _firstrun);
+                _recordCustomisationWrite("rpi-preseed.toml", _firstrun);
             }
         }
 
@@ -2424,6 +2607,7 @@ bool DownloadThread::_customizeImage()
             QByteArray instanceId = "rpi-imager-" + QByteArray::number(QDateTime::currentMSecsSinceEpoch());
             QByteArray metadata = "instance-id: " + instanceId + "\n";
             fat->writeFile("meta-data", metadata);
+            _recordCustomisationWrite("meta-data", metadata);
 
             // Expose datasource type and instance-id on kernel cmdline so that
             // cloud-init's check_instance_id() can validate the cache without
@@ -2437,11 +2621,13 @@ bool DownloadThread::_customizeImage()
             {
                 _cloudinit = "#cloud-config\n"+_cloudinit;
                 fat->writeFile("user-data", _cloudinit);
+                _recordCustomisationWrite("user-data", _cloudinit);
             }
 
             if (!_cloudinitNetwork.isEmpty())
             {
                 fat->writeFile("network-config", _cloudinitNetwork);
+                _recordCustomisationWrite("network-config", _cloudinitNetwork);
             }
         }
 
@@ -2452,6 +2638,7 @@ bool DownloadThread::_customizeImage()
             cmdline += _cmdline;
 
             fat->writeFile("cmdline.txt", cmdline);
+            _recordCustomisationWrite("cmdline.txt", cmdline);
         }
         
         // Sync before secure boot processing (writes partition table/MBR)
@@ -2671,9 +2858,16 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
 
     // NOW write boot.img and boot.sig to the cleaned partition
     emit preparationStatusUpdate(tr("Writing signed boot files..."));
+    /* Everything recorded by _customizeImage() has just been deleted from the
+       partition and folded into boot.img (config.txt and cmdline.txt among
+       them), so those expectations no longer describe the on-disk state.
+       Rebuild the set from what actually survives here. */
+    _customisationDigests.clear();
     try {
         fat->writeFile("boot.img", bootImgData);
         fat->writeFile("boot.sig", bootSigData);
+        _recordCustomisationWrite("boot.img", bootImgData);
+        _recordCustomisationWrite("boot.sig", bootSigData);
         qDebug() << "DownloadThread: secure boot files written successfully";
     }
     catch (std::runtime_error &err) {
@@ -2689,6 +2883,12 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
         emit preparationStatusUpdate(tr("Writing customization files..."));
         qDebug() << "DownloadThread: writing" << customFiles.size() << "customization files back";
         for (auto it = customFiles.constBegin(); it != customFiles.constEnd(); ++it) {
+            /* Record the expectation before attempting the write. If the write
+               below fails we deliberately swallow it (a partial secure-boot
+               partition is still worth finishing), but the recorded digest
+               means _verifyCustomisation() will catch it and fail loudly
+               instead of handing back a card that silently won't customise. */
+            _recordCustomisationWrite(it.key(), it.value());
             try {
                 fat->writeFile(it.key(), it.value());
                 qDebug() << "DownloadThread: wrote customization file:" << it.key();

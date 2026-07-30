@@ -473,6 +473,7 @@ QString PerformanceStats::eventTypeName(EventType type)
         
         // Customisation
         case EventType::Customisation: return "customisation";
+        case EventType::CustomisationVerify: return "customisation_verify";
         case EventType::CloudInitGeneration: return "cloudInitGeneration";
         case EventType::FirstRunGeneration: return "firstRunGeneration";
         case EventType::SecureBootSetup: return "secureBootSetup";
