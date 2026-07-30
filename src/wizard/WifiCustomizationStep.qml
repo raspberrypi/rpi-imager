@@ -198,7 +198,13 @@ WizardStepBase {
     content: [
     ScrollView {
         id: wifiScroll
-        anchors.fill: parent
+        // Size explicitly instead of anchors.fill: an anchored height is not an
+        // "explicit" height as far as QQuickItem is concerned, so the holder's
+        // implicitHeight below would propagate up through ScrollView's implicit
+        // size, transiently resize this view and feed back into availableHeight
+        // — a binding loop.
+        width: parent.width
+        height: parent.height
         clip: true
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
