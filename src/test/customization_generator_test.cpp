@@ -876,6 +876,7 @@ TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no use
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
     // SSH keys alone should NOT grant passwordless sudo — requires explicit opt-in
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  sudo: null"));
 }
 
 TEST_CASE("CustomisationGenerator handles multiple SSH keys in .pub file", "[customization][ssh]") {
@@ -1091,6 +1092,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
     // SSH keys alone should NOT grant passwordless sudo — requires explicit opt-in
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  sudo: null"));
     // Password authentication should be explicitly disabled when using public-key auth
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: false"));
 }
@@ -1112,6 +1114,8 @@ TEST_CASE("CustomisationGenerator cloud-init passwordless sudo when explicitly e
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("testuser ALL=(ALL) NOPASSWD:ALL"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/etc/sudoers.d/010_testuser-nopasswd"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chmod"));
+    // The opt-in must not also emit the suppressing key
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: null"));
 }
 
 TEST_CASE("CustomisationGenerator cloud-init no passwordless sudo by default", "[cloudinit][userdata][sudo]") {
@@ -1124,6 +1128,13 @@ TEST_CASE("CustomisationGenerator cloud-init no passwordless sudo by default", "
 
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: testuser"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // Regression test: the singular `user:` block is merged over the distro's
+    // default_user from /etc/cloud/cloud.cfg, which carries
+    // `sudo: ["ALL=(ALL) NOPASSWD:ALL"]` on every variant including
+    // raspberry-pi-os. Silence alone therefore inherits passwordless sudo (via
+    // /etc/sudoers.d/90-cloud-init-users), so the key must be set to null.
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  sudo: null"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("/etc/sudoers.d/010_testuser-nopasswd"));
 }
 
 TEST_CASE("CustomisationGenerator systemd script passwordless sudo", "[customization][sudo]") {
