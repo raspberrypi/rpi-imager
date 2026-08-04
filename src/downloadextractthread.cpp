@@ -4,6 +4,7 @@
  */
 
 #include "downloadextractthread.h"
+#include "block_batcher.h"
 #include "config.h"
 #include "platformquirks.h"
 #include "systemmemorymanager.h"
@@ -679,6 +680,48 @@ void DownloadExtractThread::extractMultiFileRun()
     {
         // Log the compression filter(s) being used
         _logCompressionFilters(a);
+
+        // Coalesce libarchive's data blocks into large sequential writes.
+        //
+        // archive_write_data_block() issues one write per block libarchive hands
+        // us, and its per-call overhead dominates when the blocks are small. This
+        // is a known libarchive limitation, not a misuse of the API:
+        // https://github.com/libarchive/libarchive/issues/1835 reports the same
+        // copy loop running ~2x slower than writing to a file descriptor, and it
+        // is still open with no upstream fix. libarchive's own IO notes say large
+        // blocks are almost always better because it charges overhead per block.
+        //
+        // The alternative that issue suggests, archive_read_data_into_fd(), is not
+        // usable here: on Windows the file is already open after
+        // archive_write_header(), and libarchive exposes no way to reuse that
+        // handle. Writing the files ourselves would mean giving up
+        // archive_write_disk()'s SECURE_NOABSOLUTEPATHS / SECURE_NODOTDOT /
+        // SECURE_SYMLINKS / NO_OVERWRITE handling, which is not worth trading for
+        // throughput. So we keep archive_write_disk and simply hand it bigger
+        // blocks, which is what libarchive asks for.
+        //
+        // It matters most on removable media, which is mounted with write caching
+        // disabled by default (Windows "quick removal"; the kernel logs
+        // "Write cache: disabled"), so every small write is flushed individually.
+        //
+        // Measured on a SanDisk Ultra Flair: Windows Copy-Item moves 1 GiB to the
+        // same FAT32 volume in 207.7 s (5.17 MB/s), while extraction managed about
+        // 0.8 MB/s -- roughly 6.5x slower on identical hardware and filesystem.
+        //
+        // Buffer contiguous blocks and emit one write per buffer. Non-contiguous
+        // offsets (sparse files) flush first, so libarchive still sees the same
+        // offsets and keeps its sparse handling.
+        // The buffering rules live in BlockBatcher so they can be unit tested
+        // without a download or a device -- see test/block_batcher_test.cpp.
+        constexpr size_t kExtractWriteBufferSize = 8u * 1024 * 1024;
+        quint64 blockCount = 0;   // for the average-block-size diagnostic below
+        quint64 blockBytes = 0;
+
+        rpi_imager::BlockBatcher batcher(kExtractWriteBufferSize,
+            [ext](const void *data, size_t size, int64_t offset) {
+                return static_cast<int>(archive_write_data_block(ext, data, size, offset));
+            });
+
         while ( (r = archive_read_next_header(a, &entry)) != ARCHIVE_EOF)
         {
           _checkResult(r, a);
@@ -701,11 +744,26 @@ void DownloadExtractThread::extractMultiFileRun()
               while ( (r = archive_read_data_block(a, &buff, &size, &offset)) != ARCHIVE_EOF)
               {
                   _checkResult(r, a);
-                  _checkResult(archive_write_data_block(ext, buff, size, offset), ext);
+
+                  ++blockCount;
+                  blockBytes += size;
+
+                  _checkResult(batcher.Add(buff, size, offset), ext);
+
                   _bytesWritten += size;
               }
+              // The entry's tail is still buffered; it must go out before
+              // archive_write_finish_entry() closes the file.
+              _checkResult(batcher.Flush(), ext);
           }
           _checkResult(archive_write_finish_entry(ext), ext);
+        }
+
+        // Record what libarchive handed us so batching can be assessed from logs.
+        if (blockCount > 0) {
+            qDebug() << "Extraction:" << blockCount << "data blocks,"
+                     << (blockBytes / blockCount) << "bytes average, batched into"
+                     << kExtractWriteBufferSize << "byte writes";
         }
 
         QByteArray computedHash = _inputHash.result().toHex();

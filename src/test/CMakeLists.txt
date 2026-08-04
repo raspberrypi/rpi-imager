@@ -722,3 +722,33 @@ add_custom_target(test_device_io_limits
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Running device I/O limits diagnostic"
 )
+# BlockBatcher coalesces libarchive data blocks into larger writes during
+# multi-file extraction. Header-only and free of Qt/libarchive, so it tests without
+# a download, a ring buffer or a device attached.
+add_executable(block_batcher_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../block_batcher.h
+    block_batcher_test.cpp
+)
+
+target_link_libraries(block_batcher_test PRIVATE
+    Catch2::Catch2WithMain
+)
+
+target_include_directories(block_batcher_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(block_batcher_test PRIVATE cxx_std_20)
+target_compile_options(block_batcher_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+catch_discover_tests(block_batcher_test)
+
+add_custom_target(test_block_batcher
+    COMMAND block_batcher_test
+    DEPENDS block_batcher_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running block batcher tests"
+)
