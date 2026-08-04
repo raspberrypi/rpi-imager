@@ -625,6 +625,17 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         }
         if (passwordlessSudo) {
             push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
+        } else {
+            // Must be explicit: singular `user:` is merged *over* the distro's
+            // default_user from /etc/cloud/cloud.cfg, which upstream populates
+            // with `sudo: ["ALL=(ALL) NOPASSWD:ALL"]` for every variant -
+            // including raspberry-pi-os. Omitting the key therefore inherits
+            // passwordless sudo (written to /etc/sudoers.d/90-cloud-init-users)
+            // regardless of the user's choice. `null` suppresses the rules
+            // while still inheriting the default user's groups, so the account
+            // keeps `sudo` group membership and is simply prompted for a
+            // password. `false` behaves the same but is deprecated since 22.2.
+            push(QStringLiteral("  sudo: null"), cloud);
         }
         push(QString(), cloud); // blank line
     }
