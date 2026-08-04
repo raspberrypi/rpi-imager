@@ -132,7 +132,9 @@ validate_cli_qt_dir() {
 	exit 1
 }
 
-if [ "$APPIMAGE_PACKAGING" != pack ] || [ "$ARCH" = "$TOOL_ARCH" ]; then
+# The pack stage only wraps an AppDir built earlier, so it never needs Qt — even
+# when target arch == tool arch (host-arch chroot build packed on the host).
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
 # Check if Qt root is specified via command line argument (highest priority)
 if [ -n "$QT_ROOT_ARG" ]; then
     echo "Using Qt from command line argument: $QT_ROOT_ARG"
@@ -221,8 +223,8 @@ if [ -f "$QT_DIR/bin/qmake" ]; then
 fi
 fi
 
-if [ "$APPIMAGE_PACKAGING" = pack ] && [ "$ARCH" != "$TOOL_ARCH" ]; then
-    echo "create-appimage-cli: using AppDir from build stage (cross pack)"
+if [ "$APPIMAGE_PACKAGING" = pack ]; then
+    echo "create-appimage-cli: using AppDir from build stage (pack)"
 fi
 
 # Configuration
@@ -354,6 +356,12 @@ rm -f "$APPDIR/usr/lib/libQt6Widgets.so"* 2>/dev/null || true
 rm -f "$APPDIR/usr/lib/libQt6Svg.so"* 2>/dev/null || true
 rm -f "$APPDIR/usr/lib/libQt"*"QuickControls"*.so* 2>/dev/null || true
 
+# Bundle the non-host-coupled dependency closure of Qt Core/Network and the TLS
+# backends. Without this the CLI relies on the host for ICU, PCRE2, zstd and
+# friends; ICU is soname-pinned per Debian release, so leaving it out would tie
+# the package to a single distro version.
+appimage_deploy_lib_closure "$APPDIR" "$QT_DIR/lib" || exit 1
+
 # Remove development files to save space
 find "$APPDIR" -name "*.a" -delete 2>/dev/null || true
 find "$APPDIR" -name "*.la" -delete 2>/dev/null || true
@@ -385,7 +393,7 @@ echo "Creating CLI-only AppImage..."
 rm -f "$PWD/rpi-imager-cli.AppImage"
 rm -f "$PWD/rpi-imager-cli-$ARCH.AppImage"
 
-if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ]; then
+if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
     # Create AppImage using linuxdeploy
     # Explicitly specify the desktop file to ensure correct naming
     LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" \

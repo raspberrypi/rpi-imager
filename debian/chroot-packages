@@ -75,5 +75,5 @@ libwayland-server0
 libwayland-client0
 libwayland-bin
 fuse
-libfuse2t64
+libfuse2
 liburing-dev

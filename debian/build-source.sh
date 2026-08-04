@@ -37,6 +37,7 @@ cp -a "$TOP/debian" "$_builddir/$_src/"
 for _f in \
 	"${PACKAGE}_${VERSION}.debian.tar.xz" \
 	"${PACKAGE}_${VERSION}.dsc" \
+	"${PACKAGE}_${VERSION}_source.buildinfo" \
 	"${PACKAGE}_${VERSION}_source.changes"
 do
 	if [ -f "$_builddir/$_f" ]; then

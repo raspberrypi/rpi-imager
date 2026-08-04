@@ -51,3 +51,11 @@ wasm-jspi
 wasm-simd128
 wayland-server
 windeployqt
+
+# ICU: Qt only uses it for extended QStringConverter codecs, QCollator
+# collation and localised timezone display names. rpi-imager uses none of
+# these (UTF-8 only, no collation, timezones handled as IANA ID strings), and
+# Qt has non-ICU fallbacks for all three. Excluding it drops ~35 MB of
+# libicudata/libicui18n/libicuuc per package and removes the per-release
+# soname pin (libicu72 on bookworm, libicu76 on trixie).
+icu
