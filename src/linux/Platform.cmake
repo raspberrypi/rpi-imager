@@ -7,9 +7,33 @@ find_package(GnuTLS REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBURING liburing)
 
+# file_operations_linux.cpp uses the 64-bit user_data helpers
+# (io_uring_sqe_set_data64 / io_uring_prep_cancel64), added in liburing 2.2.
+# Some distros ship an older liburing (e.g. Ubuntu 22.04's 2.1) that provides
+# the library but not these helpers, so probe for them before enabling io_uring.
+set(LIBURING_USABLE FALSE)
 if(LIBURING_FOUND)
-    message(STATUS "Found liburing: ${LIBURING_VERSION}")
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_INCLUDES ${LIBURING_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_LIBRARIES ${LIBURING_LIBRARIES})
+    check_cxx_source_compiles("
+#include <liburing.h>
+int main() {
+    struct io_uring_sqe *sqe = 0;
+    io_uring_sqe_set_data64(sqe, 0);
+    io_uring_prep_cancel64(sqe, 0, 0);
+    return 0;
+}" LIBURING_HAS_DATA64)
+    unset(CMAKE_REQUIRED_INCLUDES)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+    set(LIBURING_USABLE ${LIBURING_HAS_DATA64})
+endif()
+
+if(LIBURING_USABLE)
+    message(STATUS "Found liburing: ${LIBURING_VERSION} (async io_uring enabled)")
     add_definitions(-DHAVE_LIBURING)
+elseif(LIBURING_FOUND)
+    message(WARNING "liburing ${LIBURING_VERSION} lacks the 64-bit user_data API (need >= 2.2); async io_uring disabled, falling back to synchronous writes")
 else()
     message(WARNING "liburing not found - async I/O will be disabled. Install with: sudo apt install liburing-dev")
 endif()
@@ -45,8 +69,8 @@ endif()
 
 set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
 
-# Add liburing if available
-if(LIBURING_FOUND)
+# Add liburing if usable (see the API probe above)
+if(LIBURING_USABLE)
     set(EXTRALIBS ${EXTRALIBS} ${LIBURING_LIBRARIES})
     include_directories(${LIBURING_INCLUDE_DIRS})
 endif()
