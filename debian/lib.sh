@@ -40,15 +40,20 @@ QT_VERSION=${QT_VERSION:-6.11.1}
 # auto: build Qt on cache miss (default); cached: require pre-built Qt; always: force rebuild
 QT_BUILD=${QT_BUILD:-auto}
 
-CHROOT_DIST=${CHROOT_DIST:-trixie}
-# Chroot name suffix (dir: <dist>-<arch>-<suffix>, e.g. trixie-arm64-rpi-imager).
+# bookworm (glibc 2.36) is the baseline for all arches: modern enough for Qt
+# 6.11 / liburing 2.2+ yet old enough that the resulting AppImages/.debs stay
+# portable to current Debian/Ubuntu/Raspberry Pi OS releases.
+CHROOT_DIST=${CHROOT_DIST:-bookworm}
+# Chroot name suffix (dir: <dist>-<arch>-<suffix>, e.g. bookworm-arm64-rpi-imager).
 CHROOT_SUFFIX=${CHROOT_SUFFIX:-rpi-imager}
 DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://deb.debian.org/debian}
 RASPBIAN_MIRROR=${RASPBIAN_MIRROR:-http://raspbian.raspberrypi.com/raspbian}
 RPI_MIRROR=${RPI_MIRROR:-http://archive.raspberrypi.com/debian}
 CHROOT_ARCHES=${CHROOT_ARCHES:-arm64 amd64 armhf}
-# auto/local: host arch builds locally, foreign arches in an mmdebstrap chroot; chroot: force chroot
-BUILDER=${BUILDER:-auto}
+# chroot: every arch (incl. the host) builds in its bookworm mmdebstrap chroot
+#   for a consistent, portable toolchain (default);
+# auto/local: host arch builds directly on the host, foreign arches in a chroot
+BUILDER=${BUILDER:-chroot}
 # auto: create missing chroots via mmdebstrap (rootless, default); 0: require manual setup
 CHROOT_AUTO_CREATE=${CHROOT_AUTO_CREATE:-auto}
 DEB_BUILD_PROFILES=${DEB_BUILD_PROFILES:-desktop cli}
@@ -90,13 +95,14 @@ release_arch_order() {
 	printf '%s\n' "$@"
 }
 
-# Foreign arches need a rootless mmdebstrap chroot or APPIMAGE_REMOTE_<arch>.
-# CHROOT_AUTO_CREATE=auto (default) creates missing chroots when possible.
-# Returns a space-separated list of foreign RELEASE_ARCHES missing chroot/remote.
+# Arches whose builder is 'chroot' need a rootless mmdebstrap chroot or
+# APPIMAGE_REMOTE_<arch>. CHROOT_AUTO_CREATE=auto (default) creates missing
+# chroots when possible. Returns a space-separated list of such RELEASE_ARCHES
+# missing a chroot/remote (with BUILDER=chroot this includes the host arch).
 missing_release_chroots() {
 	_missing=""
 	for _arch in $RELEASE_ARCHES; do
-		if [ "$_arch" = "$HOST_ARCH" ]; then
+		if [ "$(choose_builder "$_arch")" != chroot ]; then
 			continue
 		fi
 		if have_chroot "$_arch"; then
@@ -110,7 +116,9 @@ missing_release_chroots() {
 	printf '%s' "$_missing"
 }
 
-# Host arch builds locally; foreign arches build in their rootless mmdebstrap chroot.
+# Resolve the builder for <arch>: 'chroot' (rootless mmdebstrap, default for all
+# arches) or 'local' (build directly on the host, only for the host arch under
+# BUILDER=auto/local).
 choose_builder() {
 	_arch=$1
 	case "$BUILDER" in
@@ -516,6 +524,301 @@ appimage_pack_with_tool() {
 		echo "  Place it at appimage-tools/runtime-$_tarch or enable network access." >&2
 		return 1
 	fi
+}
+
+# Libraries that must always come from the host system and are never bundled.
+# Bundling these couples the AppImage to the build host's C library, graphics
+# stack or session bus; libsystemd/libdbus in particular broke lsblk and udisks
+# integration (#1304, #1577). Callers must declare the corresponding Debian
+# packages in debian/control instead.
+appimage_lib_excluded() {
+	case "$1" in
+	# glibc and the dynamic loader
+	ld-linux*|libc.so.*|libm.so.*|libdl.so.*|libpthread.so.*|librt.so.*) return 0 ;;
+	libresolv.so.*|libnsl.so.*|libutil.so.*|libcrypt.so.*|libanl.so.*) return 0 ;;
+	libthread_db.so.*|libnss_*|libBrokenLocale.so.*) return 0 ;;
+	# compiler runtimes: must match the host libstdc++ ABI
+	libstdc++.so.*|libgcc_s.so.*|libatomic.so.*) return 0 ;;
+	# GPU stack: must match the host's drivers
+	libGL.so.*|libGLX.so.*|libEGL.so.*|libOpenGL.so.*|libGLdispatch.so.*) return 0 ;;
+	libglapi.so.*|libgbm.so.*|libdrm.so.*|libvulkan.so.*) return 0 ;;
+	# display server and input: must match the running X/Wayland session
+	libX11-xcb.so.*|libxcb*.so.*|libX*.so.*) return 0 ;;
+	libxkbcommon.so.*|libxkbcommon-x11.so.*|libwayland-*.so.*) return 0 ;;
+	libinput.so.*|libmtdev.so.*|libevdev.so.*|libwacom.so.*) return 0 ;;
+	# session and device integration (#1304, #1577)
+	libsystemd.so.*|libdbus-1.so.*|libcap.so.*|libudev.so.*|libselinux.so.*) return 0 ;;
+	# font stack: must match the host's fontconfig cache and configuration
+	libfontconfig.so.*|libfreetype.so.*|libexpat.so.*) return 0 ;;
+	esac
+	return 1
+}
+
+# Multiarch triplet used to locate target-architecture system libraries. The
+# build stage runs inside the target-arch chroot, so the local triplet is the
+# one we want.
+appimage_multiarch_triplet() {
+	_t=""
+	if command -v dpkg-architecture >/dev/null 2>&1; then
+		_t=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || true)
+	fi
+	if [ -z "$_t" ] && command -v gcc >/dev/null 2>&1; then
+		_t=$(gcc -print-multiarch 2>/dev/null || true)
+	fi
+	if [ -z "$_t" ]; then
+		for _d in /usr/lib/*-linux-gnu*; do
+			[ -d "$_d" ] || continue
+			_t=$(basename "$_d")
+			break
+		done
+	fi
+	[ -n "$_t" ] || return 1
+	printf '%s\n' "$_t"
+}
+
+appimage_list_elf_objects() {
+	find "$1/usr/bin" "$1/usr/lib" "$1/usr/plugins" "$1/usr/qml" \
+		-type f \( -name '*.so' -o -name '*.so.*' -o -perm -u+x \) 2>/dev/null
+}
+
+embedded_list_elf_objects() {
+	find "$1/bin" "$1/lib" "$1/plugins" "$1/qml" \
+		-type f \( -name '*.so' -o -name '*.so.*' -o -perm -u+x \) 2>/dev/null
+}
+
+# Libraries the embedded package takes from the host. Much narrower than
+# appimage_lib_excluded(): the embedded tree is deliberately self-contained
+# under /opt, so only the C library, the compiler runtime, the GPU stack and
+# libsystemd stay external. libsystemd in particular must come from the host to
+# work with DBus (#1304).
+embedded_lib_excluded() {
+	case "$1" in
+	ld-linux*|libc.so.*|libm.so.*|libdl.so.*|libpthread.so.*|librt.so.*) return 0 ;;
+	libresolv.so.*|libnsl.so.*|libutil.so.*|libcrypt.so.*|libanl.so.*) return 0 ;;
+	libthread_db.so.*|libnss_*|libBrokenLocale.so.*) return 0 ;;
+	libstdc++.so.*|libgcc_s.so.*) return 0 ;;
+	libGL.so.*|libGLX.so.*|libEGL.so.*|libOpenGL.so.*|libGLdispatch.so.*) return 0 ;;
+	libglapi.so.*|libvulkan.so.*) return 0 ;;
+	libX11.so.*|libX11-xcb.so.*|libxcb*.so.*|libwayland-*.so.*) return 0 ;;
+	libsystemd.so.*) return 0 ;;
+	esac
+	return 1
+}
+
+# Shared worker for the two closure helpers. Completes the transitive
+# DT_NEEDED closure of the objects listed by $2 <root> into $1, skipping
+# sonames rejected by the predicate $3 and resolving against $4. Reads ELF
+# headers with readelf rather than shelling out to ldd, so it works unchanged
+# on a foreign-architecture tree. Call after pruning unwanted plugins, so
+# their dependencies are not dragged in.
+deploy_lib_closure_core() {
+	_libdir=$1
+	_lister=$2
+	_root=$3
+	_excl=$4
+	_searchdirs=$5
+	mkdir -p "$_libdir"
+
+	_round=0
+	_missing=""
+	while [ "$_round" -lt 16 ]; do
+		_round=$((_round + 1))
+		_added=0
+		# shellcheck disable=SC2046
+		for _obj in $("$_lister" "$_root"); do
+			# shellcheck disable=SC2046
+			for _need in $(readelf -d "$_obj" 2>/dev/null | \
+				sed -n 's/.*(NEEDED)[^[]*\[\([^]]*\)\].*/\1/p'); do
+				[ -n "$_need" ] || continue
+				[ -e "$_libdir/$_need" ] && continue
+				"$_excl" "$_need" && continue
+				_found=""
+				for _dir in $_searchdirs; do
+					[ -f "$_dir/$_need" ] || continue
+					cp -L "$_dir/$_need" "$_libdir/$_need"
+					echo "  bundled $_need (from $_dir)"
+					_found=1
+					_added=1
+					break
+				done
+				if [ -z "$_found" ]; then
+					case " $_missing " in
+					*" $_need "*) ;;
+					*) _missing="$_missing $_need" ;;
+					esac
+				fi
+			done
+		done
+		[ "$_added" -eq 0 ] && break
+	done
+
+	if [ "$_round" -ge 16 ]; then
+		echo "Warning: library closure did not converge after 16 rounds" >&2
+	fi
+	if [ -n "$_missing" ]; then
+		echo "Error: unresolved libraries, not excluded and not found on the build system:" >&2
+		for _m in $_missing; do
+			echo "  $_m" >&2
+		done
+		echo "  Add the providing package to debian/chroot-packages, or add the" >&2
+		echo "  soname to the exclusion predicate and declare it in debian/control." >&2
+		return 1
+	fi
+}
+
+# Search path for resolving DT_NEEDED against the target's system libraries.
+deploy_lib_search_dirs() {
+	_qtlib=${1:-}
+	_triplet=$(appimage_multiarch_triplet || true)
+	_dirs=""
+	[ -n "$_qtlib" ] && _dirs="$_qtlib"
+	if [ -n "$_triplet" ]; then
+		_dirs="$_dirs /usr/lib/$_triplet /lib/$_triplet"
+	fi
+	printf '%s /usr/lib /lib\n' "$_dirs"
+}
+
+appimage_deploy_lib_closure() {
+	_appdir=$1
+	echo "Bundling library closure (triplet: $(appimage_multiarch_triplet || echo unknown))..."
+	deploy_lib_closure_core "$_appdir/usr/lib" appimage_list_elf_objects \
+		"$_appdir" appimage_lib_excluded "$(deploy_lib_search_dirs "${2:-}")"
+}
+
+# Complete the closure of the vendored /opt tree.
+#
+# The explicit cp -d list in create-embedded.sh is deliberately curated: this
+# package is often fetched over the network, so payload size matters. This does
+# not replace that curation -- it is purely additive, and only copies libraries
+# something still in the tree actually names in DT_NEEDED. Because it runs
+# after the pruning step, dependencies of removed plugins are not pulled back
+# in, so the result stays close to the curated set: it adds the Qt libraries
+# the wholesale `cp -r` of the QML tree references but the list forgot.
+#
+# If this ever regresses size unacceptably, the way back is to drop the
+# embedded_deploy_lib_closure call from create-embedded.sh and go back to
+# curating by hand -- but then prune the QML tree to match, or the plugins will
+# reference libraries that are not there. Compare with:
+#     debian/lib.sh: embedded_list_elf_objects + readelf -d
+# to see what the tree actually needs before trimming.
+#
+# For reference, the curated Qt set at the point this closure was introduced --
+# 17 `cp -d` lines in create-embedded.sh, which remain the authoritative copy
+# unless someone deletes them:
+#
+#     libQt6Core          libQt6Gui           libQt6DBus (linuxfb plugin)
+#     libQt6Quick         libQt6Qml           libQt6QmlCore
+#     libQt6QmlMeta       libQt6Network       libQt6Svg
+#     libQt6QuickTemplates2                   libQt6QuickLayouts
+#     libQt6QuickDialogs2                     libQt6LabsFolderListModel
+#     libQt6QuickControls2Basic               libQt6QuickControls2Impl
+#     libQt6QuickControls2Material            libQt6QuickControls2MaterialStyleImpl
+#
+# What this closure adds on top is small, because create-embedded.sh now also
+# prunes the QML modules the UI never imports. What remains are libraries the
+# curated list genuinely forgot:
+#
+#     libQt6QuickControls2              QtQuick.Controls is imported by ~29 QML
+#                                       files; the list had the Basic/Material
+#                                       styles but not Controls2 itself
+#     libQt6QuickControls2BasicStyleImpl  needed by the Basic style fallback
+#     libQt6QmlModels                   NEEDED by libQt6Quick itself
+#     libQt6OpenGL                      NEEDED by libQt6Quick itself
+#     libQt6QuickDialogs2QuickImpl      needed by the (curated) Dialogs module
+#     libQt6QuickDialogs2Utils
+#
+# So the pre-existing bug was real: libQt6Quick could not have resolved
+# libQt6QmlModels or libQt6OpenGL, and the QtQuick.Controls plugin could not
+# have resolved libQt6QuickControls2. Do not "fix" a size regression by
+# dropping these -- prune QML modules instead, which removes both the plugin
+# and its library together.
+embedded_deploy_lib_closure() {
+	_optdir=$1
+	echo "Completing embedded library closure (triplet: $(appimage_multiarch_triplet || echo unknown))..."
+	deploy_lib_closure_core "$_optdir/lib" embedded_list_elf_objects \
+		"$_optdir" embedded_lib_excluded "$(deploy_lib_search_dirs "${2:-}")"
+}
+
+# Prune the deployed Qt QML tree, its style libraries and the QML tooling down
+# to what the UI actually imports. Shared by the AppImage and embedded packaging
+# paths so both ship the same QML surface -- they deploy Qt differently
+# (linuxdeploy/manual copy vs a curated /opt tree) but there is no reason for
+# them to disagree about which modules the app needs.
+#
+# Imager's QML imports, and nothing more, are:
+#   QtQuick, QtQuick.Controls, QtQuick.Controls.Material, QtQuick.Layouts,
+#   QtQuick.Window, QtCore, QtQml, Qt.labs.folderlistmodel
+# Re-derive with:
+#   grep -rhoE '^\s*import\s+[A-Za-z0-9_.]+' --include='*.qml' src/ | sort -u
+#
+# Every module removed here also removes the need to ship the Qt library its
+# plugin links against (QtQuick/Effects -> libQt6QuickEffects, and so on), so
+# prune modules rather than trimming libraries by hand: dropping a library
+# whose plugin is still deployed leaves the plugin unable to load.
+#
+# $1 qml dir, $2 lib dir, $3 plugins dir
+prune_qml_to_imports() {
+	_qmldir=$1
+	_libdir=$2
+	_plugindir=$3
+
+	# Control styles: Material is the one in use, Basic is the fallback.
+	for _style in Universal Fusion Imagine FluentWinUI3; do
+		rm -rf "$_qmldir/QtQuick/Controls/$_style"
+		rm -f "$_libdir/libQt6QuickControls2$_style.so"*
+		rm -f "$_libdir/libQt6QuickControls2${_style}StyleImpl.so"*
+	done
+	rm -f "$_libdir/libQt6QuickControls2WindowsStyleImpl.so"*
+
+	# Modules the UI never imports.
+	for _mod in QtQuick/Effects QtQuick/Particles QtQuick/Shapes \
+		QtQuick/Timeline QtQuick/VectorImage \
+		QtQml/WorkerScript QtQml/XmlListModel
+	do
+		rm -rf "$_qmldir/$_mod"
+	done
+
+	# ...and the libraries only those modules' plugins linked against. The
+	# AppImage path copies libQt6*.so* wholesale, so removing the module alone
+	# leaves the library behind; the embedded path never copies them, so these
+	# are no-ops there. Verified to have no remaining referrer with:
+	#   readelf -d <every surviving object> | grep libQt6<name>
+	#
+	# libQt6QmlWorkerScript is deliberately NOT in this list: libQt6QmlMeta
+	# links it directly, so it is required even though QtQml/WorkerScript is
+	# not imported. Re-run the check above before adding anything here.
+	for _lib in QuickEffects QuickParticles \
+		QuickShapes QuickShapesDesignHelpers \
+		QuickTimeline QuickTimelineBlendTrees \
+		QuickVectorImage QuickVectorImageGenerator QuickVectorImageHelpers \
+		QmlXmlListModel
+	do
+		rm -f "$_libdir/libQt6$_lib.so"*
+	done
+
+	# Development-only tooling and test modules.
+	rm -rf "$_qmldir/QtTest"*
+	rm -rf "$_qmldir/QtQuick/tooling"
+	[ -n "$_plugindir" ] && rm -rf "$_plugindir/qmltooling"
+
+	# QtWidgets is not used by the QML UI.
+	rm -f "$_libdir/libQt6Widgets.so"*
+	rm -f "$_libdir"/libQt*Widgets.so*
+
+	return 0
+}
+
+# Drop unversioned *.so development symlinks copied in from the build system.
+# Only versioned sonames are used at runtime, and these links point at absolute
+# host paths, so they ship as dangling files.
+prune_dev_symlinks() {
+	_libdir=$1
+	for _l in "$_libdir"/*.so; do
+		[ -L "$_l" ] || continue
+		case "$(readlink "$_l")" in
+		/*) rm -f "$_l"; echo "  pruned dev symlink $(basename "$_l")" ;;
+		esac
+	done
 }
 
 # shellcheck disable=SC1091

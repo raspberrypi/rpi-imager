@@ -83,6 +83,10 @@ wasm-simd128
 # Domain validation
 topleveldomain
 
+# ICU: see features_exclude.list — unused by rpi-imager, and excluding it
+# keeps the CLI package small (libicudata alone is ~30 MB).
+icu
+
 # Misc
 poll-exit-on-error
 socks5

@@ -61,7 +61,7 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
     install_linux_basic_deps
 
     sudo apt-get install -y \
-        libfontconfig1-dev libfreetype6-dev libicu-dev \
+        libfontconfig1-dev libfreetype6-dev \
         libnss3-dev libssl-dev \
         libdbus-1-dev libglib2.0-dev libsqlite3-dev \
         libdouble-conversion-dev libpcre2-dev \

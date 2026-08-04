@@ -63,7 +63,11 @@ case "$ARCH" in
 		;;
 esac
 
-_INCLUDE=git,ca-certificates
+# apt is included explicitly: --variant=minbase resolves to mmdebstrap's
+# 'required' set (?priority(required)), and Raspbian bookworm ships apt as
+# Priority: important (Debian bookworm and Raspbian trixie both mark it
+# required), so minbase alone leaves the armhf chroot without apt-get.
+_INCLUDE=apt,git,ca-certificates
 if [ "$ARCH" != "$HOST_ARCH" ]; then
 	_INCLUDE="$_INCLUDE,qemu-user-static,binfmt-support"
 fi
@@ -88,6 +92,12 @@ trap 'rm -rf "$_KEYRING_STAGE" "$_HOOK_ROOT" "$_SETUP_HOOK" "$_CUSTOMIZE_HOOK"' 
 cat >"$_SETUP_HOOK" <<EOF
 #!/bin/sh
 set -eu
+# Hooks run from a staged /tmp tree without lib.sh/release.conf, so the chosen
+# suite and mirrors must be passed through explicitly.
+export CHROOT_DIST='$CHROOT_DIST'
+export DEBIAN_MIRROR='$DEBIAN_MIRROR'
+export RASPBIAN_MIRROR='$RASPBIAN_MIRROR'
+export RPI_MIRROR='$RPI_MIRROR'
 exec sh '$_HOOK_ROOT/debian/mmdebstrap-setup-hook.sh' "\$1" '$ARCH' '$_KEYRING'
 EOF
 chmod 0755 "$_SETUP_HOOK"
@@ -98,8 +108,17 @@ set -eu
 root=\$1
 export DEBIAN_FRONTEND=noninteractive
 export KEYRING_CACHE='$_KEYRING_CACHE_ABS'
+export CHROOT_DIST='$CHROOT_DIST'
+export DEBIAN_MIRROR='$DEBIAN_MIRROR'
+export RASPBIAN_MIRROR='$RASPBIAN_MIRROR'
+export RPI_MIRROR='$RPI_MIRROR'
 sh '$_HOOK_ROOT/debian/mmdebstrap-configure-apt.sh' "\$root" '$ARCH'
-chroot "\$root" sh '$_HOOK_ROOT/debian/chroot-apt-install.sh' $(tr '\n' ' ' <"$TOP/debian/chroot-packages")
+# The staged hook tree lives on the host /tmp; a bare 'chroot "\$root" sh
+# <hostpath>' resolves that path inside the chroot, where it does not exist.
+# Copy the tree in, run it, then remove it.
+cp -a '$_HOOK_ROOT/debian' "\$root/tmp/rpi-imager-hooks"
+chroot "\$root" sh /tmp/rpi-imager-hooks/chroot-apt-install.sh $(tr '\n' ' ' <"$TOP/debian/chroot-packages")
+rm -rf "\$root/tmp/rpi-imager-hooks"
 touch "\$root/.rpi-imager-chroot-ok"
 EOF
 chmod 0755 "$_CUSTOMIZE_HOOK"

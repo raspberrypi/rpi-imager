@@ -19,8 +19,9 @@ fi
 rm -f "$ROOT/etc/apt/sources.list.d/bootstrap.sources"
 case "$ARCH" in
 	arm64|armhf)
-		# archive.raspberrypi.com keys still use SHA1 certifications; trixie
-		# sqv rejects those after 2026-02-01 unless policy is extended.
+		# archive.raspberrypi.com keys still use SHA1 certifications; on
+		# sequoia-based apt (e.g. trixie) sqv rejects those after 2026-02-01
+		# unless policy is extended. Harmless no-op on gpgv-based apt (bookworm).
 		install -d "$ROOT/etc/crypto-policies/back-ends"
 		cat >"$ROOT/etc/crypto-policies/back-ends/apt-sequoia.config" <<'EOF'
 [hash_algorithms]

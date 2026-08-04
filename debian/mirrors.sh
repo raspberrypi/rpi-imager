@@ -13,6 +13,9 @@ DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://deb.debian.org/debian}
 RASPBIAN_MIRROR=${RASPBIAN_MIRROR:-http://raspbian.raspberrypi.com/raspbian}
 RPI_MIRROR=${RPI_MIRROR:-http://archive.raspberrypi.com/debian}
 CHROOT_ARCHES=${CHROOT_ARCHES:-arm64 amd64 armhf}
+# Keep in sync with lib.sh; the mmdebstrap hooks run from a staged /tmp tree
+# without lib.sh, so this default (and the exported CHROOT_DIST) must match.
+CHROOT_DIST=${CHROOT_DIST:-bookworm}
 
 CHROOT_APT_DIR=${CHROOT_APT_DIR:-$TOP/debian/chroot-apt}
 
@@ -32,23 +35,23 @@ chroot_configure_apt_dir() {
 	case "$arch" in
 		amd64)
 			install_apt_sources_into_chroot "$root" \
-				"$CHROOT_APT_DIR/debian-trixie.sources" debian.sources
+				"$CHROOT_APT_DIR/debian-${CHROOT_DIST}.sources" debian.sources
 			;;
 		arm64)
 			install_apt_sources_into_chroot "$root" \
-				"$CHROOT_APT_DIR/debian-trixie.sources" debian.sources
+				"$CHROOT_APT_DIR/debian-${CHROOT_DIST}.sources" debian.sources
 			install_apt_sources_into_chroot "$root" \
-				"$CHROOT_APT_DIR/rpi-trixie.sources" raspberrypi.sources
+				"$CHROOT_APT_DIR/rpi-${CHROOT_DIST}.sources" raspberrypi.sources
 			install_apt_preferences_into_chroot "$root" \
 				"$CHROOT_APT_DIR/preferences-arm64.pref" 10-rpi-imager-cascade.pref
 			;;
 		armhf)
 			install_apt_sources_into_chroot "$root" \
-				"$CHROOT_APT_DIR/raspbian-trixie.sources" raspbian.sources
+				"$CHROOT_APT_DIR/raspbian-${CHROOT_DIST}.sources" raspbian.sources
 			install_apt_sources_into_chroot "$root" \
-				"$CHROOT_APT_DIR/rpi-trixie.sources" raspberrypi.sources
+				"$CHROOT_APT_DIR/rpi-${CHROOT_DIST}.sources" raspberrypi.sources
 			install_apt_sources_into_chroot "$root" \
-				"$CHROOT_APT_DIR/debian-trixie.sources" debian.sources
+				"$CHROOT_APT_DIR/debian-${CHROOT_DIST}.sources" debian.sources
 			install_apt_preferences_into_chroot "$root" \
 				"$CHROOT_APT_DIR/preferences-armhf.pref" 10-rpi-imager-cascade.pref
 			;;

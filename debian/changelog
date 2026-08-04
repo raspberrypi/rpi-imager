@@ -57,6 +57,32 @@ rpi-imager (2.0.10-1) unstable; urgency=medium
     - Update bmap-tools repo URL
   * Performance:
     - Refactor analyse_performance script
+  * debian/build-source.sh: collect the generated _source.buildinfo. It
+    was listed in _source.changes but discarded with the temporary build
+    directory, leaving the source upload referencing a missing file.
+  * create-appimage.sh, create-appimage-cli.sh: bundle the transitive
+    library closure of the staged AppDir via
+    appimage_deploy_lib_closure() in debian/lib.sh. The chroot build
+    path never invoked linuxdeploy, so only Qt itself was bundled and
+    around twenty libraries (PCRE2, zstd, brotli, GnuTLS, glib, double-
+    conversion, liburing) were silently taken from the host. Resolution
+    reads ELF headers with readelf rather than ldd, so it also works for
+    foreign-architecture AppDirs where linuxdeploy cannot run; arm64 and
+    armhf were never correctly bundled before.
+  * qt/features_exclude.list, qt/features_exclude.cli.list: build Qt
+    with -no-feature-icu. No ICU-backed Qt feature is used (UTF-8
+    conversion only, no QCollator, timezones handled as IANA identifier
+    strings) and ICU was enabled purely by configure autodetection.
+    Removes around 12.6 MB per binary package and drops the per-release
+    libicu soname pin that tied the packages to a single Debian release.
+  * create-appimage.sh: drop the JPEG 2000 image format plugin. It was
+    staged on amd64 only and its libjasper dependency was never shipped
+    or declared.
+  * debian/control: declare the host-coupled libraries the AppImages
+    resolve from the system (xcb, xkbcommon, Wayland, EGL/GL, DRM/GBM,
+    libinput, D-Bus, fontconfig, FreeType, libstdc++, libatomic).
+    dh_shlibdeps cannot inspect the AppImage payload, so these were
+    previously undeclared.
 
  -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 19 Jun 2026 14:35:14 +0100
 
