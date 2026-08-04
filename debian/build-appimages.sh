@@ -15,13 +15,8 @@ ARCH="${1:?usage: build-appimages.sh <arm64|amd64|armhf>}"
 IMG_ARCH=$(normalize_image_arch "$(deb_to_image_arch "$ARCH")")
 CHROOT=$(chroot_name "$ARCH")
 
-# True only when this arch builds directly on the host (BUILDER=auto/local).
-# With BUILDER=chroot (default) even the host arch builds in its chroot: the
-# AppDir is produced inside the chroot and packed into an AppImage on the host.
-_local_build() {
-	[ "$(choose_builder "$ARCH")" = local ]
-}
-
+# Every arch, the host included, builds in its chroot: the AppDir is produced
+# inside the chroot and packed into an AppImage on the host.
 run_build_env() {
 	# shellcheck disable=SC2086
 	export_cmake_parallel
@@ -29,11 +24,6 @@ run_build_env() {
 }
 
 run_in_build_context() {
-	if _local_build; then
-		run_build_env "$@"
-		return $?
-	fi
-
 	if ! ensure_chroot "$ARCH"; then
 		exit 1
 	fi
@@ -73,38 +63,20 @@ _pack_on_host() {
 }
 
 _build_in_context() {
-	if _local_build; then
-		run_in_build_context "$@"
-		return $?
-	fi
 	run_in_build_context env APPIMAGE_TOOL_ARCH="$HOST_ARCH" APPIMAGE_PACKAGING=build "$@"
 }
 
 echo "build-appimages: desktop AppImage ($IMG_ARCH)..."
-if _local_build; then
-	if run_in_build_context "$TOP/create-appimage.sh" "--arch=$IMG_ARCH" "--try-build-qt"; then
-		:
-	elif [ "$ARCH" = armhf ]; then
-		echo "build-appimages: desktop AppImage failed for armhf (CLI may still succeed)" >&2
-	else
-		exit 1
-	fi
+if _build_in_context "$TOP/create-appimage.sh" "--arch=$IMG_ARCH" "--try-build-qt"; then
+	_pack_on_host "$TOP/create-appimage.sh" "--arch=$IMG_ARCH" --no-clean || exit 1
+elif [ "$ARCH" = armhf ]; then
+	echo "build-appimages: desktop AppImage failed for armhf (CLI may still succeed)" >&2
 else
-	if _build_in_context "$TOP/create-appimage.sh" "--arch=$IMG_ARCH" "--try-build-qt"; then
-		_pack_on_host "$TOP/create-appimage.sh" "--arch=$IMG_ARCH" --no-clean || exit 1
-	elif [ "$ARCH" = armhf ]; then
-		echo "build-appimages: desktop AppImage failed for armhf (CLI may still succeed)" >&2
-	else
-		exit 1
-	fi
+	exit 1
 fi
 
 echo "build-appimages: CLI AppImage ($IMG_ARCH)..."
-if _local_build; then
-	run_in_build_context "$TOP/create-appimage-cli.sh" "--arch=$IMG_ARCH"
-else
-	_build_in_context "$TOP/create-appimage-cli.sh" "--arch=$IMG_ARCH"
-	_pack_on_host "$TOP/create-appimage-cli.sh" "--arch=$IMG_ARCH" --no-clean
-fi
+_build_in_context "$TOP/create-appimage-cli.sh" "--arch=$IMG_ARCH"
+_pack_on_host "$TOP/create-appimage-cli.sh" "--arch=$IMG_ARCH" --no-clean
 
 echo "build-appimages: done for $ARCH"
