@@ -116,8 +116,10 @@ PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:sp
 echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION)"
 
 # Resolve Qt (vendored cache, /opt/Qt, or system qmake6).
+# The pack stage only wraps an AppDir built earlier, so it never needs Qt — even
+# when target arch == tool arch (host-arch chroot build packed on the host).
 QT_DIR=""
-if [ "$APPIMAGE_PACKAGING" != pack ] || [ "$ARCH" = "$TOOL_ARCH" ]; then
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
 if ! QT_DIR=$(qt_resolve_desktop_dir "$ARCH"); then
     if [ "$TRY_BUILD_QT" -eq 1 ] && [ -x "$SCRIPT_DIR/debian/ensure-qt.sh" ]; then
         _deb_arch=$ARCH
@@ -304,15 +306,16 @@ EOF
 fi
 fi
 
-# Deploy Qt dependencies (build stage, or native all-in-one / pack)
-if [ "$APPIMAGE_PACKAGING" = pack ] && [ "$ARCH" != "$TOOL_ARCH" ]; then
-    echo "create-appimage: using AppDir from build stage (cross pack)"
+# Deploy Qt dependencies (build stage, or native all-in-one). The pack stage
+# reuses the AppDir produced by the build stage and only wraps it.
+if [ "$APPIMAGE_PACKAGING" = pack ]; then
+    echo "create-appimage: using AppDir from build stage (pack)"
 else
 echo "Deploying Qt dependencies using $QT_DIR..."
 export QML_SOURCES_PATHS="$QML_SOURCES_PATH"
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 
-if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ]; then
+if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
 export APPIMAGE_EXTRACT_AND_RUN=1
 export QMAKE="$QT_DIR/bin/qmake"
 export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
@@ -328,7 +331,9 @@ else
             cp -a "$QT_DIR/plugins/$_plug/." "$APPDIR/usr/plugins/$_plug/"
         fi
     done
-    for _qml in QtCore QtGui QtQml QtQuick QtQuickControls2 QML; do
+    # "Qt" carries Qt.labs.* (e.g. Qt.labs.folderlistmodel used by ImFileDialog.qml);
+    # the native linuxdeploy path resolves these from QML imports automatically.
+    for _qml in Qt QtCore QtGui QtQml QtQuick QtQuickControls2 QML; do
         if [ -d "$QT_DIR/qml/$_qml" ]; then
             mkdir -p "$APPDIR/usr/qml/$_qml"
             cp -a "$QT_DIR/qml/$_qml/." "$APPDIR/usr/qml/$_qml/"
@@ -352,41 +357,32 @@ rm -rf "$APPDIR/usr/share/doc/libsystemd"*
 rm -rf "$APPDIR/usr/share/doc/libdbus"*
 rm -rf "$APPDIR/usr/share/doc/libcap"*
 
-# Remove unused QML Controls themes (size optimization)
-rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Universal"
-rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Fusion"
-rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Imagine"
-rm -rf "$APPDIR/usr/qml/QtQuick/Controls/FluentWinUI3"
-
-# Remove QtWidgets if included (we don't use it)
-rm -f "$APPDIR/usr/lib/libQt6Widgets.so"*
-rm -f "$APPDIR/usr/lib/libQt"*"Widgets.so"*
-
-# Remove QML debugging tools (development-only)
-rm -rf "$APPDIR/usr/qml/QtTest"*
-rm -rf "$APPDIR/usr/plugins/qmltooling"
+# Prune the QML tree, style libraries and tooling to what the UI imports.
+# Shared with the embedded packaging path -- see prune_qml_to_imports() in
+# debian/lib.sh for the import list and how to re-derive it.
+prune_qml_to_imports "$APPDIR/usr/qml" "$APPDIR/usr/lib" "$APPDIR/usr/plugins"
 
 # Remove Qt translations (we excluded them but remove any that might have slipped through)
 rm -rf "$APPDIR/usr/translations"
 rm -rf "$APPDIR/usr/share/qt6/translations"
 
 # Remove unnecessary image format plugins (consistency with all platforms)
-# Excludes: TIFF, WebP, GIF (less common formats)
+# Excludes: TIFF, WebP, GIF, JPEG 2000 (less common formats)
 # Keeps: JPEG, PNG, SVG (common formats + icons)
+# libqjp2 additionally pulls in libjasper, which is not in the build chroot.
 rm -f "$APPDIR/usr/plugins/imageformats/libqtiff.so"
 rm -f "$APPDIR/usr/plugins/imageformats/libqwebp.so"
 rm -f "$APPDIR/usr/plugins/imageformats/libqgif.so"
+rm -f "$APPDIR/usr/plugins/imageformats/libqjp2.so"
 
-# Remove unused Qt Quick Controls 2 style libraries (size optimization)
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2Fusion.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2Universal.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2Imagine.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2FluentWinUI3.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2FusionStyleImpl.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2UniversalStyleImpl.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2ImagineStyleImpl.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2FluentWinUI3StyleImpl.so"*
-rm -f "$APPDIR/usr/lib/libQt6QuickControls2WindowsStyleImpl.so"*
+# Bundle the non-host-coupled dependency closure of whatever survived pruning.
+# The manual deployment branch above copies only Qt itself, so without this the
+# AppImage relies on the host for ICU, PCRE2, zstd and friends -- ICU in
+# particular is soname-pinned per Debian release (libicu72 on bookworm), which
+# would tie the package to a single distro version.
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
+    appimage_deploy_lib_closure "$APPDIR" "$QT_DIR/lib" || exit 1
+fi
 
 if [ "$APPIMAGE_PACKAGING" = build ]; then
     prepare_appdir_for_appimagetool "$APPDIR" com.raspberrypi.rpi-imager
@@ -401,7 +397,7 @@ rm -f "$PWD/rpi-imager-$ARCH.AppImage"
 
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 
-if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ]; then
+if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
 export APPIMAGE_EXTRACT_AND_RUN=1
 "$LINUXDEPLOY" --appdir="$APPDIR" \
     --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \

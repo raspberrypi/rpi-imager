@@ -18,7 +18,8 @@ QT_CACHE=.debian/qt
 # QT_DESKTOP_BUILD=required
 
 # Rootless cross-build chroot settings (mmdebstrap under CHROOT_ROOT, no sudo).
-CHROOT_DIST=trixie
+# bookworm is the baseline for every arch (portable glibc 2.36; Qt 6.11 + liburing 2.2+ ok).
+CHROOT_DIST=bookworm
 CHROOT_SUFFIX=rpi-imager
 # CHROOT_ROOT=.debian/chroots
 # KEYRING_CACHE=.debian/archive-keyrings   # fetched from archives for mmdebstrap --keyring
@@ -32,8 +33,10 @@ CHROOT_SUFFIX=rpi-imager
 # RASPBIAN_MIRROR=http://raspbian.raspberrypi.com/raspbian
 # RPI_MIRROR=http://archive.raspberrypi.com/debian
 
-# Build backend: auto/local (host builds locally, foreign in mmdebstrap chroot) or chroot.
-BUILDER=auto
+# Build backend:
+#   chroot (default): every arch (incl. the host) builds in its bookworm chroot
+#   auto/local: host arch builds directly on the host, foreign arches in a chroot
+BUILDER=chroot
 # auto (default): create missing chroots via mmdebstrap (rootless, no sudo)
 # CHROOT_AUTO_CREATE=auto
 # CHROOT_AUTO_CREATE=0

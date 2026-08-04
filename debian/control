@@ -11,7 +11,17 @@ Build-Profiles: <desktop>
 Architecture: amd64 arm64 armhf
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2,
          util-linux (>= 2.37), pkexec,
-         libfontconfig1, libx11-6, libegl1, libgl1
+         libstdc++6, libatomic1,
+         libfontconfig1, libfreetype6,
+         libx11-6, libx11-xcb1, libxcb1, libxcb-cursor0, libxcb-glx0,
+         libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0,
+         libxcb-render0, libxcb-render-util0, libxcb-shape0, libxcb-shm0,
+         libxcb-sync1, libxcb-xfixes0, libxcb-xkb1,
+         libxkbcommon0, libxkbcommon-x11-0,
+         libwayland-client0, libwayland-cursor0,
+         libegl1, libgl1, libopengl0,
+         libdbus-1-3,
+         libdrm2, libgbm1, libinput10, libudev1
 Recommends: udisks2
 Conflicts: rpi-imager-embedded
 Description: Raspberry Pi Imaging utility
@@ -22,7 +32,11 @@ Build-Profiles: <embedded>
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends},
          dosfstools, fdisk, util-linux (>= 2.37), libdrm2,
-         libinput10, libudev1
+         libinput10, libudev1,
+         libstdc++6,
+         libegl1, libgl1, libopengl0,
+         libx11-6,
+         libsystemd0
 Suggests: rpi-eeprom, firmware-brcm80211
 Conflicts: rpi-imager
 Description: Raspberry Pi Imaging utility for embedded systems
@@ -38,8 +52,9 @@ Description: Raspberry Pi Imaging utility for embedded systems
 Package: rpi-imager-cli
 Build-Profiles: <cli>
 Architecture: amd64 arm64 armhf
-Depends: ${shlibs:Depends}, ${misc:Depends}, 
-         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37)
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37),
+         libstdc++6, libatomic1
 Conflicts: rpi-imager, rpi-imager-embedded
 Description: Raspberry Pi Imaging utility (command-line only)
  A command-line tool for creating bootable media for Raspberry Pi devices.

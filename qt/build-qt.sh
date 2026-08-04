@@ -63,7 +63,7 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
         libxcb-sync-dev libxcb-util-dev libxcb-xfixes0-dev \
         libxcb-xinerama0-dev libxcb-xkb-dev \
         libinput-dev libxkbcommon-dev libxkbcommon-x11-dev \
-        libfontconfig1-dev libfreetype6-dev libicu-dev \
+        libfontconfig1-dev libfreetype6-dev \
         libdrm-dev libegl1-mesa-dev libgbm-dev libgles2-mesa-dev \
         libvulkan-dev \
         libjpeg-dev libpng-dev zlib1g-dev \

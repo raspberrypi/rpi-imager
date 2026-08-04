@@ -19,7 +19,7 @@ if [ -f "$TOP/debian/release.conf" ]; then
 	. "$TOP/debian/release.conf"
 fi
 
-CHROOT_DIST=${CHROOT_DIST:-trixie}
+CHROOT_DIST=${CHROOT_DIST:-bookworm}
 DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://deb.debian.org/debian}
 RASPBIAN_MIRROR=${RASPBIAN_MIRROR:-http://raspbian.raspberrypi.com/raspbian}
 

@@ -603,15 +603,11 @@ fi
 # ---------------------------------------------------------------------------
 echo "Applying embedded system optimisations..."
 
-# Remove unused QML Controls themes (size optimisation)
-rm -rf "$OPTDIR/qml/QtQuick/Controls/Universal"
-rm -rf "$OPTDIR/qml/QtQuick/Controls/Fusion"
-rm -rf "$OPTDIR/qml/QtQuick/Controls/Imagine"
-rm -rf "$OPTDIR/qml/QtQuick/Controls/FluentWinUI3"
-
-# Remove QML debugging tools
-rm -rf "$OPTDIR/qml/QtTest"* 2>/dev/null || true
-rm -rf "$OPTDIR/plugins/qmltooling" 2>/dev/null || true
+# Prune the QML tree, style libraries and tooling to what the UI imports. The
+# `cp -r` of QtQuick/QtQml above is wholesale, so unused modules arrive whether
+# or not anything imports them. Shared with the AppImage packaging path -- see
+# prune_qml_to_imports() in debian/lib.sh for the import list.
+prune_qml_to_imports "$OPTDIR/qml" "$OPTDIR/lib" "$OPTDIR/plugins"
 
 # Remove Qt translations (not needed on embedded systems)
 rm -rf "$OPTDIR/translations" 2>/dev/null || true
@@ -621,18 +617,6 @@ rm -rf "$OPTDIR/share/qt6/translations" 2>/dev/null || true
 rm -f "$OPTDIR/plugins/imageformats/libqtiff.so" 2>/dev/null || true
 rm -f "$OPTDIR/plugins/imageformats/libqwebp.so" 2>/dev/null || true
 rm -f "$OPTDIR/plugins/imageformats/libqgif.so" 2>/dev/null || true
-
-# Remove unused Qt Quick Controls 2 style libraries
-rm -f "$OPTDIR/lib/libQt6QuickControls2Fusion.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2Universal.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2Imagine.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2FluentWinUI3.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2FusionStyleImpl.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2UniversalStyleImpl.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2ImagineStyleImpl.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2FluentWinUI3StyleImpl.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6QuickControls2WindowsStyleImpl.so"* 2>/dev/null || true
-rm -f "$OPTDIR/lib/libQt6Widgets.so"* 2>/dev/null || true
 
 # Remove desktop-specific libraries that may have been included
 rm -f "$OPTDIR/lib/libwayland"* 2>/dev/null || true
@@ -645,6 +629,19 @@ rm -rf "$OPTDIR/plugins/platforms/libqxcb"* 2>/dev/null || true
 find "$OPTDIR" -name "*.a" -delete 2>/dev/null || true
 find "$OPTDIR" -name "*.la" -delete 2>/dev/null || true
 find "$OPTDIR" -name "*.prl" -delete 2>/dev/null || true
+
+# The explicit cp -d list above is curated to keep this package small (it is
+# often fetched over the network). Keep curating it -- this call is additive and
+# only fills in libraries the staged tree actually names in DT_NEEDED, chiefly
+# the Qt libraries pulled in by the wholesale `cp -r` of the QML tree that the
+# list does not mention. Runs after pruning so removed plugins' dependencies
+# are not pulled back in. See embedded_deploy_lib_closure() in debian/lib.sh
+# for how to revert to a purely curated list if size regresses.
+embedded_deploy_lib_closure "$OPTDIR" "$QT_DIR/lib" || exit 1
+
+# The cp -d globs above also match unversioned *.so development symlinks, which
+# point at absolute host paths and would ship dangling.
+prune_dev_symlinks "$OPTDIR/lib"
 
 # Strip binaries to reduce size
 find "$OPTDIR" -type f -executable -exec strip {} \; 2>/dev/null || true
