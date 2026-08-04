@@ -562,21 +562,39 @@ FileError WindowsFileOperations::GetSize(std::uint64_t& size) {
 
   LARGE_INTEGER file_size;
   if (!GetFileSizeEx(handle_, &file_size)) {
-    // For devices, try to get geometry information
-    DISK_GEOMETRY geometry;
     DWORD bytes_returned;
-    
+
+    // For devices, ask for the exact length. IOCTL_DISK_GET_DRIVE_GEOMETRY below
+    // reports a synthetic CHS geometry whose product is rounded down to a whole
+    // cylinder, so it under-reports the device: a 28.7 GB USB stick of 60125184
+    // sectors is reported as 3742 * 255 * 63 = 60115230 sectors, 9954 sectors
+    // (4.86 MiB) short. Anything positioned relative to the end of the device is
+    // then placed inside that gap rather than at the true end.
+    GET_LENGTH_INFORMATION length_info;
+    if (DeviceIoControl(handle_, IOCTL_DISK_GET_LENGTH_INFO,
+                        nullptr, 0, &length_info, sizeof(length_info),
+                        &bytes_returned, nullptr)) {
+      size = static_cast<std::uint64_t>(length_info.Length.QuadPart);
+      return FileError::kSuccess;
+    }
+
+    // Fall back to geometry information
+    DISK_GEOMETRY geometry;
+
     if (DeviceIoControl(handle_, IOCTL_DISK_GET_DRIVE_GEOMETRY,
                         nullptr, 0, &geometry, sizeof(geometry),
                         &bytes_returned, nullptr)) {
-      
+
       size = static_cast<std::uint64_t>(geometry.Cylinders.QuadPart) *
              geometry.TracksPerCylinder *
              geometry.SectorsPerTrack *
              geometry.BytesPerSector;
+      FileOperationsLog("GetSize: IOCTL_DISK_GET_LENGTH_INFO unavailable; using "
+                        "cylinder-rounded geometry size " + std::to_string(size) +
+                        " which may under-report the device");
       return FileError::kSuccess;
     }
-    
+
     return FileError::kSizeError;
   }
 
