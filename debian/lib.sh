@@ -50,10 +50,14 @@ DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://deb.debian.org/debian}
 RASPBIAN_MIRROR=${RASPBIAN_MIRROR:-http://raspbian.raspberrypi.com/raspbian}
 RPI_MIRROR=${RPI_MIRROR:-http://archive.raspberrypi.com/debian}
 CHROOT_ARCHES=${CHROOT_ARCHES:-arm64 amd64 armhf}
-# chroot: every arch (incl. the host) builds in its bookworm mmdebstrap chroot
-#   for a consistent, portable toolchain (default);
-# auto/local: host arch builds directly on the host, foreign arches in a chroot
-BUILDER=${BUILDER:-chroot}
+# Every arch, including the host, builds in its bookworm mmdebstrap chroot.
+# There is deliberately no host-native build path: a package built against the
+# host's libraries is not the package it claims to be. Building on a newer
+# glibc than bookworm yields binaries that will not start on bookworm at all,
+# and building on an older one silently drops features -- liburing < 2.2 loses
+# io_uring, for instance -- while the artifact still gets labelled for
+# bookworm. The rootless mmdebstrap chroots need no sudo, so there is no
+# environment that cannot use them.
 # auto: create missing chroots via mmdebstrap (rootless, default); 0: require manual setup
 CHROOT_AUTO_CREATE=${CHROOT_AUTO_CREATE:-auto}
 DEB_BUILD_PROFILES=${DEB_BUILD_PROFILES:-desktop cli}
@@ -95,16 +99,13 @@ release_arch_order() {
 	printf '%s\n' "$@"
 }
 
-# Arches whose builder is 'chroot' need a rootless mmdebstrap chroot or
-# APPIMAGE_REMOTE_<arch>. CHROOT_AUTO_CREATE=auto (default) creates missing
-# chroots when possible. Returns a space-separated list of such RELEASE_ARCHES
-# missing a chroot/remote (with BUILDER=chroot this includes the host arch).
+# Every arch needs a rootless mmdebstrap chroot or APPIMAGE_REMOTE_<arch>,
+# the host arch included. CHROOT_AUTO_CREATE=auto (default) creates missing
+# chroots when possible. Returns a space-separated list of RELEASE_ARCHES
+# missing a chroot/remote.
 missing_release_chroots() {
 	_missing=""
 	for _arch in $RELEASE_ARCHES; do
-		if [ "$(choose_builder "$_arch")" != chroot ]; then
-			continue
-		fi
 		if have_chroot "$_arch"; then
 			continue
 		fi
@@ -114,24 +115,6 @@ missing_release_chroots() {
 		_missing="$_missing $_arch"
 	done
 	printf '%s' "$_missing"
-}
-
-# Resolve the builder for <arch>: 'chroot' (rootless mmdebstrap, default for all
-# arches) or 'local' (build directly on the host, only for the host arch under
-# BUILDER=auto/local).
-choose_builder() {
-	_arch=$1
-	case "$BUILDER" in
-		chroot) printf '%s\n' chroot ;;
-		local|auto)
-			if [ "$_arch" = "$HOST_ARCH" ]; then
-				printf '%s\n' local
-			else
-				printf '%s\n' chroot
-			fi
-			;;
-		*) printf '%s\n' "$BUILDER" ;;
-	esac
 }
 
 deb_to_image_arch() {

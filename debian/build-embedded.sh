@@ -36,20 +36,17 @@ fi
 ensure_dirs
 sh "$TOP/debian/fetch-vendor-deps.sh"
 
-if [ "$ARCH" = "$HOST_ARCH" ]; then
-	echo "build-embedded: building $ARCH locally"
-	sh "$TOP/create-embedded.sh" --arch="$IMG_ARCH" --qt-root="$QT_DIR"
-else
-	_backend=$(chroot_backend_for "$ARCH")
-	if [ "$_backend" = none ]; then
-		echo "build-embedded: no chroot for $ARCH (need $(chroot_name "$ARCH"))" >&2
-		echo "build-embedded: run: debian/mmdebstrap-ensure-chroot.sh $ARCH" >&2
-		exit 1
-	fi
-	echo "build-embedded: building $ARCH inside $_backend chroot"
-	chroot_run "$ARCH" bash -lc \
-		"cd '$TOP' && sh '$TOP/create-embedded.sh' --arch='$IMG_ARCH' --qt-root='$QT_DIR'"
+# The host arch builds in its chroot too, so the vendored tree links against
+# bookworm's libraries rather than whatever the builder happens to run.
+_backend=$(chroot_backend_for "$ARCH")
+if [ "$_backend" = none ]; then
+	echo "build-embedded: no chroot for $ARCH (need $(chroot_name "$ARCH"))" >&2
+	echo "build-embedded: run: debian/mmdebstrap-ensure-chroot.sh $ARCH" >&2
+	exit 1
 fi
+echo "build-embedded: building $ARCH inside $_backend chroot"
+chroot_run "$ARCH" bash -lc \
+	"cd '$TOP' && sh '$TOP/create-embedded.sh' --arch='$IMG_ARCH' --qt-root='$QT_DIR'"
 
 # create-embedded.sh writes the .deb into $TOP (bind-mounted in the chroot, so
 # it is visible on the host tree either way). Collect it into OUTPUT_DIR.

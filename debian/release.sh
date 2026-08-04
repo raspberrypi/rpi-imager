@@ -12,7 +12,8 @@
 #   1. Environment variables
 #   2. debian/release.conf  (copy from debian/release.conf.example)
 #
-# Works without sbuild: BUILDER=auto falls back to local dpkg-buildpackage.
+# Every architecture, the host included, builds in its rootless mmdebstrap
+# chroot; there is no host-native build path (see debian/lib.sh).
 set -eu
 
 TOP=$(cd "$(dirname "$0")/.." && pwd)
@@ -30,7 +31,6 @@ Configuration file: $TOP/debian/release.conf (optional)
   APPIMAGE_ROOT=$APPIMAGE_ROOT
   QT_CACHE=$QT_CACHE
   QT_VERSION=$QT_VERSION
-  BUILDER=$BUILDER
   APPIMAGE_BUILD=$APPIMAGE_BUILD
   QT_BUILD=$QT_BUILD
 
@@ -79,14 +79,13 @@ should_build_appimages() {
 }
 
 cmd_status() {
-	_builder=$(choose_builder "$HOST_ARCH")
 	echo "version:       $VERSION (upstream $UPSTREAM)"
 	echo "host arch:     $HOST_ARCH"
 	echo "tree:          $TOP"
 	echo "output dir:    $OUTPUT_DIR"
 	echo "appimage root: $APPIMAGE_ROOT"
 	echo "qt cache:      $QT_CACHE (Qt $QT_VERSION, QT_BUILD=$QT_BUILD)"
-	echo "builder:       $BUILDER (next build for $HOST_ARCH: $_builder)"
+	echo "builder:       rootless mmdebstrap chroot (all arches)"
 	echo "appimage build: $APPIMAGE_BUILD"
 	if git -C "$TOP" diff --quiet && git -C "$TOP" diff --cached --quiet; then
 		echo "git:           clean"
@@ -175,16 +174,8 @@ cmd_appimages() {
 
 cmd_binary() {
 	arch=$1
-	_builder=$(choose_builder "$arch")
-	echo "release: using $_builder builder for $arch"
-	case "$_builder" in
-		local) sh "$TOP/debian/build-binary-local.sh" "$arch" ;;
-		chroot) sh "$TOP/debian/build-binary-chroot.sh" "$arch" ;;
-		*)
-			echo "release: unknown builder: $_builder" >&2
-			exit 1
-			;;
-	esac
+	echo "release: building $arch in its chroot"
+	sh "$TOP/debian/build-binary-chroot.sh" "$arch"
 }
 
 cmd_embedded() {

@@ -77,10 +77,6 @@ run_mmdebstrap_ensure_chroot() {
 ensure_chroot() {
 	_arch=$1
 
-	# Arches that build directly on the host (BUILDER=auto/local) need no chroot.
-	if [ "$(choose_builder "$_arch")" != chroot ]; then
-		return 0
-	fi
 	if have_chroot "$_arch"; then
 		return 0
 	fi
