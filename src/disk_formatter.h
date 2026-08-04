@@ -169,8 +169,11 @@ class DiskFormatter {
       std::uint32_t partition_size_sectors) const;
 
   // Helper functions
+  // offset_sectors is where this copy of the boot sector is written; the primary
+  // and the backup at +6 differ there but must record the same partition start.
   Result<void> WriteBootSector(
       std::uint32_t offset_sectors,
+      std::uint32_t partition_start_sectors,
       const Fat32Config& config) const;
 
   Result<void> WriteFsInfo(
