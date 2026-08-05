@@ -30,18 +30,17 @@ Description: Raspberry Pi Imaging utility
 Package: rpi-imager-embedded
 Build-Profiles: <embedded>
 Architecture: arm64
-# The package vendors Qt and its support libraries under /opt. create-embedded.sh
-# assembles the .deb with dh_gencontrol/dh_md5sums/dh_builddeb and deliberately
-# runs no dh_shlibdeps: it would demand from the target the ~19 libraries bundled
-# precisely so a netboot micro image need not carry them. This Depends list is
-# therefore explicit and covers only what genuinely comes from the host -- the
-# C/C++ runtime, the GPU stack, X11 and the session bus (libsystemd, #1304) --
-# plus the functional tools. Keep it in step with the external sonames reported
-# by embedded_deploy_lib_closure() (debian/lib.sh).
+# The package vendors Qt and its support libraries under /opt for the
+# pi-gen-micro netboot image, which carries almost nothing. create-embedded.sh
+# assembles the .deb with dh_gencontrol/dh_md5sums/dh_builddeb and runs no
+# dh_shlibdeps (it would demand the bundled libraries from the target). This
+# list is therefore explicit and minimal -- only what genuinely comes from the
+# host. The embedded Qt is built -no-opengl -no-dbus, so there is deliberately
+# NO libegl1/libgl1/libx11-6 (Mesa/X11 are far too large for the image) and no
+# libsystemd0 (no session bus). Keep it in step with the external sonames from
+# embedded_deploy_lib_closure() (debian/lib.sh).
 Depends: dosfstools, fdisk, util-linux (>= 2.37),
          libc6, libgcc-s1, libstdc++6,
-         libegl1, libgl1, libopengl0,
-         libx11-6, libsystemd0,
          libdrm2, libinput10, libudev1
 Suggests: rpi-eeprom, firmware-brcm80211
 Conflicts: rpi-imager

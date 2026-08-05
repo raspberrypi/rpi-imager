@@ -308,7 +308,6 @@ echo "Deploying Qt dependencies for embedded systems..."
 # Copy essential Qt libraries (QtWidgets excluded - not used)
 cp -d "$QT_DIR/lib/libQt6Core.so"* "$OPTDIR/lib/"
 cp -d "$QT_DIR/lib/libQt6Gui.so"* "$OPTDIR/lib/"
-cp -d "$QT_DIR/lib/libQt6DBus.so"* "$OPTDIR/lib/"  # Required by linuxfb plugin
 cp -d "$QT_DIR/lib/libQt6Quick.so"* "$OPTDIR/lib/"
 cp -d "$QT_DIR/lib/libQt6Qml.so"* "$OPTDIR/lib/"
 cp -d "$QT_DIR/lib/libQt6QmlCore.so"* "$OPTDIR/lib/" 2>/dev/null || true
@@ -403,9 +402,9 @@ cp -d "/lib/${ARCH}-linux-gnu"/libgobject-2.0.so* "$OPTDIR/lib/" 2>/dev/null || 
 cp -d "/lib/${ARCH}-linux-gnu"/libgudev-1.0.so* "$OPTDIR/lib/" 2>/dev/null || \
     cp -d "/usr/lib/${ARCH}-linux-gnu"/libgudev-1.0.so* "$OPTDIR/lib/" 2>/dev/null || true
 
-# Copy additional system libraries
-cp -d "/lib/${ARCH}-linux-gnu"/libdbus-1.so* "$OPTDIR/lib/" 2>/dev/null || \
-    cp -d "/usr/lib/${ARCH}-linux-gnu"/libdbus-1.so* "$OPTDIR/lib/" 2>/dev/null || true
+# Note: libdbus-1 is intentionally NOT included. The embedded build links no
+# QtDBus (see the QT_DBUS_LIB guards in the app), so nothing in the tree needs
+# it; bundling it only dragged in libsystemd, which the netboot image lacks.
 
 # Note: libsystemd is intentionally NOT included - it must come from the host system
 # to work correctly with DBus (see https://github.com/raspberrypi/rpi-imager/issues/1304)
