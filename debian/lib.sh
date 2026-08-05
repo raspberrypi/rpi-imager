@@ -157,9 +157,29 @@ qt_cli_gcc_dir() {
 	esac
 }
 
+qt_embedded_gcc_dir() {
+	_arch=$1
+	case "$_arch" in
+		amd64) printf '%s\n' gcc_64_embedded ;;
+		arm64) printf '%s\n' gcc_arm64_embedded ;;
+		armhf) printf '%s\n' gcc_arm32_embedded ;;
+		*) return 1 ;;
+	esac
+}
+
 qt_version_tree() {
 	_arch=$1
 	printf '%s/%s/%s\n' "$QT_CACHE" "$_arch" "$QT_VERSION"
+}
+
+qt_embedded_path() {
+	_arch=$1
+	_gcc=$(qt_embedded_gcc_dir "$_arch") || return 1
+	printf '%s/%s\n' "$(qt_version_tree "$_arch")" "$_gcc"
+}
+
+qt_embedded_ok() {
+	qt_qmake_ok "$(qt_embedded_path "$1")"
 }
 
 qt_desktop_path() {

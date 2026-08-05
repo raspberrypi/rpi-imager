@@ -1,3 +1,8 @@
+# ICU: unused by rpi-imager (UTF-8 only, no QCollator, timezones handled as
+# IANA identifier strings). Excluding it keeps the embedded package free of the
+# ~35 MB ICU libraries and matches the desktop/cli builds.
+icu
+
 androiddeployqt
 appstore-compliant
 calendarwidget
