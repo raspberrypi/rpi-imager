@@ -87,28 +87,33 @@ Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a
 
 The Raspberry Pi Network installer (embedded imager) runs inside an operating system created by [pi-gen-micro](https://github.com/raspberrypi/pi-gen-micro/tree/main/configurations/rpi-imager-embedded).
 
-To build the entire system, you must first build our customised embedded qt:
+It uses the same vendored release Qt as the desktop and CLI packages (built with
+`-no-feature-icu`, linuxfb renderer), so there is no separate embedded Qt to
+build. The canonical build goes through the release pipeline, which builds
+inside the arm64 mmdebstrap chroot:
 
 ```sh
-./qt/build-qt-embedded.sh
+debian/release.sh embedded arm64
 ```
 
-Then build the embedded AppImage:
+This produces `out/debian/rpi-imager-embedded_<version>_arm64.deb`. It stages the
+vendored `/opt` tree with `create-embedded.sh`, then assembles the `.deb` with
+debhelper so that `debian/control` is the single source of the package's
+dependencies and metadata (`dh_shlibdeps` is deliberately not used — the package
+vendors its libraries, so the external `Depends` are maintained explicitly in
+the `rpi-imager-embedded` stanza of `debian/control`).
+
+To build against a Qt tree you resolved yourself, `create-embedded.sh` can be
+run directly:
 
 ```sh
-./create-embedded.sh
+./create-embedded.sh --arch=aarch64 --qt-root=/path/to/qt
 ```
 
-Package the appImage for use with pi-gen-micro and other Debian systems:
-
-```sh
-dpkg-buildpackage -uc -us --profile=embedded
-```
-
-And finally, import your new embedded imager into pi-gen-micro for packaging:
+Finally, import the package into pi-gen-micro:
 
 ```sh
 rm ${pi-gen-micro-root}/packages/rpi-imager-embedded*.deb
-cp ../rpi-imager-embedded*.deb ${pi-gen-micro-root}/packages/
+cp out/debian/rpi-imager-embedded*.deb ${pi-gen-micro-root}/packages/
 pushd ${pi-gen-micro-root}/packages/ && dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz && popd
 ```
