@@ -49,8 +49,27 @@ set(PLATFORM_SOURCES
     linux/platformquirks_linux.cpp
 )
 
-# Only include DBus-dependent and GUI components for non-CLI builds
-if(NOT BUILD_CLI_ONLY)
+# DBus-backed components. The embedded (linuxfb netboot) build has no session
+# bus and is built without QtDBus, so it uses the same stubs as the CLI build
+# for the WiFi-credential and suspend-inhibitor backends, and drops the
+# NetworkManager and Pi Connect URI-handler sources entirely. It keeps the
+# GUI file dialog (nativefiledialog_linux.cpp), whose DBus portal path is
+# QT_DBUS_LIB-guarded and compiles to a QML-only fallback without DBus.
+if(BUILD_CLI_ONLY)
+    # CLI: no GUI, no DBus.
+    list(APPEND PLATFORM_SOURCES
+        linux/suspend_inhibitor_stub.cpp
+        linux/wlancredentials_stub.cpp
+    )
+elseif(BUILD_EMBEDDED)
+    # Embedded GUI: file dialog kept (QML-only without DBus), rest stubbed.
+    list(APPEND PLATFORM_SOURCES
+        linux/nativefiledialog_linux.cpp
+        linux/suspend_inhibitor_stub.cpp
+        linux/wlancredentials_stub.cpp
+    )
+else()
+    # Desktop GUI: full DBus-backed components.
     list(APPEND PLATFORM_SOURCES
         linux/linux_suspend_inhibitor.cpp
         linux/networkmanagerapi.h
@@ -58,12 +77,6 @@ if(NOT BUILD_CLI_ONLY)
         linux/nativefiledialog_linux.cpp
         linux/urihandler_dbus.h
         linux/urihandler_dbus.cpp
-    )
-else()
-    # Use stub implementations for CLI builds (no DBus dependency)
-    list(APPEND PLATFORM_SOURCES
-        linux/suspend_inhibitor_stub.cpp
-        linux/wlancredentials_stub.cpp
     )
 endif()
 

@@ -283,8 +283,12 @@ if(BUILD_CLI_ONLY)
     find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
 else()
     # Regular GUI build: need Core, Quick, Svg, Network, Gui
-    # DBus is required on Linux for suspend inhibitor and native file dialogs (portals)
-    if(UNIX AND NOT APPLE)
+    # DBus is used on Linux for the suspend inhibitor, portal file dialogs,
+    # NetworkManager WiFi credentials and the Pi Connect URI handler. The
+    # embedded (linuxfb netboot) target has no session bus and must not pull
+    # libdbus/libsystemd, so it is built without DBus; the QT_DBUS_LIB guards in
+    # the platform code then compile those paths out (see linux/Platform.cmake).
+    if(UNIX AND NOT APPLE AND NOT BUILD_EMBEDDED)
         find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network DBus OPTIONAL_COMPONENTS LinguistTools)
     else()
         find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network OPTIONAL_COMPONENTS LinguistTools)
@@ -548,8 +552,9 @@ if(BUILD_CLI_ONLY)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
 else()
     # Regular GUI build: link all GUI components
-    # Add DBus on Linux for suspend inhibitor and native file dialogs (portals)
-    if(UNIX AND NOT APPLE)
+    # DBus on Linux for suspend inhibitor, portal file dialogs and URI handler;
+    # excluded for embedded (no session bus on the netboot image).
+    if(UNIX AND NOT APPLE AND NOT BUILD_EMBEDDED)
         target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${QT}::DBus ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
     else()
         target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})

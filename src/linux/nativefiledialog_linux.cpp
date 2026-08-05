@@ -4,6 +4,7 @@
  */
 
 #include "../nativefiledialog.h"
+#ifdef QT_DBUS_LIB
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -335,3 +336,19 @@ bool NativeFileDialog::areNativeDialogsAvailablePlatform()
 }
 
 #include "nativefiledialog_linux.moc"
+#else  // QT_DBUS_LIB
+// Built without QtDBus (embedded/linuxfb netboot): there is no XDG desktop
+// portal. In this configuration getOpenFileName/getSaveFileName already return
+// empty (embedded mode / forced QML dialogs), so these platform hooks are never
+// reached at runtime; they exist only to satisfy the link.
+QString NativeFileDialog::getFileNameNative(const QString &, const QString &,
+                                            const QString &, bool, void *)
+{
+    return QString();
+}
+
+bool NativeFileDialog::areNativeDialogsAvailablePlatform()
+{
+    return false;
+}
+#endif // QT_DBUS_LIB
