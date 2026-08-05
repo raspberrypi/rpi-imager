@@ -45,7 +45,7 @@
 #include <QTcpSocket>
 #endif
 #ifndef CLI_ONLY_BUILD
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) && defined(QT_DBUS_LIB)
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
         }
     }
 
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) && defined(QT_DBUS_LIB)
     // Check if another instance is already running via D-Bus
     // If so, send the callback URL to it and exit
     if (!callbackUrl.isEmpty())
@@ -541,7 +541,7 @@ int main(int argc, char *argv[])
         qWarning() << "TCP listen failed:" << server.errorString();
     }
 #endif
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) && defined(QT_DBUS_LIB)
     // D-Bus callback service for URI handling
     QDBusConnection bus = QDBusConnection::sessionBus();
     if (bus.isConnected())
