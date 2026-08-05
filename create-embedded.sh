@@ -180,54 +180,14 @@ if [ -z "$QT_DIR" ]; then
     exit 1
 fi
 
-# Ensure Qt host tools (qmake, rcc, etc.) can load custom ICU runtime libs.
-# This matters for embedded Qt builds linked against ICU 73 from qt/icu/install.
-for ICU_RUNTIME_LIB_DIR in \
-    "$SCRIPT_DIR/qt/icu/install/lib" \
-    "$SCRIPT_DIR/qt/icu/icu4c/source/lib"
-do
-    if [ -d "$ICU_RUNTIME_LIB_DIR" ]; then
-        case "${LD_LIBRARY_PATH:-}" in
-            *"$ICU_RUNTIME_LIB_DIR"*) ;;
-            *)
-                export LD_LIBRARY_PATH="$ICU_RUNTIME_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-                echo "Using ICU runtime libraries from: $ICU_RUNTIME_LIB_DIR"
-                ;;
-        esac
-        break
-    fi
-done
-
 # Check if Qt Version
 if [ -f "$QT_DIR/bin/qmake" ]; then
     QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
     echo "Qt version: $QT_VERSION"
 fi
 
-# Detect ICU version for this Qt build.
-# The ICU major is read directly from what libQt6Core links against: the
-# vendored release Qt (QT_CACHE) is built against the distro's system ICU,
-# which can differ from the source-build map in get_icu_version_for_qt().
-ICU_MAJOR_VERSION=""
-ICU_QT_CORE=$(ls "$QT_DIR"/lib/libQt6Core.so.6.* 2>/dev/null | head -n 1)
-if [ -n "$ICU_QT_CORE" ] && command -v readelf >/dev/null 2>&1; then
-    ICU_MAJOR_VERSION=$(readelf -d "$ICU_QT_CORE" 2>/dev/null \
-        | sed -n 's/.*libicuuc\.so\.\([0-9][0-9]*\).*/\1/p' | head -n 1)
-fi
-
-if [ -n "$ICU_MAJOR_VERSION" ]; then
-    ICU_VERSION="$ICU_MAJOR_VERSION"
-    echo "Using ICU major $ICU_MAJOR_VERSION (from $(basename "$ICU_QT_CORE"))"
-elif type get_icu_version_for_qt >/dev/null 2>&1; then
-    ICU_VERSION=$(get_icu_version_for_qt "$QT_VERSION")
-    ICU_MAJOR_VERSION="${ICU_VERSION%%.*}"  # Extract major version (e.g., 76 from 76.1)
-    echo "Using ICU version: $ICU_VERSION (major: $ICU_MAJOR_VERSION)"
-else
-    # Fallback if common functions not available
-    echo "Warning: Could not determine ICU version, using default 73.2"
-    ICU_VERSION="73.2"
-    ICU_MAJOR_VERSION="73"
-fi
+# Qt is built with -no-feature-icu (see qt/features_exclude.list), so nothing
+# in the vendored tree links ICU and none is bundled.
 
 # Configuration
 BUILD_TYPE="MinSizeRel"  # Optimize for size in embedded systems
@@ -244,8 +204,6 @@ case "$ARCH" in
     *)       DEB_ARCH="$ARCH" ;;
 esac
 
-OUTPUT_FILE="$PWD/rpi-imager-embedded_${PROJECT_VERSION}_${DEB_ARCH}.deb"
-
 # Set up build directory
 BUILD_DIR="build-embedded-$ARCH"
 
@@ -258,7 +216,6 @@ fi
 mkdir -p "$OPTDIR/bin"
 mkdir -p "$OPTDIR/lib"
 mkdir -p "$DEBDIR/usr/bin"
-mkdir -p "$DEBDIR/DEBIAN"
 mkdir -p "$BUILD_DIR"
 
 echo "Building rpi-imager for embedded $ARCH..."
@@ -282,6 +239,13 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
 
 ## Build embedded version
 CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DBUILD_EMBEDDED=ON"
+
+# Bake the deployed rpath in at build time. cmake's default build rpath points
+# at $QT_DIR/lib in the build tree; the binary is copied to /opt as-is (not
+# installed), so without this it ships a leaked absolute build-host path that
+# also breaks dpkg-shlibdeps. $ORIGIN/../lib matches the bundled layout and the
+# launcher's LD_LIBRARY_PATH.
+CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH=\$ORIGIN/../lib"
 
 # shellcheck disable=SC2086
 cmake -G Ninja "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
@@ -393,7 +357,10 @@ if [ -f "/lib/${ARCH}-linux-gnu/libfontconfig.so.1" ] || [ -f "/usr/lib/${ARCH}-
     # Copy font configuration files for fontconfig to work properly
     mkdir -p "$OPTDIR/etc/fonts"
     if [ -d "/etc/fonts" ]; then
-        cp -r /etc/fonts/* "$OPTDIR/etc/fonts/" 2>/dev/null || true
+        # -L dereferences the conf.d/*.conf symlinks (which point at absolute
+        # /usr/share/fontconfig/conf.avail paths) so the bundle is self-contained
+        # rather than shipping links that dangle on a target without fontconfig.
+        cp -rL /etc/fonts/* "$OPTDIR/etc/fonts/" 2>/dev/null || true
         echo "Copied system font configuration"
     fi
 
@@ -493,42 +460,8 @@ cp "$QT_DIR/qml/QtQuick/Controls/Basic/impl/libqtquickcontrols2basicstyleimplplu
 cp "$QT_DIR/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so" "$OPTDIR/qml/QtQuick/Controls/Basic/" 2>/dev/null || true
 cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so" "$OPTDIR/qml/QtQuick/Controls/Material/" 2>/dev/null || true
 
-# Copy ICU libraries (using detected version).
-# Search order: a from-source ICU build (qt/icu), then the Qt build's own lib
-# dir, then the target's system multiarch dirs. The vendored release Qt links
-# against system ICU, so the multiarch fallback is what actually gets used here.
-echo "Copying ICU $ICU_VERSION libraries..."
-ICU_LIB_DIR=""
-for _icu_dir in \
-    "$PWD/qt/icu/install/lib" \
-    "$PWD/qt/icu/icu4c/source/lib" \
-    "$QT_DIR/lib" \
-    "/usr/lib/${ARCH}-linux-gnu" \
-    "/lib/${ARCH}-linux-gnu"
-do
-    if [ -f "$_icu_dir/libicuuc.so.$ICU_MAJOR_VERSION" ]; then
-        ICU_LIB_DIR="$_icu_dir"
-        break
-    fi
-done
-
-if [ -n "$ICU_LIB_DIR" ]; then
-    echo "Using ICU libraries from: $ICU_LIB_DIR"
-    for _icu in libicudata libicui18n libicuuc; do
-        cp -d "$ICU_LIB_DIR/$_icu.so.$ICU_MAJOR_VERSION"* "$OPTDIR/lib/" 2>/dev/null || \
-            echo "Warning: Could not find $_icu.so.$ICU_MAJOR_VERSION in $ICU_LIB_DIR"
-    done
-
-    # Create unversioned symlinks for compatibility (only if missing)
-    for _icu in libicudata libicui18n libicuuc; do
-        if [ -e "$OPTDIR/lib/$_icu.so.$ICU_MAJOR_VERSION" ] && [ ! -e "$OPTDIR/lib/$_icu.so" ]; then
-            ln -sf "$_icu.so.$ICU_MAJOR_VERSION" "$OPTDIR/lib/$_icu.so"
-        fi
-    done
-else
-    echo "Warning: ICU $ICU_MAJOR_VERSION libraries not found in any known location"
-    echo "You may need to build Qt with ICU support first"
-fi
+# ICU is intentionally absent: Qt is built with -no-feature-icu, so no ICU
+# library is linked or bundled.
 
 # Fonts
 mkdir -p "$OPTDIR/share/fonts/truetype/dejavu"
@@ -654,47 +587,45 @@ if [ -n "$SO_FILES" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Build the .deb
+# Assemble the .deb via debhelper, so debian/control is the single source of
+# the package metadata (Depends, version, description) and md5sums are
+# generated. dh_shlibdeps is deliberately NOT used: this package vendors Qt and
+# its support libraries under /opt, and shlibdeps would demand from the target
+# the very libraries bundled to avoid that. The external Depends are therefore
+# maintained explicitly in debian/control's rpi-imager-embedded stanza.
 # ---------------------------------------------------------------------------
-echo "Creating embedded .deb package..."
+echo "Assembling embedded .deb via debhelper..."
 
-# Calculate installed size in KiB
-INSTALLED_SIZE=$(du -sk "$DEBDIR" | cut -f1)
+_pkg=rpi-imager-embedded
+_stage="$TOP/debian/$_pkg"
 
-cat > "$DEBDIR/DEBIAN/control" << CTRL_EOF
-Package: rpi-imager-embedded
-Version: ${PROJECT_VERSION}
-Architecture: ${DEB_ARCH}
-Installed-Size: ${INSTALLED_SIZE}
-Maintainer: Raspberry Pi Ltd <info@raspberrypi.com>
-Depends: dosfstools, fdisk, util-linux (>= 2.37), libdrm2, libinput10, libudev1
-Suggests: rpi-eeprom, firmware-brcm80211
-Conflicts: rpi-imager
-Section: admin
-Priority: optional
-Homepage: https://www.raspberrypi.com/software
-Description: Raspberry Pi Imaging utility for embedded systems
- Optimised for embedded systems with vendored Qt6 and dependencies.
- Uses linuxfb for direct rendering (no desktop environment required).
-CTRL_EOF
+# Populate the debhelper install tree from the vendored staging root.
+rm -rf "$_stage"
+mkdir -p "$_stage"
+cp -a "$DEBDIR/opt" "$_stage/"
+cp -a "$DEBDIR/usr" "$_stage/"
 
-# Remove old output
-rm -f "$OUTPUT_FILE"
-rm -f "$PWD/rpi-imager-embedded.deb"
+# dh_gencontrol: version/arch/Depends from debian/control + debian/changelog.
+# dh_md5sums:    DEBIAN/md5sums.  dh_builddeb: the .deb into $TOP.
+export DEB_BUILD_PROFILES=embedded
+(
+    cd "$TOP"
+    dh_gencontrol -p"$_pkg"
+    dh_md5sums -p"$_pkg"
+    dh_builddeb -p"$_pkg" --destdir="$TOP"
+)
 
-dpkg-deb --build --root-owner-group "$DEBDIR" "$OUTPUT_FILE"
+# Remove the debhelper working files so the tree is left clean.
+rm -rf "$_stage" "$TOP/debian/$_pkg.substvars" "$TOP/debian/$_pkg.debhelper.log" \
+    "$TOP/debian/files" "$TOP/debian/.debhelper"
 
-if [ -f "$OUTPUT_FILE" ]; then
+_out=$(ls "$TOP"/${_pkg}_*_"${DEB_ARCH}".deb 2>/dev/null | head -1)
+if [ -n "$_out" ] && [ -f "$_out" ]; then
     echo ""
-    echo "Embedded .deb created: $OUTPUT_FILE"
-
-    # Create convenience symlink for debian packaging
-    ln -sf "$(basename "$OUTPUT_FILE")" "$PWD/rpi-imager-embedded.deb"
-
-    echo ""
+    echo "Embedded .deb created: $_out"
     echo "Embedded .deb build completed successfully for $ARCH."
-    echo "Install with: sudo dpkg -i $(basename "$OUTPUT_FILE")"
+    echo "Install with: sudo dpkg -i $(basename "$_out")"
 else
-    echo "Error: .deb creation failed."
+    echo "Error: .deb creation failed." >&2
     exit 1
 fi
