@@ -981,6 +981,14 @@ std::vector<DeviceDescriptor> ListStorageDevices()
             // Refine classification based on bus type (these are our constants, case-sensitive OK)
             device.isCard = (device.busType == "SD" || device.busType == "MMC" || device.busType == "UFS");
 
+            // UASP bridges are driven through the SCSI enumerator, even though
+            // the adapter descriptor identifies their bus type as USB. Classify
+            // them before the system-drive heuristic below so removable USB
+            // storage is not hidden as a generic non-removable SCSI disk.
+            if (equalsIgnoreCase(device.enumerator, "SCSI") && device.busType == "USB") {
+                device.isUSB = true;
+            }
+
             // SD/MMC/UFS cards and USB devices should never be system drives
             if (!device.isCard && !device.isUSB) {
                 device.isSystem = device.isSystem || isSystemDevice(device.mountpoints);
