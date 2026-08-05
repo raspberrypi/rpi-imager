@@ -2,49 +2,64 @@
 # Build the embedded (linuxfb) rpi-imager .deb for one architecture.
 #
 # The embedded package vendors Qt + dependencies under /opt and renders with
-# linuxfb (no desktop environment). It links the target's system libraries, so
-# a foreign arch must be built inside that arch's chroot; the host arch builds
-# locally. The vendored release Qt (QT_CACHE) is used via --qt-root.
+# linuxfb. It uses a DEDICATED Qt built with -no-opengl -qpa linuxfb (distinct
+# from the desktop/cli release Qt): the target image (pi-gen-micro) carries no
+# Mesa/GL or X11 -- those are far too large for a network-loaded image -- so the
+# embedded Qt must not link libEGL/libGL/libX11 at all. That build is a separate
+# cache variant (gcc_arm64_embedded) produced by qt/build-qt-embedded.sh.
+#
+# arm64 only: it is the only platform the embedded (netboot) installer targets.
 #
 # Usage:
-#   debian/build-embedded.sh <amd64|arm64|armhf>
+#   debian/build-embedded.sh arm64
 set -eu
 
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 cd "$TOP"
 . "$TOP/debian/lib.sh"
 
-ARCH="${1:?usage: build-embedded.sh <arch>}"
+ARCH="${1:?usage: build-embedded.sh arm64}"
+
+if [ "$ARCH" != arm64 ]; then
+	echo "build-embedded: embedded is arm64 only (got '$ARCH')" >&2
+	exit 1
+fi
 
 IMG_ARCH=$(normalize_image_arch "$ARCH")
-QT_DIR=$(qt_desktop_path "$ARCH") || {
+QT_DIR=$(qt_embedded_path "$ARCH") || {
 	echo "build-embedded: unknown arch: $ARCH" >&2
 	exit 1
 }
 
-if [ ! -x "$QT_DIR/bin/qmake" ] && [ ! -d "$QT_DIR/plugins/platforms" ]; then
-	echo "build-embedded: vendored Qt not found at $QT_DIR" >&2
-	echo "build-embedded: build it first (e.g. debian/release.sh appimages $ARCH)" >&2
-	exit 1
-fi
-
-if [ ! -f "$QT_DIR/plugins/platforms/libqlinuxfb.so" ]; then
-	echo "build-embedded: $QT_DIR has no linuxfb platform plugin" >&2
-	exit 1
-fi
-
 ensure_dirs
 sh "$TOP/debian/fetch-vendor-deps.sh"
 
-# The host arch builds in its chroot too, so the vendored tree links against
-# bookworm's libraries rather than whatever the builder happens to run.
+# Build inside the arch's chroot so the vendored tree links against bookworm's
+# libraries rather than whatever the builder happens to run.
 _backend=$(chroot_backend_for "$ARCH")
 if [ "$_backend" = none ]; then
 	echo "build-embedded: no chroot for $ARCH (need $(chroot_name "$ARCH"))" >&2
 	echo "build-embedded: run: debian/mmdebstrap-ensure-chroot.sh $ARCH" >&2
 	exit 1
 fi
-echo "build-embedded: building $ARCH inside $_backend chroot"
+
+# Build the dedicated -no-opengl embedded Qt on cache miss. Check by file
+# presence rather than qt_embedded_ok(): that runs `qmake -query`, but the
+# cached qmake is the target arch (arm64) and this orchestrator runs on the
+# host, so executing it would always fail and force a needless full rebuild.
+if [ ! -x "$QT_DIR/bin/qmake" ] || [ ! -f "$QT_DIR/plugins/platforms/libqlinuxfb.so" ]; then
+	echo "build-embedded: building -no-opengl embedded Qt $QT_VERSION for $ARCH inside $_backend chroot..."
+	export_cmake_parallel
+	chroot_run "$ARCH" bash -lc \
+		"cd '$TOP' && export CMAKE_BUILD_PARALLEL_LEVEL='$(cmake_build_jobs)' && sh '$TOP/qt/build-qt-embedded.sh' --version='$QT_VERSION' --prefix='$(qt_version_tree "$ARCH")' --skip-dependencies --unprivileged"
+fi
+
+if [ ! -f "$QT_DIR/plugins/platforms/libqlinuxfb.so" ]; then
+	echo "build-embedded: $QT_DIR has no linuxfb platform plugin after build" >&2
+	exit 1
+fi
+
+echo "build-embedded: building $ARCH package inside $_backend chroot"
 chroot_run "$ARCH" bash -lc \
 	"cd '$TOP' && sh '$TOP/create-embedded.sh' --arch='$IMG_ARCH' --qt-root='$QT_DIR'"
 
