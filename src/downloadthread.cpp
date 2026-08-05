@@ -377,7 +377,7 @@ bool DownloadThread::_openAndPrepareDevice()
         QStringList args("x-apple.systempreferences:com.apple.preference.security?Privacy_RemovableVolume");
         QProcess::execute("open", args);
         emit error(msg);
-#elif defined(Q_OS_LINUX)
+#elif defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
         emit error(tr("Cannot open storage device '%1'. Please run with elevated privileges (sudo).").arg(QString(_filename)));
 #else
         emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));

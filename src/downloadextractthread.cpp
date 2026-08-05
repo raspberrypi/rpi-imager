@@ -447,8 +447,8 @@ void DownloadExtractThread::extractImageRun()
                 if (size == ARCHIVE_FATAL && errorStr && strstr(errorStr, "No progress is possible")) {
                     break;
                 }
-                
-                throw runtime_error(errorStr);
+
+                throw runtime_error(errorStr ? errorStr : "Unknown libarchive error, possibly EOF");
             }
             if (size == 0) {
                 // Release the slot we acquired but won't use

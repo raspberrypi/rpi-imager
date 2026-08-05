@@ -36,19 +36,16 @@ using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
 
 namespace rpi_imager {
 
-// Forward declaration — defined at bottom of file, called from OpenDevice()
-FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path);
+FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string&);
 
 // Use the common logging function from file_operations.cpp
 static void Log(const std::string& msg) {
     FileOperationsLog(msg);
 }
 
-LinuxFileOperations::LinuxFileOperations() 
-    : fd_(-1), last_error_code_(0), using_direct_io_(false), direct_io_attempted_(false),
-      async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
-      async_write_offset_(0), io_uring_available_(false), ring_(nullptr), next_write_id_(1) {  // Start at 1, 0 is reserved for cancel operations
-    
+LinuxFileOperations::LinuxFileOperations()
+    : UnixFileOperations(), io_uring_available_(false), ring_(nullptr) {
+
 #ifdef HAVE_LIBURING
     // Probe for io_uring availability
     io_uring_available_ = InitIOUring();
@@ -65,6 +62,44 @@ LinuxFileOperations::LinuxFileOperations()
 bool LinuxFileOperations::IsBlockDevicePath(const std::string& path) {
   // Check for common block device paths
   return (path.find("/dev/") == 0);
+}
+
+// Linux-specific device size query using BLKGETSIZE64 ioctl
+FileError LinuxFileOperations::GetDeviceSize(std::uint64_t& size) {
+    if (ioctl(fd_, BLKGETSIZE64, &size) == -1) {
+        last_error_code_ = errno;
+        return FileError::kSizeError;
+    }
+    return FileError::kSuccess;
+}
+
+// Linux-specific device I/O limits query using sysfs
+FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
+    FileOperations::DeviceIOLimits limits;
+
+    // Read max_sectors_kb from sysfs
+    std::string max_sectors_path = "/sys/block/" + path.substr(5) + "/queue/max_sectors_kb";
+    std::ifstream f(max_sectors_path);
+    if (f.is_open()) {
+        int max_sectors_kb;
+        f >> max_sectors_kb;
+        if (max_sectors_kb > 0) {
+            limits.max_transfer_bytes = static_cast<size_t>(max_sectors_kb * 1024);
+        }
+    }
+
+    // Read nr_requests from sysfs (queue depth)
+    std::string nr_requests_path = "/sys/block/" + path.substr(5) + "/queue/nr_requests";
+    std::ifstream f2(nr_requests_path);
+    if (f2.is_open()) {
+        int nr_requests;
+        f2 >> nr_requests;
+        if (nr_requests > 0) {
+            limits.suggested_queue_depth = nr_requests;
+        }
+    }
+
+    return limits;
 }
 
 LinuxFileOperations::~LinuxFileOperations() {
@@ -250,333 +285,6 @@ void LinuxFileOperations::CleanupIOUring() { pending_callbacks_.clear(); }
 void LinuxFileOperations::ProcessCompletions(bool) {}
 #endif
 
-FileError LinuxFileOperations::OpenDevice(const std::string& path) {
-  // Reset direct I/O tracking for new device
-  direct_io_attempted_ = false;
-  
-  // Use O_DIRECT for block devices to bypass the page cache
-  int flags = O_RDWR;
-  bool isBlockDevice = IsBlockDevicePath(path);
-  
-  if (isBlockDevice) {
-    flags |= O_DIRECT;
-    using_direct_io_ = true;
-    direct_io_attempted_ = true;
-  }
-  
-  FileError result = OpenInternal(path.c_str(), flags);
-  
-  // If O_DIRECT fails, fall back to regular I/O
-  if (result != FileError::kSuccess && isBlockDevice && using_direct_io_) {
-    using_direct_io_ = false;
-    result = OpenInternal(path.c_str(), O_RDWR);
-  }
-  
-  // Reset async state for new file
-  async_write_offset_ = 0;
-  first_async_error_ = FileError::kSuccess;
-  cancelled_.store(false);
-  write_latency_stats_.reset();
-
-  if (result == FileError::kSuccess) {
-    device_io_limits_ = QueryPlatformDeviceIOLimits(current_path_);
-    if (device_io_limits_.max_transfer_bytes > 0 || device_io_limits_.suggested_queue_depth > 0) {
-      std::ostringstream oss;
-      oss << "Device I/O limits: max_transfer=" << device_io_limits_.max_transfer_bytes
-          << " bytes, suggested_queue_depth=" << device_io_limits_.suggested_queue_depth;
-      Log(oss.str());
-    }
-  }
-
-  return result;
-}
-
-FileError LinuxFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
-  FileError result = OpenInternal(path.c_str(), 
-                                  O_CREAT | O_RDWR | O_TRUNC, 
-                                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  if (result != FileError::kSuccess) {
-    return result;
-  }
-
-  if (ftruncate(fd_, static_cast<off_t>(size)) != 0) {
-    Close();
-    return FileError::kSizeError;
-  }
-
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::WriteAtOffset(
-    std::uint64_t offset,
-    const std::uint8_t* data,
-    std::size_t size) {
-  
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  if (lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == -1) {
-    return FileError::kSeekError;
-  }
-
-  std::size_t bytes_written = 0;
-  while (bytes_written < size) {
-    ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
-    if (result <= 0) {
-      return FileError::kWriteError;
-    }
-    bytes_written += static_cast<std::size_t>(result);
-  }
-
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::GetSize(std::uint64_t& size) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  struct stat st;
-  if (fstat(fd_, &st) != 0) {
-    last_error_code_ = errno;
-    return FileError::kSizeError;
-  }
-
-  // For block devices, use BLKGETSIZE64 ioctl
-  if (S_ISBLK(st.st_mode)) {
-    std::uint64_t device_size = 0;
-    if (ioctl(fd_, BLKGETSIZE64, &device_size) == -1) {
-      last_error_code_ = errno;
-      return FileError::kSizeError;
-    }
-    size = device_size;
-    return FileError::kSuccess;
-  }
-
-  size = static_cast<std::uint64_t>(st.st_size);
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::Close() {
-  // Wait for any pending async writes
-  WaitForPendingWrites();
-  
-  if (fd_ >= 0) {
-    if (close(fd_) != 0) {
-      fd_ = -1;
-      using_direct_io_ = false;
-      return FileError::kCloseError;
-    }
-    fd_ = -1;
-  }
-  current_path_.clear();
-  using_direct_io_ = false;
-  async_write_offset_ = 0;
-  return FileError::kSuccess;
-}
-
-bool LinuxFileOperations::IsOpen() const {
-  return fd_ >= 0;
-}
-
-FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
-  if (!IsOpen() || current_path_.empty()) {
-    return FileError::kOpenError;
-  }
-  
-  if (using_direct_io_ == enabled) {
-    return FileError::kSuccess;
-  }
-  
-  // Save current position before reopening
-  off_t currentPos = lseek(fd_, 0, SEEK_CUR);
-  std::string savedPath = current_path_;
-  
-  close(fd_);
-  fd_ = -1;
-  
-  int flags = O_RDWR;
-  if (enabled && IsBlockDevicePath(savedPath)) {
-    flags |= O_DIRECT;
-  }
-  
-  FileError result = OpenInternal(savedPath.c_str(), flags);
-  if (result != FileError::kSuccess) {
-    if (enabled) {
-      result = OpenInternal(savedPath.c_str(), O_RDWR);
-      using_direct_io_ = false;
-      Log("Failed to enable O_DIRECT, reopened without it");
-    }
-    if (result != FileError::kSuccess) {
-      return result;
-    }
-  } else {
-    using_direct_io_ = enabled;
-  }
-  
-  if (currentPos > 0) {
-    lseek(fd_, currentPos, SEEK_SET);
-  }
-  
-  std::ostringstream oss;
-  oss << "O_DIRECT " << (using_direct_io_ ? "enabled" : "disabled");
-  Log(oss.str());
-  
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::OpenInternal(const char* path, int flags, mode_t mode) {
-  Close();
-
-  fd_ = open(path, flags, mode);
-  if (fd_ < 0) {
-    last_error_code_ = errno;
-    return FileError::kOpenError;
-  }
-
-  current_path_ = path;
-  last_error_code_ = 0;
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::size_t size) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  std::size_t bytes_written = 0;
-  while (bytes_written < size) {
-    ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
-    if (result <= 0) {
-      if (result == 0 || errno != EINTR) {
-        last_error_code_ = errno;
-        return FileError::kWriteError;
-      }
-      continue;
-    }
-    bytes_written += static_cast<std::size_t>(result);
-  }
-
-  last_error_code_ = 0;
-  
-  // Update async_write_offset_ so Tell() returns correct position
-  // This is needed because Seek() sets async_write_offset_, and Tell()
-  // uses it if > 0. Without this update, Tell() would return a stale value.
-  async_write_offset_ += size;
-  
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  ssize_t result = read(fd_, data, size);
-  if (result < 0) {
-    bytes_read = 0;
-    return FileError::kReadError;
-  }
-
-  bytes_read = static_cast<std::size_t>(result);
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::Seek(std::uint64_t position) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  // Wait for pending async writes before seeking
-  WaitForPendingWrites();
-
-  if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
-    return FileError::kSeekError;
-  }
-
-  // Also update async write offset
-  async_write_offset_ = position;
-  
-  return FileError::kSuccess;
-}
-
-std::uint64_t LinuxFileOperations::Tell() const {
-  if (!IsOpen()) {
-    return 0;
-  }
-
-  // If async I/O has been used, return the async write offset
-  // (pwrite/io_uring doesn't update the file descriptor position)
-  if (async_write_offset_ > 0) {
-    return async_write_offset_;
-  }
-
-  off_t pos = lseek(fd_, 0, SEEK_CUR);
-  return (pos == -1) ? 0 : static_cast<std::uint64_t>(pos);
-}
-
-FileError LinuxFileOperations::ForceSync() {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  // Wait for async writes first
-  WaitForPendingWrites();
-  
-  if (fsync(fd_) != 0) {
-    return FileError::kSyncError;
-  }
-
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::Flush() {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  // Wait for async writes first
-  WaitForPendingWrites();
-  
-  if (fdatasync(fd_) != 0) {
-    return FileError::kFlushError;
-  }
-
-  return FileError::kSuccess;
-}
-
-void LinuxFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) {
-  if (!IsOpen()) {
-    return;
-  }
-
-  // Invalidate cache and set up read-ahead
-  int ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_DONTNEED);
-  if (ret != 0) {
-    std::ostringstream oss;
-    oss << "Warning: posix_fadvise(DONTNEED) failed: " << ret;
-    Log(oss.str());
-  }
-  
-  ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_SEQUENTIAL);
-  if (ret != 0) {
-    std::ostringstream oss;
-    oss << "Warning: posix_fadvise(SEQUENTIAL) failed: " << ret;
-    Log(oss.str());
-  }
-}
-
-int LinuxFileOperations::GetHandle() const {
-  return fd_;
-}
-
-int LinuxFileOperations::GetLastErrorCode() const {
-  return last_error_code_;
-}
-
-// ============= Async I/O Implementation (using io_uring) =============
-
 bool LinuxFileOperations::SetAsyncQueueDepth(int depth) {
   if (depth < 1) depth = 1;
   
@@ -692,22 +400,6 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
 #endif
 }
 
-void LinuxFileOperations::PollAsyncCompletions() {
-  // Intentionally a no-op on Linux.
-  //
-  // Unlike Windows IOCP, io_uring's CQ is not thread-safe for multiple
-  // consumers. The extract thread is the sole CQ consumer — it polls via
-  // ProcessCompletions() inside AsyncWriteSequential() and
-  // WaitForPendingWrites(). External callers (watchdog timer, download
-  // thread's _updateBottleneckState) must not touch the CQ directly, as
-  // concurrent peek/cqe_seen calls cause double-processing or skipped
-  // completions.
-  //
-  // This is safe because the extract thread's blocking wait uses 100ms
-  // timeouts with cancellation checks, so completions are always drained
-  // promptly without external prodding.
-}
-
 void LinuxFileOperations::CancelAsyncIO() {
 #ifdef HAVE_LIBURING
   // Set cancellation flag first
@@ -776,7 +468,7 @@ FileError LinuxFileOperations::WaitForPendingWrites() {
     // Log progress every 30 seconds (informational only, not stall detection)
     if (elapsedSeconds >= 30 && elapsedSeconds % 30 == 0 && elapsedSeconds != lastLogSecond) {
       lastLogSecond = elapsedSeconds;
-      Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) + 
+      Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) +
           " writes pending after " + std::to_string(elapsedSeconds) + "s");
     }
   }
@@ -787,26 +479,6 @@ FileError LinuxFileOperations::WaitForPendingWrites() {
 #endif
 }
 
-// GetAsyncIOStats() inherited from FileOperations base class
-
-std::vector<FileOperations::PendingWriteInfo> LinuxFileOperations::GetPendingWritesSorted() const {
-  std::vector<PendingWriteInfo> result;
-  
-  std::lock_guard<std::mutex> lock(pending_mutex_);
-  result.reserve(pending_callbacks_.size());
-  
-  for (const auto& [write_id, pw] : pending_callbacks_) {
-    result.push_back(PendingWriteInfo{pw.offset, pw.data, pw.size, pw.callback});
-  }
-  
-  // Sort by offset for sequential replay
-  std::sort(result.begin(), result.end(), 
-            [](const PendingWriteInfo& a, const PendingWriteInfo& b) {
-              return a.offset < b.offset;
-            });
-  
-  return result;
-}
 
 FileError LinuxFileOperations::AttemptSyncFallback() {
 #ifdef HAVE_LIBURING
@@ -913,123 +585,6 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
 #else
   return FileError::kSuccess;
 #endif
-}
-
-bool LinuxFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
-#ifdef HAVE_LIBURING
-  // First, prevent new async writes by switching to sync mode
-  sync_fallback_mode_ = true;
-  
-  int pending = pending_writes_.load();
-  if (pending == 0) {
-    Log("DrainAndSwitchToSync: No pending writes, switching to sync mode");
-    return true;
-  }
-  
-  Log("DrainAndSwitchToSync: Waiting for " + std::to_string(pending) + 
-      " pending writes to drain (stall timeout: " + std::to_string(stallTimeoutSeconds) + "s per completion)");
-  
-  auto startTime = std::chrono::steady_clock::now();
-  auto lastProgressTime = startTime;
-  int lastPending = pending;
-  
-  // Wait for the extract thread to drain pending writes.
-  // We do NOT call ProcessCompletions here — the extract thread is the sole
-  // CQ consumer (io_uring is not thread-safe for multiple consumers).
-  // Once sync_fallback_mode_ is set above, the extract thread will stop
-  // submitting new writes and drain the remaining ones via its own
-  // ProcessCompletions calls in AsyncWriteSequential/WaitForPendingWrites.
-  while (pending_writes_.load() > 0) {
-    int currentPending = pending_writes_.load();
-    auto now = std::chrono::steady_clock::now();
-
-    if (currentPending < lastPending) {
-      // Progress! Reset the stall timer
-      Log("DrainAndSwitchToSync: Draining... " + std::to_string(currentPending) + " remaining");
-      lastPending = currentPending;
-      lastProgressTime = now;
-    } else {
-      // No progress - check stall timeout
-      auto stallDuration = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressTime);
-      if (stallDuration.count() >= stallTimeoutSeconds) {
-        int remaining = pending_writes_.load();
-        auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
-        Log("DrainAndSwitchToSync: Stalled - no completions for " +
-            std::to_string(stallTimeoutSeconds) + "s, " + std::to_string(remaining) +
-            " writes still pending after " + std::to_string(totalElapsed.count()) + "s total");
-        return false;
-      }
-    }
-
-    // Brief sleep to avoid spinning — the extract thread is doing the actual draining
-    usleep(100000);  // 100ms
-  }
-  
-  auto elapsed = std::chrono::steady_clock::now() - startTime;
-  int elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
-  
-  Log("DrainAndSwitchToSync: Successfully drained all writes in " + 
-      std::to_string(elapsedMs) + "ms - now in sync mode");
-  return true;
-#else
-  (void)stallTimeoutSeconds;
-  sync_fallback_mode_ = true;
-  return true;
-#endif
-}
-
-void LinuxFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
-#ifdef HAVE_LIBURING
-  int oldDepth = async_queue_depth_;
-  
-  // Only reduce, never increase during recovery
-  if (newDepth >= oldDepth) {
-    return;
-  }
-  
-  // Ensure minimum viable depth (2 still allows some pipelining)
-  newDepth = std::max(newDepth, TimeoutDefaults::kMinAsyncQueueDepth);
-  
-  async_queue_depth_ = newDepth;
-  
-  Log("Queue depth reduced for recovery: " + std::to_string(oldDepth) + " -> " + std::to_string(newDepth) +
-      " (pending: " + std::to_string(pending_writes_.load()) + ")");
-#else
-  (void)newDepth;
-#endif
-}
-
-// Query device I/O limits from sysfs without requiring an open file descriptor.
-// Returns zero-initialized struct if the device path isn't a block device or sysfs is unavailable.
-FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
-  FileOperations::DeviceIOLimits limits;
-
-  // Extract device name from path (e.g. "/dev/sda" -> "sda")
-  if (path.find("/dev/") != 0)
-    return limits;
-  std::string devname = path.substr(5);
-  if (devname.empty())
-    return limits;
-
-  std::string queueDir = "/sys/block/" + devname + "/queue/";
-
-  // Read nr_requests — block layer scheduler queue depth
-  {
-    std::ifstream f(queueDir + "nr_requests");
-    int val = 0;
-    if (f >> val && val > 0)
-      limits.suggested_queue_depth = val;
-  }
-
-  // Read max_sectors_kb — maximum single I/O request size the block layer will accept
-  {
-    std::ifstream f(queueDir + "max_sectors_kb");
-    int val = 0;
-    if (f >> val && val > 0)
-      limits.max_transfer_bytes = static_cast<size_t>(val) * 1024;
-  }
-
-  return limits;
 }
 
 // Platform-specific factory function implementation

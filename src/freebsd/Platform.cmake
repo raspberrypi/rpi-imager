@@ -1,30 +1,28 @@
-# Linux platform-specific sources and link settings
+# FreeBSD platform-specific sources and link settings
 
 find_package(GnuTLS REQUIRED)
 
-# Find liburing for async I/O (Linux 5.1+)
-# Uses pkg-config since liburing doesn't have a CMake config
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBURING liburing)
 
-if(LIBURING_FOUND)
-    message(STATUS "Found liburing: ${LIBURING_VERSION}")
-    add_definitions(-DHAVE_LIBURING)
-else()
-    message(WARNING "liburing not found - async I/O will be disabled. Install with: sudo apt install liburing-dev")
-endif()
+# local include packages
+set(__PKG_CONFIG_OLD ${PKG_CONFIG})
+set(PKG_CONFIG "${PKG_CONFIG} --static")
+pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
+set(PKG_CONFIG ${__PKG_CONFIG_OLD})
+unset(__PKG_CONFIG_OLD)
+
+pkg_check_modules(NETTLE REQUIRED IMPORTED_TARGET nettle)
+pkg_check_modules(LIBIDN2 REQUIRED IMPORTED_TARGET libidn2)
 
 set(PLATFORM_SOURCES
-    drivelist/drivelist_linux.cpp
-    linux/stpanalyzer.h
-    linux/stpanalyzer.cpp
+    drivelist/drivelist_freebsd.cpp
     linux/acceleratedcryptographichash_gnutls.cpp
     unix/bootimgcreator_unix.cpp
-    linux/bootimgcreator_linux.cpp
+    freebsd/bootimgcreator_freebsd.cpp
     linux/secureboot_crypto_linux.cpp
     unix/file_operations_unix.cpp
-    linux/file_operations_linux.cpp
-    linux/platformquirks_linux.cpp
+    freebsd/file_operations_freebsd.cpp
+    freebsd/platformquirks_freebsd.cpp
 )
 
 # Only include DBus-dependent and GUI components for non-CLI builds
@@ -45,18 +43,10 @@ else()
     )
 endif()
 
-set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
-
-# Add liburing if available
-if(LIBURING_FOUND)
-    set(EXTRALIBS ${EXTRALIBS} ${LIBURING_LIBRARIES})
-    include_directories(${LIBURING_INCLUDE_DIRS})
-endif()
+set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS PkgConfig::ZSTD PkgConfig::NETTLE PkgConfig::LIBIDN2)
 
 set(DEPENDENCIES "")
 add_definitions(-DHAVE_GNUTLS)
 
 # libusb requires libudev for rpiboot support
 pkg_check_modules(UDEV REQUIRED libudev)
-
-

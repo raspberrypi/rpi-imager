@@ -215,7 +215,7 @@ namespace PlatformQuirks {
      */
     DiskResult refreshDiskView(const QString& device);
 
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
     /**
      * Find the system's CA certificate bundle for libcurl.
      *

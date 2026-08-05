@@ -112,3 +112,125 @@ rm ${pi-gen-micro-root}/packages/rpi-imager-embedded*.deb
 cp ../rpi-imager-embedded*.deb ${pi-gen-micro-root}/packages/
 pushd ${pi-gen-micro-root}/packages/ && dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz && popd
 ```
+
+### FreeBSD
+
+To build manually, follow the steps below. An executable will be installed to `/usr/local/bin`. Both GUI builds and CLI-only builds will yield dynamically-linked executables (with the exception of zstd, which is statically linked to make use of experimental features).
+
+#### Get dependencies
+
+Install the dependencies through the FreeBSD binary database:
+
+```sh
+pkg install cmake git gnutls libarchive libidn2 nettle
+```
+
+`liblzma`, `zlib`, `zstd`, and are provided by the FreeBSD base system and should not need to be installed separately.
+
+#### Get the source
+
+```sh
+git clone --depth 1 https://github.com/raspberrypi/rpi-imager
+```
+
+#### Build Qt
+Unlike other systems, Qt does not build cleanly on FreeBSD without patches. Hence, you should opt to use a copy from the ports tree through one of three options:
+
+1. Install from FreeBSD binary database (recommended):
+
+   ```sh
+   pkg install qt6-base
+   ```
+   
+   If you plan to build the GUI version, some image plugins are required:
+   ```sh
+   pkg install qt6-imageformats
+   ```
+
+   If you need translations, an additional dependency is required:
+   ```sh
+   pkg install qt6-tools
+   ```
+
+2. Build FreeBSD port from source (with portmaster):
+
+   First, install portmaster:
+   ```sh
+   pkg install portmaster
+   ```
+
+   Clone the ports tree if you have not yet done so:
+   ```
+   git clone https://git.freebsd.org/ports.git /usr/ports
+   ```
+
+   Then, install the dependencies:
+   ```sh
+   portmaster --delete-build-only /usr/ports/devel/qt6-base
+   ```
+
+   If you plan to build the GUI version, some image plugins are required:
+   ```sh
+   portmaster --delete-build-only /usr/ports/devel/qt6-imageformats
+   ```
+
+   If you need translations, an additional dependency is required:
+   ```sh
+   portmaster --delete-build-only /usr/ports/devel/qt6-tools
+   ```
+
+3. Build FreeBSD port from source (without portmaster):
+   Clone the ports tree if you have not yet done so:
+   ```
+   git clone https://git.freebsd.org/ports.git /usr/ports
+   ```
+
+   Then, install the dependencies:
+   ```sh
+   cd /usr/ports/devel/qt6-base && make install clean
+   ```
+
+   If you plan to build the GUI version, some image plugins are required:
+   ```sh
+   cd /usr/ports/devel/qt6-imageformats && make install clean
+   ```
+
+   If you need translations, an additional dependency is required:
+   ```sh
+   cd /usr/ports/devel/qt6-tools && make install clean
+   ```
+
+#### Build and install the package
+
+```sh
+./create-freebsd.sh --cli --qt-root=/path/to/qt
+```
+
+which installs `rpi-imager-cli` for CLI-only version and
+
+```sh
+./create-freebsd.sh --qt-root=/path/to/qt
+```
+
+which installs `rpi-imager` for GUI version.
+
+#### Uninstalling
+1. CLI
+
+   ``` sh
+   rm -f /usr/local/bin/rpi-imager-cli
+   rm -f /usr/local/share/icons/hicolor/scalable/apps/rpi-imager.svg
+   rm -f /usr/local/share/applications/com.raspberrypi.rpi-imager.desktop
+   ```
+
+2. GUI
+
+   ``` sh
+   rm -f /usr/local/bin/rpi-imager
+   rm -f /usr/local/share/icons/hicolor/scalable/apps/rpi-imager.svg
+   rm -f /usr/local/share/applications/com.raspberrypi.rpi-imager.desktop
+   rm -f /usr/local/share/metainfo/com.raspberrypi.rpi-imager.metainfo.xml
+   rm -f /usr/local/share/mime/packages/com.raspberrypi.rpi-imager-manifest.xml
+   rm -f /usr/local/share/polkit-1/actions/com.raspberrypi.rpi-imager.policy
+   ```
+

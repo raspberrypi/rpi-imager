@@ -8,29 +8,29 @@
 #include <QProcess>
 #include <QDebug>
 
-BootImgCreatorUnix::setPlatformName("MacOS");
+BootImgCreatorUnix::setPlatformName("FreeBSD");
 
 bool BootImgCreatorUnix::attachDiskImage(const QString& imagePath, QString& device) {
-    QProcess hdiutilAttach;
-    hdiutilAttach.start("hdiutil", QStringList() << "attach" << "-nomount" << imagePath);
-    if (!hdiutilAttach.waitForFinished(10000) || hdiutilAttach.exitCode() != 0) {
-        qDebug() << "BootImgCreator (macOS): hdiutil attach failed";
+    QProcess mdconfigCreate;
+    mdconfigCreate.start("mdconfig", QStringList() << "-f" << imagePath);
+    if (!mdconfigCreate.waitForFinished(10000) || mdconfigCreate.exitCode() != 0) {
+        qDebug() << "BootImgCreator (FreeBSD): mdconfig failed";
         return false;
     }
-    device = QString(hdiutilAttach.readAllStandardOutput()).trimmed();
+    device = QString(mdconfigCreate.readAllStandardOutput()).trimmed();
     return true;
 }
 
 bool BootImgCreatorUnix::detachDiskImage(const QString& device) {
-    QProcess::execute("hdiutil", QStringList() << "detach" << device);
+    QProcess::execute("mdconfig", QStringList() << "-d" << "-u" << device);
     return true;
 }
 
 bool BootImgCreatorUnix::mountFilesystem(const QString& device, const QString& mountPoint) {
     QProcess mountProc;
-    mountProc.start("mount", QStringList() << "-t" << "msdos" << device << mountPoint);
+    mountProc.start("mount", QStringList() << "-t" << "msdosfs" << device << mountPoint);
     if (!mountProc.waitForFinished(10000) || mountProc.exitCode() != 0) {
-        qDebug() << "BootImgCreator (macOS): mount failed:" << mountProc.readAllStandardError();
+        qDebug() << "BootImgCreator (FreeBSD): mount failed:" << mountProc.readAllStandardError();
         return false;
     }
     return true;

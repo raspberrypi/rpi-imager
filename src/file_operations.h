@@ -252,7 +252,7 @@ class FileOperations {
   // Returns true if drain succeeded (pending==0), false if stalled (no progress for stallTimeoutSeconds).
   // After this call, IsInSyncFallbackMode() returns true.
   //
-  // Implementation pattern (shared by Linux, macOS, Windows implementations):
+  // Implementation pattern (shared by Linux, macOS, Windows and FreeBSD implementations):
   //   1. Set sync_fallback_mode_ = true (prevents new async writes)
   //   2. If no pending writes, return true immediately
   //   3. Loop until pending == 0 or stall timeout:
@@ -358,4 +358,4 @@ class FileOperations {
 
 } // namespace rpi_imager
 
-#endif // FILE_OPERATIONS_H_ 
+#endif // FILE_OPERATIONS_H_

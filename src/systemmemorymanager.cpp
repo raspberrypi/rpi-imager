@@ -26,6 +26,9 @@
 #elif defined(Q_OS_LINUX)
 #include <sys/sysinfo.h>
 #include <unistd.h>
+#elif defined(Q_OS_FREEBSD)
+#include <sys/sysctl.h>
+#include <unistd.h>
 #endif
 
 SystemMemoryManager& SystemMemoryManager::instance()
@@ -111,6 +114,8 @@ QString SystemMemoryManager::getPlatformName()
     return "macOS";
 #elif defined(Q_OS_LINUX)
     return "Linux";
+#elif defined(Q_OS_FREEBSD)
+    return "FreeBSD";
 #else
     return "Unknown";
 #endif
@@ -177,6 +182,38 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
     }
     
     return 0; // Detection failed
+}
+
+#elif defined(Q_OS_FREEBSD)
+qint64 SystemMemoryManager::getPlatformTotalMemoryMB()
+{
+	int64_t memsize = 0;
+	size_t size = sizeof(memsize);
+
+	if (sysctlbyname("hw.physmem", &memsize, &size, NULL, 0) == 0) {
+		return static_cast<qint64>(memsize / (1024 * 1024));
+	}
+
+	return 0; // Detection failed
+}
+
+qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
+{
+	int64_t v_free{}, v_inac{};
+	size_t v_free_sz{sizeof(v_free)}, v_inac_sz{sizeof(v_inac)};
+	size_t page_size{getSystemPageSize()};
+
+	if (sysctlbyname("vm.stats.vm.v_free_count", &v_free, &v_free_sz, NULL, 0) != 0) {
+		return 0;
+	}
+
+	if (sysctlbyname("vm.stats.vm.v_inactive_count", &v_inac, &v_inac_sz, NULL, 0) != 0) {
+		return 0;
+	}
+
+	int64_t available_pages = v_free + v_inac;
+	int64_t available_bytes = available_pages * page_size;
+	return static_cast<qint64>(available_bytes / (1024 * 1024));
 }
 
 #elif defined(Q_OS_LINUX)
@@ -412,7 +449,7 @@ size_t SystemMemoryManager::getSystemPageSize()
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     return si.dwPageSize;
-#elif defined(Q_OS_DARWIN) || defined(Q_OS_LINUX)
+#elif defined(Q_OS_DARWIN) || defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
     size_t pageSize = sysconf(_SC_PAGESIZE);
     return (pageSize == (size_t)-1) ? 4096 : pageSize;
 #else

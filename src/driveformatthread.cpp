@@ -12,7 +12,7 @@
 #include <QTemporaryFile>
 #include <QElapsedTimer>
 
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
 #include <unistd.h>
 #endif
 
@@ -58,8 +58,8 @@ void DriveFormatThread::run()
     }
 #endif
 
-#ifdef Q_OS_LINUX
-    // Linux-specific: Check permissions
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
+    // Linux and FreeBSD-specific: Check permissions
     if (::access(_device.constData(), W_OK) != 0)
     {
         emit error(tr("Cannot format device: insufficient permissions. Please run with elevated privileges (sudo)."));
@@ -86,7 +86,7 @@ void DriveFormatThread::run()
     emit preparationStatusUpdate(tr("Writing filesystem..."));
 
     // Unmount the device before formatting (needed for macOS and Linux)
-#if defined(Q_OS_DARWIN) || defined(Q_OS_LINUX)
+#if defined(Q_OS_DARWIN) || defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
     // Use block device path for unmount (e.g., /dev/disk on macOS, not /dev/rdisk)
     QString unmountPath = PlatformQuirks::getEjectDevicePath(QString::fromLatin1(_device));
     qDebug() << "Unmounting:" << unmountPath;
@@ -102,7 +102,7 @@ void DriveFormatThread::run()
     }
 #endif
 
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
     // Get device size for logging
     std::uint64_t deviceSize = getDeviceSize(_device);
     qDebug() << "Device size:" << deviceSize << "bytes";
