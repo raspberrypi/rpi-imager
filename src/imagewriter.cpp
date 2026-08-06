@@ -165,10 +165,21 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
     _debugSkipEndOfDevice = false; // Normal behavior; enable for counterfeit cards
     _debugIgnoreDeviceLimits = false; // Use device-reported I/O limits by default
-    _debugRpiboot = false;          // Rpiboot/fastboot support disabled by default
+    // Rpiboot/fastboot support is off by default, but sticky once turned on:
+    // the people who need it (CM provisioning) want it every session, and
+    // re-entering the secret menu on every launch is needless friction.
+    _debugRpiboot = _settings.value(QStringLiteral("debug_rpiboot"), false).toBool();
     _debugForceSecureBoot = false;  // No UI override; CLI flag still wins
     _debugSignFastbootGadget = false; // CM5 special-reprovision-device (SBR then fastboot)
-    
+
+    // Propagate a restored rpiboot setting to the poll thread; these only set
+    // atomics, so it is safe before polling starts.
+    if (_debugRpiboot) {
+        _drivelist.setRpibootEnabled(true);
+        _drivelist.setFastbootScanEnabled(true);
+        qDebug() << "Debug: Rpiboot/fastboot support enabled from saved settings";
+    }
+
     // Calculate optimal async queue depth based on system memory
     _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
     
@@ -3725,6 +3736,9 @@ void ImageWriter::setDebugRpiboot(bool enabled)
         _debugRpiboot = enabled;
         _drivelist.setRpibootEnabled(enabled);
         _drivelist.setFastbootScanEnabled(enabled);
+        // Sticky across runs — restored in the constructor.
+        _settings.setValue(QStringLiteral("debug_rpiboot"), enabled);
+        _settings.sync();
         qDebug() << "Debug: Rpiboot/fastboot support" << (enabled ? "enabled" : "disabled");
     }
 }
