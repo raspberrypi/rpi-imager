@@ -112,20 +112,23 @@ namespace {
         DiskOpContext* ctx = static_cast<DiskOpContext*>(context);
         ctx->result = translateDissenter(dissenter);
         ctx->completed = true;
+        CFRunLoopStop(CFRunLoopGetCurrent());
     }
-    
+
     void ejectCallback(DADiskRef disk, DADissenterRef dissenter, void* context) {
         (void)disk;
         DiskOpContext* ctx = static_cast<DiskOpContext*>(context);
         ctx->result = translateDissenter(dissenter);
         ctx->completed = true;
+        CFRunLoopStop(CFRunLoopGetCurrent());
     }
-    
+
     void ejectUnmountCallback(DADiskRef disk, DADissenterRef dissenter, void* context) {
         DiskOpContext* ctx = static_cast<DiskOpContext*>(context);
         if (dissenter) {
             ctx->result = translateDissenter(dissenter);
             ctx->completed = true;
+            CFRunLoopStop(CFRunLoopGetCurrent());
         } else {
             // Unmount succeeded, now eject
             DADiskEject(disk, kDADiskEjectOptionDefault, ejectCallback, context);
@@ -134,14 +137,16 @@ namespace {
     
     // Default timeout: 60 seconds (maxRetries * 100 * 0.05s = 60s with maxRetries=12)
     // Slow USB drives with many files open may take significant time to unmount
-    PlatformQuirks::DiskResult runDiskOperationOnMainRunLoop(const char* device,
-                                                                DADiskUnmountCallback callback,
-                                                                int maxRetries = 12) {
+    PlatformQuirks::DiskResult runDiskOperation(const char* device,
+                                                DADiskUnmountCallback callback,
+                                                int maxRetries = 12) {
         DiskOpContext context;
-        
+
         PLATFORM_LOG_INFO("runDiskOperation: starting operation on %{public}s", device);
-        
-        CFRunLoopRef run_loop = [[NSRunLoop mainRunLoop] getCFRunLoop];
+
+        // Run the session on the calling thread's own run loop. The caller is a
+        // worker thread (write/format), so blocking here never stalls the GUI.
+        CFRunLoopRef run_loop = CFRunLoopGetCurrent();
 
         // Create DiskArbitration session
         DASessionRef session = DASessionCreate(kCFAllocatorDefault);
@@ -164,12 +169,19 @@ namespace {
         DADiskUnmount(disk, kDADiskUnmountOptionWhole | kDADiskUnmountOptionForce,
                       callback, &context);
         
+        // Wait for the callback, sleeping 50ms per iteration. A zero-second
+        // CFRunLoopRunInMode() only drains sources that are *already* pending,
+        // so polling with it burns through the retry budget in microseconds and
+        // reports a timeout on every real disk.
         int retries = 0;
         while (!context.completed && retries < maxRetries * 100) {
-            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true);
+            SInt32 status = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
+            if (status == kCFRunLoopRunStopped || status == kCFRunLoopRunFinished) {
+                break;
+            }
             retries++;
         }
-        
+
         // Clean up
         DASessionUnscheduleFromRunLoop(session, run_loop, kCFRunLoopDefaultMode);
         CFRelease(disk);
@@ -183,20 +195,6 @@ namespace {
         PLATFORM_LOG_INFO("runDiskOperation: completed on %{public}s with result %d", 
                           device, static_cast<int>(context.result));
         return context.result;
-    }
-
-    PlatformQuirks::DiskResult runDiskOperation(const char* device,
-                                                 DADiskUnmountCallback callback,
-                                                 int maxRetries = 12) {
-        if ([NSThread isMainThread]) {
-            return runDiskOperationOnMainRunLoop(device, callback, maxRetries);
-        }
-
-        __block PlatformQuirks::DiskResult result = PlatformQuirks::DiskResult::Error;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = runDiskOperationOnMainRunLoop(device, callback, maxRetries);
-        });
-        return result;
     }
 }
 
