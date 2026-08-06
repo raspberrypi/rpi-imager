@@ -1,4 +1,73 @@
-rpi-imager (2.0.10-1) unstable; urgency=medium
+rpi-imager (2.0.11) unstable; urgency=medium
+
+  * OS Customisation:
+    - Add the rpi-preseed first-boot customisation format, and list it as a
+      valid init_format in the schema notes.
+    - rpi-preseed: always add the account to the 'sudo' group.
+    - cloud-init: write `sudo: null` when the user declines passwordless sudo.
+      A singular `user:` block is merged over the distro default_user, which
+      raspberry-pi-os populates with passwordless sudo, so omitting the key
+      granted it regardless of the user's choice; `null` suppresses the rules
+      while keeping 'sudo' group membership, so the account is prompted for one.
+    - Centralise credential derivation in CustomisationGenerator and hash
+      credentials in C++ before persisting them.
+    - Verify the device kept the customisation files after writing.
+    - UI: keep customisation steps centre-middle; drop the unused ImageOptions
+      enum; bind SSH key row data; allow query parameters on custom manifest
+      URLs.
+  * Fastboot (Compute Module):
+    - Add an Erase command for 'Format'.
+    - Verify device identity before treating a target as a Pi.
+    - Align stage() tests and docs with the download verb.
+  * Write reliability:
+    - Support multi-frame .img.zst images (use ZSTD_findDecompressedSize).
+    - Linux/Windows: take an exclusive lock on drive open. On Windows, hold
+      volume locks rather than deleting drive letters, only remove removable
+      mountpoints, retry the exclusive open before falling back to shared, and
+      flush the filesystem to media before writing the partition table.
+    - macOS: run DiskArbitration on the main run loop with blocking calls, and
+      move the nested run loop onto worker threads.
+  * Embedded (Raspberry Pi network installer):
+    - Build a dedicated Qt configured -no-opengl -qpa linuxfb -no-dbus
+      -no-feature-icu. The pi-gen-micro netboot image carries no Mesa or X11
+      (far too large for a network-loaded image), no session bus, and none of
+      the languages that need ICU. The package had drifted onto the desktop Qt
+      and so linked libEGL/libGL/libX11 and libQt6DBus -- absent from the image
+      -- and could not load on the target.
+    - Build the application without QtDBus for embedded; its DBus users (portal
+      file dialog, NetworkManager WiFi backend, Pi Connect URI handler) are
+      unusable on a busless image and are compiled out via QT_DBUS_LIB guards.
+    - Assemble the .deb with debhelper so debian/control is the single source of
+      dependencies and metadata and md5sums are generated; trim Depends to the
+      minimal host-provided set (no libegl1/libgl1/libx11-6/libsystemd0, which
+      apt would otherwise pull -- Mesa and X11 included -- into the image).
+    - Bake an $ORIGIN-relative rpath at build time (was a leaked build-host
+      path), dereference the bundled fontconfig config, and drop the stale
+      vendored ICU handling.
+  * Build / packaging:
+    - Rootless multi-arch (amd64/arm64/armhf) release pipeline: every arch,
+      the host included, builds inside its bookworm mmdebstrap chroot; there is
+      no host-native build path (a package built against the host's libraries
+      is not the package it claims to be).
+    - Desktop and CLI AppImages are now self-contained: bundle the transitive
+      library closure of the staged AppDir (via readelf, so it also works for
+      foreign-architecture AppDirs), which was previously taken from the host
+      and left arm64/armhf incompletely bundled. Declare the genuinely
+      host-coupled libraries in debian/control.
+    - Build Qt with -no-feature-icu across desktop/CLI/embedded; drop the
+      JPEG 2000 image plugin; collect the source .buildinfo.
+    - liburing: probe for the 64-bit user_data API (added in 2.2) before
+      enabling io_uring, so an older build environment falls back to
+      synchronous writes instead of failing to link.
+    - Vendor curl/libarchive/libusb/nghttp2/xz as git submodules.
+    - Reproducibility and hygiene: normalise mtimes; generate version files in
+      an explicit build override; prune qmlls and performance profiles from the
+      packaged tree; stop deleting the screenshot; ship the fastboot udev rule
+      inside the .debs; assorted amd64/arm64 packaging fixes.
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 06 Aug 2026 11:46:27 +0100
+
+rpi-imager (2.0.10) unstable; urgency=medium
 
   * Pi Connect:
     - Fix Connect sign-in on more Linux systems (#1564)
@@ -57,32 +126,6 @@ rpi-imager (2.0.10-1) unstable; urgency=medium
     - Update bmap-tools repo URL
   * Performance:
     - Refactor analyse_performance script
-  * debian/build-source.sh: collect the generated _source.buildinfo. It
-    was listed in _source.changes but discarded with the temporary build
-    directory, leaving the source upload referencing a missing file.
-  * create-appimage.sh, create-appimage-cli.sh: bundle the transitive
-    library closure of the staged AppDir via
-    appimage_deploy_lib_closure() in debian/lib.sh. The chroot build
-    path never invoked linuxdeploy, so only Qt itself was bundled and
-    around twenty libraries (PCRE2, zstd, brotli, GnuTLS, glib, double-
-    conversion, liburing) were silently taken from the host. Resolution
-    reads ELF headers with readelf rather than ldd, so it also works for
-    foreign-architecture AppDirs where linuxdeploy cannot run; arm64 and
-    armhf were never correctly bundled before.
-  * qt/features_exclude.list, qt/features_exclude.cli.list: build Qt
-    with -no-feature-icu. No ICU-backed Qt feature is used (UTF-8
-    conversion only, no QCollator, timezones handled as IANA identifier
-    strings) and ICU was enabled purely by configure autodetection.
-    Removes around 12.6 MB per binary package and drops the per-release
-    libicu soname pin that tied the packages to a single Debian release.
-  * create-appimage.sh: drop the JPEG 2000 image format plugin. It was
-    staged on amd64 only and its libjasper dependency was never shipped
-    or declared.
-  * debian/control: declare the host-coupled libraries the AppImages
-    resolve from the system (xcb, xkbcommon, Wayland, EGL/GL, DRM/GBM,
-    libinput, D-Bus, fontconfig, FreeType, libstdc++, libatomic).
-    dh_shlibdeps cannot inspect the AppImage payload, so these were
-    previously undeclared.
 
  -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 19 Jun 2026 14:35:14 +0100
 
