@@ -18,7 +18,10 @@ WizardStepBase {
     title: qsTr("Write complete!")
     showBackButton: false
     showNextButton: false
-    readonly property bool autoEjectEnabled: ImageWriterSingleton.getBoolSetting("eject")
+    readonly property var ejectState: ImageWriterSingleton.ejectState
+    readonly property bool ejectInProgress: ejectState === ImageWriterSingleton.EjectInProgress
+    // Fastboot targets have no removable medium to eject
+    readonly property bool ejectApplicable: !ImageWriterSingleton.isFastbootDevice()
     // Use snapshot of customization flags captured when write completed
     // This preserves the state even after token/flags are cleared for security
     readonly property bool anyCustomizationsApplied: (
@@ -234,10 +237,22 @@ WizardStepBase {
             }
             FocusableText {
                 id: ejectInstruction
-                text: root.autoEjectEnabled ? qsTr("The storage device was ejected automatically. You can now remove it safely.") : qsTr("Please eject the storage device before removing it from your computer.")
+                visible: root.ejectApplicable
+                text: {
+                    if (root.ejectState === ImageWriterSingleton.EjectInProgress)
+                        return qsTr("Ejecting the storage device — do not remove it yet…")
+                    if (root.ejectState === ImageWriterSingleton.EjectSucceeded)
+                        return qsTr("The storage device was ejected. You can now remove it safely.")
+                    if (root.ejectState === ImageWriterSingleton.EjectFailed)
+                        return qsTr("The storage device could not be ejected. Close any application still using it, then press Eject.")
+                    // EjectIdle: no eject ran for this write, so never claim one
+                    // did — instruct the user to eject before removal instead.
+                    return qsTr("Please eject the storage device before removing it from your computer.")
+                }
                 font.pointSize: Style.fontSizeDescription
                 font.family: Style.fontFamily
-                color: Style.textDescriptionColor
+                color: root.ejectInProgress || root.ejectState === ImageWriterSingleton.EjectFailed ? Style.formLabelColor : Style.textDescriptionColor
+                font.bold: root.ejectInProgress || root.ejectState === ImageWriterSingleton.EjectFailed
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
@@ -253,10 +268,24 @@ WizardStepBase {
         },
         
         ImButton {
+            id: ejectButton
+            text: qsTr("Eject")
+            accessibleDescription: qsTr("Eject the storage device so it can be removed safely")
+            visible: root.ejectApplicable &&
+                     (root.ejectState === ImageWriterSingleton.EjectFailed ||
+                      root.ejectState === ImageWriterSingleton.EjectIdle)
+            activeFocusOnTab: true
+            Layout.minimumWidth: Style.buttonWidthMinimum
+            Layout.preferredHeight: Style.buttonHeightStandard
+            onVisibleChanged: root.rebuildFocusOrder()
+            onClicked: ImageWriterSingleton.ejectDrive()
+        },
+
+        ImButton {
             id: writeAnotherButton
             text: qsTr("Write Another")
             accessibleDescription: qsTr("Return to storage selection to write the same image to another storage device")
-            enabled: true
+            enabled: !root.ejectInProgress
             activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum
             Layout.preferredHeight: Style.buttonHeightStandard
@@ -270,8 +299,8 @@ WizardStepBase {
         ImButtonRed {
             id: finishButton
             text: ImageWriterSingleton.isEmbeddedMode() ? qsTr("Reboot") : CommonStrings.finish
-            accessibleDescription: ImageWriterSingleton.isEmbeddedMode() ? qsTr("Reboot the system to apply changes") : qsTr("Close Raspberry Pi Imager and exit the application")
-            enabled: true
+            accessibleDescription: root.ejectInProgress ? qsTr("Available once the storage device has been ejected") : (ImageWriterSingleton.isEmbeddedMode() ? qsTr("Reboot the system to apply changes") : qsTr("Close Raspberry Pi Imager and exit the application"))
+            enabled: !root.ejectInProgress
             activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum
             Layout.preferredHeight: Style.buttonHeightStandard
@@ -308,12 +337,17 @@ WizardStepBase {
         
         // Register eject instruction as third focus group
         registerFocusGroup("eject", function() {
-            return [ejectInstruction]
+            return ejectInstruction.visible ? [ejectInstruction] : []
         }, 2)
         
         // Register custom buttons as fourth focus group
         registerFocusGroup("buttons", function() {
-            return [writeAnotherButton, finishButton]
+            var buttons = []
+            if (ejectButton.visible)
+                buttons.push(ejectButton)
+            buttons.push(writeAnotherButton)
+            buttons.push(finishButton)
+            return buttons
         }, 3)
         
         // Ensure focus order is built after custom buttons are fully instantiated

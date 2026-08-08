@@ -328,7 +328,9 @@ void DownloadExtractThread::_onDownloadSuccess()
         return;
     }
 
-    // Extraction thread already called _writeComplete(), so just emit success to signal thread completion
+    // Extraction thread already called _writeComplete() (image mode) or
+    // performed the eject itself (multi-file mode), so just emit success to
+    // signal thread completion.
     emit success();
 }
 
@@ -844,6 +846,11 @@ void DownloadExtractThread::extractMultiFileRun()
             }
         }
 
+        // Announce the eject before success() so the done screen never claims
+        // the drive is safe to remove while the flush is still running; the
+        // eject itself runs in the cleanup section below, after this signal.
+        if (_ejectEnabled)
+            emit ejectStarted();
         emit success();
     }
     catch (exception &e)
@@ -915,15 +922,14 @@ void DownloadExtractThread::extractMultiFileRun()
     }
 #endif
 
-    // Give the filesystem a moment to settle after sync before ejecting
-    QThread::msleep(500);
-
+    // The eject is announced before success() and performed here afterwards,
+    // so the done screen appears immediately and shows a live "ejecting"
+    // status instead of the write screen freezing on "Finalising…". On macOS
+    // the unmount inside ejectDisk() is what flushes the freshly extracted
+    // files out of the page cache, which can take tens of seconds on a slow
+    // stick.
     if (_ejectEnabled)
-    {
-        // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
-        QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
-        PlatformQuirks::ejectDisk(ejectPath);
-    }
+        _performEject();
 }
 
 ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)

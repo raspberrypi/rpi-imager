@@ -1917,14 +1917,36 @@ void DownloadThread::_writeComplete()
     QThread::sleep(1);
 #endif
 
+    // Announce the eject before success() so the done screen never shows a
+    // stale "safe to remove" while the background eject is still running.
+    if (_ejectEnabled)
+        emit ejectStarted();
+
     emit success();
 
     if (_ejectEnabled)
-    {
-        // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
-        QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
-        PlatformQuirks::ejectDisk(ejectPath);
-    }
+        _performEject();
+}
+
+void DownloadThread::_performEject()
+{
+    // Give the filesystem a moment to settle before ejecting
+    QThread::msleep(500);
+
+    // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
+    QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
+    PlatformQuirks::DiskResult result = PlatformQuirks::ejectDisk(ejectPath);
+
+    bool succeeded = (result == PlatformQuirks::DiskResult::Success);
+#ifdef Q_OS_WIN
+    // The legacy Windows implementation walks every drive letter, so its
+    // result can carry an unrelated volume's failure even when the target
+    // drive ejected fine. Only report a definite miss.
+    succeeded = (result != PlatformQuirks::DiskResult::InvalidDrive);
+#endif
+
+    qDebug() << "Background eject finished for" << ejectPath << "succeeded:" << succeeded;
+    emit ejectFinished(succeeded);
 }
 
 namespace {
