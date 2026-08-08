@@ -46,6 +46,7 @@
 #include <QTimeZone>
 #include <QNetworkInterface>
 #include <QCoreApplication>
+#include <QPointer>
 #ifndef CLI_ONLY_BUILD
 #include <QQmlContext>
 #include <QWindow>
@@ -509,6 +510,22 @@ ImageWriter::~ImageWriter()
         qDebug() << "Cleaning up CacheManager";
         delete _cacheManager;
         _cacheManager = nullptr;
+    }
+
+    // Give a user-triggered eject a chance to finish before teardown. Never
+    // terminate() it: killing the thread mid-DiskArbitration call is unsafe,
+    // and deleting a QThread that survived terminate() is a qFatal. If it is
+    // still flushing after the grace period, leave it to finish detached — the
+    // worker only reaches this object through a guarded QPointer, so it cannot
+    // touch a destroyed ImageWriter.
+    if (_manualEjectThread) {
+        qDebug() << "Waiting for manual eject thread to finish";
+        if (_manualEjectThread->wait(10000)) {
+            delete _manualEjectThread;
+        } else {
+            qWarning() << "Manual eject still running at teardown; leaving it to finish detached";
+        }
+        _manualEjectThread = nullptr;
     }
 
     // Ensure any running thread is properly cleaned up
@@ -1028,6 +1045,7 @@ void ImageWriter::startWrite()
     }
 
     setWriteState(WriteState::Preparing);
+    setEjectState(EjectState::EjectIdle);
 
     if (_isFastbootDevice)
     {
@@ -1403,6 +1421,8 @@ void ImageWriter::startWrite()
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+    connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
+    connect(_thread, &DownloadThread::ejectFinished, this, &ImageWriter::onEjectFinished);
     // Ensure cleanup of thread pointer on finish in all paths
     connect(_thread, &QThread::finished, this, [this]() {
         if (_thread)
@@ -2629,6 +2649,72 @@ void ImageWriter::restartWrite(QString reason)
         }
         startWrite();
     }
+}
+
+void ImageWriter::setEjectState(EjectState state)
+{
+    if (_ejectState == state)
+        return;
+
+    _ejectState = state;
+    emit ejectStateChanged();
+}
+
+void ImageWriter::onEjectStarted()
+{
+    setEjectState(EjectState::EjectInProgress);
+}
+
+void ImageWriter::onEjectFinished(bool succeeded)
+{
+    // Ignore a stale result if a new write has already reset the state
+    if (_ejectState != EjectState::EjectInProgress)
+        return;
+
+    setEjectState(succeeded ? EjectState::EjectSucceeded : EjectState::EjectFailed);
+}
+
+void ImageWriter::ejectDrive()
+{
+    // The eject result (queued onEjectFinished) can arrive before the worker's
+    // finished() signal, so ejectState alone would let a retry overwrite a
+    // thread that is still winding down — check the thread pointer too.
+    if (_ejectState == EjectState::EjectInProgress || _manualEjectThread)
+        return;
+
+    // Only regular block devices can be ejected (not fastboot targets)
+    if (_dst.isEmpty() || _dst.startsWith("fastboot://"))
+        return;
+
+    setEjectState(EjectState::EjectInProgress);
+
+    const QString device = _dst;
+    // Guard `this` with a QPointer and deliver via the application object: the
+    // destructor does not join a slow eject, so the worker must never touch a
+    // destroyed ImageWriter.
+    QPointer<ImageWriter> self(this);
+    QThread *thread = QThread::create([self, device]() {
+        PlatformQuirks::DiskResult result =
+            PlatformQuirks::ejectDisk(PlatformQuirks::getEjectDevicePath(device));
+        bool succeeded = (result == PlatformQuirks::DiskResult::Success);
+#ifdef Q_OS_WIN
+        // The legacy Windows result can carry an unrelated volume's failure
+        // even when the target drive ejected fine; only report a definite miss.
+        succeeded = (result != PlatformQuirks::DiskResult::InvalidDrive);
+#endif
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [self, succeeded]() {
+            if (self)
+                self->onEjectFinished(succeeded);
+        }, Qt::QueuedConnection);
+    });
+    _manualEjectThread = thread;
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        thread->deleteLater();
+        // A retry may already own the member; only clear our own pointer.
+        if (_manualEjectThread == thread)
+            _manualEjectThread = nullptr;
+    });
+    thread->start();
 }
 
 void ImageWriter::setWriteState(WriteState state)
@@ -4519,6 +4605,8 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+    connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
+    connect(_thread, &DownloadThread::ejectFinished, this, &ImageWriter::onEjectFinished);
     // Ensure cleanup of thread pointer on finish in all paths
     connect(_thread, &QThread::finished, this, [this]() {
         if (_thread)

@@ -66,6 +66,18 @@ public:
     };
     Q_ENUM(WriteState)
 
+    // Progress of the post-write eject, which runs in the background after
+    // success() so the done screen can show a live status instead of the
+    // write blocking on a slow flush. EjectIdle also covers writes where no
+    // eject was requested (auto-eject disabled, fastboot flash).
+    enum class EjectState {
+        EjectIdle,
+        EjectInProgress,
+        EjectSucceeded,
+        EjectFailed
+    };
+    Q_ENUM(EjectState)
+
     // NB: the parent argument is deliberately mandatory (no `= nullptr`).
     // ImageWriter is a QML_SINGLETON whose instance is supplied by main() via
     // setQmlInstance()/create(). Qt's qmlRegisterTypesAndRevisions only honours a
@@ -88,6 +100,7 @@ public:
 #endif
 
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
+    Q_PROPERTY(EjectState ejectState READ ejectState NOTIFY ejectStateChanged)
     Q_PROPERTY(bool isOsListUnavailable READ isOsListUnavailable NOTIFY osListUnavailableChanged)
     Q_PROPERTY(bool screenReaderActive READ isScreenReaderActive NOTIFY screenReaderActiveChanged)
 
@@ -125,6 +138,11 @@ public:
 
     /* Cancel write */
     Q_INVOKABLE void cancelWrite();
+
+    /* Manually eject the written drive (retry after a failed background
+       eject, or first eject when auto-eject is disabled). Runs on a
+       background thread; progress is reported via ejectState. */
+    Q_INVOKABLE void ejectDrive();
 
     /* Skip cache verification and proceed with download */
     Q_INVOKABLE void skipCacheVerification();
@@ -477,6 +495,7 @@ signals:
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
     void writeStateChanged();
+    void ejectStateChanged();
     void connectTokenReceived(const QString &token);
     void connectTokenConflictDetected(const QString &token);
     void connectTokenCleared();
@@ -498,6 +517,8 @@ protected slots:
     
     void onSuccess();
     void onError(QString msg);
+    void onEjectStarted();
+    void onEjectFinished(bool succeeded);
     void onFileSelected(QString filename);
     void onCancelled();
     void onFinalizing();
@@ -524,6 +545,8 @@ private:
 #endif
     void setWriteState(WriteState state);
     WriteState writeState() const { return _writeState; }
+    void setEjectState(EjectState state);
+    EjectState ejectState() const { return _ejectState; }
     // Cache management
     CacheManager* _cacheManager;
     bool _waitingForCacheVerification;
@@ -554,6 +577,8 @@ protected:
     DriveListModel _drivelist;
     bool _selectedDeviceValid;
     WriteState _writeState;
+    EjectState _ejectState = EjectState::EjectIdle;
+    QThread *_manualEjectThread = nullptr;
     bool _cancelledDueToDeviceRemoval;
     HWListModel _hwlist;
     OSListModel _oslist;
