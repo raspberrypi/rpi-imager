@@ -4347,11 +4347,21 @@ QString ImageWriter::customRepoHost()
 
 bool ImageWriter::isValidRepoUrl(const QString &url) const
 {
-    // Validate: must be http/https URL ending with .json or manifest extension
-    static const QRegularExpression repoUrlRe(
-        QStringLiteral("^https?://[^ \\t\\r\\n]+\\.(json|" MANIFEST_EXTENSION ")$"), 
+    QUrl u(url, QUrl::StrictMode);
+    if (!u.isValid()) return false;
+
+    const QString scheme = u.scheme();
+    if (scheme.compare(QLatin1String("http"), Qt::CaseInsensitive) != 0 &&
+        scheme.compare(QLatin1String("https"), Qt::CaseInsensitive) != 0)
+    return false;
+
+    // Validate URL path (ignoring query string/fragment) ends with .json
+    // or the manifest extension, so authenticated URLs with query params
+    // (e.g. Azure SAS tokens, S3 presigned URLs) are accepted.    
+    static const QRegularExpression extRe(
+        QStringLiteral("\\.(json|" MANIFEST_EXTENSION ")$"),
         QRegularExpression::CaseInsensitiveOption);
-    return repoUrlRe.match(url).hasMatch();
+    return extRe.match(u.path()).hasMatch();
 }
 
 // Cache-related methods removed - now handled by CacheManager
