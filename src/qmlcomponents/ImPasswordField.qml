@@ -20,6 +20,11 @@ Item {
 
     // Public API (forwards from internal TextField)
     property alias text: textField.text
+    // Control characters are always scrubbed by ImTextField; trimWhitespace stays
+    // at its default of false here, since surrounding spaces are a legitimate part
+    // of a secret. Callers can still read `value` for symmetry with ImTextField.
+    property alias trimWhitespace: textField.trimWhitespace
+    readonly property string value: textField.value
     property alias placeholderText: textField.placeholderText
     property alias font: textField.font
     property alias enabled: textField.enabled

@@ -176,9 +176,10 @@ BaseDialog {
                 font.pointSize: Style.fontSizeInput
                 activeFocusOnTab: true
                 inputMethodHints: Qt.ImhUrlCharactersOnly
+                trimWhitespace: true
 
                 // Use ImageWriter's validation method for consistency
-                property bool isValid: ImageWriterSingleton && ImageWriterSingleton.isValidRepoUrl(text)
+                property bool isValid: ImageWriterSingleton && ImageWriterSingleton.isValidRepoUrl(fieldCustomUri.value)
             }
         }
     }
@@ -304,9 +305,9 @@ BaseDialog {
             ImageWriterSingleton.refreshOsListFrom(selectedRepo)
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
-        } else if (radioCustomUri.checked && originalRepo !== fieldCustomUri.text) {
+        } else if (radioCustomUri.checked && originalRepo !== fieldCustomUri.value) {
             // QML auto-converts string to QUrl for C++ method
-            ImageWriterSingleton.refreshOsListFrom(fieldCustomUri.text)
+            ImageWriterSingleton.refreshOsListFrom(fieldCustomUri.value)
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         }

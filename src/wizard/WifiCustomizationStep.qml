@@ -67,7 +67,7 @@ WizardStepBase {
         }
 
         // If not saved, try to auto-detect the current SSID from the system
-        if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
+        if (fieldWifiSSID.value.length === 0) {
             var detectedSsid = ImageWriterSingleton.getSSID()
             console.log("WifiCustomizationStep: detected SSID:", detectedSsid)
             if (detectedSsid && detectedSsid.length > 0) {
@@ -89,10 +89,10 @@ WizardStepBase {
         // IMPORTANT: Only attempt PSK retrieval if we have an SSID (either saved or detected)
         // Pass the SSID to getPSKForSSID() to avoid race condition where SSID detection
         // might fail during the keychain permission dialog on macOS
-        if (!hadSavedCrypt && fieldWifiSSID.text && fieldWifiSSID.text.length > 0) {
+        if (!hadSavedCrypt && fieldWifiSSID.value.length > 0) {
             // Auto-populate WiFi password from system keychain when available
             // Only when no crypted password is already saved
-            var psk = ImageWriterSingleton.getPSKForSSID(fieldWifiSSID.text)
+            var psk = ImageWriterSingleton.getPSKForSSID(fieldWifiSSID.value)
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
                 fieldWifiPasswordConfirm.text = psk
@@ -117,7 +117,7 @@ WizardStepBase {
         function onLocationPermissionGranted() {
             console.log("WifiCustomizationStep: Location permission granted, retrying SSID detection")
             // Only retry if SSID field is still empty (user hasn't manually entered one)
-            if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
+            if (fieldWifiSSID.value.length === 0) {
                 var detectedSsid = ImageWriterSingleton.getSSID()
                 console.log("WifiCustomizationStep: re-detected SSID:", detectedSsid)
                 if (detectedSsid && detectedSsid.length > 0) {
@@ -138,7 +138,7 @@ WizardStepBase {
     }
 
     function updatePasswordFieldUI() {
-        var ssid = (fieldWifiSSID.text || "").trim()
+        var ssid = fieldWifiSSID.value
         var prevSSID = originalSavedSSID
 
         if (wifiMode === "open") {
@@ -162,7 +162,7 @@ WizardStepBase {
         if (!showPw) return " ";
 
         // Gather state
-        var ssidNow = (fieldWifiSSID.text || "").trim();
+        var ssidNow = fieldWifiSSID.value;
         var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID);
         var pwd = fieldWifiPassword.text || "";
         var conf = fieldWifiPasswordConfirm.text || "";
@@ -298,6 +298,7 @@ WizardStepBase {
                         id: fieldWifiSSID
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
+                        trimWhitespace: true
                         onTextChanged: updatePasswordFieldUI()
                         onActiveFocusChanged: {
                             if (activeFocus)
@@ -310,7 +311,7 @@ WizardStepBase {
                         text: CommonStrings.password
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), root.originalSavedSSID)
+                            var canKeep = root.hadSavedCrypt && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
                             return canKeep 
                                 ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
                                 : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
@@ -339,7 +340,7 @@ WizardStepBase {
                         text: qsTr("Confirm password:")
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), root.originalSavedSSID)
+                            var canKeep = root.hadSavedCrypt && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
                             return canKeep 
                                 ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
                                 : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
@@ -351,7 +352,7 @@ WizardStepBase {
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         placeholderText: {
-                            var canKeep = root.hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), root.originalSavedSSID)
+                            var canKeep = root.hadSavedCrypt && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
                             return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                         }
                         visible: root.showPw
@@ -444,13 +445,13 @@ WizardStepBase {
     // - SSID entered and either new PSK provided or a saved crypt exists; or
     // - all WiFi fields are empty (skip)
     nextButtonEnabled: (function(){
-        var haveSSID = fieldWifiSSID.text && fieldWifiSSID.text.trim().length > 0
+        var haveSSID = fieldWifiSSID.value.length > 0
         if (!haveSSID) return true  // allow skipping by leaving fields empty
 
         if (wifiMode === "open") return true
 
         // secure / closed mode
-        var ssidNow = fieldWifiSSID.text.trim()
+        var ssidNow = fieldWifiSSID.value
         var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID)
         var pwd = fieldWifiPassword.text || ""
 
@@ -470,7 +471,7 @@ WizardStepBase {
 
     // Save settings when moving to next step
     onNextClicked: {
-        var ssid = fieldWifiSSID.text ? fieldWifiSSID.text.trim() : ""
+        var ssid = fieldWifiSSID.value
         var pwd = fieldWifiPassword.text
         var prevSSID = wizardContainer.customizationSettings.wifiSSID || ""
         var hidden = chkWifiHidden.checked

@@ -89,6 +89,7 @@ WizardStepBase {
                         ? qsTr("Saved — type to replace")
                         : qsTr("Paste organisation API key")
                     accessibleDescription: qsTr("Raspberry Pi Connect organisation API key. Once saved the value is never redisplayed.")
+                    trimWhitespace: true
                     onTextChanged: root.orgKeyDirty = true
                 }
 
@@ -107,6 +108,7 @@ WizardStepBase {
                     Layout.fillWidth: true
                     font.pointSize: Style.fontSizeInput
                     placeholderText: qsTr("e.g. Factory-A")
+                    trimWhitespace: true
                     text: root.wizardContainer ? root.wizardContainer.connectOrgDescription : ""
                     onTextChanged: {
                         if (root.wizardContainer)
@@ -188,6 +190,7 @@ WizardStepBase {
                 enabled: root.tokenFieldEnabled
                 persistentSelection: true
                 mouseSelectionMode: TextInput.SelectCharacters
+                trimWhitespace: true
                 placeholderText: {
                     if (root.connectTokenReceived) {
                         return qsTr("Token received from browser")
@@ -199,7 +202,7 @@ WizardStepBase {
                 }
                 text: root.connectToken
                 onTextChanged: {
-                    var token = text.trim()
+                    var token = fieldConnectToken.value
                     if (token && token.length > 0) {
                         root.connectToken = token
                         countdownTimer.stop()
@@ -237,7 +240,7 @@ WizardStepBase {
     //   AND we have a valid token (from browser or typed).
     nextButtonEnabled: {
         if (root.orgModeEnabled) {
-            if (fieldOrgApiKey.text.trim().length > 0) {
+            if (fieldOrgApiKey.value.length > 0) {
                 return true
             }
             return root.hasStoredOrgKey
@@ -408,8 +411,8 @@ WizardStepBase {
         // to write the key to the image, so the device joins the
         // organisation on first boot.
         if (root.orgModeEnabled) {
-            var typedKey = fieldOrgApiKey.text.trim()
-            var desc = fieldOrgDescription.text.trim()
+            var typedKey = fieldOrgApiKey.value
+            var desc = fieldOrgDescription.value
             if (typedKey.length > 0) {
                 // Replace both key and description.
                 ImageWriterSingleton.setConnectOrgRegistration(typedKey, desc)

@@ -57,7 +57,8 @@ WizardStepBase {
                     Layout.fillWidth: true
                     placeholderText: qsTr("Enter your username")
                     font.pointSize: Style.fontSizeInput
-                    
+                    trimWhitespace: true
+
                     validator: RegularExpressionValidator {
                         regularExpression: /^[a-z_][a-z0-9_-]*$/
                     }
@@ -213,7 +214,7 @@ WizardStepBase {
     
     // Save settings when moving to next step
     onNextClicked: {
-        var usernameText = fieldUsername.text ? fieldUsername.text.trim() : ""
+        var usernameText = fieldUsername.value
         var hasPasswords = fieldPassword.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text
         
         // Update conserved customization settings (runtime state)

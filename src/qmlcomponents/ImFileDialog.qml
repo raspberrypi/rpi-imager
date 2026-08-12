@@ -300,28 +300,29 @@ BaseDialog {
             color: Style.formLabelColor
         }
         
-        TextField {
+        // ImTextField rather than a bare TextField so that a path pasted with a
+        // trailing newline is scrubbed on the way in (see issues #1627, #1687);
+        // it also supplies the font, focus and accessibility defaults this field
+        // previously set by hand.
+        ImTextField {
             id: pathField
             Layout.fillWidth: true
-            font.family: Style.fontFamily
-            font.pointSize: Style.fontSizeInput
             text: dialog._toDisplayPath(dialog.currentFolder)
             placeholderText: dialog.isSaveDialog
                 ? qsTr("Enter path or URL\u2026")
                 : qsTr("Enter folder or file path\u2026")
-            activeFocusOnTab: true
-            focusPolicy: Qt.TabFocus
+            trimWhitespace: true
             onTextChanged: {
                 if (!dialog.isSaveDialog) {
-                    dialog._pathFieldFile = dialog._looksLikeFilePath(text)
-                        ? dialog._toFileUrl(text) : ""
+                    dialog._pathFieldFile = dialog._looksLikeFilePath(pathField.value)
+                        ? dialog._toFileUrl(pathField.value) : ""
                 }
             }
             onAccepted: {
-                var newUrl = dialog._toFileUrl(text)
+                var newUrl = dialog._toFileUrl(pathField.value)
                 if (!newUrl || newUrl.length === 0)
                     return
-                if (!dialog.isSaveDialog && dialog._looksLikeFilePath(text)) {
+                if (!dialog.isSaveDialog && dialog._looksLikeFilePath(pathField.value)) {
                     dialog.selectedFile = newUrl
                     dialog.close()
                     dialog.accepted()
@@ -346,19 +347,18 @@ BaseDialog {
             color: Style.formLabelColor
         }
         
-        TextField {
+        ImTextField {
             id: filenameField
             Layout.fillWidth: true
-            font.family: Style.fontFamily
-            font.pointSize: Style.fontSizeInput
             text: dialog._currentFilename
             placeholderText: qsTr("Enter filename…")
             activeFocusOnTab: dialog.isSaveDialog
+            trimWhitespace: true
             onTextChanged: {
                 dialog._currentFilename = text
             }
             onAccepted: {
-                if (text.trim().length > 0) {
+                if (filenameField.value.length > 0) {
                     dialog.selectedFile = dialog._toFileUrl(dialog._buildFilePath())
                     dialog.close()
                     dialog.accepted()
