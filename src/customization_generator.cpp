@@ -113,6 +113,12 @@ QString CustomisationGenerator::pbkdf2(const QByteArray& password, const QByteAr
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, password, ssid, 4096, 32).toHex();
 }
 
+QString CustomisationGenerator::stripLineTerminators(const QString& secret) {
+    QString cleaned = secret;
+    cleaned.removeIf([](QChar c) { return c == u'\r' || c == u'\n'; });
+    return cleaned;
+}
+
 QString CustomisationGenerator::cryptPassword(const QByteArray& passwordInput, const QString& osReleaseDate) {
     // Strip CR/LF before hashing. Pasted clipboard content can carry a trailing
     // newline (single-line text fields do not sanitise pasted text), and PAM
@@ -189,7 +195,13 @@ QString CustomisationGenerator::resolveWifiPskCrypt(const QVariantMap& settings,
     if (!crypted.isEmpty())
         return crypted;
 
-    const QString plain = settings.value(QStringLiteral("wifiPassword")).toString();
+    // Strip CR/LF before the length test, not just before derivation. A pasted
+    // trailing newline would otherwise push a 63-character passphrase to 64 and
+    // flip the branch below, passing the plaintext through as though it were a
+    // pre-computed PMK; a 7-character one would likewise be inflated to a valid
+    // passphrase length. See stripLineTerminators() and issue #1627.
+    const QString plain = stripLineTerminators(
+        settings.value(QStringLiteral("wifiPassword")).toString());
     if (plain.isEmpty())
         return {};
 
@@ -995,7 +1007,7 @@ QByteArray CustomisationGenerator::generateRpiPreseedToml(const QVariantMap& s,
             if (!psk.isEmpty()) {
                 pskEncrypted = true;
             } else {
-                const QString legacy = s.value("wifiPassword").toString();
+                const QString legacy = stripLineTerminators(s.value("wifiPassword").toString());
                 if (!legacy.isEmpty()) {
                     psk = legacy;
                     // A 64-hex value is a raw PMK; anything shorter is a passphrase

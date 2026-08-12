@@ -4017,14 +4017,20 @@ bool ImageWriter::savedUserPasswordUsableWithCurrentOs(const QString &cryptHash)
 
 QString ImageWriter::deriveWifiPsk(const QString &ssid, const QString &plaintext)
 {
-    if (plaintext.isEmpty())
+    // Strip CR/LF before measuring the length. ImTextField scrubs control
+    // characters out of the field, so the UI should never send them, but this is
+    // the same trust boundary cryptPassword() guards: a trailing newline would
+    // push a 63-character passphrase to 64 and flip the branch below, returning
+    // the plaintext verbatim as though it were a pre-computed PSK.
+    const QString password = rpi_imager::CustomisationGenerator::stripLineTerminators(plaintext);
+    if (password.isEmpty())
         return QString();
     // Passphrase length per WPA spec is 8..63; anything else is taken to be a
     // pre-computed PSK and returned verbatim.
-    const bool isPassphrase = (plaintext.length() >= 8 && plaintext.length() < 64);
+    const bool isPassphrase = (password.length() >= 8 && password.length() < 64);
     return isPassphrase
-        ? rpi_imager::CustomisationGenerator::pbkdf2(plaintext.toUtf8(), ssid.toUtf8())
-        : plaintext;
+        ? rpi_imager::CustomisationGenerator::pbkdf2(password.toUtf8(), ssid.toUtf8())
+        : password;
 }
 
 QString ImageWriter::wifiSsidOctetsBase64(const QString &ssid) const
@@ -4341,8 +4347,16 @@ bool ImageWriter::isValidRepoUrl(const QString &url) const
     // a SAS token: ".../manifest.json?sv=...&sig=...") are accepted. The path
     // portion excludes '?' and '#' so the extension must appear before any
     // query/fragment rather than merely somewhere in the URL.
+    //
+    // Anchored with \A..\z rather than ^..$: PCRE2 lets '$' match immediately
+    // before a newline at the end of the subject, so "...repo.json\n" matched
+    // despite '\n' being excluded from every character class above. That is
+    // exactly what a URL copied out of a browser looks like, and it reached
+    // refreshOsListFrom() as a %0A-suffixed URL (issue #1687). This also guards
+    // the deep-link "repo=" path, which never passes through a text field.
     static const QRegularExpression repoUrlRe(
-        QStringLiteral("^https?://[^ \\t\\r\\n?#]+\\.(json|" MANIFEST_EXTENSION ")([?#][^ \\t\\r\\n]*)?$"),
+        QRegularExpression::anchoredPattern(
+            QStringLiteral("https?://[^ \\t\\r\\n?#]+\\.(json|" MANIFEST_EXTENSION ")([?#][^ \\t\\r\\n]*)?")),
         QRegularExpression::CaseInsensitiveOption);
     return repoUrlRe.match(url).hasMatch();
 }

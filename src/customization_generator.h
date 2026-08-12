@@ -119,6 +119,16 @@ public:
     static QString cryptPassword(const QByteArray& password, const QString& osReleaseDate);
 
     /**
+     * @brief Remove CR/LF from a secret typed or pasted into a single-line field.
+     *
+     * The QByteArray equivalent is inlined in cryptPassword(). Line terminators
+     * can never form part of a usable password or Wi-Fi passphrase, but Qt's
+     * single-line fields insert pasted text verbatim, so clipboard content
+     * copied from a browser arrives with a trailing newline (issue #1627).
+     */
+    static QString stripLineTerminators(const QString& secret);
+
+    /**
      * @brief Derive a WPA PSK from a passphrase (PBKDF2-HMAC-SHA1, 4096 iters).
      *
      * @param password Plaintext Wi-Fi passphrase (UTF-8 bytes)

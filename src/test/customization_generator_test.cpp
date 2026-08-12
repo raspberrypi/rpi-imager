@@ -7,12 +7,14 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include "customization_generator.h"
 #include "dependencies/sha256crypt/sha256crypt.h"
+#include "dependencies/yescrypt/yescrypt_wrapper.h"
 #include <QVariantMap>
 #include <QString>
 #include <QByteArray>
 #include <QPasswordDigestor>
 #include <QCryptographicHash>
 #include <QStringConverter>
+#include <QRegularExpression>
 
 using namespace rpi_imager;
 using Catch::Matchers::ContainsSubstring;
@@ -111,6 +113,117 @@ TEST_CASE("CustomisationGenerator handles yescrypt password format", "[customiza
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/usr/lib/userconf-pi/userconf"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("$y$j9T$"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("echo \"$FIRSTUSER:$y$j9T$"));
+}
+
+// Regression test for issue #1627. A password pasted from a browser or password
+// manager arrives with a trailing newline, because Qt's single-line text fields
+// insert clipboard content verbatim. PAM discards the line terminator when
+// reading a password, so hashing the raw value yields a hash that can never be
+// matched at login. cryptPassword() must therefore strip CR/LF before hashing.
+//
+// Verified the way PAM would: re-derive the hash from the *clean* password using
+// the stored hash as the salt setting, and require that it reproduces the hash
+// that was generated from the newline-bearing input.
+TEST_CASE("cryptPassword strips CR/LF so pasted passwords still authenticate",
+          "[customization][password]") {
+    const QByteArray clean = "correct horse battery staple";
+
+    SECTION("sha256crypt (pre-2023 OS)") {
+        const QString releaseDate = QStringLiteral("2022-09-22");
+        REQUIRE_FALSE(CustomisationGenerator::osUsesYescrypt(releaseDate));
+
+        for (const QByteArray &suffix : {QByteArray("\n"), QByteArray("\r\n"), QByteArray("\r")}) {
+            const QString hash = CustomisationGenerator::cryptPassword(clean + suffix, releaseDate);
+            REQUIRE(hash.startsWith(QStringLiteral("$5$")));
+            const QByteArray setting = hash.toUtf8();
+            REQUIRE(QString::fromUtf8(sha256_crypt(clean.constData(), setting.constData())) == hash);
+        }
+    }
+
+    SECTION("yescrypt (2023+ OS)") {
+        const QString releaseDate = QStringLiteral("2024-03-15");
+        REQUIRE(CustomisationGenerator::osUsesYescrypt(releaseDate));
+
+        for (const QByteArray &suffix : {QByteArray("\n"), QByteArray("\r\n"), QByteArray("\r")}) {
+            const QString hash = CustomisationGenerator::cryptPassword(clean + suffix, releaseDate);
+            REQUIRE(CustomisationGenerator::isYescryptHash(hash));
+            const QByteArray setting = hash.toUtf8();
+            REQUIRE(QString::fromUtf8(yescrypt_crypt(clean.constData(), setting.constData())) == hash);
+        }
+    }
+
+    SECTION("a genuinely different password still does not authenticate") {
+        const QString releaseDate = QStringLiteral("2024-03-15");
+        const QString hash = CustomisationGenerator::cryptPassword(clean + "\n", releaseDate);
+        const QByteArray setting = hash.toUtf8();
+        REQUIRE(QString::fromUtf8(yescrypt_crypt("wrong password", setting.constData())) != hash);
+    }
+
+    SECTION("interior CR/LF is removed too, not just a trailing terminator") {
+        // A multi-line clipboard paste collapses to a single line rather than
+        // being silently truncated at the first newline.
+        const QString releaseDate = QStringLiteral("2024-03-15");
+        const QString hash = CustomisationGenerator::cryptPassword("ab\ncd", releaseDate);
+        const QByteArray setting = hash.toUtf8();
+        REQUIRE(QString::fromUtf8(yescrypt_crypt("abcd", setting.constData())) == hash);
+        REQUIRE(QString::fromUtf8(yescrypt_crypt("ab", setting.constData())) != hash);
+    }
+}
+
+// Companion to the test above, for the Wi-Fi passphrase rather than the account
+// password. Here a stray newline does more than corrupt the derivation: the
+// 8..63 passphrase-length test decides whether the value is treated as a
+// passphrase to hash or as an already-computed 64-hex PMK to pass through, so a
+// single extra character can flip the branch and emit the user's plaintext where
+// a PMK is expected.
+TEST_CASE("resolveWifiPskCrypt strips CR/LF before classifying by length",
+          "[customization][wifi][password]") {
+    const QByteArray ssid = "TestNet";
+
+    // resolveWifiPskCrypt is private, so drive it through generateSystemdScript
+    // and read back the PSK it emits into the wpa_supplicant stanza.
+    auto pskFor = [&](const QString &plaintext) {
+        QVariantMap settings;
+        settings["wifiConfigured"] = true;
+        settings["wifiSSID"] = QString::fromUtf8(ssid);
+        settings["wifiPassword"] = plaintext;
+        const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+        static const QRegularExpression pskRe(QStringLiteral("(?m)^\\s*psk=(\\S*)\\s*$"));
+        const QRegularExpressionMatch m = pskRe.match(script);
+        REQUIRE(m.hasMatch());
+        return m.captured(1);
+    };
+
+    SECTION("a trailing newline does not change the derived PSK") {
+        const QString expected = pskFor(QStringLiteral("hunter2hunter2"));
+        REQUIRE_FALSE(expected.isEmpty());
+        REQUIRE(pskFor(QStringLiteral("hunter2hunter2\n")) == expected);
+        REQUIRE(pskFor(QStringLiteral("hunter2hunter2\r\n")) == expected);
+    }
+
+    SECTION("a 63-character passphrase is still hashed, not passed through") {
+        const QString maxLen(63, QLatin1Char('a'));
+        const QString expected = pskFor(maxLen);
+        // A derived PSK is 32 bytes rendered as hex; the plaintext must not survive.
+        REQUIRE(expected.length() == 64);
+        REQUIRE(expected != maxLen);
+        // Without stripping, 63 + 1 == 64 would take the pass-through branch.
+        REQUIRE(pskFor(maxLen + "\n") == expected);
+    }
+
+    SECTION("a too-short passphrase is not inflated into a valid length") {
+        const QString tooShort(7, QLatin1Char('a'));
+        // 7 chars is below the WPA minimum, so it is passed through unchanged
+        // rather than hashed. Adding a newline must not make it look like 8.
+        REQUIRE(pskFor(tooShort) == tooShort);
+        REQUIRE(pskFor(tooShort + "\n") == tooShort);
+    }
+
+    SECTION("a real 64-hex PMK is still passed through untouched") {
+        const QString pmk(64, QLatin1Char('a'));
+        REQUIRE(pskFor(pmk) == pmk);
+        REQUIRE(pskFor(pmk + "\n") == pmk);
+    }
 }
 
 TEST_CASE("CustomisationGenerator handles sha256crypt password format", "[customization][password]") {

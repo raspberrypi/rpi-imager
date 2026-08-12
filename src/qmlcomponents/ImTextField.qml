@@ -15,6 +15,45 @@ TextField {
     font.family: Style.fontFamily
     font.pointSize: Style.fontSizeInput
 
+    // Whether surrounding whitespace is meaningful for this field. Fields where it
+    // never is (URLs, hostnames, usernames, SSIDs, tokens) set this to true and
+    // consumers read `value`. Left false for passwords, where a leading or
+    // trailing space is a legitimate part of the secret and silently discarding
+    // it would change what the user actually set.
+    property bool trimWhitespace: false
+
+    // The sanitised field contents. Read this rather than `text`: it is always
+    // free of control characters, and of surrounding whitespace when the field
+    // opts in above. Trimming happens here rather than in the scrubber below so
+    // that typing a space mid-phrase is not swallowed as you type.
+    readonly property string value: trimWhitespace ? text.trim() : text
+
+    // A single-line field must never hold control characters, but Qt inserts
+    // pasted text verbatim (QQuickTextInputPrivate::paste() is just
+    // insert(clip), and internalInsert() does no filtering). Text copied from a
+    // browser therefore arrives with a trailing newline, which has silently
+    // corrupted a password hash (issue #1627) and a repository URL (issue
+    // #1687). A validator cannot be used for this: QRegularExpressionValidator
+    // returns Intermediate rather than Invalid, so Qt keeps the offending text
+    // and merely clears acceptableInput. Nor can paste() be overridden here,
+    // because the Ctrl/Cmd+V key handler calls the private d->paste() directly.
+    // Scrubbing on change is what catches every route in, so that no consumer
+    // has to remember to sanitise. These characters cannot be typed, so removing
+    // them never disturbs editing, and doing so is lossless even for passwords.
+    property bool _scrubbing: false
+    onTextChanged: {
+        if (_scrubbing)
+            return
+        var cleaned = text.replace(/[\x00-\x1F\x7F]/g, "")
+        if (cleaned === text)
+            return
+        _scrubbing = true
+        var restoreCursor = Math.min(cursorPosition, cleaned.length)
+        text = cleaned
+        cursorPosition = restoreCursor
+        _scrubbing = false
+    }
+
     // Sensible defaults to ensure consistent behavior across the app
     activeFocusOnPress: true
     activeFocusOnTab: true

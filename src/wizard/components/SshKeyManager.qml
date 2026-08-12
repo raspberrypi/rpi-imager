@@ -268,9 +268,10 @@ ColumnLayout {
                 font.pointSize: Style.fontSizeInput
                 Accessible.name: qsTr("SSH public key input")
                 Accessible.description: qsTr("Paste an SSH public key here or use the browse button to select a key file")
+                trimWhitespace: true
                 onAccepted: {
-                    if (text.trim().length > 0) {
-                        root.addKey(text)
+                    if (addKeyField.value.length > 0) {
+                        root.addKey(addKeyField.value)
                         text = ""
                     }
                 }
@@ -278,11 +279,11 @@ ColumnLayout {
             
             ImButton {
                 id: addOrBrowseButton
-                text: addKeyField.text.trim().length > 0 ? qsTr("Add") : CommonStrings.browse
+                text: addKeyField.value.length > 0 ? qsTr("Add") : CommonStrings.browse
                 Layout.minimumWidth: 80
                 onClicked: {
-                    if (addKeyField.text.trim().length > 0) {
-                        root.addKey(addKeyField.text)
+                    if (addKeyField.value.length > 0) {
+                        root.addKey(addKeyField.value)
                         addKeyField.text = ""
                     } else {
                         // Browse for file
@@ -301,7 +302,7 @@ ColumnLayout {
                         }
                     }
                 }
-                accessibleDescription: addKeyField.text.trim().length > 0 
+                accessibleDescription: addKeyField.value.length > 0 
                     ? qsTr("Add the entered SSH key")
                     : qsTr("Select an SSH public key file to add")
             }
