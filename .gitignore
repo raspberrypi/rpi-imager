@@ -3,7 +3,7 @@ src/build/*
 src/build/**
 compile_commands.json
 src/.cache/clangd
-obj-**
+/obj-**
 
 # IDE Configurations
 .vscode
@@ -31,29 +31,26 @@ debian/com.raspberrypi.rpi-imager.metainfo.xml
 *.*swp*
 
 # AppImage related
+# Patterns for build products at the repository root are anchored with a leading
+# slash: unanchored patterns match by basename at every depth, which silently
+# swallowed debian/appimage-pack.sh, qt/build-qt*.sh and src/timezones.txt.
 *.AppImage*
 *.appimagecraft*
-AppDir-*
-appimage-*
+/AppDir-*
+/appimage-tools/
 
 # Embedded .deb build tree (created by create-embedded.sh)
-debroot-embedded-*
-rpi-imager-embedded*.deb
-screenshot.png
+/debroot-embedded-*
+/rpi-imager-embedded*.deb
 
 # Qt related
-qt-build**
-qt-src**
+/qt-build**
+/qt-src**
 qt/language_filters.json
-build
-build-**
-!debian/build-*.sh
-
-# IANA Timezone database generated as part of build
-timezones.txt
+/build-**
 
 # build-cli-only related
-test-cli-**
+/test-cli-**
 
 # clangd related
 .cache/clangd
@@ -63,5 +60,5 @@ test-cli-**
 **/.venv
 
 # Debian release tooling (local paths; see debian/release.conf.example)
-.debian/
-out/
+/.debian/
+/out/
