@@ -36,8 +36,14 @@ the vendored third-party dependencies are git submodules (initialised for you by
 debian/release.sh status          # what exists, what doesn't — check this first
 debian/release.sh appimages amd64 # desktop + CLI AppImages for one architecture
 debian/release.sh arch amd64      # ...and the .deb packages that wrap them
-debian/release.sh repo            # source package + every arch in RELEASE_ARCHES
+
+# All three architectures, plus the source package. RELEASE_ARCHES defaults to
+# your own architecture alone, so pass it explicitly (or set it in release.conf).
+RELEASE_ARCHES="amd64 arm64 armhf" debian/release.sh repo
 ```
+
+`repo` is the only command that builds more than one architecture; the others
+take exactly one.
 
 The first run bootstraps a chroot and builds Qt, so it takes a while; both are
 cached under `.debian/` afterwards. Finished AppImages land in

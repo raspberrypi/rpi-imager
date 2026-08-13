@@ -59,7 +59,7 @@ and verifies each is at its pinned tag.
 ```sh
 cp debian/release.conf.example debian/release.conf   # optional; edit to taste
 debian/release.sh status                             # what exists, what doesn't
-debian/release.sh repo                               # source + every arch
+RELEASE_ARCHES="amd64 arm64 armhf" debian/release.sh repo
 ```
 
 `status` is the first thing to run and the first thing to check when something
@@ -71,17 +71,57 @@ staged AppImage's embedded runtime is the *right* architecture.
 AppImages and `.deb`s for each architecture in `RELEASE_ARCHES`, host
 architecture first. If `DPUT_HOST` is set it uploads each `.changes` at the end.
 
+## Building more than one architecture
+
+`repo` is the only command that takes more than one architecture, and it reads
+them from `RELEASE_ARCHES` rather than from its arguments. Everything else —
+`appimages`, `binary`, `arch`, `embedded` — is strictly one architecture per
+invocation.
+
+**`RELEASE_ARCHES` defaults to the host architecture alone**, so a bare
+`debian/release.sh repo` builds one architecture, not three. Set it explicitly.
+Either inline, for a single run:
+
+```sh
+RELEASE_ARCHES="amd64 arm64 armhf" debian/release.sh repo
+```
+
+or persistently, in `debian/release.conf`:
+
+```sh
+RELEASE_ARCHES="amd64 arm64 armhf"
+```
+
+`debian/release.conf.example` already sets all three, so copying it gives you
+multi-architecture builds by default — which is why the same `repo` command
+behaves differently on a tree with a `release.conf` and one without. `status`
+prints nothing about `RELEASE_ARCHES`; check the config or pass it explicitly if
+you are unsure.
+
+The host architecture is always built first (`release_arch_order()` in
+`debian/lib.sh`), so the run that is most likely to reveal a problem fails
+fastest. Architectures are built sequentially, not in parallel, and each one
+compiles Qt on a cache miss — expect the first full three-architecture run to
+take hours, and subsequent ones to be much quicker.
+
+To build several architectures without the source package or the `dput` upload,
+loop over `arch` yourself:
+
+```sh
+for a in amd64 arm64 armhf; do debian/release.sh arch "$a" || break; done
+```
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `release.sh status` | Version, paths, and the state of every cache. Read this first. |
 | `release.sh source [git-ref]` | Quilt source package (`.orig.tar.xz`, `.debian.tar.xz`, `.dsc`) from `git-ref` (default `HEAD`). |
-| `release.sh appimages <arch> [--use-cache]` | Build desktop + CLI AppImages, then sync them into the per-arch cache. `--use-cache` syncs already-staged files without building. |
-| `release.sh binary <arch>` | Binary `.deb`s for `arch`, always inside that arch's chroot. |
+| `release.sh appimages <arch> [--use-cache]` | Build desktop + CLI AppImages, then sync them into the per-arch cache. `--use-cache` syncs already-staged files without building. One arch. |
+| `release.sh binary <arch>` | Binary `.deb`s for `arch`, always inside that arch's chroot. One arch. |
 | `release.sh embedded <arch>` | The embedded (linuxfb) `.deb`. arm64 only. |
-| `release.sh arch <arch> [--use-cache]` | `appimages` then `binary`. |
-| `release.sh repo` | `source`, then `arch` for every entry in `RELEASE_ARCHES`. |
+| `release.sh arch <arch> [--use-cache]` | `appimages` then `binary`. One arch. |
+| `release.sh repo` | `source`, then `arch` for every entry in `RELEASE_ARCHES` (default: host arch only). The only multi-arch command — see above. |
 
 `repo` does **not** build the embedded package: it is not in the default
 `DEB_BUILD_PROFILES` (`desktop cli`) and has its own command. Run
@@ -310,7 +350,7 @@ the environment. Environment wins.
 | `RPI_MIRROR` | `archive.raspberrypi.com/debian` | Raspberry Pi archive |
 | `DEB_BUILD_PROFILES` | `desktop cli` | Build profiles; `embedded` is separate |
 | `APPIMAGE_BUILD` | `always` | `cached` to sync pre-staged AppImages only |
-| `RELEASE_ARCHES` | host arch | Architectures `release.sh repo` covers |
+| `RELEASE_ARCHES` | host arch only | Architectures `release.sh repo` covers; `release.conf.example` sets all three |
 | `DPUT_HOST` | unset | Upload target for `release.sh repo` |
 | `APPIMAGE_REMOTE_<arch>` | unset | SSH builder fallback, `user@host[:/path]` |
 
