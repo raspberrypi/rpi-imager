@@ -15,6 +15,8 @@ Please see our [official documentation](https://www.raspberrypi.com/documentatio
 
 To build Raspberry Pi Imager from source-code, see our separate instructions in [CONTRIBUTING.md](./CONTRIBUTING.md)
 
+For the Linux release pipeline — the rootless, multi-architecture chroot build that produces the AppImages and `.deb` packages — see [doc/linux-build.md](./doc/linux-build.md).
+
 ## Other notes
 
 ### Custom repository
