@@ -2,6 +2,11 @@
 
 This document explains how to build Qt from source with Debian-like configuration for Raspberry Pi OS using the `build-qt.sh` script.
 
+> **Which Qt version?** Set in one place only: `QT_VERSION_DEFAULT` in
+> [qt-build-common.sh](./qt-build-common.sh). Every `build-qt*.sh` script reads
+> it, as does the Linux release pipeline. `<version>` below stands for whatever
+> that says; deliberately not repeated here, so it cannot go stale.
+
 ## Overview
 
 The `build-qt.sh` script automates the process of:
@@ -30,7 +35,7 @@ To build Qt with default options:
 ```
 
 This will:
-- Build Qt 6.9.1
+- Build the Qt version pinned in `qt-build-common.sh` (`QT_VERSION_DEFAULT`)
 - Install it to `/opt/qt6`
 - Use all available CPU cores
 - Configure for the Wayland desktop environment
@@ -40,7 +45,7 @@ This will:
 The script supports the following options:
 
 ```
---version=VERSION    Qt version to build (default: 6.9.1)
+--version=VERSION    Qt version to build (default: QT_VERSION_DEFAULT from qt-build-common.sh)
 --prefix=PREFIX      Installation prefix (default: /opt/qt6)
 --cores=CORES        Number of CPU cores to use (default: all)
 --no-clean           Don't clean the build directory
@@ -53,7 +58,7 @@ The script supports the following options:
 
 Build a specific Qt version:
 ```bash
-./build-qt.sh --version=6.9.1
+./build-qt.sh --version=<version>
 ```
 
 Install to a custom location:
@@ -131,5 +136,5 @@ If you're building Qt specifically for the Raspberry Pi Imager:
 
 ```bash
 # Example: Add to create-appimage.sh
-export Qt6_ROOT="/opt/Qt/6.9.1/gcc_arm64"
+export Qt6_ROOT="/opt/Qt/<version>/gcc_arm64"
 ``` 
