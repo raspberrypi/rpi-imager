@@ -2,6 +2,11 @@
 
 This document explains how to build Qt from source with minimal configuration for macOS using the `build-qt-macos.sh` script.
 
+> **Which Qt version?** Set in one place only: `QT_VERSION_DEFAULT` in
+> [qt-build-common.sh](./qt-build-common.sh). Every `build-qt*.sh` script reads
+> it. `<version>` below stands for whatever that says; deliberately not repeated
+> here, so it cannot go stale.
+
 ## Overview
 
 The `build-qt-macos.sh` script automates the process of:
@@ -36,8 +41,8 @@ cd qt
 
 This will:
 
-- Build Qt 6.9.3
-- Install it to `/opt/Qt/6.9.3/macos` (works for both Intel and Apple Silicon)
+- Build the Qt version pinned in `qt-build-common.sh` (`QT_VERSION_DEFAULT`)
+- Install it to `/opt/Qt/<version>/macos` (works for both Intel and Apple Silicon)
 - Use all available CPU cores
 - Apply macOS-specific optimizations
 - Exclude unnecessary modules and features for minimal footprint
@@ -47,7 +52,7 @@ This will:
 The script supports the following options:
 
 ```
---version=VERSION      Qt version to build (default: 6.9.3)
+--version=VERSION      Qt version to build (default: QT_VERSION_DEFAULT from qt-build-common.sh)
 --prefix=PREFIX        Installation prefix (default: /opt/Qt/{VERSION})
 --cores=CORES          Number of CPU cores to use (default: all)
 --no-clean             Don't clean the build directory
@@ -66,13 +71,13 @@ The script supports the following options:
 Build a specific Qt version:
 
 ```bash
-./build-qt-macos.sh --version=6.8.0
+./build-qt-macos.sh --version=<version>
 ```
 
 Install to a custom location:
 
 ```bash
-./build-qt-macos.sh --prefix=/Users/$(whoami)/Qt/6.9.3
+./build-qt-macos.sh --prefix=/Users/$(whoami)/Qt/<version>
 ```
 
 Limit CPU usage (useful for background builds):
@@ -90,7 +95,7 @@ Build single-architecture (host only):
 Run without sudo (requires pre-installed dependencies):
 
 ```bash
-./build-qt-macos.sh --unprivileged --prefix=$HOME/Qt/6.9.3
+./build-qt-macos.sh --unprivileged --prefix=$HOME/Qt/<version>
 ```
 
 ## Minimal Build Configuration
@@ -132,7 +137,7 @@ By default, the script creates fat binaries containing both Intel and Apple Sili
 
 - **Intel optimizations**: `-march=x86-64-v2 -mtune=intel` for better x86_64 performance
 - **Apple Silicon optimizations**: `-march=armv8.4-a+crypto -mtune=apple-a14` for M-series chips
-- **Installation path**: `/opt/Qt/6.11.1/macos` (same as single-architecture builds)
+- **Installation path**: `/opt/Qt/<version>/macos` (same as single-architecture builds)
 - **CMake integration**: Toolchain file automatically sets `CMAKE_OSX_ARCHITECTURES="x86_64;arm64"`
 
 **When to use universal builds:**
@@ -206,7 +211,7 @@ After building Qt, the script creates several helper files:
 To set up your environment for using the built Qt:
 
 ```bash
-source /opt/Qt/6.9.3/macos/bin/qtenv.sh
+source /opt/Qt/<version>/macos/bin/qtenv.sh
 ```
 
 This sets the needed environment variables for Qt on macOS.
@@ -216,7 +221,7 @@ This sets the needed environment variables for Qt on macOS.
 To use this Qt build with CMake projects (like rpi-imager):
 
 ```bash
-cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/6.9.3/macos/qt6-toolchain.cmake \
+cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/<version>/macos/qt6-toolchain.cmake \
       -S /path/to/source -B build
 ```
 
@@ -226,12 +231,12 @@ To build rpi-imager with your custom Qt:
 
 ```bash
 # Set up Qt environment
-source /opt/Qt/6.9.3/macos/bin/qtenv.sh
+source /opt/Qt/<version>/macos/bin/qtenv.sh
 
 # Configure and build rpi-imager
 cd /path/to/rpi-imager
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/6.9.3/macos/qt6-toolchain.cmake ../src
+cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/<version>/macos/qt6-toolchain.cmake ../src
 make -j$(sysctl -n hw.ncpu)
 ```
 ## Troubleshooting
@@ -271,10 +276,10 @@ If CMake can't find your Qt installation:
 
 ```bash
 # Make sure Qt is in your path
-export CMAKE_PREFIX_PATH="/opt/Qt/6.9.3/macos:$CMAKE_PREFIX_PATH"
+export CMAKE_PREFIX_PATH="/opt/Qt/<version>/macos:$CMAKE_PREFIX_PATH"
 
 # Or use the toolchain file
-cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/6.9.3/macos/qt6-toolchain.cmake ...
+cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/<version>/macos/qt6-toolchain.cmake ...
 ```
 
 ## Integration with rpi-imager Build System

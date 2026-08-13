@@ -2,6 +2,11 @@
 
 This guide covers building a minimal Qt installation specifically for CLI-only applications like rpi-imager-cli.
 
+> **Which Qt version?** Set in one place only: `QT_VERSION_DEFAULT` in
+> [qt-build-common.sh](./qt-build-common.sh). Every `build-qt*.sh` script reads
+> it, as does the Linux release pipeline. `<version>` below stands for whatever
+> that says; deliberately not repeated here, so it cannot go stale.
+
 ## Overview
 
 The CLI-only Qt build is designed to be as minimal as possible, excluding all GUI, multimedia, and graphics components. This results in:
@@ -13,9 +18,9 @@ The CLI-only Qt build is designed to be as minimal as possible, excluding all GU
 
 ```bash
 # Build minimal Qt for CLI applications
-./build-qt-cli.sh --version=6.9.1
+./build-qt-cli.sh --version=<version>
 
-# This installs to /opt/Qt/6.9.1/gcc_64_cli (separate from GUI Qt)
+# This installs to /opt/Qt/<version>/gcc_64_cli (separate from GUI Qt)
 ```
 
 ## CLI-Specific Exclude Lists
@@ -61,10 +66,10 @@ The CLI-only build includes only essential components:
 
 ```bash
 # Build CLI-optimized Qt
-./build-qt-cli.sh --version=6.9.1 --cores=4
+./build-qt-cli.sh --version=<version> --cores=4
 
 # Use with rpi-imager CLI build
-export Qt6_ROOT="/opt/Qt/6.9.1/gcc_64_cli"
+export Qt6_ROOT="/opt/Qt/<version>/gcc_64_cli"
 mkdir build && cd build
 cmake ../src -DBUILD_CLI_ONLY=ON
 make -j$(nproc)

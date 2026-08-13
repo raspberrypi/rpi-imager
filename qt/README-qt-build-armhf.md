@@ -2,6 +2,15 @@
 
 This document describes how to cross-compile Qt for the armhf architecture, enabling cross-compilation of Raspberry Pi Imager for Raspberry Pi 1, Pi 2, and other armhf-based systems.
 
+> **Which Qt version?** Set in one place only: `QT_VERSION_DEFAULT` in
+> [qt-build-common.sh](./qt-build-common.sh). Every `build-qt*.sh` script reads
+> it, as does the Linux release pipeline. `<version>` below stands for whatever
+> that says; deliberately not repeated here, so it cannot go stale.
+
+> **Note:** for release builds you do not need this script. The Linux release
+> pipeline builds armhf Qt inside an armhf chroot via `debian/ensure-qt.sh` —
+> see [../doc/linux-build.md](../doc/linux-build.md).
+
 ## Overview
 
 The `build-qt-armhf.sh` script provides automated cross-compilation of Qt for the armhf (ARM hard-float) architecture. This is particularly useful for:
@@ -142,8 +151,8 @@ cd /path/to/rpi-imager/qt
 ./build-qt-armhf.sh [options]
 
 Options:
-  --version=VERSION    Qt version to build (default: 6.9.3)
-  --prefix=PREFIX      Installation prefix (default: /opt/Qt/6.9.3)
+  --version=VERSION    Qt version to build (default: QT_VERSION_DEFAULT from qt-build-common.sh)
+  --prefix=PREFIX      Installation prefix (default: /opt/Qt/{VERSION})
   --cores=CORES        Number of CPU cores to use (default: all available)
   --sysroot=PATH       Path to armhf sysroot (REQUIRED)
   --toolchain=PREFIX   Cross-compiler prefix (default: arm-linux-gnueabihf-)
@@ -193,7 +202,7 @@ After successful compilation, the script creates environment setup files:
 
 ```bash
 # Source the environment
-source /opt/Qt/6.9.3/gcc_armhf/bin/qtenv-armhf.sh
+source /opt/Qt/<version>/gcc_armhf/bin/qtenv-armhf.sh
 
 # Verify Qt installation
 qmake -query
@@ -203,7 +212,7 @@ qmake -query
 
 ```bash
 # Use the generated toolchain file
-cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/6.9.3/gcc_armhf/qt6-armhf-toolchain.cmake \
+cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/<version>/gcc_armhf/qt6-armhf-toolchain.cmake \
       -DCMAKE_BUILD_TYPE=Release \
       /path/to/your/project
 
@@ -216,14 +225,14 @@ Once Qt is cross-compiled, you can build Raspberry Pi Imager:
 
 ```bash
 # Set up environment
-source /opt/Qt/6.9.3/gcc_armhf/bin/qtenv-armhf.sh
+source /opt/Qt/<version>/gcc_armhf/bin/qtenv-armhf.sh
 
 # Create build directory
 mkdir -p ~/rpi-imager-build-armhf
 cd ~/rpi-imager-build-armhf
 
 # Configure with CMake
-cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/6.9.3/gcc_armhf/qt6-armhf-toolchain.cmake \
+cmake -DCMAKE_TOOLCHAIN_FILE=/opt/Qt/<version>/gcc_armhf/qt6-armhf-toolchain.cmake \
       -DCMAKE_BUILD_TYPE=Release \
       /path/to/rpi-imager/src
 
@@ -273,7 +282,7 @@ make -j$(nproc)
 After successful compilation, the Qt installation will have this structure:
 
 ```
-/opt/Qt/6.9.3/gcc_armhf/
+/opt/Qt/<version>/gcc_armhf/
 ├── bin/                    # Qt tools and utilities
 │   ├── qmake              # Qt build system
 │   ├── qtenv-armhf.sh     # Environment setup script
@@ -311,7 +320,7 @@ For automated builds, you can use the script in CI environments:
     
 - name: Build Raspberry Pi Imager
   run: |
-    source /home/runner/Qt/6.9.3/gcc_armhf/bin/qtenv-armhf.sh
+    source /home/runner/Qt/<version>/gcc_armhf/bin/qtenv-armhf.sh
     mkdir build && cd build
     cmake -DCMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE ..
     make -j$(nproc)
