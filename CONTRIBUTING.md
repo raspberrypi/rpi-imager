@@ -2,41 +2,68 @@
 
 ### Linux
 
+Linux artifacts are built by one pipeline, driven from `debian/release.sh`. It
+builds every architecture — amd64, arm64 and armhf — inside its own rootless
+`mmdebstrap` chroot, from a machine of any of those architectures, and needs no
+`sudo`. [doc/linux-build.md](./doc/linux-build.md) is the full reference; this is
+the short version.
+
 #### Get dependencies
 
-- Install the build dependencies (Debian used as an example):
+Only what is needed to drive the pipeline; the actual build dependencies are
+installed inside the chroot:
 
 ```sh
-sudo apt install --no-install-recommends build-essential cmake git libgnutls28-dev
+sudo apt install mmdebstrap dpkg-dev git curl file xz-utils
 ```
+
+To build an architecture other than your own, also install `qemu-user-static`
+and `binfmt-support`.
 
 #### Get the source
 
 ```sh
-git clone --depth 1 https://github.com/raspberrypi/rpi-imager
+git clone https://github.com/raspberrypi/rpi-imager
 ```
 
-#### Build Qt
+Clone with full history: version strings come from `git describe --tags`, and
+the vendored third-party dependencies are git submodules (initialised for you by
+`debian/fetch-vendor-deps.sh`). A `--depth 1` clone will not build.
+
+#### Build the release artifacts
 
 ```sh
-sudo ./qt/build-qt.sh
+debian/release.sh status          # what exists, what doesn't — check this first
+debian/release.sh appimages amd64 # desktop + CLI AppImages for one architecture
+debian/release.sh arch amd64      # ...and the .deb packages that wrap them
+debian/release.sh repo            # source package + every arch in RELEASE_ARCHES
 ```
 
-This will build and install the version of Qt preferred for Raspberry Pi Imager into /opt/Qt/<version>. You must use `sudo` for the installation step to complete.
+The first run bootstraps a chroot and builds Qt, so it takes a while; both are
+cached under `.debian/` afterwards. Finished AppImages land in
+`.debian/appimages/<arch>/` and packages in `out/debian/`.
 
-#### Build the AppImage
+#### Build quickly while developing
+
+To iterate on the app itself, skip the packaging and build against a Qt tree
+directly:
 
 ```sh
-./create-appimage.sh
-./Raspberry_Pi_Imager-*.AppImage
+debian/ensure-qt.sh amd64    # populates .debian/qt/, or use system qt6-base-dev
+cmake -B build -G Ninja src -DQt6_ROOT=$PWD/.debian/qt/amd64/<version>/gcc_64
+cmake --build build
 ```
+
+`<version>` is whatever `QT_VERSION_DEFAULT` in
+[qt/qt-build-common.sh](./qt/qt-build-common.sh) says — the single place the Qt
+version is selected.
 
 ### Windows
 
 #### Get dependencies
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
-  - During installation, choose Qt 6.9 with Mingw64 64-bit toolchain.
+  - During installation, choose the Qt version named by `QT_VERSION_DEFAULT` in [qt/qt-build-common.sh](./qt/qt-build-common.sh), with the Mingw64 64-bit toolchain. Any newer Qt 6 that satisfies the `find_package(Qt6 ...)` minimum in `src/CMakeLists.txt` will also configure.
 - For building the installer, install Inno Setup scriptable install system: https://jrsoftware.org/isdl.php
 - Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
 - It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
@@ -47,7 +74,7 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
 
 - Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
 - Open the CMake plugin settings, and set the following Configure Args:
-  - `-DQt6_ROOT=C:\Qt\6.9.0\mingw_64` - or the equivalent path you installed Qt 6.9 to.
+  - `-DQt6_ROOT=C:\Qt\<version>\mingw_64` - or the equivalent path you installed Qt to.
   - `-DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64` - or the equivalent path you installed mingw64 to.
   - `-DENABLE_INNO_INSTALLER=ON` - to enable the Inno Setup installer, rather than the legacy NSIS installer.
   - `-DIMAGER_SIGNED_APP=ON` - to enable code signing for redistribution.
@@ -74,7 +101,7 @@ Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a
 
 - Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
 - Open the CMake plugin settings, and set the following Configure Args:
-  - `-DQt6_ROOT=/opt/Qt/6.9.1/macos` - or the equivalent path you installed Qt 6.9 to.
+  - `-DQt6_ROOT=/opt/Qt/<version>/macos` - or the equivalent path `build-qt-macos.sh` installed Qt to.
   - `-DIMAGER_SIGNED_APP=ON` - to enable code signing.
   - `-DIMAGER_SIGNING_IDENTITY=$cn` - to specify the Developer ID Certificate Common Name.
   - `-DIMAGER_NOTARIZE_APP=ON` - to enable automatic notarization for distribution to others.
@@ -87,10 +114,15 @@ Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a
 
 The Raspberry Pi Network installer (embedded imager) runs inside an operating system created by [pi-gen-micro](https://github.com/raspberrypi/pi-gen-micro/tree/main/configurations/rpi-imager-embedded).
 
-It uses the same vendored release Qt as the desktop and CLI packages (built with
-`-no-feature-icu`, linuxfb renderer), so there is no separate embedded Qt to
-build. The canonical build goes through the release pipeline, which builds
-inside the arm64 mmdebstrap chroot:
+It uses a **dedicated** Qt, distinct from the desktop and CLI release Qt: built
+`-no-opengl -no-dbus -qpa linuxfb` by `qt/build-qt-embedded.sh` into its own
+cache variant (`gcc_arm64_embedded`). The netboot target image carries no
+Mesa/GL, no X11 and no session bus — far too large for a network-loaded image —
+so the embedded Qt must not link `libEGL`/`libGL`/`libX11` at all. The build
+below produces it automatically on a cache miss.
+
+The canonical build goes through the release pipeline, which builds inside the
+arm64 mmdebstrap chroot:
 
 ```sh
 debian/release.sh embedded arm64
