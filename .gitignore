@@ -44,8 +44,13 @@ debian/com.raspberrypi.rpi-imager.metainfo.xml
 /rpi-imager-embedded*.deb
 
 # Qt related
-/qt-build**
-/qt-src**
+# build-qt*.sh creates these as $PWD/qt-src and $PWD/qt-build[-suffix], so they
+# land wherever the script was run from -- usually qt/, per the READMEs. Hence
+# no leading slash. The trailing slash restricts each to directories, which is
+# what keeps qt-build* from swallowing the tracked qt/qt-build-common.sh.
+qt-src/
+qt-build/
+qt-build-*/
 qt/language_filters.json
 /build-**
 
