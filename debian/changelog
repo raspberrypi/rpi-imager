@@ -1,4 +1,4 @@
-rpi-imager (2.0.11) unstable; urgency=medium
+rpi-imager (2.0.11-1) unstable; urgency=medium
 
   * OS Customisation:
     - Add the rpi-preseed first-boot customisation format, and list it as a
