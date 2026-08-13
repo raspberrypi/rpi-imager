@@ -167,9 +167,13 @@ fi
 if [ -z "$QT_DIR" ]; then
     echo "Error: No suitable Qt installation found for $ARCH"
 
-    if [ -f "./qt/build-qt.sh" ]; then
-        echo "You can build Qt using:"
-        echo "  ./qt/build-qt.sh --version=6.9.1"
+    if [ -f "./qt/build-qt-embedded.sh" ]; then
+        echo "The embedded package needs the dedicated -no-opengl -no-dbus"
+        echo "linuxfb Qt, which debian/build-embedded.sh builds for you:"
+        echo "  debian/build-embedded.sh arm64"
+        echo "Or build it directly (version defaults to QT_VERSION_DEFAULT in"
+        echo "qt/qt-build-common.sh):"
+        echo "  ./qt/build-qt-embedded.sh"
         echo "Or specify the Qt location with:"
         echo "  $0 --qt-root=/path/to/qt"
     else
