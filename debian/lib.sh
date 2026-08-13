@@ -36,7 +36,18 @@ APPIMAGE_ROOT=$(resolve_repo_path "$APPIMAGE_ROOT")
 
 QT_CACHE=${QT_CACHE:-.debian/qt}
 QT_CACHE=$(resolve_repo_path "$QT_CACHE")
-QT_VERSION=${QT_VERSION:-6.11.1}
+# The Qt version is selected in exactly one place: QT_VERSION_DEFAULT in
+# qt/qt-build-common.sh, which the qt/build-qt*.sh scripts this pipeline invokes
+# also read. Extract it rather than sourcing that file — it sets ARCH, PLATFORM
+# and friends, which would clobber callers of this library.
+if [ -z "${QT_VERSION:-}" ]; then
+	QT_VERSION=$(sed -n 's/^QT_VERSION_DEFAULT="\([^"]*\)".*/\1/p' \
+		"$TOP/qt/qt-build-common.sh" 2>/dev/null | head -1)
+	if [ -z "$QT_VERSION" ]; then
+		echo "lib.sh: could not read QT_VERSION_DEFAULT from qt/qt-build-common.sh" >&2
+		return 1 2>/dev/null || exit 1
+	fi
+fi
 # auto: build Qt on cache miss (default); cached: require pre-built Qt; always: force rebuild
 QT_BUILD=${QT_BUILD:-auto}
 
@@ -221,10 +232,17 @@ system_qt6_qmake() {
 	return 1
 }
 
-# Minimum Qt required by src/CMakeLists.txt (find_package(Qt6 6.9 ...)).
-QT_MIN_VERSION=${QT_MIN_VERSION:-6.9}
+# Minimum Qt accepted from a system install. Read from the find_package(Qt6 ...)
+# call in src/CMakeLists.txt, which is what actually enforces it, so the two
+# cannot drift.
+if [ -z "${QT_MIN_VERSION:-}" ]; then
+	QT_MIN_VERSION=$(sed -n \
+		's/.*find_package(Qt6 \([0-9][0-9.]*\).*/\1/p' \
+		"$TOP/src/CMakeLists.txt" 2>/dev/null | head -1)
+	QT_MIN_VERSION=${QT_MIN_VERSION:-6.9}
+fi
 
-# True when version $1 (e.g. 6.8.2) is >= QT_MIN_VERSION (major.minor compare).
+# True when version $1 is >= QT_MIN_VERSION (major.minor compare).
 qt_version_ge_min() {
 	_v=$1
 	[ -n "$_v" ] || return 1

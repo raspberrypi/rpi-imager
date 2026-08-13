@@ -9,7 +9,9 @@ APPIMAGE_ROOT=.debian/appimages
 
 # Per-arch Qt cache (desktop + CLI trees). Built automatically on first use.
 QT_CACHE=.debian/qt
-# QT_VERSION=6.11.1
+# The Qt version is selected by QT_VERSION_DEFAULT in qt/qt-build-common.sh.
+# Uncomment only to override it for this tree.
+# QT_VERSION=
 
 # Qt build policy: auto (default, build on cache miss), cached, or always.
 # QT_BUILD=auto
@@ -18,7 +20,8 @@ QT_CACHE=.debian/qt
 # QT_DESKTOP_BUILD=required
 
 # Rootless cross-build chroot settings (mmdebstrap under CHROOT_ROOT, no sudo).
-# bookworm is the baseline for every arch (portable glibc 2.36; Qt 6.11 + liburing 2.2+ ok).
+# bookworm is the baseline for every arch (portable glibc 2.36; new enough for the
+# Qt we ship and liburing 2.2+).
 CHROOT_DIST=bookworm
 CHROOT_SUFFIX=rpi-imager
 # CHROOT_ROOT=.debian/chroots
