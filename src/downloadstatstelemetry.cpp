@@ -39,16 +39,17 @@ DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByt
             +"&imagerLocale="+QUrl::toPercentEncoding(embedded ? imagerLang : locale.name());
 #ifdef Q_OS_LINUX
     QFile f("/proc/cpuinfo");
-    f.open(f.ReadOnly);
-    QByteArray cpuinfo = f.readAll();
-    f.close();
+    if (f.open(f.ReadOnly)) {
+        QByteArray cpuinfo = f.readAll();
+        f.close();
 
-    if (cpuinfo.contains("Raspberry Pi")) {
-        static QRegularExpression rx("Revision[ \t]*: ([0-9a-f]+)");
-        QRegularExpressionMatch m = rx.match(cpuinfo);
-        if (m.hasMatch())
-        {
-            _postfields += "&imagerPiRevision="+QUrl::toPercentEncoding(m.captured(1));
+        if (cpuinfo.contains("Raspberry Pi")) {
+            static QRegularExpression rx("Revision[ \t]*: ([0-9a-f]+)");
+            QRegularExpressionMatch m = rx.match(cpuinfo);
+            if (m.hasMatch())
+            {
+                _postfields += "&imagerPiRevision="+QUrl::toPercentEncoding(m.captured(1));
+            }
         }
     }
 #endif
