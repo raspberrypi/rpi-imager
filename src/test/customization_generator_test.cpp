@@ -1462,19 +1462,12 @@ TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[clo
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rfkill, unblock, wifi"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/var/lib/systemd/rfkill/*:wlan"));
     
-    // Network config should include eth0 for DHCP but no WiFi when there's no SSID
-    // The regulatory domain is set via cmdline parameter (cfg80211.ieee80211_regdom) instead.
+    // A country code alone cannot produce a wifis: block — cloud-init requires at
+    // least one access-point — and without one there is nothing to write, so no
+    // network-config is emitted. The regulatory domain is applied via the cmdline
+    // parameter (cfg80211.ieee80211_regdom) instead.
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    
-    // Should have eth0 configuration with DHCP v4 and v6
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    
-    // Should NOT have wifis section (no SSID configured)
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with special characters in SSID", "[cloudinit][network][negative]") {
@@ -1575,13 +1568,10 @@ TEST_CASE("Independent step: Hostname only", "[cloudinit][independent][hostname]
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
     
-    // Network config has eth0 with DHCP but no WiFi
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    // No Wi-Fi here, so no network-config is emitted at all. eth0 DHCP is only
+    // written alongside a wifis: block, because a network-config file replaces
+    // the distro default and would otherwise take wired ethernet with it.
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("Independent step: Timezone only", "[cloudinit][independent][locale]") {
@@ -1603,13 +1593,10 @@ TEST_CASE("Independent step: Timezone only", "[cloudinit][independent][locale]")
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
     
-    // Network config has eth0 with DHCP but no WiFi
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    // No Wi-Fi here, so no network-config is emitted at all. eth0 DHCP is only
+    // written alongside a wifis: block, because a network-config file replaces
+    // the distro default and would otherwise take wired ethernet with it.
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("Independent step: Keyboard only", "[cloudinit][independent][locale]") {
@@ -1633,13 +1620,10 @@ TEST_CASE("Independent step: Keyboard only", "[cloudinit][independent][locale]")
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
     
-    // Network config has eth0 with DHCP but no WiFi
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    // No Wi-Fi here, so no network-config is emitted at all. eth0 DHCP is only
+    // written alongside a wifis: block, because a network-config file replaces
+    // the distro default and would otherwise take wired ethernet with it.
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("Independent step: Locale (timezone + keyboard)", "[cloudinit][independent][locale]") {
@@ -1691,13 +1675,10 @@ TEST_CASE("Independent step: User credentials only (no SSH)", "[cloudinit][indep
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
     
-    // Network config has eth0 with DHCP but no WiFi
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    // No Wi-Fi here, so no network-config is emitted at all. eth0 DHCP is only
+    // written alongside a wifis: block, because a network-config file replaces
+    // the distro default and would otherwise take wired ethernet with it.
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("Independent step: WiFi only", "[cloudinit][independent][wifi]") {
@@ -1759,13 +1740,10 @@ TEST_CASE("Independent step: SSH with password auth only", "[cloudinit][independ
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
     
-    // Network config has eth0 with DHCP but no WiFi
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    // No Wi-Fi here, so no network-config is emitted at all. eth0 DHCP is only
+    // written alongside a wifis: block, because a network-config file replaces
+    // the distro default and would otherwise take wired ethernet with it.
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("Independent step: SSH with public keys only", "[cloudinit][independent][ssh]") {
@@ -1816,13 +1794,10 @@ TEST_CASE("Independent step: Interfaces only (I2C)", "[cloudinit][independent][i
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
     
-    // Network config has eth0 with DHCP but no WiFi
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    // No Wi-Fi here, so no network-config is emitted at all. eth0 DHCP is only
+    // written alongside a wifis: block, because a network-config file replaces
+    // the distro default and would otherwise take wired ethernet with it.
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("Independent step: Interfaces only (SPI)", "[cloudinit][independent][interfaces]") {
@@ -1918,13 +1893,10 @@ TEST_CASE("Independent step: Pi Connect only (with required user)", "[cloudinit]
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
     
-    // Network config has eth0 with DHCP but no WiFi
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+    // No Wi-Fi here, so no network-config is emitted at all. eth0 DHCP is only
+    // written alongside a wifis: block, because a network-config file replaces
+    // the distro default and would otherwise take wired ethernet with it.
+    REQUIRE(netcfg.isEmpty());
 }
 
 // =============================================================================
@@ -2105,26 +2077,14 @@ TEST_CASE("CustomisationGenerator handles empty cloud-init settings gracefully",
     
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings);
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings);
-    QString userdataYaml = QString::fromUtf8(userdata);
-    
-    // User data should only have the always-present manage_resolv_conf setting
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("manage_resolv_conf: false"));
-    // Should NOT have any user-specific configuration
-    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("hostname:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("user:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("enable_ssh:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("timezone:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("keyboard:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("rpi:"));
-    
-    // Network config should still have eth0 with DHCP (always generated)
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("network:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("ethernets:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("eth0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp4: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("dhcp6: true"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("wifis:"));
+
+    // Nothing configured means nothing written. Both generators used to emit a
+    // baseline (manage_resolv_conf, and eth0 DHCP) unconditionally, which made
+    // the fastboot and download paths write meta-data/network-config even when
+    // the user had skipped customisation — and older fastboot gadgets failed on
+    // that write. An empty payload is what tells those paths to skip the file.
+    REQUIRE(userdata.isEmpty());
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("CustomisationGenerator cloud-init handles empty Pi Connect token", "[cloudinit][negative]") {
