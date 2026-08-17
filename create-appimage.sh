@@ -340,6 +340,33 @@ else
         fi
     done
 fi
+
+# Qt Wayland plugins, deployed for both paths above: linuxdeploy-plugin-qt does
+# not ship these directories, and the manual list above does not either.
+#
+# libQt6WaylandClient looks for a shell integration under
+# plugins/wayland-shell-integration; without libxdg-shell.so the "wayland" QPA
+# plugin loads, connects to the compositor, then aborts with "Loading shell
+# integration failed." Qt then falls back to "xcb", so every session -- Wayland
+# included -- ends up on XWayland and needs libxcb-cursor0. On a target without
+# that library (Raspberry Pi OS bookworm) both plugins fail and the app does not
+# start at all.
+#
+# These are Qt's own plugins and belong with the bundled Qt, unlike the wayland
+# *system* libraries: libwayland-client/-cursor stay host-provided via
+# --exclude-library above and libwayland-client0/libwayland-cursor0 in
+# debian/control. libxdg-shell.so links only those two plus libQt6WaylandClient,
+# which is already bundled, so this adds no new host dependency.
+#
+# wayland-graphics-integration-client carries libqt-plugin-wayland-egl.so, which
+# is what gets GPU-accelerated Wayland rather than software shm buffers.
+for _plug in wayland-shell-integration wayland-graphics-integration-client \
+             wayland-decoration-client; do
+    if [ -d "$QT_DIR/plugins/$_plug" ]; then
+        mkdir -p "$APPDIR/usr/plugins/$_plug"
+        cp -a "$QT_DIR/plugins/$_plug/." "$APPDIR/usr/plugins/$_plug/"
+    fi
+done
 fi
 
 # Hook for removing files before AppImage creation
