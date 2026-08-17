@@ -29,6 +29,7 @@ fi
 
 echo "fetch-vendor-deps: initializing submodules..."
 git submodule sync --recursive
+# Depth-1 clones omit tag refs; check_submodule fetches each expected tag below.
 git submodule update --init --depth 1
 
 check_submodule() {
@@ -41,9 +42,16 @@ check_submodule() {
 		return 1
 	fi
 
-	_actual=$(git -C "$TOP/$_path" describe --tags --exact-match 2>/dev/null || true)
-	if [ "$_actual" != "$_tag" ]; then
-		echo "fetch-vendor-deps: $_path at '$_actual', expected '$_tag'" >&2
+	# Fetch only the pinned tag (not all tags) so the tag ref exists in a
+	# shallow clone without pulling every upstream release tip.
+	if ! git -C "$TOP/$_path" rev-parse --verify --quiet "refs/tags/$_tag" >/dev/null; then
+		git -C "$TOP/$_path" fetch --depth 1 origin tag "$_tag"
+	fi
+
+	_head=$(git -C "$TOP/$_path" rev-parse HEAD)
+	_want=$(git -C "$TOP/$_path" rev-parse "$_tag^{commit}")
+	if [ "$_head" != "$_want" ]; then
+		echo "fetch-vendor-deps: $_path at $_head, expected $_tag ($_want)" >&2
 		return 1
 	fi
 }
