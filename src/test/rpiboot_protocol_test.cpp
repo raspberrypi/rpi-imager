@@ -166,15 +166,24 @@ TEST_CASE("FileServer handles GetFileSize request", "[rpiboot][fileserver]")
 
     REQUIRE(server.run(mock, fw.path(), nullptr, cancelled));
 
-    // Should have sent one control transfer with the file size
-    // Size is encoded in wValue (low 16 bits) / wIndex (high 16 bits), no data payload
-    REQUIRE(mock.capturedControlTransfers().size() == 1);
-    auto& ct = mock.capturedControlTransfers()[0];
+    // Two control transfers: the file size, then the zero-length acknowledgement
+    // the server sends for the empty filename that signals "done" — an empty name
+    // is the device's end-of-transfer marker whatever command accompanies it, and
+    // acknowledging it matches upstream rpiboot.
+    REQUIRE(mock.capturedControlTransfers().size() == 2);
 
-    // Size of "enable_uart=1\n" = 14 bytes, encoded in wValue
-    CHECK(ct.data.empty());
-    CHECK(ct.wValue == 14);
-    CHECK(ct.wIndex == 0);
+    // Size is encoded in wValue (low 16 bits) / wIndex (high 16 bits), no data
+    // payload. "enable_uart=1\n" is 14 bytes.
+    auto& sizeReply = mock.capturedControlTransfers()[0];
+    CHECK(sizeReply.data.empty());
+    CHECK(sizeReply.wValue == 14);
+    CHECK(sizeReply.wIndex == 0);
+
+    // The done acknowledgement carries no payload and no size.
+    auto& doneAck = mock.capturedControlTransfers()[1];
+    CHECK(doneAck.data.empty());
+    CHECK(doneAck.wValue == 0);
+    CHECK(doneAck.wIndex == 0);
 }
 
 TEST_CASE("FileServer handles ReadFile request", "[rpiboot][fileserver]")
@@ -447,16 +456,23 @@ TEST_CASE("FileServer handles missing file gracefully", "[rpiboot][fileserver]")
     CHECK(mock.capturedControlTransfers()[0].data.empty());
 }
 
-TEST_CASE("FileServer returns false on short bulk read", "[rpiboot][fileserver][negative]")
+TEST_CASE("FileServer treats a failed message read as a fatal disconnect", "[rpiboot][fileserver][negative]")
 {
     MockUsbTransport mock;
-    // No responses queued — bulkRead returns -1 (short read)
+    // No responses queued, so controlTransferIn returns -1 (LIBUSB_ERROR_IO).
+    // FileMessages arrive over control IN rather than bulk IN, matching upstream
+    // rpiboot's ep_read().
 
     std::atomic<bool> cancelled{false};
     FileServer server;
 
+    // IO (-1) and NO_DEVICE (-4) mean the device has gone, so the server fails
+    // immediately instead of spending its retry budget — again matching upstream,
+    // which breaks out of its loop on both. Other error codes are retried; that
+    // path reports "Failed to read FileMessage" once the retries are exhausted.
     CHECK_FALSE(server.run(mock, std::filesystem::temp_directory_path(), nullptr, cancelled));
-    CHECK_THAT(server.lastError(), Catch::Matchers::ContainsSubstring("Failed to read FileMessage"));
+    CHECK_THAT(server.lastError(),
+               Catch::Matchers::ContainsSubstring("Device disconnected (libusb error -1)"));
 }
 
 TEST_CASE("FileServer fails when control transfer fails on ReadFile size header", "[rpiboot][fileserver][negative]")
