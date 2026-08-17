@@ -34,55 +34,63 @@ static std::shared_ptr<DeviceWrapper> g_shared_device_wrapper;
 static int g_partition_num = 1;
 static std::string g_test_device_path;
 
-// Initialize the shared device wrapper once
+// Initialize the shared device wrapper once.
+//
+// This runs from a static constructor, i.e. before main(), so it also runs when
+// the binary is merely listing its test cases. catch_discover_tests() parses
+// that listing from stdout a line at a time, so anything written to stdout here
+// is registered as a test case name — "WARNING: No test device path available"
+// became a phantom CTest entry that could never pass. Every diagnostic on this
+// path therefore goes to stderr, which discovery ignores.
 static void initializeSharedDevice() {
     if (g_shared_device_wrapper) {
         return; // Already initialized
     }
-    
+
     std::string mount_path = getTestMountPath();
     if (mount_path.empty()) {
-        std::cout << "WARNING: No test device path available" << std::endl;
+        std::cerr << "WARNING: No test device path available" << std::endl;
         return;
     }
-    
+
     g_test_device_path = mount_path;
-    
+
     // Convert partition to whole disk
     std::string disk_path = getWholeDiskPath(mount_path);
     g_partition_num = getPartitionNumber(mount_path);
-    
-    std::cout << "=========================================" << std::endl;
-    std::cout << "Opening test device ONCE for all tests" << std::endl;
-    std::cout << "Partition: " << mount_path << std::endl;
-    std::cout << "Whole disk: " << disk_path << std::endl;
-    std::cout << "Partition #: " << g_partition_num << std::endl;
-    std::cout << "=========================================" << std::endl;
-    
+
+    std::cerr << "=========================================" << std::endl;
+    std::cerr << "Opening test device ONCE for all tests" << std::endl;
+    std::cerr << "Partition: " << mount_path << std::endl;
+    std::cerr << "Whole disk: " << disk_path << std::endl;
+    std::cerr << "Partition #: " << g_partition_num << std::endl;
+    std::cerr << "=========================================" << std::endl;
+
     auto file_ops = rpi_imager::FileOperations::Create();
     auto result = file_ops->OpenDevice(disk_path);
-    
+
     if (result != rpi_imager::FileError::kSuccess) {
-        std::cout << "ERROR: Failed to open device: " << disk_path << std::endl;
+        std::cerr << "ERROR: Failed to open device: " << disk_path << std::endl;
         return;
     }
-    
+
     auto device_wrapper = std::make_unique<DeviceWrapper>(file_ops.get());
-    
+
     // Convert to shared_ptr for global sharing
     g_shared_file_ops = std::shared_ptr<rpi_imager::FileOperations>(std::move(file_ops));
     g_shared_device_wrapper = std::shared_ptr<DeviceWrapper>(std::move(device_wrapper));
-    
-    std::cout << "✅ Device opened successfully and will be reused by all tests" << std::endl;
-    std::cout << "=========================================" << std::endl;
+
+    std::cerr << "✅ Device opened successfully and will be reused by all tests" << std::endl;
+    std::cerr << "=========================================" << std::endl;
 }
 
-// Cleanup the shared device wrapper
+// Cleanup the shared device wrapper. Runs from a static destructor — see the
+// note above on why these go to stderr.
 static void cleanupSharedDevice() {
     if (g_shared_device_wrapper) {
-        std::cout << "=========================================" << std::endl;
-        std::cout << "Closing shared test device" << std::endl;
-        std::cout << "=========================================" << std::endl;
+        std::cerr << "=========================================" << std::endl;
+        std::cerr << "Closing shared test device" << std::endl;
+        std::cerr << "=========================================" << std::endl;
         g_shared_device_wrapper.reset();
         g_shared_file_ops.reset();
     }
