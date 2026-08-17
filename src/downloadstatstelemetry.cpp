@@ -20,10 +20,13 @@ DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByt
 {
     QLocale locale;
     
-    // Extract clean numeric version (X.Y.Z) from IMAGER_VERSION_STR for telemetry
-    // Handles formats like: v2.0.0, v2.0.0-rc4-60-geac7c2f0, 2.0.0, etc.
+    // Extract clean numeric version (X.Y.Z, or X.Y.Z.W for a hotfix release) from
+    // IMAGER_VERSION_STR for telemetry.
+    // Handles formats like: v2.0.0, v2.0.0-rc4-60-geac7c2f0, 2.0.0, v2.0.11.1, etc.
+    // The fourth component must be kept: without it a hotfix is indistinguishable
+    // from the release it fixes, so uptake of the fix cannot be measured.
     QString versionStr(IMAGER_VERSION_STR);
-    static QRegularExpression versionRx("^v?([0-9]+\\.[0-9]+\\.[0-9]+)");
+    static QRegularExpression versionRx("^v?([0-9]+\\.[0-9]+\\.[0-9]+(?:\\.[0-9]+)?)");
     QRegularExpressionMatch versionMatch = versionRx.match(versionStr);
     QByteArray cleanVersion = versionMatch.hasMatch() 
         ? versionMatch.captured(1).toLatin1() 
