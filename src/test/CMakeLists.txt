@@ -17,6 +17,19 @@ FetchContent_MakeAvailable(Catch2)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
+# Register a Catch2 binary's cases with CTest.
+#
+# Wraps catch_discover_tests purely to pin SKIP_RETURN_CODE. Catch2 exits 4 when
+# every selected case was skipped, and because discovery registers one CTest test
+# per case, a case that calls SKIP() is always the only one selected — so without
+# this CTest reports every skip as a failure. Tests that skip when optional
+# fixtures or hardware are absent (the pieeprom and eeprom_signer ones) were
+# accounting for six phantom failures. Use this in place of
+# catch_discover_tests() so a new test binary cannot reintroduce them.
+function(rpi_discover_tests target)
+    catch_discover_tests(${target} PROPERTIES SKIP_RETURN_CODE 4)
+endfunction()
+
 # Add the customization generator test executable
 # Includes the bundled crypto sources the generator now depends on for
 # credential derivation (yescrypt/sha256crypt password hashing).
@@ -49,7 +62,7 @@ target_compile_options(customization_generator_test PRIVATE
 )
 
 # Register with CTest for automatic test discovery
-catch_discover_tests(customization_generator_test)
+rpi_discover_tests(customization_generator_test)
 
 # Also add a custom target for manual running
 add_custom_target(test_customization_generator
@@ -130,7 +143,7 @@ target_compile_options(fat_partition_test PRIVATE
 # Note: These tests are marked with [!mayfail] and [.destructive] tags
 # Run with: ctest -C Debug --output-on-failure
 # Or with environment variable: FAT_TEST_MOUNT_PATH="/Volumes/bootfs 1" ctest
-catch_discover_tests(fat_partition_test)
+rpi_discover_tests(fat_partition_test)
 
 # Custom target for manual running with mount path argument
 # Usage: FAT_TEST_MOUNT_PATH="/Volumes/bootfs 1" cmake --build . --target test_fat_partition
@@ -198,7 +211,7 @@ target_compile_options(drivelist_test PRIVATE
 )
 
 # Register with CTest for automatic test discovery
-catch_discover_tests(drivelist_test)
+rpi_discover_tests(drivelist_test)
 
 # Custom target for manual running
 add_custom_target(test_drivelist
@@ -271,7 +284,7 @@ target_compile_options(platformquirks_test PRIVATE
 )
 
 # Register with CTest for automatic test discovery
-catch_discover_tests(platformquirks_test)
+rpi_discover_tests(platformquirks_test)
 
 # Custom target for manual running
 add_custom_target(test_platformquirks
@@ -323,7 +336,7 @@ target_compile_options(rpiboot_protocol_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(rpiboot_protocol_test)
+rpi_discover_tests(rpiboot_protocol_test)
 
 add_custom_target(test_rpiboot_protocol
     COMMAND rpiboot_protocol_test
@@ -361,7 +374,7 @@ target_compile_options(rpiboot_bootfiles_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(rpiboot_bootfiles_test)
+rpi_discover_tests(rpiboot_bootfiles_test)
 
 add_custom_target(test_rpiboot_bootfiles
     COMMAND rpiboot_bootfiles_test
@@ -394,7 +407,7 @@ target_compile_options(fastboot_protocol_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(fastboot_protocol_test)
+rpi_discover_tests(fastboot_protocol_test)
 
 add_custom_target(test_fastboot_protocol
     COMMAND fastboot_protocol_test
@@ -423,7 +436,7 @@ target_compile_options(sparse_encoder_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(sparse_encoder_test)
+rpi_discover_tests(sparse_encoder_test)
 
 add_custom_target(test_sparse_encoder
     COMMAND sparse_encoder_test
@@ -450,7 +463,7 @@ target_compile_options(pieeprom_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(pieeprom_test)
+rpi_discover_tests(pieeprom_test)
 
 add_custom_target(test_pieeprom
     COMMAND pieeprom_test
@@ -477,7 +490,7 @@ target_compile_options(bootloader_image_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(bootloader_image_test)
+rpi_discover_tests(bootloader_image_test)
 
 add_custom_target(test_bootloader_image
     COMMAND bootloader_image_test
@@ -507,7 +520,7 @@ target_compile_options(fastboot_eeprom_wire_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(fastboot_eeprom_wire_test)
+rpi_discover_tests(fastboot_eeprom_wire_test)
 
 add_custom_target(test_fastboot_eeprom_wire
     COMMAND fastboot_eeprom_wire_test
@@ -559,7 +572,7 @@ target_compile_options(eeprom_signer_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(eeprom_signer_test)
+rpi_discover_tests(eeprom_signer_test)
 
 add_custom_target(test_eeprom_signer
     COMMAND eeprom_signer_test
@@ -615,7 +628,7 @@ target_compile_options(rpiboot_integration_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
-catch_discover_tests(rpiboot_integration_test)
+rpi_discover_tests(rpiboot_integration_test)
 
 add_custom_target(test_rpiboot_integration
     COMMAND rpiboot_integration_test
@@ -714,7 +727,7 @@ endif()
 
 target_compile_features(device_io_limits_test PRIVATE cxx_std_20)
 
-catch_discover_tests(device_io_limits_test)
+rpi_discover_tests(device_io_limits_test)
 
 add_custom_target(test_device_io_limits
     COMMAND device_io_limits_test
@@ -744,7 +757,7 @@ target_compile_options(block_batcher_test PRIVATE
     $<$<CONFIG:Debug>:-g -O0>
 )
 
-catch_discover_tests(block_batcher_test)
+rpi_discover_tests(block_batcher_test)
 
 add_custom_target(test_block_batcher
     COMMAND block_batcher_test
