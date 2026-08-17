@@ -21,12 +21,29 @@ TextField {
     // trailing space is a legitimate part of the secret and silently discarding
     // it would change what the user actually set.
     property bool trimWhitespace: false
+    onTrimWhitespaceChanged: _syncValue()
 
     // The sanitised field contents. Read this rather than `text`: it is always
     // free of control characters, and of surrounding whitespace when the field
     // opts in above. Trimming happens here rather than in the scrubber below so
     // that typing a space mid-phrase is not swallowed as you type.
-    readonly property string value: trimWhitespace ? text.trim() : text
+    readonly property string value: _value
+
+    // `value` cannot be bound directly to `text`. QML re-evaluates a binding
+    // only after every handler connected to the same change signal has run, so
+    // an `onTextChanged` at the use site would read the *previous* contents.
+    // That silently discarded the Connect token the browser fills in, because
+    // the field's own handler saw an empty `value` and cleared the token it had
+    // just been given (issue: Next stays disabled on the Pi Connect step). The
+    // scrubber below runs before any use-site handler, so refreshing the
+    // backing property from there keeps `value` in step with `text` for every
+    // reader. Bindings *on* `value` still work: assigning `_value` notifies
+    // synchronously.
+    property string _value: ""
+    function _syncValue() {
+        _value = trimWhitespace ? text.trim() : text
+    }
+    Component.onCompleted: _syncValue()
 
     // A single-line field must never hold control characters, but Qt inserts
     // pasted text verbatim (QQuickTextInputPrivate::paste() is just
@@ -42,6 +59,9 @@ TextField {
     // them never disturbs editing, and doing so is lossless even for passwords.
     property bool _scrubbing: false
     onTextChanged: {
+        // Ahead of the scrub so that the re-entrant pass below leaves `value`
+        // holding the cleaned text by the time any use-site handler runs.
+        _syncValue()
         if (_scrubbing)
             return
         var cleaned = text.replace(/[\x00-\x1F\x7F]/g, "")
