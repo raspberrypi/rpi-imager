@@ -101,17 +101,20 @@ CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
 
 # Extract numeric version components for compatibility
-# Match versions like: v1.2.3, 1.2.3, v1.2.3-extra, etc.
+# Match versions like: v1.2.3, 1.2.3, v1.2.3-extra, v1.2.3.4 (hotfix), etc.
+# TWEAK is the optional fourth component and stays empty for ordinary releases.
 MAJOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}\([0-9]\{1,\}\)\.[0-9]\{1,\}\.[0-9]\{1,\}.*/\1/p')
 MINOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.\([0-9]\{1,\}\)\.[0-9]\{1,\}.*/\1/p')
 PATCH=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.[0-9]\{1,\}\.\([0-9]\{1,\}\).*/\1/p')
+TWEAK=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\.\([0-9]\{1,\}\).*/\1/p')
 
 if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
-    PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+    PROJECT_VERSION="$MAJOR.$MINOR.$PATCH${TWEAK:+.$TWEAK}"
 else
     MAJOR="0"
     MINOR="0"
     PATCH="0"
+    TWEAK=""
     PROJECT_VERSION="0.0.0"
     echo "Warning: Could not parse version from git tag: $GIT_VERSION"
 fi

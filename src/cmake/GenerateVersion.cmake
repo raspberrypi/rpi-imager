@@ -24,16 +24,32 @@ if(GIT_EXECUTABLE)
     endif()
 endif()
 
-# Parse numeric version components (e.g. v2.0.0-rc4-60-geac7c2f0 → 2, 0, 0)
-string(REGEX MATCH "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)" _match "${VERSION_STR}")
+# Parse numeric version components (e.g. v2.0.0-rc4-60-geac7c2f0 → 2, 0, 0, 0)
+#
+# The fourth component is optional and exists for hotfix tags such as v2.0.11.1.
+# It must be carried through: Windows FILEVERSION and the assembly manifest are
+# built from these numbers, so truncating to three would make a hotfix report
+# the same file version as the release it fixes, and anything keyed on that
+# (winget, SCCM, inventory tooling, crash triage) could not tell them apart.
+string(REGEX MATCH "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)(\\.([0-9]+))?" _match "${VERSION_STR}")
 if(_match)
     set(VERSION_MAJOR "${CMAKE_MATCH_1}")
     set(VERSION_MINOR "${CMAKE_MATCH_2}")
     set(VERSION_PATCH "${CMAKE_MATCH_3}")
+    # CMAKE_MATCH_4 is the optional ".N" wrapper; CMAKE_MATCH_5 is the N itself.
+    # Quote the reference: a group that did not participate leaves CMAKE_MATCH_5
+    # unset, and an unquoted `if(VAR STREQUAL "")` would then compare the literal
+    # name rather than the value, silently yielding an empty tweak.
+    if("${CMAKE_MATCH_5}" STREQUAL "")
+        set(VERSION_TWEAK 0)
+    else()
+        set(VERSION_TWEAK "${CMAKE_MATCH_5}")
+    endif()
 else()
     set(VERSION_MAJOR 0)
     set(VERSION_MINOR 0)
     set(VERSION_PATCH 0)
+    set(VERSION_TWEAK 0)
 endif()
 
 # Helper: write file only when content actually changed, so downstream build
@@ -64,6 +80,7 @@ set(IMAGER_VERSION_STR \"${VERSION_STR}\")
 set(IMAGER_VERSION_MAJOR ${VERSION_MAJOR})
 set(IMAGER_VERSION_MINOR ${VERSION_MINOR})
 set(IMAGER_VERSION_PATCH ${VERSION_PATCH})
+set(IMAGER_VERSION_TWEAK ${VERSION_TWEAK})
 ")
 write_if_changed("${OUTPUT_DIR}/imager_version_vars.cmake" "${CMAKE_CONTENT}")
 
