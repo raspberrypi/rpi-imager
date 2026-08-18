@@ -2967,10 +2967,26 @@ void ImageWriter::_parseZstdFile()
 
     unsigned long long fcs = ZSTD_findDecompressedSize(data.constData(), data.size());
 
+    // The failure sentinels are (0ULL - 2) and (0ULL - 1), not 0, so they have to
+    // be tested by name: comparing against 0 alone lets ZSTD_CONTENTSIZE_UNKNOWN
+    // through as _extrLen = ULLONG_MAX, and startWrite() then rejects a perfectly
+    // good local image with "Storage capacity is not large enough".
+    if (fcs == ZSTD_CONTENTSIZE_ERROR)
+    {
+        qDebug() << "Unable to parse .zst file (invalid or truncated frames)";
+        return;
+    }
+
+    if (fcs == ZSTD_CONTENTSIZE_UNKNOWN)
+    {
+        // Size not recorded in the frame headers (streaming-compressed input).
+        // Leave _extrLen unknown and let progress fall back to the download size.
+        qDebug() << "Parsed .zst file. Uncompressed size: unknown (FCS not present)";
+        return;
+    }
+
     if (fcs == 0)
     {
-        // Could be ZSTD_CONTENTSIZE_ERROR or ZSTD_CONTENTSIZE_UNKNOWN,
-        // or a valid zero-size file. Fall back to unknown.
         qDebug() << "Unable to determine decompressed size of .zst file";
         return;
     }
