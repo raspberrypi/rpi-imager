@@ -29,6 +29,13 @@
 #include <unistd.h>
 #endif
 
+#ifdef Q_OS_LINUX
+#include <sys/ioctl.h>
+#include <linux/fs.h>   // BLKRRPART
+#include <cerrno>
+#include <QFile>
+#endif
+
 using namespace std;
 
 // Ring buffer slot count is now determined dynamically by SystemMemoryManager
@@ -617,6 +624,50 @@ void DownloadExtractThread::extractMultiFileRun()
             fatpartition += "p1";
         else
             fatpartition += "1";
+
+        // The partition node for the freshly written table may not
+        // exist yet. The kernel re-reads the table when the last writer
+        // closes the whole-disk device, but the exclusive (O_EXCL) open used
+        // during formatting means that re-read can fail with EBUSY and only
+        // happen later — mounting immediately then dies with "special device
+        // does not exist". Wait for the node, and after a grace period ask
+        // the kernel for a re-read ourselves.
+        if (!QFile::exists(fatpartition))
+        {
+            QElapsedTimer nodeWait;
+            nodeWait.start();
+            bool rereadRequested = false;
+            while (!_cancelled && !QFile::exists(fatpartition) && nodeWait.elapsed() < 10000)
+            {
+                if (!rereadRequested && nodeWait.elapsed() >= 2000)
+                {
+                    rereadRequested = true;
+                    int fd = open(_filename.constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+                    if (fd >= 0)
+                    {
+                        if (ioctl(fd, BLKRRPART) != 0)
+                            qDebug() << "BLKRRPART on" << _filename << "failed:" << strerror(errno);
+                        else
+                            qDebug() << "Requested partition table re-read on" << _filename;
+                        close(fd);
+                    }
+                    else
+                    {
+                        qDebug() << "Could not open" << _filename << "for partition re-read:" << strerror(errno);
+                    }
+                }
+                QThread::msleep(100);
+            }
+            qDebug() << "Waited" << nodeWait.elapsed() << "ms for partition node" << fatpartition
+                     << "- exists:" << QFile::exists(fatpartition);
+
+            // A cancel during that wait must not fall through to mount: the
+            // cancel path has already torn the write down, and _joinExtractThread()
+            // is blocked on this function returning.
+            if (_cancelled)
+                return;
+        }
+
         args << "-t" << "vfat" << fatpartition << folder;
 
         if (QProcess::execute("mount", args) != 0)
