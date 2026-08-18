@@ -1937,13 +1937,7 @@ void DownloadThread::_performEject()
     QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
     PlatformQuirks::DiskResult result = PlatformQuirks::ejectDisk(ejectPath);
 
-    bool succeeded = (result == PlatformQuirks::DiskResult::Success);
-#ifdef Q_OS_WIN
-    // The legacy Windows implementation walks every drive letter, so its
-    // result can carry an unrelated volume's failure even when the target
-    // drive ejected fine. Only report a definite miss.
-    succeeded = (result != PlatformQuirks::DiskResult::InvalidDrive);
-#endif
+    const bool succeeded = (result == PlatformQuirks::DiskResult::Success);
 
     qDebug() << "Background eject finished for" << ejectPath << "succeeded:" << succeeded;
     emit ejectFinished(succeeded);

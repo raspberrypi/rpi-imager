@@ -2696,12 +2696,7 @@ void ImageWriter::ejectDrive()
     QThread *thread = QThread::create([self, device]() {
         PlatformQuirks::DiskResult result =
             PlatformQuirks::ejectDisk(PlatformQuirks::getEjectDevicePath(device));
-        bool succeeded = (result == PlatformQuirks::DiskResult::Success);
-#ifdef Q_OS_WIN
-        // The legacy Windows result can carry an unrelated volume's failure
-        // even when the target drive ejected fine; only report a definite miss.
-        succeeded = (result != PlatformQuirks::DiskResult::InvalidDrive);
-#endif
+        const bool succeeded = (result == PlatformQuirks::DiskResult::Success);
         QMetaObject::invokeMethod(QCoreApplication::instance(), [self, succeeded]() {
             if (self)
                 self->onEjectFinished(succeeded);
