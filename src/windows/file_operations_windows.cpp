@@ -740,6 +740,19 @@ FileError WindowsFileOperations::SetDirectIOEnabled(bool enabled) {
   if (result != FileError::kSuccess) {
     result = OpenInternal(savedPath, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, shareMode);
     using_direct_io_ = false;
+    if (result != FileError::kSuccess &&
+        shareMode != (FILE_SHARE_READ | FILE_SHARE_WRITE)) {
+      // The handle is already closed, so another process can claim the drive in
+      // that window and every exclusive reopen then fails, aborting a write that
+      // was already in flight. OpenDevice() degrades to a shared open in the same
+      // situation; do the same here rather than lose the write.
+      result = OpenInternal(savedPath, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING,
+                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE);
+      if (result == FileError::kSuccess) {
+        Log("Exclusive reopen failed; continuing with a shared handle");
+      }
+    }
     if (result != FileError::kSuccess) {
       return result;
     }
