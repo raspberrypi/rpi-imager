@@ -25,10 +25,22 @@
 namespace fastboot {
 
 struct Response {
-    enum Type { Okay, Fail, Data, Info, Text };
+    // TransportError means we never heard from the device at all (the bulk
+    // write or read failed), as opposed to Fail, which is the device answering
+    // and refusing. Callers that only ask "did this succeed?" can keep testing
+    // against Okay; callers that must not confuse "no" with "no answer" —
+    // device identification, above all — have to tell the two apart.
+    enum Type { Okay, Fail, Data, Info, Text, TransportError };
     Type type = Fail;
     std::string message;
     uint32_t dataSize = 0;  // Only valid for Data type
+};
+
+// Outcome of identifying a device as a genuine rpi-fastbootd gadget.
+enum class RpiIdentity {
+    ConfirmedPi,     // the descriptor or the block-devices getvar confirms it
+    ConfirmedNotPi,  // the device answered the probe and denied it
+    Inconclusive,    // the probe never got an answer; identity still unknown
 };
 
 class FastbootProtocol {
@@ -103,8 +115,13 @@ public:
     //   2. a fallback probe of the RPi-specific "block-devices" getvar, which
     //      stock Android fastboot/fastbootd does not implement (FAILs), for
     //      transports that cannot read the descriptor or customised gadgets.
-    // Returns true only when one of these confirms a Pi; false otherwise.
-    bool isRpiFastboot(rpiboot::IUsbTransport& transport);
+    //
+    // A transport failure is reported as Inconclusive rather than as a denial:
+    // a genuine Pi that is still bringing its gadget up answers nothing for a
+    // moment, and treating that as ConfirmedNotPi would strand it. Callers
+    // deciding whether to *write* must require ConfirmedPi; callers deciding
+    // whether to *remember* a rejection must accept only ConfirmedNotPi.
+    RpiIdentity identifyRpiFastboot(rpiboot::IUsbTransport& transport);
 
     // Combined download + flash in one call.
     bool flashImage(rpiboot::IUsbTransport& transport,

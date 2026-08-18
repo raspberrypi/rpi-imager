@@ -48,6 +48,10 @@ public:
     // Configure a simulated failure on the next N bulk writes
     void failNextBulkWrites(int count) { _failBulkWriteCount = count; }
 
+    // Make the next bulk write report a short (but non-negative) transfer of
+    // `bytes`, as a real USB stack may. Applies once.
+    void shortNextBulkWrite(int bytes) { _shortBulkWriteBytes = bytes; }
+
     // Configure a simulated failure on the next N control transfers
     void failNextControlTransfers(int count) { _failControlCount = count; }
 
@@ -112,6 +116,13 @@ public:
         }
 
         _capturedBulkWrites.emplace_back(data.begin(), data.end());
+
+        if (_shortBulkWriteBytes >= 0) {
+            int n = _shortBulkWriteBytes;
+            _shortBulkWriteBytes = -1;
+            return n;
+        }
+
         return static_cast<int>(data.size());
     }
 
@@ -137,6 +148,7 @@ private:
     bool _isOpen = true;
     std::string _interfaceString;
     int _failBulkWriteCount = 0;
+    int _shortBulkWriteBytes = -1;  // -1 = write everything
     int _failControlCount = 0;
     std::deque<std::vector<uint8_t>> _bulkReadQueue;
     std::vector<std::vector<uint8_t>> _capturedBulkWrites;
