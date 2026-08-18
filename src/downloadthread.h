@@ -192,6 +192,12 @@ signals:
     void cacheFileHashUpdated(QByteArray cacheFileHash, QByteArray imageHash);
     void finalizing();
     void preparationStatusUpdate(QString msg);
+    // Background eject progress after a successful write. ejectStarted() is
+    // emitted before success() so the UI already shows "ejecting" when the
+    // done screen appears; ejectFinished() follows when the drive is safe to
+    // remove (or the eject gave up).
+    void ejectStarted();
+    void ejectFinished(bool succeeded);
     
     // Performance event signals (connected by ImageWriter to PerformanceStats)
     void eventDriveUnmount(quint32 durationMs, bool success);
@@ -245,6 +251,7 @@ protected:
 
     void _hashData(const char *buf, size_t len);
     void _writeComplete();
+    void _performEject();
     virtual bool _verify();
     virtual void _onVerifyProgress() {}  // Called during verify loop for progress updates
     int _authopen(const QByteArray &filename);

@@ -141,7 +141,7 @@ namespace {
         }
     }
     
-    // Default timeout: 60 seconds (maxRetries * 100 * 0.05s = 60s with maxRetries=12)
+    // Timeout: maxRetries * 100 iterations * 0.05s, so maxRetries=12 -> 60s.
     // Slow USB drives with many files open may take significant time to unmount
     PlatformQuirks::DiskResult runDiskOperationOnMainRunLoop(const char* device,
                                                                 DADiskUnmountCallback callback,
@@ -568,9 +568,14 @@ DiskResult ejectDisk(const QString& device) {
     
     QByteArray bsdNameBytes = bsdName.toUtf8();
     qDebug() << "ejectDisk: ejecting" << bsdNameBytes.constData();
-    
-    // Use the combined unmount+eject callback
-    return runDiskOperation(bsdNameBytes.constData(), ejectUnmountCallback);
+
+    // Use the combined unmount+eject callback. The unmount is what flushes
+    // everything the extract path just wrote out of the page cache, and on a
+    // slow stick that alone can exceed the 60-second default. Give the flush
+    // five minutes; the callers treat the result as best-effort, but timing
+    // out early would let the UI claim the drive is safe to remove while the
+    // kernel is still writing to it.
+    return runDiskOperation(bsdNameBytes.constData(), ejectUnmountCallback, 60);
 }
 
 qreal detectTextScaleFactor()
