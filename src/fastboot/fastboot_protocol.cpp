@@ -26,7 +26,9 @@ Response FastbootProtocol::readResponse(rpiboot::IUsbTransport& transport, int t
 
     int bytesRead = transport.bulkRead(EP_IN, span, timeoutMs);
     if (bytesRead < 4) {
-        return {Response::Fail, "Short or failed read from device", 0};
+        // No usable answer came back. This is not the device saying "no" — it
+        // is the device saying nothing — so report it distinctly.
+        return {Response::TransportError, "Short or failed read from device", 0};
     }
 
     std::string raw(reinterpret_cast<const char*>(buf), static_cast<size_t>(bytesRead));
@@ -78,9 +80,13 @@ FastbootProtocol::CaptureResult FastbootProtocol::sendCommandCapture(
     auto data = std::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(command.data()), command.size());
 
+    // A command is one small ASCII write with no continuation, so a short write
+    // is not something to resume — it means the device received a truncated
+    // command, and any response we then read is answering something we did not
+    // ask. Treat it exactly like a failed write.
     int written = transport.bulkWrite(EP_OUT, data, timeoutMs);
-    if (written < 0) {
-        result.terminal = {Response::Fail, "Failed to send command", 0};
+    if (written < 0 || static_cast<size_t>(written) != data.size()) {
+        result.terminal = {Response::TransportError, "Failed to send complete command", 0};
         return result;
     }
 
@@ -123,9 +129,12 @@ bool FastbootProtocol::sendData(rpiboot::IUsbTransport& transport,
 
     auto cmdSpan = std::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(cmd), static_cast<size_t>(cmdLen));
+    // Short write means a truncated command header — see sendCommandCapture().
+    // Here it would be read back as a bad size, so fail rather than stream a
+    // payload the device is not expecting.
     int written = transport.bulkWrite(EP_OUT, cmdSpan, 3000);
-    if (written < 0) {
-        _lastError = std::string("Failed to send ") + std::string(commandPrefix) + " command";
+    if (written < 0 || static_cast<size_t>(written) != cmdSpan.size()) {
+        _lastError = std::string("Failed to send complete ") + std::string(commandPrefix) + " command";
         return false;
     }
 
@@ -204,9 +213,10 @@ std::vector<uint8_t> FastbootProtocol::upload(rpiboot::IUsbTransport& transport,
     const char* cmd = "upload";
     auto cmdSpan = std::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(cmd), std::strlen(cmd));
+    // Short write means a truncated command — see sendCommandCapture().
     int written = transport.bulkWrite(EP_OUT, cmdSpan, 3000);
-    if (written < 0) {
-        _lastError = "Failed to send upload command";
+    if (written < 0 || static_cast<size_t>(written) != cmdSpan.size()) {
+        _lastError = "Failed to send complete upload command";
         return {};
     }
 
@@ -433,22 +443,34 @@ std::optional<std::string> FastbootProtocol::getVar(rpiboot::IUsbTransport& tran
 
 // ── Device identification ──────────────────────────────────────────────
 
-bool FastbootProtocol::isRpiFastboot(rpiboot::IUsbTransport& transport)
+RpiIdentity FastbootProtocol::identifyRpiFastboot(rpiboot::IUsbTransport& transport)
 {
     // Prefer the authoritative signal: the USB interface string descriptor
     // the RPi gadget advertises ("fastbootd-provisioner").  It is available
     // at open time, before any fastboot command, and stock Android
     // fastboot/fastbootd advertises "fastbootd" / "Android Fastboot" instead.
     if (transport.interfaceString() == rpiboot::FASTBOOT_INTERFACE_DESCRIPTOR)
-        return true;
+        return RpiIdentity::ConfirmedPi;
 
     // Fall back to a protocol-level probe: rpi-fastbootd implements the
     // RPi-specific "block-devices" getvar to enumerate flashable storage,
-    // which stock Android fastboot does not (→ getVar yields nullopt).  This
-    // covers transports that cannot read the descriptor (e.g. non-USB) and
-    // gadgets built with a customised interface string, while still rejecting
-    // a non-Pi device that merely matches the borrowed 18d1:4e40 VID/PID.
-    return getVar(transport, "block-devices").has_value();
+    // which stock Android fastboot does not (→ FAIL).  This covers transports
+    // that cannot read the descriptor (e.g. non-USB) and gadgets built with a
+    // customised interface string, while still rejecting a non-Pi device that
+    // merely matches the borrowed 18d1:4e40 VID/PID.
+    auto resp = sendCommand(transport, "getvar:block-devices", 3000);
+    switch (resp.type) {
+    case Response::Okay:
+        // Implementing the getvar at all is the positive signal; an empty list
+        // just means a Pi with no attached storage.
+        return RpiIdentity::ConfirmedPi;
+    case Response::TransportError:
+        // Nothing answered. A Pi whose gadget is still coming up looks exactly
+        // like this, so leave the question open rather than banking a "no".
+        return RpiIdentity::Inconclusive;
+    default:
+        return RpiIdentity::ConfirmedNotPi;
+    }
 }
 
 // ── Combined flash ─────────────────────────────────────────────────────

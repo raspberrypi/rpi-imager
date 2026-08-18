@@ -183,26 +183,26 @@ TEST_CASE("FastbootProtocol getVar returns nullopt on FAIL", "[fastboot][protoco
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Device identification (isRpiFastboot) — guards against a non-Pi device
+// Device identification (identifyRpiFastboot) — guards against a non-Pi device
 // that happens to enumerate as the borrowed 18d1:4e40 VID/PID.
 //
 // Primary signal: the USB interface descriptor "fastbootd-provisioner".
 // Fallback: the RPi-specific "block-devices" getvar.
 // ────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("FastbootProtocol isRpiFastboot true on the fastbootd-provisioner interface descriptor", "[fastboot][protocol][identity]")
+TEST_CASE("FastbootProtocol identifyRpiFastboot confirms on the fastbootd-provisioner interface descriptor", "[fastboot][protocol][identity]")
 {
     MockUsbTransport mock;
     mock.setInterfaceString("fastbootd-provisioner");
 
     FastbootProtocol fb;
-    CHECK(fb.isRpiFastboot(mock));
+    CHECK(fb.identifyRpiFastboot(mock) == RpiIdentity::ConfirmedPi);
 
     // The descriptor is authoritative — no getvar probe should be sent.
     CHECK(mock.capturedBulkWrites().empty());
 }
 
-TEST_CASE("FastbootProtocol isRpiFastboot false for a non-Pi interface descriptor with no block-devices", "[fastboot][protocol][identity][negative]")
+TEST_CASE("FastbootProtocol identifyRpiFastboot denies a non-Pi interface descriptor with no block-devices", "[fastboot][protocol][identity][negative]")
 {
     // e.g. a stock Android device that matched the borrowed VID/PID.
     MockUsbTransport mock;
@@ -210,17 +210,17 @@ TEST_CASE("FastbootProtocol isRpiFastboot false for a non-Pi interface descripto
     mock.queueBulkReadResponse(makeResponse("FAIL", "unknown variable"));
 
     FastbootProtocol fb;
-    CHECK_FALSE(fb.isRpiFastboot(mock));
+    CHECK(fb.identifyRpiFastboot(mock) == RpiIdentity::ConfirmedNotPi);
 }
 
-TEST_CASE("FastbootProtocol isRpiFastboot falls back to block-devices when the descriptor is unavailable", "[fastboot][protocol][identity]")
+TEST_CASE("FastbootProtocol identifyRpiFastboot falls back to block-devices when the descriptor is unavailable", "[fastboot][protocol][identity]")
 {
     // No interface descriptor (default empty) → protocol-level fallback.
     MockUsbTransport mock;
     mock.queueBulkReadResponse(makeResponse("OKAY", "mmcblk0,nvme0n1"));
 
     FastbootProtocol fb;
-    CHECK(fb.isRpiFastboot(mock));
+    CHECK(fb.identifyRpiFastboot(mock) == RpiIdentity::ConfirmedPi);
 
     // Verify it probed the RPi-specific getvar
     REQUIRE(!mock.capturedBulkWrites().empty());
@@ -228,7 +228,7 @@ TEST_CASE("FastbootProtocol isRpiFastboot falls back to block-devices when the d
     CHECK(sent == "getvar:block-devices");
 }
 
-TEST_CASE("FastbootProtocol isRpiFastboot true for a Pi with an empty block-devices list", "[fastboot][protocol][identity]")
+TEST_CASE("FastbootProtocol identifyRpiFastboot confirms a Pi with an empty block-devices list", "[fastboot][protocol][identity]")
 {
     // A genuine Pi with no attached storage still OKAYs the getvar (empty
     // value). Implementing the getvar at all is the positive signal.
@@ -236,27 +236,72 @@ TEST_CASE("FastbootProtocol isRpiFastboot true for a Pi with an empty block-devi
     mock.queueBulkReadResponse(makeResponse("OKAY", ""));
 
     FastbootProtocol fb;
-    CHECK(fb.isRpiFastboot(mock));
+    CHECK(fb.identifyRpiFastboot(mock) == RpiIdentity::ConfirmedPi);
 }
 
-TEST_CASE("FastbootProtocol isRpiFastboot false when block-devices FAILs", "[fastboot][protocol][identity][negative]")
+TEST_CASE("FastbootProtocol identifyRpiFastboot denies when block-devices FAILs", "[fastboot][protocol][identity][negative]")
 {
     // Stock Android fastboot/fastbootd does not implement block-devices and
-    // returns FAIL — the device must be rejected.
+    // returns FAIL — the device answered, and the answer was no.
     MockUsbTransport mock;
     mock.queueBulkReadResponse(makeResponse("FAIL", "unknown variable"));
 
     FastbootProtocol fb;
-    CHECK_FALSE(fb.isRpiFastboot(mock));
+    CHECK(fb.identifyRpiFastboot(mock) == RpiIdentity::ConfirmedNotPi);
 }
 
-TEST_CASE("FastbootProtocol isRpiFastboot false when the transport is dead", "[fastboot][protocol][identity][negative]")
+TEST_CASE("FastbootProtocol identifyRpiFastboot is inconclusive when the transport is dead", "[fastboot][protocol][identity][negative]")
 {
-    // No queued response → bulkRead fails → not identified as a Pi.
+    // No queued response → bulkRead fails → we never heard from the device.
+    // This must NOT be recorded as a denial: a genuine Pi that is still
+    // bringing its gadget up is indistinguishable from this, and caching a
+    // "not a Pi" verdict here would strand it until it is unplugged.
     MockUsbTransport mock;
 
     FastbootProtocol fb;
-    CHECK_FALSE(fb.isRpiFastboot(mock));
+    CHECK(fb.identifyRpiFastboot(mock) == RpiIdentity::Inconclusive);
+}
+
+TEST_CASE("FastbootProtocol rejects a short command write", "[fastboot][protocol][negative]")
+{
+    // A command is a single small ASCII write with no continuation. A positive
+    // but short transfer means the device got a truncated command, so any
+    // response read afterwards is answering something we never sent — even a
+    // queued OKAY must not be accepted.
+    MockUsbTransport mock;
+    mock.shortNextBulkWrite(3);
+    mock.queueBulkReadResponse(makeResponse("OKAY", "mmcblk0"));
+
+    FastbootProtocol fb;
+    CHECK(fb.sendCommand(mock, "getvar:block-devices", 100).type
+          == Response::TransportError);
+}
+
+TEST_CASE("FastbootProtocol short command write is not read as a device denial", "[fastboot][protocol][identity][negative]")
+{
+    // The identity probe must not downgrade a truncated command to
+    // ConfirmedNotPi — that would be cached and strand a genuine Pi.
+    MockUsbTransport mock;
+    mock.shortNextBulkWrite(3);
+
+    FastbootProtocol fb;
+    CHECK(fb.identifyRpiFastboot(mock) == RpiIdentity::Inconclusive);
+}
+
+TEST_CASE("FastbootProtocol reports a dead transport as TransportError, not Fail", "[fastboot][protocol][identity][negative]")
+{
+    // The distinction the tri-state identity rests on: a device that refuses
+    // answers Fail, a device that is not talking yields TransportError.
+    MockUsbTransport mock;
+
+    FastbootProtocol fb;
+    CHECK(fb.sendCommand(mock, "getvar:block-devices", 100).type
+          == Response::TransportError);
+
+    MockUsbTransport refusing;
+    refusing.queueBulkReadResponse(makeResponse("FAIL", "unknown variable"));
+    CHECK(fb.sendCommand(refusing, "getvar:block-devices", 100).type
+          == Response::Fail);
 }
 
 // ────────────────────────────────────────────────────────────────────────
