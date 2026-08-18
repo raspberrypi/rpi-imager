@@ -261,18 +261,25 @@ FileError LinuxFileOperations::OpenDevice(const std::string& path) {
   // is rejected. extraFlags (e.g. O_EXCL) are preserved across that fallback.
   auto tryOpenWithFlags = [&](int extraFlags) -> FileError {
     int flags = O_RDWR | extraFlags;
-    if (isBlockDevice) {
+    // Track the O_DIRECT attempt locally: OpenInternal() starts with Close(),
+    // and Close() resets using_direct_io_, so the member is always false by the
+    // time the call returns. Branching on it here would make the buffered
+    // fallback below unreachable, and would also leave using_direct_io_ false
+    // after a *successful* O_DIRECT open.
+    const bool triedDirectIo = isBlockDevice;
+    if (triedDirectIo) {
       flags |= O_DIRECT;
-      using_direct_io_ = true;
       direct_io_attempted_ = true;
     }
 
     FileError r = OpenInternal(path.c_str(), flags);
 
     // If O_DIRECT fails, fall back to regular (buffered) I/O, keeping extraFlags.
-    if (r != FileError::kSuccess && isBlockDevice && using_direct_io_) {
-      using_direct_io_ = false;
+    if (r != FileError::kSuccess && triedDirectIo) {
       r = OpenInternal(path.c_str(), O_RDWR | extraFlags);
+      using_direct_io_ = false;
+    } else {
+      using_direct_io_ = (r == FileError::kSuccess && triedDirectIo);
     }
     return r;
   };
@@ -434,6 +441,18 @@ FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
       result = OpenInternal(savedPath.c_str(), O_RDWR | exclFlag);
       using_direct_io_ = false;
       Log("Failed to enable O_DIRECT, reopened without it");
+    }
+    if (result != FileError::kSuccess && exclFlag != 0) {
+      // The handle was closed above, so anything racing us can claim the device
+      // in that window and every exclusive reopen then fails — which aborts a
+      // write that was already in flight. OpenDevice() degrades to a shared open
+      // in the same situation; do the same here rather than lose the write.
+      result = OpenInternal(savedPath.c_str(), O_RDWR);
+      if (result == FileError::kSuccess) {
+        opened_exclusive_ = false;
+        using_direct_io_ = false;
+        Log("Exclusive reopen failed; continuing with a shared handle");
+      }
     }
     if (result != FileError::kSuccess) {
       return result;
