@@ -658,6 +658,19 @@ bool FastbootFlashThread::performErase(fastboot::FastbootProtocol& fb,
     // targets it directly and mounts "<dev>p1", so no partition suffix here.
     const std::string dev = _blockDevice.toStdString();
 
+    // Every step below is destructive, so cancellation is checked before and
+    // after each one: a cancel landing between two commands must not let the
+    // next one run, and must never reach emit success().
+    auto stopIfCancelled = [this]() {
+        if (!_cancelled.load())
+            return false;
+        emit error(tr("Cancelled"));
+        return true;
+    };
+
+    if (stopIfCancelled())
+        return false;
+
     // 1. Bare wipe of the whole device. The daemon's erase handler calls
     //    wipe_block_device(), which issues BLKDISCARD (near-instant on eMMC
     //    that supports it) or falls back to zeroing the device — which can
@@ -665,8 +678,7 @@ bool FastbootFlashThread::performErase(fastboot::FastbootProtocol& fb,
     emit preparationStatusUpdate(tr("Erasing storage device..."));
     qDebug() << "FastbootFlashThread: erase:" << QString::fromStdString(dev);
     auto resp = fb.sendCommand(transport, "erase:" + dev, 600000);
-    if (_cancelled.load()) {
-        emit error(tr("Cancelled"));
+    if (stopIfCancelled()) {
         return false;
     }
     if (resp.type != fastboot::Response::Okay) {
@@ -679,6 +691,9 @@ bool FastbootFlashThread::performErase(fastboot::FastbootProtocol& fb,
     emit preparationStatusUpdate(tr("Writing partition table..."));
     qDebug() << "FastbootFlashThread: oem partinit" << QString::fromStdString(dev) << "dos";
     resp = fb.sendCommand(transport, "oem partinit " + dev + " dos", 60000);
+    if (stopIfCancelled()) {
+        return false;
+    }
     if (resp.type != fastboot::Response::Okay) {
         emit error(tr("Failed to write partition table: %1")
                    .arg(QString::fromStdString(resp.message)));
@@ -694,6 +709,9 @@ bool FastbootFlashThread::performErase(fastboot::FastbootProtocol& fb,
     emit preparationStatusUpdate(tr("Creating FAT32 partition..."));
     qDebug() << "FastbootFlashThread: oem partapp" << QString::fromStdString(dev) << "c";
     resp = fb.sendCommand(transport, "oem partapp " + dev + " c", 60000);
+    if (stopIfCancelled()) {
+        return false;
+    }
     if (resp.type != fastboot::Response::Okay) {
         emit error(tr("Failed to create partition: %1")
                    .arg(QString::fromStdString(resp.message)));
@@ -748,12 +766,16 @@ void FastbootFlashThread::runImpl()
     // Safety gate: refuse to touch anything that is not a genuine
     // rpi-fastbootd gadget. The device matched only on the 18d1:4e40 VID/PID
     // the gadget borrows from Google, so verify its identity before issuing
-    // any destructive command (erase / partition / flash). isRpiFastboot()
+    // any destructive command (erase / partition / flash). identifyRpiFastboot()
     // checks the authoritative USB interface descriptor ("fastbootd-provisioner")
     // and falls back to the RPi-specific block-devices getvar. This ensures a
     // non-Pi device in a colliding fastboot mode can never be written to,
     // even if it somehow reached this point.
-    if (!fb.isRpiFastboot(*transport)) {
+    //
+    // Only a positive confirmation is good enough here: an inconclusive probe
+    // means we do not know what this device is, and "unknown" must never be
+    // enough to start erasing it.
+    if (fb.identifyRpiFastboot(*transport) != fastboot::RpiIdentity::ConfirmedPi) {
         emit error(tr("Refusing to flash %1: the device did not identify as a "
                       "Raspberry Pi fastboot device.").arg(_fastbootId));
         return;
