@@ -1901,6 +1901,15 @@ void DownloadThread::_writeComplete()
         return;
     }
 
+    /* _verifyCustomisation() returns true when it bailed out early because the
+       write was cancelled, so re-check here: without this a cancelled write
+       reaches success() and the done screen shows a green card. */
+    if (_cancelled)
+    {
+        _closeFiles();
+        return;
+    }
+
     _closeFiles();
 
 #ifdef Q_OS_DARWIN
@@ -2071,13 +2080,18 @@ bool DownloadThread::_verifyCustomisation()
                                       .arg(coverage, missing.join(","),
                                            sizeMismatched.join(","), mismatched.join(",")));
 
-    emit error(tr("The OS customisation settings were not stored correctly on the device. "
-                  "The following files are missing or damaged: %1.\n\n"
-                  "The device accepted the data but did not keep it, which usually means the "
-                  "SD card or USB adapter is failing or counterfeit. The image itself was "
-                  "written correctly, but the device would not have applied your settings on "
-                  "first boot (so you would not have been able to connect to it). Try a "
-                  "different card or card reader.").arg(affected.join(", ")));
+    /* Route through _onDownloadError() like every other failure in
+       _writeComplete(): it marks the write cancelled, drops the device handle and
+       refreshes the OS disk view. We have just rewritten the partition table, so
+       on Windows skipping that refresh can leave the drive with no letter. */
+    DownloadThread::_onDownloadError(
+        tr("The OS customisation settings were not stored correctly on the device. "
+           "The following files are missing or damaged: %1.\n\n"
+           "The device accepted the data but did not keep it, which usually means the "
+           "SD card or USB adapter is failing or counterfeit. The image itself was "
+           "written correctly, but the device would not have applied your settings on "
+           "first boot (so you would not have been able to connect to it). Try a "
+           "different card or card reader.").arg(affected.join(", ")));
     return false;
 }
 
