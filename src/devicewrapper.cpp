@@ -17,7 +17,16 @@ DeviceWrapper::DeviceWrapper(rpi_imager::FileOperations *file_ops, QObject *pare
 
 DeviceWrapper::~DeviceWrapper()
 {
-    sync();
+    /* sync() throws on a write or flush failure, and a destructor is implicitly
+       noexcept — letting that escape calls std::terminate(). A card reader that
+       disappeared mid-write is exactly the case that makes the final flush fail,
+       so kill the process there and the user loses the error dialog too. Callers
+       that need to know a flush failed call sync() explicitly. */
+    try {
+        sync();
+    } catch (const std::exception &err) {
+        qDebug() << "DeviceWrapper: sync() failed during destruction:" << err.what();
+    }
 }
 
 void DeviceWrapper::_seekToBlock(quint64 blockNr)
