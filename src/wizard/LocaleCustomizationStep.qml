@@ -114,58 +114,60 @@ WizardStepBase {
         spacing: Style.stepContentSpacing
         
         WizardSectionContainer {
-            RowLayout {
+            GridLayout {
                 Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                
-                WizardFormLabel { 
+                columns: 2
+                columnSpacing: Style.formColumnSpacing
+                rowSpacing: Style.formRowSpacing
+
+                WizardFormLabel {
                     id: labelCapitalCity
-                    text: qsTr("Capital city:") 
+                    text: qsTr("Capital city:")
                     accessibleDescription: qsTr("Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country's Wi-Fi regulations.")
                 }
-                ImComboBox {
-                    id: comboCapitalCity
+                RowLayout {
                     Layout.fillWidth: true
-                    editable: false
-                    selectTextByMouse: true
-                    font.pointSize: Style.fontSizeInput
-                    onActivated: {
-                        // Use Qt.callLater to ensure text is fully updated
-                        Qt.callLater(root.onCapitalCityChanged)
+                    spacing: Style.spacingMedium
+
+                    ImComboBox {
+                        id: comboCapitalCity
+                        Layout.fillWidth: true
+                        editable: false
+                        selectTextByMouse: true
+                        font.pointSize: Style.fontSizeInput
+                        onActivated: {
+                            // Use Qt.callLater to ensure text is fully updated
+                            Qt.callLater(root.onCapitalCityChanged)
+                        }
+                    }
+                    Text {
+                        id: capitalCityInfoIcon
+                        text: "ⓘ"
+                        font.pointSize: Style.fontSizeFormLabel
+                        color: capitalCityInfoArea.containsMouse ? Style.textDescriptionColor : Style.textMetadataColor
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("Why am I being asked this?")
+                        Accessible.description: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
+
+                        ToolTip.text: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
+                        ToolTip.visible: capitalCityInfoArea.containsMouse
+                        ToolTip.delay: 300
+
+                        MouseArea {
+                            id: capitalCityInfoArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            acceptedButtons: Qt.NoButton
+                        }
                     }
                 }
-                Text {
-                    id: capitalCityInfoIcon
-                    text: "ⓘ"
-                    font.pointSize: Style.fontSizeFormLabel
-                    color: capitalCityInfoArea.containsMouse ? Style.textDescriptionColor : Style.textMetadataColor
-                    Layout.alignment: Qt.AlignVCenter
 
-                    Accessible.role: Accessible.Button
-                    Accessible.name: qsTr("Why am I being asked this?")
-                    Accessible.description: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
-
-                    ToolTip.text: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
-                    ToolTip.visible: capitalCityInfoArea.containsMouse
-                    ToolTip.delay: 300
-
-                    MouseArea {
-                        id: capitalCityInfoArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        acceptedButtons: Qt.NoButton
-                    }
-                }
-            }
-            
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                
-                WizardFormLabel { 
+                WizardFormLabel {
                     id: labelTimezone
-                    text: qsTr("Time zone:") 
+                    text: qsTr("Time zone:")
                     accessibleDescription: qsTr("Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.")
                 }
                 ImComboBox {
@@ -178,15 +180,10 @@ WizardStepBase {
                         root.userChangedTimezone = true
                     }
                 }
-            }
-            
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                
-                WizardFormLabel { 
+
+                WizardFormLabel {
                     id: labelKeyboard
-                    text: qsTr("Keyboard layout:") 
+                    text: qsTr("Keyboard layout:")
                     accessibleDescription: qsTr("Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.")
                 }
                 ImComboBox {
@@ -200,7 +197,6 @@ WizardStepBase {
                     }
                 }
             }
-            
         }
     }
     ]
