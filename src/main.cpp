@@ -238,7 +238,11 @@ int main(int argc, char *argv[])
     app.setOrganizationDomain("raspberrypi.com");
     app.setApplicationName("Raspberry Pi Imager");
     app.setApplicationVersion(ImageWriter::staticVersion());
+#ifdef Q_OS_WIN
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
+#else
+    app.setWindowIcon(QIcon::fromTheme("rpi-imager"));
+#endif
 
     // Log text scaling factor for debugging (all modes)
     qDebug() << "Text scale factor:" << PlatformQuirks::detectTextScaleFactor();
