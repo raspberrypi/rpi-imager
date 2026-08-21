@@ -746,9 +746,9 @@ void MacOSFileOperations::CancelAsyncIO() {
     completion_cv_.notify_all();
   }
   
-  // Note: We can't cancel already-dispatched GCD blocks, but they will
-  // complete relatively quickly. The key is unblocking the semaphore wait
-  // in AsyncWriteSequential so the caller can respond to cancellation.
+  // Already-dispatched GCD blocks cannot be cancelled. WaitForPendingWrites()
+  // must still drain them before their buffers or dispatch resources are
+  // destroyed.
 }
 
 std::vector<FileOperations::PendingWriteInfo> MacOSFileOperations::GetPendingWritesSorted() const {
@@ -775,17 +775,20 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
-  // Wait for pending writes to complete or be cancelled.
+  // Wait for every dispatched write and its callback to complete. Cancellation
+  // prevents new submissions, but GCD cannot cancel blocks already on the queue;
+  // returning early would let Close()/CleanupAsyncIO() destroy the file and
+  // semaphore while those blocks are still using them.
   // 
   // DESIGN: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
-  // This function simply waits, responding to cancellation. We keep a very long safety-net
+  // This function simply drains the queue. We keep a very long safety-net
   // timeout (5 minutes) only as emergency fallback if cancellation somehow fails.
   constexpr int kEmergencyTimeoutMs = 300000;  // 5 minute emergency fallback
   constexpr int kPollIntervalMs = 500;
   int totalWaitMs = 0;
   
   std::unique_lock<std::mutex> lock(completion_mutex_);
-  while (pending_writes_.load() > 0 && !cancelled_.load()) {
+  while (pending_writes_.load() > 0) {
     auto result = completion_cv_.wait_for(lock, std::chrono::milliseconds(kPollIntervalMs));
     
     if (result == std::cv_status::timeout) {
@@ -809,7 +812,7 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
     }
   }
   
-  if (cancelled_.load() && pending_writes_.load() > 0) {
+  if (cancelled_.load()) {
     return FileError::kCancelled;
   }
   
@@ -1004,4 +1007,4 @@ std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
   return std::make_unique<MacOSFileOperations>();
 }
 
-} // namespace rpi_imager 
+} // namespace rpi_imager
