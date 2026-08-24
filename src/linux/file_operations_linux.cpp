@@ -491,9 +491,20 @@ FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::si
     return FileError::kOpenError;
   }
 
+  // Write at our own logical cursor (async_write_offset_, also maintained by
+  // Seek()) rather than the file descriptor's position. io_uring submits
+  // offset-based writes, which never advance f_pos, so once a single async write
+  // has been issued the fd position is stale -- it still points just past the
+  // deferred first block. Using write() here would send everything after a
+  // mid-write switch to sync mode (sync_fallback_mode_, set by
+  // DrainAndSwitchToSync()/AttemptSyncFallback()) back to that stale position,
+  // overwriting the start of the device while reporting success, and the
+  // corruption would only surface as a post-write verification hash mismatch.
+  // Same approach as MacOSFileOperations::WriteSequential(). See #1598.
   std::size_t bytes_written = 0;
   while (bytes_written < size) {
-    ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
+    ssize_t result = pwrite(fd_, data + bytes_written, size - bytes_written,
+                            static_cast<off_t>(async_write_offset_ + bytes_written));
     if (result <= 0) {
       if (result == 0 || errno != EINTR) {
         last_error_code_ = errno;
@@ -505,12 +516,18 @@ FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::si
   }
 
   last_error_code_ = 0;
-  
-  // Update async_write_offset_ so Tell() returns correct position
-  // This is needed because Seek() sets async_write_offset_, and Tell()
-  // uses it if > 0. Without this update, Tell() would return a stale value.
+
+  // Advance the logical cursor so Tell() and the next write are correct.
   async_write_offset_ += size;
-  
+
+  // Keep f_pos in step: ReadSequential() is still position-based, so a
+  // write-then-read caller that does not Seek() in between must not see a
+  // position frozen by the pwrite() above.
+  if (lseek(fd_, static_cast<off_t>(async_write_offset_), SEEK_SET) == -1) {
+    last_error_code_ = errno;
+    return FileError::kSeekError;
+  }
+
   return FileError::kSuccess;
 }
 
