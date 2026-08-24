@@ -238,14 +238,14 @@ FileError MacOSFileOperations::WriteAtOffset(
     return FileError::kOpenError;
   }
 
-  if (lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == -1) {
-    std::cout << "WriteAtOffset: lseek failed, offset=" << offset << ", errno=" << errno << std::endl;
-    return FileError::kSeekError;
-  }
-
+  // Random-access write: pwrite() so this leaves both the fd position and the
+  // sequential cursor (async_write_offset_) alone. Seeking here would move
+  // f_pos out from under ReadSequential() while leaving the cursor behind, so
+  // the two would disagree about where "here" is.
   std::size_t bytes_written = 0;
   while (bytes_written < size) {
-    ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
+    ssize_t result = pwrite(fd_, data + bytes_written, size - bytes_written,
+                            static_cast<off_t>(offset + bytes_written));
     if (result <= 0) {
       std::cout << "WriteAtOffset: write failed, bytes_written=" << bytes_written << ", errno=" << errno << std::endl;
       return FileError::kWriteError;
