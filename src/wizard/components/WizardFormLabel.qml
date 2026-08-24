@@ -14,6 +14,10 @@ FocusableText {
     
     property bool isError: false
     property bool isDisabled: false
+
+    // Lets WizardFormGrid pick the labels out of its children when it measures
+    // how much width the label column is asking for.
+    readonly property bool isWizardFormLabel: true
     
     // When set, label becomes independently focusable for screen readers with this description
     property string accessibleDescription: ""
