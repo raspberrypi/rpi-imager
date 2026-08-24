@@ -165,8 +165,14 @@ FocusScope {
                 visible: customButtonArea.children.length === 0 && root.showSkipButton
                 enabled: root.skipButtonEnabled
                 accessibleDescription: root.skipButtonAccessibleDescription
+                // Without fillWidth a layout pins the button at its preferred width,
+                // which makes these hints inert and pushes the row's minimum past
+                // the window in wordy translations. Cap growth at the natural width
+                // rounded up, so a fractional content width can't cost the label an
+                // ellipsis it doesn't need.
+                Layout.fillWidth: true
                 Layout.minimumWidth: Style.buttonWidthSkip
-                Layout.maximumWidth: Style.buttonWidthSkip * 1.5  // Allow some growth but cap it
+                Layout.maximumWidth: Math.ceil(implicitWidth)
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.skipClicked()
                 // Tab order among action buttons: next -> back -> skip -> wrap to first field
@@ -185,8 +191,9 @@ FocusScope {
                 visible: customButtonArea.children.length === 0 && root.showBackButton
                 enabled: root.backButtonEnabled
                 accessibleDescription: root.backButtonAccessibleDescription
+                Layout.fillWidth: true
                 Layout.minimumWidth: Style.buttonWidthMinimum
-                Layout.maximumWidth: Style.buttonWidthMinimum * 1.5  // Allow some growth but cap it
+                Layout.maximumWidth: Math.ceil(implicitWidth)
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.backClicked()
                 // After back, Tab goes to skip; Shift+Tab goes to next
@@ -200,8 +207,9 @@ FocusScope {
                 visible: customButtonArea.children.length === 0 && root.showNextButton
                 enabled: root.nextButtonEnabled
                 accessibleDescription: root.nextButtonAccessibleDescription
+                Layout.fillWidth: true
                 Layout.minimumWidth: Style.buttonWidthMinimum
-                Layout.maximumWidth: Style.buttonWidthMinimum * 1.5  // Allow some growth but cap it
+                Layout.maximumWidth: Math.ceil(implicitWidth)
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.nextClicked()
                 // After next, Tab goes to back; Shift+Tab goes to skip
