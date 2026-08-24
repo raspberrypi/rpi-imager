@@ -141,7 +141,9 @@ Item {
     readonly property int buttonWidthMinimum: scaled(120)
     readonly property int buttonWidthSkip: scaled(150)
 
-    readonly property int sectionMaxWidth: scaled(500)
+    // Wide enough that a resized window gives the form room rather than margins,
+    // capped so a maximised window doesn't stretch a single field across the screen.
+    readonly property int sectionMaxWidth: scaled(720)
     readonly property int sectionMargins: scaled(24)
     readonly property int sectionPadding: scaled(16)
     readonly property int sectionBorderWidth: 1          // not scaled — visual decoration
