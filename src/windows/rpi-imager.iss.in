@@ -30,6 +30,11 @@ MinVersion=10.0.15063
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAppExeName},0
 UninstallDisplayName={#MyAppName}
+; Defaults to 'auto', which hides the Select Destination Location page whenever a
+; previous install is recorded in the registry. Together with DisableReadyPage that
+; leaves an upgrader unable to see or correct the destination at all - see
+; InitializeWizard below.
+DisableDirPage=no
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
 DisableReadyPage=yes
@@ -603,4 +608,38 @@ begin
   end;
 
   Result := True;
+end;
+
+// DirEdit is prefilled from the previous install's recorded app path, because
+// UsePreviousAppDir defaults to yes. Nothing validates that path until
+// TMainForm.Install does so as its very first act - by which point the wizard has
+// already switched to the Installing page - and failure there aborts the install
+// behind Inno's bare "The drive or UNC share you selected does not exist or is not
+// accessible" message. An external drive that has been removed or re-lettered, or a
+// share that is no longer mapped, is enough to trigger it, and a silent install has
+// no page on which to correct it. Fall back to the default location instead.
+procedure InitializeWizard();
+var
+  Dir, Root: string;
+begin
+  // An explicit /DIR= is the operator's decision. Leave it to fail loudly rather
+  // than silently redirecting an unattended install somewhere else.
+  if ExpandConstant('{param:DIR}') <> '' then
+    Exit;
+
+  Dir := WizardForm.DirEdit.Text;
+  Root := ExtractFileDrive(Dir);
+  if Root = '' then
+    Exit;
+
+  // Inno's own check calls SHPathPrepareForWrite first, which can reconnect a mapped
+  // network drive - those start disconnected in an elevated process. We have no
+  // equivalent, so this test is the more pessimistic one: a share that would have
+  // reconnected gets relocated instead. Hence the log lines.
+  if not DirExists(AddBackslash(Root)) then begin
+    Log('Recorded install directory is unreachable: ' + Dir);
+    Dir := ExpandConstant('{autopf}\{#MyAppPublisher}\Imager');  // matches DefaultDirName
+    Log('Falling back to default install directory: ' + Dir);
+    WizardForm.DirEdit.Text := Dir;
+  end;
 end;
