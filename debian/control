@@ -9,7 +9,21 @@ Homepage: https://www.raspberrypi.com/software
 Package: rpi-imager
 Build-Profiles: <desktop>
 Architecture: amd64 arm64 armhf
-Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2,
+# The bundled AppImage runtime is AppImage/type2-runtime, which links libfuse3
+# and squashfuse statically (static-PIE, no DT_NEEDED at all). All it wants from
+# the system is a fusermount helper on $PATH, and every provider of `fuse`
+# ships /usr/bin/fusermount: fuse 2.9.9 on bookworm, fuse3 (Provides: fuse,
+# Breaks: fuse) on either suite, and trixie's transitional fuse -> fuse3.
+# Do NOT put libfuse2 back. Trixie renamed it libfuse2t64 for the 64-bit time_t
+# transition and, on 32-bit architectures, libfuse2t64 only Replaces libfuse2 --
+# it deliberately does not Provide it, because the ABI genuinely changed. A
+# libfuse2 dependency is therefore unsatisfiable on 32-bit Raspberry Pi OS
+# trixie, which is armhf userland even on a Pi 5 (issue #1651). The 64-bit
+# archs never saw it: there libfuse2t64 does carry Provides: libfuse2.
+# The build chroot is a separate matter and does still need libfuse2 (see
+# debian/chroot-packages): appimagetool is itself a classic AppImage linked
+# against libfuse.so.2, and the chroot is bookworm, where that still exists.
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse,
          util-linux (>= 2.37), pkexec,
          libstdc++6, libatomic1,
          libfontconfig1, libfreetype6,
@@ -57,8 +71,10 @@ Description: Raspberry Pi Imaging utility for embedded systems
 Package: rpi-imager-cli
 Build-Profiles: <cli>
 Architecture: amd64 arm64 armhf
+# See the fuse note on the rpi-imager stanza above: the AppImage runtime
+# bundles libfuse3 statically, and libfuse2 must not come back.
 Depends: ${shlibs:Depends}, ${misc:Depends},
-         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37),
+         dosfstools, fdisk, fuse, util-linux (>= 2.37),
          libstdc++6, libatomic1
 Conflicts: rpi-imager, rpi-imager-embedded
 Description: Raspberry Pi Imaging utility (command-line only)
