@@ -249,7 +249,9 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
         if (_producerDone) {
             return nullptr;  // EOF
         }
-        // Spurious wakeup, try again
+        // Spurious wakeup, try again. Release the lock first: _mutex is not
+        // recursive, so recursing while still holding it would self-deadlock.
+        lock.unlock();
         return acquireReadSlot(timeoutMs);
     }
     
