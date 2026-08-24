@@ -7,6 +7,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Material
 import QtQuick.Window
 
 import RpiImager
@@ -43,7 +44,37 @@ ComboBox {
     // Configuration
     selectTextByMouse: true
     editable: false
-    
+
+    // The Material style's content item is a read-only TextField, which cannot
+    // elide, so a field squeezed below its content width clips mid-character. A
+    // plain Text can elide, so use one and mirror the style's own metrics. Only
+    // the rendering is shortened - displayText, currentText and the accessible
+    // name all keep the full string. Every box in the app is non-editable; an
+    // editable one would need the style's TextField content item back.
+    contentItem: Text {
+        leftPadding: root.Material.textFieldHorizontalPadding
+        topPadding: root.Material.textFieldVerticalPadding
+        bottomPadding: root.Material.textFieldVerticalPadding
+
+        text: root.editable ? root.editText : root.displayText
+        font: root.font
+        color: root.enabled ? root.Material.foreground : root.Material.hintTextColor
+        elide: Text.ElideRight
+        verticalAlignment: Text.AlignVCenter
+    }
+
+    // ComboBox mirrors editText from its content item only while that item is a
+    // TextInput, and ours no longer is. Call sites read editText on these
+    // (always non-editable) boxes to persist the selection, so keep the mirror
+    // explicit rather than leaving them reading an empty string.
+    function syncEditText() {
+        if (!editable)
+            editText = displayText
+    }
+
+    onDisplayTextChanged: root.syncEditText()
+    Component.onCompleted: root.syncEditText()
+
     ListModel {
         id: filteredModel
     }
@@ -276,6 +307,7 @@ ComboBox {
                 contentItem: Text {
                     text: filterDelegate.displayText
                     font: root.font
+                    elide: Text.ElideRight
                     verticalAlignment: Text.AlignVCenter
                     color: root.indicateError ? Style.formLabelErrorColor : Style.textDescriptionColor
                 }
