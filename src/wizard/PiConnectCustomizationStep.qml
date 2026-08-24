@@ -70,11 +70,8 @@ WizardStepBase {
                 Accessible.name: text
             }
 
-            GridLayout {
+            WizardFormGrid {
                 Layout.fillWidth: true
-                columns: 2
-                columnSpacing: Style.formColumnSpacing
-                rowSpacing: Style.formRowSpacing
 
                 WizardFormLabel {
                     id: labelOrgKey

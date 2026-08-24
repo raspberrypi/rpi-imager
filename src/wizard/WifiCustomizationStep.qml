@@ -282,11 +282,8 @@ WizardStepBase {
                 }
 
                 // No explicit enable checkbox; intent is inferred from inputs
-                GridLayout {
+                WizardFormGrid {
                     Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: Style.formColumnSpacing
-                    rowSpacing: Style.formRowSpacing
 
                     WizardFormLabel {
                         id: labelSSID
