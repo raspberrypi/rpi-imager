@@ -765,3 +765,41 @@ add_custom_target(test_block_batcher
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Running block batcher tests"
 )
+
+# ============================================================================
+# RingBuffer Slot Recycling Tests
+# ============================================================================
+# The write path uses the ring buffer as a slot pool for asynchronous I/O, whose
+# completions release slots out of order. Covers that a released slot -- and only
+# that slot -- is recycled, so a buffer still being read from is never handed
+# back to the producer. Needs Qt6::Core for qMallocAligned/qDebug.
+
+add_executable(ringbuffer_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
+    ringbuffer_test.cpp
+)
+
+target_include_directories(ringbuffer_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(ringbuffer_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(ringbuffer_test PRIVATE cxx_std_20)
+target_compile_options(ringbuffer_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+rpi_discover_tests(ringbuffer_test)
+
+add_custom_target(test_ringbuffer
+    COMMAND ringbuffer_test
+    DEPENDS ringbuffer_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running ring buffer tests"
+)

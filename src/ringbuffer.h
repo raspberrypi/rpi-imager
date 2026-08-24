@@ -30,6 +30,12 @@
  * - Zero-copy: producer writes directly to buffer, consumer reads directly
  * - Blocking acquire with timeout for graceful shutdown
  * - Thread-safe for single producer / single consumer pattern
+ * - Slots are tracked by identity, so they may be released in any order
+ *
+ * It can also be used as a plain slot pool (acquireWriteSlot() straight to
+ * releaseReadSlot(), skipping commit/acquireRead) which is how the write path
+ * hands buffers to asynchronous I/O: the slot stays valid until the write
+ * completes, and those completions arrive out of order.
  */
 class RingBuffer
 {
@@ -95,7 +101,10 @@ public:
     /**
      * @brief Acquire a slot for writing (producer side)
      * 
-     * Blocks if no slots are available until one is released.
+     * Blocks if no slots are available until one is released. Only slots that
+     * have actually been released are handed out, so a slot still being read
+     * from -- for instance by an async write that has not completed yet -- is
+     * never returned, whatever order the releases arrive in.
      * 
      * @param timeoutMs Maximum time to wait in milliseconds (0 = infinite)
      * @return Pointer to slot, or nullptr if timeout/cancelled
@@ -125,7 +134,8 @@ public:
     /**
      * @brief Release a read slot after processing (consumer side)
      * 
-     * Makes the slot available for writing again.
+     * Makes that specific slot available for writing again. Slots may be
+     * released in any order; each is recycled individually.
      * 
      * @param slot The slot to release
      */
@@ -208,11 +218,18 @@ private:
     std::vector<Slot> _slots;
     std::vector<char*> _memory;  // Raw memory blocks for cleanup
     
-    // Ring buffer indices
-    std::atomic<size_t> _writeIndex;  // Next slot to write
-    std::atomic<size_t> _readIndex;   // Next slot to read
-    std::atomic<size_t> _committedCount;  // Number of committed (readable) slots
-    std::atomic<size_t> _availableCount;  // Number of available (writable) slots
+    // Slot bookkeeping. Slots are tracked by identity rather than by a free
+    // count and a rotating index: releases can arrive out of order (async write
+    // completions do), and a count alone would let acquireWriteSlot() hand back
+    // the oldest slot while its write was still in flight, so the producer would
+    // overwrite a buffer the kernel was reading from. See #1598.
+    std::vector<size_t> _freeSlots;         // Indices free for writing (stack)
+    std::queue<size_t> _committedSlots;     // Committed indices, in commit order
+    std::vector<uint8_t> _slotInUse;        // Per-slot: handed out and not yet released
+    std::atomic<size_t> _committedCount;    // == _committedSlots.size(), for lock-free isComplete()
+    
+    // Map a slot pointer back to its index; returns _numSlots if not ours.
+    size_t slotIndex(const Slot* slot) const;
     
     // Synchronization
     std::mutex _mutex;

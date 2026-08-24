@@ -12,10 +12,7 @@ RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
     : _numSlots(numSlots)
     , _slotSize(slotSize)
     , _alignment(alignment)
-    , _writeIndex(0)
-    , _readIndex(0)
     , _committedCount(0)
-    , _availableCount(numSlots)
     , _producerDone(false)
     , _cancelled(false)
     , _stallTimeoutExceeded(false)
@@ -28,6 +25,12 @@ RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
 {
     _slots.resize(numSlots);
     _memory.reserve(numSlots);
+    _slotInUse.assign(numSlots, 0);
+    _freeSlots.reserve(numSlots);
+    // Pushed in reverse so the first slots handed out are 0, 1, 2, ...
+    for (size_t i = numSlots; i-- > 0; ) {
+        _freeSlots.push_back(i);
+    }
     
     // Pre-allocate aligned memory for each slot
     for (size_t i = 0; i < numSlots; ++i) {
@@ -79,22 +82,30 @@ RingBuffer::~RingBuffer()
     _memory.clear();
 }
 
+size_t RingBuffer::slotIndex(const Slot* slot) const
+{
+    if (slot < _slots.data() || slot >= _slots.data() + _numSlots) {
+        return _numSlots;
+    }
+    return static_cast<size_t>(slot - _slots.data());
+}
+
 RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
 {
     std::unique_lock<std::mutex> lock(_mutex);
     
     auto waitPred = [this] {
-        return _availableCount > 0 || _cancelled || _stallTimeoutExceeded;
+        return !_freeSlots.empty() || _cancelled || _stallTimeoutExceeded;
     };
     
     // Check if we need to wait (producer starvation)
-    if (_availableCount == 0 && !_cancelled && !_stallTimeoutExceeded) {
+    if (_freeSlots.empty() && !_cancelled && !_stallTimeoutExceeded) {
         _producerStalls++;
         auto waitStart = std::chrono::steady_clock::now();
         uint64_t cumulativeWaitMs = 0;
         
         // Loop with timeout, checking for overall stall timeout
-        while (_availableCount == 0 && !_cancelled && !_stallTimeoutExceeded) {
+        while (_freeSlots.empty() && !_cancelled && !_stallTimeoutExceeded) {
             int waitMs = timeoutMs > 0 ? timeoutMs : 100;  // Use 100ms chunks if no timeout specified
             
             if (!_writeAvailable.wait_for(lock, std::chrono::milliseconds(waitMs), waitPred)) {
@@ -140,15 +151,13 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
         return nullptr;
     }
     
-    // Get the next write slot
-    size_t index = _writeIndex % _numSlots;
-    Slot* slot = &_slots[index];
+    // Take a slot that has actually been released, rather than the next index in
+    // rotation -- see the _freeSlots comment in the header.
+    size_t index = _freeSlots.back();
+    _freeSlots.pop_back();
+    _slotInUse[index] = 1;
     
-    // Advance write index and decrement available count
-    _writeIndex++;
-    _availableCount--;
-    
-    return slot;
+    return &_slots[index];
 }
 
 void RingBuffer::commitWriteSlot(Slot* slot, size_t dataSize)
@@ -159,6 +168,14 @@ void RingBuffer::commitWriteSlot(Slot* slot, size_t dataSize)
     
     {
         std::lock_guard<std::mutex> lock(_mutex);
+        size_t index = slotIndex(slot);
+        if (index == _numSlots) {
+            qDebug() << "RingBuffer: commitWriteSlot() called with a foreign slot - ignoring";
+            return;
+        }
+        // Queue the index so the consumer reads slots in commit order: the free
+        // list recycles indices out of order, so it cannot be derived.
+        _committedSlots.push(index);
         _committedCount++;
     }
     
@@ -236,15 +253,12 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
         return acquireReadSlot(timeoutMs);
     }
     
-    // Get the next read slot
-    size_t index = _readIndex % _numSlots;
-    Slot* slot = &_slots[index];
-    
-    // Advance read index and decrement committed count
-    _readIndex++;
+    // Get the oldest committed slot
+    size_t index = _committedSlots.front();
+    _committedSlots.pop();
     _committedCount--;
     
-    return slot;
+    return &_slots[index];
 }
 
 RingBuffer::StallType RingBuffer::getStallType() const
@@ -260,7 +274,19 @@ void RingBuffer::releaseReadSlot(Slot* slot)
     
     {
         std::lock_guard<std::mutex> lock(_mutex);
-        _availableCount++;
+        size_t index = slotIndex(slot);
+        if (index == _numSlots) {
+            qDebug() << "RingBuffer: releaseReadSlot() called with a foreign slot - ignoring";
+            return;
+        }
+        if (!_slotInUse[index]) {
+            // Releasing twice would put the index on the free list twice and let
+            // two producers write the same buffer.
+            qDebug() << "RingBuffer: slot" << index << "released while already free - ignoring";
+            return;
+        }
+        _slotInUse[index] = 0;
+        _freeSlots.push_back(index);
     }
     
     // Signal producer that slot is available
@@ -308,10 +334,13 @@ void RingBuffer::reset()
     
     std::lock_guard<std::mutex> lock(_mutex);
     
-    _writeIndex = 0;
-    _readIndex = 0;
     _committedCount = 0;
-    _availableCount = _numSlots;
+    std::queue<size_t>().swap(_committedSlots);
+    _slotInUse.assign(_numSlots, 0);
+    _freeSlots.clear();
+    for (size_t i = _numSlots; i-- > 0; ) {
+        _freeSlots.push_back(i);
+    }
     _producerDone = false;
     _cancelled = false;
     _stallTimeoutExceeded = false;
