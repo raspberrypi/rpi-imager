@@ -246,12 +246,17 @@ namespace PlatformQuirks {
      *
      * Embedded builds run under the linuxfb/eglfs QPA platform with no window
      * manager or compositor to negotiate DPI, so the scale has to be derived
-     * here from the connected display, read directly from /sys/class/drm:
-     *   - If the panel reports a plausible physical size, the factor is chosen
-     *     from the display's DPI.
-     *   - If the physical size is missing or implausible (common on cheap HDMI
-     *     panels and DSI displays that report 0 cm or nonsense EDID), the
-     *     factor falls back to a fixed value keyed off the pixel resolution.
+     * here from the connected display, read directly from /sys/class/drm.
+     *
+     * The embedded UI is a fixed composition, not a reflowing one, so the
+     * factor is chosen to hand it a canvas the size of the composition it was
+     * drawn for (680x540: main.qml's desktop window width, and the height the
+     * sidebar needs once the customisation steps expand it). The ratio is applied
+     * unrounded, because being derived from the panel's own dimensions it is
+     * the one value that tiles it exactly. Resolution alone decides: the panel's physical size is logged as
+     * a diagnostic but does not affect the factor, because viewing distance
+     * grows with panel size and holding the composition proportional keeps its
+     * apparent size roughly constant.
      *
      * An already-set QT_SCALE_FACTOR (manual override) is always respected and
      * left untouched. A no-op if no connected display can be read.

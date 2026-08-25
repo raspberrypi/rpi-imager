@@ -31,6 +31,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
+#include <cmath>
 #include <fcntl.h>
 #include <pthread.h>
 #include <atomic>
@@ -1929,11 +1930,43 @@ struct DrmDisplay {
     bool valid() const { return widthPx > 0 && heightPx > 0; }
 };
 
-// A computed DPI outside this window is treated as bogus physical-size data,
-// triggering the resolution-based fallback. Spans large low-DPI TVs through
-// dense phone-class panels.
-constexpr qreal kMinPlausibleDpi = 40.0;
-constexpr qreal kMaxPlausibleDpi = 600.0;
+// The composition the embedded layout is drawn for. The embedded UI is a fixed
+// composition rather than a reflowing one -- the sidebar is 200 logical px, the
+// content column is capped at Style.sectionMaxWidth, the buttons are 40 tall --
+// so handed more logical pixels it does not grow into them, it draws the same
+// small composition in the middle of a large screen. The scale factor is
+// therefore chosen to hand it a canvas the size of the composition itself.
+//
+// The width is main.qml's desktop window width. The height is not: the window
+// is 450, but the customisation steps expand the sidebar to eleven entries plus
+// a footer, and 480 rows demonstrably clips "Done" off the bottom while 540
+// fits it with headroom (see src/test/embedded_scaling, which renders those
+// steps). 540 also happens to give every 16:9 mode a 960x540 canvas that
+// divides the panel exactly.
+constexpr int kDesignWidthPx = 680;
+constexpr int kDesignHeightPx = 540;
+
+// A panel already within an eighth of the design canvas is left at 1.0. On the
+// smallest screens a fractional ratio is where it shows most, and the few
+// unused pixels cost less than scaling an 800x480 panel by 1.07.
+constexpr qreal kSnapToOneBelow = 1.125;
+
+// Below this the UI would be drawn smaller than the canvas it was designed
+// for, which clips rather than shrinks; above it, a mode is far likelier to be
+// a misreported EDID than a real panel (6.0 still gives 8K a 1280x720 canvas).
+constexpr qreal kMinScale = 1.0;
+constexpr qreal kMaxScale = 6.0;
+
+// How far below the fitted ratio the search for an exactly-tiling factor is
+// allowed to look, and enough slack to keep a ratio like 2160/4.8 -- which
+// lands a whisker above 450 in binary floating point -- from being read as 451
+// logical rows and missing the exact fit entirely.
+constexpr qreal kTilingSearchSlack = 1.05;
+constexpr qreal kFpSlack = 1e-6;
+
+// Largest mode dimension treated as real. DRM's own limit is well inside this,
+// so anything larger is a misreported EDID rather than a panel.
+constexpr int kMaxModeDimension = 32768;
 
 // Derive the physical image size (mm) from a raw EDID block. Prefers the
 // per-millimetre size in the first detailed timing descriptor; falls back to
@@ -2001,7 +2034,10 @@ DrmDisplay readConnectedDisplay()
                 h = firstMode.mid(xPos + 1).toInt();
             }
         }
-        if (w <= 0 || h <= 0)
+        // A dimension beyond kMaxModeDimension is not a panel the kernel could
+        // have driven, and the scaling arithmetic downstream derives loop
+        // bounds from these numbers, so refuse rather than carry them.
+        if (w <= 0 || h <= 0 || w > kMaxModeDimension || h > kMaxModeDimension)
             continue;  // connected but advertises no usable mode
 
         info.widthPx = w;
@@ -2044,41 +2080,62 @@ void applyEmbeddedDisplayScaling()
         return;
     }
 
-    qreal scale = 1.0;
-    const char *basis = nullptr;
+    // Fit the design canvas to the panel, letting whichever axis runs out
+    // first decide. On a 16:9 panel that is the height, which is why every
+    // 16:9 resolution ends up with the same 800x450-ish canvas and therefore
+    // the same composition, however many pixels the panel actually has.
+    const qreal fit = qMin(static_cast<qreal>(display.widthPx) / kDesignWidthPx,
+                           static_cast<qreal>(display.heightPx) / kDesignHeightPx);
 
-    // Primary path: derive the factor from DPI when the physical size is
-    // present and yields a plausible density.
-    if (display.widthMm > 0) {
-        const qreal dpi = display.widthPx * 25.4 / display.widthMm;
-        if (dpi >= kMinPlausibleDpi && dpi <= kMaxPlausibleDpi) {
-            if      (dpi >= 216) scale = 2.5;
-            else if (dpi >= 168) scale = 2.0;
-            else if (dpi >= 132) scale = 1.5;
-            else if (dpi >= 108) scale = 1.25;
-            else                 scale = 1.0;
-            basis = "DPI";
-            qInfo().nospace() << "Embedded scaling: " << qRound(dpi) << " DPI -> scale " << scale;
-        } else {
-            qWarning().nospace() << "Embedded scaling: implausible " << qRound(dpi)
-                                 << " DPI from physical size; using resolution fallback";
+    qreal scale = fit < kSnapToOneBelow ? 1.0 : fit;
+    scale = qBound(kMinScale, scale, kMaxScale);
+
+    // Snap to a factor that divides the panel exactly in both axes, so the
+    // window covers the framebuffer with nothing left over. Under linuxfb the
+    // window *is* the framebuffer, with no compositor to absorb a rounding
+    // error: a factor of 4.75 on a 4K panel leaves it 2 px short across and 1 px
+    // over down, which shows as an unpainted seam along the edge.
+    //
+    // Scanning upward from the smallest usable logical height, the first height
+    // whose matching width is also whole wins. On every common mode that is the
+    // fitted ratio itself -- 2160 / 4.8 is exactly 450 rows. The search gives up
+    // after a few per cent because on an awkward mode such as 1366x768 the next
+    // exactly-tiling factor is 1.0, a third of the way down, and a 1 px seam
+    // costs far less than a third of the UI's size.
+    const qint64 minRows = static_cast<qint64>(std::ceil(display.heightPx / scale - kFpSlack));
+    const qint64 maxRows = static_cast<qint64>(minRows * kTilingSearchSlack);
+    for (qint64 rows = minRows; rows <= maxRows; ++rows) {
+        if ((static_cast<qint64>(display.widthPx) * rows) % display.heightPx == 0) {
+            scale = static_cast<qreal>(display.heightPx) / static_cast<qreal>(rows);
+            break;
         }
     }
 
-    // Fallback: choose a fixed factor from the pixel resolution when we can't
-    // trust (or don't have) a physical size. Key off the longer edge so
-    // portrait panels are treated the same as landscape.
-    if (!basis) {
-        const int longEdge = qMax(display.widthPx, display.heightPx);
-        if      (longEdge >= 3840) scale = 2.0;   // 4K / UHD
-        else if (longEdge >= 2560) scale = 1.5;   // QHD / 1440p
-        else                       scale = 1.0;   // 1080p and below
-        basis = "resolution";
-        qInfo().nospace() << "Embedded scaling: " << longEdge << "px long edge -> scale " << scale;
+    // Density deliberately plays no part in the choice. Viewing distance grows
+    // with panel size, so keeping the composition proportional to the panel
+    // holds its apparent size roughly constant, whereas scaling to a fixed
+    // physical size leaves the UI marooned in the corner of anything large.
+    // The panel's reported size is still logged: it is the first thing anyone
+    // wants when diagnosing a display in the field.
+    if (display.widthMm > 0) {
+        const qreal dpi = display.widthPx * 25.4 / display.widthMm;
+        qInfo().nospace() << "Embedded scaling: panel reports " << display.widthMm << "x"
+                          << display.heightMm << " mm (" << qRound(dpi)
+                          << " DPI) — logged for diagnostics, not used for scaling";
     }
 
+    const qreal logicalWidth = display.widthPx / scale;
+    const qreal logicalHeight = display.heightPx / scale;
+    const bool tiles = qAbs(logicalWidth - qRound(logicalWidth)) < 0.01
+                    && qAbs(logicalHeight - qRound(logicalHeight)) < 0.01;
+
     qputenv("QT_SCALE_FACTOR", QByteArray::number(scale));
-    qInfo().nospace() << "Embedded scaling: QT_SCALE_FACTOR=" << scale << " (from " << basis << ")";
+    qInfo().nospace() << "Embedded scaling: " << display.widthPx << "x" << display.heightPx
+                      << " panel fits the " << kDesignWidthPx << "x" << kDesignHeightPx
+                      << " design canvas " << QString::number(fit, 'f', 2).toUtf8().constData()
+                      << " times over -> QT_SCALE_FACTOR=" << scale
+                      << " (logical canvas " << qRound(logicalWidth) << "x" << qRound(logicalHeight)
+                      << (tiles ? ", tiles exactly)" : ", does not tile exactly)");
 }
 
 } // namespace PlatformQuirks
