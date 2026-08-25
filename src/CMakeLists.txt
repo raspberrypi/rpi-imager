@@ -8,6 +8,11 @@ OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 OPTION (BUILD_EMBEDDED "Build for Embedded Imager" OFF)
 OPTION (BUILD_CLI_ONLY "Build CLI-only version without GUI components" OFF)
+# Test-only hooks, for src/test/embedded_scaling to drive and photograph the UI.
+# They give anything that can set the process environment a screen capture
+# written to a path of its choosing, in a binary the embedded image runs as
+# root, so they are compiled out unless a test build asks for them.
+OPTION (ENABLE_TEST_HOOKS "Build test-only UI hooks (screenshot capture). Never enable for a release build." OFF)
 
 # We use FetchContent_Populate() instead of FetchContent_MakeAvailable() to allow EXCLUDE_FROM_ALL
 # This prevents the dependencies from being built by default, which is our desired behavior
@@ -247,6 +252,13 @@ if(BUILD_CLI_ONLY)
     set(SOURCES ${SOURCES_BASE} "imagewriter.cpp" "hwlistmodel.cpp" "oslistmodel.cpp")
 else()
     set(SOURCES ${SOURCES_BASE} "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp" "iconmultifetcher.cpp")
+endif()
+
+if(ENABLE_TEST_HOOKS)
+    add_definitions(-DIMAGER_ENABLE_TEST_HOOKS=1)
+    message(WARNING
+        "ENABLE_TEST_HOOKS is ON: this binary will honour RPI_IMAGER_SCREENSHOT and "
+        "write a capture of its window to a caller-chosen path. Do not ship this build.")
 endif()
 
 if(BUILD_EMBEDDED)

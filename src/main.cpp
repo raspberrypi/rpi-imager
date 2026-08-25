@@ -107,6 +107,27 @@ static constexpr quint16 kPort =
 #endif
 
 
+#ifdef IMAGER_ENABLE_TEST_HOOKS
+/*
+ * Find the wizard container in a loaded QML tree, for the screenshot hook's
+ * step jumping. QML ids are not object names, so the container is identified by
+ * the navigation API it carries rather than by name.
+ */
+static QObject *findWizardStepHost(QObject *root)
+{
+    if (!root)
+        return nullptr;
+    const QMetaObject *mo = root->metaObject();
+    if (mo->indexOfProperty("currentStep") >= 0 && mo->indexOfProperty("stepIfAndFeatures") >= 0)
+        return root;
+    for (QObject *child : root->children()) {
+        if (QObject *found = findWizardStepHost(child))
+            return found;
+    }
+    return nullptr;
+}
+#endif // IMAGER_ENABLE_TEST_HOOKS
+
 int main(int argc, char *argv[])
 {
     // Parse --log-file early, before Qt initialization
@@ -803,6 +824,127 @@ int main(int argc, char *argv[])
             emit imageWriter.permissionWarning(permissionMessage);
         }, Qt::QueuedConnection);
     }
+
+#ifdef IMAGER_ENABLE_TEST_HOOKS
+    // Test-only screenshot hook, compiled in only for -DENABLE_TEST_HOOKS=ON.
+    // When RPI_IMAGER_SCREENSHOT names a file, grab the window once it has
+    // settled and exit. src/test/embedded_scaling uses this to confirm the UI
+    // actually lays out at the scale factor chosen for a display, rather than
+    // only that the right factor was chosen.
+    //
+    // Never built for release: this writes a capture of the window — which on
+    // the customisation steps holds a Wi-Fi key and a user password — to a path
+    // the caller chooses, in a process the embedded image runs as root.
+    if (const QByteArray screenshotPath = qgetenv("RPI_IMAGER_SCREENSHOT"); !screenshotPath.isEmpty())
+    {
+        auto *grabTarget = qobject_cast<QQuickWindow *>(qmlwindow);
+        if (!grabTarget)
+        {
+            qWarning() << "Screenshot requested but the root QML object is not a window";
+        }
+        else
+        {
+            // main.qml leaves the embedded window unsized (width/height -1)
+            // because linuxfb always makes the platform window cover the
+            // framebuffer. Offscreen rendering has no such rule, so hand the
+            // window the screen it is standing in for; without this QML lays
+            // out at 1x1 and the grab says nothing. Qt reports screen geometry
+            // in device-independent pixels, so the grab still comes back at the
+            // panel's full pixel count once the scale factor is applied.
+            if (grabTarget->width() <= 1 || grabTarget->height() <= 1)
+            {
+                const QScreen *hostScreen = grabTarget->screen() ? grabTarget->screen()
+                                                                 : QGuiApplication::primaryScreen();
+                if (hostScreen)
+                    grabTarget->setGeometry(hostScreen->geometry());
+            }
+
+            // The first frame is drawn before fonts, icons and the OS list have
+            // settled, so wait before grabbing. Tune with
+            // RPI_IMAGER_SCREENSHOT_DELAY_MS on a slow or emulated host.
+            const int delayMs = qEnvironmentVariableIsSet("RPI_IMAGER_SCREENSHOT_DELAY_MS")
+                                    ? qEnvironmentVariableIntValue("RPI_IMAGER_SCREENSHOT_DELAY_MS")
+                                    : 3000;
+            // Optionally jump the wizard to a named step first. Embedded mode
+            // always opens on language selection, which holds a single combo
+            // box, so a layout judged only there says little about the
+            // form-heavy pages. RPI_IMAGER_SCREENSHOT_STEP takes either a step
+            // index or a WizardContainer constant's name without its prefix,
+            // e.g. "WifiCustomization" for stepWifiCustomization.
+            const QByteArray stepRequest = qgetenv("RPI_IMAGER_SCREENSHOT_STEP");
+
+            const QString path = QString::fromLocal8Bit(screenshotPath);
+            const auto grabAndQuit = [grabTarget, path]() {
+                const QImage frame = grabTarget->grabWindow();
+                if (frame.isNull() || !frame.save(path))
+                {
+                    qWarning() << "Screenshot: could not write" << path;
+                    QCoreApplication::exit(1);
+                    return;
+                }
+                qInfo().nospace() << "Screenshot: wrote " << path << " at "
+                                  << frame.width() << "x" << frame.height() << " px";
+                QCoreApplication::quit();
+            };
+
+            QTimer::singleShot(delayMs, grabTarget, [grabTarget, stepRequest, grabAndQuit]() {
+                if (stepRequest.isEmpty())
+                {
+                    grabAndQuit();
+                    return;
+                }
+
+                QObject *wizard = findWizardStepHost(grabTarget);
+                if (!wizard)
+                {
+                    qWarning() << "Screenshot: no wizard container found; cannot jump to step"
+                               << stepRequest;
+                    QCoreApplication::exit(1);
+                    return;
+                }
+
+                bool isIndex = false;
+                int step = QString::fromLatin1(stepRequest).toInt(&isIndex);
+                if (!isIndex)
+                {
+                    const QByteArray property = QByteArray("step") + stepRequest;
+                    const QVariant named = wizard->property(property.constData());
+                    if (!named.isValid())
+                    {
+                        qWarning() << "Screenshot: wizard has no step named" << property;
+                        QCoreApplication::exit(1);
+                        return;
+                    }
+                    step = named.toInt();
+                }
+
+                // Steps normally unlock as their prerequisites are met, and a
+                // screenshot run has satisfied none of them. Marking them all
+                // permissible renders the sidebar the way a real run would
+                // rather than greying most of it out.
+                const int totalSteps = wizard->property("totalSteps").toInt();
+                if (totalSteps > 0 && totalSteps < 31)
+                    wizard->setProperty("permissibleStepsBitmap", (1 << totalSteps) - 1);
+
+                // jumpToStep() is what a sidebar click calls: it moves the
+                // stack as well as the highlight. Setting currentStep alone
+                // repaints the sidebar and leaves the page behind.
+                if (!QMetaObject::invokeMethod(wizard, "jumpToStep", Q_ARG(QVariant, step)))
+                {
+                    qWarning() << "Screenshot: wizard refused jumpToStep" << step;
+                    QCoreApplication::exit(1);
+                    return;
+                }
+                qInfo().nospace() << "Screenshot: jumped to wizard step " << step
+                                  << " (" << stepRequest.constData() << ")";
+
+                // Let the step lay out, and its own deferred work settle,
+                // before grabbing.
+                QTimer::singleShot(1000, grabTarget, grabAndQuit);
+            });
+        }
+    }
+#endif // IMAGER_ENABLE_TEST_HOOKS
 
     int rc = app.exec();
 
