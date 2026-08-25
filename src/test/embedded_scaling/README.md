@@ -15,7 +15,14 @@ chooses.
 Nothing here is a mock: the binary under test is the production code path, and
 the fixtures are checksum-correct EDID blocks of the shape real panels emit.
 
-## Running it
+There are two runners over the same mechanism:
+
+| | |
+|-|-|
+| [`run.sh`](run.sh) | checks *which* factor the code picks, for every case in [`cases.txt`](cases.txt) |
+| [`screenshots.sh`](screenshots.sh) | renders the UI at that factor and writes a PNG per profile in [`profiles.txt`](profiles.txt) |
+
+## Checking the chosen factor
 
 ```sh
 ctest -R embedded_scaling_matrix          # from a BUILD_TESTING=ON build tree
@@ -32,6 +39,49 @@ cmake --build . --target test_embedded_scaling
 The runner exits 4 — which CTest reads as a skip — where the host cannot
 provide an unprivileged mount namespace, so a container that forbids
 `unshare -rm` reports a skip rather than a failure.
+
+## Rendering the UI
+
+`run.sh` proves the right *number* was chosen. To see whether the interface
+actually lays out at that number, `screenshots.sh` renders it:
+
+```sh
+cmake -S src -B build -DBUILD_EMBEDDED=ON -DENABLE_TEST_HOOKS=ON
+cmake --build build --target screenshots_embedded_scaling
+./screenshots.sh /path/to/rpi-imager ./shots
+```
+
+It needs a GUI build configured with `-DBUILD_EMBEDDED=ON`, so the embedded code
+paths and layout are the ones exercised, and `-DENABLE_TEST_HOOKS=ON`, which
+compiles in the screenshot hook it drives. Release builds leave that hook out
+deliberately — it writes a capture of the window to a caller-chosen path, in a
+binary the embedded image runs as root — so configuring without the flag gives
+no `screenshots_embedded_scaling` target, and pointing `screenshots.sh` at such
+a build reports that the hook is missing rather than timing out. Per profile it
+builds the same
+kind of fake `/sys/class/drm`, lets the app's own scaling code read it, renders
+onto an offscreen screen of that panel's resolution, and saves the frame using
+the app's `RPI_IMAGER_SCREENSHOT` hook. A profile fails if the factor chosen is
+not the one the profile expects, or if the frame does not come back at the
+panel's full resolution — a UI that did not fill the screen, or a device pixel
+ratio that did not take.
+
+| Variable | Effect |
+|----------|--------|
+| `RPI_SCALING_STEP` | jump the wizard to this step first, naming the output `<profile>.<step>.png` — either an index or a `WizardContainer` constant without its prefix, e.g. `WifiCustomization` |
+| `RPI_SCALING_FORCE_SCALE` | render at this factor instead of the chosen one, naming the output `<profile>@<n>x.png` |
+| `RPI_SCALING_REPO` | OS list URL or file, for a deterministic first screen |
+| `RPI_SCALING_DELAY_MS` | settle time before the grab (default 3000) |
+| `RPI_SCALING_TIMEOUT` | per-profile timeout in seconds (default 90) |
+
+Rendering offscreen is not the linuxfb path the device uses, so these frames
+confirm layout, scaling and text metrics rather than anything about the
+framebuffer itself.
+
+Panels shorter than 540 logical rows — the 7-inch DSI screen among them — clip
+the bottom of the sidebar on customisation steps, and no scale factor can fix
+that: 480 rows cannot hold 540 rows of sidebar. It needs a layout change, and it
+is what those panels do today.
 
 ## Adding a case
 
@@ -86,6 +136,10 @@ Two properties are worth keeping an eye on, and the matrix pins both:
   the edge — 4.75 on a 4K panel is 2 px short across and 1 px over down. Every
   mode in the matrix tiles exactly except 768p, where the nearest tiling factor
   is 1.0 and half a pixel is the cheaper price.
+- **The canvas is big enough for the busiest step.** Judging a layout on the
+  language step, which embedded mode always opens on, says almost nothing: it
+  holds one combo box. `RPI_SCALING_STEP=WifiCustomization` renders a form-heavy
+  page instead, which is how the 540-row requirement was found.
 - **The EDID cannot change the outcome.** Ten rows feed the same 4K panel every
   shape of EDID we have seen fail in the field — absent, empty, zeroed, a
   nonsense 16 mm width, a corrupt header, a truncated block — and all of them

@@ -1,0 +1,30 @@
+# Display profiles rendered by screenshots.sh.
+#
+# Columns:
+#
+#   name       output file name and report label
+#   resolution the panel's native mode, used both for the fake connector and
+#              for the offscreen screen the UI is rendered onto
+#   edid       EDID recipe for the connector (see mkedid.sh), or "-" for a
+#              panel that reports no EDID at all
+#   dpi        logical DPI for the rendering screen, or "auto" to hold it at
+#              Qt's base DPI. Keep "auto" unless you mean to deviate: the
+#              offscreen plugin turns logicalDpi/logicalBaseDpi into a device
+#              pixel ratio of its own, and on linuxfb that ratio comes from
+#              QT_SCALE_FACTOR alone. Anything else scales the UI twice.
+#   scale      the QT_SCALE_FACTOR this profile must run at; the run fails if
+#              the scaling code picks anything else
+#
+# Under the design-canvas policy every 4K panel gets the same factor, so the two
+# 43-inch-class rows now agree: the television's EDID can no longer change the
+# UI. What varies across the list is resolution, and each row should render the
+# same composition as the 7-inch DSI panel at the bottom.
+
+43in-4k-tv-desktop   3840x2160  px=3840x2160,mm=951x535,extensions=1  auto  4
+43in-4k-tv-no-edid   3840x2160  -                                     auto  4
+32in-4k-monitor      3840x2160  px=3840x2160,mm=708x398               auto  4
+27in-4k-monitor      3840x2160  px=3840x2160,mm=597x336               auto  4
+24in-4k-monitor      3840x2160  px=3840x2160,mm=527x296               auto  4
+27in-1440p-monitor   2560x1440  px=2560x1440,mm=597x336               auto  2.66667
+24in-1080p-monitor   1920x1080  px=1920x1080,mm=527x296               auto  2
+pi-7in-dsi           800x480    -                                     auto  1
