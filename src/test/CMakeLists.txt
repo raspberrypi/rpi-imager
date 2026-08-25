@@ -855,4 +855,20 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         COMMENT "Running embedded display scaling matrix"
     )
 
+    # The matrix above proves which factor is chosen; screenshots.sh renders the
+    # UI at it. That needs the app itself, so the target only appears in a GUI
+    # build; only an embedded one lays out the way the netboot imager does; and
+    # it needs the screenshot hook, which is compiled out unless a test build
+    # asks for it (-DENABLE_TEST_HOOKS=ON). Not a CTest test: it wants fonts and
+    # several seconds per profile, and its output is meant to be looked at.
+    if(TARGET rpi-imager AND BUILD_EMBEDDED AND ENABLE_TEST_HOOKS)
+        add_custom_target(screenshots_embedded_scaling
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/embedded_scaling/screenshots.sh
+                    $<TARGET_FILE:rpi-imager>
+                    ${CMAKE_CURRENT_BINARY_DIR}/embedded_scaling_screenshots
+            DEPENDS rpi-imager
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Rendering the embedded UI at each display profile"
+        )
+    endif()
 endif()
