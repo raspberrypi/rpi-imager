@@ -803,3 +803,56 @@ add_custom_target(test_ringbuffer
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Running ring buffer tests"
 )
+
+# ============================================================================
+# Embedded Display Scaling Matrix
+# ============================================================================
+# applyEmbeddedDisplayScaling() chooses the embedded UI scale by reading the
+# connected display out of /sys/class/drm, so the cases that matter -- a
+# 43-inch-class 4K TV on a desk, the same set with no usable EDID, a DSI panel
+# that reports no physical size -- are unreachable from an ordinary unit test,
+# which only ever sees the build host's own display.
+#
+# embedded_scaling/run.sh drives the real code instead: per case it builds a
+# synthetic /sys/class/drm, bind-mounts it over the real one inside an
+# unprivileged mount namespace, and checks the factor chosen. This probe is
+# what it runs inside that namespace. Linux-only, and it skips itself (exit 4)
+# where the host cannot provide the namespace.
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(embedded_scaling_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../platformquirks.h
+        ${PLATFORMQUIRKS_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/embedded_scaling_probe.cpp
+    )
+
+    target_link_libraries(embedded_scaling_probe PRIVATE
+        Qt6::Core
+        ${PLATFORMQUIRKS_LIBS}
+    )
+
+    target_include_directories(embedded_scaling_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_compile_features(embedded_scaling_probe PRIVATE cxx_std_20)
+    target_compile_options(embedded_scaling_probe PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+
+    add_test(NAME embedded_scaling_matrix
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/embedded_scaling/run.sh
+                $<TARGET_FILE:embedded_scaling_probe>
+    )
+    set_tests_properties(embedded_scaling_matrix PROPERTIES SKIP_RETURN_CODE 4)
+
+    add_custom_target(test_embedded_scaling
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/embedded_scaling/run.sh
+                $<TARGET_FILE:embedded_scaling_probe>
+        DEPENDS embedded_scaling_probe
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Running embedded display scaling matrix"
+    )
+
+endif()

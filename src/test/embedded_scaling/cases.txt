@@ -1,0 +1,128 @@
+# Case matrix for PlatformQuirks::applyEmbeddedDisplayScaling(), run by run.sh.
+#
+# Columns (whitespace-separated):
+#
+#   name       identifies the case in the report
+#   expected   the QT_SCALE_FACTOR the run must produce, or "unset" when the
+#              code is expected to leave the variable alone (Qt then uses 1.0)
+#   env        extra environment for the run, or "-"
+#   displays   the /sys/class/drm connectors to synthesise, ';'-separated,
+#              each written as  name|status|modes|edid
+#                status  contents of the status file, or "-" for no file
+#                modes   ','-separated mode lines, "empty" for an empty file,
+#                        or "-" for no file
+#                edid    ','-separated EDID recipe passed to mkedid.sh,
+#                        "empty" for a zero-length file, or "-" for no file
+#              A whole field of "-" means a tree with no connectors at all.
+#
+# Expected values are derived from the documented policy, not from a recorded
+# run. The embedded UI is a fixed composition drawn for a 680x540 canvas -- the
+# desktop window's width, and the height the sidebar needs once the
+# customisation steps expand it to eleven entries -- so the
+# factor fits that canvas to the panel -- min(width/680, height/540), snapped
+# down to the nearest factor that divides the panel exactly in both axes (giving
+# up after 5%), held at 1.0 below a fit of 1.125, and clamped to [1.0, 6.0].
+# The panel's physical size plays no part. Whichever axis runs out first decides, which on a 16:9 panel is
+# always the height.
+
+# ---------------------------------------------------------------------------
+# 43-inch-class 4K TVs used as a desktop monitor, the panel class that drove
+# this harness. 2160 / 540 = 4 exactly, giving the UI the 960x540 canvas it needs
+# rather than a ninth of the screen, and covering the framebuffer with nothing
+# left over.
+#
+# Every row below is the same panel with a different EDID, and they all agree:
+# what the television says about its physical size can no longer change the UI.
+# ---------------------------------------------------------------------------
+43in-4k-tv-desktop              4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=951x535
+43in-4k-tv-cta-extension        4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=951x535,extensions=1
+43in-4k-tv-cm-granularity       4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=951x535,no-dtd-size
+43in-4k-tv-monitor-descriptor   4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=951x535,monitor-descriptor
+43in-4k-tv-no-edid              4         -  card1-HDMI-A-1|connected|3840x2160|-
+43in-4k-tv-empty-edid           4         -  card1-HDMI-A-1|connected|3840x2160|empty
+43in-4k-tv-zero-size-edid       4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,no-dtd-size,cm=0x0
+43in-4k-tv-bogus-size-edid      4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=16x9
+43in-4k-tv-bad-edid-header      4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=951x535,bad-header
+43in-4k-tv-truncated-edid       4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=951x535,truncate=64
+
+# ---------------------------------------------------------------------------
+# Other 4K panels. All of them land on 4 too: the composition occupies the
+# same fraction of the glass whether that glass is 24 inches or 98, which is the
+# point of driving the factor from resolution. Apparent size then tracks
+# viewing distance, which tracks panel size.
+# ---------------------------------------------------------------------------
+32in-4k-monitor                 4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=708x398
+27in-4k-monitor                 4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=597x336
+24in-4k-monitor                 4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=527x296
+98in-4k-tv                      4         -  card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=2170x1220
+
+# ---------------------------------------------------------------------------
+# Resolution rungs. On a 16:9 panel the height runs out first, so every one of
+# these hands the UI the same 960x540 canvas and the same composition -- only the
+# factor differs. Two are awkward: on 5:4 glass the width constrains instead, and
+# 1366 is not a whole multiple of any canvas width, so 768p is the one mode here
+# that cannot tile exactly (the nearest factor that does is 1.0, far too small a
+# UI to trade for half a pixel).
+#
+# The last three are below the canvas the layout needs, so the lower clamp holds
+# them at 1.0 and the busiest customisation steps clip the bottom of the sidebar.
+# That is a layout limit rather than a scaling one -- no factor fits 540 rows of
+# sidebar into a 480-row panel -- and it is what those panels do today.
+# ---------------------------------------------------------------------------
+1440p-panel                     2.66667   -  card1-HDMI-A-1|connected|2560x1440|px=2560x1440,mm=597x336
+1080p-panel                     2         -  card1-HDMI-A-1|connected|1920x1080|px=1920x1080,mm=527x296
+900p-panel                      1.66667   -  card1-HDMI-A-1|connected|1600x900|-
+768p-panel                      1.42222   -  card1-HDMI-A-1|connected|1366x768|-
+720p-panel                      1.33333   -  card1-HDMI-A-1|connected|1280x720|-
+1280x1024-5by4-panel            1.88235   -  card1-HDMI-A-1|connected|1280x1024|-
+1024x600-panel                  1         -  card1-HDMI-A-1|connected|1024x600|-
+800x480-panel                   1         -  card1-HDMI-A-1|connected|800x480|-
+# Narrower than the design canvas, so the fit is 0.94 and the clamp holds it at
+# lower clamp holds it at 1.0: the UI clips rather than shrinking, as it does today.
+640x480-clamped-at-one          1         -  card1-HDMI-A-1|connected|640x480|-
+# A mode this large is a misreported EDID, not a panel. The upper clamp keeps
+# the UI usable instead of applying a factor of 18.2; tiling then nudges it to 5.99707.
+absurd-mode-clamped-at-six      5.99707   -  card1-HDMI-A-1|connected|16384x8192|-
+# Beyond kMaxModeDimension no kernel could have driven the panel, so the mode is
+# refused outright rather than carried into the scaling arithmetic.
+oversized-mode-rejected         unset     -  card1-HDMI-A-1|connected|40000x30000|-
+
+# ---------------------------------------------------------------------------
+# Panels the netboot imager actually ships against.
+# ---------------------------------------------------------------------------
+pi-7in-dsi-no-edid              1         -  card1-DSI-1|connected|800x480|-
+5in-hdmi-panel                  1         -  card1-HDMI-A-1|connected|800x480|px=800x480,mm=108x64
+# A DSI panel whose connector reports "unknown" rather than "connected" is
+# skipped outright, so it gets no scaling at all.
+dsi-status-unknown              unset     -  card1-DSI-1|unknown|800x480|-
+# Interlaced modes are named "1920x1080i" in sysfs, which the mode parser
+# cannot read; the connector is dropped and no factor is chosen.
+interlaced-first-mode           unset     -  card1-HDMI-A-1|connected|1920x1080i,1920x1080|-
+
+# ---------------------------------------------------------------------------
+# Portrait orientation. Here the width runs out first, so a rotated 4K panel
+# gets 3.15789 rather than 4: the fit is 3.17647 and the snap takes it down to
+# the nearest exactly-tiling factor, for a 684x1216 canvas.
+# ---------------------------------------------------------------------------
+portrait-4k-edid                3.15789   -  card1-DSI-1|connected|2160x3840|px=2160x3840,mm=535x951
+portrait-4k-no-edid             3.15789   -  card1-DSI-1|connected|2160x3840|-
+
+# ---------------------------------------------------------------------------
+# Connector selection: the first connected connector advertising a usable mode
+# wins, in sysfs name order.
+# ---------------------------------------------------------------------------
+skips-disconnected-connector    2         -  card1-DP-1|disconnected|3840x2160|-;card1-HDMI-A-1|connected|1920x1080|px=1920x1080,mm=527x296
+skips-connector-without-modes   4         -  card1-DP-1|connected|empty|-;card1-HDMI-A-1|connected|3840x2160|-
+skips-connector-missing-modes   4         -  card1-DP-1|connected|-|-;card1-HDMI-A-1|connected|3840x2160|-
+first-connected-wins            2.66667   -  card1-DP-1|connected|2560x1440|px=2560x1440,mm=597x336;card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=527x296
+uses-first-mode-line            4         -  card1-HDMI-A-1|connected|3840x2160,2560x1440,1920x1080|-
+missing-status-file             unset     -  card1-HDMI-A-1|-|3840x2160|-
+all-connectors-disconnected     unset     -  card1-DP-1|disconnected|-|-;card1-HDMI-A-1|disconnected|-|-
+no-connectors-at-all            unset     -  -
+
+# ---------------------------------------------------------------------------
+# A manually set factor -- site policy, or a field engineer overriding us --
+# survives untouched, even where we would have chosen something else.
+# ---------------------------------------------------------------------------
+manual-override-respected       1.75      QT_SCALE_FACTOR=1.75  card1-HDMI-A-1|connected|3840x2160|-
+manual-override-of-good-edid    1         QT_SCALE_FACTOR=1     card1-HDMI-A-1|connected|3840x2160|px=3840x2160,mm=527x296
