@@ -27,10 +27,13 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse,
          util-linux (>= 2.37), pkexec,
          libstdc++6, libatomic1,
          libfontconfig1, libfreetype6,
-         libx11-6, libx11-xcb1, libxcb1, libxcb-cursor0, libxcb-glx0,
-         libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0,
-         libxcb-render0, libxcb-render-util0, libxcb-shape0, libxcb-shm0,
-         libxcb-sync1, libxcb-xfixes0, libxcb-xkb1,
+# The xcb extension bindings and xcb-util helpers are bundled inside the
+# AppImage (#1719) and are deliberately absent here; see
+# appimage_lib_excluded() in debian/lib.sh for which stay external and why.
+# libxcb-cursor0 in particular is in universe and not installed by default on
+# some Ubuntu derivatives, so depending on it here would not have helped the
+# AppImage users who hit that bug in the first place.
+         libx11-6, libx11-xcb1, libxcb1, libxcb-glx0,
          libxkbcommon0, libxkbcommon-x11-0,
          libwayland-client0, libwayland-cursor0,
          libegl1, libgl1, libopengl0,

@@ -348,9 +348,10 @@ fi
 # plugins/wayland-shell-integration; without libxdg-shell.so the "wayland" QPA
 # plugin loads, connects to the compositor, then aborts with "Loading shell
 # integration failed." Qt then falls back to "xcb", so every session -- Wayland
-# included -- ends up on XWayland and needs libxcb-cursor0. On a target without
-# that library (Raspberry Pi OS bookworm) both plugins fail and the app does not
-# start at all.
+# included -- ends up on XWayland and needs libxcb-cursor. That library is now
+# bundled (see appimage_lib_excluded() in debian/lib.sh, #1719), so the fallback
+# no longer depends on the host shipping it; deploying these plugins is still
+# what keeps a Wayland session off XWayland in the first place.
 #
 # These are Qt's own plugins and belong with the bundled Qt, unlike the wayland
 # *system* libraries: libwayland-client/-cursor stay host-provided via
