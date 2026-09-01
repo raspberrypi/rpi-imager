@@ -563,8 +563,39 @@ appimage_lib_excluded() {
 	# GPU stack: must match the host's drivers
 	libGL.so.*|libGLX.so.*|libEGL.so.*|libOpenGL.so.*|libGLdispatch.so.*) return 0 ;;
 	libglapi.so.*|libgbm.so.*|libdrm.so.*|libvulkan.so.*) return 0 ;;
+	# X protocol bindings that stay external. libxcb.so.1 owns the connection
+	# and libX11/libX11-xcb sit on top of it; the -dri2/-dri3/-present/-glx
+	# bindings are driven by the host's Mesa libGL, which we also keep external
+	# (above), so bundling them would risk two copies in one process. libxcb.so.1
+	# and the DRI/GLX bindings are what the AppImage excludelist names; the
+	# libX*.so.* glob is broader than that and predates this clause, kept as-is
+	# because Xlib-level libraries have never been the ones we needed to bundle.
+	libxcb.so.*|libxcb-glx.so.*|libxcb-dri2.so.*|libxcb-dri3.so.*) return 0 ;;
+	libxcb-present.so.*|libX11-xcb.so.*|libX*.so.*) return 0 ;;
+	# Everything else named libxcb-<extension> is a client-side binding to an X
+	# protocol extension, generated from the protocol XML, or a small xcb-util
+	# helper. None of them own the session: they marshal requests through
+	# whatever libxcb.so.1 the host provides, carry no versioned symbols, and
+	# sit far below our glibc baseline. Bundling them is what the AppImage
+	# excludelist expects -- it names libxcb.so.1, libX11* and the DRI pair, and
+	# pointedly not the helpers.
+	#
+	# Leaving them external broke the AppImage outright (#1719). Qt >= 6.5 makes
+	# libxcb-cursor a hard DT_NEEDED of libQt6XcbQpa, and Qt is close to its only
+	# consumer, so distros have no other reason to pull it in: libxcb-cursor0 is
+	# in Ubuntu universe and absent by default on Linux Mint. The QPA plugin then
+	# failed to load and the app aborted before opening a window. The other
+	# helpers we need -- icccm, image, keysyms, randr, render, render-util,
+	# shape, shm, sync, xfixes, xkb -- were only working by luck, because desktop
+	# distros install them for other packages. This clause fixes the class rather
+	# than the one instance that got reported.
+	#
+	# Deliberately still external: libxkbcommon* (below). Bundling it is
+	# defensible on the same reasoning, but it parses keymaps for every session
+	# including Wayland, so the blast radius is keyboard input rather than
+	# cursors, and every real desktop already ships it.
+	libxcb-*.so.*) return 1 ;;
 	# display server and input: must match the running X/Wayland session
-	libX11-xcb.so.*|libxcb*.so.*|libX*.so.*) return 0 ;;
 	libxkbcommon.so.*|libxkbcommon-x11.so.*|libwayland-*.so.*) return 0 ;;
 	libinput.so.*|libmtdev.so.*|libevdev.so.*|libwacom.so.*) return 0 ;;
 	# session and device integration (#1304, #1577)
