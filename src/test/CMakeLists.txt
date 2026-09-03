@@ -705,6 +705,15 @@ if(NOT WIN32)
 
     rpi_link_platform_file_ops(disk_formatter_test)
 
+    # Not Catch2, so rpi_discover_tests does not apply -- register it directly.
+    # Until now this binary was built but never registered, which left
+    # file_operations.cpp and the platform file_operations implementation with
+    # no test that actually runs. The TIMEOUT is a backstop: the loop-device
+    # section shells out, and while every sudo in it now passes -n, a wedged
+    # external tool should fail the suite rather than hang it.
+    add_test(NAME disk_formatter COMMAND disk_formatter_test)
+    set_tests_properties(disk_formatter PROPERTIES TIMEOUT 120)
+
     add_custom_target(test_disk_formatter
         COMMAND disk_formatter_test
         DEPENDS disk_formatter_test
