@@ -53,6 +53,9 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
+[Messages]
+SetupWindowTitle=Installazione di {#MyAppName} {#MyAppVersion}
+
 [CustomMessages]
 NameAndVersion=%1 %2
 AdditionalIcons=Collegamenti:
