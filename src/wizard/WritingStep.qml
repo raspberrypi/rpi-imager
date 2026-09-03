@@ -72,6 +72,7 @@ WizardStepBase {
     property string bottleneckStatus: ""
     property int writeThroughputKBps: 0
     property string operationWarning: ""  // Non-fatal warning message (e.g., sync fallback)
+    property string failureMessage: ""  // Last write error; keeps the reason on screen after the dialog closes
     property bool isIndeterminateProgress: false  // True when we can't determine accurate progress (e.g., gz files >4GB)
     readonly property bool anyCustomizationsApplied: (
         wizardContainer.customizationSupported && (
@@ -96,7 +97,7 @@ WizardStepBase {
         spacing: Style.spacingLarge
 
         // Top spacer to vertically center progress section when writing/complete
-        Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete }
+        Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete || root.failureMessage !== "" }
 
         // Summary section (de-chromed)
         ColumnLayout {
@@ -280,7 +281,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: root.isWriting || root.isComplete
+            visible: root.isWriting || root.isComplete || root.failureMessage !== ""
 
             FocusableText {
                 id: progressText
@@ -347,7 +348,7 @@ WizardStepBase {
         }
 
         // Bottom spacer to vertically center progress section when writing/complete
-        Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete }
+        Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete || root.failureMessage !== "" }
     }
     ]
 
@@ -537,6 +538,7 @@ WizardStepBase {
             root.operationWarning = ""
             // Check if extract size is known upfront (e.g., gz files can't reliably store sizes >4GB)
             root.isIndeterminateProgress = !ImageWriterSingleton.isExtractSizeKnown()
+            root.failureMessage = ""
             progressText.text = qsTr("Starting write process...")
             progressBar.value = 0
             ImageWriterSingleton.startWrite()
@@ -587,6 +589,7 @@ WizardStepBase {
             root.wizardContainer.nextStep()
         }
         function onError(msg) {
+            root.failureMessage = msg
             progressText.text = qsTr("Write failed: %1").arg(msg)
         }
 
