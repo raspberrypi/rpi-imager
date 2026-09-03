@@ -327,6 +327,31 @@ TEST_CASE("chipGenerationName returns readable names", "[rpiboot][types]")
     CHECK(chipGenerationName(ChipGeneration::BCM2712) == "BCM2712");
 }
 
+TEST_CASE("fastbootGadgetFamilySlug names the provisioner's per-family gadgets", "[rpiboot][types]")
+{
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2711) == "pi4-family");
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2712) == "pi5-family");
+    // 2710-class parts take the self-contained bootfiles tarball and never ask
+    // for a boot.img, which is why no pi3-family gadget is shipped.
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2836_7).empty());
+}
+
+TEST_CASE("chipGenerationFromRevisionProcessor reads the fastboot getvar", "[rpiboot][types]")
+{
+    CHECK(chipGenerationFromRevisionProcessor("0x4") == ChipGeneration::BCM2712);
+    CHECK(chipGenerationFromRevisionProcessor("0x3") == ChipGeneration::BCM2711);
+    // BCM2836 and BCM2837 are one generation to imager, as they are one PID.
+    CHECK(chipGenerationFromRevisionProcessor("0x1") == ChipGeneration::BCM2836_7);
+    CHECK(chipGenerationFromRevisionProcessor("0x2") == ChipGeneration::BCM2836_7);
+    // The field is documented as "0x" plus hex, but accept a bare digit too.
+    CHECK(chipGenerationFromRevisionProcessor("4") == ChipGeneration::BCM2712);
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("0x0").has_value()); // BCM2835
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("0x5").has_value()); // future part
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("").has_value());
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("0x").has_value());
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("nonsense").has_value());
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // BootMessage layout
 // ────────────────────────────────────────────────────────────────────────

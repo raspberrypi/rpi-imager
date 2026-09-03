@@ -75,6 +75,12 @@
 #include <QVersionNumber>
 #include <QVariantMap>
 
+#include <chrono>
+#include <thread>
+
+#include "localfileextractthread.h"
+#include "platform_file_operations.h"
+
 using Catch::Matchers::ContainsSubstring;
 
 namespace {
@@ -3426,6 +3432,78 @@ WriteOutcome runWrite(ImageWriter &w, int timeoutMs = 120000)
     return out;
 }
 
+// ── pacing ──────────────────────────────────────────────────────────────────
+// Three cases below are about what the writer does *while* a write runs: that
+// progress reaches the UI, that cancelling stops it, that skipping
+// verification still finishes. All three have to observe a write in flight,
+// and the destination is a file, which on any modern machine is memory. A 64MB
+// image can therefore land inside a single 100ms progress sample -- so the run
+// ends before the case can see or do anything, and it fails for being on a
+// fast host rather than for a fault in the code.
+//
+// Pacing the device fixes that at the source: the write takes as long as the
+// case says it does, on a laptop and on a build machine alike. dm-delay would
+// do the same for a real block device, but needs root, which the suite does
+// not have and should not want.
+
+class PacedDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    explicit PacedDevice(std::chrono::milliseconds perWrite) : _perWrite(perWrite) {}
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *data, std::size_t size) override
+    {
+        std::this_thread::sleep_for(_perWrite);
+        return rpi_imager::PlatformFileOperations::WriteSequential(data, size);
+    }
+
+    // The write loop takes this path instead when async I/O is on, so pacing
+    // only the synchronous one would leave the case as quick as it was.
+    rpi_imager::FileError AsyncWriteSequential(const std::uint8_t *data, std::size_t size,
+                                               rpi_imager::FileOperations::AsyncWriteCallback callback) override
+    {
+        std::this_thread::sleep_for(_perWrite);
+        return rpi_imager::PlatformFileOperations::AsyncWriteSequential(data, size,
+                                                                        std::move(callback));
+    }
+
+private:
+    std::chrono::milliseconds _perWrite;
+};
+
+class PacedLocalFileThread : public LocalFileExtractThread
+{
+public:
+    PacedLocalFileThread(const QByteArray &url, const QByteArray &dst, const QByteArray &hash,
+                         std::chrono::milliseconds perWrite, QObject *parent)
+        : LocalFileExtractThread(url, dst, hash, parent)
+    {
+        // DownloadThread's constructor has already put the platform
+        // implementation here; swapping it now is what the scripted-device
+        // cases elsewhere in the suite do.
+        _file = std::make_shared<PacedDevice>(perWrite);
+    }
+};
+
+// An ImageWriter that writes through a paced device. Everything else about the
+// run -- the thread, the signals, the state machine -- is the production path.
+class PacedImageWriter : public ImageWriter
+{
+public:
+    explicit PacedImageWriter(std::chrono::milliseconds perWrite)
+        : ImageWriter(nullptr), _perWrite(perWrite) {}
+
+protected:
+    DownloadExtractThread *createLocalFileThread(const QByteArray &url, const QByteArray &dst,
+                                                 const QByteArray &expectedHash) override
+    {
+        return new PacedLocalFileThread(url, dst, expectedHash, _perWrite, this);
+    }
+
+private:
+    std::chrono::milliseconds _perWrite;
+};
+
 // A small image of recognisable bytes, and somewhere to write it.
 class WriteFixture
 {
@@ -3545,7 +3623,10 @@ TEST_CASE("The UI is told what is happening during a write",
     // point -- no progress, and nothing wrong. Several buffers' worth is
     // what a real image looks like and what the bar is there for.
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so the write spans several progress samples however fast the
+    // host is. Unpaced it can finish inside one, and the only sample taken
+    // catches the download counter moving with nothing yet written.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(false);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -3632,7 +3713,11 @@ TEST_CASE("Skipping verification leaves a finished write, not an abandoned one",
     // away a card that is already correctly written, and they would start
     // again for nothing.
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so a write progress signal arrives while there is still a write
+    // to skip the verification of. Unpaced the run can finish before one is
+    // delivered, leaving the skip never asked for and the case failing on
+    // its own precondition.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(true);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -3671,7 +3756,11 @@ TEST_CASE("Cancelling a write in progress reports cancelled, not success",
           "[imagewriter][write][cancel]")
 {
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so there is still a write to stop when the cancel arrives.
+    // Unpaced the run can be over before the first progress signal is
+    // delivered, and the case then fails for the write having succeeded --
+    // which, the write having genuinely finished, was the right answer.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(false);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -7853,12 +7942,17 @@ Drivelist::DeviceDescriptor removableWithChildren(
     return d;
 }
 
+// The model keys a board on its USB port path, so a caller that means two
+// separate boards has to give them separate ports -- two nodes on one port
+// are one board that turned up twice.
 Drivelist::DeviceDescriptor rpibootDevice(const std::string &device,
-                                          const std::string &chip)
+                                          const std::string &chip,
+                                          const std::vector<uint8_t> &portPath = {})
 {
     Drivelist::DeviceDescriptor d = removable(device, "A board in USB boot");
     d.isRpiboot = true;
     d.rpibootChipName = chip;
+    d.usbPortPath = portPath;
     return d;
 }
 
@@ -7923,8 +8017,8 @@ TEST_CASE("The same board seen twice is still one chip", "[drivelist]")
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList().size() == 1);
@@ -7969,16 +8063,16 @@ TEST_CASE("Two different boards are both reported, in a settled order",
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712"),
-                              rpibootDevice("/dev/sdb", "BCM2711") });
+    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdb", "BCM2711", {1, 3}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList()
           == QStringList{QStringLiteral("BCM2711"), QStringLiteral("BCM2712")});
 
     // The same pair the other way round is not a change.
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711", {1, 3}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
     CHECK(chips.count() == 1);
 }
 
@@ -8238,7 +8332,11 @@ QString listImage(const QString &image, const QString &dir = QString())
     return QString::fromUtf8(p.readAllStandardOutput());
 }
 
-constexpr qint64 kBootImgSize = 8 * 1024 * 1024;
+// Matches the floor SecureBoot::createBootImg applies. Below it mkfs.vfat
+// still builds a FAT32, with a warning and fewer than the 65525 clusters the
+// spec requires, and mtools then refuses to read what it made -- so a smaller
+// image tests a shape the application never asks for and cannot be read back.
+constexpr qint64 kBootImgSize = 33 * 1024 * 1024;
 
 } // namespace
 

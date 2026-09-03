@@ -43,6 +43,15 @@ bool overwriteCopy(const std::filesystem::path& src,
     return std::filesystem::copy_file(src, dest, ec);
 }
 
+// Name of the fastboot gadget rpi-sb-provisioner ships for this chip's
+// device family, used both as the upstream filename under host-support/ and
+// as the cache filename under fastboot/.  Only called for the chips that take
+// a separate boot.img (BCM2711/BCM2712), so the slug is never empty here.
+std::string fastbootGadgetFilename(ChipGeneration chip)
+{
+    return "fastboot-gadget-" + std::string(fastbootGadgetFamilySlug(chip)) + ".img";
+}
+
 // Capture the ETag from a curl response.  Used to populate a sidecar file
 // next to each cached download so the next session can issue a conditional
 // GET (If-None-Match) and skip the body transfer when the upstream hasn't
@@ -132,14 +141,24 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
             // BCM2711/BCM2712: fastboot gadget kernel + config are separate from
             // bootfiles.bin; bootcode is extracted from the TAR at cache time.
             //
+            // The gadget fetched is the one for this chip's device family, not
+            // the all-devices fastboot-gadget.img: rpi-sb-provisioner ships one
+            // per family and serves that (get_fastboot_gadget()), keeping the
+            // unsuffixed image only as the fallback for a station that cannot
+            // tell what it has connected.  We always can — the USB PID we
+            // enumerated the device on *is* the family — so there is no reason
+            // to push the other families' device trees and firmware over USB.
+            //
             // The upstream gadget is cached under its own name
-            // (fastboot-gadget.img); the active boot.img the file_server
-            // uploads is rematerialised on every run by ensureAvailable() —
-            // either copied from this cached upstream or from the user's
-            // current custom gadget.  Custom gadgets are session-only in the
-            // UI, so they must not leak into the persistent cache.
-            entries.push_back({provisioner + "host-support/fastboot-gadget.img",
-                               "fastboot/fastboot-gadget.img"});
+            // (fastboot-gadget-<family>.img); the active boot.img the
+            // file_server uploads is rematerialised on every run by
+            // ensureAvailable() — either copied from this cached upstream or
+            // from the user's current custom gadget.  Custom gadgets are
+            // session-only in the UI, so they must not leak into the
+            // persistent cache.
+            const std::string gadget = fastbootGadgetFilename(chip);
+            entries.push_back({provisioner + "host-support/" + gadget,
+                               "fastboot/" + gadget});
             entries.push_back({usbboot + "mass-storage-gadget64/config.txt",
                                "fastboot/config.txt"});
             entries.push_back({usbboot + "firmware/bootfiles.bin",
@@ -267,8 +286,9 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     //     bytes, never inherited from a different binary;
     //   - copy_file below always creates a fresh destination (no stale-cache
     //     edge cases on Windows).
-    // The cached upstream gadget lives under its own name (fastboot-gadget.img)
-    // and remains intact, so this isn't a network re-fetch — just a copy.
+    // The cached upstream gadget lives under its own name
+    // (fastboot-gadget-<family>.img) and remains intact, so this isn't a
+    // network re-fetch — just a copy.
     if (mode == SideloadMode::Fastboot) {
         std::error_code purgeEc;
         std::filesystem::remove(versionDir / "fastboot" / "boot.img", purgeEc);
@@ -372,7 +392,7 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     // 3b. Materialise fastboot/boot.img for BCM2711/BCM2712 fastboot runs.
     // The active boot.img is rebuilt from scratch on every run (see step 1b):
     //   - if the user provided a custom gadget, copy from that file;
-    //   - otherwise, copy from the cached upstream fastboot-gadget.img.
+    //   - otherwise, copy from this family's cached upstream gadget.
     // BCM2836_7 doesn't ship a separate boot.img (it uses a self-contained
     // bootfiles.bin bundle) — skip cleanly when the manifest doesn't include
     // an upstream gadget and no custom is set.
@@ -381,16 +401,42 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         auto gadgetDest = versionDir / "fastboot" / "boot.img";
         std::filesystem::create_directories(gadgetDest.parent_path(), ec);
 
+        const auto legacyGadget = versionDir / "fastboot" / "fastboot-gadget.img";
+
         std::filesystem::path gadgetSrc;
         if (!_customFastbootGadget.empty()) {
             gadgetSrc = _customFastbootGadget;
             qDebug() << "FirmwareManager: using custom fastboot gadget:"
                      << QString::fromStdString(_customFastbootGadget);
         } else {
-            gadgetSrc = versionDir / "fastboot" / "fastboot-gadget.img";
+            const std::string gadget = fastbootGadgetFilename(chip);
+            gadgetSrc = versionDir / "fastboot" / gadget;
             if (!std::filesystem::exists(gadgetSrc)) {
-                _lastError = "Cached fastboot-gadget.img missing — cannot materialise boot.img";
-                return {};
+                // A cache populated before per-family gadgets holds only the
+                // all-devices image, and offline that is all there is to boot
+                // from.  It carries every family's device trees rather than
+                // this one's, which is wasteful but not wrong, so prefer it to
+                // failing the run outright.
+                if (std::filesystem::exists(legacyGadget)) {
+                    qWarning() << "FirmwareManager:" << QString::fromStdString(gadget)
+                               << "not cached — falling back to the all-devices "
+                                  "fastboot-gadget.img";
+                    gadgetSrc = legacyGadget;
+                } else {
+                    _lastError = "Cached " + gadget + " missing — cannot materialise boot.img";
+                    return {};
+                }
+            } else {
+                // The all-devices image is ~3MB larger than any family's and
+                // nothing fetches it any more, so a cache carrying both is
+                // holding one copy for nothing.  Drop it once the gadget that
+                // replaced it is on disk.
+                std::error_code legacyEc;
+                if (std::filesystem::remove(legacyGadget, legacyEc))
+                    qDebug() << "FirmwareManager: removed superseded "
+                                "fastboot/fastboot-gadget.img from the cache";
+                std::filesystem::remove(versionDir / "fastboot" / "fastboot-gadget.img.etag",
+                                        legacyEc);
             }
         }
 

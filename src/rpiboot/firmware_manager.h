@@ -89,6 +89,13 @@ public:
     // resolveLatestEepromVersion().  recovery.bin is a stable filename.
     static constexpr const char* EEPROM_RAW_BASE =
         "https://github.com/raspberrypi/rpi-eeprom/raw/refs/heads/master/";
+    // rpi-sb-provisioner's host-support/ directory is where the fastboot
+    // gadgets live.  It ships one per device family — fastboot-gadget-pi4-family.img,
+    // fastboot-gadget-pi5-family.img and the self-contained
+    // fastboot-gadget.2710-bootfiles-bin — plus an all-devices
+    // fastboot-gadget.img kept only for a station that cannot identify what it
+    // has connected.  We fetch the family image for the PID we enumerated on;
+    // see fastbootGadgetFamilySlug().
     static constexpr const char* PROVISIONER_RAW_BASE =
         "https://github.com/raspberrypi/rpi-sb-provisioner/raw/refs/heads/main/";
 
