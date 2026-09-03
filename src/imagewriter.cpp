@@ -742,6 +742,9 @@ void ImageWriter::onRpibootDeviceDetected(const QString &deviceId,
         return;
 
     _bootstrappingDevices.insert(ppKey);
+    // Hold the device's chip annotation across the handover from rpiboot to
+    // the fastboot gadget, during which it is on neither side of the bus.
+    _drivelist.setBootstrapInFlight(ppKey, true);
     qDebug() << "Auto-bootstrap: starting rpiboot for" << ppKey << "deviceId=" << deviceId;
 
     // Create DeviceInfo from parameters
@@ -829,6 +832,9 @@ void ImageWriter::onBootstrapError(const QString &portPathKey, const QString &ms
         _activeBootstrapThreads.remove(portPathKey);
     }
     _bootstrappingDevices.remove(portPathKey);
+    // The device is not coming back on its own, so stop holding its
+    // annotation — the next poll that doesn't see the port clears it.
+    _drivelist.setBootstrapInFlight(portPathKey, false);
 
     // Unpause drive scanning when the last bootstrap finishes (success or
     // error).  Only resume once no bootstraps remain in flight, in case

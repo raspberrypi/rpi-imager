@@ -92,6 +92,32 @@ public:
 
     void setFastbootScanEnabled(bool enabled);
 
+    /**
+     * @brief Note that a device at this USB port path is mid-bootstrap
+     *
+     * A device being bootstrapped leaves the bus entirely between rpiboot
+     * finishing and the fastboot gadget enumerating — up to a minute, on the
+     * gadget's own re-enumerate budget — and it is neither an rpiboot device
+     * nor a fastboot one while it boots. Told that a bootstrap is in flight,
+     * the model holds the chip it learned for that port rather than dropping
+     * it, so the "Connected via USB" annotation stays put across the handover
+     * instead of blinking off at the point the device is busiest.
+     *
+     * The hold is released by the model itself, on the first poll that sees
+     * the port again in either mode — waiting for that rather than for the
+     * bootstrap's own completion signal, which fires before the poll thread
+     * has had a chance to probe the new gadget. A bootstrap that fails clears
+     * the hold through this same call with @p inFlight false, and the hold
+     * expires anyway after a few polls that miss the port, so a device
+     * unplugged mid-bootstrap cannot leave the annotation stuck on. Polling is
+     * paused for the duration of a bootstrap, so that budget is only spent
+     * once the device is genuinely expected back.
+     *
+     * @param portPathKey Dotted USB port path (e.g. "1.2")
+     * @param inFlight    true when the bootstrap starts, false when it fails
+     */
+    void setBootstrapInFlight(const QString &portPathKey, bool inFlight);
+
     enum driveListRoles {
         deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole, childDevicesRole,
         isRpibootRole,
@@ -146,6 +172,19 @@ protected:
     DriveListModelPollThread _thread;
     QString _lastError;  // Last enumeration error message (empty if successful)
     QStringList _connectedRpibootChips;
+    // Chip generation last seen at each USB port path, keyed by dotted port
+    // path.  Learned from a device's USB PID in rpiboot mode and from the
+    // gadget's revision-processor getvar in fastboot mode, so one connected
+    // device keeps naming its silicon across the transition between the two.
+    QHash<QString, QString> _chipByPort;
+    // Port paths whose device is mid-bootstrap and so briefly on neither side
+    // of that transition, against the number of further polls that may miss
+    // the port before the hold is given up.  See setBootstrapInFlight().
+    QHash<QString, int> _bootstrapPorts;
+    // Polls a mid-bootstrap port may be absent for before its chip is
+    // forgotten.  The gadget only has to enumerate and answer one getvar, so
+    // this is generous; polling ticks once a second.
+    static constexpr int kBootstrapHoldPolls = 10;
     // Tracks naked rpiboot devices we've already emitted rpibootDeviceDetected
     // for.  We deliberately keep these out of _drivelist (they aren't writable
     // storage until bootstrap converts them to fastboot mode) but still need
