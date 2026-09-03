@@ -1001,6 +1001,70 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 # ============================================================================
+# FileOperations Write Path
+# ============================================================================
+# The write path is the most safety-critical code in the imager and, until this
+# target, had no test that ran: file_operations.cpp and the platform
+# implementation behind it were reachable only from fat_partition_test (tagged
+# [.destructive]) and disk_formatter_test (unregistered until recently).
+#
+# Every case works against a scratch file under a per-process temp directory,
+# so it is safe to run unattended and touches no real device. The loopback
+# cases attach that scratch file to a loop device to reach the block-device
+# paths -- O_DIRECT, real size queries, aligned buffers -- and skip themselves
+# where the host will not allow one, which is the normal case in containerised
+# CI. Verified against a KVM guest, where the loop cases do run.
+
+add_executable(file_operations_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../aligned_buffer.h
+    ${PLATFORM_FILE_OPS}
+    file_operations_test.cpp
+)
+
+# Only the macOS set has a Q_OBJECT type in it (MacFile), so only that build
+# needs the moc pass. The other test targets enable AUTOMOC unconditionally and
+# pay for a scan that can never find anything.
+if(APPLE)
+    set_target_properties(file_operations_test PROPERTIES AUTOMOC ON)
+endif()
+
+target_include_directories(file_operations_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+# Qt6::Core for the QFile/qDebug use inside the platform implementations.
+target_link_libraries(file_operations_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+if(APPLE)
+    target_link_libraries(file_operations_test PRIVATE
+        "-framework Security"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
+    )
+endif()
+
+target_compile_features(file_operations_test PRIVATE cxx_std_20)
+target_compile_options(file_operations_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+rpi_link_platform_file_ops(file_operations_test)
+rpi_discover_tests(file_operations_test)
+
+add_custom_target(test_file_operations
+    COMMAND file_operations_test
+    DEPENDS file_operations_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running file operations write-path tests"
+)
+
+# ============================================================================
 # Coverage Report
 # ============================================================================
 # `cmake --build <dir> --target coverage` with -DRPI_IMAGER_COVERAGE=ON runs
