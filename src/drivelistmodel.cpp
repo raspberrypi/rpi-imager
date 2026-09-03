@@ -270,10 +270,13 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         qDebug() << "Drive added:" << info.device;
     }
 
-    // Extract connected rpiboot chip names and notify if changed
+    // Extract connected chip names and notify if changed.  Both device states
+    // a Pi passes through under imager's control name their silicon, so the
+    // fastboot entries count here too — the device is no less connected for
+    // having handed over from rpiboot to the gadget.
     QStringList newChips;
     for (const auto &i : l) {
-        if (i.isRpiboot && !i.rpibootChipName.empty()) {
+        if (!i.rpibootChipName.empty()) {
             QString chip = QString::fromStdString(i.rpibootChipName);
             if (!newChips.contains(chip))
                 newChips.append(chip);
