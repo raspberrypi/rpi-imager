@@ -54,15 +54,15 @@ Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Messages]
-SetupWindowTitle=Installazione di {#MyAppName} {#MyAppVersion}
+italian.SetupWindowTitle=Installazione di {#MyAppName} {#MyAppVersion}
 
 [CustomMessages]
-NameAndVersion=%1 %2
-AdditionalIcons=Collegamenti:
-CreateDesktopIcon=Crea collegamento programma sul &desktop
-CreateQuickLaunchIcon=Crea collegamento programma nella &barra 'Avvio veloce'
-ProgramOnTheWeb=Sito web %1
-LaunchProgram=Esegui %1
+italian.NameAndVersion=%1 %2
+italian.AdditionalIcons=Collegamenti:
+italian.CreateDesktopIcon=Crea collegamento programma sul &desktop
+italian.CreateQuickLaunchIcon=Crea collegamento programma nella &barra 'Avvio veloce'
+italian.ProgramOnTheWeb=Sito web %1
+italian.LaunchProgram=Esegui %1
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
