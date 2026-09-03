@@ -20,6 +20,46 @@
 namespace fs = std::filesystem;
 using namespace rpi_imager;
 
+namespace {
+
+// Per-process scratch directory.
+//
+// These tests used to write to fixed /tmp paths (/tmp/test_disk.img and
+// friends). That collides whenever two runs overlap -- ctest -j, or a
+// developer running the binary while CI runs it -- and leaves debris behind
+// when a case fails early. Now that the binary is registered with CTest and
+// runs unattended, neither is acceptable.
+class ScratchDir {
+ public:
+  ScratchDir() {
+    base_ = fs::temp_directory_path() /
+            ("rpi-imager-disk-formatter-" + std::to_string(getpid()));
+    std::error_code ec;
+    fs::remove_all(base_, ec);
+    fs::create_directories(base_, ec);
+  }
+
+  ~ScratchDir() {
+    std::error_code ec;
+    fs::remove_all(base_, ec);
+  }
+
+  ScratchDir(const ScratchDir&) = delete;
+  ScratchDir& operator=(const ScratchDir&) = delete;
+
+  std::string file(const char* name) const { return (base_ / name).string(); }
+
+ private:
+  fs::path base_;
+};
+
+ScratchDir& scratch() {
+  static ScratchDir dir;
+  return dir;
+}
+
+}  // namespace
+
 class DiskFormatterTest {
  public:
   static bool RunAllTests() {
@@ -44,7 +84,7 @@ class DiskFormatterTest {
   static bool TestBasicFormatting() {
     std::cout << "Testing basic formatting...\n";
     
-    const std::string test_file = "/tmp/test_disk.img";
+    const std::string test_file = scratch().file("basic.img");
     const std::uint64_t disk_size = 64 * 1024 * 1024;  // 64MB
     
     // Clean up any existing test file
@@ -76,7 +116,7 @@ class DiskFormatterTest {
   static bool TestMbrStructure() {
     std::cout << "Testing MBR structure...\n";
     
-    const std::string test_file = "/tmp/test_mbr.img";
+    const std::string test_file = scratch().file("mbr.img");
     const std::uint64_t disk_size = 64 * 1024 * 1024;  // 64MB
     
     fs::remove(test_file);
@@ -131,7 +171,7 @@ class DiskFormatterTest {
   static bool TestFat32Structure() {
     std::cout << "Testing FAT32 structure...\n";
     
-    const std::string test_file = "/tmp/test_fat32.img";
+    const std::string test_file = scratch().file("fat32.img");
     const std::uint64_t disk_size = 64 * 1024 * 1024;  // 64MB
     
     fs::remove(test_file);
@@ -205,6 +245,58 @@ class DiskFormatterTest {
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
   }
 
+  // Run a privileged command: directly when we are already root, via sudo -n
+  // otherwise.
+  //
+  // Going straight to the binary when root matters for more than tidiness. In
+  // a namespaced container sudo drops the ambient capability set, so
+  // `sudo losetup` fails with EPERM in environments where plain `losetup`
+  // succeeds -- which would silently cost us the whole mount check. The -n on
+  // the fallback keeps an unattended run from stopping at a password prompt.
+  static int runPrivileged(const char *absPath, std::vector<const char*> args,
+                           std::string *out = nullptr) {
+    std::vector<const char*> argv;
+    const char *binary;
+    if (geteuid() == 0) {
+      binary = absPath;
+      argv.push_back(absPath);
+    } else {
+      binary = "/usr/bin/sudo";
+      argv.push_back("sudo");
+      argv.push_back("-n");
+      argv.push_back(absPath);
+    }
+    argv.insert(argv.end(), args.begin(), args.end());
+    argv.push_back(nullptr);
+    return out ? runCapture(binary, argv, out) : runCommand(binary, argv);
+  }
+
+  // As runCommand, but captures the child's stdout into *out.
+  static int runCapture(const char *path, const std::vector<const char*> &argv,
+                        std::string *out) {
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return -1;
+    pid_t pid = fork();
+    if (pid < 0) { close(pipefd[0]); close(pipefd[1]); return -1; }
+    if (pid == 0) {
+      close(pipefd[0]);
+      dup2(pipefd[1], 1);
+      close(pipefd[1]);
+      int devnull = open("/dev/null", O_WRONLY);
+      if (devnull >= 0) { dup2(devnull, 2); close(devnull); }
+      execv(path, const_cast<char *const *>(argv.data()));
+      _exit(127);
+    }
+    close(pipefd[1]);
+    char buf[256] = {};
+    ssize_t n = read(pipefd[0], buf, sizeof(buf) - 1);
+    close(pipefd[0]);
+    int status = 0;
+    waitpid(pid, &status, 0);
+    if (out && n > 0) out->assign(buf, static_cast<std::size_t>(n));
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  }
+
   // Validate that a string looks like a /dev/loop device path.
   static bool isValidLoopDevice(const char *s) {
     // Must match /dev/loop[0-9]+
@@ -218,7 +310,7 @@ class DiskFormatterTest {
   static bool TestSystemToolValidation() {
     std::cout << "Testing with system tools...\n";
 
-    const std::string test_file = "/tmp/test_system.img";
+    const std::string test_file = scratch().file("system.img");
     const std::uint64_t disk_size = 64 * 1024 * 1024;  // 64MB
 
     fs::remove(test_file);
@@ -253,84 +345,60 @@ class DiskFormatterTest {
       }
     }
 
-    // Set up loop device and mount (requires sudo)
+    // Set up a loop device and mount the FAT filesystem we just wrote. This is
+    // the only check that proves the image is actually mountable rather than
+    // merely structurally plausible, so it is worth running wherever the host
+    // permits it -- and worth saying so out loud when it cannot, rather than
+    // passing silently as it used to.
+    //
+    // Needs CAP_SYS_ADMIN. runPrivileged() goes straight to the binary when we
+    // are root and falls back to sudo -n otherwise, so an unattended run
+    // without the privilege fails fast instead of stopping at a password
+    // prompt. -P asks for the partition table to be scanned; without it
+    // <loop>p1 never appears and the mount cannot work.
+    const std::string mount_point = scratch().file("mount");
     {
-      std::vector<const char*> mkdirArgv = {"mkdir", "-p", "/tmp/test_mount", nullptr};
-      runCommand("/bin/mkdir", mkdirArgv);
+      std::error_code ec;
+      fs::create_directories(mount_point, ec);
     }
 
-    // Use popen for losetup since we need to read its output, but validate the result
     {
-      // Use fork/exec to safely get loop device name
-      int pipefd[2];
-      if (pipe(pipefd) == 0) {
-        pid_t pid = fork();
-        if (pid == 0) {
-          close(pipefd[0]);
-          dup2(pipefd[1], 1); // stdout -> pipe
-          close(pipefd[1]);
-          int devnull = open("/dev/null", O_WRONLY);
-          if (devnull >= 0) { dup2(devnull, 2); close(devnull); }
-          const char *argv[] = {"sudo", "losetup", "-f", "--show", test_file.c_str(), nullptr};
-          execv("/usr/bin/sudo", const_cast<char *const *>(argv));
-          _exit(127);
-        } else if (pid > 0) {
-          close(pipefd[1]);
-          char loop_device[256] = {};
-          ssize_t n = read(pipefd[0], loop_device, sizeof(loop_device) - 1);
-          close(pipefd[0]);
-          int status = 0;
-          waitpid(pid, &status, 0);
+      std::string out;
+      int rc = runPrivileged("/usr/sbin/losetup",
+                             {"--find", "--show", "-P", test_file.c_str()}, &out);
+      out.erase(0, out.find_first_not_of(" \t\r\n"));
+      const auto last = out.find_last_not_of(" \t\r\n");
+      out.erase(last == std::string::npos ? 0 : last + 1);
 
-          if (n > 0) {
-            loop_device[strcspn(loop_device, "\n")] = 0;
+      if (rc != 0 || out.empty()) {
+        std::cout << "Loop/mount test SKIPPED (could not attach a loop device; "
+                     "needs CAP_SYS_ADMIN or passwordless sudo)\n";
+      } else if (!isValidLoopDevice(out.c_str())) {
+        std::cout << "Loop/mount test SKIPPED (losetup returned an unexpected path)\n";
+      } else {
+        const std::string loop_device = out;
+        const std::string loop_part = loop_device + "p1";
 
-            // Validate loop device path before using it in any command
-            if (isValidLoopDevice(loop_device)) {
-              std::string loopPart = std::string(loop_device) + "p1";
+        if (runPrivileged("/usr/bin/mount",
+                          {"-t", "vfat", loop_part.c_str(), mount_point.c_str()}) == 0) {
+          std::cout << "Mount test passed\n";
 
-              // Mount
-              std::vector<const char*> mountArgv = {"sudo", "mount", "-t", "vfat",
-                                                     loopPart.c_str(), "/tmp/test_mount", nullptr};
-              if (runCommand("/usr/bin/sudo", mountArgv) == 0) {
-                std::cout << "Mount test passed\n";
-
-                // Test file creation
-                std::vector<const char*> touchArgv = {"sudo", "touch", "/tmp/test_mount/test.txt", nullptr};
-                if (runCommand("/usr/bin/sudo", touchArgv) == 0) {
-                  std::cout << "File creation test passed\n";
-                  std::vector<const char*> rmArgv = {"sudo", "rm", "/tmp/test_mount/test.txt", nullptr};
-                  runCommand("/usr/bin/sudo", rmArgv);
-                } else {
-                  std::cout << "File creation test failed\n";
-                }
-
-                // Unmount
-                std::vector<const char*> umountArgv = {"sudo", "umount", "/tmp/test_mount", nullptr};
-                runCommand("/usr/bin/sudo", umountArgv);
-              } else {
-                std::cout << "Mount test failed (may require sudo privileges)\n";
-              }
-
-              // Detach loop device
-              std::vector<const char*> detachArgv = {"sudo", "losetup", "-d", loop_device, nullptr};
-              runCommand("/usr/bin/sudo", detachArgv);
-            } else {
-              std::cout << "Invalid loop device path returned, skipping mount test\n";
-            }
+          const std::string touch_path = mount_point + "/test.txt";
+          if (runPrivileged("/usr/bin/touch", {touch_path.c_str()}) == 0) {
+            std::cout << "File creation test passed\n";
+            runPrivileged("/usr/bin/rm", {touch_path.c_str()});
+          } else {
+            std::cout << "File creation test failed\n";
+            all_passed = false;
           }
-        } else {
-          close(pipefd[0]);
-          close(pipefd[1]);
-          std::cout << "Loop device test skipped (fork failed)\n";
-        }
-      }
-    }
 
-    // Clean up mount point
-    {
-      std::vector<const char*> argv = {"rmdir", "/tmp/test_mount", nullptr};
-      runCommand("/bin/rmdir", argv);
+          runPrivileged("/usr/bin/umount", {mount_point.c_str()});
+        } else {
+          std::cout << "Mount test SKIPPED (loop device attached but mount was refused)\n";
+        }
+
+        runPrivileged("/usr/sbin/losetup", {"-d", loop_device.c_str()});
+      }
     }
 
     // Verify filesystem with fsck.fat if available
