@@ -968,3 +968,47 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         )
     endif()
 endif()
+
+# ============================================================================
+# Coverage Report
+# ============================================================================
+# `cmake --build <dir> --target coverage` with -DRPI_IMAGER_COVERAGE=ON runs
+# the CTest suite and renders a gcovr HTML report of the headless core.
+#
+#   cmake -B build-cov -DBUILD_TESTING=ON -DRPI_IMAGER_COVERAGE=ON
+#   cmake --build build-cov --target coverage
+#   xdg-open build-cov/coverage/index.html
+#
+# The instrumentation itself is switched on in ../CMakeLists.txt; what lands in
+# the report is decided by the exclusion list in RunCoverage.cmake. The report
+# is branch-oriented on purpose -- line coverage alone would have called
+# runWithTimeout's timeout path "reached" as soon as any test entered its poll
+# loop, when in fact neither detach() had ever executed.
+
+if(RPI_IMAGER_COVERAGE)
+    find_program(GCOVR_EXECUTABLE gcovr)
+    if(NOT GCOVR_EXECUTABLE)
+        message(WARNING
+            "RPI_IMAGER_COVERAGE is on but gcovr was not found, so no `coverage` target "
+            "was created. Install it (apt install gcovr / pip install gcovr) and "
+            "re-run CMake.")
+    else()
+        # No DEPENDS on the test binaries: RunCoverage.cmake builds them
+        # itself, best-effort, so one unbuildable target (rpiboot_integration_test
+        # does not currently link) degrades the report rather than blocking it.
+        # Expressing it as DEPENDS made that single failure fatal to the run.
+        add_custom_target(coverage
+            COMMAND ${CMAKE_COMMAND}
+                    -DCOVERAGE_BINARY_DIR=${CMAKE_BINARY_DIR}
+                    -DCOVERAGE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/..
+                    -DCOVERAGE_OUTPUT_DIR=${CMAKE_BINARY_DIR}/coverage
+                    -DGCOVR_EXECUTABLE=${GCOVR_EXECUTABLE}
+                    -DCTEST_EXECUTABLE=${CMAKE_CTEST_COMMAND}
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/RunCoverage.cmake
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "Running the suite under gcov and rendering a coverage report"
+            USES_TERMINAL
+            VERBATIM
+        )
+    endif()
+endif()
