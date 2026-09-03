@@ -327,6 +327,15 @@ TEST_CASE("chipGenerationName returns readable names", "[rpiboot][types]")
     CHECK(chipGenerationName(ChipGeneration::BCM2712) == "BCM2712");
 }
 
+TEST_CASE("fastbootGadgetFamilySlug names the provisioner's per-family gadgets", "[rpiboot][types]")
+{
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2711) == "pi4-family");
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2712) == "pi5-family");
+    // 2710-class parts take the self-contained bootfiles tarball and never ask
+    // for a boot.img, which is why no pi3-family gadget is shipped.
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2836_7).empty());
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // BootMessage layout
 // ────────────────────────────────────────────────────────────────────────

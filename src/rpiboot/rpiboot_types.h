@@ -166,6 +166,25 @@ inline std::string_view chipDirectoryPrefix(ChipGeneration gen)
     return "";
 }
 
+// Slug naming the per-family fastboot gadget that rpi-sb-provisioner ships
+// in host-support/, matching get_device_family_slug() there.  Each gadget
+// carries only the device trees and start firmware its family can load, so
+// the one for the connected part is several megabytes smaller than the
+// all-devices image and is the artefact the provisioner itself serves.
+//
+// BCM2836_7 has no slug: a 2710-class part is served the self-contained
+// fastboot-gadget.2710-bootfiles-bin and never asks for a boot.img, which is
+// why the provisioner stopped shipping a pi3-family gadget at all.
+inline std::string_view fastbootGadgetFamilySlug(ChipGeneration gen)
+{
+    switch (gen) {
+    case ChipGeneration::BCM2836_7: return "";
+    case ChipGeneration::BCM2711:   return "pi4-family";
+    case ChipGeneration::BCM2712:   return "pi5-family";
+    }
+    return "";
+}
+
 // Friendly device description for the UI (e.g. drive-list delegate)
 inline std::string deviceDescription(ChipGeneration gen)
 {
