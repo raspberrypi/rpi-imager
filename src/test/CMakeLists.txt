@@ -30,6 +30,22 @@ function(rpi_discover_tests target)
     catch_discover_tests(${target} PROPERTIES SKIP_RETURN_CODE 4)
 endfunction()
 
+# Link liburing into a target that compiles the platform file_operations.
+#
+# linux/Platform.cmake adds -DHAVE_LIBURING with add_definitions(), which every
+# target in this directory inherits, but it only puts the library itself into
+# EXTRALIBS -- and EXTRALIBS reaches the app target alone. Any test binary
+# compiling file_operations_linux.cpp therefore got the io_uring code paths
+# compiled in with nothing to resolve them against, and failed to link on any
+# machine with liburing-dev >= 2.2 installed. Call this for every target that
+# pulls in PLATFORM_FILE_OPS.
+function(rpi_link_platform_file_ops target)
+    if(LIBURING_USABLE)
+        target_include_directories(${target} PRIVATE ${LIBURING_INCLUDE_DIRS})
+        target_link_libraries(${target} PRIVATE ${LIBURING_LIBRARIES})
+    endif()
+endfunction()
+
 # Add the customization generator test executable
 # Includes the bundled crypto sources the generator now depends on for
 # credential derivation (yescrypt/sha256crypt password hashing).
@@ -138,6 +154,8 @@ target_compile_options(fat_partition_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
+
+rpi_link_platform_file_ops(fat_partition_test)
 
 # Register with CTest for automatic test discovery
 # Note: These tests are marked with [!mayfail] and [.destructive] tags
@@ -685,6 +703,8 @@ if(NOT WIN32)
         )
     endif()
 
+    rpi_link_platform_file_ops(disk_formatter_test)
+
     add_custom_target(test_disk_formatter
         COMMAND disk_formatter_test
         DEPENDS disk_formatter_test
@@ -724,6 +744,8 @@ if(APPLE)
         "-framework CoreFoundation"
     )
 endif()
+
+rpi_link_platform_file_ops(device_io_limits_test)
 
 target_compile_features(device_io_limits_test PRIVATE cxx_std_20)
 
