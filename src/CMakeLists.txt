@@ -103,6 +103,39 @@ endif()
 #add_compile_options("-fsanitize=address")
 #add_link_options("-fsanitize=address")
 
+# Coverage instrumentation. Off by default; when on, test/ grows a `coverage`
+# target that runs the CTest suite and renders an HTML report.
+#
+# Deliberately global rather than per-target. Most of what we would want a gap
+# report for has no test binary of its own -- downloadthread.cpp is reached
+# only from the app -- and a translation unit with no .gcno is silently absent
+# from the report rather than showing up at 0%, which is the opposite of what a
+# gap report is for. Instrumenting the app target too costs build time and
+# nothing else; test/RunCoverage.cmake decides what actually gets reported.
+option(RPI_IMAGER_COVERAGE "Build with gcov instrumentation and add a `coverage` target" OFF)
+
+if(RPI_IMAGER_COVERAGE)
+    if(MSVC)
+        message(FATAL_ERROR "RPI_IMAGER_COVERAGE needs a GCC/Clang-style driver")
+    endif()
+    if(NOT BUILD_TESTING)
+        message(WARNING
+            "RPI_IMAGER_COVERAGE is set but BUILD_TESTING is off, so there is no suite "
+            "to run and no `coverage` target will be created. Configure with "
+            "-DBUILD_TESTING=ON.")
+    endif()
+    # LTO rewrites the call graph that gcov attributes counts to, and any
+    # optimisation folds away the very branches the report exists to
+    # distinguish. Both have to go, whatever the build type asked for.
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
+    # -fprofile-update=atomic matters here specifically: the write path is
+    # threaded, and the default non-atomic counter increments lose updates
+    # under concurrency, which shows up as branches wrongly reported as cold.
+    add_compile_options(--coverage -O0 -g -fprofile-update=atomic)
+    add_link_options(--coverage)
+    message(STATUS "Coverage instrumentation enabled (forcing -O0, LTO off)")
+endif()
+
 # Leave empty by default so we don't inject the wrong path on other platforms. (changing on every QT version)
 # Users/Kits can set Qt6_ROOT or CMAKE_PREFIX_PATH externally.
 set(Qt6_ROOT "" CACHE PATH "Path to Qt6 (optional; leave empty if using CMAKE_PREFIX_PATH)")
