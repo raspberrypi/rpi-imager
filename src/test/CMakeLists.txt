@@ -7,8 +7,12 @@ include(FetchContent)
 FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.5.2
-    FIND_PACKAGE_ARGS NAMES Catch2
+    GIT_TAG v3.16.0
+    # Version floor, or find_package matches a system Catch2 v2 -- still the
+    # packaged one on Debian/Ubuntu -- and FetchContent skips the fetch. The
+    # suite is v3: catch_test_macros.hpp and Catch2WithMain are v3-only, so
+    # that build fails at the first #include rather than at configure time.
+    FIND_PACKAGE_ARGS 3 NAMES Catch2
 )
 
 FetchContent_MakeAvailable(Catch2)
@@ -1354,6 +1358,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             COMMENT "Rendering the embedded UI at each display profile"
         )
     endif()
+
+    # The desktop counterpart, sharing the same screenshot hook but none of the
+    # display fixtures: it photographs the published UI rather than judging a
+    # scale factor, so it wants the desktop layout and needs nothing synthesised
+    # about the panel. Its output is what the AppStream metainfo and the store
+    # listings point at, which is why it is a target you run and look at rather
+    # than a CTest test.
+    if(TARGET rpi-imager AND NOT BUILD_EMBEDDED AND ENABLE_TEST_HOOKS)
+        add_custom_target(screenshots_desktop
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/screenshots/shots.sh
+                    $<TARGET_FILE:rpi-imager>
+                    ${CMAKE_CURRENT_BINARY_DIR}/desktop_screenshots
+            DEPENDS rpi-imager
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Rendering the desktop UI, one PNG per wizard page"
+        )
+    endif()
 endif()
 
 # ============================================================================
@@ -2294,6 +2315,27 @@ add_dependencies(device_info_test device_info_probe)
 
 rpi_discover_tests(device_info_test)
 
+# ── screenshot page list ────────────────────────────────────────────────────
+# The runner itself is a custom target below, but the list it is driven from
+# names steps in WizardContainer.qml and published names in the metainfo, and
+# is silently wrong when either moves. Reading three files costs nothing.
+add_executable(screenshot_pages_test screenshot_pages_test.cpp)
+
+target_link_libraries(screenshot_pages_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_definitions(screenshot_pages_test PRIVATE
+    SCREENSHOT_PAGES_FILE="${CMAKE_CURRENT_SOURCE_DIR}/screenshots/pages.txt"
+    WIZARD_CONTAINER_QML="${CMAKE_CURRENT_SOURCE_DIR}/../wizard/WizardContainer.qml"
+    METAINFO_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml.in"
+)
+
+target_compile_features(screenshot_pages_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(screenshot_pages_test)
+
 # ── suspend inhibition ──────────────────────────────────────────────────────
 # The machine must not go to sleep while a card is being written, and letting
 # go of the inhibit must not hold the application open afterwards. The FIFO it
@@ -2302,9 +2344,15 @@ rpi_discover_tests(device_info_test)
 if(TARGET Qt6::DBus)
     add_executable(suspend_inhibitor_probe
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.cpp
         ${PLATFORM_QUIRKS_SRC}
         suspend_inhibitor_probe.cpp
     )
+
+    # LinuxSuspendInhibitor derives from SuspendInhibitor, so the probe needs
+    # the base's constructor and destructor, and AUTOMOC to emit the vtable
+    # entries its Q_OBJECT declares.
+    set_target_properties(suspend_inhibitor_probe PROPERTIES AUTOMOC ON)
 
     target_include_directories(suspend_inhibitor_probe PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -2322,6 +2370,7 @@ if(TARGET Qt6::DBus)
     # under dbus-run-session so the bus is private to the case.
     add_executable(gnome_inhibitor_probe
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.cpp
         ${PLATFORM_QUIRKS_SRC}
         gnome_inhibitor_probe.cpp
     )
