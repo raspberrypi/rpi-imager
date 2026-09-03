@@ -423,8 +423,9 @@ ComboBox {
                     if (PlatformHelper.isScrollInverted(event.inverted)) {
                         dy = -dy
                     }
-                    
-                    var newY = dropdownList.contentY + dy
+
+                    // dy is now positive for an "up" gesture, and up means earlier in the list, so contentY decreases.
+                    var newY = dropdownList.contentY - dy
                     var maxY = Math.max(0, dropdownList.contentHeight - dropdownList.height)
                     newY = Math.max(0, Math.min(newY, maxY))
                     
