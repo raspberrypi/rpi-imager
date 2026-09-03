@@ -805,6 +805,102 @@ add_custom_target(test_ringbuffer
 )
 
 # ============================================================================
+# runWithTimeout Lifetime Hazards
+# ============================================================================
+# runWithTimeout() detaches its worker thread on both the timeout and the
+# cancellation path, abandoning a thread that still holds references to the
+# promise and completion flag on the frame being returned from. These cases
+# provoke that deliberately so a sanitiser can be pointed at it.
+#
+# The cases are tagged [.timeout-hazard] -- hidden, so catch_discover_tests
+# does not register them and an ordinary `ctest` run never executes them. That
+# is deliberate: without instrumentation the detached worker writes through a
+# dangling reference and segfaults the binary, which is the behaviour under
+# test but is not a useful CI signal. Only the [timeout-utils] control case,
+# which takes the joined path, runs by default.
+#
+# Build with RPI_IMAGER_TEST_SANITIZER and select the hidden tag explicitly:
+#
+#   cmake -B build-asan -DBUILD_TESTING=ON -DRPI_IMAGER_TEST_SANITIZER=address
+#   cmake --build build-asan --target timeout_utils_test
+#   ASAN_OPTIONS=detect_stack_use_after_return=1 \
+#       ./build-asan/src/test/timeout_utils_test "[timeout-hazard]"
+#
+# ASan reports stack-use-after-return at timeout_utils.h:100 and TSan reports
+# heap-use-after-free between timeout_utils.h:101 and the promise destructor.
+# Note that ASan stops at the first report, so run the two hazard cases
+# separately to see both.
+
+set(RPI_IMAGER_TEST_SANITIZER "none" CACHE STRING
+    "Sanitizer to build timeout_utils_test with: none, address or thread")
+set_property(CACHE RPI_IMAGER_TEST_SANITIZER PROPERTY STRINGS none address thread)
+
+# Header-only and free of Qt, so this builds without a device or a download --
+# which also means nothing else has pulled in the thread library for us.
+find_package(Threads REQUIRED)
+
+add_executable(timeout_utils_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../timeout_utils.h
+    timeout_utils_test.cpp
+)
+
+target_link_libraries(timeout_utils_test PRIVATE
+    Catch2::Catch2WithMain
+    Threads::Threads
+)
+
+target_include_directories(timeout_utils_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(timeout_utils_test PRIVATE cxx_std_20)
+target_compile_options(timeout_utils_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+if(NOT RPI_IMAGER_TEST_SANITIZER STREQUAL "none")
+    if(MSVC)
+        message(FATAL_ERROR "RPI_IMAGER_TEST_SANITIZER needs a GCC/Clang-style driver")
+    endif()
+    # Optimisation level is chosen per sanitiser, because it changes which
+    # diagnosis you get:
+    #
+    #   ASan at -O0  -- runWithTimeout stays out of line, so the report is
+    #                   stack-use-after-return against runWithTimeout's own
+    #                   frame, naming `completed` at timeout_utils.h:100.
+    #                   Inlined at -O1+ it still fires, but as
+    #                   stack-use-after-scope against the caller's frame.
+    #   TSan at -O1  -- reports heap-use-after-free between set_value() at
+    #                   timeout_utils.h:101 and ~promise() at
+    #                   timeout_utils.h:129, which states the bug outright.
+    #                   At -O0 it reports instead as a plain data race on the
+    #                   dead frame; still a true positive, but it fingers the
+    #                   test's own clobber helper rather than the destructor.
+    if(RPI_IMAGER_TEST_SANITIZER STREQUAL "thread")
+        set(_hazard_opt -O1)
+    else()
+        set(_hazard_opt -O0)
+    endif()
+    target_compile_options(timeout_utils_test PRIVATE
+        -fsanitize=${RPI_IMAGER_TEST_SANITIZER} -fno-omit-frame-pointer -g ${_hazard_opt})
+    target_link_options(timeout_utils_test PRIVATE
+        -fsanitize=${RPI_IMAGER_TEST_SANITIZER})
+    # Catch2 itself is not instrumented by this option. Harmless here -- it
+    # runs single-threaded and owns none of the memory under test.
+    message(STATUS "timeout_utils_test: building with -fsanitize=${RPI_IMAGER_TEST_SANITIZER}")
+endif()
+
+rpi_discover_tests(timeout_utils_test)
+
+add_custom_target(test_timeout_utils
+    COMMAND timeout_utils_test
+    DEPENDS timeout_utils_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running timeout utils tests (hazard cases excluded)"
+)
+
+# ============================================================================
 # Embedded Display Scaling Matrix
 # ============================================================================
 # applyEmbeddedDisplayScaling() chooses the embedded UI scale by reading the
