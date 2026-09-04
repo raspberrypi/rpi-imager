@@ -3699,3 +3699,133 @@ TEST_CASE("The same auth key arriving twice is not a conflict", "[imagewriter][u
     CHECK(w.getRuntimeConnectToken() == key);
     w.clearConnectToken();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The debug switches, and the multi-file write
+//
+// The debug toggles are not developer-only: they are what support asks a
+// user to change when a write fails on their machine. Direct I/O off,
+// periodic sync off, async I/O off, a shallower queue, device limits
+// ignored. Each one has to still produce a correct card, or the advice makes
+// things worse.
+//
+// The multi-file write is the other shape of write entirely. An archive with
+// several files in it -- which is how the OS list ships EEPROM and bootloader
+// images -- is not written as a disk image at all: the card is formatted and
+// the files are copied onto the filesystem.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+WriteOutcome writeWithToggles(const std::function<void(ImageWriter &)> &configure)
+{
+    ExtractFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    configure(w);
+    w.setSrc(fx.archiveUrl(), 0, kFixturePayload);
+    w.setDst(fx.target(), kFixturePayload);
+
+    WriteOutcome out = runWrite(w);
+    if (out.succeeded)
+        REQUIRE(fx.written() == fixturePayload());
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("A write with direct I/O disabled still lands correctly", "[imagewriter][toggles]")
+{
+    const WriteOutcome out = writeWithToggles([](ImageWriter &w) { w.setDebugDirectIO(false); });
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.failed);
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("A write with async I/O disabled still lands correctly", "[imagewriter][toggles]")
+{
+    // The sync fallback support recommends when io_uring misbehaves.
+    const WriteOutcome out = writeWithToggles([](ImageWriter &w) { w.setDebugAsyncIO(false); });
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.failed);
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("A write with periodic sync disabled still lands correctly", "[imagewriter][toggles]")
+{
+    const WriteOutcome out = writeWithToggles([](ImageWriter &w) { w.setDebugPeriodicSync(false); });
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.failed);
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("A write with a shallow async queue still lands correctly", "[imagewriter][toggles]")
+{
+    const WriteOutcome out = writeWithToggles([](ImageWriter &w) { w.setDebugAsyncQueueDepth(2); });
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.failed);
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("A write ignoring device limits still lands correctly", "[imagewriter][toggles]")
+{
+    // This one reallocates the ring buffers after the device is opened,
+    // which is a different allocation path than every other write takes.
+    const WriteOutcome out =
+        writeWithToggles([](ImageWriter &w) { w.setDebugIgnoreDeviceLimits(true); });
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.failed);
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("The debug toggles read back what was set", "[imagewriter][toggles]")
+{
+    ImageWriter w(nullptr);
+
+    w.setDebugDirectIO(false);
+    w.setDebugPeriodicSync(false);
+    w.setDebugAsyncIO(false);
+    w.setDebugAsyncQueueDepth(4);
+    w.setDebugIgnoreDeviceLimits(true);
+    w.setDebugVerboseLogging(true);
+
+    // QML binds to these; a setter that does not stick leaves the dialog
+    // showing one thing and the write doing another.
+    CHECK_FALSE(w.getDebugDirectIO());
+    CHECK_FALSE(w.getDebugPeriodicSync());
+    CHECK_FALSE(w.getDebugAsyncIO());
+    CHECK(w.getDebugAsyncQueueDepth() == 4);
+    CHECK(w.getDebugIgnoreDeviceLimits());
+    CHECK(w.getDebugVerboseLogging());
+}
+
+TEST_CASE("A multi-file archive that cannot be mounted reports it", "[imagewriter][multifile]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString archive = QDir(dir.path()).filePath(QStringLiteral("bootloader.zip"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/bootloader-3files.zip"), archive));
+
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(64 * 1024 * 1024));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    // multifilesinzip: the card is formatted and the files copied onto the
+    // filesystem, rather than the archive being written as a disk image.
+    w.setSrc(QUrl::fromLocalFile(archive), 0, 0, QByteArray(), true);
+    w.setDst(target, 64 * 1024 * 1024);
+
+    const WriteOutcome out = runWrite(w, 90000);
+
+    // Mounting the freshly formatted partition needs privileges the imager
+    // does not have here, so this ends in an error -- which is the point:
+    // it has to be an error the user sees, not a silent success leaving a
+    // formatted card with no bootloader files on it.
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+    CHECK(out.failed);
+}
