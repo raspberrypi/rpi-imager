@@ -1420,6 +1420,114 @@ target_compile_features(drive_format_thread_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(drive_format_thread_test)
 
+# ── ImageWriter and the models behind the pickers ───────────────────────────
+#
+# The QML-facing backend. It was excluded from coverage as unreachable, which
+# was only true of the Qt that happened to be installed: it needs no QML
+# engine -- it builds its models as members and leaves the engine null -- so a
+# QGuiApplication on the offscreen platform reaches all of it.
+#
+# imagewriter.cpp, hwlistmodel.cpp and oslistmodel.cpp are compiled into the
+# QML module rather than into SOURCES for a GUI build, so they are named here
+# explicitly alongside the rest of the application's sources. main.cpp is the
+# only one left out; this target supplies its own.
+if(NOT BUILD_CLI_ONLY)
+    # SOURCES is the application's own final list, so this target cannot
+    # drift from what actually ships. main.cpp is dropped because this binary
+    # supplies its own.
+    set(IMAGE_WRITER_TEST_SOURCES)
+    foreach(_src IN LISTS SOURCES)
+        # .qrc is deliberately included: the timezone, country and keymap
+        # lists the customisation dialog is built from are Qt resources, and
+        # a library without them hands back empty lists that look like a
+        # product bug rather than a missing resource.
+        if(_src MATCHES "\\.(cpp|cc|c|mm|qrc)$" AND NOT _src MATCHES "(^|/)main\\.cpp$")
+            if(IS_ABSOLUTE "${_src}")
+                list(APPEND IMAGE_WRITER_TEST_SOURCES "${_src}")
+            else()
+                list(APPEND IMAGE_WRITER_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../${_src}")
+            endif()
+        endif()
+    endforeach()
+
+    # ...and the QML-declared types, which a GUI build compiles into the QML
+    # module rather than into SOURCES.
+    set(IMAGER_QML_CPP_TYPES_ABS)
+    foreach(_src IN LISTS IMAGER_QML_CPP_TYPES)
+        list(APPEND IMAGER_QML_CPP_TYPES_ABS "${CMAKE_CURRENT_SOURCE_DIR}/../${_src}")
+    endforeach()
+
+    # One static library for the whole application, shared by every test
+    # target that needs it.
+    #
+    # Listing the sources per target meant compiling the same hundred files
+    # once for each -- and, under coverage instrumentation, meant several
+    # objects for the same source each writing its own .gcda. That is the
+    # "overwriting an existing profile data with a different checksum"
+    # warning: the counts were being split across duplicate objects and then
+    # merged back by gcovr. One object per source removes both problems.
+    add_library(rpi_imager_testable STATIC
+        ${IMAGE_WRITER_TEST_SOURCES}
+        ${IMAGER_QML_CPP_TYPES_ABS}
+        ${DEPENDENCIES}
+    )
+
+    set_target_properties(rpi_imager_testable PROPERTIES AUTOMOC ON AUTORCC ON)
+
+    # PUBLIC throughout: consumers are test binaries that need the same
+    # headers and the same libraries, and should not have to restate them.
+    target_include_directories(rpi_imager_testable PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${GNUTLS_INCLUDE_DIRS}
+        ${LIBLZMA_INCLUDE_DIRS}
+        ${LibArchive_INCLUDE_DIR}
+        ${LIBUSB_INCLUDE_DIR}
+    )
+
+    target_link_libraries(rpi_imager_testable PUBLIC
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+        Qt6::Svg
+        Qt6::Network
+        Qt6::Concurrent
+        CURL::libcurl
+        ${LibArchive_LIBRARIES}
+        ${LIBLZMA_LIBRARIES}
+        ${ZSTD_LIBRARIES}
+        ${GNUTLS_LIBRARIES}
+        ${LIBUSB_LIBRARIES}
+        ${CMAKE_DL_LIBS}
+    )
+
+    # customization_generator hashes passwords through the bundled yescrypt.
+    if(TARGET yescrypt)
+        target_link_libraries(rpi_imager_testable PUBLIC yescrypt)
+    endif()
+
+    # The Linux URI handler is a DBus adaptor, so the same guard the
+    # application uses applies here.
+    if(TARGET Qt6::DBus)
+        target_link_libraries(rpi_imager_testable PUBLIC Qt6::DBus)
+    endif()
+
+    rpi_link_platform_file_ops(rpi_imager_testable)
+
+    target_compile_features(rpi_imager_testable PUBLIC cxx_std_20)
+
+    add_executable(image_writer_test image_writer_test.cpp)
+    set_target_properties(image_writer_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(image_writer_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+    rpi_discover_tests(image_writer_test)
+
+    # The picker models: same library, its own cases.
+    add_executable(picker_models_test picker_models_test.cpp)
+    set_target_properties(picker_models_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(picker_models_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+    rpi_discover_tests(picker_models_test)
+endif()
+
 # ── OS list parsing ─────────────────────────────────────────────────────────
 # Pure JSON transformations that decide what the user sees in the OS chooser.
 add_executable(oslist_parser_test
