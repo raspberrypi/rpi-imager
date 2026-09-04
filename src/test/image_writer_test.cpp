@@ -4573,3 +4573,97 @@ TEST_CASE("Generating a key does not replace one already there", "[imagewriter][
     // Overwriting somebody's SSH key would be unforgivable.
     CHECK(w.getDefaultPubKey().trimmed() == key);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sweeping the customisation dropdowns
+//
+// The existing cases check these lists are not empty. That catches a
+// resource that failed to compile in, but not a list with a malformed row in
+// the middle of it -- which is what the user meets as a dropdown entry that
+// sets nothing, or one that writes an invalid value into the card's locale
+// configuration and leaves the Pi with a keyboard that types the wrong keys.
+//
+// Every entry, checked in full, is cheap here and impossible to notice by
+// eye across several hundred rows.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Every timezone offered is one the system knows", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList zones = w.getTimezoneList();
+    REQUIRE(zones.size() > 100);
+
+    int unknown = 0;
+    QStringList examples;
+    for (const QString &zone : zones) {
+        if (zone.trimmed().isEmpty()) {
+            ++unknown;
+            continue;
+        }
+        // A zone the tz database does not have is one systemd-timesyncd will
+        // reject on first boot, leaving the Pi on UTC.
+        if (!QTimeZone(zone.toUtf8()).isValid()) {
+            ++unknown;
+            if (examples.size() < 5)
+                examples << zone;
+        }
+    }
+    INFO("unrecognised: " << examples.join(QStringLiteral(", ")).toStdString());
+    CHECK(unknown == 0);
+}
+
+TEST_CASE("Every country offered is well formed", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList countries = w.getCountryList();
+    REQUIRE(countries.size() > 50);
+
+    QStringList bad;
+    for (const QString &c : countries) {
+        // These become the Wi-Fi regulatory domain, which the kernel takes as
+        // a two-letter ISO code.
+        if (c.trimmed().isEmpty() || c != c.trimmed()) {
+            if (bad.size() < 5) bad << QStringLiteral("[%1]").arg(c);
+        }
+    }
+    INFO("malformed: " << bad.join(QStringLiteral(", ")).toStdString());
+    CHECK(bad.isEmpty());
+
+    CHECK(countries.contains(QStringLiteral("GB")));
+}
+
+TEST_CASE("Every keyboard layout offered is well formed", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList layouts = w.getKeymapLayoutList();
+    REQUIRE(layouts.size() > 20);
+
+    QStringList bad;
+    for (const QString &l : layouts) {
+        if (l.trimmed().isEmpty() || l != l.trimmed() || l.contains(QLatin1Char(' '))) {
+            if (bad.size() < 5) bad << QStringLiteral("[%1]").arg(l);
+        }
+    }
+    // A layout name with stray whitespace is written into the card's keyboard
+    // configuration verbatim and silently ignored on boot.
+    INFO("malformed: " << bad.join(QStringLiteral(", ")).toStdString());
+    CHECK(bad.isEmpty());
+
+    CHECK(layouts.contains(QStringLiteral("gb")));
+}
+
+TEST_CASE("The lists have no duplicate entries", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+
+    // A duplicate is a dropdown showing the same choice twice, which looks
+    // like a bug to the user even though either one works.
+    const QStringList countries = w.getCountryList();
+    CHECK(QSet<QString>(countries.cbegin(), countries.cend()).size() == countries.size());
+
+    const QStringList layouts = w.getKeymapLayoutList();
+    CHECK(QSet<QString>(layouts.cbegin(), layouts.cend()).size() == layouts.size());
+
+    const QStringList zones = w.getTimezoneList();
+    CHECK(QSet<QString>(zones.cbegin(), zones.cend()).size() == zones.size());
+}

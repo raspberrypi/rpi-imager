@@ -3218,7 +3218,11 @@ QStringList ImageWriter::getTimezoneList()
     QStringList timezones;
     QFile f(":/timezones.txt");
     if (f.open(QFile::ReadOnly | QFile::Text)) {
-        timezones = QString::fromUtf8(f.readAll()).split('\n');
+        // SkipEmptyParts, as getCountryList() and getKeymapLayoutList()
+        // already do: the resource ends with a newline, so splitting without
+        // it left a blank entry at the end of the timezone dropdown that set
+        // no timezone at all when picked.
+        timezones = QString::fromUtf8(f.readAll()).split('\n', Qt::SkipEmptyParts);
         for (QString &s : timezones)
             s = s.trimmed();
         f.close();
