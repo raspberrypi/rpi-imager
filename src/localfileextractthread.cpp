@@ -229,9 +229,27 @@ bool LocalFileExtractThread::_testArchiveFormat()
             
             if (dataSize > 0)
             {
-                // libarchive can both read the header AND extract data
-                canUseArchive = true;
-                qDebug() << "File can be handled by libarchive as archive format";
+                // Getting bytes back is not the question -- libarchive is
+                // configured with format_raw, which matches any file at all
+                // and hands its contents straight back. Asking only "did I
+                // get data" therefore said yes to a plain uncompressed
+                // image, and every "Use custom" write of one went through
+                // libarchive rather than the direct copy written for it.
+                //
+                // What matters is whether libarchive actually recognised
+                // something. A real container (zip, tar, iso) reports its
+                // own format; a compressed image reports RAW with a
+                // decompression filter -- .img.xz is RAW + XZ, which must
+                // still go through libarchive or the card gets the
+                // compressed bytes. Only RAW with no filter at all is a
+                // plain image, and that is the direct copy's case.
+                const int format = archive_format(a);
+                const int filter = archive_filter_code(a, 0);
+                const bool plainImage = (format == ARCHIVE_FORMAT_RAW)
+                                        && (filter == ARCHIVE_FILTER_NONE);
+                canUseArchive = !plainImage;
+                qDebug() << "libarchive probe: format" << format << "filter" << filter
+                         << (canUseArchive ? "-> extract" : "-> direct copy");
             }
             else
             {
