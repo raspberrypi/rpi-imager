@@ -24,6 +24,8 @@ class AcceleratedCryptographicHash;
 namespace fastboot { class FastbootProtocol; }
 namespace rpiboot { class IUsbTransport; }
 
+namespace rpiboot { class IUsbTransport; class LibusbContext; struct UsbDeviceInfo; }
+
 class FastbootFlashThread : public QThread
 {
     Q_OBJECT
@@ -103,6 +105,20 @@ protected:
     // which writes a mountable FAT32.  Emits success()/error() itself.
     bool performErase(class fastboot::FastbootProtocol& fb,
                       class rpiboot::IUsbTransport& transport);
+
+    // How the fastboot device is opened.
+    //
+    // Everything past this point drives the device through IUsbTransport,
+    // which is why the individual steps -- erase, customisation, boot order
+    // -- were already testable against the mock. Constructing a concrete
+    // LibusbTransport was the single thing that kept runImpl(), the whole
+    // flash sequence, reachable only with hardware attached. Behind a
+    // virtual it is reachable without.
+    //
+    // The context is passed in rather than created here so its lifetime
+    // stays exactly where it was: it has to outlive the transport.
+    virtual std::unique_ptr<class rpiboot::IUsbTransport> openFastbootTransport(
+        class rpiboot::LibusbContext& ctx, const struct rpiboot::UsbDeviceInfo& target);
 
     // Best-effort: after the OS image has been flashed, set the
     // EEPROM's BOOT_ORDER so the chosen storage device boots first on

@@ -732,6 +732,12 @@ bool FastbootFlashThread::performErase(fastboot::FastbootProtocol& fb,
     return true;
 }
 
+std::unique_ptr<rpiboot::IUsbTransport> FastbootFlashThread::openFastbootTransport(
+    rpiboot::LibusbContext& ctx, const rpiboot::UsbDeviceInfo& target)
+{
+    return ctx.openDevice(target);
+}
+
 void FastbootFlashThread::runImpl()
 {
     emit preparationStatusUpdate(tr("Connecting to fastboot device..."));
@@ -741,7 +747,7 @@ void FastbootFlashThread::runImpl()
     deviceOpenTimer.start();
 
     rpiboot::LibusbContext ctx;
-    std::unique_ptr<rpiboot::LibusbTransport> transport;
+    std::unique_ptr<rpiboot::IUsbTransport> transport;
 
     rpiboot::UsbDeviceInfo targetInfo{};
     targetInfo.vendorId = FASTBOOT_VID;
@@ -754,7 +760,7 @@ void FastbootFlashThread::runImpl()
         targetInfo.deviceAddress = static_cast<uint8_t>(parts[1].toUInt());
     }
 
-    transport = ctx.openDevice(targetInfo);
+    transport = openFastbootTransport(ctx, targetInfo);
     if (!transport || !transport->isOpen()) {
         emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), false, _fastbootId);
         emit error(tr("Failed to open fastboot device: %1").arg(_fastbootId));

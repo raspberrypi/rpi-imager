@@ -27,6 +27,9 @@
 #include "fastbootflashthread.h"
 #include "fastboot/fastboot_protocol.h"
 #include "rpiboot/test/mock_usb_transport.h"
+#include <memory>
+#include "rpiboot/libusb_transport.h"
+#include "rpiboot/rpiboot_types.h"
 
 #include <QCoreApplication>
 #include <QString>
@@ -58,6 +61,7 @@ public:
     using FastbootFlashThread::performErase;
     using FastbootFlashThread::applyCustomisation;
     using FastbootFlashThread::applyBootOrderUpdate;
+    using FastbootFlashThread::runImpl;
 };
 
 // A transport that can run a callback after each command reaches the "wire",
@@ -641,4 +645,179 @@ TEST_CASE("An EEPROM with no bootconf.txt is not written back",
     const QStringList cmds = commandsSent(mock);
     INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
     CHECK(cmds.filter(QStringLiteral("eeprom-update")).isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// 6. The flash sequence itself
+//
+// runImpl() opens the device and drives the whole flash. It used to be
+// reachable only with hardware attached -- not because of anything it does,
+// but because the one line that obtains the transport constructed a concrete
+// LibusbTransport. Everything after that line already goes through
+// IUsbTransport. Behind a virtual, the sequence runs against the mock.
+//
+// The case that matters most is the refusal: before any destructive command
+// the device has to identify as a Pi. Get that wrong and the imager erases
+// whatever else happened to be in fastboot mode on the bus.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Forwards to a mock the test owns.
+//
+// runImpl() holds the transport in a local unique_ptr, so whatever it is
+// handed is destroyed when it returns. Handing it the mock directly and
+// keeping a pointer to inspect afterwards is a use-after-free -- which is
+// exactly what the first version of this did. The thread owns this thin
+// view instead; the mock outlives it.
+class TransportView : public rpiboot::IUsbTransport
+{
+public:
+    explicit TransportView(MockUsbTransport &target) : _t(target) {}
+
+    bool controlTransfer(uint8_t requestType, uint8_t request, uint16_t wValue,
+                         uint16_t wIndex, std::span<const uint8_t> data,
+                         int timeoutMs) override
+    {
+        return _t.controlTransfer(requestType, request, wValue, wIndex, data, timeoutMs);
+    }
+    int controlTransferIn(uint8_t requestType, uint8_t request, uint16_t wValue,
+                          uint16_t wIndex, std::span<uint8_t> buffer,
+                          int timeoutMs) override
+    {
+        return _t.controlTransferIn(requestType, request, wValue, wIndex, buffer, timeoutMs);
+    }
+    int bulkWrite(uint8_t endpoint, std::span<const uint8_t> data, int timeoutMs) override
+    {
+        return _t.bulkWrite(endpoint, data, timeoutMs);
+    }
+    int bulkRead(uint8_t endpoint, std::span<uint8_t> buffer, int timeoutMs) override
+    {
+        return _t.bulkRead(endpoint, buffer, timeoutMs);
+    }
+    bool isOpen() const override { return _t.isOpen(); }
+    std::string interfaceString() const override { return _t.interfaceString(); }
+    uint8_t outEndpoint() const override { return _t.outEndpoint(); }
+    uint8_t inEndpoint() const override { return _t.inEndpoint(); }
+
+private:
+    MockUsbTransport &_t;
+};
+
+// A thread whose device is a mock the test keeps.
+class MockedFlashThread : public TestableFlashThread
+{
+public:
+    using TestableFlashThread::TestableFlashThread;
+
+    MockUsbTransport mock;              // outlives runImpl()
+    bool openShouldFail = false;
+
+protected:
+    std::unique_ptr<rpiboot::IUsbTransport> openFastbootTransport(
+        rpiboot::LibusbContext &, const rpiboot::UsbDeviceInfo &) override
+    {
+        if (openShouldFail)
+            return nullptr;
+        return std::make_unique<TransportView>(mock);
+    }
+};
+
+} // namespace
+
+TEST_CASE("A device that will not identify as a Pi is not flashed",
+          "[fastboot][flash]")
+{
+    // The guard in front of every destructive command. Something else in
+    // fastboot mode on the same bus -- a phone, a dev board -- must not be
+    // erased and rewritten because it answered.
+    MockedFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                        QStringLiteral("mmcblk0")};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    // Nothing destructive was sent.
+    const QStringList cmds = commandsSent(t.mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    for (const QString &c : cmds) {
+        CHECK_THAT(c.toStdString(), !ContainsSubstring("erase"));
+        CHECK_THAT(c.toStdString(), !ContainsSubstring("partinit"));
+        CHECK_THAT(c.toStdString(), !ContainsSubstring("flash"));
+    }
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK_THAT(log.errors.last().toStdString(), ContainsSubstring("Refusing to flash"));
+}
+
+TEST_CASE("A device that cannot be opened is reported", "[fastboot][flash]")
+{
+    MockedFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                        QStringLiteral("mmcblk0")};
+    t.openShouldFail = true;
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK_THAT(log.errors.last().toStdString(), ContainsSubstring("Failed to open"));
+}
+
+TEST_CASE("An erase runs the full sequence against an identified Pi",
+          "[fastboot][flash]")
+{
+    // The erase entry, driven through runImpl() rather than by calling
+    // performErase() directly -- so the identification, the mode decision
+    // and the erase all run in the order the application uses them.
+    class ErasingThread : public MockedFlashThread
+    {
+    public:
+        using MockedFlashThread::MockedFlashThread;
+
+    protected:
+        std::unique_ptr<rpiboot::IUsbTransport> openFastbootTransport(
+            rpiboot::LibusbContext &ctx, const rpiboot::UsbDeviceInfo &info) override
+        {
+            // Identify as a Pi, and answer the four erase commands.
+            mock.setInterfaceString(rpiboot::FASTBOOT_INTERFACE_DESCRIPTOR);
+            for (int i = 0; i < 4; ++i)
+                mock.queueBulkReadResponse(okay());
+            return MockedFlashThread::openFastbootTransport(ctx, info);
+        }
+    };
+
+    ErasingThread t{QUrl(QStringLiteral("internal://format")), QStringLiteral("mmcblk0")};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    const QStringList cmds = commandsSent(t.mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+
+    REQUIRE(cmds.size() >= 3);
+    CHECK(cmds[0] == QStringLiteral("erase:mmcblk0"));
+    CHECK(cmds[1] == QStringLiteral("oem partinit mmcblk0 dos"));
+    CHECK(cmds[2] == QStringLiteral("oem partapp mmcblk0 c"));
+    CHECK(log.success);
+}
+
+TEST_CASE("A cancelled flash does not reach the device", "[fastboot][flash]")
+{
+    MockedFlashThread t{QUrl(QStringLiteral("internal://format")),
+                        QStringLiteral("mmcblk0")};
+    SignalLog log;
+    log.attach(&t);
+    t.cancel();
+
+    t.runImpl();
+
+    CHECK_FALSE(log.success);
+    const QStringList cmds = commandsSent(t.mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    for (const QString &c : cmds)
+        CHECK_THAT(c.toStdString(), !ContainsSubstring("erase:"));
 }
