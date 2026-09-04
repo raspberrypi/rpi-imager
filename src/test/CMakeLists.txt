@@ -1325,6 +1325,52 @@ target_compile_features(oslist_parser_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(oslist_parser_test)
 
+# ── fastboot flash thread ───────────────────────────────────────────────────
+# Covers the erase path: the most destructive operation in the fastboot flow.
+add_executable(fastboot_flash_thread_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastbootflashthread.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/pieeprom.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/eeprom_signer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/libusb_transport.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../connect_device_registrar.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../systemmemorymanager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
+    fastboot_flash_thread_test.cpp
+)
+
+set_target_properties(fastboot_flash_thread_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(fastboot_flash_thread_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS}
+    ${LIBUSB_INCLUDE_DIR}
+    ${LibArchive_INCLUDE_DIR}
+)
+
+# Catch2 without its main(): this target provides its own so a
+# QCoreApplication exists before any case runs (see the bottom of the test).
+target_link_libraries(fastboot_flash_thread_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Network
+    Qt6::Concurrent
+    CURL::libcurl
+    ${LibArchive_LIBRARIES}
+    ${GNUTLS_LIBRARIES}
+    ${LIBUSB_LIBRARIES}
+)
+
+target_compile_features(fastboot_flash_thread_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(fastboot_flash_thread_test)
+
 # ============================================================================
 # FirmwareManager
 # ============================================================================

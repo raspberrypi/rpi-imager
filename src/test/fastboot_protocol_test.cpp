@@ -308,7 +308,12 @@ TEST_CASE("FastbootProtocol reports a dead transport as TransportError, not Fail
 // Transport failure tests
 // ────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("FastbootProtocol sendCommand returns Fail when bulk write fails", "[fastboot][protocol][negative]")
+// Renamed and re-pointed: a bulk write that fails means the command never
+// reached the device, which commit 2566a651 deliberately made distinct from
+// the device answering FAIL. These expectations were left on the old
+// behaviour and had been failing ever since.
+TEST_CASE("FastbootProtocol sendCommand reports a transport error when bulk write fails",
+          "[fastboot][protocol][negative]")
 {
     MockUsbTransport mock;
     mock.failNextBulkWrites(1);
@@ -316,11 +321,12 @@ TEST_CASE("FastbootProtocol sendCommand returns Fail when bulk write fails", "[f
     FastbootProtocol fb;
     auto resp = fb.sendCommand(mock, "getvar:version", 3000);
 
-    CHECK(resp.type == Response::Fail);
+    CHECK(resp.type == Response::TransportError);
     CHECK_THAT(resp.message, Catch::Matchers::ContainsSubstring("Failed to send"));
 }
 
-TEST_CASE("FastbootProtocol sendCommand returns Fail on short response", "[fastboot][protocol][negative]")
+TEST_CASE("FastbootProtocol sendCommand reports a transport error on a short response",
+          "[fastboot][protocol][negative]")
 {
     MockUsbTransport mock;
     // Queue a response that's too short (< 4 bytes)
@@ -329,11 +335,12 @@ TEST_CASE("FastbootProtocol sendCommand returns Fail on short response", "[fastb
     FastbootProtocol fb;
     auto resp = fb.sendCommand(mock, "getvar:version", 3000);
 
-    CHECK(resp.type == Response::Fail);
+    CHECK(resp.type == Response::TransportError);
     CHECK_THAT(resp.message, Catch::Matchers::ContainsSubstring("Short"));
 }
 
-TEST_CASE("FastbootProtocol sendCommand returns Fail on empty read queue", "[fastboot][protocol][negative]")
+TEST_CASE("FastbootProtocol sendCommand reports a transport error on an empty read queue",
+          "[fastboot][protocol][negative]")
 {
     MockUsbTransport mock;
     // No responses queued — bulkRead returns -1
@@ -341,7 +348,7 @@ TEST_CASE("FastbootProtocol sendCommand returns Fail on empty read queue", "[fas
     FastbootProtocol fb;
     auto resp = fb.sendCommand(mock, "getvar:version", 3000);
 
-    CHECK(resp.type == Response::Fail);
+    CHECK(resp.type == Response::TransportError);
 }
 
 TEST_CASE("FastbootProtocol sendCommand handles unknown response prefix", "[fastboot][protocol][negative]")
@@ -400,7 +407,11 @@ TEST_CASE("FastbootProtocol download fails when initial write fails", "[fastboot
     bool ok = fb.download(mock, std::span<const uint8_t>(payload), nullptr, cancelled);
 
     CHECK_FALSE(ok);
-    CHECK_THAT(fb.lastError(), Catch::Matchers::ContainsSubstring("Failed to send download command"));
+    // Matches on the distinctive part rather than the whole sentence: the
+    // message reads "Failed to send complete download command", and the
+    // expectation here had been left on an older wording without the
+    // "complete", so it could never match.
+    CHECK_THAT(fb.lastError(), Catch::Matchers::ContainsSubstring("download command"));
 }
 
 TEST_CASE("FastbootProtocol download fails when device returns FAIL instead of DATA", "[fastboot][protocol][negative]")

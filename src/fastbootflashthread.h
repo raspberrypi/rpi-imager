@@ -72,7 +72,19 @@ signals:
 protected:
     void run() override;
 
-private:
+// Protected rather than private so a test can subclass and drive the parts
+// that already take their transport as a parameter.
+//
+// isEraseOperation(), performErase() and applyCustomisation() are what
+// decide whether a board is about to be wiped and what gets written to it,
+// and they were designed to take an IUsbTransport, which the tree already
+// has a mock for; src/test/fastboot_flash_thread_test.cpp drives all three
+// through it. applyBootOrderUpdate() is reachable the same way but is not
+// covered yet -- it needs a device EEPROM image queued up on the mock. The only thing standing in the way was that the whole class beyond
+// run() was private, so the sole way in was to start the thread and have it
+// look for a real device on the USB bus. Widening to protected changes
+// nothing for existing callers.
+protected:
     void runImpl();
     void downloadProducer();
     void decompressConsumerProducer();
