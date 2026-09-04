@@ -4667,3 +4667,40 @@ TEST_CASE("The lists have no duplicate entries", "[imagewriter][locale]")
     const QStringList zones = w.getTimezoneList();
     CHECK(QSet<QString>(zones.cbegin(), zones.cend()).size() == zones.size());
 }
+
+TEST_CASE("Every language offered actually applies", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList langs = w.getTranslations();
+    REQUIRE(langs.size() > 1);
+
+    // changeLanguage() loads :/i18n/rpi-imager_<code>.qm and, if the load
+    // fails, silently does nothing. So a language in the menu whose
+    // translation did not make it into the resource is one the user can
+    // select and watch nothing happen -- no error, no change.
+    //
+    // The existing case changes to one language. This one changes to every
+    // one, which is the only way to find the single entry that does not.
+    QStringList inert;
+    for (const QString &lang : langs) {
+        w.changeLanguage(lang);
+        if (w.getCurrentLanguage() != lang)
+            inert << lang;
+    }
+
+    INFO("did not apply: " << inert.join(QStringLiteral(", ")).toStdString());
+    CHECK(inert.isEmpty());
+}
+
+TEST_CASE("An unknown language is ignored rather than applied", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QString before = w.getCurrentLanguage();
+
+    w.changeLanguage(QStringLiteral("Klingon"));
+    w.changeLanguage(QString());
+
+    // Neither should move the selection; a name not in the list has no
+    // translation behind it.
+    CHECK(w.getCurrentLanguage() == before);
+}
