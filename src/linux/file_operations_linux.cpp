@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>   // major(), minor()
 #include <sys/ioctl.h>
 #include <linux/fs.h>
 #include <errno.h>
@@ -1068,14 +1069,25 @@ void LinuxFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
 FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
   FileOperations::DeviceIOLimits limits;
 
-  // Extract device name from path (e.g. "/dev/sda" -> "sda")
-  if (path.find("/dev/") != 0)
-    return limits;
-  std::string devname = path.substr(5);
-  if (devname.empty())
+  // Resolve the device by its major:minor rather than by trimming "/dev/"
+  // off the path.
+  //
+  // The previous form took everything after "/dev/" as the sysfs node name,
+  // which only works for a device sitting directly in /dev. Anything one
+  // level down -- "/dev/mapper/foo" (LVM, LUKS), "/dev/disk/by-id/usb-...",
+  // "/dev/md/0" -- became "/sys/block/mapper/foo/queue/", which does not
+  // exist, so every limit silently stayed zero and the caller sized its
+  // writes off nothing.
+  //
+  // /sys/dev/block/<major>:<minor> is a symlink the kernel maintains for
+  // every block device, so this works for all of them and follows symlinked
+  // paths for free.
+  struct stat st{};
+  if (stat(path.c_str(), &st) != 0 || !S_ISBLK(st.st_mode))
     return limits;
 
-  std::string queueDir = "/sys/block/" + devname + "/queue/";
+  const std::string queueDir = "/sys/dev/block/" + std::to_string(major(st.st_rdev)) + ":" +
+                               std::to_string(minor(st.st_rdev)) + "/queue/";
 
   // Read nr_requests — block layer scheduler queue depth
   {
