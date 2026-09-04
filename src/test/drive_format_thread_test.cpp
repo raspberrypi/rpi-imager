@@ -30,6 +30,8 @@
 #include <QFile>
 #include <QStringList>
 #include <QTemporaryDir>
+#include <QProcess>
+#include "fixture_process.h"
 
 using Catch::Matchers::ContainsSubstring;
 
@@ -272,4 +274,244 @@ TEST_CASE("A formatted device reports its size", "[format][device]")
                           | (quint32(quint8(mbr.at(0x1BE + 15))) << 24);
     INFO("partition sectors: " << sectors);
     CHECK(sectors > 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FAT32 geometry across card sizes
+//
+// DiskFormatter picks a cluster size from the card's capacity -- five bands,
+// from 512 bytes on a tiny card up to 16 KB above 16 GB. Everything else in
+// the boot sector is derived from that choice, so getting the band wrong
+// produces a filesystem that is valid-looking and wrong: the FAT is sized for
+// a different cluster count, and what reads it disagrees about where files
+// are.
+//
+// The formatter writes through the ordinary file interface, so this needs no
+// block device and no privileges. The files are sparse; only the tables near
+// the start are actually written.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+quint32 readLe32(const QByteArray &b, int off)
+{
+    return quint32(quint8(b.at(off)))
+         | (quint32(quint8(b.at(off + 1))) << 8)
+         | (quint32(quint8(b.at(off + 2))) << 16)
+         | (quint32(quint8(b.at(off + 3))) << 24);
+}
+
+quint16 readLe16(const QByteArray &b, int off)
+{
+    return quint16(quint8(b.at(off))) | (quint16(quint8(b.at(off + 1))) << 8);
+}
+
+// Formats a sparse file of the given size and returns its boot sector.
+struct Formatted
+{
+    bool ok = false;
+    QByteArray mbr;
+    QByteArray bootSector;
+    quint32 partitionStartLba = 0;
+};
+
+Formatted formatSizedImage(const QString &path, quint64 bytes)
+{
+    Formatted out;
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.resize(qint64(bytes)));   // sparse
+        f.close();
+    }
+
+    rpi_imager::DiskFormatter formatter;
+    const auto result = formatter.FormatDrive(path.toStdString());
+    if (!result.has_value())
+        return out;
+
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    out.mbr = f.read(512);
+    REQUIRE(out.mbr.size() == 512);
+
+    out.partitionStartLba = readLe32(out.mbr, 0x1BE + 8);
+    REQUIRE(out.partitionStartLba > 0);
+    REQUIRE(f.seek(qint64(out.partitionStartLba) * 512));
+    out.bootSector = f.read(512);
+    REQUIRE(out.bootSector.size() == 512);
+
+    out.ok = true;
+    return out;
+}
+
+// Copies the partition out of a formatted image and asks fsck.vfat what it
+// makes of it. An independent implementation is a far better oracle than
+// re-reading the fields we just wrote.
+bool haveFsck()
+{
+    return QFileInfo::exists(QStringLiteral("/usr/sbin/fsck.vfat"))
+        || QFileInfo::exists(QStringLiteral("/sbin/fsck.vfat"));
+}
+
+QString fsckPath()
+{
+    return QFileInfo::exists(QStringLiteral("/usr/sbin/fsck.vfat"))
+        ? QStringLiteral("/usr/sbin/fsck.vfat")
+        : QStringLiteral("/sbin/fsck.vfat");
+}
+
+bool partitionPassesFsck(const QString &image, quint32 startLba, QString *output)
+{
+    const QString extracted = image + QStringLiteral(".part");
+    {
+        QFile in(image);
+        if (!in.open(QIODevice::ReadOnly))
+            return false;
+        if (!in.seek(qint64(startLba) * 512))
+            return false;
+        QFile out(extracted);
+        if (!out.open(QIODevice::WriteOnly))
+            return false;
+        while (!in.atEnd()) {
+            const QByteArray chunk = in.read(4 * 1024 * 1024);
+            if (chunk.isEmpty())
+                break;
+            out.write(chunk);
+        }
+    }
+
+    QProcess proc;
+    proc.start(fsckPath(), {QStringLiteral("-n"), extracted});
+    proc.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+    if (output)
+        *output = QString::fromUtf8(proc.readAllStandardOutput()
+                                    + proc.readAllStandardError());
+    const bool clean = (proc.exitStatus() == QProcess::NormalExit) && (proc.exitCode() == 0);
+    QFile::remove(extracted);
+    return clean;
+}
+
+} // namespace
+
+TEST_CASE("Cluster size follows the card's capacity", "[format][geometry]")
+{
+    struct Band
+    {
+        const char *name;
+        quint64 bytes;
+        quint8 expectedSectorsPerCluster;
+    };
+
+    // One size inside each band the formatter distinguishes.
+    const Band bands[] = {
+        {"16 MB",  16ull  * 1024 * 1024,        1},
+        {"100 MB", 100ull * 1024 * 1024,        2},
+        {"1 GB",   1024ull * 1024 * 1024,       8},
+        {"10 GB",  10ull * 1024 * 1024 * 1024, 16},
+        {"20 GB",  20ull * 1024 * 1024 * 1024, 32},
+    };
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    for (const Band &band : bands) {
+        INFO("band: " << band.name);
+        const QString path = QDir(dir.path()).filePath(
+            QStringLiteral("card-%1.img").arg(QString::fromLatin1(band.name).remove(' ')));
+
+        const Formatted f = formatSizedImage(path, band.bytes);
+        REQUIRE(f.ok);
+
+        // A partition table anything will recognise.
+        CHECK(quint8(f.mbr.at(510)) == 0x55);
+        CHECK(quint8(f.mbr.at(511)) == 0xAA);
+        const quint8 type = quint8(f.mbr.at(0x1BE + 4));
+        CHECK((type == 0x0B || type == 0x0C));
+
+        // BPB_SecPerClus, the byte every other size in the boot sector is
+        // derived from.
+        CHECK(quint8(f.bootSector.at(13)) == band.expectedSectorsPerCluster);
+
+        // And the boot sector is a boot sector: 512-byte sectors, two FATs,
+        // and its own signature.
+        CHECK(readLe16(f.bootSector, 11) == 512);
+        CHECK(quint8(f.bootSector.at(16)) == 2);
+        CHECK(quint8(f.bootSector.at(510)) == 0x55);
+        CHECK(quint8(f.bootSector.at(511)) == 0xAA);
+
+        // Independent confirmation on the sizes cheap enough to copy out.
+        if (haveFsck() && band.bytes <= 100ull * 1024 * 1024) {
+            QString fsckOutput;
+            const bool clean = partitionPassesFsck(path, f.partitionStartLba, &fsckOutput);
+            INFO("fsck said: " << fsckOutput.toStdString());
+            CHECK(clean);
+        }
+
+        QFile::remove(path);
+    }
+}
+
+TEST_CASE("The FSInfo sector is written and signed", "[format][geometry]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("fsinfo.img"));
+
+    const Formatted f = formatSizedImage(path, 512ull * 1024 * 1024);
+    REQUIRE(f.ok);
+
+    // FSInfo lives at the sector the boot sector nominates. Drivers use its
+    // free-cluster hint; a missing or unsigned one makes them rescan the
+    // whole FAT on mount.
+    const quint16 fsInfoSector = readLe16(f.bootSector, 48);
+    CHECK(fsInfoSector == 1);
+
+    QFile file(path);
+    REQUIRE(file.open(QIODevice::ReadOnly));
+    REQUIRE(file.seek((qint64(f.partitionStartLba) + fsInfoSector) * 512));
+    const QByteArray fsInfo = file.read(512);
+    REQUIRE(fsInfo.size() == 512);
+
+    CHECK(readLe32(fsInfo, 0) == 0x41615252);     // lead signature
+    CHECK(readLe32(fsInfo, 484) == 0x61417272);   // struct signature
+    CHECK(readLe32(fsInfo, 508) == 0xAA550000);   // trail signature
+}
+
+TEST_CASE("A device too small to hold a filesystem is refused", "[format][geometry]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("tiny.img"));
+
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    REQUIRE(f.resize(64 * 1024));
+    f.close();
+
+    rpi_imager::DiskFormatter formatter;
+    const auto result = formatter.FormatDrive(path.toStdString());
+
+    if (!result.has_value()) {
+        SUCCEED("refused outright, which is one correct answer");
+        return;
+    }
+
+    // It did not refuse. Then what it wrote has to be a filesystem, because
+    // reporting success and leaving an unreadable card is the worse of the
+    // two failures. FAT32 has a minimum cluster count and 64 KB is far below
+    // it, so this is the interesting case.
+    if (!haveFsck())
+        SKIP("fsck.vfat is not installed, so the result cannot be checked");
+
+    QFile f2(path);
+    REQUIRE(f2.open(QIODevice::ReadOnly));
+    const QByteArray mbr = f2.read(512);
+    f2.close();
+    REQUIRE(mbr.size() == 512);
+
+    QString fsckOutput;
+    const bool clean = partitionPassesFsck(path, readLe32(mbr, 0x1BE + 8), &fsckOutput);
+    INFO("fsck said: " << fsckOutput.toStdString());
+    CHECK(clean);
 }

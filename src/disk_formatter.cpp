@@ -127,6 +127,21 @@ Result<void> DiskFormatter::FormatDrive(const std::string& device_path) {
   }
 
   // Write MBR
+  // The partition starts 4 MB in, and everything downstream computes the
+  // partition size as (total sectors - that offset) in 32-bit arithmetic. On
+  // a device smaller than the offset it underflows: a 64 KB device produced a
+  // filesystem claiming 4,294,959,232 sectors, which fsck rejects outright.
+  // Refuse instead of laying down a table describing two terabytes of card
+  // that is not there.
+  {
+    const std::uint64_t total_sectors = device_size_bytes / kSectorSize;
+    const std::uint64_t minimum_sectors =
+        static_cast<std::uint64_t>(kPartitionStartSector) + kMinimumPartitionSectors;
+    if (total_sectors < minimum_sectors) {
+      return Result<void>(FormatError::kInsufficientSpace);
+    }
+  }
+
   if (auto result = WriteMbr(device_size_bytes); !result) {
     return result;
   }
@@ -424,6 +439,26 @@ Result<void> DiskFormatter::WriteRootDirectory(
     return Result<void>(FormatError::kFileWriteError);
   }
   
+  // The boot sector carries a volume label, and FAT expects a matching entry
+  // in the root directory. Writing only the boot-sector copy leaves the two
+  // disagreeing: fsck reports "label in boot sector is 'BOOT', but there is
+  // no volume label in root directory" and offers to strip it, and file
+  // managers show the card unnamed.
+  //
+  // A volume-label entry is a normal 32-byte directory entry whose only
+  // meaningful fields are the 11-byte name and the volume-id attribute;
+  // cluster and size stay zero.
+  {
+    auto* entry = static_cast<std::uint8_t*>(root_cluster.data());
+    std::array<char, 11> padded_label{};
+    std::fill(padded_label.begin(), padded_label.end(), ' ');
+    std::copy_n(config.volume_label.begin(),
+                std::min(config.volume_label.size(), padded_label.size()),
+                padded_label.begin());
+    std::copy_n(padded_label.begin(), padded_label.size(), entry);
+    entry[11] = 0x08;  // ATTR_VOLUME_ID
+  }
+
   std::uint64_t offset = static_cast<std::uint64_t>(root_cluster_sector) * kSectorSize;
   FileError error = file_ops_->WriteAtOffset(offset, root_cluster.data(), root_cluster_size);
   if (error != FileError::kSuccess) {

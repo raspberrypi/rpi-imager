@@ -153,6 +153,10 @@ class DiskFormatter {
  private:
   static constexpr std::uint32_t kSectorSize = 512;
   static constexpr std::uint32_t kPartitionStartSector = 8192;  // 4MB offset
+  // Enough partition for the reserved sectors, both FATs and a root cluster,
+  // with room to spare. Below this the geometry arithmetic in
+  // CalculateFat32Config and WriteBootSector has nothing sensible to produce.
+  static constexpr std::uint32_t kMinimumPartitionSectors = 2048;  // 1MB
   static constexpr std::uint8_t kFat32PartitionType = 0x0C;    // FAT32 LBA
 
   std::unique_ptr<FileOperations> file_ops_;
