@@ -2919,3 +2919,142 @@ TEST_CASE("A verified write lands the right bytes", "[imagewriter][extract]")
 
     CHECK(fx.written() == fixturePayload());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Getting the customisation onto the card
+//
+// Steps three and four of the common path meet here. The user fills in the
+// customisation dialog, the write runs, and the settings only take effect if
+// the generated files actually land in the boot partition of the image that
+// was just written.
+//
+// Nothing checked that they did. The generator has its own tests and the
+// write path has its own tests, but the join between them -- the point where
+// firstrun.sh and cmdline.txt are inserted into a FAT32 partition that has
+// just been laid down sector by sector -- did not.
+//
+// When it fails there is no error: the card boots, and none of the hostname,
+// user, Wi-Fi or SSH settings the user entered are there.
+//
+// The fixture is a real 48 MiB image with an MBR and an empty FAT32 boot
+// partition. The oracle is the bytes on the target: both the 8.3 directory
+// entry and the file's contents have to be findable in the written image.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+class BootPartitionFixture
+{
+public:
+    BootPartitionFixture()
+    {
+        REQUIRE(_dir.isValid());
+        const QString from = QStringLiteral(IMAGER_TEST_DATA_DIR "/fat32-48MiB.img.xz");
+        REQUIRE(QFile::exists(from));
+        _source = QDir(_dir.path()).filePath(QStringLiteral("fat32.img.xz"));
+        REQUIRE(QFile::copy(from, _source));
+
+        _target = QDir(_dir.path()).filePath(QStringLiteral("target.img"));
+        QFile t(_target);
+        REQUIRE(t.open(QIODevice::WriteOnly));
+        REQUIRE(t.resize(qint64(kImageSize)));
+        t.close();
+    }
+
+    static constexpr quint64 kImageSize = 48 * 1024 * 1024;
+
+    QUrl sourceUrl() const { return QUrl::fromLocalFile(_source); }
+    QString target() const { return _target; }
+
+    QByteArray targetBytes() const
+    {
+        QFile f(_target);
+        REQUIRE(f.open(QIODevice::ReadOnly));
+        return f.readAll();
+    }
+
+private:
+    QTemporaryDir _dir;
+    QString _source, _target;
+};
+
+WriteOutcome writeWithCustomisation(BootPartitionFixture &fx,
+                                    const QByteArray &config,
+                                    const QByteArray &cmdline,
+                                    const QByteArray &firstrun,
+                                    const QByteArray &initFormat = QByteArray("systemd"))
+{
+    static ImageWriter *keepAlive = nullptr;
+    Q_UNUSED(keepAlive)
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize);
+    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
+    w.setImageCustomisation(config, cmdline, firstrun, QByteArray(), QByteArray(),
+                            ImageOptions::NoAdvancedOptions, initFormat);
+    REQUIRE(w.readyToWrite());
+    return runWrite(w);
+}
+
+} // namespace
+
+TEST_CASE("A firstrun script lands in the boot partition", "[imagewriter][customisation][boot]")
+{
+    BootPartitionFixture fx;
+    const QByteArray script = "#!/bin/bash\n# rpi-imager-test-marker-firstrun\nexit 0\n";
+
+    const WriteOutcome out = writeWithCustomisation(fx, QByteArray(), QByteArray(), script);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    const QByteArray written = fx.targetBytes();
+    // The 8.3 directory entry FAT stores for "firstrun.sh".
+    CHECK(written.contains(QByteArray("FIRSTRUNSH")));
+    // ...and the script itself, not just a zero-length entry.
+    CHECK(written.contains(QByteArray("rpi-imager-test-marker-firstrun")));
+}
+
+TEST_CASE("A cmdline append lands in the boot partition", "[imagewriter][customisation][boot]")
+{
+    BootPartitionFixture fx;
+    const QByteArray script = "#!/bin/bash\nexit 0\n";
+    const QByteArray cmdline = " rpi_imager_test_marker=cmdline";
+
+    const WriteOutcome out = writeWithCustomisation(fx, QByteArray(), cmdline, script);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // cmdline.txt is how the kernel is told to run the firstrun script; an
+    // append that is dropped means the script never executes.
+    CHECK(fx.targetBytes().contains(QByteArray("rpi_imager_test_marker=cmdline")));
+}
+
+TEST_CASE("Config entries land in the boot partition", "[imagewriter][customisation][boot]")
+{
+    BootPartitionFixture fx;
+    const QByteArray config = "dtparam=rpi_imager_test_marker=on\n";
+
+    const WriteOutcome out = writeWithCustomisation(fx, config, QByteArray(), QByteArray());
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    CHECK(fx.targetBytes().contains(QByteArray("dtparam=rpi_imager_test_marker=on")));
+}
+
+TEST_CASE("A write with no customisation leaves the image alone", "[imagewriter][customisation][boot]")
+{
+    BootPartitionFixture fx;
+
+    const WriteOutcome out = writeWithCustomisation(fx, QByteArray(), QByteArray(), QByteArray());
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // Nothing was asked for, so nothing should have been inserted.
+    const QByteArray written = fx.targetBytes();
+    CHECK_FALSE(written.contains(QByteArray("FIRSTRUNSH")));
+}
