@@ -567,13 +567,26 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
                 if (longFilename.indexOf(QChar::Null) >= 0)
                     longFilename.truncate(longFilename.indexOf(QChar::Null));
                 
-                // Get short filename as fallback
+                // Get short filename as fallback.
+                //
+                // DIR_Name is a fixed 11-byte field: an 8-byte base and a
+                // 3-byte extension, each space-padded, with no separator
+                // stored. Walking all 11 bytes and stopping at the first
+                // space therefore ends at the padding after the base, and
+                // the extension is never reached -- "CONFIG  TXT" came back
+                // as "CONFIG". The `i == 8` test that was meant to insert the
+                // dot could only fire when the base filled all 8 bytes.
+                // readFile() and listFilesInDirectory() already do this the
+                // way below; these two loops had not been kept in step.
                 QString shortName;
-                for (int i = 0; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                    if (i == 8 && entry.DIR_Name[i] != ' ') {
-                        shortName += '.';
-                    }
+                for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++) {
                     shortName += QChar(entry.DIR_Name[i]);
+                }
+                if (entry.DIR_Name[8] != ' ') {
+                    shortName += '.';
+                    for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
+                        shortName += QChar(entry.DIR_Name[i]);
+                    }
                 }
                 shortName = shortName.trimmed();
                 
@@ -776,12 +789,22 @@ QStringList DeviceWrapperFatPartition::listAllFilesRecursive()
                     if (longFilename.indexOf(QChar::Null) >= 0)
                         longFilename.truncate(longFilename.indexOf(QChar::Null));
                     
+                    // Same fixed 8+3 field as in listAllFiles() above: stop
+                    // at the padding after the base and the extension is
+                    // lost. This one matters most -- SecureBoot's
+                    // extractFatPartitionFiles() lists through here and then
+                    // calls readFile() on each name, so a truncated "CONFIG"
+                    // simply failed to resolve and the file was left out of
+                    // the signed boot image without a word.
                     QString shortName;
-                    for (int i = 0; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                        if (i == 8 && entry.DIR_Name[i] != ' ') {
-                            shortName += '.';
-                        }
+                    for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++) {
                         shortName += QChar(entry.DIR_Name[i]);
+                    }
+                    if (entry.DIR_Name[8] != ' ') {
+                        shortName += '.';
+                        for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
+                            shortName += QChar(entry.DIR_Name[i]);
+                        }
                     }
                     shortName = shortName.trimmed();
                     
