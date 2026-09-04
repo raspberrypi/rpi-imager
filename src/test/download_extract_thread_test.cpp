@@ -1112,3 +1112,132 @@ TEST_CASE("DownloadExtractThread reports a corrupt multi-file archive",
     // looks written and will not boot.
     CHECK_FALSE(outcome.succeeded);
 }
+
+// ---------------------------------------------------------------------------
+// A hostile multi-file archive
+// ---------------------------------------------------------------------------
+//
+// Multi-file extraction writes entries onto the mounted boot partition using
+// the paths the archive declares, and the archive is downloaded. An entry
+// named "../../etc/cron.d/x", or an absolute path, is the classic Zip Slip:
+// the extraction writes outside the target and onto the machine doing the
+// imaging.
+//
+// libarchive defends against this, but only because the disk writer is given
+// ARCHIVE_EXTRACT_SECURE_NODOTDOT, SECURE_NOABSOLUTEPATHS and
+// SECURE_SYMLINKS. That is one line of flags, and dropping any of them would
+// be silent -- ordinary archives would keep extracting perfectly. These pin
+// it.
+
+TEST_CASE("DownloadExtractThread will not write outside the target",
+          "[extract][multifile][security]")
+{
+    if (!canRunPrivileged())
+        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed");
+    if (!haveTool(QStringLiteral("zip")))
+        SKIP("zip is not installed, so no archive can be built");
+
+    MountedFatDevice device(48);
+    if (!device.isReady())
+        SKIP("the loop-backed FAT device could not be mounted");
+
+    ScratchDir scratch;
+
+    // A legitimate entry, so the extraction has something to do, and two
+    // that try to climb out of the target.
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("config.txt")),
+                      QByteArray("arm_64bit=1\n")));
+    const QString escapee = scratch.filePath(QStringLiteral("escapee.txt"));
+    REQUIRE(writeFile(escapee, QByteArray("should never be written outside\n")));
+
+    const QString archive = scratch.filePath(QStringLiteral("hostile.zip"));
+    REQUIRE(runTool(QStringLiteral("zip"),
+                    {QStringLiteral("-q"), QStringLiteral("-0"), archive,
+                     QStringLiteral("config.txt")},
+                    QFileInfo(archive).absolutePath()));
+    // zip refuses to store "../" paths without help; -f rewrites the name.
+    REQUIRE(runTool(QStringLiteral("zip"),
+                    {QStringLiteral("-q"), QStringLiteral("-0"), QStringLiteral("--junk-paths"),
+                     archive, escapee},
+                    QFileInfo(archive).absolutePath()));
+
+    // Rename the stored entry to a traversal path. Done with a python
+    // rewrite because no archiver will produce one willingly.
+    const QString hostile = scratch.filePath(QStringLiteral("traversal.zip"));
+    const QString py = QStringLiteral(
+        "import zipfile,sys\n"
+        "src,dst=sys.argv[1],sys.argv[2]\n"
+        "zi=zipfile.ZipFile(src)\n"
+        "zo=zipfile.ZipFile(dst,'w',zipfile.ZIP_STORED)\n"
+        "for n in zi.namelist():\n"
+        "    data=zi.read(n)\n"
+        "    out='config.txt' if n=='config.txt' else '../../../../tmp/rpi-imager-escaped.txt'\n"
+        "    zo.writestr(out,data)\n"
+        "zo.close()\n");
+    REQUIRE(runTool(QStringLiteral("python3"),
+                    {QStringLiteral("-c"), py, archive, hostile},
+                    QFileInfo(archive).absolutePath()));
+
+    const QString escapeTarget = QStringLiteral("/tmp/rpi-imager-escaped.txt");
+    QFile::remove(escapeTarget);
+
+    DownloadExtractThread dt(QByteArray("file://") + hostile.toUtf8(),
+                             device.device().toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.enableMultipleFileExtraction();
+
+    const Outcome outcome = runToCompletion(dt, 240000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+
+    // Whether the extraction as a whole succeeds or is refused is libarchive's
+    // business. What must be true either way is that nothing was written
+    // outside the mounted target.
+    INFO("escape target exists: " << QFileInfo::exists(escapeTarget));
+    CHECK_FALSE(QFileInfo::exists(escapeTarget));
+
+    QFile::remove(escapeTarget);
+}
+
+TEST_CASE("DownloadExtractThread will not write to an absolute path",
+          "[extract][multifile][security]")
+{
+    if (!canRunPrivileged())
+        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed");
+    if (!haveTool(QStringLiteral("zip")))
+        SKIP("zip is not installed, so no archive can be built");
+
+    MountedFatDevice device(48);
+    if (!device.isReady())
+        SKIP("the loop-backed FAT device could not be mounted");
+
+    ScratchDir scratch;
+    const QString hostile = scratch.filePath(QStringLiteral("absolute.zip"));
+    const QString py = QStringLiteral(
+        "import zipfile,sys\n"
+        "zo=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_STORED)\n"
+        "zo.writestr('config.txt', 'arm_64bit=1\\n')\n"
+        "zo.writestr('/tmp/rpi-imager-absolute.txt', 'written by absolute path\\n')\n"
+        "zo.close()\n");
+    REQUIRE(runTool(QStringLiteral("python3"),
+                    {QStringLiteral("-c"), py, hostile},
+                    QFileInfo(hostile).absolutePath()));
+
+    const QString escapeTarget = QStringLiteral("/tmp/rpi-imager-absolute.txt");
+    QFile::remove(escapeTarget);
+
+    DownloadExtractThread dt(QByteArray("file://") + hostile.toUtf8(),
+                             device.device().toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.enableMultipleFileExtraction();
+
+    const Outcome outcome = runToCompletion(dt, 240000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    INFO("escape target exists: " << QFileInfo::exists(escapeTarget));
+    CHECK_FALSE(QFileInfo::exists(escapeTarget));
+
+    QFile::remove(escapeTarget);
+}
