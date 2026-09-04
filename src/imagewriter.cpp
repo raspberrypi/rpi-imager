@@ -1834,6 +1834,13 @@ void ImageWriter::cancelWrite()
 
     if (!_thread || !_thread->isRunning())
     {
+        // Nothing is running, so no thread will ever finish and call
+        // onCancelled() to move the state on. Without this the state stays
+        // at Cancelling for good, and startWrite()'s re-entry guard -- which
+        // rejects Cancelling -- then silently ignores every write from here
+        // on: no error, no progress, nothing on screen. Reached whenever
+        // Cancel lands after the write has already finished.
+        setWriteState(WriteState::Cancelled);
         emit cancelled();
     }
 }
