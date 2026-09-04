@@ -3572,3 +3572,130 @@ TEST_CASE("An absurd refresh interval is capped", "[imagewriter][refresh]")
     CHECK(w.refreshIntervalMs() == 24 * 24 * 60 * 60 * 1000);
     CHECK(w.refreshIntervalMs() > 0);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// What a link from outside is allowed to change
+//
+// The repository half of handleIncomingUrl() is covered above. The rest is
+// not: a double-clicked manifest, and the Connect auth key.
+//
+// The key is written into the firstrun script on the card, so it decides
+// which organisation a device enrols into. Accepting one in the wrong shape,
+// or quietly replacing one the user already set up, both end with a Pi
+// enrolled somewhere nobody chose.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A double-clicked manifest is loaded", "[imagewriter][url]")
+{
+    OsListDir dir;
+    ImageWriter w(nullptr);
+
+    QEventLoop loop;
+    QObject context;
+    bool prepared = false;
+    QObject::connect(&w, &ImageWriter::osListPrepared, &context,
+                     [&] { prepared = true; loop.quit(); });
+    QTimer guard;
+    guard.setSingleShot(true);
+    QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
+    guard.start(20000);
+
+    // A local file the user opened deliberately is trusted and loaded
+    // without the confirmation a remote link needs.
+    w.handleIncomingUrl(dir.put(QStringLiteral("list.json"), oneOsList()));
+    loop.exec();
+
+    REQUIRE(prepared);
+    CHECK(osNamesIn(w.getFilteredOSlistDocument())
+              .contains(QStringLiteral("Raspberry Pi OS (64-bit)")));
+}
+
+TEST_CASE("A trailing newline does not sneak a repo URL through", "[imagewriter][url]")
+{
+    ImageWriter w(nullptr);
+    rpi_test::SignalLog repos(&w, &ImageWriter::repositoryUrlReceived);
+
+    // A URL copied out of a browser carries one, and PCRE2's '$' matches
+    // before a final newline -- which is how issue #1687 got in. The pattern
+    // is anchored with \A..\z for exactly this.
+    w.handleIncomingUrl(QUrl(QStringLiteral(
+        "rpi-imager://open?repo=https%3A%2F%2Fexample.com%2Flist.json%0A")));
+
+    CHECK(repos.isEmpty());
+}
+
+TEST_CASE("A well-formed auth key is accepted", "[imagewriter][url]")
+{
+    ImageWriter w(nullptr);
+    w.clearConnectToken();
+
+    // rpuak_ followed by 24 Base58 characters is the shape Connect issues.
+    const QString key = QStringLiteral("rpuak_123456789ABCDEFGHJKLMNPQ");
+    w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://open?auth_key=") + key));
+
+    CHECK(w.getRuntimeConnectToken() == key);
+    w.clearConnectToken();
+}
+
+TEST_CASE("A malformed auth key is ignored", "[imagewriter][url]")
+{
+    ImageWriter w(nullptr);
+
+    const QStringList rejected{
+        QStringLiteral("nopreflx_123456789ABCDEFGHJKLMNP"),   // wrong prefix
+        QStringLiteral("rpuak_short"),                        // payload too short
+        QStringLiteral("rpuak_0OIl456789ABCDEFGHJKLMNPQ"),    // 0 O I l are not Base58
+        QStringLiteral("rpuak_"),                             // no payload at all
+    };
+
+    for (const QString &bad : rejected) {
+        INFO("candidate: " << bad.toStdString());
+        w.clearConnectToken();
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://open?auth_key=")
+                                 + QUrl::toPercentEncoding(bad)));
+        CHECK(w.getRuntimeConnectToken().isEmpty());
+    }
+    w.clearConnectToken();
+}
+
+TEST_CASE("A second, different auth key raises a conflict", "[imagewriter][url]")
+{
+    ImageWriter w(nullptr);
+    w.clearConnectToken();
+
+    const QString first = QStringLiteral("rpuak_123456789ABCDEFGHJKLMNPQ");
+    const QString second = QStringLiteral("rpuak_987654321ABCDEFGHJKLMNPQ");
+
+    w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://open?auth_key=") + first));
+    REQUIRE(w.getRuntimeConnectToken() == first);
+
+    rpi_test::SignalLog conflicts(&w, &ImageWriter::connectTokenConflictDetected);
+    w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://open?auth_key=") + second));
+
+    // Replacing it silently would enrol the next card into a different
+    // account than the one the user set up. QML gets to ask.
+    REQUIRE(conflicts.count() == 1);
+    CHECK(conflicts.at(0).at(0).toString() == second);
+    CHECK(w.getRuntimeConnectToken() == first);
+
+    w.clearConnectToken();
+}
+
+TEST_CASE("The same auth key arriving twice is not a conflict", "[imagewriter][url]")
+{
+    ImageWriter w(nullptr);
+    w.clearConnectToken();
+
+    const QString key = QStringLiteral("rpuak_123456789ABCDEFGHJKLMNPQ");
+    w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://open?auth_key=") + key));
+    REQUIRE(w.getRuntimeConnectToken() == key);
+
+    // Following the same link again is ordinary; prompting for it would be
+    // noise.
+    rpi_test::SignalLog conflicts(&w, &ImageWriter::connectTokenConflictDetected);
+    w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://open?auth_key=") + key));
+
+    CHECK(conflicts.isEmpty());
+    CHECK(w.getRuntimeConnectToken() == key);
+    w.clearConnectToken();
+}
