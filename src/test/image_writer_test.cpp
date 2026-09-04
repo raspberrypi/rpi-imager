@@ -33,7 +33,10 @@
 #include <QTimer>
 #include <QGuiApplication>
 #include <QStandardPaths>
+#include <functional>
 #include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -1373,27 +1376,29 @@ WriteOutcome runWrite(ImageWriter &w, int timeoutMs = 120000)
     WriteOutcome out;
     QEventLoop loop;
 
-    QObject::connect(&w, &ImageWriter::success, [&] { out.succeeded = true; loop.quit(); });
-    QObject::connect(&w, &ImageWriter::error, [&](QVariant m) {
+    // Scoped so nothing here outlives the loop it quits (see fetchOsList).
+    QObject context;
+    QObject::connect(&w, &ImageWriter::success, &context, [&] { out.succeeded = true; loop.quit(); });
+    QObject::connect(&w, &ImageWriter::error, &context, [&](QVariant m) {
         out.failed = true;
         out.errors << m.toString();
         loop.quit();
     });
-    QObject::connect(&w, &ImageWriter::finalizing, [&] { out.finalizing = true; });
-    QObject::connect(&w, &ImageWriter::preparationStatusUpdate,
+    QObject::connect(&w, &ImageWriter::finalizing, &context, [&] { out.finalizing = true; });
+    QObject::connect(&w, &ImageWriter::preparationStatusUpdate, &context,
                      [&](QVariant m) { out.statuses << m.toString(); });
-    QObject::connect(&w, &ImageWriter::writeProgress,
+    QObject::connect(&w, &ImageWriter::writeProgress, &context,
                      [&](QVariant n, QVariant t) {
                          out.sawProgress = true;
                          out.progressKinds << QStringLiteral("write %1/%2")
                                                   .arg(n.toULongLong()).arg(t.toULongLong());
                      });
-    QObject::connect(&w, &ImageWriter::downloadProgress,
+    QObject::connect(&w, &ImageWriter::downloadProgress, &context,
                      [&](QVariant n, QVariant t) {
                          out.progressKinds << QStringLiteral("download %1/%2")
                                                   .arg(n.toULongLong()).arg(t.toULongLong());
                      });
-    QObject::connect(&w, &ImageWriter::verifyProgress,
+    QObject::connect(&w, &ImageWriter::verifyProgress, &context,
                      [&](QVariant n, QVariant t) {
                          out.progressKinds << QStringLiteral("verify %1/%2")
                                                   .arg(n.toULongLong()).arg(t.toULongLong());
@@ -2505,4 +2510,244 @@ TEST_CASE("A settings map with no SSH keys is left alone", "[imagewriter][custom
     CHECK_FALSE(got.contains(QStringLiteral("sshAuthorizedKeys")));
     CHECK(got.size() == 1);
     clearCustomisation();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The OS list the chooser is built from
+//
+// Everything the user picks in step two comes from this JSON: the top-level
+// list, and the sublists behind entries like "Raspberry Pi OS (other)" that
+// are fetched separately and spliced in.
+//
+// The failure that matters is the quiet one. A list that fails to parse, a
+// sublist that never arrives, or an entry that is dropped during the splice
+// leaves the chooser looking finished but short of options -- and no error
+// is shown, because as far as the fetch is concerned nothing went wrong.
+//
+// The lists here are served from disk, so nothing depends on the network or
+// on what the real repository happens to be offering today.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Waits for one of the OS list's terminal outcomes.
+struct OsListOutcome
+{
+    bool prepared = false;
+    QStringList errors;
+};
+
+OsListOutcome fetchOsList(ImageWriter &w, const QUrl &url, int timeoutMs = 20000)
+{
+    OsListOutcome out;
+    QEventLoop loop;
+
+    // osListPrepared() is emitted again for every sublist that lands, which
+    // is after this function has returned and its loop has gone. Binding the
+    // connections to a scoped context object severs them on the way out.
+    QObject context;
+    QObject::connect(&w, &ImageWriter::osListPrepared, &context,
+                     [&] { out.prepared = true; loop.quit(); });
+    QObject::connect(&w, &ImageWriter::error, &context, [&](QVariant m) {
+        out.errors << m.toString();
+        loop.quit();
+    });
+
+    QTimer guard;
+    guard.setSingleShot(true);
+    QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
+    guard.start(timeoutMs);
+
+    w.refreshOsListFrom(url);
+    loop.exec();
+    return out;
+}
+
+// Spins the event loop until a condition holds, or gives up.
+bool waitUntil(const std::function<bool()> &done, int timeoutMs = 20000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (!done() && t.elapsed() < timeoutMs) {
+        QEventLoop loop;
+        QTimer::singleShot(20, &loop, &QEventLoop::quit);
+        loop.exec();
+    }
+    return done();
+}
+
+QStringList osNamesIn(const QJsonDocument &doc)
+{
+    QStringList names;
+    for (const QJsonValue &v : doc.object().value(QStringLiteral("os_list")).toArray())
+        names << v.toObject().value(QStringLiteral("name")).toString();
+    return names;
+}
+
+// Writes JSON files into a temp dir and hands back file:// URLs for them.
+class OsListDir
+{
+public:
+    OsListDir() { REQUIRE(_dir.isValid()); }
+
+    QUrl put(const QString &name, const QString &json)
+    {
+        const QString path = QDir(_dir.path()).filePath(name);
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.write(json.toUtf8()) > 0);
+        f.close();
+        return QUrl::fromLocalFile(path);
+    }
+
+    QUrl missing() const
+    {
+        return QUrl::fromLocalFile(QDir(_dir.path()).filePath(QStringLiteral("absent.json")));
+    }
+
+private:
+    QTemporaryDir _dir;
+};
+
+QString oneOsList()
+{
+    return QStringLiteral(R"JSON({
+      "imager": { "latest_version": "1.9.0" },
+      "os_list": [
+        { "name": "Raspberry Pi OS (64-bit)", "description": "Recommended",
+          "url": "https://example.invalid/a.img.xz", "image_download_size": 100 },
+        { "name": "Raspberry Pi OS Lite (64-bit)", "description": "No desktop",
+          "url": "https://example.invalid/b.img.xz", "image_download_size": 50 }
+      ]
+    })JSON");
+}
+
+} // namespace
+
+TEST_CASE("A fetched OS list reaches the chooser", "[imagewriter][oslist]")
+{
+    OsListDir dir;
+    ImageWriter w(nullptr);
+
+    const OsListOutcome out = fetchOsList(w, dir.put(QStringLiteral("list.json"), oneOsList()));
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.prepared);
+
+    const QStringList names = osNamesIn(w.getFilteredOSlistDocument());
+    CHECK(names.contains(QStringLiteral("Raspberry Pi OS (64-bit)")));
+    CHECK(names.contains(QStringLiteral("Raspberry Pi OS Lite (64-bit)")));
+}
+
+TEST_CASE("The chooser always offers Erase and Use custom", "[imagewriter][oslist]")
+{
+    ImageWriter w(nullptr);
+    // Before any fetch: the two built-in entries are appended regardless, so
+    // a user with no network can still format a card or pick their own file.
+    const QJsonDocument doc = w.getFilteredOSlistDocument();
+
+    QStringList urls;
+    for (const QJsonValue &v : doc.object().value(QStringLiteral("os_list")).toArray())
+        urls << v.toObject().value(QStringLiteral("url")).toString();
+
+    CHECK(urls.contains(QStringLiteral("internal://format")));
+    CHECK(urls.contains(QStringLiteral("internal://custom")));
+}
+
+TEST_CASE("The built-in entries survive a fetched list", "[imagewriter][oslist]")
+{
+    OsListDir dir;
+    ImageWriter w(nullptr);
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("list.json"), oneOsList())).prepared);
+
+    QStringList urls;
+    for (const QJsonValue &v : w.getFilteredOSlistDocument().object()
+                                   .value(QStringLiteral("os_list")).toArray())
+        urls << v.toObject().value(QStringLiteral("url")).toString();
+
+    CHECK(urls.contains(QStringLiteral("internal://format")));
+    CHECK(urls.contains(QStringLiteral("internal://custom")));
+}
+
+TEST_CASE("A sublist is fetched and spliced into its parent", "[imagewriter][oslist]")
+{
+    OsListDir dir;
+    const QUrl sub = dir.put(QStringLiteral("sub.json"), QStringLiteral(R"JSON({
+      "os_list": [
+        { "name": "Raspberry Pi OS (Legacy, 32-bit)",
+          "url": "https://example.invalid/legacy.img.xz", "image_download_size": 10 }
+      ]
+    })JSON"));
+
+    const QString top = QStringLiteral(R"JSON({
+      "imager": {},
+      "os_list": [
+        { "name": "Raspberry Pi OS (other)", "description": "More options",
+          "subitems_url": "%1" }
+      ]
+    })JSON").arg(sub.toString());
+
+    ImageWriter w(nullptr);
+    const OsListOutcome out = fetchOsList(w, dir.put(QStringLiteral("top.json"), top));
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.prepared);
+
+    // osListPrepared() fires as soon as the top level parses -- the sublist
+    // fetches are only queued at that point, so the chooser is briefly
+    // showing a parent it cannot expand.
+    auto parentOf = [&w]() {
+        for (const QJsonValue &v : w.getFilteredOSlistDocument().object()
+                                       .value(QStringLiteral("os_list")).toArray())
+            if (v.toObject().value(QStringLiteral("name")).toString()
+                == QStringLiteral("Raspberry Pi OS (other)"))
+                return v.toObject();
+        return QJsonObject();
+    };
+    REQUIRE(waitUntil([&] { return parentOf().contains(QStringLiteral("subitems")); }));
+
+    const QJsonObject parent = parentOf();
+    REQUIRE_FALSE(parent.isEmpty());
+    CHECK_FALSE(parent.contains(QStringLiteral("subitems_url")));
+    REQUIRE(parent.contains(QStringLiteral("subitems")));
+
+    QStringList subNames;
+    for (const QJsonValue &v : parent.value(QStringLiteral("subitems")).toArray())
+        subNames << v.toObject().value(QStringLiteral("name")).toString();
+    CHECK(subNames.contains(QStringLiteral("Raspberry Pi OS (Legacy, 32-bit)")));
+}
+
+TEST_CASE("An OS list that will not parse is reported", "[imagewriter][oslist]")
+{
+    OsListDir dir;
+    ImageWriter w(nullptr);
+
+    const OsListOutcome out =
+        fetchOsList(w, dir.put(QStringLiteral("bad.json"), QStringLiteral("{ not json at all")));
+
+    // A broken list is not reported through error() -- the UI is told the OS
+    // list is unavailable and shows its offline state instead.
+    CHECK_FALSE(out.prepared);
+    CHECK(waitUntil([&] { return w.isOsListUnavailable(); }));
+}
+
+TEST_CASE("An OS list that is not there is reported", "[imagewriter][oslist]")
+{
+    OsListDir dir;
+    ImageWriter w(nullptr);
+
+    const OsListOutcome out = fetchOsList(w, dir.missing());
+
+    CHECK_FALSE(out.prepared);
+    CHECK(waitUntil([&] { return w.isOsListUnavailable(); }));
+}
+
+TEST_CASE("An OS list with no os_list key yields an empty chooser, not a crash", "[imagewriter][oslist]")
+{
+    OsListDir dir;
+    ImageWriter w(nullptr);
+
+    fetchOsList(w, dir.put(QStringLiteral("empty.json"), QStringLiteral(R"JSON({"imager":{}})JSON")));
+
+    const QStringList names = osNamesIn(w.getFilteredOSlistDocument());
+    // Only the two built-ins.
+    CHECK(names.size() == 2);
 }
