@@ -1529,6 +1529,14 @@ if(NOT BUILD_CLI_ONLY)
     target_link_libraries(picker_models_test PRIVATE Catch2::Catch2 rpi_imager_testable)
     rpi_discover_tests(picker_models_test)
 
+    # Does the user interface load at all?
+    add_executable(qml_load_test qml_load_test.cpp)
+    set_target_properties(qml_load_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(qml_load_test PRIVATE Catch2::Catch2 rpi_imager_testable Qt6::Quick)
+    target_compile_definitions(qml_load_test PRIVATE
+        IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}")
+    rpi_discover_tests(qml_load_test)
+
     # Saving a copy of the image while it downloads.
     add_executable(async_cache_writer_test async_cache_writer_test.cpp)
     set_target_properties(async_cache_writer_test PROPERTIES AUTOMOC ON)
