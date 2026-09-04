@@ -438,6 +438,15 @@ Drivelist::DeviceDescriptor makeDevice(const std::string &path,
 
 int rowsOf(QAbstractItemModel *m) { return m->rowCount(QModelIndex()); }
 
+QVariant roleOfRow(QAbstractItemModel *m, int row, const char *roleName)
+{
+    const auto roles = m->roleNames();
+    for (auto it = roles.cbegin(); it != roles.cend(); ++it)
+        if (it.value() == QByteArray(roleName))
+            return m->data(m->index(row, 0), it.key());
+    return {};
+}
+
 QStringList devicePathsIn(QAbstractItemModel *m)
 {
     QStringList paths;
@@ -842,4 +851,216 @@ TEST_CASE("The chooser is told when the connected device changes", "[models][hwl
     // each poll would be visible in the UI.
     model->setConnectedRpibootChips({QStringLiteral("BCM2712")});
     CHECK(changes == 1);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Drives that must never be offered, and devices that are not drives
+//
+// The cases above cover the ordinary ones. These are the exclusions and the
+// special cases, which is where the consequences are: a system disk that
+// appears in the chooser is one mis-click from overwriting the machine the
+// imager is running on, and a naked rpiboot device offered as storage is an
+// entry that cannot be written to at all.
+//
+// Also the error path. Enumeration can fail transiently -- a USB reset, a
+// permissions change -- and the list must not blank itself when it does, or
+// the user's selection disappears mid-flow.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A drive mounted at the root is never offered", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor root = makeDevice("/dev/sda", "System disk", 512000000000ull);
+    root.mountpoints = {"/"};
+
+    model->processDriveList({root, makeDevice("/dev/sdz", "Card reader", 32000000000ull)});
+
+    // One mis-click away from overwriting the machine the imager runs on.
+    const QStringList paths = devicePathsIn(model);
+    CHECK_FALSE(paths.contains(QStringLiteral("/dev/sda")));
+    CHECK(paths.contains(QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("A system drive is offered but flagged for confirmation", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor sys = makeDevice("/dev/sda", "Internal", 512000000000ull);
+    sys.isSystem = true;
+    sys.isUSB = false;
+    sys.isRemovable = false;
+
+    model->processDriveList({sys});
+
+    // Deliberate: an internal disk can be a legitimate target, so it is
+    // listed rather than hidden -- but the row carries isSystem, which is
+    // what QML binds the "are you sure" dialog to. Losing that flag is how a
+    // machine's own disk gets overwritten without a warning.
+    REQUIRE(rowsOf(model) == 1);
+    CHECK(roleOfRow(model, 0, "isSystem").toBool());
+}
+
+TEST_CASE("A virtual system device is hidden outright", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor v = makeDevice("/dev/loop9", "Snap mount", 100000000ull);
+    v.isVirtual = true;
+    v.isSystem = true;
+
+    // A snap or APFS system volume is never a card; there is nothing to
+    // confirm.
+    model->processDriveList({v});
+    CHECK(rowsOf(model) == 0);
+}
+
+TEST_CASE("A plain removable drive is not flagged for confirmation", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    model->processDriveList({makeDevice("/dev/sdz", "Card reader", 32000000000ull)});
+
+    // Flagging everything would train the user to click through the dialog.
+    REQUIRE(rowsOf(model) == 1);
+    CHECK_FALSE(roleOfRow(model, 0, "isSystem").toBool());
+}
+
+TEST_CASE("An enumeration failure is reported without clearing the list", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    model->processDriveList({makeDevice("/dev/sdz", "Card reader", 32000000000ull)});
+    REQUIRE(rowsOf(model) == 1);
+
+    Drivelist::DeviceDescriptor sentinel;
+    sentinel.device = "__error__";
+    sentinel.error = "permission denied";
+
+    int errors = 0;
+    QString reported;
+    QObject::connect(model, &DriveListModel::enumerationError, model,
+                     [&](QString m) { ++errors; reported = m; });
+
+    model->processDriveList({sentinel});
+
+    // Blanking the list on a transient failure loses the user's selection
+    // in the middle of setting up a write.
+    CHECK(rowsOf(model) == 1);
+    CHECK(errors == 1);
+    CHECK(reported == QStringLiteral("permission denied"));
+    CHECK(model->lastError() == QStringLiteral("permission denied"));
+}
+
+TEST_CASE("The same enumeration failure is not reported twice", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor sentinel;
+    sentinel.device = "__error__";
+    sentinel.error = "permission denied";
+
+    model->processDriveList({sentinel});
+
+    int errors = 0;
+    QObject::connect(model, &DriveListModel::enumerationError, model,
+                     [&](QString) { ++errors; });
+
+    // The poll repeats every second; one banner, not sixty a minute.
+    model->processDriveList({sentinel});
+    CHECK(errors == 0);
+}
+
+TEST_CASE("A recovered enumeration clears the error", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor sentinel;
+    sentinel.device = "__error__";
+    sentinel.error = "permission denied";
+    model->processDriveList({sentinel});
+    REQUIRE_FALSE(model->lastError().isEmpty());
+
+    QStringList reported;
+    QObject::connect(model, &DriveListModel::enumerationError, model,
+                     [&](QString m) { reported << m; });
+
+    model->processDriveList({makeDevice("/dev/sdz", "Card reader", 32000000000ull)});
+
+    // The banner has to go away by itself once scanning works again.
+    CHECK(model->lastError().isEmpty());
+    REQUIRE(reported.size() == 1);
+    CHECK(reported.at(0).isEmpty());
+    CHECK(rowsOf(model) == 1);
+}
+
+TEST_CASE("A naked rpiboot device is announced but not offered", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor rpiboot = makeDevice("rpiboot://1:5", "Compute Module", 0);
+    rpiboot.isRpiboot = true;
+    rpiboot.rpibootPid = 0x2712;
+
+    int announced = 0;
+    QString seenUri;
+    quint8 seenBus = 0, seenAddr = 0;
+    QObject::connect(model, &DriveListModel::rpibootDeviceDetected, model,
+                     [&](QString uri, quint8 bus, quint8 addr, QList<uint8_t>, quint16) {
+                         ++announced;
+                         seenUri = uri;
+                         seenBus = bus;
+                         seenAddr = addr;
+                     });
+
+    model->processDriveList({rpiboot});
+
+    // It is a device state to react to, not somewhere to write. Listing it
+    // gives the user a target that cannot accept an image.
+    CHECK(rowsOf(model) == 0);
+    REQUIRE(announced == 1);
+    CHECK(seenUri == QStringLiteral("rpiboot://1:5"));
+    CHECK(seenBus == 1);
+    CHECK(seenAddr == 5);
+}
+
+TEST_CASE("An rpiboot device already seen is not announced again", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor rpiboot = makeDevice("rpiboot://1:5", "Compute Module", 0);
+    rpiboot.isRpiboot = true;
+
+    model->processDriveList({rpiboot});
+
+    int announced = 0;
+    QObject::connect(model, &DriveListModel::rpibootDeviceDetected, model,
+                     [&](QString, quint8, quint8, QList<uint8_t>, quint16) { ++announced; });
+
+    // Announcing on every poll would re-trigger auto-bootstrap once a second.
+    model->processDriveList({rpiboot});
+    CHECK(announced == 0);
+}
+
+TEST_CASE("A fastboot storage target is offered even at zero size", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    Drivelist::DeviceDescriptor fb = makeDevice("fastboot://1:6", "CM5 eMMC", 0);
+    fb.isFastbootStorage = true;
+
+    // Zero-sized devices are normally dropped as empty readers, but a
+    // fastboot target reports no size and is still writable.
+    model->processDriveList({fb});
+    CHECK(rowsOf(model) == 1);
 }
