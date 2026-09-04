@@ -785,8 +785,14 @@ void DownloadThread::run()
         ret = curl_easy_perform(_c);
     }
 
-    curl_easy_cleanup(_c);
-
+    // Deliberately not cleaned up here.
+    //
+    // Both arms of the switch below read from the handle -- the success arm
+    // collects the connection timing metrics, and the error arm asks for
+    // CURLINFO_PRIMARY_IP to name the server in the message. Destroying it
+    // first made every one of those a use-after-free on the happy path of
+    // every download; AddressSanitizer reports it at curl_easy_getinfo,
+    // easy.c:861. Cleanup happens once the switch is done with it.
     switch (ret)
     {
         case CURLE_OK:
@@ -862,6 +868,9 @@ void DownloadThread::run()
 
             _onDownloadError(tr("Error downloading: %1").arg(errorMsg));
     }
+
+    curl_easy_cleanup(_c);
+    _c = nullptr;
 }
 
 size_t DownloadThread::_writeData(const char *buf, size_t len)
