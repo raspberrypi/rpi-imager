@@ -4814,3 +4814,45 @@ TEST_CASE("Ignoring device limits reallocates the buffers", "[imagewriter][devic
     REQUIRE(card.open(QIODevice::ReadOnly));
     CHECK(card.read(qint64(kFixturePayload)) == fixturePayload());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Which extraction path a plain image takes
+//
+// LocalFileExtractThread chooses between libarchive and a direct copy by
+// asking libarchive whether it can extract anything. libarchive is
+// configured with format_raw, which matches any file at all and hands back
+// its contents -- so a plain uncompressed .img is taken for an archive and
+// goes through the libarchive path, not the direct copy written for it.
+//
+// That is worth pinning rather than assuming, because it decides which of
+// two implementations every "Use custom" write of a raw image exercises.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A zero-length image is refused rather than written", "[imagewriter][extract]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("empty.img"));
+    QFile s(source);
+    REQUIRE(s.open(QIODevice::WriteOnly));
+    s.close();
+
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, 0);
+    w.setDst(target, kFixturePayload);
+
+    // An empty file is the one case libarchive cannot extract anything from,
+    // so this is also the only way into the direct-copy path. Writing
+    // nothing and calling it a success would leave the user with a card they
+    // believe is imaged.
+    const WriteOutcome out = runWrite(w, 60000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+}

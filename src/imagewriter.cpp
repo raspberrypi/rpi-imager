@@ -1208,6 +1208,15 @@ void ImageWriter::startWrite()
             onError(tr("Source file is not readable: %1").arg(localPath));
             return;
         }
+        if (localFi.size() == 0)
+        {
+            // An interrupted copy or a failed download saved to disk. It
+            // passes the capacity check, extracts to nothing, and finishes
+            // reporting success -- leaving the user with a card they believe
+            // is imaged and no indication otherwise.
+            onError(tr("Source file is empty: %1").arg(localPath));
+            return;
+        }
     }
 
     if (_devLen && _extrLen > _devLen)
