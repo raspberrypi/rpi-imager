@@ -1128,6 +1128,66 @@ if(RPI_IMAGER_COVERAGE)
 endif()
 
 # ============================================================================
+# FAT driver, against a filesystem in a scratch file
+# ============================================================================
+# DeviceWrapperFatPartition is the imager's own FAT implementation -- what
+# writes config.txt, cmdline.txt and firstrun.sh onto the boot partition after
+# imaging. fat_partition_test above can only reach it through a real mounted
+# partition named by FAT_TEST_MOUNT_PATH, so on an ordinary run it exercises
+# almost none of it.
+#
+# This target builds a filesystem with mkfs.vfat in a per-process scratch file
+# and drives the same code against that: no device, no mount, no privileges,
+# and both FAT16 and FAT32. Cases skip themselves where mkfs.vfat is absent.
+
+add_executable(fat_partition_image_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    fat_partition_image_test.cpp
+)
+
+set_target_properties(fat_partition_image_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(fat_partition_image_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(fat_partition_image_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+if(APPLE)
+    target_link_libraries(fat_partition_image_test PRIVATE
+        "-framework Security"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
+    )
+endif()
+
+rpi_link_platform_file_ops(fat_partition_image_test)
+
+target_compile_features(fat_partition_image_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(fat_partition_image_test)
+
+add_custom_target(test_fat_partition_image
+    COMMAND fat_partition_image_test
+    DEPENDS fat_partition_image_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running FAT driver tests against a scratch filesystem"
+)
+
+# ============================================================================
 # DownloadThread
 # ============================================================================
 # The write path: curl in, hashed, onto the target. 1,958 branches, the
