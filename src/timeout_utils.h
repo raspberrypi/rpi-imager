@@ -22,6 +22,7 @@
 #include <chrono>
 #include <functional>
 #include <future>
+#include <memory>
 #include <thread>
 #include <atomic>
 #include <type_traits>
@@ -91,14 +92,33 @@ TimeoutResult runWithTimeout(
     Func&& operation,
     const TimeoutConfig& config = {}
 ) {
-    std::atomic<bool> completed{false};
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    
-    std::thread worker([&completed, &promise, op = std::forward<Func>(operation)]() {
+    // The shared state lives on the heap and the worker holds a strong
+    // reference to it.
+    //
+    // It used to be two locals captured by reference. On the timeout and
+    // cancellation paths below the worker is detached and this function
+    // returns, so those references pointed into a frame that no longer
+    // existed; when the abandoned operation finally unblocked it stored
+    // through them and called set_value() on a destroyed promise. Under ASan
+    // that is a stack-use-after-return, under TSan a heap-use-after-free, and
+    // uninstrumented it is a segfault -- reachable in the product by
+    // cancelling a write while the device is still being prepared, since
+    // _openAndPrepareDevice() runs through here.
+    //
+    // Keeping the state alive through a shared_ptr means a detached worker
+    // writes somewhere that is still valid, and the memory is released when
+    // the last of the two lets go of it.
+    struct SharedState {
+        std::atomic<bool> completed{false};
+        std::promise<void> promise;
+    };
+    auto state = std::make_shared<SharedState>();
+    auto future = state->promise.get_future();
+
+    std::thread worker([state, op = std::forward<Func>(operation)]() mutable {
         op();
-        completed.store(true);
-        promise.set_value();
+        state->completed.store(true);
+        state->promise.set_value();
     });
     
     auto startTime = std::chrono::steady_clock::now();
@@ -143,9 +163,22 @@ TimeoutResult runWithTimeout(
     ResultType& result,
     const TimeoutConfig& config = {}
 ) {
-    return runWithTimeout([&]() {
-        result = operation();
+    // Same hazard as the void overload, one level up: `result` is the
+    // caller's variable, and a detached worker assigning to it after this
+    // function has returned writes into a dead frame. The worker fills a
+    // heap-allocated slot instead, and the value is copied out only when the
+    // operation actually completed -- so a timed-out or cancelled operation
+    // that finishes later cannot scribble over the caller's result either.
+    auto slot = std::make_shared<ResultType>(result);
+
+    const TimeoutResult outcome = runWithTimeout([slot, &operation]() {
+        *slot = operation();
     }, config);
+
+    if (outcome == TimeoutResult::Completed)
+        result = *slot;
+
+    return outcome;
 }
 
 /**

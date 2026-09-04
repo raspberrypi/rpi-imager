@@ -1,4 +1,17 @@
 /*
+ * NOTE (updated): these two cases were tagged [.timeout-hazard] -- hidden --
+ * because runWithTimeout() captured its completion flag and promise by
+ * reference and detached the worker, so uninstrumented they took the process
+ * down and were useless as a CI signal.
+ *
+ * That has been fixed: the shared state is now heap-allocated and the worker
+ * holds a strong reference to it, so a detached worker writes somewhere that
+ * is still alive. The cases are therefore no longer hidden -- they run on
+ * every build and guard the fix. They still say the most under a sanitiser
+ * (the commands below), but uninstrumented a regression reintroduces the
+ * segfault and fails the suite loudly, which is exactly what is wanted.
+ */
+/*
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2026 Raspberry Pi Ltd
  *
@@ -110,8 +123,8 @@ constexpr auto kWorkerSettleTime = std::chrono::milliseconds(500);
 
 }  // namespace
 
-TEST_CASE("timed-out operation writes into runWithTimeout's dead frame",
-          "[.timeout-hazard]") {
+TEST_CASE("timed-out operation does not write into runWithTimeout's dead frame",
+          "[timeout-hazard]") {
   auto gate = std::make_shared<Gate>();
   std::atomic<bool> onTimeoutFired{false};
 
@@ -140,8 +153,8 @@ TEST_CASE("timed-out operation writes into runWithTimeout's dead frame",
   SUCCEED("reached the end without the worker taking the process down");
 }
 
-TEST_CASE("cancelled operation writes into runWithTimeout's dead frame",
-          "[.timeout-hazard]") {
+TEST_CASE("cancelled operation does not write into runWithTimeout's dead frame",
+          "[timeout-hazard]") {
   auto gate = std::make_shared<Gate>();
   std::atomic<bool> cancel{false};
 
