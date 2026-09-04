@@ -24,6 +24,8 @@
 
 #include <QDir>
 #include <QFile>
+#include <QEventLoop>
+#include <QTimer>
 #include <QGuiApplication>
 #include <QStandardPaths>
 #include <QJsonArray>
@@ -1330,4 +1332,227 @@ TEST_CASE("Hardware tags are taken from the feed's device list",
     // machine is, so a test that checked it would pass or fail on the build
     // host rather than on the code. Only that asking is safe.
     CHECK_NOTHROW(w.getHardwareName());
+}
+
+// ══════════════════════════════════════════════════════════════
+// A write, driven the way the UI drives it
+//
+// Everything above stops short of startWrite() actually starting one. This
+// takes a local image and a scratch file as the target and runs it through:
+// thread selection, the progress signals the UI binds to, and the terminal
+// state. It is the path every successful write takes, and none of it had
+// been executed by a test.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Runs the Qt event loop until one of ImageWriter's terminal signals lands.
+struct WriteOutcome
+{
+    bool succeeded = false;
+    bool failed = false;
+    bool finalizing = false;
+    QStringList errors;
+    QStringList statuses;
+    bool sawProgress = false;
+    QStringList progressKinds;
+};
+
+WriteOutcome runWrite(ImageWriter &w, int timeoutMs = 120000)
+{
+    WriteOutcome out;
+    QEventLoop loop;
+
+    QObject::connect(&w, &ImageWriter::success, [&] { out.succeeded = true; loop.quit(); });
+    QObject::connect(&w, &ImageWriter::error, [&](QVariant m) {
+        out.failed = true;
+        out.errors << m.toString();
+        loop.quit();
+    });
+    QObject::connect(&w, &ImageWriter::finalizing, [&] { out.finalizing = true; });
+    QObject::connect(&w, &ImageWriter::preparationStatusUpdate,
+                     [&](QVariant m) { out.statuses << m.toString(); });
+    QObject::connect(&w, &ImageWriter::writeProgress,
+                     [&](QVariant n, QVariant t) {
+                         out.sawProgress = true;
+                         out.progressKinds << QStringLiteral("write %1/%2")
+                                                  .arg(n.toULongLong()).arg(t.toULongLong());
+                     });
+    QObject::connect(&w, &ImageWriter::downloadProgress,
+                     [&](QVariant n, QVariant t) {
+                         out.progressKinds << QStringLiteral("download %1/%2")
+                                                  .arg(n.toULongLong()).arg(t.toULongLong());
+                     });
+    QObject::connect(&w, &ImageWriter::verifyProgress,
+                     [&](QVariant n, QVariant t) {
+                         out.progressKinds << QStringLiteral("verify %1/%2")
+                                                  .arg(n.toULongLong()).arg(t.toULongLong());
+                     });
+
+    QTimer guard;
+    guard.setSingleShot(true);
+    QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
+    guard.start(timeoutMs);
+
+    w.startWrite();
+    loop.exec();
+    return out;
+}
+
+// A small image of recognisable bytes, and somewhere to write it.
+class WriteFixture
+{
+public:
+    WriteFixture()
+    {
+        REQUIRE(_dir.isValid());
+        _source = QDir(_dir.path()).filePath(QStringLiteral("source.img"));
+        _target = QDir(_dir.path()).filePath(QStringLiteral("target.img"));
+
+        _payload.reserve(kSize);
+        for (int i = 0; i < kSize; ++i)
+            _payload.append(char('A' + (i * 31) % 26));
+
+        QFile s(_source);
+        REQUIRE(s.open(QIODevice::WriteOnly));
+        REQUIRE(s.write(_payload) == _payload.size());
+        s.close();
+
+        // Pre-create the target at the same size: the write path opens it as
+        // though it were a device rather than creating it.
+        QFile t(_target);
+        REQUIRE(t.open(QIODevice::WriteOnly));
+        REQUIRE(t.write(QByteArray(kSize, '\0')) == kSize);
+        t.close();
+    }
+
+    static constexpr int kSize = 4 * 1024 * 1024;
+    QUrl sourceUrl() const { return QUrl::fromLocalFile(_source); }
+    QString target() const { return _target; }
+    const QByteArray &payload() const { return _payload; }
+
+private:
+    QTemporaryDir _dir;
+    QString _source, _target;
+    QByteArray _payload;
+};
+
+// Same shape, sized so the copy loop runs many times.
+class LargeWriteFixture
+{
+public:
+    LargeWriteFixture()
+    {
+        REQUIRE(_dir.isValid());
+        _source = QDir(_dir.path()).filePath(QStringLiteral("source.img"));
+        _target = QDir(_dir.path()).filePath(QStringLiteral("target.img"));
+
+        QByteArray chunk(1024 * 1024, '\0');
+        for (int i = 0; i < chunk.size(); ++i)
+            chunk[i] = char('A' + (i * 17) % 26);
+
+        QFile s(_source);
+        REQUIRE(s.open(QIODevice::WriteOnly));
+        for (int i = 0; i < kSizeMB; ++i)
+            REQUIRE(s.write(chunk) == chunk.size());
+        s.close();
+
+        QFile t(_target);
+        REQUIRE(t.open(QIODevice::WriteOnly));
+        for (int i = 0; i < kSizeMB; ++i)
+            REQUIRE(t.write(QByteArray(1024 * 1024, '\0')) == 1024 * 1024);
+        t.close();
+    }
+
+    static constexpr int kSizeMB = 64;
+    static constexpr quint64 kSize = quint64(kSizeMB) * 1024 * 1024;
+    QUrl sourceUrl() const { return QUrl::fromLocalFile(_source); }
+    QString target() const { return _target; }
+
+private:
+    QTemporaryDir _dir;
+    QString _source, _target;
+};
+
+} // namespace
+
+TEST_CASE("A local image is written through to the target", "[imagewriter][write]")
+{
+    WriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, WriteFixture::kSize);
+    w.setDst(fx.target(), WriteFixture::kSize);
+    REQUIRE(w.readyToWrite());
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    INFO("statuses: " << out.statuses.join(QStringLiteral(" | ")).toStdString());
+
+    REQUIRE_FALSE(out.failed);
+    CHECK(out.succeeded);
+
+    // The bytes really arrived, not just a success signal.
+    QFile t(fx.target());
+    REQUIRE(t.open(QIODevice::ReadOnly));
+    CHECK(t.read(WriteFixture::kSize) == fx.payload());
+}
+
+TEST_CASE("The UI is told what is happening during a write",
+          "[imagewriter][write]")
+{
+    // The progress bar and status line are bound to these. A write that
+    // completes without ever emitting leaves the window looking frozen.
+    //
+    // Deliberately larger than the other cases here. Progress is sampled
+    // inside the copy loop and only emitted when the written count has
+    // actually moved, so an image small enough to be consumed in a single
+    // buffer can finish with the write still in flight at the one sample
+    // point -- no progress, and nothing wrong. Several buffers' worth is
+    // what a real image looks like and what the bar is there for.
+    LargeWriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
+    w.setDst(fx.target(), LargeWriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w, 600000);
+    REQUIRE(out.succeeded);
+    INFO("progress signals: " << out.progressKinds.join(QStringLiteral(" | ")).toStdString());
+    CHECK(out.sawProgress);
+}
+
+TEST_CASE("A write to somewhere unwritable reports rather than hangs",
+          "[imagewriter][write]")
+{
+    // The failure the user meets when the card is write-protected or the
+    // permissions are wrong. It has to come back as an error, not a
+    // progress bar that never moves.
+    WriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, WriteFixture::kSize);
+    w.setDst(QStringLiteral("/nonexistent-9f2a/target.img"), WriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w, 60000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(out.failed);
+    CHECK_FALSE(out.succeeded);
+    CHECK_FALSE(out.errors.isEmpty());
+}
+
+TEST_CASE("A verified write checks what it wrote", "[imagewriter][write]")
+{
+    // Verification reads the card back. With it on, a successful result
+    // means the bytes on the device were compared, not just sent.
+    WriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.sourceUrl(), 0, WriteFixture::kSize);
+    w.setDst(fx.target(), WriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    CHECK(out.succeeded);
 }
