@@ -270,35 +270,115 @@ bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
         _currentDirClusters.clear();
         _currentDirClusters.append(dirCluster);
         
-        // Get the file entry in subdirectory
-        QString fileNameOnly = parts[parts.size() - 1];
-        qDebug() << "DeviceWrapperFatPartition::deleteFile: searching for file" << fileNameOnly << "in subdirectory";
-        bool found = getDirEntry(fileNameOnly, &entry);
-        qDebug() << "DeviceWrapperFatPartition::deleteFile: getDirEntry returned" << found;
-        
-        // Restore directory state
-        _fat32_currentRootDirCluster = savedRootDirCluster;
-        _currentDirClusters = savedDirClusters;
-        
-        if (!found) {
-            qDebug() << "DeviceWrapperFatPartition::deleteFile: file not found in directory:" << filename;
+        // Scan the subdirectory here rather than calling getDirEntry().
+        //
+        // getDirEntry() and updateDirEntry() both begin with openDir(), which
+        // unconditionally seeks back to the root directory -- so the cluster
+        // set up above was discarded and the search ran in the root, found
+        // nothing, and returned false. The whole subdirectory branch was dead
+        // code: nothing under overlays/ could ever be deleted, and
+        // DownloadThread::_clearFatPartition() logged "failed to delete" for
+        // every one of them and carried on.
+        //
+        // readFile() gets this right by scanning the directory itself, and
+        // that is what happens below. Doing it here rather than teaching
+        // openDir() about subdirectories keeps the change away from the other
+        // callers of that shared traversal state. It also works on FAT16,
+        // where readDir() cannot walk a subdirectory at all -- it throws once
+        // the position leaves the fixed root-directory region.
+        const QString fileNameOnly = parts[parts.size() - 1];
+        const QString fileNameLower = fileNameOnly.toLower();
+
+        seekCluster(dirCluster);
+
+        bool found = false;
+        quint64 entryOffset = 0;
+        QString longFilename;
+
+        while (true)
+        {
+            const quint64 thisEntryOffset = _offset;
+            read((char *) &entry, sizeof(entry));
+
+            if (entry.DIR_Name[0] == 0)
+                break;  /* end of directory */
+
+            if (IS_LONG_NAME_ENTRY(entry.DIR_Attr))
+            {
+                struct longfn_entry *l = (struct longfn_entry *) &entry;
+                char lnamePartStr[26] = {0};
+                memcpy(lnamePartStr, l->LDIR_Name1, 10);
+                memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
+                memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
+                QString lnamePart((QChar *) lnamePartStr, 13);
+                longFilename = lnamePart + longFilename;
+                continue;
+            }
+
+            if (entry.DIR_Name[0] != 0xE5 && !(entry.DIR_Attr & ATTR_VOLUME_ID))
+            {
+                if (longFilename.indexOf(QChar::Null) >= 0)
+                    longFilename.truncate(longFilename.indexOf(QChar::Null));
+
+                QString shortName;
+                for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++)
+                    shortName += QChar(entry.DIR_Name[i]).toLower();
+                if (entry.DIR_Name[8] != ' ')
+                {
+                    shortName += '.';
+                    for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++)
+                        shortName += QChar(entry.DIR_Name[i]).toLower();
+                }
+
+                const QString candidate =
+                    longFilename.isEmpty() ? shortName : longFilename.toLower();
+
+                if (candidate == fileNameLower)
+                {
+                    found = true;
+                    entryOffset = thisEntryOffset;
+                    break;
+                }
+            }
+
+            longFilename.clear();
+
+            /* Follow the directory's cluster chain on FAT32 */
+            if (_type == FAT32 && (pos() - _clusterOffset) % _bytesPerCluster == 0)
+            {
+                uint32_t nextCluster = getFAT(_fat32_currentRootDirCluster);
+                if (nextCluster >= 0xFFFFFF8)
+                    break;
+                if (_currentDirClusters.contains(nextCluster))
+                {
+                    qDebug() << "DeviceWrapperFatPartition::deleteFile: circular cluster "
+                                "reference in" << dirName;
+                    break;
+                }
+                _currentDirClusters.append(nextCluster);
+                _fat32_currentRootDirCluster = nextCluster;
+                seekCluster(nextCluster);
+            }
+        }
+
+        if (!found)
+        {
+            _fat32_currentRootDirCluster = savedRootDirCluster;
+            _currentDirClusters = savedDirClusters;
+            qDebug() << "DeviceWrapperFatPartition::deleteFile: file not found in directory:"
+                     << filename;
             return false;
         }
-        
-        // Mark as deleted and update
+
+        /* Mark the short entry deleted in place, matching what the
+           root-directory path does. */
         entry.DIR_Name[0] = 0xE5;
-        
-        // Switch back to subdirectory to update
-        _fat32_currentRootDirCluster = dirCluster;
-        _currentDirClusters.clear();
-        _currentDirClusters.append(dirCluster);
-        
-        updateDirEntry(&entry);
-        
-        // Restore directory state again
+        seek(entryOffset);
+        write((char *) &entry, sizeof(entry));
+
         _fat32_currentRootDirCluster = savedRootDirCluster;
         _currentDirClusters = savedDirClusters;
-        
+
         qDebug() << "DeviceWrapperFatPartition::deleteFile: deleted" << filename;
         return true;
     }
