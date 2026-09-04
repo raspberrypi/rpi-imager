@@ -540,6 +540,16 @@ std::vector<uint8_t> FileServer::readFileFromDisk(const std::filesystem::path& d
         return {};
     }
 
+    // Must be a regular file. An empty filename resolves to the firmware
+    // directory itself, and the device can send one -- the caller's garbage
+    // check only walks the characters of the name, so an empty name passes
+    // it. On Linux a directory opens happily through ifstream, tellg() then
+    // reports a nonsense size, and reserving a buffer that big throws
+    // std::bad_alloc out of a code path with no handler for it.
+    std::error_code fec;
+    if (!std::filesystem::is_regular_file(resolved, fec) || fec)
+        return {};
+
     std::ifstream file(resolved, std::ios::binary | std::ios::ate);
     if (!file.is_open())
         return {};
