@@ -998,6 +998,12 @@ std::optional<std::string> FirmwareManager::resolveLatestEepromVersion(
     // `default`-tagged builds live there).  Archived (`old`) builds are not
     // guaranteed to exist under latest/, so skip them — otherwise a future
     // newest-but-archived row would resolve to a URL that 404s.
+    return selectLatestVersion(in, firmwareDir);
+}
+
+std::optional<std::string> FirmwareManager::selectLatestVersion(std::istream& in,
+                                                                 const std::string& firmwareDir)
+{
     std::string line;
     while (std::getline(in, line)) {
         if (line.empty() || line.front() == '#')

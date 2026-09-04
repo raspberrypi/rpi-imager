@@ -1324,3 +1324,62 @@ target_link_libraries(oslist_parser_test PRIVATE
 target_compile_features(oslist_parser_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(oslist_parser_test)
+
+# ============================================================================
+# FirmwareManager
+# ============================================================================
+# Decides which firmware a board needs and whether what is already cached can
+# be trusted for it. The second question is the dangerous one: accepting a
+# cache directory that is incomplete, zero-length, or populated for a
+# different chip sideloads the wrong firmware to a Compute Module.
+#
+# The only public way in is ensureAvailable(), which downloads first, so the
+# cache logic was unreachable. Those helpers are protected rather than private
+# now and the test subclasses to reach them -- all filesystem work against a
+# scratch cache, no network.
+
+add_executable(firmware_manager_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/firmware_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootcode_loader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/secure_boot_provisioner.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_protocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    firmware_manager_test.cpp
+)
+
+set_target_properties(firmware_manager_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(firmware_manager_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS}
+    ${LibArchive_INCLUDE_DIR}
+)
+
+target_link_libraries(firmware_manager_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    CURL::libcurl
+    ${LibArchive_LIBRARIES}
+    ${ZSTD_LIBRARIES}
+    ${LIBLZMA_LIBRARIES}
+    ${GNUTLS_LIBRARIES}
+)
+
+rpi_link_platform_file_ops(firmware_manager_test)
+
+target_compile_features(firmware_manager_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(firmware_manager_test)

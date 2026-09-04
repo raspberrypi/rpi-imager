@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <istream>
 #include <optional>
 #include <string>
 #include <vector>
@@ -82,7 +83,18 @@ public:
     static constexpr const char* PROVISIONER_RAW_BASE =
         "https://github.com/raspberrypi/rpi-sb-provisioner/raw/refs/heads/main/";
 
-private:
+// Protected rather than private so a test can subclass and drive the cache
+// logic directly.
+//
+// buildManifest(), findCachedVersion(), validateCacheForDevice() and
+// clearCache()'s helpers are pure filesystem work -- they decide which
+// firmware files are needed, whether what is already on disk can be trusted
+// for a given board, and what to throw away. That is worth testing on its
+// own, but the only public way in is ensureAvailable(), which downloads from
+// the network first. Widening the access from private to protected changes
+// nothing for existing callers and keeps the class's public surface exactly
+// as it was.
+protected:
     struct ManifestEntry {
         std::string url;
         std::string localPath;  // relative to the version dir
@@ -101,6 +113,14 @@ private:
     // Fetch rpi-eeprom's firmware-271X/versions.txt and return the first
     // (newest) version it lists.  Returns std::nullopt on network failure;
     // caller falls back to the cached version sidecar.
+    // Choose the version to use from the body of rpi-eeprom's versions.txt.
+    // Split out from the fetch so it can be tested against hand-written
+    // files: the choice matters because an archived ("old") row is not
+    // guaranteed to exist under the latest/ channel we download from, so
+    // selecting one yields a URL that 404s and the device gets no firmware.
+    static std::optional<std::string> selectLatestVersion(std::istream& in,
+                                                          const std::string& firmwareDir);
+
     std::optional<std::string> resolveLatestEepromVersion(ChipGeneration chip,
                                                            std::atomic<bool>& cancelled);
 
