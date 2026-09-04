@@ -95,14 +95,27 @@ private:
     bool _hasChecksums = false;
     std::vector<BlockRange> _ranges;
 
-    // Cursor for sequential access
+    // Cursor for sequential access, plus the last index it answered, so a
+    // caller that jumps backwards can be detected and the cursor rewound.
     size_t _cursor = 0;
+    uint64_t _lastIdx = 0;
 };
 
 // ── Inline implementations ─────────────────────────────────────────────
 
 inline bool BlockMap::isMappedSequential(uint64_t idx)
 {
+    // The cursor only ever moves forward, so a caller that goes backwards
+    // would be answered from a range already behind idx -- reporting a
+    // mapped block as unmapped. The encoder would then skip it, and the
+    // card would be left with a hole where that block's data should be,
+    // with nothing reporting an error. Today's only caller walks strictly
+    // forward, so this cannot happen; the reset keeps it that way for the
+    // next one, and costs one comparison per block.
+    if (idx < _lastIdx)
+        _cursor = 0;
+    _lastIdx = idx;
+
     // Advance cursor past ranges that end before this block
     while (_cursor < _ranges.size() && _ranges[_cursor].end <= idx)
         ++_cursor;
