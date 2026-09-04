@@ -665,6 +665,10 @@ target_compile_options(rpiboot_integration_test PRIVATE
     -Wall -Wextra -Wpedantic
     $<$<CONFIG:Debug>:-g -O0>
 )
+# PLATFORM_FILE_OPS brings in the io_uring write path, so the target needs
+# liburing on the link line as well as in its sources.
+rpi_link_platform_file_ops(rpiboot_integration_test)
+
 rpi_discover_tests(rpiboot_integration_test)
 
 add_custom_target(test_rpiboot_integration
