@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -788,4 +789,200 @@ TEST_CASE("A write past the end of the file extends it", "[file-ops]") {
 
   REQUIRE(ops->Close() == FileError::kSuccess);
   CHECK(readBack(path, beyond, 512) == data);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The async write path and its recovery ladder
+//
+// Writes are queued through io_uring and completed later. When a card stops
+// keeping up, the watchdog walks a ladder: poll for completions, shrink the
+// queue, drain what is outstanding and fall back to synchronous writes. Each
+// rung is a public method here, and each is reached in production only after
+// a stall -- which is why almost none of it had been executed.
+//
+// Getting this wrong is the difference between a slow card that eventually
+// finishes and a write that dies half way. Driving the methods directly is
+// far more controllable than provoking a real stall.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// A loopback block device, which is what the async machinery actually needs:
+// against a regular file the queue depth comes back as 1 and no async
+// statistics are recorded, so the interesting paths are never taken.
+struct AsyncFixture {
+  std::string backing;
+  std::unique_ptr<LoopDevice> loop;
+  std::unique_ptr<rpi_imager::FileOperations> ops;
+
+  explicit AsyncFixture(const std::string &name) {
+    backing = makeImage(name, 32u * 1024 * 1024);
+    loop = std::make_unique<LoopDevice>(backing);
+    ops = rpi_imager::FileOperations::Create();
+  }
+
+  ~AsyncFixture() {
+    if (ops)
+      ops->Close();
+  }
+
+  bool haveDevice() const { return loop && loop->valid(); }
+
+  // The queue depth defaults to 1, and AsyncWriteSequential falls straight
+  // through to a synchronous write at that depth. DownloadThread configures
+  // it explicitly before writing; without the same step none of the async
+  // machinery is exercised at all.
+  bool open(int queueDepth = 16) {
+    if (ops->OpenDevice(loop->path()) != rpi_imager::FileError::kSuccess)
+      return false;
+    if (ops->IsAsyncIOSupported())
+      ops->SetAsyncQueueDepth(queueDepth);
+    return true;
+  }
+};
+
+// O_DIRECT is enabled for block devices, and it rejects a buffer that is not
+// aligned to the logical block size -- which a std::vector is not. Production
+// writes out of an AlignedBuffer for the same reason.
+class AlignedBlock {
+ public:
+  AlignedBlock(std::size_t size, std::uint8_t seed) : buffer_(size), size_(size) {
+    auto* p = static_cast<std::uint8_t*>(buffer_.data());
+    for (std::size_t i = 0; i < size; ++i)
+      p[i] = static_cast<std::uint8_t>((i * 7 + seed) & 0xFF);
+  }
+  const std::uint8_t* data() const {
+    return static_cast<const std::uint8_t*>(buffer_.data());
+  }
+  std::size_t size() const { return size_; }
+  bool valid() const { return buffer_.valid(); }
+
+ private:
+  rpi_imager::AlignedBuffer buffer_;
+  std::size_t size_;
+};
+
+}  // namespace
+
+TEST_CASE("Async writes complete and land", "[fileops][async]") {
+  AsyncFixture fx("rpi-imager-async-land.img");
+  if (!fx.haveDevice())
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+  REQUIRE(fx.open());
+  if (!fx.ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available here");
+
+  const AlignedBlock block(64 * 1024, 3);
+  REQUIRE(block.valid());
+  std::atomic<int> completed{0};
+  for (int i = 0; i < 8; ++i) {
+    const auto err = fx.ops->AsyncWriteSequential(
+        block.data(), block.size(),
+        [&completed](rpi_imager::FileError, std::size_t) { ++completed; });
+    REQUIRE(err == rpi_imager::FileError::kSuccess);
+  }
+
+  // Nothing is guaranteed to have finished until this returns.
+  REQUIRE(fx.ops->WaitForPendingWrites() == rpi_imager::FileError::kSuccess);
+  CHECK(fx.ops->GetPendingWriteCount() == 0);
+  CHECK(completed.load() == 8);
+
+  fx.ops->Close();
+  std::ifstream check(fx.loop->path(), std::ios::binary);
+  std::vector<char> first(block.size());
+  check.read(first.data(), static_cast<std::streamsize>(first.size()));
+  CHECK(std::memcmp(first.data(), block.data(), block.size()) == 0);
+}
+
+// Three more rungs are deliberately not covered here: polling alone,
+// DrainAndSwitchToSync() and CancelAsyncIO(). Driven directly they leave
+// writes queued -- WaitForPendingWrites() drains the same writes without
+// trouble -- which says the submission contract is not what a caller would
+// assume from the names. That is worth someone establishing, but a test
+// asserting my guess at it would be worse than none.
+
+TEST_CASE("The queue depth can be shrunk for recovery", "[fileops][async]") {
+  AsyncFixture fx("rpi-imager-async-depth.img");
+  if (!fx.haveDevice())
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+  REQUIRE(fx.open());
+  if (!fx.ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available here");
+
+  const int original = fx.ops->GetAsyncQueueDepth();
+  INFO("queue depth: " << original);
+  REQUIRE(original > 2);
+
+  // The second rung of the ladder: fewer outstanding writes so a slow card
+  // can drain what it already has.
+  fx.ops->ReduceQueueDepthForRecovery(2);
+  CHECK(fx.ops->GetAsyncQueueDepth() <= original);
+
+  const AlignedBlock block(16 * 1024, 9);
+  for (int i = 0; i < 4; ++i)
+    REQUIRE(fx.ops->AsyncWriteSequential(block.data(), block.size(), nullptr)
+            == rpi_imager::FileError::kSuccess);
+  CHECK(fx.ops->WaitForPendingWrites() == rpi_imager::FileError::kSuccess);
+}
+
+TEST_CASE("Pending writes are reported in offset order", "[fileops][async]") {
+  AsyncFixture fx("rpi-imager-async-sorted.img");
+  if (!fx.haveDevice())
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+  REQUIRE(fx.open());
+  if (!fx.ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available here");
+
+  const AlignedBlock block(64 * 1024, 13);
+  for (int i = 0; i < 6; ++i)
+    fx.ops->AsyncWriteSequential(block.data(), block.size(), nullptr);
+
+  // The sync fallback replays these, so their order decides whether the
+  // image is reassembled correctly or scrambled.
+  const auto pending = fx.ops->GetPendingWritesSorted();
+  for (std::size_t i = 1; i < pending.size(); ++i)
+    CHECK(pending[i - 1].offset <= pending[i].offset);
+
+  fx.ops->WaitForPendingWrites();
+}
+
+TEST_CASE("Direct I/O can be turned off and writing still works", "[fileops][async]") {
+  AsyncFixture fx("rpi-imager-async-directio.img");
+  if (!fx.haveDevice())
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+  REQUIRE(fx.open());
+
+  // Support asks users to turn this off when a write misbehaves, so it has
+  // to leave a working writer behind.
+  const auto err = fx.ops->SetDirectIOEnabled(false);
+  if (err != rpi_imager::FileError::kSuccess)
+    SKIP("direct I/O could not be disabled on this filesystem");
+
+  const AlignedBlock block(8 * 1024, 19);
+  CHECK(fx.ops->WriteSequential(block.data(), block.size()) == rpi_imager::FileError::kSuccess);
+  CHECK(fx.ops->Flush() == rpi_imager::FileError::kSuccess);
+}
+
+TEST_CASE("Async statistics are recorded and can be reset", "[fileops][async]") {
+  AsyncFixture fx("rpi-imager-async-stats.img");
+  if (!fx.haveDevice())
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+  REQUIRE(fx.open());
+  if (!fx.ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available here");
+
+  const AlignedBlock block(32 * 1024, 23);
+  for (int i = 0; i < 4; ++i)
+    fx.ops->AsyncWriteSequential(block.data(), block.size(), nullptr);
+  fx.ops->WaitForPendingWrites();
+
+  std::uint32_t wallMs = 0, writes = 0, minUs = 0, maxUs = 0, avgUs = 0;
+  fx.ops->GetAsyncIOStats(wallMs, writes, minUs, maxUs, avgUs);
+  // These end up in the performance report attached to bug reports.
+  CHECK(writes >= 4);
+  CHECK(maxUs >= minUs);
+
+  fx.ops->ResetAsyncIOStats();
+  fx.ops->GetAsyncIOStats(wallMs, writes, minUs, maxUs, avgUs);
+  CHECK(writes == 0);
 }
