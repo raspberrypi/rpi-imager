@@ -1227,6 +1227,27 @@ set(RPI_DOWNLOAD_PIPELINE_SOURCES
     ${PLATFORM_FILE_OPS}
 )
 
+# ── bmap ────────────────────────────────────────────────────────────────────
+# Decides which blocks get written. A block wrongly reported unmapped is
+# never written and leaves a hole in the filesystem on the card.
+add_executable(bmap_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
+    bmap_test.cpp
+)
+
+target_include_directories(bmap_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(bmap_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(bmap_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(bmap_test)
+
 # ── drive format thread ─────────────────────────────────────────────────────
 # The "Erase" entry: refusing safely, and the message shown when it fails.
 add_executable(drive_format_thread_test
