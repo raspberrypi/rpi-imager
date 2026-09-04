@@ -1534,6 +1534,41 @@ target_compile_features(cache_manager_test PRIVATE cxx_std_20)
 rpi_discover_tests(cache_manager_test)
 
 # ============================================================================
+# CurlFetcher
+# ============================================================================
+# How the OS list and its sublists are retrieved. Reporting success on a 404
+# hands the caller an HTML error page to parse as JSON, and never reporting at
+# all leaves the UI waiting, so the failure cases carry the weight here.
+#
+# Driven against a throwaway HTTP server on 127.0.0.1 bound to port 0: real
+# requests and real status handling, no network, no fixed port.
+
+add_executable(curl_fetcher_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlfetcher.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlfetcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    curl_fetcher_test.cpp
+)
+
+set_target_properties(curl_fetcher_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(curl_fetcher_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(curl_fetcher_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Network
+    CURL::libcurl
+)
+
+target_compile_features(curl_fetcher_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(curl_fetcher_test)
+
+# ============================================================================
 # SecureBootProvisioner
 # ============================================================================
 # Burns a customer key hash into a Compute Module's OTP and signs the firmware
@@ -1619,6 +1654,41 @@ target_link_libraries(download_stats_telemetry_test PRIVATE
 target_compile_features(download_stats_telemetry_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(download_stats_telemetry_test)
+
+# ============================================================================
+# ConnectDeviceRegistrar
+# ============================================================================
+# Enrols a board into Raspberry Pi Connect. It looked like it needed hardware
+# and the live API; it needs neither. The device side is an IUsbTransport, and
+# rpiboot/test/mock_usb_transport.h already provides one with fault injection
+# built in; the API side takes a baseUrl that can point at 127.0.0.1.
+#
+# Nothing here contacts Raspberry Pi Connect and no real credential is used.
+
+add_executable(connect_device_registrar_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../connect_device_registrar.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    connect_device_registrar_test.cpp
+)
+
+set_target_properties(connect_device_registrar_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(connect_device_registrar_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(connect_device_registrar_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Network
+    CURL::libcurl
+)
+
+target_compile_features(connect_device_registrar_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(connect_device_registrar_test)
 
 # ============================================================================
 # FirmwareManager
