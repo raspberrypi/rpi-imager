@@ -15,6 +15,8 @@
 #include <QTemporaryDir>
 #include "platformquirks.h"
 
+#include <cmath>
+
 using Catch::Matchers::ContainsSubstring;
 
 // ============================================================================
@@ -576,5 +578,93 @@ TEST_CASE("unmountDisk rejects a directory", "[platformquirks][disk]") {
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
     CHECK(PlatformQuirks::unmountDisk(dir.path()) == PlatformQuirks::DiskResult::InvalidDrive);
+}
+#endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+// ============================================================================
+// Display scaling and environment helpers
+// ============================================================================
+//
+// Small exported functions, each with a real consequence: the font scale the
+// window is laid out at, and the environment handed to external tools.
+
+#include <QProcessEnvironment>
+
+TEST_CASE("An explicit QT_SCALE_FACTOR overrides desktop text scaling",
+          "[platformquirks][scaling]") {
+    // Somebody who has set QT_SCALE_FACTOR has already said what they want.
+    // Multiplying the desktop's text-scaling factor on top of it would
+    // double-apply and leave the window unusable at high settings.
+    const QByteArray saved = qgetenv("QT_SCALE_FACTOR");
+    qputenv("QT_SCALE_FACTOR", "2");
+
+    CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+
+    if (saved.isEmpty())
+        qunsetenv("QT_SCALE_FACTOR");
+    else
+        qputenv("QT_SCALE_FACTOR", saved);
+}
+
+TEST_CASE("Text scaling returns a usable factor without one",
+          "[platformquirks][scaling]") {
+    // Whatever the desktop reports, the result has to be a sane multiplier:
+    // zero or a negative would collapse or invert every measurement derived
+    // from it.
+    const QByteArray saved = qgetenv("QT_SCALE_FACTOR");
+    qunsetenv("QT_SCALE_FACTOR");
+
+    const qreal f = PlatformQuirks::detectTextScaleFactor();
+    INFO("factor: " << f);
+    CHECK(f > 0.0);
+    CHECK(f < 10.0);
+
+    if (!saved.isEmpty())
+        qputenv("QT_SCALE_FACTOR", saved);
+}
+
+TEST_CASE("The font DPI correction is the ratio it claims to be",
+          "[platformquirks][scaling]") {
+    // 72/96: points to pixels. Wrong here and every font in the window is
+    // the wrong size.
+    const qreal c = PlatformQuirks::fontDpiCorrection();
+    INFO("correction: " << c);
+    CHECK(c > 0.0);
+    CHECK(std::abs(c - (72.0 / 96.0)) < 1e-9);
+}
+
+TEST_CASE("Clearing the AppImage environment removes both loader variables",
+          "[platformquirks][env]") {
+    // An AppImage points these at its bundled libraries. Leaving them set
+    // for a forked tool makes it load our Qt instead of the system's, which
+    // surfaces as PAM modules refusing to open a session or KDE tools
+    // failing on a Qt version mismatch -- neither of which looks like an
+    // environment problem from the outside.
+    qputenv("LD_LIBRARY_PATH", "/opt/appimage/lib");
+    qputenv("LD_PRELOAD", "/opt/appimage/lib/libthing.so");
+    REQUIRE_FALSE(qgetenv("LD_LIBRARY_PATH").isEmpty());
+
+    PlatformQuirks::clearAppImageEnvironment();
+
+    CHECK(qgetenv("LD_LIBRARY_PATH").isEmpty());
+    CHECK(qgetenv("LD_PRELOAD").isEmpty());
+}
+
+TEST_CASE("Clearing an already-clean environment is harmless",
+          "[platformquirks][env]") {
+    qunsetenv("LD_LIBRARY_PATH");
+    qunsetenv("LD_PRELOAD");
+    CHECK_NOTHROW(PlatformQuirks::clearAppImageEnvironment());
+    CHECK(qgetenv("LD_LIBRARY_PATH").isEmpty());
+}
+
+TEST_CASE("Scroll direction follows the flag Qt reports",
+          "[platformquirks][input]") {
+    // On Linux the platform has no opinion of its own, so Qt's flag is
+    // passed through. Inverting it here would reverse scrolling for
+    // everybody who has natural scrolling switched on.
+    CHECK(PlatformQuirks::isScrollInverted(true));
+    CHECK_FALSE(PlatformQuirks::isScrollInverted(false));
 }
 #endif // Q_OS_LINUX
