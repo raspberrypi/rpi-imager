@@ -19,6 +19,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <QTemporaryDir>
 
 using namespace rpiboot;
 using namespace rpiboot::testing;
@@ -724,4 +725,124 @@ TEST_CASE("RpibootProtocol execute respects cancellation", "[rpiboot][protocol][
     CHECK_FALSE(protocol.execute(mock, ChipGeneration::BCM2711,
                                   SideloadMode::Fastboot, fw.path(),
                                   nullptr, cancelled));
+}
+
+// ── File requests from the device ───────────────────────────────────────────
+//
+// The rpiboot file server answers file requests made by whatever is plugged
+// in. The filename comes off the wire and the contents go straight back to
+// the requester, so the device chooses what gets read. The only check on the
+// way in is that the name is printable ASCII, which a traversal satisfies
+// perfectly well. The imager frequently runs elevated so that it can write to
+// block devices, so "any file this process can read" is a wide set.
+
+TEST_CASE("Firmware files inside the directory are served", "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    {
+        std::ofstream f(base / "bootcode4.bin", std::ios::binary);
+        f << "firmware-bytes";
+    }
+    std::filesystem::create_directories(base / "2712");
+    {
+        std::ofstream f(base / "2712" / "bootcode5.bin", std::ios::binary);
+        f << "chip-specific";
+    }
+
+    const auto plain = rpiboot::FileServer::readFileFromDisk(base, "bootcode4.bin");
+    CHECK(std::string(plain.begin(), plain.end()) == "firmware-bytes");
+
+    // Chip subdirectories are a normal request and must keep working.
+    const auto nested = rpiboot::FileServer::readFileFromDisk(base, "2712/bootcode5.bin");
+    CHECK(std::string(nested.begin(), nested.end()) == "chip-specific");
+}
+
+TEST_CASE("A file request that climbs out of the firmware directory is refused",
+          "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+    std::filesystem::create_directories(base / "firmware");
+
+    // A secret next to the firmware directory, standing in for anything the
+    // imager's process can read.
+    {
+        std::ofstream f(base / "secret.txt", std::ios::binary);
+        f << "not-for-the-device";
+    }
+
+    for (const char *escape : {"../secret.txt",
+                               "./../secret.txt",
+                               "sub/../../secret.txt",
+                               "../../../../../../etc/passwd"}) {
+        INFO("request: " << escape);
+        const auto data = rpiboot::FileServer::readFileFromDisk(base / "firmware", escape);
+        CHECK(data.empty());
+    }
+}
+
+TEST_CASE("An absolute file request is refused", "[rpiboot][fileserver]")
+{
+    // std::filesystem::path's operator/ throws away the base when the right
+    // side is absolute, so this is a plain read of the named file unless it
+    // is checked for.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    const auto data = rpiboot::FileServer::readFileFromDisk(base, "/etc/passwd");
+    CHECK(data.empty());
+    CHECK(std::string(data.begin(), data.end()).find("root:") == std::string::npos);
+}
+
+TEST_CASE("A metadata request is not treated as a file", "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "*").empty());
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "*BOARD").empty());
+}
+
+TEST_CASE("A request for something that is not there yields nothing",
+          "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "absent.bin").empty());
+}
+
+TEST_CASE("A request that names a directory rather than a file is refused",
+          "[rpiboot][fileserver]")
+{
+    // An empty filename resolves to the firmware directory itself, and a
+    // device can send one: the caller's garbage check walks the characters of
+    // the name, so a name with no characters passes it unexamined.
+    //
+    // A directory opens perfectly well through ifstream on Linux, and the
+    // size it then reports is nonsense -- large enough that reserving a
+    // buffer for it throws std::bad_alloc, out of a call with no handler
+    // anywhere above it. It surfaced here as a test that passed alone and
+    // failed under `ctest -j4`, because whether the allocation throws depends
+    // on what else is running.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+    std::filesystem::create_directories(base / "subdir");
+
+    CHECK_NOTHROW(rpiboot::FileServer::readFileFromDisk(base, ""));
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "").empty());
+
+    CHECK_NOTHROW(rpiboot::FileServer::readFileFromDisk(base, "subdir"));
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "subdir").empty());
+
+    CHECK_NOTHROW(rpiboot::FileServer::readFileFromDisk(base, "."));
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, ".").empty());
 }
