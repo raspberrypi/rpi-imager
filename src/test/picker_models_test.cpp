@@ -1228,3 +1228,201 @@ TEST_CASE("Choosing a different board drops the image already picked", "[models]
 
     CHECK(writer.srcFileName().isEmpty());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The OS chooser's contents
+//
+// reload() turns the filtered list into rows: names, sizes, icons, and the
+// "(Recommended)" label on whichever entry ends up first after the
+// architecture sort.
+//
+// The label is worth pinning because it moves. Sorting for a different board
+// changes which entry is first, and the old label has to come off before the
+// new one goes on -- two entries claiming to be recommended, or none, is what
+// the user sees when that fails. It must also never land on Erase or Use
+// custom, which are fallbacks rather than operating systems.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+QByteArray osListWithEntries(const QString &entries)
+{
+    return QStringLiteral(R"JSON({
+        "imager": { "devices": [] },
+        "os_list": [ %1 ]
+    })JSON").arg(entries).toUtf8();
+}
+
+QString osEntry(const QString &name, const QString &extra = {})
+{
+    return QStringLiteral(R"({"name":"%1","description":"An operating system",)"
+                          R"("url":"https://example.invalid/%1.img.xz",)"
+                          R"("image_download_size":100,"extract_size":200%2})")
+        .arg(name, extra.isEmpty() ? QString() : QStringLiteral(",") + extra);
+}
+
+int rowNamedInOsList(QAbstractItemModel *view, const QString &name)
+{
+    for (int r = 0; r < view->rowCount(QModelIndex()); ++r)
+        if (roleOfRow(view, r, "name").toString() == name)
+            return r;
+    return -1;
+}
+
+} // namespace
+
+TEST_CASE("With no OS list the chooser still offers the built-ins", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(QByteArray(R"JSON({"imager":{},"os_list":[]})JSON"));
+    OSListModel *model = writer.getOSList();
+
+    // getFilteredOSlistDocument() always appends Erase and Use custom, so an
+    // empty repository list still reloads successfully. That is what lets a
+    // user with no network format a card or write their own image.
+    REQUIRE(model->reload());
+    REQUIRE(rowsOf(model) == 2);
+
+    QStringList urls;
+    for (int r = 0; r < rowsOf(model); ++r)
+        urls << roleOfRow(model, r, "url").toString();
+    CHECK(urls.contains(QStringLiteral("internal://format")));
+    CHECK(urls.contains(QStringLiteral("internal://custom")));
+}
+
+TEST_CASE("The first operating system is marked recommended", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListWithEntries(osEntry(QStringLiteral("Alpha")) + QStringLiteral(",")
+                                        + osEntry(QStringLiteral("Beta"))));
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+
+    const int alpha = rowNamedInOsList(model, QStringLiteral("Alpha"));
+    const int beta = rowNamedInOsList(model, QStringLiteral("Beta"));
+    REQUIRE(alpha >= 0);
+    REQUIRE(beta >= 0);
+
+    CHECK(roleOfRow(model, alpha, "description").toString().contains(QStringLiteral("Recommended")));
+    CHECK_FALSE(roleOfRow(model, beta, "description").toString().contains(QStringLiteral("Recommended")));
+}
+
+TEST_CASE("Exactly one entry is ever marked recommended", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListWithEntries(osEntry(QStringLiteral("Alpha")) + QStringLiteral(",")
+                                        + osEntry(QStringLiteral("Beta")) + QStringLiteral(",")
+                                        + osEntry(QStringLiteral("Gamma"))));
+    OSListModel *model = writer.getOSList();
+
+    // Reloading happens every time the board changes. The previous label has
+    // to be stripped, or the list accumulates them.
+    REQUIRE(model->reload());
+    REQUIRE(model->reload());
+    REQUIRE(model->reload());
+
+    int marked = 0;
+    for (int r = 0; r < rowsOf(model); ++r)
+        if (roleOfRow(model, r, "description").toString().contains(QStringLiteral("Recommended")))
+            ++marked;
+    CHECK(marked == 1);
+}
+
+TEST_CASE("Erase and Use custom are never recommended", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    // No real entries at all: the built-ins are all that is left.
+    writer.feedOsList(QByteArray(R"JSON({"imager":{},"os_list":[]})JSON"));
+    OSListModel *model = writer.getOSList();
+    model->reload();
+
+    for (int r = 0; r < rowsOf(model); ++r) {
+        const QString url = roleOfRow(model, r, "url").toString();
+        if (!url.startsWith(QStringLiteral("internal://")))
+            continue;
+        INFO("row: " << roleOfRow(model, r, "name").toString().toStdString());
+        // Recommending "Format card as FAT32" would be actively misleading.
+        CHECK_FALSE(roleOfRow(model, r, "description").toString()
+                        .contains(QStringLiteral("Recommended")));
+    }
+}
+
+TEST_CASE("A remote OS icon is routed through the image provider", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListWithEntries(
+        osEntry(QStringLiteral("Alpha"), QStringLiteral(R"("icon":"https://example.com/a.png")"))));
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+
+    const int alpha = rowNamedInOsList(model, QStringLiteral("Alpha"));
+    REQUIRE(alpha >= 0);
+    CHECK(roleOfRow(model, alpha, "icon").toString()
+          == QStringLiteral("image://icons/https://example.com/a.png"));
+}
+
+TEST_CASE("A local OS icon is left as it is", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListWithEntries(
+        osEntry(QStringLiteral("Alpha"), QStringLiteral(R"("icon":"qrc:/icons/a.png")"))));
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+
+    const int alpha = rowNamedInOsList(model, QStringLiteral("Alpha"));
+    REQUIRE(alpha >= 0);
+    CHECK(roleOfRow(model, alpha, "icon").toString() == QStringLiteral("qrc:/icons/a.png"));
+}
+
+TEST_CASE("Sizes and hashes reach the chooser", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListWithEntries(osEntry(
+        QStringLiteral("Alpha"),
+        QStringLiteral(R"("extract_sha256":"abc123","release_date":"2026-01-01","architecture":"arm64")"))));
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+
+    const int alpha = rowNamedInOsList(model, QStringLiteral("Alpha"));
+    REQUIRE(alpha >= 0);
+
+    // These feed the capacity check and the hash the download is verified
+    // against; a role that does not arrive is a write that cannot be checked.
+    CHECK(roleOfRow(model, alpha, "extract_size").toDouble() == 200);
+    CHECK(roleOfRow(model, alpha, "image_download_size").toDouble() == 100);
+    CHECK(roleOfRow(model, alpha, "extract_sha256").toString() == QStringLiteral("abc123"));
+    CHECK(roleOfRow(model, alpha, "release_date").toString() == QStringLiteral("2026-01-01"));
+}
+
+TEST_CASE("A soft refresh repaints without rebuilding", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListWithEntries(osEntry(QStringLiteral("Alpha"))));
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+
+    int resets = 0, changes = 0;
+    QObject::connect(model, &QAbstractItemModel::modelReset, model, [&] { ++resets; });
+    QObject::connect(model, &QAbstractItemModel::dataChanged, model,
+                     [&](const QModelIndex &, const QModelIndex &, const QList<int> &) { ++changes; });
+
+    // Used when only the display needs updating (a language change, say).
+    // A full reset would scroll the list back to the top under the user.
+    model->softRefresh();
+
+    CHECK(resets == 0);
+    CHECK(changes == 1);
+}
+
+TEST_CASE("A soft refresh of an empty list is harmless", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+
+    int changes = 0;
+    QObject::connect(model, &QAbstractItemModel::dataChanged, model,
+                     [&](const QModelIndex &, const QModelIndex &, const QList<int> &) { ++changes; });
+
+    model->softRefresh();
+    CHECK(changes == 0);
+}
