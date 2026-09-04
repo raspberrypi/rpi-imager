@@ -1529,6 +1529,12 @@ if(NOT BUILD_CLI_ONLY)
     target_link_libraries(picker_models_test PRIVATE Catch2::Catch2 rpi_imager_testable)
     rpi_discover_tests(picker_models_test)
 
+    # Saving a copy of the image while it downloads.
+    add_executable(async_cache_writer_test async_cache_writer_test.cpp)
+    set_target_properties(async_cache_writer_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(async_cache_writer_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+    rpi_discover_tests(async_cache_writer_test)
+
     # The one place every libcurl handle is configured.
     add_executable(curl_network_config_test curl_network_config_test.cpp)
     set_target_properties(curl_network_config_test PROPERTIES AUTOMOC ON)
