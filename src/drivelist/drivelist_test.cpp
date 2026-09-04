@@ -848,3 +848,128 @@ TEST_CASE("System drive detection works", "[drivelist][integration]")
     CHECK(systemDrive->isSystem);
     CHECK(systemDrive->hasSystemMountpoint());
 }
+
+// ── Display sanitisation ────────────────────────────────────────────────────
+//
+// Device names come from USB descriptors, so they are attacker-controlled: a
+// hostile device chooses what the imager shows in the drive list. The attack
+// this defends against is a name that renders as something other than what it
+// is -- bidirectional overrides that reverse part of the text, or zero-width
+// characters that hide a suffix -- so the user picks it believing it is a
+// different drive and overwrites the wrong one.
+//
+// The sanitiser therefore has to be judged on two counts: it must strip
+// everything that can misrepresent, and it must leave ordinary names alone,
+// because mangling legitimate non-English device names would be its own bug.
+
+TEST_CASE("Plain ASCII names are left alone", "[drivelist][sanitize]")
+{
+    CHECK(sanitizeForDisplay("SanDisk Cruzer Blade") == "SanDisk Cruzer Blade");
+    CHECK(sanitizeForDisplay("") == "");
+    CHECK(sanitizeForDisplay("Generic USB 3.0 (32 GB)") == "Generic USB 3.0 (32 GB)");
+}
+
+TEST_CASE("Bidirectional overrides are stripped", "[drivelist][sanitize]")
+{
+    // The documented attack: U+202E reverses what follows, so a crafted name
+    // can be made to read as an entirely different device.
+    const std::string attack = "Safe\xE2\x80\xAE" "drivevod\xE2\x80\xAC Storage";
+    const std::string clean  = sanitizeForDisplay(attack);
+
+    CHECK(clean.find("\xE2\x80\xAE") == std::string::npos);   // U+202E RLO
+    CHECK(clean.find("\xE2\x80\xAC") == std::string::npos);   // U+202C PDF
+    // The visible text survives; only the direction controls go.
+    CHECK(clean == "Safedrivevod Storage");
+}
+
+TEST_CASE("Every bidi control in the guarded ranges is stripped",
+          "[drivelist][sanitize]")
+{
+    // U+202A-U+202E and U+2066-U+2069.
+    auto utf8 = [](uint32_t cp) {
+        std::string s;
+        s += char(0xE0 | (cp >> 12));
+        s += char(0x80 | ((cp >> 6) & 0x3F));
+        s += char(0x80 | (cp & 0x3F));
+        return s;
+    };
+
+    for (uint32_t cp = 0x202A; cp <= 0x202E; ++cp) {
+        INFO("codepoint U+" << std::hex << cp);
+        CHECK(sanitizeForDisplay("a" + utf8(cp) + "b") == "ab");
+    }
+    for (uint32_t cp = 0x2066; cp <= 0x2069; ++cp) {
+        INFO("codepoint U+" << std::hex << cp);
+        CHECK(sanitizeForDisplay("a" + utf8(cp) + "b") == "ab");
+    }
+}
+
+TEST_CASE("Zero-width characters are stripped", "[drivelist][sanitize]")
+{
+    // These render as nothing, so they let two different names look identical.
+    CHECK(sanitizeForDisplay("Kingston\xE2\x80\x8B") == "Kingston");   // U+200B
+    CHECK(sanitizeForDisplay("King\xE2\x80\x8Cston") == "Kingston");   // U+200C
+    CHECK(sanitizeForDisplay("King\xE2\x80\x8Dston") == "Kingston");   // U+200D
+    CHECK(sanitizeForDisplay("\xEF\xBB\xBF" "Kingston") == "Kingston"); // U+FEFF
+}
+
+TEST_CASE("Invisible formatting characters are stripped", "[drivelist][sanitize]")
+{
+    CHECK(sanitizeForDisplay("soft\xC2\xAD" "hyphen") == "softhyphen");   // U+00AD
+    CHECK(sanitizeForDisplay("a\xE2\x81\xA0" "b") == "ab");               // U+2060
+    CHECK(sanitizeForDisplay("a\xEF\xB8\x80" "b") == "ab");               // U+FE00
+}
+
+TEST_CASE("Control characters become spaces rather than vanishing",
+          "[drivelist][sanitize]")
+{
+    // A newline or tab that simply disappeared would let "Disk 1\nEvil" show
+    // as "Disk 1Evil"; replacing with a space keeps the join visible.
+    CHECK(sanitizeForDisplay("Disk\n1") == "Disk 1");
+    CHECK(sanitizeForDisplay("Disk\t1") == "Disk 1");
+    CHECK(sanitizeForDisplay(std::string("Disk\0" "1", 6)) == "Disk 1");
+    CHECK(sanitizeForDisplay("Disk\x7F" "1") == "Disk 1");
+}
+
+TEST_CASE("Legitimate non-English names survive", "[drivelist][sanitize]")
+{
+    // Over-zealous stripping would be its own defect: a user with a device
+    // named in their own script must still be able to recognise it.
+    CHECK(sanitizeForDisplay("Sandisk \xC3\xBC" "berdrive") == "Sandisk \xC3\xBC" "berdrive");
+    CHECK(sanitizeForDisplay("\xE3\x83\x87\xE3\x82\xA3\xE3\x82\xB9\xE3\x82\xAF")
+          == "\xE3\x83\x87\xE3\x82\xA3\xE3\x82\xB9\xE3\x82\xAF");  // ディスク
+    CHECK(sanitizeForDisplay("\xF0\x9F\x92\xBE") == "\xF0\x9F\x92\xBE");  // 💾, 4-byte
+}
+
+TEST_CASE("Invalid UTF-8 becomes a replacement character", "[drivelist][sanitize]")
+{
+    // A truncated sequence must not be copied through as-is, or the string
+    // handed to the UI is not valid UTF-8 at all.
+    const std::string out = sanitizeForDisplay("bad\xC3");
+    CHECK(out == "bad\xEF\xBF\xBD");
+
+    // A continuation byte with no lead byte.
+    CHECK(sanitizeForDisplay("\x80") == "\xEF\xBF\xBD");
+}
+
+TEST_CASE("A name made only of hostile characters collapses to nothing",
+          "[drivelist][sanitize]")
+{
+    CHECK(sanitizeForDisplay("\xE2\x80\xAE\xE2\x80\xAC\xE2\x80\x8B").empty());
+}
+
+// ── IDN homograph detection ─────────────────────────────────────────────────
+
+TEST_CASE("Ordinary hostnames are not flagged", "[drivelist][sanitize]")
+{
+    CHECK_FALSE(hasNonAsciiChars("downloads.raspberrypi.org"));
+    CHECK_FALSE(hasNonAsciiChars("localhost"));
+    CHECK_FALSE(hasNonAsciiChars(""));
+}
+
+TEST_CASE("A hostname with lookalike characters is flagged", "[drivelist][sanitize]")
+{
+    // Cyrillic 'а' (U+0430) is indistinguishable from Latin 'a' in most
+    // fonts, which is the whole point of an IDN homograph.
+    CHECK(hasNonAsciiChars("r\xD0\xB0" "spberrypi.org"));
+}
