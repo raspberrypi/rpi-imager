@@ -4313,3 +4313,146 @@ TEST_CASE("An empty source is refused before anything starts", "[imagewriter][de
 
     CHECK_FALSE(w.readyToWrite());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Erasing a card, and ejecting it afterwards
+//
+// Two things the user does that are not "write an image". Erase is the first
+// entry in the OS chooser; eject is what the imager offers when a write
+// finishes, and on Linux it is what stops the desktop remounting a card the
+// user is about to pull out.
+//
+// Neither had been driven through ImageWriter. The eject state machine
+// matters most: QML binds a button to it, so a state that never leaves
+// "in progress" is a button that stays disabled for the rest of the session.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+ImageWriter::EjectState ejectStateOf(ImageWriter &w)
+{
+    // ejectState() is private but published as a Q_PROPERTY for QML.
+    return w.property("ejectState").value<ImageWriter::EjectState>();
+}
+
+bool waitForEjectToSettle(ImageWriter &w, int timeoutMs = 30000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (ejectStateOf(w) == ImageWriter::EjectState::EjectInProgress
+           && t.elapsed() < timeoutMs) {
+        QEventLoop loop;
+        QTimer::singleShot(20, &loop, &QEventLoop::quit);
+        loop.exec();
+    }
+    return ejectStateOf(w) != ImageWriter::EjectState::EjectInProgress;
+}
+
+} // namespace
+
+TEST_CASE("Ejecting with no card chosen does nothing", "[imagewriter][eject]")
+{
+    ImageWriter w(nullptr);
+    w.ejectDrive();
+
+    // No destination: there is nothing to eject and nothing to report.
+    CHECK(ejectStateOf(w) == ImageWriter::EjectState::EjectIdle);
+}
+
+TEST_CASE("Ejecting a fastboot target does nothing", "[imagewriter][eject]")
+{
+    ImageWriter w(nullptr);
+    w.setDst(QStringLiteral("fastboot://1:6"), 0);
+    w.ejectDrive();
+
+    // A device in fastboot is not a removable disk; there is no eject for it.
+    CHECK(ejectStateOf(w) == ImageWriter::EjectState::EjectIdle);
+}
+
+TEST_CASE("Ejecting always reaches a terminal state", "[imagewriter][eject]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(1024 * 1024));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setDst(target, 1024 * 1024);
+    w.ejectDrive();
+
+    // A regular file is not ejectable, so this may well fail -- what matters
+    // is that it stops. QML binds a button to this state, and one stuck at
+    // "in progress" is disabled for the rest of the session.
+    REQUIRE(waitForEjectToSettle(w));
+    const auto state = ejectStateOf(w);
+    CHECK((state == ImageWriter::EjectState::EjectSucceeded
+           || state == ImageWriter::EjectState::EjectFailed));
+}
+
+TEST_CASE("A second eject while one is running is ignored", "[imagewriter][eject]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(1024 * 1024));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setDst(target, 1024 * 1024);
+
+    w.ejectDrive();
+    // Double-clicking the button must not start a second worker over the
+    // first one's state.
+    CHECK_NOTHROW(w.ejectDrive());
+    REQUIRE(waitForEjectToSettle(w));
+}
+
+TEST_CASE("Ejecting a real block device settles", "[imagewriter][eject][device]")
+{
+    const QString dev = testBlockDevicePath();
+    if (dev.isEmpty())
+        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+
+    ImageWriter w(nullptr);
+    w.setDst(dev, 64ull * 1024 * 1024);
+    w.ejectDrive();
+
+    REQUIRE(waitForEjectToSettle(w));
+    CHECK(ejectStateOf(w) != ImageWriter::EjectState::EjectInProgress);
+}
+
+TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][device]")
+{
+    const QString dev = testBlockDevicePath();
+    if (dev.isEmpty())
+        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    // The first entry in the OS chooser.
+    w.setSrc(QUrl(QStringLiteral("internal://format")));
+    w.setDst(dev, 64ull * 1024 * 1024);
+    REQUIRE(w.readyToWrite());
+
+    const WriteOutcome out = runWrite(w, 180000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    QFile card(dev);
+    REQUIRE(card.open(QIODevice::ReadOnly));
+    const QByteArray mbr = card.read(512);
+    REQUIRE(mbr.size() == 512);
+
+    // A FAT32 partition table, or the card is not usable by anything.
+    CHECK(quint8(mbr.at(510)) == 0x55);
+    CHECK(quint8(mbr.at(511)) == 0xAA);
+    const quint8 type = quint8(mbr.at(0x1BE + 4));
+    INFO("partition type: 0x" << QString::number(type, 16).toStdString());
+    CHECK((type == 0x0B || type == 0x0C));
+}
