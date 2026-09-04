@@ -1195,7 +1195,18 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
                 bytes_written = len;
                 // Don't increment _bytesWritten here - callback will do it on completion
             } else {
-                qFreeAligned(asyncBuf);
+                // Deliberately no qFreeAligned() here.
+                //
+                // AsyncWriteSequential() invokes the callback exactly once on
+                // every path it can return by -- bad fd, async unavailable, a
+                // previous async error, cancellation, no submission queue
+                // entry, submit failure -- and the callback above frees the
+                // buffer. Freeing it again here is a double free, and it is
+                // not a rare corner: it fires on every async submission
+                // failure. A card that starts erroring mid-write took the
+                // process down with "double free or corruption" instead of
+                // reporting the write error, losing the one message that
+                // would have told the user what went wrong.
                 qDebug() << "Async write queue failed with error" << static_cast<int>(write_result);
             }
         } else {
