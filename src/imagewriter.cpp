@@ -87,6 +87,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <limits>
 #endif
 
 using namespace ImageOptions;
@@ -2471,7 +2472,11 @@ void ImageWriter::scheduleOsListRefresh()
     int jitterMinutes = 0;
 
     // CLI overrides take precedence when set (>= 0)
-    if (_refreshIntervalOverrideMinutes >= 0) {
+    // A negative override means "not set". Zero means "switch refresh off",
+    // so it must not fall through to the list's value below -- otherwise
+    // there is no way to disable a refresh the repository has asked for.
+    const bool intervalOverridden = (_refreshIntervalOverrideMinutes >= 0);
+    if (intervalOverridden) {
         baseMinutes = _refreshIntervalOverrideMinutes;
     }
     if (_refreshJitterOverrideMinutes >= 0) {
@@ -2483,7 +2488,7 @@ void ImageWriter::scheduleOsListRefresh()
         if (root.contains("imager")) {
             QJsonObject imager = root.value("imager").toObject();
             // New optional fields
-            if (baseMinutes <= 0 && imager.contains("refresh_interval_minutes")) {
+            if (!intervalOverridden && baseMinutes <= 0 && imager.contains("refresh_interval_minutes")) {
                 baseMinutes = imager.value("refresh_interval_minutes").toInt(0);
             }
             if (jitterMinutes <= 0 && imager.contains("refresh_jitter_minutes")) {
@@ -2509,11 +2514,17 @@ void ImageWriter::scheduleOsListRefresh()
     const int extraSeconds = (jitterSeconds > 0) ? QRandomGenerator::global()->bounded(jitterSeconds + 1) : 0;
     qint64 msec = baseMs + static_cast<qint64>(extraSeconds) * 1000;
 
-    // Cap to a reasonable max to avoid overflow (e.g., ~30 days)
-    const qint64 maxMs = static_cast<qint64>(30) * 24 * 60 * 60 * 1000;
+    // Cap to a reasonable max to avoid overflow. QTimer's interval is an int,
+    // so the ceiling is INT_MAX milliseconds -- about 24.8 days. The previous
+    // cap of 30 days was itself above that: a list asking for a long interval
+    // wrapped to a negative int and the timer then fired every millisecond,
+    // re-fetching the OS list in a tight loop.
+    constexpr qint64 maxMs = static_cast<qint64>(24) * 24 * 60 * 60 * 1000;
+    static_assert(maxMs <= std::numeric_limits<int>::max(),
+                  "refresh cap must fit in QTimer's int interval");
     if (msec > maxMs) msec = maxMs;
 
-    _osListRefreshTimer.start(msec);
+    _osListRefreshTimer.start(static_cast<int>(msec));
     qDebug() << "Scheduled OS list refresh in" << (msec/1000) << "seconds (base" << (baseMs/1000) << "+ jitter" << extraSeconds << ")";
 }
 

@@ -3439,3 +3439,136 @@ TEST_CASE("A truncated zstd is refused", "[imagewriter][extract]")
 {
     checkTruncatedIsRefused(QStringLiteral("pattern-1MiB.img.zst"));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Deciding when to look for a new OS list
+//
+// The repository can ask the imager to re-fetch on an interval, with jitter
+// so a fleet of machines does not arrive at the same second. The imager
+// reschedules after every successful top-level fetch, and a command-line
+// override can replace whatever the list asked for.
+//
+// Both ways of being wrong are quiet. Too eager and every installation
+// hammers the repository on a fixed cadence; not at all and a machine left
+// running for weeks keeps offering images that have been superseded, with no
+// indication the list is stale.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// _osListRefreshTimer is protected, which is enough to read the schedule back
+// without adding an accessor to the shipping class.
+class RefreshObservingWriter : public ImageWriter
+{
+public:
+    using ImageWriter::ImageWriter;
+
+    bool refreshScheduled() const { return _osListRefreshTimer.isActive(); }
+    int refreshIntervalMs() const { return _osListRefreshTimer.interval(); }
+};
+
+QString osListWithRefresh(const QString &imagerFields)
+{
+    return QStringLiteral(R"JSON({
+      "imager": { %1 },
+      "os_list": [
+        { "name": "Raspberry Pi OS (64-bit)", "url": "https://example.invalid/a.img.xz",
+          "image_download_size": 100 }
+      ]
+    })JSON").arg(imagerFields);
+}
+
+} // namespace
+
+TEST_CASE("A list that asks for no refresh schedules none", "[imagewriter][refresh]")
+{
+    OsListDir dir;
+    RefreshObservingWriter w(nullptr);
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("l.json"),
+                                   osListWithRefresh(QStringLiteral("\"latest_version\":\"1.0\"")))).prepared);
+
+    CHECK_FALSE(w.refreshScheduled());
+}
+
+TEST_CASE("A list that asks for a refresh gets one scheduled", "[imagewriter][refresh]")
+{
+    OsListDir dir;
+    RefreshObservingWriter w(nullptr);
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("l.json"),
+                                   osListWithRefresh(QStringLiteral("\"refresh_interval_minutes\": 60")))).prepared);
+
+    REQUIRE(w.refreshScheduled());
+    // No jitter asked for, so the interval is exactly what was requested.
+    CHECK(w.refreshIntervalMs() == 60 * 60 * 1000);
+}
+
+TEST_CASE("Jitter stays inside the window the list asked for", "[imagewriter][refresh]")
+{
+    OsListDir dir;
+    RefreshObservingWriter w(nullptr);
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("l.json"),
+                                   osListWithRefresh(QStringLiteral(
+                                       "\"refresh_interval_minutes\": 60, \"refresh_jitter_minutes\": 10")))).prepared);
+
+    REQUIRE(w.refreshScheduled());
+    const int base = 60 * 60 * 1000;
+    // Jitter exists to spread a fleet out; overshooting it would delay the
+    // refresh past the window the repository budgeted for.
+    INFO("interval: " << w.refreshIntervalMs());
+    CHECK(w.refreshIntervalMs() >= base);
+    CHECK(w.refreshIntervalMs() <= base + 10 * 60 * 1000);
+}
+
+TEST_CASE("A command-line override replaces what the list asked for", "[imagewriter][refresh]")
+{
+    OsListDir dir;
+    RefreshObservingWriter w(nullptr);
+    w.setOsListRefreshOverride(30, 0);
+
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("l.json"),
+                                   osListWithRefresh(QStringLiteral("\"refresh_interval_minutes\": 600")))).prepared);
+
+    REQUIRE(w.refreshScheduled());
+    CHECK(w.refreshIntervalMs() == 30 * 60 * 1000);
+}
+
+TEST_CASE("An override applied after the list reschedules immediately", "[imagewriter][refresh]")
+{
+    OsListDir dir;
+    RefreshObservingWriter w(nullptr);
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("l.json"),
+                                   osListWithRefresh(QStringLiteral("\"refresh_interval_minutes\": 600")))).prepared);
+    REQUIRE(w.refreshIntervalMs() == 600 * 60 * 1000);
+
+    // Setting the override once a list is already loaded has to take effect
+    // without waiting for the next fetch.
+    w.setOsListRefreshOverride(15, 0);
+    CHECK(w.refreshIntervalMs() == 15 * 60 * 1000);
+}
+
+TEST_CASE("A refresh interval of zero cancels the schedule", "[imagewriter][refresh]")
+{
+    OsListDir dir;
+    RefreshObservingWriter w(nullptr);
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("l.json"),
+                                   osListWithRefresh(QStringLiteral("\"refresh_interval_minutes\": 60")))).prepared);
+    REQUIRE(w.refreshScheduled());
+
+    w.setOsListRefreshOverride(0, 0);
+    CHECK_FALSE(w.refreshScheduled());
+}
+
+TEST_CASE("An absurd refresh interval is capped", "[imagewriter][refresh]")
+{
+    OsListDir dir;
+    RefreshObservingWriter w(nullptr);
+    REQUIRE(fetchOsList(w, dir.put(QStringLiteral("l.json"),
+                                   osListWithRefresh(QStringLiteral("\"refresh_interval_minutes\": 99999999")))).prepared);
+
+    REQUIRE(w.refreshScheduled());
+    // QTimer's interval is an int, so the ceiling is INT_MAX milliseconds --
+    // about 24.8 days. A cap above that wraps negative and the timer then
+    // fires every millisecond, re-fetching the list in a tight loop.
+    CHECK(w.refreshIntervalMs() == 24 * 24 * 60 * 60 * 1000);
+    CHECK(w.refreshIntervalMs() > 0);
+}
