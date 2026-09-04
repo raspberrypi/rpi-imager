@@ -23,6 +23,7 @@
 #include "drivelistmodel.h"
 
 #include <QCryptographicHash>
+#include "signal_log.h"
 #include <QProcess>
 #include "fixture_process.h"
 #include <QDir>
@@ -1991,4 +1992,179 @@ TEST_CASE("A failed fetch does not discard a list already loaded",
     const int after = namesIn(w.getFilteredOSlistDocument()).size();
     INFO("before " << before << ", after " << after);
     CHECK(after == before);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The disk cache, and the half of startWrite() that lives behind it
+//
+// When the image the user picked is already in the cache, startWrite() does
+// not write anything. It kicks off a background integrity check and returns,
+// and the write is resumed later by
+// _continueStartWriteAfterCacheVerification() -- 594 branches that no test
+// had ever executed, because reaching them needs a cache file on disk whose
+// hash matches the selected image.
+//
+// What it decides is which bytes reach the card: the cached copy, or a fresh
+// download. Getting that wrong writes the wrong image, or silently writes a
+// corrupt one. The cases below set the cache file's contents and the source
+// image's contents to different patterns, so the bytes on the target say
+// which path was taken rather than the log doing it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+QByteArray patternOf(char seed, int size)
+{
+    QByteArray out;
+    out.reserve(size);
+    for (int i = 0; i < size; ++i)
+        out.append(char('A' + ((i * 31) + seed) % 26));
+    return out;
+}
+
+QByteArray sha256HexOf(const QByteArray &data)
+{
+    return QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex();
+}
+
+// A source image and a cache file holding deliberately different bytes.
+class CacheFixture
+{
+public:
+    explicit CacheFixture(char cacheSeed = 7)
+    {
+        REQUIRE(_dir.isValid());
+        _source = QDir(_dir.path()).filePath(QStringLiteral("source.img"));
+        _cache  = QDir(_dir.path()).filePath(QStringLiteral("cached.img"));
+        _target = QDir(_dir.path()).filePath(QStringLiteral("target.img"));
+
+        _sourceBytes = patternOf(0, kSize);
+        _cacheBytes  = patternOf(cacheSeed, kSize);
+        REQUIRE(_sourceBytes != _cacheBytes);
+
+        write(_source, _sourceBytes);
+        write(_cache, _cacheBytes);
+        write(_target, QByteArray(kSize, '\0'));
+    }
+
+    static constexpr int kSize = 2 * 1024 * 1024;
+
+    QUrl sourceUrl() const { return QUrl::fromLocalFile(_source); }
+    QString cachePath() const { return _cache; }
+    QString target() const { return _target; }
+    const QByteArray &sourceBytes() const { return _sourceBytes; }
+    const QByteArray &cacheBytes() const { return _cacheBytes; }
+
+    QByteArray targetBytes() const
+    {
+        QFile f(_target);
+        REQUIRE(f.open(QIODevice::ReadOnly));
+        return f.read(kSize);
+    }
+
+private:
+    static void write(const QString &path, const QByteArray &bytes)
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.write(bytes) == bytes.size());
+        f.close();
+    }
+
+    QTemporaryDir _dir;
+    QString _source, _cache, _target;
+    QByteArray _sourceBytes, _cacheBytes;
+};
+
+} // namespace
+
+TEST_CASE("A cache hit defers the write until the cache has been checked", "[imagewriter][cache]")
+{
+    CacheFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, CacheFixture::kSize, sha256HexOf(fx.cacheBytes()));
+    w.setCustomCacheFile(fx.cachePath(), sha256HexOf(fx.cacheBytes()));
+    w.setDst(fx.target(), CacheFixture::kSize);
+    REQUIRE(w.readyToWrite());
+
+    rpi_test::SignalLog started(&w, &ImageWriter::cacheVerificationStarted);
+    rpi_test::SignalLog succeeded(&w, &ImageWriter::success);
+    rpi_test::SignalLog failed(&w, &ImageWriter::error);
+
+    w.startWrite();
+
+    // startWrite() must return having started nothing: the UI shows a
+    // "checking cached image" state and the card is not touched yet.
+    CHECK(started.count() == 1);
+    CHECK(succeeded.isEmpty());
+    CHECK(failed.isEmpty());
+}
+
+TEST_CASE("A cache file that verifies is written instead of the source", "[imagewriter][cache]")
+{
+    CacheFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, CacheFixture::kSize, sha256HexOf(fx.cacheBytes()));
+    w.setCustomCacheFile(fx.cachePath(), sha256HexOf(fx.cacheBytes()));
+    w.setDst(fx.target(), CacheFixture::kSize);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // The bytes on the target are the cache's, not the source's. This is the
+    // whole point of the cache and the only way to tell the two paths apart.
+    CHECK(fx.targetBytes() == fx.cacheBytes());
+}
+
+TEST_CASE("A cache file that fails its check is discarded and the source used", "[imagewriter][cache]")
+{
+    CacheFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    // The image the user picked hashes to the source's bytes, but the cache
+    // file holds something else -- a truncated or corrupted earlier download.
+    const QByteArray expected = sha256HexOf(fx.sourceBytes());
+    w.setSrc(fx.sourceUrl(), 0, CacheFixture::kSize, expected);
+    w.setCustomCacheFile(fx.cachePath(), expected);
+    w.setDst(fx.target(), CacheFixture::kSize);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // A corrupt cache must never reach the card.
+    CHECK(fx.targetBytes() == fx.sourceBytes());
+}
+
+TEST_CASE("Skipping the cache check falls back to the source", "[imagewriter][cache]")
+{
+    CacheFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    // The selected image is the source; the cache file is a stale copy that
+    // the user chooses not to wait for.
+    const QByteArray expected = sha256HexOf(fx.sourceBytes());
+    w.setSrc(fx.sourceUrl(), 0, CacheFixture::kSize, expected);
+    w.setCustomCacheFile(fx.cachePath(), expected);
+    w.setDst(fx.target(), CacheFixture::kSize);
+
+    rpi_test::SignalLog finished(&w, &ImageWriter::cacheVerificationFinished);
+
+    // The "Skip" the user gets while the cache is being checked.
+    QObject::connect(&w, &ImageWriter::cacheVerificationStarted,
+                     &w, &ImageWriter::skipCacheVerification, Qt::QueuedConnection);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    CHECK(finished.count() == 1);
+    // Skipping means the cache is discarded unread, so the source is used.
+    CHECK(fx.targetBytes() == fx.sourceBytes());
 }
