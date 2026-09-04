@@ -1519,6 +1519,8 @@ if(NOT BUILD_CLI_ONLY)
     add_executable(image_writer_test image_writer_test.cpp)
     set_target_properties(image_writer_test PROPERTIES AUTOMOC ON)
     target_link_libraries(image_writer_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+    target_compile_definitions(image_writer_test PRIVATE
+        IMAGER_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
     rpi_discover_tests(image_writer_test)
 
     # The picker models: same library, its own cases.

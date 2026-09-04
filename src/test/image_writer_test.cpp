@@ -2256,3 +2256,253 @@ TEST_CASE("Every city offered resolves to complete locale data", "[imagewriter][
         REQUIRE(QTimeZone(data.value(QStringLiteral("timezone")).toString().toUtf8()).isValid());
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sizing a compressed image the user picked from disk
+//
+// "Use custom" hands setSrc() a local file with no manifest behind it, so the
+// uncompressed size has to be read out of the container. That number is what
+// the capacity check compares against the card, and what the progress bar is
+// scaled to.
+//
+// Read it wrong and one of two things happens: a card that would have fitted
+// is refused, or a write starts that cannot finish and dies part-way with the
+// card left unbootable. Neither is diagnosable from the UI.
+//
+// The fixtures are real archives of a known 1 MiB payload, one per container
+// the picker accepts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+constexpr quint64 kFixturePayload = 1024 * 1024;
+
+// setSrc() reads the file it is given, so each case gets its own copy.
+class ArchiveFixture
+{
+public:
+    explicit ArchiveFixture(const QString &archiveName)
+    {
+        REQUIRE(_dir.isValid());
+        const QString from = QStringLiteral(IMAGER_TEST_DATA_DIR "/") + archiveName;
+        REQUIRE(QFile::exists(from));
+        _archive = QDir(_dir.path()).filePath(archiveName);
+        REQUIRE(QFile::copy(from, _archive));
+
+        _target = QDir(_dir.path()).filePath(QStringLiteral("target.img"));
+        QFile t(_target);
+        REQUIRE(t.open(QIODevice::WriteOnly));
+        REQUIRE(t.write(QByteArray(4096, '\0')) == 4096);
+        t.close();
+    }
+
+    QUrl archiveUrl() const { return QUrl::fromLocalFile(_archive); }
+    QString target() const { return _target; }
+
+private:
+    QTemporaryDir _dir;
+    QString _archive, _target;
+};
+
+// Does startWrite() refuse this device as too small? Everything before the
+// capacity check is satisfied, so the answer is about the parsed size alone.
+bool refusedAsTooSmall(ImageWriter &w, const QString &target, quint64 deviceSize)
+{
+    w.setDst(target, deviceSize);
+    rpi_test::SignalLog failed(&w, &ImageWriter::error);
+    w.startWrite();
+    for (int i = 0; i < failed.count(); ++i)
+        if (failed.at(i).at(0).toString().contains(QStringLiteral("capacity")))
+            return true;
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("An xz image reports its uncompressed size", "[imagewriter][archive]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    ImageWriter w(nullptr);
+    w.setSrc(fx.archiveUrl());
+
+    CHECK(w.isExtractSizeKnown());
+    CHECK(refusedAsTooSmall(w, fx.target(), kFixturePayload - 1));
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), kFixturePayload));
+}
+
+TEST_CASE("A zstd image reports its uncompressed size", "[imagewriter][archive]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB.img.zst"));
+    ImageWriter w(nullptr);
+    w.setSrc(fx.archiveUrl());
+
+    CHECK(w.isExtractSizeKnown());
+    CHECK(refusedAsTooSmall(w, fx.target(), kFixturePayload - 1));
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), kFixturePayload));
+}
+
+TEST_CASE("A zipped image reports its uncompressed size", "[imagewriter][archive]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB.img.zip"));
+    ImageWriter w(nullptr);
+    w.setSrc(fx.archiveUrl());
+
+    CHECK(w.isExtractSizeKnown());
+    CHECK(refusedAsTooSmall(w, fx.target(), kFixturePayload - 1));
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), kFixturePayload));
+}
+
+TEST_CASE("A gzipped image is sized but not trusted", "[imagewriter][archive]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB.img.gz"));
+    ImageWriter w(nullptr);
+    w.setSrc(fx.archiveUrl());
+
+    // gzip records the uncompressed size in 32 bits, so it wraps above 4 GB.
+    // The size is still parsed and still guards the capacity check -- it is
+    // just not published as known, so progress is not scaled to it.
+    CHECK_FALSE(w.isExtractSizeKnown());
+    CHECK(refusedAsTooSmall(w, fx.target(), kFixturePayload - 1));
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), kFixturePayload));
+}
+
+TEST_CASE("An uncompressed image is sized from the file itself", "[imagewriter][archive]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString plain = QDir(dir.path()).filePath(QStringLiteral("plain.img"));
+    QFile f(plain);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    REQUIRE(f.write(QByteArray(int(kFixturePayload), 'Z')) == qint64(kFixturePayload));
+    f.close();
+
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl::fromLocalFile(plain));
+
+    CHECK(w.isExtractSizeKnown());
+    CHECK(refusedAsTooSmall(w, fx.target(), kFixturePayload - 1));
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), kFixturePayload));
+}
+
+TEST_CASE("A manifest size overrides what the container claims", "[imagewriter][archive]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    ImageWriter w(nullptr);
+    // The OS list gives an extract size directly; the file is not parsed.
+    w.setSrc(fx.archiveUrl(), 0, 8 * 1024 * 1024);
+
+    CHECK(w.isExtractSizeKnown());
+    CHECK(refusedAsTooSmall(w, fx.target(), 4 * 1024 * 1024));
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), 8 * 1024 * 1024));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Reloading the customisation the user saved last time
+//
+// The customisation dialog repopulates itself from this map. Anything it
+// drops silently reverts to a default the user did not choose -- a hostname,
+// a locale, or an SSH key that quietly is not installed.
+//
+// The SSH key list gets its own handling because the field is a paste target:
+// the same key arriving twice is normal, and duplicates in authorized_keys
+// are at best untidy.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Writes straight into the store ImageWriter reads, as a previous run would.
+void saveCustomisation(const QVariantMap &values)
+{
+    QSettings s;
+    s.beginGroup(QStringLiteral("imagecustomization"));
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+        s.setValue(it.key(), it.value());
+    s.endGroup();
+    s.sync();
+}
+
+void clearCustomisation()
+{
+    QSettings s;
+    s.beginGroup(QStringLiteral("imagecustomization"));
+    s.remove(QString());
+    s.endGroup();
+    s.sync();
+}
+
+} // namespace
+
+TEST_CASE("Saved customisation settings come back as they went in", "[imagewriter][customisation]")
+{
+    clearCustomisation();
+    saveCustomisation({{QStringLiteral("hostname"), QStringLiteral("raspberrypi")},
+                       {QStringLiteral("sshEnabled"), true},
+                       {QStringLiteral("timezone"), QStringLiteral("Europe/London")}});
+
+    ImageWriter w(nullptr);
+    const QVariantMap got = w.getSavedCustomisationSettings();
+
+    CHECK(got.value(QStringLiteral("hostname")).toString() == QStringLiteral("raspberrypi"));
+    CHECK(got.value(QStringLiteral("sshEnabled")).toBool());
+    CHECK(got.value(QStringLiteral("timezone")).toString() == QStringLiteral("Europe/London"));
+    clearCustomisation();
+}
+
+TEST_CASE("No saved customisation yields an empty map", "[imagewriter][customisation]")
+{
+    clearCustomisation();
+    ImageWriter w(nullptr);
+    CHECK(w.getSavedCustomisationSettings().isEmpty());
+}
+
+TEST_CASE("Duplicate SSH keys are collapsed to one", "[imagewriter][customisation]")
+{
+    clearCustomisation();
+    const QString key1 = QStringLiteral("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample1 a@host");
+    const QString key2 = QStringLiteral("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample2 b@host");
+    saveCustomisation({{QStringLiteral("sshAuthorizedKeys"),
+                        QStringList{key1, key2, key1}.join(QLatin1Char('\n'))}});
+
+    ImageWriter w(nullptr);
+    const QStringList got = w.getSavedCustomisationSettings()
+                                .value(QStringLiteral("sshAuthorizedKeys"))
+                                .toString()
+                                .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+
+    // Order is preserved: the first occurrence wins, so the list the user
+    // sees is the one they built.
+    REQUIRE(got.size() == 2);
+    CHECK(got.at(0) == key1);
+    CHECK(got.at(1) == key2);
+    clearCustomisation();
+}
+
+TEST_CASE("Blank lines and stray whitespace are dropped from SSH keys", "[imagewriter][customisation]")
+{
+    clearCustomisation();
+    const QString key = QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABExample c@host");
+    saveCustomisation({{QStringLiteral("sshAuthorizedKeys"),
+                        QStringLiteral("\n  %1  \n\n%1\n\n").arg(key)}});
+
+    ImageWriter w(nullptr);
+    const QString got = w.getSavedCustomisationSettings()
+                            .value(QStringLiteral("sshAuthorizedKeys")).toString();
+
+    // A padded copy and a bare copy of the same key are the same key.
+    CHECK(got == key);
+    clearCustomisation();
+}
+
+TEST_CASE("A settings map with no SSH keys is left alone", "[imagewriter][customisation]")
+{
+    clearCustomisation();
+    saveCustomisation({{QStringLiteral("hostname"), QStringLiteral("pi")}});
+
+    ImageWriter w(nullptr);
+    const QVariantMap got = w.getSavedCustomisationSettings();
+
+    CHECK_FALSE(got.contains(QStringLiteral("sshAuthorizedKeys")));
+    CHECK(got.size() == 1);
+    clearCustomisation();
+}
