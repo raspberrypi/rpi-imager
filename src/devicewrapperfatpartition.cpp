@@ -944,6 +944,29 @@ void DeviceWrapperFatPartition::writeFile(const QString &filename, const QByteAr
             throw std::runtime_error("Path component is not a directory");
         }
         
+        // Refuse rather than write to the wrong directory.
+        //
+        // Setting the traversal state below and then calling getDirEntry()
+        // does not work: getDirEntry() begins with openDir(), which seeks
+        // unconditionally back to the root and discards it. The entry is
+        // created in the root instead, so a file the caller asked to place in
+        // a subdirectory silently appears at the top level -- readable at
+        // "added.dtbo" and absent from "overlays/added.dtbo".
+        //
+        // deleteFile() had the identical defect and is fixed by scanning the
+        // subdirectory itself rather than going through the shared traversal
+        // state. The same treatment would work here, but writeFile() also
+        // allocates clusters and rewrites the directory entry, so it is more
+        // than a like-for-like change -- and nothing calls it this way today:
+        // every caller writes a root-level file (config.txt, cmdline.txt,
+        // firstrun.sh, boot.img).
+        //
+        // Failing loudly keeps that true. Silently writing to the wrong
+        // directory looks like it works right up until a board cannot find
+        // its overlays.
+        throw std::runtime_error(
+            "Writing to a subdirectory is not supported: " + filename.toStdString());
+
         // Save current directory context
         uint32_t savedRootDirCluster = _fat32_currentRootDirCluster;
         QList<uint32_t> savedDirClusters = _currentDirClusters;
