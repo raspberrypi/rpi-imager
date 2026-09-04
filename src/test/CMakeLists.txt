@@ -1188,6 +1188,50 @@ add_custom_target(test_fat_partition_image
 )
 
 # ============================================================================
+# SecureBoot
+# ============================================================================
+# Assembles and signs the boot image a locked-down Pi will accept. Testable
+# without hardware because the Linux signing path shells out to openssl, so a
+# throwaway key suffices, and extractFatPartitionFiles() takes a
+# DeviceWrapperFatPartition that the FAT scratch-image fixture can build.
+# Cases needing openssl or mkfs.vfat skip themselves.
+
+add_executable(secureboot_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    secureboot_test.cpp
+)
+
+set_target_properties(secureboot_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(secureboot_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(secureboot_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${GNUTLS_LIBRARIES}
+)
+
+target_include_directories(secureboot_test PRIVATE ${GNUTLS_INCLUDE_DIRS})
+
+rpi_link_platform_file_ops(secureboot_test)
+
+target_compile_features(secureboot_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(secureboot_test)
+
+# ============================================================================
 # DownloadThread
 # ============================================================================
 # The write path: curl in, hashed, onto the target. 1,958 branches, the
@@ -1370,6 +1414,54 @@ target_link_libraries(fastboot_flash_thread_test PRIVATE
 target_compile_features(fastboot_flash_thread_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(fastboot_flash_thread_test)
+
+# ============================================================================
+# SecureBootProvisioner
+# ============================================================================
+# Burns a customer key hash into a Compute Module's OTP and signs the firmware
+# it will accept afterwards. OTP is write-once, so a wrong key hash bricks the
+# module permanently -- which makes these the highest-consequence functions in
+# the tree and they had no tests.
+#
+# provision() needs a device on the USB bus, but key generation, the OTP hash,
+# boot-image signing and signed-recovery preparation all work on files and are
+# covered here. The OTP hash is cross-checked against openssl rather than
+# against a value this code produced.
+
+add_executable(secure_boot_provisioner_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/secure_boot_provisioner.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    secure_boot_provisioner_test.cpp
+)
+
+set_target_properties(secure_boot_provisioner_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(secure_boot_provisioner_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS}
+)
+
+target_link_libraries(secure_boot_provisioner_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${GNUTLS_LIBRARIES}
+)
+
+rpi_link_platform_file_ops(secure_boot_provisioner_test)
+
+target_compile_features(secure_boot_provisioner_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(secure_boot_provisioner_test)
 
 # ============================================================================
 # FirmwareManager
