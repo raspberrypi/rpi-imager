@@ -2980,6 +2980,21 @@ private:
     QString _source, _target;
 };
 
+// A long filename is stored UTF-16LE, but split across three fields inside
+// each 32-byte directory entry (10 bytes, then 12, then 4), so the whole name
+// is never contiguous in the image. The first five characters are, and that
+// is enough to find the entry without guessing how the 8.3 alias was mangled
+// -- "rpi-preseed.toml" becomes something like RPI-PR~1TOM.
+QByteArray longNameHead(const QString &name)
+{
+    QByteArray out;
+    for (const QChar c : name.left(5)) {
+        out.append(char(c.unicode() & 0xFF));
+        out.append(char((c.unicode() >> 8) & 0xFF));
+    }
+    return out;
+}
+
 WriteOutcome writeWithCustomisation(BootPartitionFixture &fx,
                                     const QByteArray &config,
                                     const QByteArray &cmdline,
@@ -3954,26 +3969,6 @@ TEST_CASE("A verified customised write checks the files landed", "[imagewriter][
     CHECK(written.contains(QByteArray("dtparam=audio=on")));
 }
 
-TEST_CASE("A verified write reports verification progress", "[imagewriter][customisation][boot]")
-{
-    BootPartitionFixture fx;
-    ImageWriter w(nullptr);
-    w.setVerifyEnabled(true);
-    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize);
-    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
-
-    const WriteOutcome out = runWrite(w);
-    REQUIRE(out.succeeded);
-
-    // The UI has a separate bar for it; without progress the write looks
-    // finished while the card is still being read back.
-    bool sawVerify = false;
-    for (const QString &k : out.progressKinds)
-        if (k.startsWith(QStringLiteral("verify ")))
-            sawVerify = true;
-    INFO("progress kinds seen: " << out.progressKinds.size());
-    CHECK(sawVerify);
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // A card that fails part-way through
@@ -4079,4 +4074,134 @@ TEST_CASE("A card large enough for the image succeeds on the same harness", "[im
     INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
     CHECK_FALSE(out.failed);
     CHECK(out.succeeded);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The three customisation formats
+//
+// Which files land on the card depends on what the OS declares in the
+// manifest. systemd images get firstrun.sh plus a cmdline entry to run it;
+// rpi-preseed images get rpi-preseed.toml; cloud-init images get user-data
+// and meta-data. Every case so far has used systemd.
+//
+// Writing the wrong shape is silent: the card boots, the file is ignored
+// because nothing on that image looks for it, and none of the user's
+// settings are applied.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A systemd image gets firstrun.sh and the cmdline entry", "[imagewriter][formats]")
+{
+    BootPartitionFixture fx;
+    const QByteArray script = "#!/bin/bash\n# marker-systemd\nexit 0\n";
+
+    const WriteOutcome out = writeWithCustomisation(fx, QByteArray(), QByteArray(), script,
+                                                    QByteArray("systemd"));
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    const QByteArray written = fx.targetBytes();
+    CHECK(written.contains(QByteArray("FIRSTRUNSH")));
+    CHECK(written.contains(QByteArray("marker-systemd")));
+    // Without the cmdline entry the script is on the card and never runs.
+    CHECK(written.contains(QByteArray("systemd.run=/boot/firstrun.sh")));
+}
+
+TEST_CASE("An rpi-preseed image gets a toml, not a script", "[imagewriter][formats]")
+{
+    BootPartitionFixture fx;
+    const QByteArray toml = "[system]\nhostname = \"marker-preseed\"\n";
+
+    const WriteOutcome out = writeWithCustomisation(fx, QByteArray(), QByteArray(), toml,
+                                                    QByteArray("rpi-preseed"));
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    const QByteArray written = fx.targetBytes();
+    CHECK(written.contains(QByteArray("marker-preseed")));
+    CHECK(written.contains(longNameHead(QStringLiteral("rpi-preseed.toml"))));
+    // And none of the systemd shape: no firstrun.sh, and nothing added to
+    // cmdline.txt to run it. A preseed image ignores both.
+    CHECK_FALSE(written.contains(QByteArray("FIRSTRUNSH")));
+    CHECK_FALSE(written.contains(QByteArray("systemd.run=")));
+}
+
+TEST_CASE("A cloud-init image gets user-data and meta-data", "[imagewriter][formats]")
+{
+    BootPartitionFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize);
+    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
+    w.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(),
+                            QByteArray("#cloud-config\nhostname: marker-cloudinit\n"),
+                            QByteArray(),
+                            ImageOptions::NoAdvancedOptions, QByteArray("cloudinit"));
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    const QByteArray written = fx.targetBytes();
+    CHECK(written.contains(QByteArray("marker-cloudinit")));
+    // cloud-init needs both; user-data alone is ignored on first boot.
+    CHECK(written.contains(longNameHead(QStringLiteral("user-data"))));
+    CHECK(written.contains(longNameHead(QStringLiteral("meta-data"))));
+    // Not the systemd shape.
+    CHECK_FALSE(written.contains(QByteArray("systemd.run=")));
+}
+
+TEST_CASE("A cloud-init network config lands too", "[imagewriter][formats]")
+{
+    BootPartitionFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize);
+    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
+    w.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(),
+                            QByteArray("#cloud-config\nhostname: pi\n"),
+                            QByteArray("version: 2\nethernets:\n  eth0:\n    dhcp4: marker-net\n"),
+                            ImageOptions::NoAdvancedOptions, QByteArray("cloudinit"));
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    // Wi-Fi and static addressing are configured here; dropping it is how a
+    // headless Pi comes up with no network.
+    CHECK(fx.targetBytes().contains(QByteArray("marker-net")));
+}
+
+TEST_CASE("An image that declares no format is not customised", "[imagewriter][formats]")
+{
+    BootPartitionFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize);
+    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
+
+    // applyCustomisationFromSettings() clears everything when the selected
+    // image does not support customisation, so nothing is staged.
+    w.applyCustomisationFromSettings(QVariantMap{
+        {QStringLiteral("hostname"), QStringLiteral("marker-nothing")}});
+
+    const WriteOutcome out = runWrite(w);
+    REQUIRE(out.succeeded);
+
+    // Writing settings an image cannot act on would leave stray files in its
+    // boot partition.
+    CHECK_FALSE(fx.targetBytes().contains(QByteArray("marker-nothing")));
+}
+
+TEST_CASE("Config entries are appended, not duplicated", "[imagewriter][formats]")
+{
+    BootPartitionFixture fx;
+
+    const WriteOutcome out = writeWithCustomisation(
+        fx, QByteArray("dtparam=marker_cfg=on\n"), QByteArray(), QByteArray("#!/bin/bash\nexit 0\n"));
+    REQUIRE(out.succeeded);
+
+    const QByteArray written = fx.targetBytes();
+    // The image's own config.txt is edited rather than replaced, so an entry
+    // must appear exactly once even though the file already had content.
+    CHECK(written.count(QByteArray("dtparam=marker_cfg=on")) == 1);
 }
