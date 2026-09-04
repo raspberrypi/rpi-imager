@@ -4456,3 +4456,120 @@ TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][devic
     INFO("partition type: 0x" << QString::number(type, 16).toStdString());
     CHECK((type == 0x0B || type == 0x0C));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The SSH key offered in the customisation screen
+//
+// "Allow public-key authentication only" needs a key. The imager reads the
+// user's existing one and, if there is none, offers to generate a pair --
+// and whatever it reads is written into the card's authorized_keys.
+//
+// Reading the wrong thing, or nothing, means a headless Pi the user cannot
+// log into: the failure is discovered after the card is written, at the
+// point where it is least convenient.
+//
+// These redirect HOME to a scratch directory, and skip outright if the
+// redirect does not take -- writing an SSH key into the real account is not
+// something a test gets to do by accident.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Points HOME at a scratch directory for as long as it is alive.
+class ScopedHome
+{
+public:
+    explicit ScopedHome(const QString &path) : _saved(qgetenv("HOME"))
+    {
+        qputenv("HOME", path.toLocal8Bit());
+    }
+    ~ScopedHome() { qputenv("HOME", _saved); }
+
+private:
+    QByteArray _saved;
+};
+
+} // namespace
+
+TEST_CASE("With no key in place none is reported", "[imagewriter][sshkey]")
+{
+    QTemporaryDir home;
+    REQUIRE(home.isValid());
+    ScopedHome scoped(home.path());
+    if (QDir::homePath() != home.path())
+        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+
+    ImageWriter w(nullptr);
+    CHECK_FALSE(w.hasPubKey());
+    CHECK(w.getDefaultPubKey().isEmpty());
+}
+
+TEST_CASE("An existing public key is read back verbatim", "[imagewriter][sshkey]")
+{
+    QTemporaryDir home;
+    REQUIRE(home.isValid());
+    ScopedHome scoped(home.path());
+    if (QDir::homePath() != home.path())
+        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+
+    REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
+    const QString key =
+        QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABmarkerkey user@example");
+    QFile f(home.path() + QStringLiteral("/.ssh/id_rsa.pub"));
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(key.toUtf8() + "\n");
+    f.close();
+
+    ImageWriter w(nullptr);
+    REQUIRE(w.hasPubKey());
+    // Byte-for-byte: a key mangled on the way through does not authenticate,
+    // and the user finds out only after the card is written.
+    CHECK(w.getDefaultPubKey().trimmed() == key);
+}
+
+TEST_CASE("Generating a key creates a usable pair", "[imagewriter][sshkey]")
+{
+    if (!QFileInfo::exists(QStringLiteral("/usr/bin/ssh-keygen")))
+        SKIP("ssh-keygen is not installed");
+
+    QTemporaryDir home;
+    REQUIRE(home.isValid());
+    ScopedHome scoped(home.path());
+    if (QDir::homePath() != home.path())
+        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+
+    ImageWriter w(nullptr);
+    REQUIRE_FALSE(w.hasPubKey());
+
+    w.generatePubKey();
+
+    // Both halves, and the directory created if it was missing.
+    CHECK(QFile::exists(home.path() + QStringLiteral("/.ssh/id_rsa")));
+    REQUIRE(w.hasPubKey());
+    CHECK(w.getDefaultPubKey().startsWith(QStringLiteral("ssh-rsa ")));
+}
+
+TEST_CASE("Generating a key does not replace one already there", "[imagewriter][sshkey]")
+{
+    if (!QFileInfo::exists(QStringLiteral("/usr/bin/ssh-keygen")))
+        SKIP("ssh-keygen is not installed");
+
+    QTemporaryDir home;
+    REQUIRE(home.isValid());
+    ScopedHome scoped(home.path());
+    if (QDir::homePath() != home.path())
+        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+
+    REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
+    const QString key = QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABkeepme user@example");
+    QFile f(home.path() + QStringLiteral("/.ssh/id_rsa.pub"));
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(key.toUtf8() + "\n");
+    f.close();
+
+    ImageWriter w(nullptr);
+    w.generatePubKey();
+
+    // Overwriting somebody's SSH key would be unforgivable.
+    CHECK(w.getDefaultPubKey().trimmed() == key);
+}
