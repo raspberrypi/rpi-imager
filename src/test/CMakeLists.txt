@@ -1278,3 +1278,23 @@ rpi_link_platform_file_ops(drive_format_thread_test)
 target_compile_features(drive_format_thread_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(drive_format_thread_test)
+
+# ── OS list parsing ─────────────────────────────────────────────────────────
+# Pure JSON transformations that decide what the user sees in the OS chooser.
+add_executable(oslist_parser_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../oslistparser.cpp
+    oslist_parser_test.cpp
+)
+
+target_include_directories(oslist_parser_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(oslist_parser_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(oslist_parser_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(oslist_parser_test)
