@@ -42,6 +42,7 @@
 
 #include "aligned_buffer.h"
 #include "file_operations.h"
+#include "faulty_block_device.h"
 
 namespace fs = std::filesystem;
 
@@ -171,6 +172,19 @@ class LoopDevice {
     if (!isLoopPath(out)) return;
 
     device_ = out;
+
+    // Make the node readable and writable by the user running the suite.
+    //
+    // losetup creates /dev/loopN as root:disk, mode 0660. A developer is
+    // normally not in the disk group -- and should not have to be, since that
+    // is a standing grant of raw access to every disk on the machine -- so
+    // without this the test attaches a device it then cannot open, and fails
+    // at OpenDevice() rather than testing anything. Scoped to the loop device
+    // this object just created and gone again when it is detached.
+    if (::geteuid() != 0) {
+      std::string ignored;
+      chownDevice(device_, &ignored);
+    }
   }
 
   ~LoopDevice() {
@@ -204,6 +218,20 @@ class LoopDevice {
     argv.insert(argv.end(), args.begin(), args.end());
     argv.push_back(nullptr);
     return runCapture(binary, argv, out);
+  }
+
+  // Hand the loop node to the user running the suite, via sudo since it is
+  // created owned by root.
+  //
+  // chown to this uid rather than chmod 0666: the node only needs to be
+  // reachable by the process under test, and making a block device
+  // world-writable for the duration -- even a synthetic one -- is a wider
+  // grant than the job needs.
+  static int chownDevice(const std::string& device, std::string* out) {
+    const std::string uid = std::to_string(::geteuid());
+    std::vector<const char*> argv = {"sudo", "-n", "chown", uid.c_str(), device.c_str(),
+                                     nullptr};
+    return runCapture("/usr/bin/sudo", argv, out);
   }
 
   static bool isLoopPath(const std::string& s) {
@@ -485,4 +513,279 @@ TEST_CASE("Writes round-trip through a loopback block device", "[file-ops][loop]
   // Read through the backing file, not the loop device, so the check does not
   // depend on the loop driver's own caching.
   CHECK(readBack(backing, 0, kChunk) == expected);
+}
+
+// ---------------------------------------------------------------------------
+// A device that returns errors
+// ---------------------------------------------------------------------------
+//
+// The async submission path has a whole tier of error handling that only runs
+// on a negative completion coming back from the block layer: the completion
+// reaper's error branch, the recorded first-async-error, and the fallback
+// from async to synchronous writes. None of it can be reached by passing bad
+// arguments -- the write has to be accepted and then fail.
+//
+// The device below is synthetic: a scratch file on a loop device with a
+// device-mapper table that maps the first megabytes through and returns EIO
+// beyond them. Nothing real is touched, and it needs root only to create the
+// mapping, so these skip when passwordless sudo is unavailable.
+
+
+// O_DIRECT requires the buffer, the length and the file offset to be aligned
+// to the device's logical block size; a std::vector's storage is not. The
+// production code allocates through AlignedBuffer for exactly this reason.
+static std::unique_ptr<std::uint8_t[], void (*)(void *)> alignedBuffer(std::size_t size,
+                                                                      std::uint8_t fill) {
+  void *raw = nullptr;
+  if (::posix_memalign(&raw, 4096, size) != 0) raw = nullptr;
+  std::unique_ptr<std::uint8_t[], void (*)(void *)> buf(
+      static_cast<std::uint8_t *>(raw), [](void *p) { ::free(p); });
+  if (buf) std::memset(buf.get(), fill, size);
+  return buf;
+}
+
+TEST_CASE("Async writes report a device that fails partway", "[file-ops][faulty]") {
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+
+  FaultyDevice device(64, 8);
+  if (!device.isReady())
+    SKIP("the device-mapper fault injection device could not be created");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no async path to fail");
+
+  REQUIRE(ops->SetAsyncQueueDepth(8));
+
+  // Write well past the 8MB boundary. The first writes land; the ones beyond
+  // it come back as negative completions.
+  const std::size_t kChunk = 1u << 20;
+  auto buffer = alignedBuffer(kChunk, 0xC3);
+  REQUIRE(buffer);
+
+  bool sawError = false;
+  for (int i = 0; i < 24; ++i) {
+    const FileError result = ops->AsyncWriteSequential(buffer.get(), kChunk, nullptr);
+    if (result != FileError::kSuccess) {
+      sawError = true;
+      break;
+    }
+  }
+  ops->WaitForPendingWrites();
+
+  // Either submission refused once the first error was recorded, or the
+  // completions carried it -- both are the error path. What must not happen
+  // is every write reporting success against a device that stopped taking
+  // them.
+  INFO("submission reported an error: " << sawError);
+  CHECK((sawError || ops->GetLastErrorCode() != 0 ||
+         ops->WriteSequential(buffer.get(), kChunk) != FileError::kSuccess));
+}
+
+TEST_CASE("Async write callbacks see the failure", "[file-ops][faulty]") {
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+
+  FaultyDevice device(64, 8);
+  if (!device.isReady())
+    SKIP("the device-mapper fault injection device could not be created");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no async path to fail");
+  REQUIRE(ops->SetAsyncQueueDepth(8));
+
+  const std::size_t kChunk = 1u << 20;
+  auto buffer = alignedBuffer(kChunk, 0x5A);
+  REQUIRE(buffer);
+
+  std::atomic<int> completions{0};
+  std::atomic<int> failures{0};
+
+  for (int i = 0; i < 24; ++i) {
+    const FileError submitted = ops->AsyncWriteSequential(
+        buffer.get(), kChunk,
+        [&](FileError result, std::size_t) {
+          completions.fetch_add(1);
+          if (result != FileError::kSuccess) failures.fetch_add(1);
+        });
+    if (submitted != FileError::kSuccess) break;
+  }
+  ops->WaitForPendingWrites();
+
+  // Every submitted write gets exactly one callback, whatever the outcome --
+  // that contract is what the caller's buffer lifetime depends on.
+  INFO("completions: " << completions.load() << " failures: " << failures.load());
+  CHECK(completions.load() > 0);
+  CHECK(failures.load() > 0);
+}
+
+TEST_CASE("Writes succeed inside the good region of a mapped device",
+          "[file-ops][faulty]") {
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+
+  // Fully mapped: the control case, so a failure above is the device rather
+  // than the harness.
+  FaultyDevice device(32, 32);
+  if (!device.isReady())
+    SKIP("the device-mapper fault injection device could not be created");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+
+  const std::size_t kChunk = 1u << 20;
+  auto buffer = alignedBuffer(kChunk, 0x11);
+  REQUIRE(buffer);
+  CHECK(ops->WriteSequential(buffer.get(), kChunk) == FileError::kSuccess);
+}
+
+// ── Lifecycle and durability ────────────────────────────────────────────────
+//
+// The write layer is the last thing between the decompressed image and the
+// card. Two of its promises matter more than the rest: that a reported
+// success has actually reached the device, and that a failed or repeated
+// operation leaves the handle in a state the caller can reason about rather
+// than half-open.
+
+TEST_CASE("Operations on an unopened handle fail instead of asserting",
+          "[file-ops]") {
+  auto ops = FileOperations::Create();
+  REQUIRE(ops != nullptr);
+  CHECK_FALSE(ops->IsOpen());
+
+  std::uint64_t size = 0;
+  const auto data = pattern(512, 0x5A);
+
+  // None of these may be undefined behaviour on a closed handle: the write
+  // path calls them from error handlers, where the file may already be gone.
+  CHECK(ops->GetSize(size) != FileError::kSuccess);
+  CHECK(ops->WriteAtOffset(0, data.data(), data.size()) != FileError::kSuccess);
+  CHECK(ops->ForceSync() != FileError::kSuccess);
+}
+
+TEST_CASE("Closing twice is not an error the caller has to guard against",
+          "[file-ops]") {
+  const std::string path = makeImage("doubleclose.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK_FALSE(ops->IsOpen());
+
+  // Cleanup paths call Close() again on the way out.
+  ops->Close();
+  CHECK_FALSE(ops->IsOpen());
+}
+
+TEST_CASE("Opening a directory is refused", "[file-ops]") {
+  // A path that exists but is not a file: writing to it would fail later, in
+  // the middle of the image rather than before anything started.
+  // A directory that certainly exists: the scratch area's own subdirectory.
+  const std::string dir = scratch().file("a-directory");
+  fs::create_directories(dir);
+
+  auto ops = FileOperations::Create();
+  CHECK(ops->OpenDevice(dir) != FileError::kSuccess);
+  CHECK_FALSE(ops->IsOpen());
+}
+
+TEST_CASE("Reopening replaces the previous handle", "[file-ops]") {
+  const std::string first = makeImage("first.img");
+  const std::string second = makeImage("second.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(first) == FileError::kSuccess);
+  REQUIRE(ops->OpenDevice(second) == FileError::kSuccess);
+  CHECK(ops->IsOpen());
+
+  // Writes now land in the second file, and the first is untouched.
+  const auto data = pattern(512, 0x77);
+  REQUIRE(ops->WriteAtOffset(0, data.data(), data.size()) == FileError::kSuccess);
+  REQUIRE(ops->ForceSync() == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+
+  CHECK(readBack(second, 0, 512) == data);
+  const auto untouched = readBack(first, 0, 512);
+  CHECK(std::all_of(untouched.begin(), untouched.end(),
+                    [](std::uint8_t b) { return b == 0; }));
+}
+
+TEST_CASE("Tell follows Seek and the writes that follow it", "[file-ops]") {
+  const std::string path = makeImage("tell.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  REQUIRE(ops->Seek(4096) == FileError::kSuccess);
+  CHECK(ops->Tell() == 4096);
+
+  const auto data = pattern(1024, 0x31);
+  REQUIRE(ops->WriteSequential(data.data(), data.size()) == FileError::kSuccess);
+  CHECK(ops->Tell() == 4096 + 1024);
+
+  REQUIRE(ops->Seek(0) == FileError::kSuccess);
+  CHECK(ops->Tell() == 0);
+
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK(readBack(path, 4096, 1024) == data);
+}
+
+TEST_CASE("Direct I/O can be turned on and off on an open handle",
+          "[file-ops]") {
+  // The imager switches between buffered and direct I/O depending on the
+  // target. Toggling must not invalidate the handle or silently drop the
+  // file position, or the next write lands in the wrong place.
+  const std::string path = makeImage("directio.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  const auto before = ops->SetDirectIOEnabled(true);
+  INFO("enabling direct I/O returned " << static_cast<int>(before));
+
+  // Whether O_DIRECT is available depends on the filesystem under the
+  // scratch directory, so the result is not asserted -- but the handle must
+  // still be usable either way.
+  CHECK(ops->IsOpen());
+
+  REQUIRE(ops->SetDirectIOEnabled(false) == FileError::kSuccess);
+  CHECK(ops->IsOpen());
+
+  const auto data = pattern(4096, 0x63);
+  REQUIRE(ops->WriteAtOffset(0, data.data(), data.size()) == FileError::kSuccess);
+  REQUIRE(ops->ForceSync() == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK(readBack(path, 0, 4096) == data);
+}
+
+TEST_CASE("A write past the end of the file extends it", "[file-ops]") {
+  const std::string path = makeImage("extend.img");
+  const std::uint64_t beyond = kImageSize + 8192;
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  const auto data = pattern(512, 0x44);
+  REQUIRE(ops->WriteAtOffset(beyond, data.data(), data.size()) == FileError::kSuccess);
+
+  std::uint64_t size = 0;
+  REQUIRE(ops->GetSize(size) == FileError::kSuccess);
+  CHECK(size == beyond + 512);
+
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK(readBack(path, beyond, 512) == data);
 }
