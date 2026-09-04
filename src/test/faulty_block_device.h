@@ -58,7 +58,29 @@ inline bool runPrivileged(const QString &program, const QStringList &args, QByte
 class FaultyDevice
 {
 public:
+    // A device that is writable at both ends and fails in a band in the
+    // middle. A counterfeit card behaves this way once past its real
+    // capacity, and it is the only shape that lets a write get started and
+    // then fail: a device whose *tail* is bad is caught by the end-of-device
+    // check during preparation, before any image data is written at all.
+    struct BadBand
+    {
+        int startMegabytes;
+        int lengthMegabytes;
+    };
+
+    FaultyDevice(int totalMegabytes, BadBand band)
+        : FaultyDevice(totalMegabytes, -1, band.startMegabytes, band.lengthMegabytes)
+    {
+    }
+
     explicit FaultyDevice(int totalMegabytes, int goodMegabytes)
+        : FaultyDevice(totalMegabytes, goodMegabytes, -1, -1)
+    {
+    }
+
+private:
+    FaultyDevice(int totalMegabytes, int goodMegabytes, int bandStartMB, int bandLenMB)
         // Unique per instance, not just per process: two of these exist in
         // quick succession within a run, and a name collision would have one
         // tear down the other's mapping underneath it.
@@ -92,14 +114,32 @@ public:
         const qint64 totalSectors = static_cast<qint64>(totalMegabytes) * 1024 * 1024 / 512;
         // A fully writable device when asked for one, so a control case can
         // tell "the device failed" from "the harness is broken".
-        const QString table =
-            goodSectors >= totalSectors
+        QString table;
+        if (bandStartMB >= 0) {
+            // good | error | good
+            const qint64 bandStart = static_cast<qint64>(bandStartMB) * 1024 * 1024 / 512;
+            const qint64 bandLen = static_cast<qint64>(bandLenMB) * 1024 * 1024 / 512;
+            const qint64 tailStart = bandStart + bandLen;
+            if (tailStart > totalSectors)
+                return;
+            table = QStringLiteral("0 %1 linear %2 0\n").arg(bandStart).arg(_loop)
+                  + QStringLiteral("%1 %2 error\n").arg(bandStart).arg(bandLen)
+                  + QStringLiteral("%1 %2 linear %3 %4\n")
+                        .arg(tailStart)
+                        .arg(totalSectors - tailStart)
+                        .arg(_loop)
+                        .arg(tailStart);
+        } else {
+            // A fully writable device when asked for one, so a control case
+            // can tell "the device failed" from "the harness is broken".
+            table = goodSectors >= totalSectors
                 ? QStringLiteral("0 %1 linear %2 0\n").arg(totalSectors).arg(_loop)
                 : QStringLiteral("0 %1 linear %2 0\n%3 %4 error\n")
                       .arg(goodSectors)
                       .arg(_loop)
                       .arg(goodSectors)
                       .arg(totalSectors - goodSectors);
+        }
 
         QProcess create;
         create.start(QStringLiteral("sudo"),
@@ -122,6 +162,7 @@ public:
         runPrivileged(QStringLiteral("chmod"), {QStringLiteral("0666"), path()});
     }
 
+public:
     ~FaultyDevice()
     {
         if (_mapped)

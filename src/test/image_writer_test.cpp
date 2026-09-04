@@ -4704,3 +4704,72 @@ TEST_CASE("An unknown language is ignored rather than applied", "[imagewriter][l
     // translation behind it.
     CHECK(w.getCurrentLanguage() == before);
 }
+
+TEST_CASE("A card that fails mid-write reports it", "[imagewriter][faulty]")
+{
+    using namespace rpi_imager::testing;
+
+    if (!canRunPrivileged())
+        SKIP("needs root to create the device-mapper table that injects EIO");
+
+    // Writable at both ends, failing from 16 MB to 32 MB. Both ends matter:
+    // the end-of-device check during preparation writes to the last
+    // megabyte, so a device whose tail is bad never gets as far as writing
+    // image data. This one does, and then fails part-way through -- which is
+    // how a counterfeit card actually behaves, and the only way to reach the
+    // writer's mid-stream error handling.
+    FaultyDevice card(64, FaultyDevice::BadBand{16, 16});
+    if (!card.isReady())
+        SKIP("could not create the faulty device mapping");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("fat32.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/fat32-48MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, BootPartitionFixture::kImageSize);
+    w.setDst(card.path(), 64ull * 1024 * 1024);
+
+    const WriteOutcome out = runWrite(w, 180000);
+
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+    CHECK(out.failed);
+    REQUIRE_FALSE(out.errors.isEmpty());
+    // The message has to say something a user can act on, not just fail.
+    CHECK(out.errors.first().size() > 20);
+}
+
+TEST_CASE("A card failing mid-write in sync mode reports it too", "[imagewriter][faulty]")
+{
+    using namespace rpi_imager::testing;
+
+    if (!canRunPrivileged())
+        SKIP("needs root to create the device-mapper table that injects EIO");
+
+    FaultyDevice card(64, FaultyDevice::BadBand{16, 16});
+    if (!card.isReady())
+        SKIP("could not create the faulty device mapping");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("fat32.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/fat32-48MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    // With async I/O the failure returns through a completion callback; in
+    // sync mode the write call itself returns it. Different code, same
+    // requirement.
+    w.setDebugAsyncIO(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, BootPartitionFixture::kImageSize);
+    w.setDst(card.path(), 64ull * 1024 * 1024);
+
+    const WriteOutcome out = runWrite(w, 180000);
+
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+    CHECK(out.failed);
+}
