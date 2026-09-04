@@ -719,3 +719,127 @@ TEST_CASE("The poller's scan options can be set before it runs",
     poller.stop();
     CHECK(poller.wait(30000));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Marking the board that is actually plugged in
+//
+// When a Compute Module is attached over USB, the board chooser marks the
+// entries that correspond to the chip it reports. QML reads that through the
+// isUsbBootConnected role.
+//
+// Getting it wrong is quiet in both directions: an unmarked board leaves the
+// user hunting for the device they can see is connected, and a wrongly
+// marked one invites them to flash an image built for a different SoC.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+int roleNumbered(const QAbstractItemModel *model, const char *name)
+{
+    const QHash<int, QByteArray> roles = model->roleNames();
+    for (auto it = roles.constBegin(); it != roles.constEnd(); ++it)
+        if (it.value() == QByteArray(name))
+            return it.key();
+    return -1;
+}
+
+// Row index of a board by name.
+int rowNamed(QAbstractItemModel *view, const QString &name)
+{
+    const int nameRole = roleNumbered(view, "name");
+    for (int r = 0; r < view->rowCount(QModelIndex()); ++r)
+        if (view->data(view->index(r, 0), nameRole).toString() == name)
+            return r;
+    return -1;
+}
+
+bool markedConnected(QAbstractItemModel *view, const QString &name)
+{
+    const int row = rowNamed(view, name);
+    REQUIRE(row >= 0);
+    return view->data(view->index(row, 0), roleNumbered(view, "isUsbBootConnected")).toBool();
+}
+
+} // namespace
+
+TEST_CASE("A connected chip marks its own board and no other", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+
+    // Nothing attached: nothing marked.
+    CHECK_FALSE(markedConnected(view, QStringLiteral("Raspberry Pi 5")));
+
+    model->setConnectedRpibootChips({QStringLiteral("BCM2712")});
+
+    // The Pi 5 entry is tagged pi5-64bit; the Zero 2 W is not a BCM2712.
+    // Marking the wrong one invites a flash of an image for another SoC.
+    CHECK(markedConnected(view, QStringLiteral("Raspberry Pi 5")));
+    CHECK_FALSE(markedConnected(view, QStringLiteral("Raspberry Pi Zero 2 W")));
+}
+
+TEST_CASE("A different generation's chip marks nothing", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+
+    model->setConnectedRpibootChips({QStringLiteral("BCM2711")});
+    CHECK_FALSE(markedConnected(view, QStringLiteral("Raspberry Pi 5")));
+}
+
+TEST_CASE("An unrecognised chip marks nothing", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+
+    // Better to mark no board than the wrong one.
+    model->setConnectedRpibootChips({QStringLiteral("BCM9999")});
+    CHECK_FALSE(markedConnected(view, QStringLiteral("Raspberry Pi 5")));
+}
+
+TEST_CASE("Disconnecting the device clears the mark", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+
+    model->setConnectedRpibootChips({QStringLiteral("BCM2712")});
+    REQUIRE(markedConnected(view, QStringLiteral("Raspberry Pi 5")));
+
+    // Unplugging must not leave the chooser claiming the board is attached.
+    model->setConnectedRpibootChips({});
+    CHECK_FALSE(markedConnected(view, QStringLiteral("Raspberry Pi 5")));
+}
+
+TEST_CASE("The chooser is told when the connected device changes", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+
+    int changes = 0;
+    QObject::connect(model, &QAbstractItemModel::dataChanged,
+                     [&changes](const QModelIndex &, const QModelIndex &, const QList<int> &) {
+                         ++changes;
+                     });
+
+    model->setConnectedRpibootChips({QStringLiteral("BCM2712")});
+    REQUIRE(changes == 1);
+
+    // Setting the same list again is not a change; repainting every row on
+    // each poll would be visible in the UI.
+    model->setConnectedRpibootChips({QStringLiteral("BCM2712")});
+    CHECK(changes == 1);
+}
