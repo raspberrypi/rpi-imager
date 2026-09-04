@@ -22,6 +22,13 @@ WizardStepBase {
     // algorithm is incompatible with the currently selected OS (drives a hint).
     property bool savedPasswordInvalidated: false
     property string savedUsername: ""
+
+    // "root" already exists in every image, so first-boot user creation fails
+    // and the device is left with no usable login. Kept as a named property so
+    // further system account names can be added without touching the callers.
+    // Compare ImageWriter::getCurrentUser(), which substitutes "pi" for the
+    // same reason when pre-filling this field.
+    readonly property bool usernameIsReserved: fieldUsername.text.trim() === "root"
     
     title: qsTr("Customisation: Choose username")
     subtitle: qsTr("Create a user account for your Raspberry Pi")
@@ -91,6 +98,13 @@ WizardStepBase {
             WizardDescriptionText {
                 id: helpText
                 text: qsTr("The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
+            }
+
+            WizardDescriptionText {
+                id: reservedUsernameHint
+                visible: root.usernameIsReserved
+                color: Style.formLabelErrorColor
+                text: qsTr("This username is already used by the operating system. Please choose a different one, for example \"pi\".")
             }
 
             WizardDescriptionText {
@@ -203,7 +217,8 @@ WizardStepBase {
     // - all fields are empty (no customization), or
     // - a new password is entered and matches confirm, or
     // - a saved (crypted) password exists and user leaves password fields blank (with or without username)
-    nextButtonEnabled: (
+    // In every case the username must not collide with an existing system account.
+    nextButtonEnabled: !root.usernameIsReserved && (
         (fieldUsername.text.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)
         || (fieldPassword.text.length > 0 && fieldPasswordConfirm.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
         || (root.hasSavedUserPassword && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)
