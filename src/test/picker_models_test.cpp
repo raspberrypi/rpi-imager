@@ -1064,3 +1064,167 @@ TEST_CASE("A fastboot storage target is offered even at zero size", "[models][dr
     model->processDriveList({fb});
     CHECK(rowsOf(model) == 1);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Building the board chooser, and what selecting a board does
+//
+// reload() turns the repository's "devices" array into the list of boards.
+// It rewrites icon paths on the way, because the manifest gives them
+// relative to the repository and the wizard needs them relative to itself --
+// a rewrite that goes wrong is a chooser full of boards with no pictures.
+//
+// setCurrentIndex() is the other half: choosing a board sets the filter that
+// decides which images are offered, and clears the image already picked when
+// the board actually changes. Not clearing it leaves an image selected that
+// the new board cannot boot.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+QByteArray hwListWith(const QString &deviceFields)
+{
+    return QStringLiteral(R"JSON({
+        "imager": { "devices": [ %1 ] },
+        "os_list": []
+    })JSON").arg(deviceFields).toUtf8();
+}
+
+} // namespace
+
+TEST_CASE("A devices entry that is not an array leaves the chooser empty", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(QByteArray(R"JSON({"imager":{"devices":"not-an-array"},"os_list":[]})JSON"));
+    HWListModel *model = writer.getHWList();
+
+    // Returning false rather than throwing: the OS list may simply not have
+    // arrived yet, and the wizard re-asks.
+    CHECK_FALSE(model->reload());
+    CHECK(rowsOf(model) == 0);
+}
+
+TEST_CASE("A repository icon path is rewritten for the wizard", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(hwListWith(QStringLiteral(
+        R"({"name":"Pi 5","tags":["pi5-64bit"],"capabilities":[],"icon":"icons/pi5.png","architecture":"arm64"})")));
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+
+    // The manifest gives it relative to the repository root; the wizard is a
+    // directory deeper.
+    CHECK(roleOfRow(model, 0, "icon").toString() == QStringLiteral("../icons/pi5.png"));
+}
+
+TEST_CASE("A remote icon is routed through the image provider", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(hwListWith(QStringLiteral(
+        R"({"name":"Pi 5","tags":[],"capabilities":[],"icon":"https://example.com/pi5.png","architecture":"arm64"})")));
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+
+    // Loading it directly hits Qt's HTTP/2 stack; the provider is the
+    // fetcher with the shared cache behind it.
+    CHECK(roleOfRow(model, 0, "icon").toString()
+          == QStringLiteral("image://icons/https://example.com/pi5.png"));
+}
+
+TEST_CASE("An icon path that needs no rewriting is left alone", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(hwListWith(QStringLiteral(
+        R"({"name":"Pi 5","tags":[],"capabilities":[],"icon":"qrc:/icons/pi5.png","architecture":"arm64"})")));
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+
+    CHECK(roleOfRow(model, 0, "icon").toString() == QStringLiteral("qrc:/icons/pi5.png"));
+}
+
+TEST_CASE("Reloading replaces the boards rather than appending", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+
+    REQUIRE(model->reload());
+    const int first = rowsOf(model);
+    REQUIRE(first > 0);
+
+    // Stepping back and forward through the wizard re-enters this; appending
+    // would show every board twice.
+    REQUIRE(model->reload());
+    CHECK(rowsOf(model) == first);
+}
+
+TEST_CASE("Selecting a board out of range changes nothing", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+
+    const int before = model->currentIndex();
+    model->setCurrentIndex(9999);
+    CHECK(model->currentIndex() == before);
+
+    model->setCurrentIndex(-2);
+    CHECK(model->currentIndex() == before);
+}
+
+TEST_CASE("Clearing the board selection is allowed", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    REQUIRE(model->currentIndex() >= 0);
+
+    int changes = 0;
+    QObject::connect(model, &HWListModel::currentIndexChanged, model, [&] { ++changes; });
+
+    const QString chosen = model->currentName();
+    model->setCurrentIndex(-1);
+
+    CHECK(model->currentIndex() == -1);
+    // The button falls back to its placeholder rather than keeping the name
+    // of a board that is no longer selected.
+    CHECK(model->currentName() != chosen);
+    CHECK(model->currentName() == QStringLiteral("CHOOSE DEVICE"));
+    CHECK(changes == 1);
+}
+
+TEST_CASE("Re-selecting the same board is not a change", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    const int current = model->currentIndex();
+    REQUIRE(current >= 0);
+
+    int changes = 0;
+    QObject::connect(model, &HWListModel::currentIndexChanged, model, [&] { ++changes; });
+
+    model->setCurrentIndex(current);
+    CHECK(changes == 0);
+}
+
+TEST_CASE("Choosing a different board drops the image already picked", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    REQUIRE(rowsOf(model) >= 2);
+
+    writer.setSrc(QUrl(QStringLiteral("https://example.invalid/pi5.img.xz")), 0, 1024);
+    REQUIRE_FALSE(writer.srcFileName().isEmpty());
+
+    // The image was chosen for the previous board and may not boot on this
+    // one. Leaving it selected is how the wrong image gets written.
+    const int other = (model->currentIndex() == 0) ? 1 : 0;
+    model->setCurrentIndex(other);
+
+    CHECK(writer.srcFileName().isEmpty());
+}
