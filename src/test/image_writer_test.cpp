@@ -4205,3 +4205,111 @@ TEST_CASE("Config entries are appended, not duplicated", "[imagewriter][formats]
     // must appear exactly once even though the file already had content.
     CHECK(written.count(QByteArray("dtparam=marker_cfg=on")) == 1);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Destinations that cannot be written
+//
+// The capacity check in startWrite() catches a card that is too small. These
+// are the failures that only surface once the writer tries to open the
+// destination: a path that is not a file, one the user has no permission
+// for, one whose directory has gone.
+//
+// Each has to end in an error the user can act on. A write that fails to
+// open and then reports success would leave them believing a card was
+// written that never was.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+WriteOutcome writeTo(const QString &destination, quint64 declaredSize)
+{
+    QTemporaryDir dir;
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("os.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, kFixturePayload);
+    w.setDst(destination, declaredSize);
+    return runWrite(w, 60000);
+}
+
+} // namespace
+
+TEST_CASE("A destination that is a directory is refused", "[imagewriter][dest]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const WriteOutcome out = writeTo(dir.path(), kFixturePayload);
+
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+    CHECK(out.failed);
+}
+
+TEST_CASE("A destination in a directory that does not exist is refused", "[imagewriter][dest]")
+{
+    const WriteOutcome out =
+        writeTo(QStringLiteral("/nonexistent-directory-for-tests/target.img"), kFixturePayload);
+
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+    CHECK(out.failed);
+}
+
+TEST_CASE("A destination the user cannot write is refused", "[imagewriter][dest]")
+{
+    if (::geteuid() == 0)
+        SKIP("running as root, which can write a file with no permissions");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("readonly.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+    REQUIRE(QFile::setPermissions(target, QFileDevice::ReadOwner));
+
+    const WriteOutcome out = writeTo(target, kFixturePayload);
+
+    // This is what a card with its lock tab set looks like from here.
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+    CHECK(out.failed);
+    CHECK_FALSE(out.errors.isEmpty());
+
+    QFile::setPermissions(target, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+}
+
+TEST_CASE("An empty destination is refused before anything starts", "[imagewriter][dest]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("os.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl::fromLocalFile(source), 0, kFixturePayload);
+    w.setDst(QString(), 0);
+
+    // No destination chosen yet: the write button should not be live at all.
+    CHECK_FALSE(w.readyToWrite());
+}
+
+TEST_CASE("An empty source is refused before anything starts", "[imagewriter][dest]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setDst(target, kFixturePayload);
+
+    CHECK_FALSE(w.readyToWrite());
+}
