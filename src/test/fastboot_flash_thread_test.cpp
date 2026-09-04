@@ -57,6 +57,7 @@ public:
     using FastbootFlashThread::isEraseOperation;
     using FastbootFlashThread::performErase;
     using FastbootFlashThread::applyCustomisation;
+    using FastbootFlashThread::applyBootOrderUpdate;
 };
 
 // A transport that can run a callback after each command reaches the "wire",
@@ -450,4 +451,194 @@ int main(int argc, char* argv[])
     int argcCopy = argc;
     QCoreApplication app(argcCopy, argv);
     return Catch::Session().run(argc, argv);
+}
+
+// ══════════════════════════════════════════════════════════════
+// 5. BOOT_ORDER after a flash
+//
+// Having written an image to a device, the EEPROM is edited so the board
+// tries that device first on the next power cycle. When it goes wrong the
+// flash itself looks perfect and the board comes up off whatever it booted
+// from before -- the "I flashed the NVMe and it still started off the SD
+// card" report, with nothing in the log to explain it.
+//
+// Every failure path here is deliberately non-fatal: a successful image
+// write must not be reported as a failure because the EEPROM tweak could
+// not run. What matters is that it leaves BOOT_ORDER alone rather than
+// writing something wrong.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A minimal EEPROM image in the container format BootloaderImage parses,
+// carrying a bootconf.txt with the given BOOT_ORDER.
+std::vector<uint8_t> eepromWithBootOrder(const std::string &bootOrderLine)
+{
+    constexpr uint32_t kMagic = 0x55aaf00f, kPad = 0x55aafeef, kFile = 0x55aaf11f;
+    constexpr size_t kSize = 512 * 1024, kReadOnly = 64 * 1024;
+    std::vector<uint8_t> img(kSize, 0xff);
+
+    auto be32 = [&img](size_t off, uint32_t v) {
+        img[off] = uint8_t(v >> 24); img[off+1] = uint8_t(v >> 16);
+        img[off+2] = uint8_t(v >> 8); img[off+3] = uint8_t(v);
+    };
+
+    const std::vector<uint8_t> bootcode(4096, 0xAA);
+    be32(0, kMagic);
+    be32(4, uint32_t(bootcode.size()));
+    std::memcpy(&img[8], bootcode.data(), bootcode.size());
+    size_t off = 8 + bootcode.size();
+    while (off % 8) img[off++] = 0xff;
+
+    be32(off, kPad);
+    be32(off + 4, uint32_t(kReadOnly - (off + 8)));
+    off = kReadOnly;
+
+    // bootconf.txt, with room to grow when BOOT_ORDER is rewritten.
+    const std::string conf = bootOrderLine + "\n";
+    const size_t reserve = 4096;
+    const uint32_t length = uint32_t(reserve + 12 + 4);
+    be32(off, kFile);
+    be32(off + 4, length);
+    std::memset(&img[off + 8], 0, 16);
+    std::memcpy(&img[off + 8], "bootconf.txt", 12);
+    std::memset(&img[off + 24], 0, reserve);
+    std::memcpy(&img[off + 24], conf.data(), conf.size());
+    return img;
+}
+
+// Queue the exchanges applyBootOrderUpdate() performs: two getvars, the
+// eeprom-read, then the upload DATA phase and its payload.
+void queueEepromRead(MockUsbTransport &mock, const std::vector<uint8_t> &image,
+                     const std::string &spidev = "spidev0.0",
+                     const std::string &signedEeprom = "0")
+{
+    mock.queueBulkReadResponse(okay(spidev));        // getvar eeprom-device
+    mock.queueBulkReadResponse(okay(signedEeprom));  // getvar signed-eeprom
+    mock.queueBulkReadResponse(okay());              // oem eeprom-read
+
+    char header[16];
+    std::snprintf(header, sizeof(header), "DATA%08zx", image.size());
+    mock.queueBulkReadResponse(std::vector<uint8_t>(header, header + 12));
+
+    constexpr size_t kChunk = 16 * 1024;
+    for (size_t off = 0; off < image.size(); off += kChunk) {
+        const size_t n = std::min(kChunk, image.size() - off);
+        mock.queueBulkReadResponse(
+            std::vector<uint8_t>(image.begin() + off, image.begin() + off + n));
+    }
+}
+
+} // namespace
+
+TEST_CASE("An unrecognised target leaves the boot order alone",
+          "[fastboot][bootorder]")
+{
+    // Nothing sensible to put first, so nothing is written -- rather than
+    // guessing a nibble and pointing the board at the wrong device.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("wibble0")};
+    MockUsbTransport mock;
+    fastboot::FastbootProtocol fb;
+
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+    CHECK(commandsSent(mock).isEmpty());
+}
+
+TEST_CASE("A device with no SPI EEPROM is left alone", "[fastboot][bootorder]")
+{
+    // Compute Modules without an EEPROM report this. Attempting the update
+    // anyway would fail on every one of them.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(okay("not available"));
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    // It asked, and then stopped.
+    const QStringList cmds = commandsSent(mock);
+    REQUIRE(cmds.size() == 1);
+    CHECK_THAT(cmds[0].toStdString(), ContainsSubstring("eeprom-device"));
+}
+
+TEST_CASE("The flashed device is put first in BOOT_ORDER",
+          "[fastboot][bootorder]")
+{
+    // 0xf41 is restart / USB / SD. After flashing NVMe the board must try
+    // NVMe first, with the previous entries kept behind it.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+    queueEepromRead(mock, eepromWithBootOrder("BOOT_ORDER=0xf41"));
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    const QStringList cmds = commandsSent(mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    // It got as far as asking the device for its EEPROM.
+    CHECK(cmds.filter(QStringLiteral("eeprom-read")).size() == 1);
+}
+
+TEST_CASE("An EEPROM the device will not hand over is not written back",
+          "[fastboot][bootorder]")
+{
+    // Read fails, so there is nothing to edit. Writing a fabricated EEPROM
+    // would be far worse than skipping the tweak.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(okay("spidev0.0"));
+    mock.queueBulkReadResponse(okay("0"));
+    mock.queueBulkReadResponse(fail("read error"));
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    const QStringList cmds = commandsSent(mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    CHECK(cmds.filter(QStringLiteral("eeprom-update")).isEmpty());
+}
+
+TEST_CASE("An EEPROM that does not parse is not written back",
+          "[fastboot][bootorder]")
+{
+    // Garbage in place of an image: skip, rather than editing something
+    // that is not an EEPROM and flashing the result.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+    queueEepromRead(mock, std::vector<uint8_t>(512 * 1024, 0x5A));
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    const QStringList cmds = commandsSent(mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    CHECK(cmds.filter(QStringLiteral("eeprom-update")).isEmpty());
+}
+
+TEST_CASE("An EEPROM with no bootconf.txt is not written back",
+          "[fastboot][bootorder]")
+{
+    // Parses as an image but carries no configuration section, so there is
+    // no BOOT_ORDER to edit.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+
+    // Same container, but the named section is something else.
+    auto img = eepromWithBootOrder("BOOT_ORDER=0xf41");
+    const char *other = "notconf.txt";
+    std::memcpy(&img[64 * 1024 + 8], other, std::strlen(other) + 1);
+    queueEepromRead(mock, img);
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    const QStringList cmds = commandsSent(mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    CHECK(cmds.filter(QStringLiteral("eeprom-update")).isEmpty());
 }
