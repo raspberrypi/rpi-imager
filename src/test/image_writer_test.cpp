@@ -3377,3 +3377,65 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
     const QByteArray written = card.read(qint64(BootPartitionFixture::kImageSize));
     CHECK(written.contains(QByteArray("rpi-imager-device-marker")));
 }
+
+// Each container the picker accepts, truncated. The guard in
+// LocalFileExtractThread::run() has to fire for all of them, not just the xz
+// that found it -- a corrupt .gz or .zip copied raw onto the card is the same
+// unbootable result.
+namespace {
+
+QString truncatedCopyOf(const QTemporaryDir &dir, const QString &fixture)
+{
+    QFile src(QStringLiteral(IMAGER_TEST_DATA_DIR "/") + fixture);
+    REQUIRE(src.open(QIODevice::ReadOnly));
+    const QByteArray whole = src.readAll();
+    src.close();
+    REQUIRE(whole.size() > 64);
+
+    const QString cut = QDir(dir.path()).filePath(fixture);
+    QFile out(cut);
+    REQUIRE(out.open(QIODevice::WriteOnly));
+    REQUIRE(out.write(whole.left(whole.size() / 2)) > 0);
+    out.close();
+    return cut;
+}
+
+void checkTruncatedIsRefused(const QString &fixture)
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString cut = truncatedCopyOf(dir, fixture);
+
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(cut), 0, kFixturePayload);
+    w.setDst(target, kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("fixture: " << fixture.toStdString());
+    CHECK(out.failed);
+    CHECK_FALSE(out.succeeded);
+}
+
+} // namespace
+
+TEST_CASE("A truncated gzip is refused", "[imagewriter][extract]")
+{
+    checkTruncatedIsRefused(QStringLiteral("pattern-1MiB.img.gz"));
+}
+
+TEST_CASE("A truncated zip is refused", "[imagewriter][extract]")
+{
+    checkTruncatedIsRefused(QStringLiteral("pattern-1MiB.img.zip"));
+}
+
+TEST_CASE("A truncated zstd is refused", "[imagewriter][extract]")
+{
+    checkTruncatedIsRefused(QStringLiteral("pattern-1MiB.img.zst"));
+}
