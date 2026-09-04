@@ -15,6 +15,12 @@
 #include <QCryptographicHash>
 #include <QStringConverter>
 #include <QRegularExpression>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QProcess>
+#include <QTemporaryDir>
+#include "fixture_process.h"
 
 using namespace rpi_imager;
 using Catch::Matchers::ContainsSubstring;
@@ -2488,3 +2494,169 @@ TEST_CASE("Generator passes through a pre-derived Wi-Fi PSK unchanged", "[custom
     REQUIRE_THAT(script.toStdString(), ContainsSubstring("psk=deadbeefcafef00d"));
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Does what we generate actually parse?
+//
+// Every case above checks the output with contains(): the right strings are
+// present, the wrong ones absent. That cannot tell whether the document is
+// syntactically valid, and a cloud-init user-data file that does not parse
+// is not partially applied -- it is wholly ignored, so the user's hostname,
+// user, Wi-Fi and SSH settings all silently fail together on first boot.
+//
+// The realistic way to break YAML or TOML is not a bug in the template but a
+// value the user typed: a password containing a colon or a quote, an SSID
+// with a hash, a hostname with a newline pasted in. So these run the output
+// through real parsers, with values chosen to be awkward.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+bool havePython()
+{
+    return QFileInfo::exists(QStringLiteral("/usr/bin/python3"));
+}
+
+// Parses `document` with python3 and returns true if the parser accepted it.
+bool parsesAs(const QByteArray &document, const char *language, QString *error)
+{
+    QTemporaryDir dir;
+    if (!dir.isValid())
+        return false;
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("document"));
+    {
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly))
+            return false;
+        f.write(document);
+    }
+
+    const QString script =
+        QString::fromLatin1(language) == QLatin1String("yaml")
+            ? QStringLiteral("import sys,yaml; yaml.safe_load(open(sys.argv[1],'rb').read())")
+            : QStringLiteral("import sys,tomllib; tomllib.load(open(sys.argv[1],'rb'))");
+
+    QProcess proc;
+    proc.start(QStringLiteral("/usr/bin/python3"), {QStringLiteral("-c"), script, path});
+    proc.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+    if (error)
+        *error = QString::fromUtf8(proc.readAllStandardError()).trimmed();
+    return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
+}
+
+// Settings with values chosen to be awkward for a document format.
+QVariantMap awkwardSettings()
+{
+    QVariantMap s;
+    s.insert(QStringLiteral("hostname"), QStringLiteral("pi-test"));
+    s.insert(QStringLiteral("timezone"), QStringLiteral("Europe/London"));
+    s.insert(QStringLiteral("keyboardLayout"), QStringLiteral("gb"));
+    s.insert(QStringLiteral("sshUserName"), QStringLiteral("pi"));
+    // A crypted password is the field most likely to carry $ : / and .
+    s.insert(QStringLiteral("sshUserPassword"),
+             QStringLiteral("$5$rounds=5000$abc:def$xyz/123.456"));
+    s.insert(QStringLiteral("wifiSSID"), QStringLiteral("my: network #1 \"quoted\""));
+    s.insert(QStringLiteral("wifiPassword"), QStringLiteral("p@ss: word #with 'quotes'"));
+    s.insert(QStringLiteral("wifiCountry"), QStringLiteral("GB"));
+    return s;
+}
+
+} // namespace
+
+TEST_CASE("Generated cloud-init user-data is valid YAML", "[customisation][parse]")
+{
+    if (!havePython())
+        SKIP("python3 is not installed, so the output cannot be parsed");
+
+    const QByteArray yaml =
+        CustomisationGenerator::generateCloudInitUserData(awkwardSettings(), QString());
+    REQUIRE_FALSE(yaml.isEmpty());
+
+    QString error;
+    INFO("document:\n" << QString::fromUtf8(yaml).left(1200).toStdString());
+    INFO("parser said: " << error.toStdString());
+    CHECK(parsesAs(yaml, "yaml", &error));
+}
+
+TEST_CASE("Generated cloud-init network config is valid YAML", "[customisation][parse]")
+{
+    if (!havePython())
+        SKIP("python3 is not installed, so the output cannot be parsed");
+
+    const QByteArray yaml =
+        CustomisationGenerator::generateCloudInitNetworkConfig(awkwardSettings(), false);
+    if (yaml.isEmpty())
+        SKIP("no network config generated for these settings");
+
+    QString error;
+    INFO("document:\n" << QString::fromUtf8(yaml).left(1200).toStdString());
+    INFO("parser said: " << error.toStdString());
+    CHECK(parsesAs(yaml, "yaml", &error));
+}
+
+TEST_CASE("Generated rpi-preseed is valid TOML", "[customisation][parse]")
+{
+    if (!havePython())
+        SKIP("python3 is not installed, so the output cannot be parsed");
+
+    const QByteArray toml =
+        CustomisationGenerator::generateRpiPreseedToml(awkwardSettings(), QString());
+    REQUIRE_FALSE(toml.isEmpty());
+
+    QString error;
+    INFO("document:\n" << QString::fromUtf8(toml).left(1200).toStdString());
+    INFO("parser said: " << error.toStdString());
+    CHECK(parsesAs(toml, "toml", &error));
+}
+
+TEST_CASE("A value that looks like YAML cannot restructure the document",
+          "[customisation][parse]")
+{
+    if (!havePython())
+        SKIP("python3 is not installed, so the output cannot be parsed");
+
+    QVariantMap s = awkwardSettings();
+    // Everything here is a value a user can type into the dialog. If any of
+    // it reaches the document unescaped it stops being a value and becomes
+    // structure -- which is how a Wi-Fi password ends up disabling SSH, or
+    // the whole file stops parsing and no customisation applies at all.
+    s.insert(QStringLiteral("wifiSSID"),
+             QStringLiteral("net\nssh_pwauth: true\nfoo: bar"));
+    s.insert(QStringLiteral("wifiPassword"),
+             QStringLiteral("pw\"\n- injected\n  nested: yes"));
+    s.insert(QStringLiteral("hostname"), QStringLiteral("host\nchpasswd:\n  expire: false"));
+
+    const QByteArray yaml =
+        CustomisationGenerator::generateCloudInitUserData(s, QString());
+    REQUIRE_FALSE(yaml.isEmpty());
+
+    QString error;
+    const bool parsed = parsesAs(yaml, "yaml", &error);
+    INFO("document:\n" << QString::fromUtf8(yaml).left(1500).toStdString());
+    INFO("parser said: " << error.toStdString());
+    // Either the generator rejects these values or it quotes them. What it
+    // must not do is emit something that parses into a different shape.
+    CHECK(parsed);
+}
+
+TEST_CASE("A value that looks like TOML cannot restructure the document",
+          "[customisation][parse]")
+{
+    if (!havePython())
+        SKIP("python3 is not installed, so the output cannot be parsed");
+
+    QVariantMap s = awkwardSettings();
+    s.insert(QStringLiteral("wifiSSID"),
+             QStringLiteral("net\"\n[injected]\nkey = \"value"));
+    s.insert(QStringLiteral("sshUserName"),
+             QStringLiteral("user\"\nadmin = true"));
+
+    const QByteArray toml = CustomisationGenerator::generateRpiPreseedToml(s, QString());
+    REQUIRE_FALSE(toml.isEmpty());
+
+    QString error;
+    const bool parsed = parsesAs(toml, "toml", &error);
+    INFO("document:\n" << QString::fromUtf8(toml).left(1500).toStdString());
+    INFO("parser said: " << error.toStdString());
+    CHECK(parsed);
+}
