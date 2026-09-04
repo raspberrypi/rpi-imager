@@ -417,7 +417,7 @@ QByteArray DeviceWrapperFatPartition::readFile(const QString &filename)
                 continue;
             }
             
-            if (entry.DIR_Attr & ATTR_LONG_NAME) {
+            if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
                 // Process long filename entry
                 struct longfn_entry *l = (struct longfn_entry *) &entry;
                 char lnamePartStr[26] = {0};
@@ -547,7 +547,7 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
     openDir();
     while (readDir(&entry))
     {
-        if (entry.DIR_Attr & ATTR_LONG_NAME)
+        if (IS_LONG_NAME_ENTRY(entry.DIR_Attr))
         {
             // Long filename entry
             struct longfn_entry *l = (struct longfn_entry *) &entry;
@@ -638,7 +638,7 @@ void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uin
             break;
         }
         
-        if (entry.DIR_Attr & ATTR_LONG_NAME) {
+        if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
             // Long filename entry
             struct longfn_entry *l = (struct longfn_entry *) &entry;
             char lnamePartStr[26] = {0};
@@ -763,7 +763,7 @@ QStringList DeviceWrapperFatPartition::listAllFilesRecursive()
         
         openDir(); // Opens root directory
         while (readDir(&entry)) {
-            if (entry.DIR_Attr & ATTR_LONG_NAME) {
+            if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
                 struct longfn_entry *l = (struct longfn_entry *) &entry;
                 char lnamePartStr[26] = {0};
                 memcpy(lnamePartStr, l->LDIR_Name1, 10);
@@ -1076,7 +1076,7 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
     openDir();
     while (readDir(entry))
     {
-        if (entry->DIR_Attr & ATTR_LONG_NAME)
+        if (IS_LONG_NAME_ENTRY(entry->DIR_Attr))
         {
             struct longfn_entry *l = (struct longfn_entry *) entry;
             /* A part can have 13 UTF-16 characters */
@@ -1234,7 +1234,7 @@ bool DeviceWrapperFatPartition::dirNameExists(const QByteArray dirname)
     openDir();
     while (readDir(&entry))
     {
-        if (!(entry.DIR_Attr & ATTR_LONG_NAME)
+        if (!IS_LONG_NAME_ENTRY(entry.DIR_Attr)
                 && dirname == QByteArray((char *) entry.DIR_Name, sizeof(entry.DIR_Name)))
         {
             return true;
@@ -1258,7 +1258,7 @@ void DeviceWrapperFatPartition::updateDirEntry(struct dir_entry *dirEntry)
     while (readDir(&iterEntry))
     {
         /* Look for existing entry with same short filename */
-        if (!(iterEntry.DIR_Attr & ATTR_LONG_NAME))
+        if (!IS_LONG_NAME_ENTRY(iterEntry.DIR_Attr))
         {
             bool matches = false;
             if (searchingForDeleted)
