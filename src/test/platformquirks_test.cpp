@@ -416,3 +416,165 @@ TEST_CASE("Multiple start/stop cycles work correctly", "[platformquirks][network
         PlatformQuirks::stopNetworkMonitoring();
     }
 }
+
+#ifdef Q_OS_LINUX
+// ============================================================================
+// unmountDisk: the success path
+//
+// The rejection cases above stop nonsense reaching the kernel. This covers
+// the case the function actually exists for: a card the user has mounted,
+// about to be written to. If it silently fails to unmount, the write goes to
+// a device the kernel still has a dirty page cache for, and the filesystem
+// is corrupted -- the write "succeeds" and the card is unreadable.
+//
+// Uses a loop device so nothing outside this test is touched. Skipped when
+// the suite cannot get the privileges to set one up.
+// ============================================================================
+
+#include "faulty_block_device.h"
+
+#include <QDir>
+#include <QProcess>
+#include <QUuid>
+
+#include <unistd.h>
+
+namespace {
+
+// unmountDisk() calls umount(2) in-process, which needs the *test binary*
+// to be root -- having passwordless sudo for fixture setup is not enough.
+// So these skip unless the suite is run as root (`sudo ctest`), rather than
+// reporting a failure for a privilege the runner was never given.
+bool runningAsRoot() { return ::geteuid() == 0; }
+
+// Is `path` (or anything beneath it) currently a mount source or target?
+bool appearsInMounts(const QString &needle)
+{
+    QFile mounts(QStringLiteral("/proc/mounts"));
+    if (!mounts.open(QIODevice::ReadOnly | QIODevice::Text))
+        return false;
+    return QString::fromUtf8(mounts.readAll()).contains(needle);
+}
+
+// A loop device carrying a single FAT partition, mounted. Tears itself down
+// on destruction whether or not the test unmounted it.
+class MountedLoopDisk
+{
+public:
+    MountedLoopDisk()
+    {
+        const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+        _dir = QDir::temp().filePath(QStringLiteral("rpi-imager-um-%1").arg(id));
+        QDir().mkpath(_dir);
+        _mountPoint = QDir(_dir).filePath(QStringLiteral("mnt"));
+        QDir().mkpath(_mountPoint);
+
+        const QString backing = QDir(_dir).filePath(QStringLiteral("disk.img"));
+
+        // 64 MiB: one MBR partition starting at LBA 2048, FAT32-typed.
+        QByteArray image(64 * 1024 * 1024, '\0');
+        auto *mbr = reinterpret_cast<uint8_t *>(image.data());
+        mbr[0x1BE + 0x04] = 0x0C;                    // type: FAT32 LBA
+        mbr[0x1BE + 0x08] = 0x00;                    // first LBA = 2048
+        mbr[0x1BE + 0x09] = 0x08;
+        const uint32_t sectors = (64u * 1024 * 1024) / 512 - 2048;
+        std::memcpy(mbr + 0x1BE + 0x0C, &sectors, 4);
+        mbr[0x1FE] = 0x55;
+        mbr[0x1FF] = 0xAA;
+
+        QFile f(backing);
+        if (!f.open(QIODevice::WriteOnly))
+            return;
+        f.write(image);
+        f.close();
+
+        // -P so the kernel exposes the partition as <loop>p1.
+        QByteArray out;
+        if (!rpi_imager::testing::runPrivileged(QStringLiteral("losetup"),
+                                     {QStringLiteral("-fP"), QStringLiteral("--show"), backing},
+                                     &out))
+            return;
+        _loop = QString::fromUtf8(out).trimmed();
+        if (_loop.isEmpty())
+            return;
+
+        _partition = _loop + QStringLiteral("p1");
+        if (!rpi_imager::testing::runPrivileged(QStringLiteral("mkfs.vfat"),
+                                     {QStringLiteral("-F"), QStringLiteral("32"), _partition}))
+            return;
+        if (!rpi_imager::testing::runPrivileged(QStringLiteral("mount"), {_partition, _mountPoint}))
+            return;
+
+        _ready = true;
+    }
+
+    ~MountedLoopDisk()
+    {
+        if (!_mountPoint.isEmpty())
+            rpi_imager::testing::runPrivileged(QStringLiteral("umount"), {_mountPoint});
+        if (!_loop.isEmpty())
+            rpi_imager::testing::runPrivileged(QStringLiteral("losetup"), {QStringLiteral("-d"), _loop});
+        QDir(_dir).removeRecursively();
+    }
+
+    MountedLoopDisk(const MountedLoopDisk &) = delete;
+    MountedLoopDisk &operator=(const MountedLoopDisk &) = delete;
+
+    bool ready() const { return _ready; }
+    QString disk() const { return _loop; }
+    QString partition() const { return _partition; }
+    QString mountPoint() const { return _mountPoint; }
+
+private:
+    QString _dir, _mountPoint, _loop, _partition;
+    bool _ready = false;
+};
+
+} // namespace
+
+TEST_CASE("unmountDisk unmounts a mounted partition of the target disk",
+          "[platformquirks][disk][privileged]") {
+    if (!runningAsRoot())
+        SKIP("unmountDisk calls umount(2) in-process; run the suite as root");
+
+    MountedLoopDisk disk;
+    if (!disk.ready())
+        SKIP("could not set up a mounted loop device");
+
+    // Precondition: the partition really is mounted.
+    REQUIRE(appearsInMounts(disk.partition()));
+
+    // The caller passes the whole disk, as the write path does -- the
+    // mounted thing is the partition inside it.
+    const auto result = PlatformQuirks::unmountDisk(disk.disk());
+    CHECK(result == PlatformQuirks::DiskResult::Success);
+
+    CHECK_FALSE(appearsInMounts(disk.partition()));
+}
+
+TEST_CASE("unmountDisk succeeds on a disk that is not mounted",
+          "[platformquirks][disk][privileged]") {
+    // Nothing to unmount is not a failure: the write can proceed. Reporting
+    // an error here would block writing to a perfectly good blank card.
+    if (!runningAsRoot())
+        SKIP("unmountDisk calls umount(2) in-process; run the suite as root");
+
+    MountedLoopDisk disk;
+    if (!disk.ready())
+        SKIP("could not set up a mounted loop device");
+
+    REQUIRE(PlatformQuirks::unmountDisk(disk.disk()) == PlatformQuirks::DiskResult::Success);
+    CHECK_FALSE(appearsInMounts(disk.partition()));
+
+    // Second call has nothing left to do.
+    CHECK(PlatformQuirks::unmountDisk(disk.disk()) == PlatformQuirks::DiskResult::Success);
+}
+
+TEST_CASE("unmountDisk rejects a directory", "[platformquirks][disk]") {
+    // Guards against a path that exists but is not a device: unmounting
+    // whatever happens to be under it would be destructive.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    CHECK(PlatformQuirks::unmountDisk(dir.path()) == PlatformQuirks::DiskResult::InvalidDrive);
+}
+#endif // Q_OS_LINUX
