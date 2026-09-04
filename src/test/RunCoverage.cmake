@@ -115,8 +115,22 @@ file(MAKE_DIRECTORY "${COVERAGE_OUTPUT_DIR}")
 file(REMOVE "${COVERAGE_OUTPUT_DIR}/build-failures.log")
 
 message(STATUS "Coverage: building instrumented targets")
+# Keep going after a failure. Without this the claim above is not true:
+# ninja and make both stop at the first failing edge, so one unbuildable
+# target takes every target queued behind it with it. That is not a
+# hypothetical -- a single unlinked test hid nineteen others and produced a
+# report over a third of the suite short, with a plausible-looking
+# percentage and nothing obviously wrong.
+if(CMAKE_GENERATOR MATCHES "Ninja")
+    set(_keep_going -- -k 0)
+elseif(CMAKE_GENERATOR MATCHES "Make")
+    set(_keep_going -- -k)
+else()
+    set(_keep_going)
+endif()
+
 execute_process(
-    COMMAND "${CMAKE_COMMAND}" --build "${COVERAGE_BINARY_DIR}" --parallel
+    COMMAND "${CMAKE_COMMAND}" --build "${COVERAGE_BINARY_DIR}" --parallel ${_keep_going}
     WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
     RESULT_VARIABLE _build_result
     OUTPUT_VARIABLE _build_output
