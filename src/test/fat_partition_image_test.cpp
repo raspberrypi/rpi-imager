@@ -1561,3 +1561,155 @@ TEST_CASE("FAT driver refuses to write through a file as if it were a directory"
     // The real file is untouched.
     CHECK(image.fat().readFile(QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FAT16, which is a different driver in all but name
+//
+// FAT16 keeps its root directory in fixed sectors rather than a cluster
+// chain, so almost every traversal has a second implementation for it:
+// listAllFilesRecursive() has an entire parallel body, and readFile(),
+// deleteFile() and getDirEntry() each branch at the root.
+//
+// Small cards still arrive formatted this way, and so do the boot partitions
+// of some older images. What breaks is not the write -- it is finding the
+// file again afterwards, which is how SecureBoot builds its signed boot
+// image: it lists the partition and reads back every name it was given.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("FAT driver walks subdirectories on FAT16", "[fat][image][fat16]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(16, 32, [&](const QString &imagePath) {
+        const QString src = imagePath + QStringLiteral(".src");
+        QFile f(src);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("overlay payload");
+        f.close();
+
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays/nested")}));
+        REQUIRE(runMtool(QStringLiteral("mcopy"),
+                         {QStringLiteral("-i"), imagePath, src,
+                          QStringLiteral("::/overlays/disable-bt.dtbo")}));
+        REQUIRE(runMtool(QStringLiteral("mcopy"),
+                         {QStringLiteral("-i"), imagePath, src,
+                          QStringLiteral("::/overlays/nested/deep.dtbo")}));
+        REQUIRE(runMtool(QStringLiteral("mcopy"),
+                         {QStringLiteral("-i"), imagePath, src, QStringLiteral("::/config.txt")}));
+        QFile::remove(src);
+    });
+
+    const QStringList flat = image.fat().listAllFiles();
+    const QStringList recursive = image.fat().listAllFilesRecursive();
+
+    INFO("flat: " << flat.join(QStringLiteral(", ")).toStdString());
+    INFO("recursive: " << recursive.join(QStringLiteral(", ")).toStdString());
+
+    // The root listing walks fixed sectors here, and the descent into
+    // subdirectories then follows cluster chains like FAT32 does.
+    CHECK(flat.contains(QStringLiteral("config.txt"), Qt::CaseInsensitive));
+    CHECK(recursive.size() > flat.size());
+
+    bool sawNested = false;
+    for (const QString &entry : recursive)
+        if (entry.contains(QStringLiteral("deep.dtbo")))
+            sawNested = true;
+    CHECK(sawNested);
+}
+
+TEST_CASE("FAT driver reads back a long-named file on FAT16", "[fat][image][fat16]")
+{
+    REQUIRE_MKFS();
+    FatImage image(16, 16);
+
+    // A name too long for 8.3 is stored across several long-name records
+    // that have to be reassembled in reverse. The root of a FAT16 volume is
+    // read through a different loop than a FAT32 one.
+    const QString name = QStringLiteral("network-config-for-first-boot.yaml");
+    const QByteArray contents = "version: 2\nethernets:\n  eth0:\n    dhcp4: true\n";
+
+    image.fat().writeFile(name, contents);
+    image.sync();
+
+    CHECK(image.fat().fileExists(name));
+    CHECK(image.fat().readFile(name) == contents);
+    CHECK(image.fat().listAllFiles().contains(name));
+}
+
+TEST_CASE("FAT driver deletes a long-named file on FAT16", "[fat][image][fat16]")
+{
+    REQUIRE_MKFS();
+    FatImage image(16, 16);
+
+    const QString name = QStringLiteral("user-data-written-by-imager.yaml");
+    image.fat().writeFile(name, QByteArray("#cloud-config\n"));
+    image.sync();
+    REQUIRE(image.fat().fileExists(name));
+
+    // Every long-name record has to be freed as well as the short one, or
+    // the next write finds a directory that looks full.
+    image.fat().deleteFile(name);
+    image.sync();
+
+    CHECK_FALSE(image.fat().fileExists(name));
+    CHECK_FALSE(image.fat().listAllFiles().contains(name));
+}
+
+TEST_CASE("FAT driver replaces a file on FAT16", "[fat][image][fat16]")
+{
+    REQUIRE_MKFS();
+    FatImage image(16, 16);
+
+    const QString name = QStringLiteral("cmdline.txt");
+    image.fat().writeFile(name, QByteArray("first version, quite short"));
+    image.sync();
+
+    const QByteArray second(9000, 'B');
+    image.fat().writeFile(name, second);
+    image.sync();
+
+    // Rewriting has to free the old chain and allocate a new one; leaving the
+    // old clusters marked in use leaks the card's free space.
+    CHECK(image.fat().readFile(name) == second);
+}
+
+TEST_CASE("FAT driver reports a missing file on FAT16", "[fat][image][fat16]")
+{
+    REQUIRE_MKFS();
+    FatImage image(16, 16);
+
+    CHECK_FALSE(image.fat().fileExists(QStringLiteral("absent.txt")));
+    CHECK(image.fat().readFile(QStringLiteral("absent.txt")).isEmpty());
+}
+
+TEST_CASE("The FAT16 recursive walk finds what the driver wrote", "[fat][image][fat16]")
+{
+    REQUIRE_MKFS();
+    FatImage image(16, 16);
+
+    // listAllFilesRecursive() has an entire second body for FAT16, because
+    // the root directory is fixed sectors rather than a cluster chain. It is
+    // the listing SecureBoot uses to decide what goes into the signed boot
+    // image, so a name it drops is a file left out without a word.
+    const QString shortName = QStringLiteral("config.txt");
+    const QString longName = QStringLiteral("network-config-first-boot.yaml");
+
+    image.fat().writeFile(shortName, QByteArray("dtparam=audio=on\n"));
+    image.fat().writeFile(longName, QByteArray("version: 2\n"));
+    image.sync();
+
+    const QStringList recursive = image.fat().listAllFilesRecursive();
+    INFO("recursive: " << recursive.join(QStringLiteral(", ")).toStdString());
+
+    bool sawShort = false, sawLong = false;
+    for (const QString &entry : recursive) {
+        if (entry.contains(shortName, Qt::CaseInsensitive)) sawShort = true;
+        if (entry.contains(longName)) sawLong = true;
+    }
+    CHECK(sawShort);
+    CHECK(sawLong);
+}
