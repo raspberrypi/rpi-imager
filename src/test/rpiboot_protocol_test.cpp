@@ -13,6 +13,8 @@
 #include "rpiboot/rpiboot_types.h"
 #include "rpiboot/bootcode_loader.h"
 #include "rpiboot/file_server.h"
+#include <vector>
+#include <cstdint>
 #include "rpiboot/rpiboot_protocol.h"
 
 #include <atomic>
@@ -845,4 +847,206 @@ TEST_CASE("A request that names a directory rather than a file is refused",
 
     CHECK_NOTHROW(rpiboot::FileServer::readFileFromDisk(base, "."));
     CHECK(rpiboot::FileServer::readFileFromDisk(base, ".").empty());
+}
+
+// ── The file-serving loop ───────────────────────────────────────────────────
+//
+// FileServer::run() is what a Compute Module talks to while it boots: the
+// device asks for files by name and the host serves them until it says Done.
+// Failures here are the ones where a board sits at a blank screen -- it asked
+// for something it needed and did not get it -- so what matters is that the
+// loop serves what it can, declines what it cannot, and terminates.
+//
+// Driven through the mock transport: requests are queued as the 260-byte
+// messages the protocol expects.
+
+namespace {
+
+// One request as it arrives from the device.
+std::vector<uint8_t> fileRequest(rpiboot::FileCommand cmd, const std::string &name)
+{
+    std::vector<uint8_t> msg(sizeof(rpiboot::FileMessage), 0);
+    const auto c = static_cast<int32_t>(cmd);
+    std::memcpy(msg.data(), &c, sizeof(c));
+    const size_t n = std::min(name.size(), size_t(255));
+    std::memcpy(msg.data() + sizeof(int32_t), name.data(), n);
+    return msg;
+}
+
+// A firmware directory holding one file.
+struct FirmwareDir
+{
+    FirmwareDir()
+    {
+        REQUIRE(dir.isValid());
+        path = std::filesystem::path(dir.path().toStdString());
+        std::ofstream f(path / "bootcode4.bin", std::ios::binary);
+        f << "bootcode contents";
+    }
+    QTemporaryDir dir;
+    std::filesystem::path path;
+};
+
+} // namespace
+
+TEST_CASE("The file server stops when the device says it is done",
+          "[rpiboot][fileserver]")
+{
+    // The ordinary ending: the board has what it needs and signals Done.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+}
+
+TEST_CASE("The file server answers a size request", "[rpiboot][fileserver]")
+{
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::GetFileSize, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+
+    // The size goes back as a zero-data vendor control transfer with the
+    // value split across wValue and wIndex -- not as a bulk write. Checking
+    // the number reaches the device matters: the board allocates from it,
+    // so a wrong size is a truncated or over-read transfer rather than a
+    // clean failure.
+    REQUIRE_FALSE(mock.capturedControlTransfers().empty());
+    const auto &ct = mock.capturedControlTransfers().front();
+    const uint32_t reported = uint32_t(ct.wValue) | (uint32_t(ct.wIndex) << 16);
+    INFO("reported size: " << reported);
+    CHECK(reported == std::string("bootcode contents").size());
+}
+
+TEST_CASE("The file server serves a file the device asks for",
+          "[rpiboot][fileserver]")
+{
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+
+    // The contents went out on the wire.
+    bool sawContents = false;
+    for (const auto &w : mock.capturedBulkWrites()) {
+        const std::string s(w.begin(), w.end());
+        if (s.find("bootcode contents") != std::string::npos)
+            sawContents = true;
+    }
+    CHECK(sawContents);
+}
+
+TEST_CASE("A request for a file that is not there does not end the boot",
+          "[rpiboot][fileserver]")
+{
+    // The device probes for optional files it may not need. Treating a miss
+    // as fatal would abort a boot that would otherwise have worked.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "not-present.bin"));
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+}
+
+TEST_CASE("A cancelled file server stops rather than serving on",
+          "[rpiboot][fileserver]")
+{
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    for (int i = 0; i < 8; ++i)
+        mock.queueBulkReadResponse(
+            fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+
+    std::atomic<bool> cancelled{true};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("ok=" << ok << " error: " << server.lastError());
+    // Whether it reports success or failure, it must not have kept serving.
+    CHECK(mock.capturedBulkWrites().size() < 8);
+}
+
+TEST_CASE("A custom resolver is preferred over the firmware directory",
+          "[rpiboot][fileserver]")
+{
+    // How the bootfiles archive is served: the resolver answers from memory
+    // and only falls back to disk. A resolver that is ignored means the
+    // signed gadget is never sent and the board boots the unsigned one.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    bool resolverAsked = false;
+    auto resolver = [&resolverAsked](const std::string &) -> std::vector<uint8_t> {
+        resolverAsked = true;
+        const std::string data = "from the resolver";
+        return {data.begin(), data.end()};
+    };
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    server.run(mock, fw.path, nullptr, cancelled, resolver);
+
+    CHECK(resolverAsked);
+
+    bool sawResolverData = false;
+    for (const auto &w : mock.capturedBulkWrites()) {
+        const std::string s(w.begin(), w.end());
+        if (s.find("from the resolver") != std::string::npos)
+            sawResolverData = true;
+    }
+    CHECK(sawResolverData);
+}
+
+TEST_CASE("Garbage from the device does not wedge the file server",
+          "[rpiboot][fileserver]")
+{
+    // After the board reboots into the next stage, reads return whatever is
+    // left in the pipe. The loop has to bound that rather than interpreting
+    // it as filenames for ever.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    for (int i = 0; i < 6; ++i)
+        mock.queueBulkReadResponse(std::vector<uint8_t>(260, 0xA5));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("ok=" << ok << " error: " << server.lastError());
+    // It returned, which is the whole point.
+    SUCCEED("run() terminated on garbage input");
 }
