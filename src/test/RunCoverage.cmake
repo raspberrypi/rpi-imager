@@ -32,15 +32,23 @@ endforeach()
 # rows you can act on. The GUI is covered by the embedded scaling matrix and by
 # screenshots.sh instead.
 #
-# "Cannot be reached" is a claim about the code as it stands, though, not a
-# licence to leave decisions in there. Logic that happens to live behind the
-# UI but does not need it belongs on this side of the line, and two pieces
-# have been moved out for exactly that reason: oslistparser.cpp (which
-# entries the OS chooser shows, in which language and order) and
+# "Cannot be reached" is a claim about the code as it stands, though, and it
+# was worth less than it looked. Two pieces of pure logic were lifted out of
+# QML-facing files because they never needed the UI at all: oslistparser.cpp
+# (which entries the OS chooser shows, in which language and order) and
 # imagesizeparser.cpp (whether an image is judged to fit the chosen card).
-# Both were unreachable only because they sat in an anonymous namespace or a
-# private member of a QML-facing class. If something else in here turns out
-# to decide what the user sees, prefer lifting it out to widening this list.
+#
+# The rest of the claim then failed too. ImageWriter builds its models as
+# members and leaves the QML engine null, so it needs no engine -- only a
+# QGuiApplication, which the offscreen platform provides. It, the picker
+# models and the icon fetcher are all linked and driven by
+# image_writer_test, so they are no longer excluded. What remains below is
+# the part that genuinely wants a desktop session: the native file dialogs,
+# the clipboard, and the platform helper.
+#
+# The headline percentage fell when they came in, which is the honest
+# direction: several thousand branches of behaviour the user meets directly
+# were being left out of the denominator.
 #
 # Deliberately still IN scope, and expected to report low: downloadthread.cpp
 # and the rest of the download/cache path. Nothing links them into a test
@@ -62,20 +70,10 @@ set(_exclude
     ".*/qrc_.*"
     ".*/ui_.*"
     ".*/build[^/]*/.*"
-    # Entry point and the QML-facing backend object.
+    # Entry point and the command-line front end.
     ".*/src/main\\.cpp"
-    ".*/src/imagewriter\\.(cpp|h)"
     ".*/src/cli\\.(cpp|h)"
-    # Qt item models and view glue: constructed by the QML engine, and
-    # meaningless without one.
-    ".*/src/drivelistmodel.*"
-    ".*/src/drivelistitem.*"
-    ".*/src/oslistmodel.*"
-    ".*/src/hwlistmodel.*"
-    ".*/src/imageadvancedoptions.*"
     # Presentation helpers.
-    ".*/src/iconimageprovider.*"
-    ".*/src/iconmultifetcher.*"
     ".*/src/clipboardhelper.*"
     ".*/src/nativefiledialog.*"
     # ...and its per-platform halves, which live a directory down and so are
