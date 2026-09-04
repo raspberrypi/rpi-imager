@@ -26,6 +26,7 @@
 #include <QTimeZone>
 #include "signal_log.h"
 #include "local_http_server.h"
+#include "faulty_block_device.h"
 #include <QProcess>
 #include "fixture_process.h"
 #include <QDir>
@@ -3972,4 +3973,110 @@ TEST_CASE("A verified write reports verification progress", "[imagewriter][custo
             sawVerify = true;
     INFO("progress kinds seen: " << out.progressKinds.size());
     CHECK(sawVerify);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A card that fails part-way through
+//
+// The one hardware failure users actually hit: a counterfeit card that
+// accepts writes up to its real capacity and errors beyond it, or a card
+// that has started to fail. The write has to stop and say so.
+//
+// Reporting success here is the worst outcome the writer has. The user
+// unplugs a card they have been told is ready, and finds out it is not when
+// the Pi does not boot -- with nothing to connect the two.
+//
+// Backed by a device-mapper table that returns EIO past a set point. No real
+// media is involved. Creating the mapping needs root, so these skip without
+// it, matching the rest of the suite.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A card that fails part-way through is reported", "[imagewriter][faulty]")
+{
+    using namespace rpi_imager::testing;
+
+    if (!canRunPrivileged())
+        SKIP("needs root to create the device-mapper table that injects EIO");
+
+    // 64 MB of device, of which only the first 8 MB accept writes.
+    FaultyDevice card(64, 8);
+    if (!card.isReady())
+        SKIP("could not create the faulty device mapping");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("fat32.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/fat32-48MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, BootPartitionFixture::kImageSize);
+    w.setDst(card.path(), 64ull * 1024 * 1024);
+
+    const WriteOutcome out = runWrite(w, 180000);
+
+    // The image is 48 MB and the card takes 8. It must fail, and it must say
+    // so rather than finishing quietly.
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(out.failed);
+    CHECK_FALSE(out.succeeded);
+    CHECK_FALSE(out.errors.isEmpty());
+}
+
+TEST_CASE("A card that fails is not reported as verified", "[imagewriter][faulty]")
+{
+    using namespace rpi_imager::testing;
+
+    if (!canRunPrivileged())
+        SKIP("needs root to create the device-mapper table that injects EIO");
+
+    FaultyDevice card(64, 8);
+    if (!card.isReady())
+        SKIP("could not create the faulty device mapping");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("fat32.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/fat32-48MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    // With verification on there are two chances to notice, and neither may
+    // be skipped: a counterfeit card is exactly what verification is for.
+    w.setVerifyEnabled(true);
+    w.setSrc(QUrl::fromLocalFile(source), 0, BootPartitionFixture::kImageSize);
+    w.setDst(card.path(), 64ull * 1024 * 1024);
+
+    const WriteOutcome out = runWrite(w, 180000);
+
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+}
+
+TEST_CASE("A card large enough for the image succeeds on the same harness", "[imagewriter][faulty]")
+{
+    using namespace rpi_imager::testing;
+
+    if (!canRunPrivileged())
+        SKIP("needs root to create the device-mapper table that injects EIO");
+
+    // Same mapping, but every megabyte is good. Without this the case above
+    // would pass for any reason at all -- a broken harness included.
+    FaultyDevice card(64, 64);
+    if (!card.isReady())
+        SKIP("could not create the faulty device mapping");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("pattern-1MiB.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, kFixturePayload);
+    w.setDst(card.path(), 64ull * 1024 * 1024);
+
+    const WriteOutcome out = runWrite(w, 180000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.failed);
+    CHECK(out.succeeded);
 }
