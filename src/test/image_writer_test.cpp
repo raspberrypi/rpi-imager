@@ -4773,3 +4773,44 @@ TEST_CASE("A card failing mid-write in sync mode reports it too", "[imagewriter]
     CHECK_FALSE(out.succeeded);
     CHECK(out.failed);
 }
+
+TEST_CASE("Ignoring device limits reallocates the buffers", "[imagewriter][device]")
+{
+    const QString dev = testBlockDevicePath();
+    if (dev.isEmpty())
+        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"),
+                        QDir(served.path()).filePath(QStringLiteral("os.img.xz"))));
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    // A block device advertises a maximum transfer size, and the writer sizes
+    // its ring buffers to fit. Writing to a file never caps anything, so the
+    // reallocation this option performs -- after the device is open, which is
+    // an allocation path nothing else takes -- only happens against a real
+    // device whose limit is below the RAM-based optimum. A loop device's is.
+    //
+    // It also only happens on the download path: the hook is called from
+    // DownloadThread::run(), and LocalFileExtractThread overrides run(). So
+    // the image is served over loopback rather than read off disk.
+    w.setDebugIgnoreDeviceLimits(true);
+    w.setSrc(QUrl(QString::fromUtf8(server.urlFor(QStringLiteral("os.img.xz")))),
+             0, kFixturePayload, sha256HexOf(fixturePayload()));
+    w.setDst(dev, 64ull * 1024 * 1024);
+
+    const WriteOutcome out = runWrite(w, 180000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // Reallocating mid-flight must not lose or reorder anything.
+    QFile card(dev);
+    REQUIRE(card.open(QIODevice::ReadOnly));
+    CHECK(card.read(qint64(kFixturePayload)) == fixturePayload());
+}
