@@ -191,20 +191,24 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     // (e.g., RTL override characters that could make device names misleading)
     device.description = sanitizeForDisplay(descParts.join(" ").toStdString());
 
-    // For virtual devices, check if they're backing system paths
-    if (device.isVirtual && !device.isSystem) {
-        for (const auto& mp : device.mountpoints) {
-            QString mpStr = QString::fromStdString(mp);
-            if (mpStr == "/" ||
-                mpStr == "/usr" ||
-                mpStr == "/var" ||
-                mpStr == "/home" ||
-                mpStr == "/boot" ||
-                mpStr.startsWith("/snap/")) {
-                device.isSystem = true;
-                break;
-            }
-        }
+    // Anything carrying a system mountpoint is a system drive, whether or
+    // not it is removable.
+    //
+    // isSystem starts out as "not removable and not virtual", which is
+    // decided before the mountpoints are known and is wrong for the most
+    // common Raspberry Pi setup there is: a Pi booted from its SD card. The
+    // card is removable -- isCard forces isRemovable true a few lines up --
+    // so the drive the machine is running from came back isSystem false, and
+    // the warning shown before overwriting the system drive never appeared
+    // for it. This check already existed and already listed the right
+    // mountpoints; it was just gated on isVirtual, so it only ever rescued
+    // loopback-mounted images.
+    //
+    // The list itself now lives only in DeviceDescriptor::
+    // hasSystemMountpoint(), rather than being duplicated here where the two
+    // copies could drift.
+    if (!device.isSystem && device.hasSystemMountpoint()) {
+        device.isSystem = true;
     }
 
     // Handle NVMe drives: mark as system by default to avoid showing internal drives

@@ -122,6 +122,17 @@ TEST_CASE("DeviceDescriptor::hasSystemMountpoint", "[drivelist][unit]")
         CHECK(device.hasSystemMountpoint());
     }
 
+    SECTION("Detects /boot/firmware mount")
+    {
+        // Where current Raspberry Pi OS mounts the firmware partition. This
+        // list used to be duplicated in drivelist_linux.cpp and only that
+        // copy knew about /boot/firmware, so the helper reported a running
+        // Pi's own boot disk as safe to overwrite.
+        DeviceDescriptor device;
+        device.mountpoints = {"/boot/firmware"};
+        CHECK(device.hasSystemMountpoint());
+    }
+
     SECTION("Detects Windows system drive")
     {
         DeviceDescriptor device;
@@ -308,6 +319,75 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
 
         REQUIRE(devices.size() == 1);
         CHECK(devices[0].device == "/dev/nvme0n1");
+        CHECK(devices[0].isSystem == true);
+    }
+
+    // ── NVMe in embedded mode ──────────────────────────────────────────
+    //
+    // On a desktop, every NVMe is treated as system and hidden: nobody images
+    // an SD card onto their laptop's internal SSD. On a Pi running the imager
+    // itself, an attached NVMe is a perfectly ordinary target -- unless the Pi
+    // booted from it, in which case offering it would let the user overwrite
+    // the disk they are running from.
+
+    auto nvmeJson = [](const std::string& children) {
+        return R"({
+            "blockdevices": [{
+                "kname": "/dev/nvme0n1",
+                "type": "disk",
+                "subsystems": "block:nvme:pci",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "512110190592",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "WD Blue SN570",
+                "mountpoint": null)" + children + R"(
+            }]
+        })";
+    };
+
+    SECTION("Embedded mode offers an unmounted NVMe")
+    {
+        auto devices = parseLinuxBlockDevices(nvmeJson(""), true);
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].isSystem == false);
+    }
+
+    SECTION("Embedded mode keeps an NVMe carrying root as a system drive")
+    {
+        // The Pi booted from this disk. Overwriting it destroys the running
+        // system, so it must stay marked system whatever the mode.
+        const std::string children = R"(,
+                "children": [
+                    {"kname":"/dev/nvme0n1p1","type":"part","mountpoint":"/boot/firmware"},
+                    {"kname":"/dev/nvme0n1p2","type":"part","mountpoint":"/"}
+                ])";
+        auto devices = parseLinuxBlockDevices(nvmeJson(children), true);
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].isSystem == true);
+    }
+
+    SECTION("Embedded mode offers an NVMe mounted only under /media")
+    {
+        // A data disk the user happens to have plugged in and mounted.
+        const std::string children = R"(,
+                "children": [
+                    {"kname":"/dev/nvme0n1p1","type":"part","mountpoint":"/media/pi/backup"}
+                ])";
+        auto devices = parseLinuxBlockDevices(nvmeJson(children), true);
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].isSystem == false);
+    }
+
+    SECTION("Embedded mode keeps an NVMe with a non-/media mount as system")
+    {
+        // Anything mounted outside /media is assumed to matter to the running
+        // system -- the conservative answer when the alternative is data loss.
+        const std::string children = R"(,
+                "children": [
+                    {"kname":"/dev/nvme0n1p1","type":"part","mountpoint":"/srv/data"}
+                ])";
+        auto devices = parseLinuxBlockDevices(nvmeJson(children), true);
+        REQUIRE(devices.size() == 1);
         CHECK(devices[0].isSystem == true);
     }
 
@@ -523,6 +603,136 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[0].size == 32010928128);
         CHECK(devices[0].isReadOnly == false);
         CHECK(devices[0].isRemovable == true);
+    }
+
+    SECTION("Marks a removable SD card carrying root as a system drive")
+    {
+        // The most common Raspberry Pi setup there is: booted from the SD
+        // card in the built-in reader. isCard forces isRemovable, and
+        // isSystem used to be derived from removability alone, so the drive
+        // the machine was running from came back not-a-system-drive and the
+        // confirmation shown before overwriting it never appeared.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:pci",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "62537072640",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null,
+                "children": [
+                    {"kname":"/dev/mmcblk0p1","type":"part","label":"bootfs",
+                     "mountpoint":"/boot/firmware"},
+                    {"kname":"/dev/mmcblk0p2","type":"part","label":"rootfs",
+                     "mountpoint":"/"}
+                ]
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].hasSystemMountpoint());
+        CHECK(devices[0].isSystem);
+    }
+
+    SECTION("A removable card with only data mounts is not a system drive")
+    {
+        // The counterpart: a card the user is about to image. It must stay
+        // unflagged, or every ordinary write raises a system-drive
+        // confirmation and the warning stops meaning anything.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:pci",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null,
+                "children": [
+                    {"kname":"/dev/mmcblk0p1","type":"part","label":"bootfs",
+                     "mountpoint":"/media/pi/bootfs"}
+                ]
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+        REQUIRE(devices.size() == 1);
+        CHECK_FALSE(devices[0].hasSystemMountpoint());
+        CHECK_FALSE(devices[0].isSystem);
+    }
+
+    SECTION("A removable USB drive mounted at /home is a system drive")
+    {
+        // Removable, but the machine depends on it: overwriting it takes the
+        // user's home directory with it.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/sdb",
+                "type": "disk",
+                "subsystems": "block:scsi:usb:pci",
+                "ro": false, "rm": true, "hotplug": true,
+                "size": "128035676160",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "Samsung", "model": "Portable SSD",
+                "mountpoint": null,
+                "children": [
+                    {"kname":"/dev/sdb1","type":"part","label":"home","mountpoint":"/home"}
+                ]
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].isSystem);
+    }
+
+    SECTION("Finds a system mountpoint on a nested child")
+    {
+        // A partition holding an LVM volume, which lsblk reports as a
+        // grandchild. The mountpoint has to be found at any depth or a
+        // system drive behind LVM goes unflagged.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/sdd",
+                "type": "disk",
+                "subsystems": "block:scsi:pci",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "256060514304",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "Crucial", "model": "CT256",
+                "mountpoint": null,
+                "children": [
+                    {"kname":"/dev/sdd1","type":"part","label":"","mountpoint":null,
+                     "children":[
+                        {"kname":"/dev/mapper/vg-root","type":"lvm","label":"root",
+                         "mountpoint":"/"}
+                     ]}
+                ]
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].hasSystemMountpoint());
+        CHECK(devices[0].isSystem);
+    }
+
+    SECTION("Handles malformed lsblk output without crashing")
+    {
+        // The JSON comes straight from a subprocess; a truncated or garbled
+        // response must yield no devices rather than a crash or a
+        // half-populated list the user could then write to.
+        CHECK(parseLinuxBlockDevices("", false).empty());
+        CHECK(parseLinuxBlockDevices("not json at all", false).empty());
+        CHECK(parseLinuxBlockDevices("{\"blockdevices\":", false).empty());
+        CHECK(parseLinuxBlockDevices("{}", false).empty());
+        CHECK(parseLinuxBlockDevices("{\"blockdevices\":[]}", false).empty());
+        CHECK(parseLinuxBlockDevices("{\"blockdevices\":{}}", false).empty());
+        CHECK(parseLinuxBlockDevices("[]", false).empty());
     }
 
     SECTION("Collects mountpoints from children")

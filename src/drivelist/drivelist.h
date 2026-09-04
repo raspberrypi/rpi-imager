@@ -267,7 +267,12 @@ struct DeviceDescriptor {
     [[nodiscard]] bool hasSystemMountpoint() const noexcept {
         for (const auto& mp : mountpoints) {
             if (mp == "/" || mp == "C:\\" || mp == "C://" ||
-                mp == "/usr" || mp == "/var" || mp == "/home" || mp == "/boot") {
+                mp == "/usr" || mp == "/var" || mp == "/home" ||
+                // Raspberry Pi OS mounts the firmware partition at
+                // /boot/firmware; older layouts use /boot. Both belong to a
+                // running system, and missing the current one means no
+                // warning before overwriting the disk the Pi booted from.
+                mp == "/boot" || mp == "/boot/firmware") {
                 return true;
             }
             // Linux snap mounts
