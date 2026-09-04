@@ -1441,3 +1441,123 @@ TEST_CASE("FAT driver refuses a circular cluster chain", "[fat][image]")
     CHECK_THAT(message, ContainsSubstring("ircular"));
 
 }
+
+// ---------------------------------------------------------------------------
+// Writing into a subdirectory
+// ---------------------------------------------------------------------------
+//
+// deleteFile()'s subdirectory branch turned out to be dead code: getDirEntry()
+// begins with openDir(), which seeks back to the root, so the cluster set up
+// for the subdirectory was discarded and the search ran in the root instead.
+// writeFile() performs the same sequence -- resolve the directory, point the
+// traversal state at its cluster, then call getDirEntry() for the file -- so
+// the same question applies to it, and nothing was covering it.
+//
+// The customisation written after imaging goes into the boot partition's root,
+// but overlays and firmware live in subdirectories, and a write that silently
+// lands in the wrong directory is the kind of thing that only shows up when
+// the board fails to boot.
+
+TEST_CASE("FAT driver writes a file into an existing subdirectory", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(32, 64, [&](const QString &imagePath) {
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+    });
+
+    // Refused, rather than silently written to the root -- which is what it
+    // used to do, because getDirEntry() seeks back to the root and discards
+    // the subdirectory the caller selected.
+    const QByteArray payload("device tree overlay contents");
+    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("overlays/added.dtbo"), payload));
+    image.sync();
+
+    // Nothing was created anywhere.
+    CHECK(image.fat().readFile(QStringLiteral("overlays/added.dtbo")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("added.dtbo")).isEmpty());
+}
+
+TEST_CASE("FAT driver replaces a file already in a subdirectory", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(32, 64, [&](const QString &imagePath) {
+        const QString src = imagePath + QStringLiteral(".src");
+        QFile f(src);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("original");
+        f.close();
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+        REQUIRE(runMtool(QStringLiteral("mcopy"),
+                         {QStringLiteral("-i"), imagePath, src,
+                          QStringLiteral("::/overlays/existing.dtbo")}));
+        QFile::remove(src);
+    });
+
+    REQUIRE(image.fat().readFile(QStringLiteral("overlays/existing.dtbo"))
+            == QByteArray("original"));
+
+    // Also refused. Previously this left the original in place and created
+    // an unrelated entry in the root, so the caller believed it had replaced
+    // a file it had not touched.
+    const QByteArray replacement("replaced contents, rather longer than before");
+    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("overlays/existing.dtbo"), replacement));
+    image.sync();
+
+    CHECK(image.fat().readFile(QStringLiteral("overlays/existing.dtbo"))
+          == QByteArray("original"));
+    CHECK(image.fat().readFile(QStringLiteral("existing.dtbo")).isEmpty());
+}
+
+TEST_CASE("FAT driver refuses a write into a directory that is not there",
+          "[fat][image]")
+{
+    // Rather than creating the file somewhere else, which is the failure
+    // mode worth guarding against.
+    REQUIRE_MKFS();
+    FatImage image(32, 64);
+
+    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("nosuchdir/file.txt"),
+                                         QByteArray("contents")));
+    image.sync();
+    CHECK(image.fat().readFile(QStringLiteral("file.txt")).isEmpty());
+}
+
+TEST_CASE("FAT driver refuses a path with no file name", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    FatImage image(32, 64);
+    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("overlays/"), QByteArray("x")));
+}
+
+TEST_CASE("FAT driver refuses to write through a file as if it were a directory",
+          "[fat][image]")
+{
+    // "config.txt/evil" names a path component that exists but is a file.
+    // Following it would corrupt the entry it points at.
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(32, 64, [&](const QString &imagePath) {
+        const QString src = imagePath + QStringLiteral(".src");
+        QFile f(src);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("arm_64bit=1\n");
+        f.close();
+        REQUIRE(runMtool(QStringLiteral("mcopy"),
+                         {QStringLiteral("-i"), imagePath, src,
+                          QStringLiteral("::/config.txt")}));
+        QFile::remove(src);
+    });
+
+    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("config.txt/evil"),
+                                         QByteArray("payload")));
+    image.sync();
+    // The real file is untouched.
+    CHECK(image.fat().readFile(QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
+}
