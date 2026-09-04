@@ -31,6 +31,8 @@
 #include <QTemporaryDir>
 #include <QUrl>
 #include <QVariant>
+#include <QVersionNumber>
+#include <QVariantMap>
 
 using Catch::Matchers::ContainsSubstring;
 
@@ -320,10 +322,17 @@ class FeedableImageWriter : public ImageWriter
 public:
     FeedableImageWriter() : ImageWriter(nullptr) {}
 
+    // A top-level fetch is one whose URL matches the configured repository.
     void feedOsList(const QByteArray &json)
     {
-        onOsListFetchComplete(json, QUrl(QStringLiteral("https://example.invalid/l.json")),
-                              QUrl(QStringLiteral("https://example.invalid/l.json")));
+        onOsListFetchComplete(json, osListUrl(), osListUrl());
+    }
+
+    // Anything else is treated as the contents of a category that declared
+    // this URL in its subitems_url.
+    void feedSubList(const QByteArray &json, const QUrl &url)
+    {
+        onOsListFetchComplete(json, url, url);
     }
 };
 
@@ -661,4 +670,530 @@ TEST_CASE("Reading a file that is not there yields nothing",
 {
     ImageWriter w(nullptr);
     CHECK(w.readFileContents(QStringLiteral("/nonexistent-9f2a/nothing.txt")).isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Credentials written onto the card
+//
+// These two produce the wifi PSK and the account password hash that end up
+// in the customisation written to the boot partition. Neither failure is
+// visible until the board has been flashed and booted: a wrong PSK is a Pi
+// that never joins the network, and a wrong hash is one nobody can log into.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A wifi passphrase is derived to the documented PSK",
+          "[imagewriter][wifi]")
+{
+    // The IEEE 802.11i test vector. Checking against a published value
+    // rather than against whatever this code happens to produce is the whole
+    // point: PBKDF2-HMAC-SHA1, 4096 iterations, the SSID as salt, 256 bits.
+    ImageWriter w(nullptr);
+    const QString psk = w.deriveWifiPsk(QStringLiteral("IEEE"), QStringLiteral("password"));
+    INFO("derived: " << psk.toStdString());
+    CHECK(psk.compare(
+              QStringLiteral("f42c6fc52df0ebef9ebb4b90b38a5f902e83fe1b135a70e23aed762e9710a12e"),
+              Qt::CaseInsensitive) == 0);
+}
+
+TEST_CASE("The SSID is the salt, so the same passphrase differs per network",
+          "[imagewriter][wifi]")
+{
+    // Salting with the SSID is what stops one derivation being reusable on
+    // another network. If the salt were dropped, every card with the same
+    // passphrase would carry an identical PSK.
+    ImageWriter w(nullptr);
+    const QString a = w.deriveWifiPsk(QStringLiteral("network-one"), QStringLiteral("samepass1"));
+    const QString b = w.deriveWifiPsk(QStringLiteral("network-two"), QStringLiteral("samepass1"));
+    CHECK_FALSE(a.isEmpty());
+    CHECK(a != b);
+}
+
+TEST_CASE("An already-hexadecimal PSK is passed through untouched",
+          "[imagewriter][wifi]")
+{
+    // A 64-character key is the PSK itself, not a passphrase. Running it
+    // through the derivation again would produce a key that works nowhere.
+    ImageWriter w(nullptr);
+    const QString raw(64, QLatin1Char('a'));
+    CHECK(w.deriveWifiPsk(QStringLiteral("somewhere"), raw) == raw);
+}
+
+TEST_CASE("A too-short passphrase is not derived", "[imagewriter][wifi]")
+{
+    // WPA requires at least eight characters; anything shorter is not a
+    // passphrase and must not be silently turned into a key that looks
+    // valid.
+    ImageWriter w(nullptr);
+    const QString shortPass = QStringLiteral("abc");
+    CHECK(w.deriveWifiPsk(QStringLiteral("somewhere"), shortPass) == shortPass);
+}
+
+TEST_CASE("An empty passphrase derives nothing", "[imagewriter][wifi]")
+{
+    ImageWriter w(nullptr);
+    CHECK(w.deriveWifiPsk(QStringLiteral("somewhere"), QString()).isEmpty());
+}
+
+TEST_CASE("A trailing newline in a passphrase does not change the key",
+          "[imagewriter][wifi]")
+{
+    // Pasted credentials routinely carry one. Deriving from the newline as
+    // well produces a key that differs from every other device on the
+    // network, and the board simply never associates.
+    ImageWriter w(nullptr);
+    const QString clean = w.deriveWifiPsk(QStringLiteral("net"), QStringLiteral("passphrase1"));
+    const QString pasted = w.deriveWifiPsk(QStringLiteral("net"), QStringLiteral("passphrase1\n"));
+    const QString crlf = w.deriveWifiPsk(QStringLiteral("net"), QStringLiteral("passphrase1\r\n"));
+    CHECK_FALSE(clean.isEmpty());
+    CHECK(pasted == clean);
+    CHECK(crlf == clean);
+}
+
+TEST_CASE("A user password is hashed into a crypt string", "[imagewriter][password]")
+{
+    // What lands in the customisation is a crypt(3) hash, never the
+    // plaintext. The prefix identifies the scheme so the target OS knows how
+    // to verify it.
+    ImageWriter w(nullptr);
+    const QString hash = w.hashUserPassword(QStringLiteral("hunter2"));
+    INFO("hash: " << hash.toStdString());
+
+    REQUIRE_FALSE(hash.isEmpty());
+    CHECK_FALSE(hash.contains(QStringLiteral("hunter2")));
+    CHECK(hash.startsWith(QLatin1Char('$')));
+}
+
+TEST_CASE("Hashing the same password twice gives different hashes",
+          "[imagewriter][password]")
+{
+    // A fresh salt each time. Identical output would mean the salt is fixed,
+    // and every card imaged anywhere would share it.
+    ImageWriter w(nullptr);
+    const QString a = w.hashUserPassword(QStringLiteral("hunter2"));
+    const QString b = w.hashUserPassword(QStringLiteral("hunter2"));
+    CHECK_FALSE(a.isEmpty());
+    CHECK(a != b);
+}
+
+TEST_CASE("An empty password hashes to nothing", "[imagewriter][password]")
+{
+    // Rather than to the hash of an empty string, which would be an account
+    // with a password of "".
+    ImageWriter w(nullptr);
+    CHECK(w.hashUserPassword(QString()).isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Customisation that survives between runs
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Persisted customisation settings round-trip",
+          "[imagewriter][customisation]")
+{
+    ImageWriter w(nullptr);
+    w.clearSavedCustomisationSettings();
+
+    w.setPersistedCustomisationSetting(QStringLiteral("hostname"),
+                                       QStringLiteral("test-pi"));
+    w.setPersistedCustomisationSetting(QStringLiteral("sshEnabled"), true);
+
+    const QVariantMap saved = w.getSavedCustomisationSettings();
+    CHECK(saved.value(QStringLiteral("hostname")).toString() == QStringLiteral("test-pi"));
+    CHECK(saved.value(QStringLiteral("sshEnabled")).toBool());
+
+    w.clearSavedCustomisationSettings();
+}
+
+TEST_CASE("Clearing saved customisation really clears it",
+          "[imagewriter][customisation]")
+{
+    // Somebody imaging a card for another person expects "clear" to mean
+    // their wifi passphrase and password hash are gone, not hidden.
+    ImageWriter w(nullptr);
+    w.setPersistedCustomisationSetting(QStringLiteral("hostname"),
+                                       QStringLiteral("private-name"));
+    REQUIRE_FALSE(w.getSavedCustomisationSettings().isEmpty());
+
+    w.clearSavedCustomisationSettings();
+    CHECK(w.getSavedCustomisationSettings().isEmpty());
+}
+
+TEST_CASE("A single persisted setting can be removed on its own",
+          "[imagewriter][customisation]")
+{
+    ImageWriter w(nullptr);
+    w.clearSavedCustomisationSettings();
+    w.setPersistedCustomisationSetting(QStringLiteral("keep"), QStringLiteral("yes"));
+    w.setPersistedCustomisationSetting(QStringLiteral("drop"), QStringLiteral("no"));
+
+    w.removePersistedCustomisationSetting(QStringLiteral("drop"));
+
+    const QVariantMap saved = w.getSavedCustomisationSettings();
+    CHECK(saved.contains(QStringLiteral("keep")));
+    CHECK_FALSE(saved.contains(QStringLiteral("drop")));
+
+    w.clearSavedCustomisationSettings();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Whether customisation is offered at all
+//
+// These three read the init_format the OS entry declared, and between them
+// decide which parts of the customisation dialog appear. Wrong in one
+// direction and a user cannot set a hostname on an image that supports it;
+// wrong in the other and they fill in a form whose contents the image will
+// silently ignore.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// setSrc() carries init_format as its eighth argument, which is how the
+// selected OS entry tells the backend what it supports.
+void selectImageWithFormat(ImageWriter &w, const QByteArray &initFormat,
+                           const QString &releaseDate = QString())
+{
+    w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+             /*downloadLen=*/0, /*extrLen=*/0, /*expectedHash=*/QByteArray(),
+             /*multifilesinzip=*/false, /*parentcategory=*/QString(),
+             /*osname=*/QStringLiteral("Test OS"), initFormat, releaseDate);
+}
+
+} // namespace
+
+TEST_CASE("An image declaring no init format supports no customisation",
+          "[imagewriter][customisation]")
+{
+    ImageWriter w(nullptr);
+    selectImageWithFormat(w, QByteArray());
+    CHECK_FALSE(w.imageSupportsCustomization());
+}
+
+TEST_CASE("Each init format offers the right parts of the dialog",
+          "[imagewriter][customisation]")
+{
+    struct Case {
+        const char *format;
+        bool customisation;
+        bool ccRpi;
+        bool interfaces;
+    };
+
+    const Case cases[] = {
+        {"systemd",       true,  false, false},
+        {"cloudinit",     true,  false, false},
+        {"cloudinit-rpi", true,  true,  true },
+        {"rpi-preseed",   true,  false, true },
+    };
+
+    for (const Case &c : cases) {
+        ImageWriter w(nullptr);
+        selectImageWithFormat(w, QByteArray(c.format));
+        INFO("init_format: " << c.format);
+        CHECK(w.imageSupportsCustomization() == c.customisation);
+        CHECK(w.imageSupportsCcRpi() == c.ccRpi);
+        CHECK(w.imageSupportsInterfaceCustomisation() == c.interfaces);
+    }
+}
+
+TEST_CASE("Choosing another image updates what it supports",
+          "[imagewriter][customisation]")
+{
+    // The dialog is rebuilt when the selection changes; a stale answer here
+    // leaves controls on screen that the newly chosen image ignores.
+    ImageWriter w(nullptr);
+    selectImageWithFormat(w, QByteArray("cloudinit-rpi"));
+    REQUIRE(w.imageSupportsCcRpi());
+
+    selectImageWithFormat(w, QByteArray("systemd"));
+    CHECK_FALSE(w.imageSupportsCcRpi());
+    CHECK(w.imageSupportsCustomization());
+
+    selectImageWithFormat(w, QByteArray());
+    CHECK_FALSE(w.imageSupportsCustomization());
+}
+
+TEST_CASE("Applying customisation to an image that supports none clears it",
+          "[imagewriter][customisation]")
+{
+    // Rather than carrying settings over from a previous selection onto an
+    // image that will not read them.
+    ImageWriter w(nullptr);
+    selectImageWithFormat(w, QByteArray());
+
+    QVariantMap settings;
+    settings.insert(QStringLiteral("hostname"), QStringLiteral("test-pi"));
+    CHECK_NOTHROW(w.applyCustomisationFromSettings(settings));
+}
+
+TEST_CASE("Customisation is generated for each supported format",
+          "[imagewriter][customisation]")
+{
+    // The three branches produce quite different files; what matters here is
+    // that each is reached and none throws on a realistic settings map.
+    for (const char *format : {"systemd", "cloudinit", "cloudinit-rpi", "rpi-preseed"}) {
+        ImageWriter w(nullptr);
+        selectImageWithFormat(w, QByteArray(format), QStringLiteral("2024-11-19"));
+
+        QVariantMap settings;
+        settings.insert(QStringLiteral("hostname"), QStringLiteral("test-pi"));
+        settings.insert(QStringLiteral("sshEnabled"), true);
+        settings.insert(QStringLiteral("username"), QStringLiteral("pi"));
+        settings.insert(QStringLiteral("password"), QStringLiteral("hunter2"));
+        settings.insert(QStringLiteral("wifiSSID"), QStringLiteral("mynet"));
+        settings.insert(QStringLiteral("wifiPassword"), QStringLiteral("passphrase1"));
+        settings.insert(QStringLiteral("wifiCountry"), QStringLiteral("GB"));
+        settings.insert(QStringLiteral("timezone"), QStringLiteral("Europe/London"));
+        settings.insert(QStringLiteral("keyboardLayout"), QStringLiteral("gb"));
+
+        INFO("init_format: " << format);
+        CHECK_NOTHROW(w.applyCustomisationFromSettings(settings));
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Reusing a saved password on a different OS
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A saved password hash is reusable when the scheme matches",
+          "[imagewriter][password]")
+{
+    // Older images cannot verify a yescrypt hash. Getting this wrong locks
+    // the user out of the card they just wrote, or makes them retype a
+    // password that would have worked.
+    ImageWriter w(nullptr);
+
+    // Nothing saved is always fine.
+    CHECK(w.savedUserPasswordUsableWithCurrentOs(QString()));
+
+    // A traditional SHA-256 crypt hash is understood everywhere.
+    CHECK(w.savedUserPasswordUsableWithCurrentOs(
+        QStringLiteral("$5$rounds=5000$abcdefgh$0123456789abcdefghijklmnopqrstuvwxyzABCDEF012")));
+}
+
+TEST_CASE("A yescrypt hash is rejected for an image too old to verify it",
+          "[imagewriter][password]")
+{
+    ImageWriter w(nullptr);
+    const QString yescryptHash =
+        QStringLiteral("$y$j9T$MPabcdefghijklmnop$0123456789abcdefghijklmnopqrstuvwxyzABCD");
+
+    selectImageWithFormat(w, QByteArray("systemd"), QStringLiteral("2018-06-27"));
+    const bool oldOs = w.savedUserPasswordUsableWithCurrentOs(yescryptHash);
+
+    selectImageWithFormat(w, QByteArray("systemd"), QStringLiteral("2099-01-01"));
+    const bool newOs = w.savedUserPasswordUsableWithCurrentOs(yescryptHash);
+
+    INFO("old image accepts yescrypt: " << oldOs << "  new image: " << newOs);
+    CHECK(newOs);
+    CHECK_FALSE(oldOs);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Where the OS list comes from, and what the user is shown
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("The OS list URL defaults to the shipped repository",
+          "[imagewriter][repo]")
+{
+    ImageWriter w(nullptr);
+    const QUrl url = w.osListUrl();
+    INFO("default: " << url.toString().toStdString());
+    CHECK(url.isValid());
+    CHECK_FALSE(url.isEmpty());
+    CHECK(url.scheme() == QStringLiteral("https"));
+}
+
+TEST_CASE("A custom OS list URL replaces the default", "[imagewriter][repo]")
+{
+    // Used by anyone running their own repository, and by the --repo flag.
+    ImageWriter w(nullptr);
+    const QUrl custom(QStringLiteral("https://mirror.example.com/os_list.json"));
+    w.setCustomOsListUrl(custom);
+
+    CHECK(w.osListUrl() == custom);
+    CHECK_THAT(w.osListUrlForDisplay().toStdString(),
+               ContainsSubstring("mirror.example.com"));
+}
+
+TEST_CASE("A local OS list file is shown as a path, not a URL",
+          "[imagewriter][repo]")
+{
+    // PreferLocalFile: a file:// URL in the window title is noise; the path
+    // is what the person who passed it recognises.
+    ImageWriter w(nullptr);
+    w.setCustomOsListUrl(QUrl::fromLocalFile(QStringLiteral("/tmp/my_os_list.json")));
+
+    const QString shown = w.osListUrlForDisplay();
+    INFO("shown: " << shown.toStdString());
+    CHECK(shown == QStringLiteral("/tmp/my_os_list.json"));
+}
+
+TEST_CASE("The selected image's file name is what gets displayed",
+          "[imagewriter][repo]")
+{
+    ImageWriter w(nullptr);
+    CHECK(w.srcFileName().isEmpty());
+
+    w.setSrc(QUrl(QStringLiteral(
+        "https://downloads.raspberrypi.org/raspios/2024-11-19-raspios-bookworm.img.xz")));
+    CHECK(w.srcFileName() == QStringLiteral("2024-11-19-raspios-bookworm.img.xz"));
+}
+
+TEST_CASE("The size shown prefers the decompressed size", "[imagewriter][repo]")
+{
+    // What matters to the user is how much of their card it will occupy,
+    // not how much will come down the wire.
+    ImageWriter w(nullptr);
+    CHECK(w.getSelectedSourceSize() == 0);
+
+    w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+             /*downloadLen=*/1000, /*extrLen=*/5000);
+    CHECK(w.getSelectedSourceSize() == 5000);
+}
+
+TEST_CASE("With no decompressed size the download size is shown instead",
+          "[imagewriter][repo]")
+{
+    // Which is the streaming-compressed case: the extracted size is not
+    // recorded in the archive, so the download size is the only figure
+    // there is.
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img.zst")),
+             /*downloadLen=*/1234, /*extrLen=*/0);
+    CHECK(w.getSelectedSourceSize() == 1234);
+}
+
+TEST_CASE("The reported version is the one built in", "[imagewriter][repo]")
+{
+    ImageWriter w(nullptr);
+    const QString v = w.constantVersion();
+    INFO("version: " << v.toStdString());
+    CHECK_FALSE(v.isEmpty());
+    // Whatever it is, it has to parse as a version or the update check
+    // silently compares against nothing.
+    CHECK(QVersionNumber::fromString(
+              v.startsWith(QLatin1Char('v')) ? v.mid(1) : v).majorVersion() >= 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Expanding a category
+//
+// A category can declare a subitems_url instead of carrying its images
+// inline; opening it fetches that URL and merges the result into the entry
+// that asked for it. If the merge misses, the category opens onto nothing
+// and there is no error to show for it.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A fetched sub-list is merged into the category that asked for it",
+          "[imagewriter][oslist]")
+{
+    FeedableImageWriter writer;
+    const QUrl subUrl(QStringLiteral("https://example.invalid/other.json"));
+
+    writer.feedOsList(QByteArray(R"JSON({
+        "imager": { "latest_version": "1.9.0" },
+        "os_list": [
+            { "name": "Inline",   "url": "https://example.invalid/a.img.xz" },
+            { "name": "Deferred", "subitems_url": "https://example.invalid/other.json" }
+        ]
+    })JSON"));
+
+    writer.feedSubList(QByteArray(R"JSON({
+        "os_list": [
+            { "name": "Fetched child", "url": "https://example.invalid/b.img.xz" }
+        ]
+    })JSON"), subUrl);
+
+    const QJsonDocument doc = writer.getFilteredOSlistDocument();
+    bool found = false;
+    for (const auto &v : doc.object().value(QStringLiteral("os_list")).toArray()) {
+        const QJsonObject o = v.toObject();
+        if (o.value(QStringLiteral("name")).toString() != QLatin1String("Deferred"))
+            continue;
+        found = true;
+
+        QStringList inner;
+        for (const auto &sv : o.value(QStringLiteral("subitems")).toArray())
+            inner << sv.toObject().value(QStringLiteral("name")).toString();
+        INFO("children: " << inner.join(QStringLiteral(", ")).toStdString());
+        CHECK(inner.contains(QStringLiteral("Fetched child")));
+
+        // The pending URL is cleared, or opening the category again refetches
+        // it and appends the same images a second time.
+        CHECK_FALSE(o.contains(QStringLiteral("subitems_url")));
+    }
+    CHECK(found);
+}
+
+TEST_CASE("A sub-list for a URL nobody asked for changes nothing",
+          "[imagewriter][oslist]")
+{
+    // A late or stray response must not be spliced into an unrelated entry.
+    FeedableImageWriter writer;
+    writer.feedOsList(QByteArray(R"JSON({
+        "imager": { "latest_version": "1.9.0" },
+        "os_list": [
+            { "name": "Deferred", "subitems_url": "https://example.invalid/wanted.json" }
+        ]
+    })JSON"));
+
+    writer.feedSubList(QByteArray(R"JSON({
+        "os_list": [ { "name": "Unexpected" } ]
+    })JSON"), QUrl(QStringLiteral("https://example.invalid/unrelated.json")));
+
+    const QJsonDocument doc = writer.getFilteredOSlistDocument();
+    for (const auto &v : doc.object().value(QStringLiteral("os_list")).toArray()) {
+        const QJsonObject o = v.toObject();
+        if (o.value(QStringLiteral("name")).toString() != QLatin1String("Deferred"))
+            continue;
+        // Still waiting for the response it actually asked for.
+        CHECK(o.contains(QStringLiteral("subitems_url")));
+        QStringList inner;
+        for (const auto &sv : o.value(QStringLiteral("subitems")).toArray())
+            inner << sv.toObject().value(QStringLiteral("name")).toString();
+        CHECK_FALSE(inner.contains(QStringLiteral("Unexpected")));
+    }
+}
+
+TEST_CASE("A sub-list is merged into a nested category too",
+          "[imagewriter][oslist]")
+{
+    // Categories nest, and the entry waiting on a URL may be several levels
+    // down rather than at the top.
+    FeedableImageWriter writer;
+    const QUrl subUrl(QStringLiteral("https://example.invalid/deep.json"));
+
+    writer.feedOsList(QByteArray(R"JSON({
+        "imager": { "latest_version": "1.9.0" },
+        "os_list": [
+            { "name": "Outer", "subitems": [
+                { "name": "Inner", "subitems_url": "https://example.invalid/deep.json" }
+            ]}
+        ]
+    })JSON"));
+
+    writer.feedSubList(QByteArray(R"JSON({
+        "os_list": [ { "name": "Deep child" } ]
+    })JSON"), subUrl);
+
+    const QJsonDocument doc = writer.getFilteredOSlistDocument();
+    bool checked = false;
+    for (const auto &v : doc.object().value(QStringLiteral("os_list")).toArray()) {
+        const QJsonObject outer = v.toObject();
+        if (outer.value(QStringLiteral("name")).toString() != QLatin1String("Outer"))
+            continue;
+        for (const auto &iv : outer.value(QStringLiteral("subitems")).toArray()) {
+            const QJsonObject inner = iv.toObject();
+            if (inner.value(QStringLiteral("name")).toString() != QLatin1String("Inner"))
+                continue;
+            checked = true;
+            QStringList names;
+            for (const auto &cv : inner.value(QStringLiteral("subitems")).toArray())
+                names << cv.toObject().value(QStringLiteral("name")).toString();
+            INFO("deep children: " << names.join(QStringLiteral(", ")).toStdString());
+            CHECK(names.contains(QStringLiteral("Deep child")));
+            CHECK_FALSE(inner.contains(QStringLiteral("subitems_url")));
+        }
+    }
+    CHECK(checked);
 }
