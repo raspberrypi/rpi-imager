@@ -617,6 +617,25 @@ add_executable(rpiboot_integration_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/firmware_manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    # firmware_manager reaches the secure-boot provisioner, which reaches
+    # SecureBoot and its crypto backends; curlnetworkconfig reaches
+    # PlatformQuirks for the CA bundle. Without these the target did not link
+    # at all, so CTest registered it as rpiboot_integration_test_NOT_BUILT and
+    # reported a permanent failure, and RunCoverage.cmake warned on every run
+    # that not everything had built.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/secure_boot_provisioner.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
     rpiboot_integration_test.cpp
 )
 
@@ -1107,3 +1126,43 @@ if(RPI_IMAGER_COVERAGE)
         )
     endif()
 endif()
+
+# ============================================================================
+# DownloadThread
+# ============================================================================
+# The write path: curl in, hashed, onto the target. 1,958 branches, the
+# largest uncovered block in the tree and the most safety-critical.
+#
+# Drivable without a device or a network because curl in this build carries
+# the file:// protocol -- so a scratch file serves the image -- and
+# _openAndPrepareDevice() only unmounts when the destination starts with
+# "/dev/", so a scratch image takes the same open-and-write path a card
+# would. Nothing is mocked; the real transfer loop runs end to end.
+
+# QtConcurrent and QtTest are not among the components the app itself asks
+# for, so this target finds them on its own.
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Test)
+
+# The write pipeline links as one unit -- DownloadThread reaches the device
+# wrapper, the memory manager, platform quirks, the cache writer and the
+# secure-boot helpers -- so both targets below share the list.
+set(RPI_DOWNLOAD_PIPELINE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../downloadthread.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../systemmemorymanager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imageadvancedoptions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../asynccachewriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_linux.cpp
+    ${PLATFORM_FILE_OPS}
+)
