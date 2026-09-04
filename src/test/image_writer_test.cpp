@@ -3267,3 +3267,113 @@ TEST_CASE("A zstd image with no recorded size still writes", "[imagewriter][arch
     // Not knowing the size up front must not change the bytes written.
     CHECK(fx.written() == fixturePayload());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Writing to a real block device
+//
+// Every case above writes to a regular file, which is enough to check the
+// bytes but skips what makes a card different: the alignment rules, the
+// direct-I/O path, the discard before the write, and reading the size back
+// out of the kernel rather than off a QFileInfo.
+//
+// Those are the parts that fail on a real card and cannot fail on a file.
+//
+// Runs against RPI_IMAGER_TEST_BLOCK_DEVICE and skips when it is unset, and
+// refuses anything that is not a loop device whatever the environment says.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+QString testBlockDevicePath()
+{
+    const QByteArray dev = qgetenv("RPI_IMAGER_TEST_BLOCK_DEVICE");
+    if (dev.isEmpty() || !dev.startsWith("/dev/loop"))
+        return {};
+    return QString::fromLatin1(dev);
+}
+
+} // namespace
+
+TEST_CASE("An image is written to a real block device", "[imagewriter][device]")
+{
+    const QString dev = testBlockDevicePath();
+    if (dev.isEmpty())
+        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("os.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, kFixturePayload);
+    w.setDst(dev, kFixturePayload);
+    REQUIRE(w.readyToWrite());
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    QFile card(dev);
+    REQUIRE(card.open(QIODevice::ReadOnly));
+    CHECK(card.read(qint64(kFixturePayload)) == fixturePayload());
+}
+
+TEST_CASE("A verified write to a real block device reads back clean", "[imagewriter][device]")
+{
+    const QString dev = testBlockDevicePath();
+    if (dev.isEmpty())
+        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("os.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    // Verification re-reads the card through the same device path, which is
+    // where a caching or alignment mistake shows up as a false mismatch.
+    w.setVerifyEnabled(true);
+    w.setSrc(QUrl::fromLocalFile(source), 0, kFixturePayload);
+    w.setDst(dev, kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
+{
+    const QString dev = testBlockDevicePath();
+    if (dev.isEmpty())
+        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString source = QDir(dir.path()).filePath(QStringLiteral("fat32.img.xz"));
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/fat32-48MiB.img.xz"), source));
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(source), 0, BootPartitionFixture::kImageSize);
+    w.setDst(dev, BootPartitionFixture::kImageSize);
+    w.setImageCustomisation(QByteArray(), QByteArray(),
+                            "#!/bin/bash\n# rpi-imager-device-marker\nexit 0\n",
+                            QByteArray(), QByteArray(),
+                            ImageOptions::NoAdvancedOptions, QByteArray("systemd"));
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // The FAT partition is edited in place after the image lands; on a block
+    // device that is a re-open and a seek, not a rewrite of the file.
+    QFile card(dev);
+    REQUIRE(card.open(QIODevice::ReadOnly));
+    const QByteArray written = card.read(qint64(BootPartitionFixture::kImageSize));
+    CHECK(written.contains(QByteArray("rpi-imager-device-marker")));
+}
