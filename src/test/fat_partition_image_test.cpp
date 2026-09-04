@@ -1713,3 +1713,126 @@ TEST_CASE("The FAT16 recursive walk finds what the driver wrote", "[fat][image][
     CHECK(sawShort);
     CHECK(sawLong);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Reading a file out of a subdirectory
+//
+// readFile() accepts "overlays/disable-bt.dtbo" as well as a bare name, and
+// that matters because listAllFilesRecursive() returns paths in exactly that
+// form -- SecureBoot lists the partition and then reads back every name it
+// was handed. A path form the listing produces but the reader cannot resolve
+// is a file silently missing from the signed boot image.
+//
+// The failure modes are all "return nothing", so they are indistinguishable
+// from an empty file unless something checks them.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// An image with a couple of levels of subdirectory and known contents.
+void populateWithSubdirs(const QString &imagePath, const QByteArray &payload)
+{
+    const QString src = imagePath + QStringLiteral(".src");
+    QFile f(src);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(payload);
+    f.close();
+
+    REQUIRE(runMtool(QStringLiteral("mmd"),
+                     {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+    REQUIRE(runMtool(QStringLiteral("mcopy"),
+                     {QStringLiteral("-i"), imagePath, src,
+                      QStringLiteral("::/overlays/disable-bt.dtbo")}));
+    REQUIRE(runMtool(QStringLiteral("mcopy"),
+                     {QStringLiteral("-i"), imagePath, src, QStringLiteral("::/config.txt")}));
+    QFile::remove(src);
+}
+
+} // namespace
+
+TEST_CASE("FAT driver reads a file out of a subdirectory", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    const QByteArray payload = "overlay payload for the subdirectory read";
+    FatImage image(32, 64, [&](const QString &p) { populateWithSubdirs(p, payload); });
+
+    // The form listAllFilesRecursive() hands back.
+    CHECK(image.fat().readFile(QStringLiteral("overlays/disable-bt.dtbo")) == payload);
+    // And the bare name still works alongside it.
+    CHECK(image.fat().readFile(QStringLiteral("config.txt")) == payload);
+}
+
+TEST_CASE("FAT driver reads a subdirectory file on FAT16 too", "[fat][image][fat16]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    const QByteArray payload = "overlay payload on fat16";
+    FatImage image(16, 32, [&](const QString &p) { populateWithSubdirs(p, payload); });
+
+    // FAT16's root directory is fixed sectors, so resolving the first
+    // component takes a different path than on FAT32.
+    CHECK(image.fat().readFile(QStringLiteral("overlays/disable-bt.dtbo")) == payload);
+}
+
+TEST_CASE("FAT driver reports a missing subdirectory rather than guessing", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(32, 64, [&](const QString &p) { populateWithSubdirs(p, "x"); });
+
+    CHECK(image.fat().readFile(QStringLiteral("nosuchdir/file.txt")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("overlays/nosuchfile.dtbo")).isEmpty());
+}
+
+TEST_CASE("FAT driver refuses a path whose first part is a file", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(32, 64, [&](const QString &p) { populateWithSubdirs(p, "x"); });
+
+    // config.txt is a file, not a directory. Walking into it would read
+    // whatever its contents happen to look like as a directory table.
+    CHECK(image.fat().readFile(QStringLiteral("config.txt/inner.txt")).isEmpty());
+}
+
+TEST_CASE("FAT driver handles a malformed subdirectory path", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(32, 64, [&](const QString &p) { populateWithSubdirs(p, "x"); });
+
+    // Nothing here should reach the cluster walk with a half-parsed path.
+    CHECK(image.fat().readFile(QStringLiteral("/")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("overlays/")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("/config.txt")).isEmpty());
+}
+
+TEST_CASE("Every name the recursive listing returns can be read", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    const QByteArray payload = "readable through the listing";
+    FatImage image(32, 64, [&](const QString &p) { populateWithSubdirs(p, payload); });
+
+    // This is the contract SecureBoot depends on: it lists the partition and
+    // reads back every name. A name it cannot resolve is a file left out of
+    // the signed boot image without a word.
+    const QStringList names = image.fat().listAllFilesRecursive();
+    REQUIRE_FALSE(names.isEmpty());
+
+    QStringList unreadable;
+    for (const QString &name : names) {
+        if (image.fat().readFile(name).isEmpty())
+            unreadable << name;
+    }
+    INFO("listing: " << names.join(QStringLiteral(", ")).toStdString());
+    INFO("unreadable: " << unreadable.join(QStringLiteral(", ")).toStdString());
+    CHECK(unreadable.isEmpty());
+}
