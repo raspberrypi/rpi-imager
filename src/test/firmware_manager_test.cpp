@@ -16,6 +16,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "rpiboot/firmware_manager.h"
+#include <QTemporaryDir>
 #include "rpiboot/rpiboot_types.h"
 
 #include <QDir>
@@ -693,4 +694,231 @@ TEST_CASE("A listing with nothing usable yields no version", "[firmware][version
     CHECK_FALSE(pick("# only a comment\n").has_value());
     CHECK_FALSE(pick("\n\n\n").has_value());
     CHECK_FALSE(pick("2025-01-01  1  a  old\n2024-12-01  2  b  old\n").has_value());
+}
+
+// ── Fetching firmware, end to end ───────────────────────────────────────────
+//
+// ensureAvailable() is the largest untested thing in this class: it resolves
+// the EEPROM version, builds the manifest, downloads what is missing, caches
+// it, and validates what it has. Until now none of it could be reached,
+// because the three base URLs were compile-time constants pointing at
+// github.com -- so only real network access would do.
+//
+// They are read through overridable accessors now, which is enough to point
+// the whole path at a local server. Nothing about production behaviour
+// changes; the defaults are the constants.
+//
+// What this covers is what a user meets when setting up a Compute Module: the
+// firmware either arrives and is cached, or the failure is reported rather
+// than the board being left half-provisioned.
+
+namespace {
+
+// Serves a directory tree over HTTP on a loopback port.
+class LocalFirmwareServer
+{
+public:
+    explicit LocalFirmwareServer(const QString &root)
+    {
+        static const char *kScript =
+            "import http.server, socketserver, sys\n"
+            "class H(http.server.SimpleHTTPRequestHandler):\n"
+            "    def log_message(self, *a): pass\n"
+            "socketserver.TCPServer.allow_reuse_address = True\n"
+            "h = lambda *a, **k: H(*a, directory=sys.argv[1], **k)\n"
+            "s = socketserver.TCPServer(('127.0.0.1', 0), h)\n"
+            "print(s.server_address[1], flush=True)\n"
+            "s.serve_forever()\n";
+        _proc.start(QStringLiteral("/usr/bin/python3"),
+                    {QStringLiteral("-c"), QString::fromUtf8(kScript), root});
+        if (!_proc.waitForStarted(10000))
+            return;
+        if (_proc.waitForReadyRead(10000))
+            _port = _proc.readLine().trimmed().toInt();
+    }
+
+    ~LocalFirmwareServer()
+    {
+        _proc.kill();
+        _proc.waitForFinished(5000);
+    }
+
+    LocalFirmwareServer(const LocalFirmwareServer &) = delete;
+    LocalFirmwareServer &operator=(const LocalFirmwareServer &) = delete;
+
+    bool isRunning() const { return _port > 0; }
+    std::string base() const
+    {
+        return "http://127.0.0.1:" + std::to_string(_port) + "/";
+    }
+
+private:
+    QProcess _proc;
+    int _port = 0;
+};
+
+// A FirmwareManager whose three sources are the local server.
+class ServedFirmwareManager : public FirmwareManager
+{
+public:
+    explicit ServedFirmwareManager(std::string base) : _base(std::move(base)) {}
+
+protected:
+    std::string usbbootBase() const override { return _base; }
+    std::string eepromBase() const override { return _base; }
+    std::string provisionerBase() const override { return _base; }
+
+private:
+    std::string _base;
+};
+
+// Lay out the files the fastboot manifest asks for.
+void layOutFirmware(const QString &root)
+{
+    struct Entry { const char *path; const char *body; };
+    const Entry entries[] = {
+        {"firmware-2711/latest/recovery.bin", "bcm2711 recovery"},
+        {"firmware-2712/latest/recovery.bin", "bcm2712 recovery"},
+        {"msd/bootcode.bin",                  "msd bootcode"},
+        {"mass-storage-gadget64/config.txt",  "gadget config"},
+        // firmware/bootfiles.bin is written separately below: it has to be a
+        // real tar, because the bootcode is extracted from inside it.
+        {"host-support/fastboot-gadget.img",  "fastboot gadget"},
+        {"host-support/fastboot-gadget.2710-bootfiles-bin", "2710 bootfiles"},
+        {"firmware-2711/versions.txt",        "2024-09-23  1727086800  abc  latest\n"},
+        {"firmware-2712/versions.txt",        "2024-09-23  1727086800  abc  latest\n"},
+    };
+    for (const Entry &e : entries) {
+        const QString full = QDir(root).filePath(QString::fromLatin1(e.path));
+        QDir().mkpath(QFileInfo(full).absolutePath());
+        QFile f(full);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(e.body);
+        f.close();
+    }
+
+    // A genuine tar carrying the chip-specific bootcode, which is what
+    // extractBootcodeFromBootfiles() reaches into.
+    const QString workDir = QDir(root).filePath(QStringLiteral("_tarwork"));
+    QDir().mkpath(workDir + QStringLiteral("/2712"));
+    {
+        QFile f(workDir + QStringLiteral("/2712/bootcode5.bin"));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("bcm2712 bootcode from the archive");
+        f.close();
+    }
+    QDir().mkpath(QDir(root).filePath(QStringLiteral("firmware")));
+    QProcess tar;
+    tar.setWorkingDirectory(workDir);
+    tar.start(QStringLiteral("tar"),
+              {QStringLiteral("-cf"),
+               QDir(root).filePath(QStringLiteral("firmware/bootfiles.bin")),
+               QStringLiteral("2712")});
+    REQUIRE(tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
+    REQUIRE(tar.exitCode() == 0);
+}
+
+} // namespace
+
+TEST_CASE("Firmware is fetched and cached from the configured source",
+          "[firmware][fetch]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    ServedFirmwareManager fm(server.base());
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    INFO("dir: " << dir.string());
+    REQUIRE_FALSE(dir.empty());
+    CHECK(std::filesystem::exists(dir));
+
+    // A second call is served from the cache rather than fetched again.
+    const auto again = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                          rpiboot::ChipGeneration::BCM2712,
+                                          nullptr, cancelled);
+    CHECK(again == dir);
+
+    fm.clearCache();
+}
+
+TEST_CASE("A source serving nothing is reported, not silently accepted",
+          "[firmware][fetch]")
+{
+    // An empty tree: every download 404s. The caller has to be told, rather
+    // than handed a directory with no firmware in it and left to sideload
+    // nothing.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    ServedFirmwareManager fm(server.base());
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    CHECK(dir.empty());
+    CHECK_FALSE(fm.lastError().empty());
+
+    fm.clearCache();
+}
+
+TEST_CASE("Cancelling a firmware fetch stops it", "[firmware][fetch]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    ServedFirmwareManager fm(server.base());
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{true};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    CHECK(dir.empty());
+
+    fm.clearCache();
+}
+
+TEST_CASE("A source that is not there is reported", "[firmware][fetch]")
+{
+    // Offline, or the repository host is down.
+    ServedFirmwareManager fm("http://127.0.0.1:1/");
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    CHECK(dir.empty());
+    CHECK_FALSE(fm.lastError().empty());
+
+    fm.clearCache();
 }
