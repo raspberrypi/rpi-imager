@@ -23,6 +23,10 @@
 #include "imagewriter.h"
 #include "app_resources.h"
 #include "drivelistmodel.h"
+#include <atomic>
+#include <QEventLoop>
+#include <QElapsedTimer>
+#include "drivelistmodelpollthread.h"
 #include "drivelist/drivelist.h"
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
@@ -602,4 +606,116 @@ TEST_CASE("The same drive reported twice is listed once",
     model->processDriveList({dev});
 
     CHECK(rowsOf(model) == 1);
+}
+
+// ══════════════════════════════════════════════════════════════
+// The drive poller's lifecycle
+//
+// The poll thread enumerates the machine's drives on a timer. What it finds
+// depends on the machine, so none of this asserts on that -- but the
+// lifecycle around it is the application's own logic and is worth pinning.
+//
+// Polling is paused for the duration of a write, because enumerating drives
+// costs I/O and can disturb the device being written. If pause does not take
+// effect the write is disturbed; if resume does not, the chooser stays frozen
+// once the write finishes and the user cannot select anything again.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("The drive poller starts, reports and stops", "[models][poller]")
+{
+    DriveListModelPollThread poller;
+
+    std::atomic<int> polls{0};
+    QObject::connect(&poller, &DriveListModelPollThread::newDriveList,
+                     [&polls](std::vector<Drivelist::DeviceDescriptor>) { ++polls; });
+
+    poller.start();
+
+    // Whatever this machine has attached, one enumeration should land.
+    QElapsedTimer t;
+    t.start();
+    while (polls.load() == 0 && t.elapsed() < 30000)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+    poller.stop();
+    REQUIRE(poller.wait(30000));
+
+    INFO("polls seen: " << polls.load());
+    CHECK(polls.load() > 0);
+}
+
+TEST_CASE("Stopping a poller that never started is harmless",
+          "[models][poller]")
+{
+    // Teardown runs whether or not a write ever began.
+    DriveListModelPollThread poller;
+    CHECK_NOTHROW(poller.stop());
+    CHECK_NOTHROW(poller.stop());
+}
+
+TEST_CASE("A paused poller stops reporting and resumes on request",
+          "[models][poller]")
+{
+    DriveListModelPollThread poller;
+
+    std::atomic<int> polls{0};
+    QObject::connect(&poller, &DriveListModelPollThread::newDriveList,
+                     [&polls](std::vector<Drivelist::DeviceDescriptor>) { ++polls; });
+
+    poller.start();
+    QElapsedTimer t;
+    t.start();
+    while (polls.load() == 0 && t.elapsed() < 30000)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    REQUIRE(polls.load() > 0);
+
+    poller.pause();
+    // Let anything already in flight drain, then take a reading.
+    t.restart();
+    while (t.elapsed() < 1500)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    const int afterPause = polls.load();
+
+    t.restart();
+    while (t.elapsed() < 3000)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    INFO("polls at pause " << afterPause << ", after waiting " << polls.load());
+    CHECK(polls.load() == afterPause);
+
+    poller.resume();
+    t.restart();
+    while (polls.load() == afterPause && t.elapsed() < 30000)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+    poller.stop();
+    REQUIRE(poller.wait(30000));
+    INFO("polls after resume: " << polls.load());
+    CHECK(polls.load() > afterPause);
+}
+
+TEST_CASE("A poller can be stopped while paused", "[models][poller]")
+{
+    // Cancelling a write leaves polling paused; teardown has to get through
+    // that rather than waiting on a thread that is not looking at its flag.
+    DriveListModelPollThread poller;
+    poller.start();
+    poller.pause();
+    poller.stop();
+    CHECK(poller.wait(30000));
+}
+
+TEST_CASE("The poller's scan options can be set before it runs",
+          "[models][poller]")
+{
+    // These decide whether rpiboot and fastboot devices are scanned for at
+    // all, which is what makes a Compute Module appear in the chooser.
+    DriveListModelPollThread poller;
+    CHECK_NOTHROW(poller.setRpibootEnabled(true));
+    CHECK_NOTHROW(poller.setFastbootScanEnabled(true));
+    CHECK_NOTHROW(poller.setRpibootEnabled(false));
+    CHECK_NOTHROW(poller.setFastbootScanEnabled(false));
+
+    poller.start();
+    poller.stop();
+    CHECK(poller.wait(30000));
 }
