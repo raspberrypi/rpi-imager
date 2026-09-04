@@ -1526,6 +1526,12 @@ if(NOT BUILD_CLI_ONLY)
     set_target_properties(picker_models_test PROPERTIES AUTOMOC ON)
     target_link_libraries(picker_models_test PRIVATE Catch2::Catch2 rpi_imager_testable)
     rpi_discover_tests(picker_models_test)
+
+    # The stall detector behind "it stopped at 47%".
+    add_executable(write_progress_watchdog_test write_progress_watchdog_test.cpp)
+    set_target_properties(write_progress_watchdog_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(write_progress_watchdog_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+    rpi_discover_tests(write_progress_watchdog_test)
 endif()
 
 # ── OS list parsing ─────────────────────────────────────────────────────────

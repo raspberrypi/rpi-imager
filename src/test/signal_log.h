@@ -33,8 +33,11 @@ namespace rpi_test {
 class SignalLog : public QObject
 {
 public:
-    template <typename Sender, typename Ret, typename... Args>
-    SignalLog(Sender *sender, Ret (Sender::*signal)(Args...))
+    // Sender and Owner are deduced separately so a signal declared on a base
+    // class can be logged from a pointer to a subclass -- which is what a test
+    // that subclasses the thing under test to shorten its timings has.
+    template <typename Sender, typename Owner, typename Ret, typename... Args>
+    SignalLog(Sender *sender, Ret (Owner::*signal)(Args...))
     {
         QObject::connect(sender, signal, this, [this](Args... args) {
             _rows.append(QVariantList{QVariant::fromValue(args)...});

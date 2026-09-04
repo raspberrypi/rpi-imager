@@ -141,31 +141,31 @@ public:
     /*
      * Thread safe download progress query functions
      */
-    uint64_t dlNow();
+    virtual uint64_t dlNow();
     uint64_t dlTotal();
     uint64_t extractTotal();
     void setExtractTotal(uint64_t total);
-    uint64_t verifyNow();
+    virtual uint64_t verifyNow();
     uint64_t verifyTotal();
-    uint64_t bytesWritten();
-    int pendingAsyncWrites() const;
+    virtual uint64_t bytesWritten();
+    virtual int pendingAsyncWrites() const;
     
     // Force poll for async I/O completions - call when stall detected
     // This can unstick deadlocks where no one is polling IOCP
-    void forcePollAsyncCompletions();
+    virtual void forcePollAsyncCompletions();
     
     // Reduce async queue depth for recovery - allows pending writes to drain
     // Returns true if reduction was applied, false if not supported
-    bool reduceAsyncQueueDepth(int newDepth);
+    virtual bool reduceAsyncQueueDepth(int newDepth);
     
     // Get current async queue depth
-    int getAsyncQueueDepth() const;
+    virtual int getAsyncQueueDepth() const;
     
     // Drain pending async writes and switch to sync mode for hot-swap.
     // Waits up to timeoutSeconds for pending writes to complete naturally.
     // Returns true if drain succeeded (all pending completed), false if timeout.
     // After success, writes continue in sync mode without restart.
-    bool drainAndSwitchToSync(int timeoutSeconds);
+    virtual bool drainAndSwitchToSync(int timeoutSeconds);
     
     // Force recovery from stuck async I/O - cancels pending writes and switches to sync
     // Call this when stall is persistent and forcePollAsyncCompletions doesn't help
