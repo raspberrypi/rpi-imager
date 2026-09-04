@@ -1197,3 +1197,137 @@ TEST_CASE("A sub-list is merged into a nested category too",
     }
     CHECK(checked);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Language, keyboard and the cache
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("There are translations to choose between", "[imagewriter][locale]")
+{
+    // The language menu is built from this. Empty means a menu with nothing
+    // in it, and English for everyone regardless of what they picked.
+    ImageWriter w(nullptr);
+    const QStringList langs = w.getTranslations();
+    INFO("count: " << langs.size());
+    CHECK_FALSE(langs.isEmpty());
+
+    // Sorted, because the menu is shown in this order.
+    QStringList sorted = langs;
+    sorted.sort(Qt::CaseInsensitive);
+    CHECK(langs == sorted);
+}
+
+TEST_CASE("A language starts out selected", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    CHECK_FALSE(w.getCurrentLanguage().isEmpty());
+}
+
+TEST_CASE("Changing the language takes effect", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList langs = w.getTranslations();
+    REQUIRE(langs.size() > 1);
+
+    // Pick something that is not already current.
+    const QString current = w.getCurrentLanguage();
+    QString target;
+    for (const QString &l : langs) {
+        if (l != current) { target = l; break; }
+    }
+    REQUIRE_FALSE(target.isEmpty());
+
+    w.changeLanguage(target);
+    CHECK(w.getCurrentLanguage() == target);
+}
+
+TEST_CASE("Changing to a language that does not exist is survivable",
+          "[imagewriter][locale]")
+{
+    // The setting is persisted, so a stale or hand-edited value can name a
+    // translation that has since been removed.
+    ImageWriter w(nullptr);
+    const QString before = w.getCurrentLanguage();
+    CHECK_NOTHROW(w.changeLanguage(QStringLiteral("Klingon (no-such-locale)")));
+    INFO("before: " << before.toStdString()
+         << "  after: " << w.getCurrentLanguage().toStdString());
+    CHECK_FALSE(w.getCurrentLanguage().isEmpty());
+}
+
+TEST_CASE("Changing the keyboard layout takes effect", "[imagewriter][locale]")
+{
+    // This is written into the customisation, so it is what the board comes
+    // up with -- getting it wrong means a keyboard that types the wrong
+    // characters on first boot.
+    ImageWriter w(nullptr);
+    w.changeKeyboard(QStringLiteral("gb"));
+    CHECK(w.getCurrentKeyboard() == QStringLiteral("gb"));
+    w.changeKeyboard(QStringLiteral("us"));
+    CHECK(w.getCurrentKeyboard() == QStringLiteral("us"));
+}
+
+TEST_CASE("Nothing is cached for a hash that was never written",
+          "[imagewriter][cache]")
+{
+    // A false hit here writes a completely different image to the card than
+    // the one the user chose.
+    ImageWriter w(nullptr);
+    CHECK_FALSE(w.isCached(QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                           QByteArray("0000000000000000000000000000000000000000000000000000000000000000")));
+}
+
+TEST_CASE("An empty hash is never treated as cached", "[imagewriter][cache]")
+{
+    // An unverified download has no hash. Treating that as a cache key would
+    // match anything else that also lacks one.
+    ImageWriter w(nullptr);
+    CHECK_FALSE(w.isCached(QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                           QByteArray()));
+}
+
+TEST_CASE("Hardware tags with no device list produce no filtering",
+          "[imagewriter][hardware]")
+{
+    // It succeeds and sets an empty tag set rather than declining. That is
+    // safe -- an empty filter filters nothing, so the chooser still shows
+    // every image -- but it does mean the return value says nothing about
+    // whether any devices were found. Pinned as the behaviour, since the
+    // alternative reading (that true means tags were built) would be wrong.
+    ImageWriter w(nullptr);
+    CHECK(w.createHardwareTags());
+
+    // The proof it is harmless: everything is still offered.
+    FeedableImageWriter fed;
+    fed.feedOsList(taggedOsList());
+    REQUIRE(fed.createHardwareTags());
+    const QStringList names = namesIn(fed.getFilteredOSlistDocument());
+    INFO("offered: " << names.join(QStringLiteral(", ")).toStdString());
+    CHECK(names.contains(QStringLiteral("Pi 5 only")));
+    CHECK(names.contains(QStringLiteral("Zero 2 only")));
+}
+
+TEST_CASE("Hardware tags are taken from the feed's device list",
+          "[imagewriter][hardware]")
+{
+    // Once the feed declares devices, their tags become the filter the OS
+    // chooser is narrowed by.
+    FeedableImageWriter w;
+    w.feedOsList(QByteArray(R"JSON({
+        "imager": {
+            "devices": [
+                { "name": "Raspberry Pi 5", "tags": ["pi5-64bit"] }
+            ]
+        },
+        "os_list": [
+            { "name": "Pi 5 only",   "devices": ["pi5-64bit"] },
+            { "name": "Zero 2 only", "devices": ["pi-zero2-64bit"] }
+        ]
+    })JSON"));
+
+    CHECK(w.createHardwareTags());
+
+    // Deliberately not asserting on getHardwareName(): it reports what this
+    // machine is, so a test that checked it would pass or fail on the build
+    // host rather than on the code. Only that asking is safe.
+    CHECK_NOTHROW(w.getHardwareName());
+}

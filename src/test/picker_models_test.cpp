@@ -23,6 +23,7 @@
 #include "imagewriter.h"
 #include "app_resources.h"
 #include "drivelistmodel.h"
+#include "drivelist/drivelist.h"
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
 
@@ -35,6 +36,10 @@
 #include <QSet>
 #include <QStandardPaths>
 #include <QUrl>
+
+#include <cstdint>
+#include <string>
+#include <vector>
 #include <QVariant>
 
 namespace {
@@ -395,4 +400,206 @@ int main(int argc, char *argv[])
         QStringLiteral("picker_models_test-%1").arg(QCoreApplication::applicationPid()));
     QStandardPaths::setTestModeEnabled(true);
     return Catch::Session().run(argc, argv);
+}
+
+// ══════════════════════════════════════════════════════════════
+// What the drive chooser actually shows
+//
+// processDriveList() is a public slot, so the model can be handed a device
+// list directly rather than waiting on the poller and whatever happens to be
+// plugged into the machine running the tests.
+//
+// This is the list somebody picks a target from. A drive that should not be
+// there is how the wrong disk gets overwritten; one that is missing is a
+// card the user cannot write to and has no way to diagnose.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+Drivelist::DeviceDescriptor makeDevice(const std::string &path,
+                                       const std::string &description,
+                                       std::uint64_t size)
+{
+    Drivelist::DeviceDescriptor d;
+    d.device = path;
+    d.description = description;
+    d.size = size;
+    d.isUSB = true;
+    d.isRemovable = true;
+    d.isSystem = false;
+    d.isVirtual = false;
+    d.isReadOnly = false;
+    return d;
+}
+
+int rowsOf(QAbstractItemModel *m) { return m->rowCount(QModelIndex()); }
+
+QStringList devicePathsIn(QAbstractItemModel *m)
+{
+    QStringList paths;
+    const auto roles = m->roleNames();
+    int deviceRole = -1;
+    for (auto it = roles.cbegin(); it != roles.cend(); ++it)
+        if (it.value() == QByteArrayLiteral("device"))
+            deviceRole = it.key();
+    if (deviceRole < 0)
+        return paths;
+    for (int row = 0; row < m->rowCount(QModelIndex()); ++row)
+        paths << m->data(m->index(row, 0), deviceRole).toString();
+    return paths;
+}
+
+} // namespace
+
+TEST_CASE("A plugged-in drive appears in the chooser", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+    QAbstractItemModel *view = model;
+
+    model->processDriveList({makeDevice("/dev/sdz", "SanDisk Cruzer", 32000000000ull)});
+
+    CHECK(rowsOf(view) == 1);
+    CHECK(devicePathsIn(view).contains(QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("A zero-sized device is not offered", "[models][drivelist]")
+{
+    // An empty card reader reports zero. Offering it gives the user a target
+    // that cannot be written.
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    model->processDriveList({makeDevice("/dev/sdz", "Empty reader", 0)});
+    CHECK(rowsOf(model) == 0);
+}
+
+TEST_CASE("A drive carrying the running system is not offered",
+          "[models][drivelist]")
+{
+    // The last line of defence in front of the user. A virtual device that
+    // is also a system device must never reach the chooser.
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    auto sys = makeDevice("/dev/loop-system", "System image", 32000000000ull);
+    sys.isVirtual = true;
+    sys.isSystem = true;
+
+    model->processDriveList({sys});
+    CHECK(rowsOf(model) == 0);
+}
+
+TEST_CASE("A read-only virtual device is not offered", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    auto ro = makeDevice("/dev/loop-ro", "Mounted ISO", 700000000ull);
+    ro.isVirtual = true;
+    ro.isReadOnly = true;
+
+    model->processDriveList({ro});
+    CHECK(rowsOf(model) == 0);
+}
+
+TEST_CASE("A writable loopback image is offered", "[models][drivelist]")
+{
+    // Writing to a disk image is a supported thing to do, and on Linux a
+    // loop device is never marked removable -- so requiring removable here
+    // would hide every one of them.
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    auto loop = makeDevice("/dev/loop42", "Disk image", 8000000000ull);
+    loop.isVirtual = true;
+    loop.isRemovable = false;
+
+    model->processDriveList({loop});
+    CHECK(rowsOf(model) == 1);
+}
+
+TEST_CASE("Several drives all appear", "[models][drivelist]")
+{
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    model->processDriveList({
+        makeDevice("/dev/sdx", "First", 16000000000ull),
+        makeDevice("/dev/sdy", "Second", 32000000000ull),
+        makeDevice("/dev/sdz", "Third", 64000000000ull),
+    });
+
+    const QStringList paths = devicePathsIn(model);
+    INFO("offered: " << paths.join(QStringLiteral(", ")).toStdString());
+    CHECK(rowsOf(model) == 3);
+    CHECK(paths.contains(QStringLiteral("/dev/sdy")));
+}
+
+TEST_CASE("Unplugging a drive removes it and says so", "[models][drivelist]")
+{
+    // The signal is what lets a write in progress notice its target has
+    // gone, rather than carrying on writing to a device that is not there.
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    QStringList removed;
+    QObject::connect(model, &DriveListModel::deviceRemoved,
+                     [&removed](const QString &d) { removed << d; });
+
+    model->processDriveList({
+        makeDevice("/dev/sdx", "Stays", 16000000000ull),
+        makeDevice("/dev/sdy", "Goes", 32000000000ull),
+    });
+    REQUIRE(rowsOf(model) == 2);
+
+    model->processDriveList({makeDevice("/dev/sdx", "Stays", 16000000000ull)});
+
+    CHECK(rowsOf(model) == 1);
+    CHECK(devicePathsIn(model).contains(QStringLiteral("/dev/sdx")));
+    INFO("removed: " << removed.join(QStringLiteral(", ")).toStdString());
+    CHECK(removed.contains(QStringLiteral("/dev/sdy")));
+}
+
+TEST_CASE("An enumeration failure is reported and then cleared",
+          "[models][drivelist]")
+{
+    // The poller signals failure through a sentinel entry. The user needs to
+    // be told the list is unreliable -- an empty chooser with no explanation
+    // reads as "no drives attached".
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    QStringList errors;
+    QObject::connect(model, &DriveListModel::enumerationError,
+                     [&errors](const QString &e) { errors << e; });
+
+    Drivelist::DeviceDescriptor sentinel;
+    sentinel.device = "__error__";
+    sentinel.error = "lsblk not found";
+    model->processDriveList({sentinel});
+
+    REQUIRE_FALSE(errors.isEmpty());
+    CHECK(errors.last() == QStringLiteral("lsblk not found"));
+
+    // A later good poll clears it.
+    model->processDriveList({makeDevice("/dev/sdz", "Recovered", 16000000000ull)});
+    CHECK(errors.last().isEmpty());
+    CHECK(rowsOf(model) == 1);
+}
+
+TEST_CASE("The same drive reported twice is listed once",
+          "[models][drivelist]")
+{
+    // Successive polls return the same devices; the chooser must not grow a
+    // duplicate entry each time.
+    TestableImageWriter writer;
+    DriveListModel *model = writer.getDriveList();
+
+    const auto dev = makeDevice("/dev/sdz", "Same", 32000000000ull);
+    model->processDriveList({dev});
+    model->processDriveList({dev});
+    model->processDriveList({dev});
+
+    CHECK(rowsOf(model) == 1);
 }
