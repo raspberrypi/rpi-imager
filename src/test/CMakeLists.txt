@@ -1313,7 +1313,7 @@ rpi_discover_tests(secureboot_test)
 
 # QtConcurrent and QtTest are not among the components the app itself asks
 # for, so this target finds them on its own.
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Test)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 # The write pipeline links as one unit -- DownloadThread reaches the device
 # wrapper, the memory manager, platform quirks, the cache writer and the
@@ -1407,7 +1407,6 @@ target_include_directories(drive_format_thread_test PRIVATE
 target_link_libraries(drive_format_thread_test PRIVATE
     Catch2::Catch2
     Qt6::Core
-    Qt6::Test
     ${PLATFORMQUIRKS_LIBS}
 )
 
@@ -1502,7 +1501,6 @@ target_link_libraries(download_thread_test PRIVATE
     Qt6::Core
     Qt6::Network
     Qt6::Concurrent
-    Qt6::Test
     CURL::libcurl
     ${GNUTLS_LIBRARIES}
 )
@@ -1594,7 +1592,6 @@ target_include_directories(cache_manager_test PRIVATE
 target_link_libraries(cache_manager_test PRIVATE
     Catch2::Catch2
     Qt6::Core
-    Qt6::Test
 )
 
 target_compile_features(cache_manager_test PRIVATE cxx_std_20)

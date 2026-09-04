@@ -28,7 +28,6 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
-#include <QSignalSpy>
 #include <QStringList>
 #include <QTemporaryDir>
 

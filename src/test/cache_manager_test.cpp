@@ -26,7 +26,8 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
-#include <QSignalSpy>
+#include <QCoreApplication>
+#include "signal_log.h"
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUuid>
@@ -257,7 +258,7 @@ TEST_CASE("CacheManager verification reports a mismatch", "[cache-manager]")
     const QByteArray wrongHash = hashOf("a completely different image");
     manager.setCustomCacheFile(custom, wrongHash);
 
-    QSignalSpy completed(&manager, &CacheManager::cacheVerificationComplete);
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
     manager.startVerification(wrongHash);
 
     REQUIRE(waitFor([&]() { return completed.count() > 0; }, 30000));
@@ -279,7 +280,7 @@ TEST_CASE("CacheManager verification confirms a matching file", "[cache-manager]
 
     manager.setCustomCacheFile(custom, hash);
 
-    QSignalSpy completed(&manager, &CacheManager::cacheVerificationComplete);
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
     manager.startVerification(hash);
 
     REQUIRE(waitFor([&]() { return completed.count() > 0; }, 30000));
@@ -297,7 +298,7 @@ TEST_CASE("CacheManager verification of a missing file fails rather than hangs",
     manager.setCustomCacheFile(
         QStringLiteral("/nonexistent-rpi-imager-dir/gone.img"), hash);
 
-    QSignalSpy completed(&manager, &CacheManager::cacheVerificationComplete);
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
     manager.startVerification(hash);
 
     // The worker must answer even when there is nothing to read; a silent
@@ -320,8 +321,8 @@ TEST_CASE("CacheManager reports progress while verifying", "[cache-manager]")
 
     manager.setCustomCacheFile(custom, hash);
 
-    QSignalSpy progress(&manager, &CacheManager::cacheVerificationProgress);
-    QSignalSpy completed(&manager, &CacheManager::cacheVerificationComplete);
+    rpi_test::SignalLog progress(&manager, &CacheManager::cacheVerificationProgress);
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
     manager.startVerification(hash);
 
     REQUIRE(waitFor([&]() { return completed.count() > 0; }, 60000));
@@ -387,7 +388,7 @@ TEST_CASE("CacheManager reports disk space once ready", "[cache-manager]")
     clearCacheDir();
     CacheManager manager;
 
-    QSignalSpy spaceChecked(&manager, &CacheManager::diskSpaceCheckComplete);
+    rpi_test::SignalLog spaceChecked(&manager, &CacheManager::diskSpaceCheckComplete);
     manager.startBackgroundOperations();
 
     // The space check runs on the worker and gates whether caching is offered
@@ -427,7 +428,7 @@ TEST_CASE("CacheManager verification of an empty hash settles", "[cache-manager]
     clearCacheDir();
     CacheManager manager;
 
-    QSignalSpy completed(&manager, &CacheManager::cacheVerificationComplete);
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
     manager.startVerification(QByteArray());
 
     // An OS list entry with no published hash still reaches here; it must
@@ -471,7 +472,7 @@ TEST_CASE("CacheManager updates hashes after a completed write", "[cache-manager
     // confirm it is usable next time.
     manager.updateCacheFile(hash, hash);
 
-    QSignalSpy completed(&manager, &CacheManager::cacheVerificationComplete);
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
     manager.startVerification(hash);
     REQUIRE(waitFor([&]() { return completed.count() > 0; }, 30000));
     CHECK(completed.at(0).at(0).toBool());
