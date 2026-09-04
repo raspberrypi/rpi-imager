@@ -1226,3 +1226,34 @@ set(RPI_DOWNLOAD_PIPELINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_linux.cpp
     ${PLATFORM_FILE_OPS}
 )
+
+# ── drive format thread ─────────────────────────────────────────────────────
+# The "Erase" entry: refusing safely, and the message shown when it fails.
+add_executable(drive_format_thread_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../driveformatthread.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    ${DRIVELIST_PLATFORM_SOURCES}
+    ${PLATFORMQUIRKS_SOURCES}
+    drive_format_thread_test.cpp
+)
+
+set_target_properties(drive_format_thread_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(drive_format_thread_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(drive_format_thread_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Test
+    ${PLATFORMQUIRKS_LIBS}
+)
+
+rpi_link_platform_file_ops(drive_format_thread_test)
+
+target_compile_features(drive_format_thread_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(drive_format_thread_test)

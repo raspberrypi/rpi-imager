@@ -140,7 +140,15 @@ QString DriveFormatThread::formatErrorToString(rpi_imager::FormatError error)
             return tr("Invalid parameters for formatting");
         case rpi_imager::FormatError::kInsufficientSpace:
             return tr("Insufficient space on device");
-        default:
-            return tr("Unknown formatting error");
+        case rpi_imager::FormatError::kCancelled:
+            // Reachable: disk_formatter maps FileError::kCancelled through to
+            // here. It used to fall into the default below and tell a user who
+            // had just pressed Cancel that something unknown had gone wrong.
+            return tr("Formatting cancelled");
     }
+
+    // Deliberately no `default:` in the switch above, so that -Wswitch flags a
+    // new FormatError nobody has written a message for -- which is how the
+    // cancelled case went unnoticed. Only reached for a value outside the enum.
+    return tr("Unknown formatting error");
 }
