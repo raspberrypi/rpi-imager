@@ -1415,6 +1415,124 @@ target_compile_features(fastboot_flash_thread_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(fastboot_flash_thread_test)
 
+add_executable(download_thread_test
+    ${RPI_DOWNLOAD_PIPELINE_SOURCES}
+    download_thread_test.cpp
+)
+
+set_target_properties(download_thread_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(download_thread_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS}
+)
+
+# Catch2 without its main(): this target provides its own so a
+# QCoreApplication exists before any case runs (see the bottom of the test).
+target_link_libraries(download_thread_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Network
+    Qt6::Concurrent
+    Qt6::Test
+    CURL::libcurl
+    ${GNUTLS_LIBRARIES}
+)
+
+rpi_link_platform_file_ops(download_thread_test)
+
+target_compile_features(download_thread_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(download_thread_test)
+
+# ============================================================================
+# DownloadExtractThread
+# ============================================================================
+# The compressed-image path: the same write pipeline with libarchive in front
+# of it, so the bytes going to the card are the decompressed ones. 759
+# branches, none of them covered.
+#
+# Driven the same way as DownloadThread -- a file:// URL and a scratch image
+# for a destination -- with the archives built at test time by xz, gzip and
+# zip, so the decompressors are fed real containers rather than fixtures
+# checked into the tree.
+
+add_executable(download_extract_thread_test
+    ${RPI_DOWNLOAD_PIPELINE_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../downloadextractthread.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../localfileextractthread.cpp
+    # The stub inhibitor rather than the DBus one: nothing here needs to stop
+    # the machine suspending, and the real implementation wants a session bus.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/suspend_inhibitor_stub.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
+    download_extract_thread_test.cpp
+)
+
+set_target_properties(download_extract_thread_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(download_extract_thread_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS}
+    ${LibArchive_INCLUDE_DIR}
+)
+
+# Catch2 without its main(): this target provides its own so a
+# QCoreApplication exists before any case runs.
+target_link_libraries(download_extract_thread_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Network
+    Qt6::Concurrent
+    CURL::libcurl
+    ${LibArchive_LIBRARIES}
+    ${ZSTD_LIBRARIES}
+    ${LIBLZMA_LIBRARIES}
+    ${GNUTLS_LIBRARIES}
+)
+
+rpi_link_platform_file_ops(download_extract_thread_test)
+
+target_compile_features(download_extract_thread_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(download_extract_thread_test)
+
+# ============================================================================
+# CacheManager
+# ============================================================================
+# Decides whether a previously downloaded image can be reused. A false
+# positive here writes the wrong image to a card, so the negative cases carry
+# most of the weight.
+#
+# Runs under QStandardPaths test mode so the cache directory is a throwaway
+# under the test tree: no case can find, trust or delete a real cached image.
+# Verification happens on a worker thread, so this target supplies its own
+# main() with a QCoreApplication.
+
+add_executable(cache_manager_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../cachemanager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../cachemanager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../systemmemorymanager.cpp
+    cache_manager_test.cpp
+)
+
+set_target_properties(cache_manager_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(cache_manager_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(cache_manager_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Test
+)
+
+target_compile_features(cache_manager_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(cache_manager_test)
+
 # ============================================================================
 # SecureBootProvisioner
 # ============================================================================
@@ -1462,6 +1580,45 @@ rpi_link_platform_file_ops(secure_boot_provisioner_test)
 target_compile_features(secure_boot_provisioner_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(secure_boot_provisioner_test)
+
+# ============================================================================
+# DownloadStatsTelemetry
+# ============================================================================
+# Reports which image was written. Two properties matter more than the
+# reporting: it must send nothing when the user has opted out, and it must
+# never be able to fail a write -- it runs fire-and-forget after the card is
+# already done.
+#
+# Both are testable without the real endpoint: the opt-out is a QSettings
+# value and the POST goes wherever it is pointed, so a throwaway server on
+# 127.0.0.1 stands in. Nothing here contacts Raspberry Pi, and the settings
+# are scoped to a test-mode file so no case can switch on a developer's real
+# telemetry preference.
+
+add_executable(download_stats_telemetry_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../downloadstatstelemetry.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../downloadstatstelemetry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    download_stats_telemetry_test.cpp
+)
+
+set_target_properties(download_stats_telemetry_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(download_stats_telemetry_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(download_stats_telemetry_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Network
+    CURL::libcurl
+)
+
+target_compile_features(download_stats_telemetry_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(download_stats_telemetry_test)
 
 # ============================================================================
 # FirmwareManager
