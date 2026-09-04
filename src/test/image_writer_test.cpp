@@ -3924,3 +3924,52 @@ TEST_CASE("Exporting to an unwritable path fails rather than pretending", "[imag
     CHECK_FALSE(w.exportPerformanceDataToFile(
         QStringLiteral("/proc/definitely/not/writable/report.json")));
 }
+
+TEST_CASE("A verified customised write checks the files landed", "[imagewriter][customisation][boot]")
+{
+    BootPartitionFixture fx;
+    ImageWriter w(nullptr);
+    // Verification re-opens the card and reads the customisation back. It is
+    // the only thing standing between "the files were written" and "the
+    // files are on the card" -- a distinction that matters when the write
+    // was buffered and the card pulled early.
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize);
+    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
+    w.setImageCustomisation(QByteArray("dtparam=audio=on\n"),
+                            QByteArray(" rpi_imager_verified=1"),
+                            QByteArray("#!/bin/bash\n# rpi-imager-verified-marker\nexit 0\n"),
+                            QByteArray(), QByteArray(),
+                            ImageOptions::NoAdvancedOptions, QByteArray("systemd"));
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    const QByteArray written = fx.targetBytes();
+    CHECK(written.contains(QByteArray("rpi-imager-verified-marker")));
+    CHECK(written.contains(QByteArray("rpi_imager_verified=1")));
+    CHECK(written.contains(QByteArray("dtparam=audio=on")));
+}
+
+TEST_CASE("A verified write reports verification progress", "[imagewriter][customisation][boot]")
+{
+    BootPartitionFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize);
+    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
+
+    const WriteOutcome out = runWrite(w);
+    REQUIRE(out.succeeded);
+
+    // The UI has a separate bar for it; without progress the write looks
+    // finished while the card is still being read back.
+    bool sawVerify = false;
+    for (const QString &k : out.progressKinds)
+        if (k.startsWith(QStringLiteral("verify ")))
+            sawVerify = true;
+    INFO("progress kinds seen: " << out.progressKinds.size());
+    CHECK(sawVerify);
+}
