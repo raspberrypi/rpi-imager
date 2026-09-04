@@ -87,7 +87,8 @@ public:
      * @param slotSize Size of each slot in bytes
      * @param alignment Memory alignment for slots (default 4096 for direct I/O)
      */
-    RingBuffer(size_t numSlots, size_t slotSize, size_t alignment = 4096);
+    RingBuffer(size_t numSlots, size_t slotSize, size_t alignment = 4096,
+               uint32_t stallTimeoutMs = 30000);
     
     /**
      * @brief Destructor - frees all pre-allocated memory
@@ -257,8 +258,13 @@ private:
     // Note: These should match TimeoutDefaults in timeout_utils.h for consistency.
     // We don't include timeout_utils.h here to avoid adding dependencies to this
     // low-level data structure, but values should be kept in sync.
-    static const uint32_t STALL_EVENT_THRESHOLD_MS = 50;   // = TimeoutDefaults::kRingBufferStallEventThresholdMs
-    static const uint32_t STALL_TIMEOUT_MS = 30000;        // = TimeoutDefaults::kRingBufferStallTimeoutMs
+    // Instance fields rather than constants so the stall timeout can be set
+    // per buffer: the stall path is thirty seconds of real waiting by
+    // design, which no test can sit through for each of the two stall types.
+    // The default is the shipped value, so nothing changes for callers that
+    // do not ask.
+    uint32_t STALL_EVENT_THRESHOLD_MS = 50;   // = TimeoutDefaults::kRingBufferStallEventThresholdMs
+    uint32_t STALL_TIMEOUT_MS = 30000;        // = TimeoutDefaults::kRingBufferStallTimeoutMs
 };
 
 #endif // RINGBUFFER_H

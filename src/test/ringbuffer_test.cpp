@@ -16,6 +16,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <random>
 #include <set>
 #include <vector>
@@ -316,4 +317,114 @@ TEST_CASE("Slot capacity and count are reported as constructed", "[ringbuffer]")
     RingBuffer rb(6, 8192);
     CHECK(rb.numSlots() == 6);
     CHECK(rb.slotCapacity() == 8192);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The stall timeout, and telling the two sides apart
+//
+// When one side of the pipeline stops for good, the other cannot wait for it
+// forever. After a cumulative wait the buffer gives up, records which side
+// stalled, and returns nothing -- and that classification is what the write
+// reports to the user: a disk that stopped accepting data reads very
+// differently from a download that stopped arriving.
+//
+// Thirty seconds of real waiting by design, so these shorten it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A producer that never gets a slot gives up and says so", "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 300);
+
+    // Fill it and never consume: the producer now has nowhere to write.
+    for (int i = 0; i < 2; ++i) {
+        RingBuffer::Slot *slot = rb.acquireWriteSlot(100);
+        REQUIRE(slot != nullptr);
+        rb.commitWriteSlot(slot, 4096);
+    }
+
+    // Waiting past the cumulative limit has to end, not hang the write.
+    // A positive timeout is honoured as-is and returns without accumulating;
+    // the stall ladder is only walked when the caller is prepared to wait,
+    // which is what the writer does.
+    RingBuffer::Slot *blocked = rb.acquireWriteSlot(0);
+    CHECK(blocked == nullptr);
+    CHECK(rb.isStallTimeoutExceeded());
+
+    // And the side that stalled is recorded: this one is the disk not
+    // keeping up, which is a different message to the user than a download
+    // that stopped.
+    CHECK(rb.getStallType() == RingBuffer::StallType::ProducerStall);
+}
+
+TEST_CASE("A consumer with nothing to read gives up and says so", "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 300);
+
+    // Nothing was ever committed, and nothing ever will be.
+    RingBuffer::Slot *slot = rb.acquireReadSlot(0);
+    CHECK(slot == nullptr);
+    CHECK(rb.isStallTimeoutExceeded());
+    CHECK(rb.getStallType() == RingBuffer::StallType::ConsumerStall);
+}
+
+TEST_CASE("A stalled buffer stays stalled until it is reset", "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 200);
+
+    REQUIRE(rb.acquireReadSlot(0) == nullptr);
+    REQUIRE(rb.isStallTimeoutExceeded());
+
+    // A stall is fatal for the buffer as a whole, not just for the side that
+    // hit it: both acquires refuse from here on. That is deliberate -- the
+    // pipeline has one broken half and carrying on would deadlock the other.
+    CHECK(rb.acquireReadSlot(0) == nullptr);
+    CHECK(rb.acquireWriteSlot(0) == nullptr);
+
+    rb.reset();
+    CHECK_FALSE(rb.isStallTimeoutExceeded());
+    CHECK(rb.getStallType() == RingBuffer::StallType::None);
+}
+
+TEST_CASE("A slow but recovered wait is recorded", "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 30000);
+
+    // Fill it, then free a slot after long enough for the wait to count as
+    // significant. Events are recorded on the path that recovers -- the
+    // fatal stall returns before reaching the recording code, so a write
+    // that died leaves no event, only the stall type.
+    for (int i = 0; i < 2; ++i) {
+        RingBuffer::Slot *slot = rb.acquireWriteSlot(100);
+        REQUIRE(slot != nullptr);
+        rb.commitWriteSlot(slot, 4096);
+    }
+
+    std::thread releaser([&rb] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(120));
+        RingBuffer::Slot *read = rb.acquireReadSlot(1000);
+        if (read)
+            rb.releaseReadSlot(read);
+    });
+
+    RingBuffer::Slot *slot = rb.acquireWriteSlot(0);
+    releaser.join();
+    REQUIRE(slot != nullptr);
+
+    // This is what correlates a slow write with the side that caused it when
+    // somebody reads the performance report afterwards.
+    const auto events = rb.getPendingStallEvents();
+    INFO("stall events: " << events.size());
+    CHECK_FALSE(events.empty());
+}
+
+TEST_CASE("Cancelling beats the stall timeout", "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 30000);   // the shipped timeout
+
+    std::thread canceller([&rb] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        rb.cancel();
+    });
+
+    // A user pressing cancel must not wait out the stall timeout.
+    RingBuffer::Slot *slot = rb.acquireReadSlot(0);
+    canceller.join();
+
+    CHECK(slot == nullptr);
+    CHECK_FALSE(rb.isStallTimeoutExceeded());
 }

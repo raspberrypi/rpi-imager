@@ -8,7 +8,8 @@
 #include <QString>
 #include <chrono>
 
-RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
+RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment,
+                       uint32_t stallTimeoutMs)
     : _numSlots(numSlots)
     , _slotSize(slotSize)
     , _alignment(alignment)
@@ -23,6 +24,7 @@ RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
     , _consumerWaitMs(0)
     , _sessionTimer(nullptr)
 {
+    STALL_TIMEOUT_MS = stallTimeoutMs;
     _slots.resize(numSlots);
     _memory.reserve(numSlots);
     _slotInUse.assign(numSlots, 0);
