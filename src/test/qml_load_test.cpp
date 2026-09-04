@@ -65,6 +65,17 @@ void registerTypes()
 // component, alongside copies of the files. Using it means the wizard files
 // resolve components from other directories exactly as they do in the running
 // application, which loading straight out of the source tree does not.
+// A receiver for string-based connects: QML-declared signals have no member
+// pointer to hand the new-style connect.
+class ClickCounter : public QObject
+{
+    Q_OBJECT
+public:
+    int count = 0;
+public slots:
+    void onClicked() { ++count; }
+};
+
 QString moduleParent() { return QStringLiteral(IMAGER_QML_MODULE_PARENT); }
 QString moduleDir() { return moduleParent() + QStringLiteral("/RpiImager"); }
 bool moduleBuilt() { return QFile::exists(moduleDir() + QStringLiteral("/qmldir")); }
@@ -224,3 +235,46 @@ TEST_CASE("The main window loads", "[qml]")
     // The whole tree, from the root window down through the wizard.
     CHECK_FALSE(component.isError());
 }
+
+TEST_CASE("A component can be created and driven", "[qml][drive]")
+{
+    if (!moduleBuilt())
+        SKIP("the QML module has not been generated; build the application target");
+
+    ModuleCopy module;
+    if (!module.isReady())
+        SKIP("could not stage a copy of the generated QML module");
+
+    registerTypes();
+    QQmlApplicationEngine engine;
+    engine.addImportPath(module.importPath());
+
+    // Instantiating a single component and exercising it is the part of
+    // driven testing that does not need a rendered scene: properties in,
+    // signals out. The Qt we ship has no QtTest, so there is no mouseClick()
+    // to reach for anyway.
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        module.importPath() + QStringLiteral("/RpiImager/qmlcomponents/ImButton.qml")));
+    INFO("component errors: " << component.errorString().toStdString());
+    REQUIRE_FALSE(component.isError());
+
+    std::unique_ptr<QObject> button(component.create());
+    REQUIRE(button != nullptr);
+
+    // A property QML binds and the wizard sets to gate the Write button.
+    button->setProperty("enabled", false);
+    CHECK_FALSE(button->property("enabled").toBool());
+    button->setProperty("enabled", true);
+    CHECK(button->property("enabled").toBool());
+
+    // And the signal a click turns into, invoked directly rather than
+    // synthesised through a scene that would have to be laid out first.
+    // Counted at a real receiver, so this checks delivery rather than just
+    // that the signal exists.
+    ClickCounter counter;
+    REQUIRE(QObject::connect(button.get(), SIGNAL(clicked()), &counter, SLOT(onClicked())));
+    REQUIRE(QMetaObject::invokeMethod(button.get(), "clicked"));
+    CHECK(counter.count == 1);
+}
+
+#include "qml_load_test.moc"
