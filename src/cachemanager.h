@@ -101,7 +101,6 @@ private:
 
     void updateCacheStatus(const std::function<void(CacheStatus&)>& updater);
     void loadCacheSettings();
-    void saveCacheSettings();
     QString getDefaultCacheFilePath() const;
     bool isCachingEnabled() const;
 };

@@ -29,6 +29,9 @@
 #include <QCoreApplication>
 #include "signal_log.h"
 #include <QStandardPaths>
+#include <QSettings>
+#include <QTemporaryDir>
+#include <unistd.h>
 #include <QTimer>
 #include <QUuid>
 
@@ -476,4 +479,199 @@ TEST_CASE("CacheManager updates hashes after a completed write", "[cache-manager
     manager.startVerification(hash);
     REQUIRE(waitFor([&]() { return completed.count() > 0; }, 30000));
     CHECK(completed.at(0).at(0).toBool());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Surviving a restart
+//
+// The cache is only worth having if it is still there next launch.
+// updateCacheFile() records the file and its hashes in settings; the next
+// CacheManager reads them back in its constructor and adopts the file --
+// after checking it is still there and still readable.
+//
+// Skipping that check would be worse than not caching at all: the imager
+// would write from a file that has been deleted, truncated by a cleaner, or
+// left unreadable, and the first sign would be a card that does not boot.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Clears only the settings this section writes, leaving the cache directory
+// alone -- the point is to control the two independently.
+void clearCacheSettings()
+{
+    QSettings s;
+    s.beginGroup(QStringLiteral("caching"));
+    s.remove(QString());
+    s.endGroup();
+    s.sync();
+}
+
+} // namespace
+
+TEST_CASE("A cache recorded in settings is adopted next launch", "[cache-manager][persist]")
+{
+    clearCacheDir();
+    clearCacheSettings();
+
+    const QByteArray payload = payloadOfSize(4096, 7);
+    const QByteArray uncompressed = hashOf(payload);
+    const QByteArray compressed = hashOf(payload + "z");
+
+    QString cacheFile;
+    {
+        CacheManager first;
+        first.startBackgroundOperations();
+        REQUIRE(waitFor([&]() { return first.isReady(); }));
+        first.setupCacheForDownload(uncompressed, payload.size(), cacheFile);
+        if (cacheFile.isEmpty())
+            cacheFile = first.getCacheStatus().cacheFileName;
+        REQUIRE_FALSE(cacheFile.isEmpty());
+        REQUIRE(writeFile(cacheFile, payload));
+        first.updateCacheFile(uncompressed, compressed);
+    }
+
+    CacheManager second;
+    const CacheManager::CacheStatus status = second.getCacheStatus();
+
+    // Without this, every launch re-downloads an image already on disk.
+    CHECK(status.cacheFileName == cacheFile);
+    CHECK(status.cachedHash == uncompressed);
+    CHECK(second.hasPotentialCache(uncompressed));
+}
+
+TEST_CASE("A recorded cache is not trusted until it is verified", "[cache-manager][persist]")
+{
+    clearCacheDir();
+    clearCacheSettings();
+
+    const QByteArray payload = payloadOfSize(4096, 8);
+    const QByteArray uncompressed = hashOf(payload);
+
+    QString cacheFile;
+    {
+        CacheManager first;
+        first.startBackgroundOperations();
+        REQUIRE(waitFor([&]() { return first.isReady(); }));
+        first.setupCacheForDownload(uncompressed, payload.size(), cacheFile);
+        if (cacheFile.isEmpty())
+            cacheFile = first.getCacheStatus().cacheFileName;
+        REQUIRE(writeFile(cacheFile, payload));
+        first.updateCacheFile(uncompressed, hashOf(payload));
+    }
+
+    CacheManager second;
+    // Adopted, but verificationComplete is false: the file may have changed
+    // under us, so it is re-hashed before anything is written from it.
+    CHECK(second.hasPotentialCache(uncompressed));
+    CHECK_FALSE(second.getCacheStatus().verificationComplete);
+}
+
+TEST_CASE("A cache whose file has gone is discarded on startup", "[cache-manager][persist]")
+{
+    clearCacheDir();
+    clearCacheSettings();
+
+    const QByteArray payload = payloadOfSize(4096, 9);
+    const QByteArray uncompressed = hashOf(payload);
+
+    QString cacheFile;
+    {
+        CacheManager first;
+        first.startBackgroundOperations();
+        REQUIRE(waitFor([&]() { return first.isReady(); }));
+        first.setupCacheForDownload(uncompressed, payload.size(), cacheFile);
+        if (cacheFile.isEmpty())
+            cacheFile = first.getCacheStatus().cacheFileName;
+        REQUIRE(writeFile(cacheFile, payload));
+        first.updateCacheFile(uncompressed, hashOf(payload));
+    }
+
+    // A disk cleaner, or the user emptying their cache directory.
+    REQUIRE(QFile::remove(cacheFile));
+
+    CacheManager second;
+    CHECK_FALSE(second.hasPotentialCache(uncompressed));
+    CHECK(second.getCacheStatus().cacheFileName.isEmpty());
+}
+
+TEST_CASE("A cache file that has been emptied is discarded on startup", "[cache-manager][persist]")
+{
+    clearCacheDir();
+    clearCacheSettings();
+
+    const QByteArray payload = payloadOfSize(4096, 10);
+    const QByteArray uncompressed = hashOf(payload);
+
+    QString cacheFile;
+    {
+        CacheManager first;
+        first.startBackgroundOperations();
+        REQUIRE(waitFor([&]() { return first.isReady(); }));
+        first.setupCacheForDownload(uncompressed, payload.size(), cacheFile);
+        if (cacheFile.isEmpty())
+            cacheFile = first.getCacheStatus().cacheFileName;
+        REQUIRE(writeFile(cacheFile, payload));
+        first.updateCacheFile(uncompressed, hashOf(payload));
+    }
+
+    // Truncated rather than removed: an interrupted cleanup, or a full disk.
+    REQUIRE(writeFile(cacheFile, QByteArray()));
+
+    CacheManager second;
+    CHECK_FALSE(second.hasPotentialCache(uncompressed));
+}
+
+TEST_CASE("A cache file that cannot be read is discarded on startup", "[cache-manager][persist]")
+{
+    clearCacheDir();
+    clearCacheSettings();
+
+    if (::geteuid() == 0)
+        SKIP("running as root, which can read a file with no permissions");
+
+    const QByteArray payload = payloadOfSize(4096, 11);
+    const QByteArray uncompressed = hashOf(payload);
+
+    QString cacheFile;
+    {
+        CacheManager first;
+        first.startBackgroundOperations();
+        REQUIRE(waitFor([&]() { return first.isReady(); }));
+        first.setupCacheForDownload(uncompressed, payload.size(), cacheFile);
+        if (cacheFile.isEmpty())
+            cacheFile = first.getCacheStatus().cacheFileName;
+        REQUIRE(writeFile(cacheFile, payload));
+        first.updateCacheFile(uncompressed, hashOf(payload));
+    }
+
+    REQUIRE(QFile::setPermissions(cacheFile, QFileDevice::Permissions()));
+
+    CacheManager second;
+    CHECK_FALSE(second.hasPotentialCache(uncompressed));
+
+    QFile::setPermissions(cacheFile, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+}
+
+TEST_CASE("A custom cache file is not written into settings", "[cache-manager][persist]")
+{
+    clearCacheDir();
+    clearCacheSettings();
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString custom = QDir(dir.path()).filePath(QStringLiteral("mine.img"));
+    const QByteArray payload = payloadOfSize(4096, 12);
+    REQUIRE(writeFile(custom, payload));
+
+    {
+        CacheManager first;
+        first.setCustomCacheFile(custom, hashOf(payload));
+        first.updateCacheFile(hashOf(payload), hashOf(payload));
+    }
+
+    // A path the user pointed at once should not become the imager's
+    // permanent cache; the temporary directory it lived in is gone by now.
+    CacheManager second;
+    CHECK(second.getCacheStatus().cacheFileName != custom);
 }
