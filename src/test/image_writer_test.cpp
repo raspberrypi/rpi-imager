@@ -3829,3 +3829,98 @@ TEST_CASE("A multi-file archive that cannot be mounted reports it", "[imagewrite
     CHECK_FALSE(out.succeeded);
     CHECK(out.failed);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The performance report
+//
+// Every write records timings, throughput samples and phase transitions, and
+// the user can export the lot as JSON. It is what gets attached to a bug
+// report when somebody says a write was slow or stalled, so the export is
+// only worth having if it actually describes the write that just happened.
+//
+// PerformanceStats has its own tests for the recording. This covers the
+// export as ImageWriter drives it: after a real write, with everything a
+// real write produces in it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Exporting with nothing recorded is refused", "[imagewriter][perf]")
+{
+    ImageWriter w(nullptr);
+
+    // Nothing to report yet; offering a file dialog would be confusing.
+    CHECK_FALSE(w.exportPerformanceData());
+}
+
+TEST_CASE("A write produces an exportable report", "[imagewriter][perf]")
+{
+    ExtractFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.archiveUrl(), 0, kFixturePayload);
+    w.setDst(fx.target(), kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString report = QDir(dir.path()).filePath(QStringLiteral("report.json"));
+    REQUIRE(w.exportPerformanceDataToFile(report));
+
+    QFile f(report);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    QJsonParseError err{};
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+
+    // A report that will not parse is one nobody can read on the other end
+    // of a bug report.
+    INFO("parse error: " << err.errorString().toStdString());
+    REQUIRE(err.error == QJsonParseError::NoError);
+    REQUIRE(doc.isObject());
+
+    const QJsonObject root = doc.object();
+    CHECK_FALSE(root.isEmpty());
+
+    // The write that just happened has to be in there: a session, and the
+    // events recorded during it.
+    bool sawEvents = false;
+    for (auto it = root.constBegin(); it != root.constEnd(); ++it)
+        if (it.value().isArray() && !it.value().toArray().isEmpty())
+            sawEvents = true;
+    CHECK(sawEvents);
+}
+
+TEST_CASE("A write leaves imaging data to report", "[imagewriter][perf]")
+{
+    ExtractFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+
+    // Before: background events only, if anything.
+    CHECK_FALSE(w.performanceStats()->hasImagingData());
+
+    w.setSrc(fx.archiveUrl(), 0, kFixturePayload);
+    w.setDst(fx.target(), kFixturePayload);
+    REQUIRE(runWrite(w).succeeded);
+
+    // After: the write itself is recorded, which is the difference between a
+    // report worth attaching to a bug and one that describes nothing.
+    CHECK(w.performanceStats()->hasData());
+    CHECK(w.performanceStats()->hasImagingData());
+}
+
+TEST_CASE("Exporting to an unwritable path fails rather than pretending", "[imagewriter][perf]")
+{
+    ExtractFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.archiveUrl(), 0, kFixturePayload);
+    w.setDst(fx.target(), kFixturePayload);
+    REQUIRE(runWrite(w).succeeded);
+
+    // Telling the user the report was saved when it was not leaves them
+    // attaching nothing to their bug report.
+    CHECK_FALSE(w.exportPerformanceDataToFile(
+        QStringLiteral("/proc/definitely/not/writable/report.json")));
+}
