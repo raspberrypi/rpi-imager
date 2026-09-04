@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "imagesizeparser.h"
 #include "imager_version.h"
 #include "writeprogresswatchdog.h"
 #include "embedded_config.h"
@@ -28,11 +29,6 @@
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #endif
-#include <archive.h>
-#include <archive_entry.h>
-#include <lzma.h>
-#define ZSTD_STATIC_LINKING_ONLY  // for ZSTD_FRAMEHEADERSIZE_MAX
-#include <zstd.h>
 #include <qjsondocument.h>
 #include <QJsonArray>
 #include <random>
@@ -2900,180 +2896,25 @@ void ImageWriter::onFileSelected(QString filename)
 
 void ImageWriter::_parseCompressedFile()
 {
-    struct archive *a = archive_read_new();
-    struct archive_entry *entry;
-    QByteArray fn = _src.toLocalFile().toLatin1();
-    int numFiles = 0;
-    _extrLen = 0;
-
-    archive_read_support_filter_all(a);
-    archive_read_support_format_all(a);
-
-    if (archive_read_open_filename(a, fn.data(), 10240) == ARCHIVE_OK)
-    {
-        while ( (archive_read_next_header(a, &entry)) == ARCHIVE_OK)
-        {
-            if (archive_entry_size(entry) > 0)
-            {
-              _extrLen += archive_entry_size(entry);
-              numFiles++;
-            }
-        }
-    }
-
-    if (numFiles > 1)
+    const auto info = imagesize::parseArchive(_src.toLocalFile());
+    _extrLen = info.uncompressedSize;
+    if (info.fileCount > 1)
         _multipleFilesInZip = true;
-
-    qDebug() << "Parsed .zip file containing" << numFiles << "files, uncompressed size:" << _extrLen;
 }
 
 void ImageWriter::_parseXZFile()
 {
-    QFile f(_src.toLocalFile());
-    lzma_stream_flags opts = { 0 };
-    _extrLen = 0;
-
-    if (f.size() > LZMA_STREAM_HEADER_SIZE && f.open(f.ReadOnly))
-    {
-        f.seek(f.size()-LZMA_STREAM_HEADER_SIZE);
-        QByteArray footer = f.read(LZMA_STREAM_HEADER_SIZE);
-        lzma_ret ret = lzma_stream_footer_decode(&opts, (const uint8_t *) footer.constData());
-
-        if (ret == LZMA_OK && opts.backward_size < 1000000 && opts.backward_size < f.size()-LZMA_STREAM_HEADER_SIZE)
-        {
-            f.seek(f.size()-LZMA_STREAM_HEADER_SIZE-opts.backward_size);
-            QByteArray buf = f.read(opts.backward_size+LZMA_STREAM_HEADER_SIZE);
-            lzma_index *idx;
-            uint64_t memlimit = UINT64_MAX;
-            size_t pos = 0;
-
-            ret = lzma_index_buffer_decode(&idx, &memlimit, NULL, (const uint8_t *) buf.constData(), &pos, buf.size());
-            if (ret == LZMA_OK)
-            {
-                _extrLen = lzma_index_uncompressed_size(idx);
-                qDebug() << "Parsed .xz file. Uncompressed size:" << _extrLen;
-            }
-            else
-            {
-                qDebug() << "Unable to parse index of .xz file";
-            }
-            lzma_index_end(idx, NULL);
-        }
-        else
-        {
-            qDebug() << "Unable to parse footer of .xz file";
-        }
-
-        f.close();
-    }
+    _extrLen = imagesize::parseXz(_src.toLocalFile());
 }
 
 void ImageWriter::_parseGzFile()
 {
-    QFile f(_src.toLocalFile());
-    _extrLen = 0;
-
-    // Gzip trailer format (last 8 bytes):
-    // - CRC32 (4 bytes, little-endian)
-    // - ISIZE (4 bytes, little-endian) - original file size modulo 2^32
-    //
-    // ISIZE is only 32 bits so this is a best-effort estimate for capacity
-    // checks.  The caller (setSrc) owns the _extractSizeKnown flag that
-    // controls whether the UI trusts this value for progress display.
-    const qint64 GZIP_TRAILER_SIZE = 8;
-
-    if (f.size() > GZIP_TRAILER_SIZE && f.open(QIODevice::ReadOnly))
-    {
-        f.seek(f.size() - 4);  // Seek to ISIZE field (last 4 bytes)
-        QByteArray isizeData = f.read(4);
-
-        if (isizeData.size() == 4)
-        {
-            // ISIZE is stored as little-endian 32-bit unsigned integer
-            quint32 isize = static_cast<quint8>(isizeData[0]) |
-                           (static_cast<quint8>(isizeData[1]) << 8) |
-                           (static_cast<quint8>(isizeData[2]) << 16) |
-                           (static_cast<quint8>(isizeData[3]) << 24);
-
-            _extrLen = isize;
-
-            // Handle files larger than 4GB where ISIZE wraps around
-            // If the uncompressed size appears smaller than the compressed size,
-            // the original file was likely > 4GB. This is a heuristic for storage
-            // space checks but NOT reliable for progress calculation.
-            qint64 compressedSize = f.size();
-            while (_extrLen < static_cast<quint64>(compressedSize))
-            {
-                _extrLen += Q_UINT64_C(0x100000000);  // Add 4GB
-            }
-
-            qDebug() << "Parsed .gz file. Estimated uncompressed size:" << _extrLen
-                     << "(ISIZE field:" << isize << ") - size unreliable for progress";
-        }
-        else
-        {
-            qDebug() << "Unable to read ISIZE from .gz file";
-        }
-
-        f.close();
-    }
-    else
-    {
-        qDebug() << "Unable to open .gz file for parsing";
-    }
+    _extrLen = imagesize::parseGz(_src.toLocalFile());
 }
 
 void ImageWriter::_parseZstdFile()
 {
-    QFile f(_src.toLocalFile());
-    _extrLen = 0;
-
-    if (!f.open(QIODevice::ReadOnly))
-    {
-        qDebug() << "Unable to open .zst file for parsing";
-        return;
-    }
-
-    // ZSTD_findDecompressedSize() iterates through all concatenated frames
-    // to compute the total decompressed size. It requires the full compressed
-    // data in memory, but this is acceptable for custom file size estimates.
-    QByteArray data = f.readAll();
-    f.close();
-
-    if (data.isEmpty())
-    {
-        qDebug() << "Empty .zst file";
-        return;
-    }
-
-    unsigned long long fcs = ZSTD_findDecompressedSize(data.constData(), data.size());
-
-    // The failure sentinels are (0ULL - 2) and (0ULL - 1), not 0, so they have to
-    // be tested by name: comparing against 0 alone lets ZSTD_CONTENTSIZE_UNKNOWN
-    // through as _extrLen = ULLONG_MAX, and startWrite() then rejects a perfectly
-    // good local image with "Storage capacity is not large enough".
-    if (fcs == ZSTD_CONTENTSIZE_ERROR)
-    {
-        qDebug() << "Unable to parse .zst file (invalid or truncated frames)";
-        return;
-    }
-
-    if (fcs == ZSTD_CONTENTSIZE_UNKNOWN)
-    {
-        // Size not recorded in the frame headers (streaming-compressed input).
-        // Leave _extrLen unknown and let progress fall back to the download size.
-        qDebug() << "Parsed .zst file. Uncompressed size: unknown (FCS not present)";
-        return;
-    }
-
-    if (fcs == 0)
-    {
-        qDebug() << "Unable to determine decompressed size of .zst file";
-        return;
-    }
-
-    _extrLen = fcs;
-    qDebug() << "Parsed .zst file. Uncompressed size:" << _extrLen;
+    _extrLen = imagesize::parseZstd(_src.toLocalFile());
 }
 
 bool ImageWriter::isOnline()

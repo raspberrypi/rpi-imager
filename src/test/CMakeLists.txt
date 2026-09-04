@@ -1248,6 +1248,32 @@ target_compile_features(bmap_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(bmap_test)
 
+# ── image size estimation ───────────────────────────────────────────────────
+# Decides whether an image is accepted for a given card, so a wrong answer
+# either rejects a good image or lets a doomed write start.
+add_executable(image_size_parser_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imagesizeparser.cpp
+    image_size_parser_test.cpp
+)
+
+target_include_directories(image_size_parser_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${LibArchive_INCLUDE_DIR}
+    ${LIBLZMA_INCLUDE_DIRS}
+)
+
+target_link_libraries(image_size_parser_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${LibArchive_LIBRARIES}
+    ${LIBLZMA_LIBRARIES}
+    ${ZSTD_LIBRARIES}
+)
+
+target_compile_features(image_size_parser_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(image_size_parser_test)
+
 # ── drive format thread ─────────────────────────────────────────────────────
 # The "Erase" entry: refusing safely, and the message shown when it fails.
 add_executable(drive_format_thread_test
