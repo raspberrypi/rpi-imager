@@ -1529,6 +1529,12 @@ if(NOT BUILD_CLI_ONLY)
     target_link_libraries(picker_models_test PRIVATE Catch2::Catch2 rpi_imager_testable)
     rpi_discover_tests(picker_models_test)
 
+    # Every icon in the OS chooser comes through this.
+    add_executable(icon_fetcher_test icon_fetcher_test.cpp)
+    set_target_properties(icon_fetcher_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(icon_fetcher_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+    rpi_discover_tests(icon_fetcher_test)
+
     # The stall detector behind "it stopped at 47%".
     add_executable(write_progress_watchdog_test write_progress_watchdog_test.cpp)
     set_target_properties(write_progress_watchdog_test PROPERTIES AUTOMOC ON)
