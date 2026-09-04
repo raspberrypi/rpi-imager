@@ -266,6 +266,23 @@ TEST_CASE("launchDetached reports exec success and failure", "[platformquirks][l
                                          QStringList()) == false);
 }
 
+#ifdef PLATFORMQUIRKS_ENABLE_TEST_API
+// Declared in platformquirks_linux.cpp when test API is enabled
+namespace PlatformQuirks {
+namespace TestAPI {
+    QString xdgDataDirsForHome(const QString& home);
+}
+}
+
+TEST_CASE("XDG_DATA_DIRS rebuilt for the invoking user covers snap and flatpak", "[platformquirks][linux]") {
+    // pkexec and sudo strip XDG_DATA_DIRS; applyQuirks() restores the value a
+    // login shell would have so xdg-open can resolve snap/flatpak browsers.
+    CHECK(PlatformQuirks::TestAPI::xdgDataDirsForHome("/home/matt") ==
+          "/usr/local/share:/usr/share:/var/lib/snapd/desktop:"
+          "/var/lib/flatpak/exports/share:/home/matt/.local/share/flatpak/exports/share");
+}
+#endif // PLATFORMQUIRKS_ENABLE_TEST_API
+
 TEST_CASE("registerUriScheme writes the rpi-imager:// desktop entry", "[platformquirks][linux]") {
     // Redirect the XDG data/config dirs to a temp location so the test neither
     // pollutes nor depends on the real user environment (any update-desktop-

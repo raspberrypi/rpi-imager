@@ -198,6 +198,25 @@ namespace {
 
 namespace PlatformQuirks {
 
+// The XDG_DATA_DIRS a login shell would give this user: the spec default plus
+// the snap and flatpak export directories their profile scripts append.
+static void buildXdgDataDirs(const char* home, char* out, size_t outLen) {
+    std::snprintf(out, outLen,
+                  "/usr/local/share:/usr/share:/var/lib/snapd/desktop:"
+                  "/var/lib/flatpak/exports/share:%s/.local/share/flatpak/exports/share",
+                  home);
+}
+
+#ifdef PLATFORMQUIRKS_ENABLE_TEST_API
+namespace TestAPI {
+    QString xdgDataDirsForHome(const QString& home) {
+        char buf[1024];
+        buildXdgDataDirs(home.toUtf8().constData(), buf, sizeof(buf));
+        return QString::fromUtf8(buf);
+    }
+}
+#endif
+
 void applyQuirks() {
     // Log system information for remote debugging
     // This helps diagnose distro-specific issues from user reports
@@ -284,7 +303,19 @@ void applyQuirks() {
                 ::setenv("XDG_CACHE_HOME", xdgCacheHome, 1);
                 ::setenv("XDG_CONFIG_HOME", xdgConfigHome, 1);
                 ::setenv("XDG_DATA_HOME", xdgDataHome, 1);
-                
+
+                // sudo and pkexec strip XDG_DATA_DIRS, and the snap/flatpak
+                // directories only get added to it by login-shell profile
+                // scripts. Without them xdg-open and GIO cannot resolve the
+                // browser's .desktop file and hand https URLs to whatever
+                // claims text/html, typically a text editor (#1447). Restore
+                // the search path the user's own shell would have.
+                if (!::getenv("XDG_DATA_DIRS")) {
+                    char xdgDataDirs[1024];
+                    buildXdgDataDirs(pwResult->pw_dir, xdgDataDirs, sizeof(xdgDataDirs));
+                    ::setenv("XDG_DATA_DIRS", xdgDataDirs, 1);
+                }
+
                 // Set XDG_RUNTIME_DIR to point to the original user's runtime directory
                 // This is crucial for D-Bus session bus communication
                 ::setenv("XDG_RUNTIME_DIR", xdgRuntimeDir, 1);
@@ -1299,6 +1330,7 @@ static bool openUrlAsOriginalUser(const QString& url) {
     const QString display = env.value(QStringLiteral("DISPLAY"));
     const QString waylandDisplay = env.value(QStringLiteral("WAYLAND_DISPLAY"));
     const QString xauthority = env.value(QStringLiteral("XAUTHORITY"));
+    const QString xdgDataDirs = env.value(QStringLiteral("XDG_DATA_DIRS"));
 
     // runuser -u <user> -- env VAR=value ... xdg-open <url>
     // runuser preserves more than `pkexec --user` and needs no auth when root.
@@ -1314,6 +1346,8 @@ static bool openUrlAsOriginalUser(const QString& url) {
         envArgs << QStringLiteral("WAYLAND_DISPLAY=%1").arg(waylandDisplay);
     if (!xauthority.isEmpty())
         envArgs << QStringLiteral("XAUTHORITY=%1").arg(xauthority);
+    if (!xdgDataDirs.isEmpty())
+        envArgs << QStringLiteral("XDG_DATA_DIRS=%1").arg(xdgDataDirs);
     envArgs << QStringLiteral("xdg-open") << url;
 
     QStringList runuserArgs;
