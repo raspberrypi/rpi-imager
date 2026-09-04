@@ -25,6 +25,7 @@
 #include <QCryptographicHash>
 #include <QTimeZone>
 #include "signal_log.h"
+#include "local_http_server.h"
 #include <QProcess>
 #include "fixture_process.h"
 #include <QDir>
@@ -3057,4 +3058,212 @@ TEST_CASE("A write with no customisation leaves the image alone", "[imagewriter]
     // Nothing was asked for, so nothing should have been inserted.
     const QByteArray written = fx.targetBytes();
     CHECK_FALSE(written.contains(QByteArray("FIRSTRUNSH")));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Writing an image the user chose from the OS list
+//
+// Everything above hands startWrite() a local file, which skips the half of
+// it that exists for a remote image: the hash the manifest promised, the
+// cache the download is written into as it goes, and the download progress
+// the UI shows for minutes at a time.
+//
+// That is the path almost every real write takes. A hash check that does not
+// happen means a corrupted download is written to the card and reported as
+// successful, which is the same silent failure as a truncated archive but
+// arrives over the wire instead of off the disk.
+//
+// A throwaway server on loopback reaches all of it without a network.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("An image fetched over HTTP is written to the card", "[imagewriter][http]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"),
+                        QDir(served.path()).filePath(QStringLiteral("os.img.xz"))));
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl(QString::fromUtf8(server.urlFor(QStringLiteral("os.img.xz")))),
+             0, kFixturePayload, sha256HexOf(fixturePayload()));
+    w.setDst(target, kFixturePayload);
+    REQUIRE(w.readyToWrite());
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    QFile got(target);
+    REQUIRE(got.open(QIODevice::ReadOnly));
+    CHECK(got.read(qint64(kFixturePayload)) == fixturePayload());
+}
+
+TEST_CASE("A download whose hash does not match is refused", "[imagewriter][http]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"),
+                        QDir(served.path()).filePath(QStringLiteral("os.img.xz"))));
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    // The manifest promises a hash the served bytes do not have -- a
+    // corrupted mirror, or the wrong file behind the right URL.
+    w.setSrc(QUrl(QString::fromUtf8(server.urlFor(QStringLiteral("os.img.xz")))),
+             0, kFixturePayload,
+             QByteArray("0000000000000000000000000000000000000000000000000000000000000000"));
+    w.setDst(target, kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+
+    // Reporting success here writes an image nobody vouched for.
+    CHECK(out.failed);
+    CHECK_FALSE(out.succeeded);
+}
+
+TEST_CASE("An image that is not on the server is reported", "[imagewriter][http]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl(QString::fromUtf8(server.urlFor(QStringLiteral("absent.img.xz")))),
+             0, kFixturePayload);
+    w.setDst(target, kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+
+    // A 404 must be an error, not an empty card written successfully.
+    CHECK(out.failed);
+    CHECK_FALSE(out.succeeded);
+}
+
+TEST_CASE("Download progress is reported to the UI", "[imagewriter][http]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    REQUIRE(QFile::copy(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"),
+                        QDir(served.path()).filePath(QStringLiteral("os.img.xz"))));
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile t(target);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.resize(qint64(kFixturePayload)));
+    t.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl(QString::fromUtf8(server.urlFor(QStringLiteral("os.img.xz")))),
+             0, kFixturePayload, sha256HexOf(fixturePayload()));
+    w.setDst(target, kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+    REQUIRE(out.succeeded);
+
+    // Without this the progress bar sits at zero for the whole download and
+    // the write looks hung.
+    bool sawDownload = false;
+    for (const QString &k : out.progressKinds)
+        if (k.startsWith(QStringLiteral("download ")))
+            sawDownload = true;
+    CHECK(sawDownload);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A zstd image whose size is not recorded in the frame
+//
+// zstd only writes the uncompressed size into the frame header when it knows
+// it up front. Compress by piping -- "cat x.img | zstd" -- and it does not,
+// so ZSTD_findDecompressedSize() returns ZSTD_CONTENTSIZE_UNKNOWN, which is
+// (0ULL - 1) rather than 0 or a negative.
+//
+// Taken as a size, that is 16 exabytes. The user sees a card described as
+// needing 16,777,216 TB, and the capacity check in startWrite() refuses a
+// perfectly good image (raspberrypi/rpi-imager#1726).
+//
+// imagesizeparser has its own case for this. This one is the level the user
+// actually meets it at: the size ImageWriter derives, and whether the write
+// is allowed to start.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A zstd image with no recorded size does not report a huge one", "[imagewriter][archive][zstd]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB-nofcs.img.zst"));
+    ImageWriter w(nullptr);
+    w.setSrc(fx.archiveUrl());
+
+    // Unknown is unknown: the progress bar falls back to the download size
+    // rather than scaling against a number from nowhere.
+    CHECK_FALSE(w.isExtractSizeKnown());
+}
+
+TEST_CASE("A zstd image with no recorded size is not refused for capacity", "[imagewriter][archive][zstd]")
+{
+    ArchiveFixture fx(QStringLiteral("pattern-1MiB-nofcs.img.zst"));
+    ImageWriter w(nullptr);
+    w.setSrc(fx.archiveUrl());
+
+    // This is the reported symptom. An unknown size must not become
+    // ULLONG_MAX and fail the "will it fit" comparison against every card
+    // the user owns.
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), 8ULL * 1024 * 1024 * 1024));
+    CHECK_FALSE(refusedAsTooSmall(w, fx.target(), 2ULL * 1024 * 1024));
+}
+
+TEST_CASE("A zstd image with no recorded size still writes", "[imagewriter][archive][zstd]")
+{
+    ExtractFixture fx(QStringLiteral("pattern-1MiB-nofcs.img.zst"));
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.archiveUrl());
+    w.setDst(fx.target(), kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // Not knowing the size up front must not change the bytes written.
+    CHECK(fx.written() == fixturePayload());
 }
