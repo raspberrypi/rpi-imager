@@ -22,6 +22,9 @@
 #include "app_resources.h"
 #include "drivelistmodel.h"
 
+#include <QCryptographicHash>
+#include <QProcess>
+#include "fixture_process.h"
 #include <QDir>
 #include <QFile>
 #include <QEventLoop>
@@ -335,6 +338,11 @@ public:
     void feedSubList(const QByteArray &json, const QUrl &url)
     {
         onOsListFetchComplete(json, url, url);
+    }
+
+    void reportOsListFailure(const QString &message)
+    {
+        onOsListFetchError(message, osListUrl());
     }
 };
 
@@ -1684,4 +1692,303 @@ TEST_CASE("A custom fastboot gadget path persists", "[imagewriter][settings]")
     CHECK(w.getDebugCustomFastbootGadget() == path);
     w.setDebugCustomFastbootGadget(QString());
     CHECK(w.getDebugCustomFastbootGadget().isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// The write-start body, by configuration
+//
+// startWrite() defers to _continueStartWriteAfterCacheVerification(), which
+// is where the source is resolved, the thread chosen and verification wired
+// up. A plain uncompressed local image takes one narrow path through it;
+// these take the others.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A compressed image and a target, so the decompressing thread is chosen
+// rather than the plain local-file one.
+class CompressedWriteFixture
+{
+public:
+    explicit CompressedWriteFixture(const char *tool = "xz")
+    {
+        REQUIRE(_dir.isValid());
+        const QString raw = QDir(_dir.path()).filePath(QStringLiteral("image.img"));
+        _target = QDir(_dir.path()).filePath(QStringLiteral("target.img"));
+
+        _payload.reserve(kSize);
+        for (int i = 0; i < kSize; ++i)
+            _payload.append(char('A' + (i * 13) % 26));
+
+        QFile s(raw);
+        REQUIRE(s.open(QIODevice::WriteOnly));
+        REQUIRE(s.write(_payload) == _payload.size());
+        s.close();
+
+        _hash = QCryptographicHash::hash(_payload, QCryptographicHash::Sha256).toHex();
+
+        QProcess p;
+        p.start(QStringLiteral("/bin/sh"),
+                {QStringLiteral("-c"),
+                 QStringLiteral("%1 -k -f %2").arg(QString::fromLatin1(tool), raw)});
+        REQUIRE(p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
+        REQUIRE(p.exitCode() == 0);
+
+        _source = raw + (qstrcmp(tool, "gzip") == 0 ? QStringLiteral(".gz")
+                                                    : QStringLiteral(".xz"));
+        REQUIRE(QFile::exists(_source));
+
+        QFile t(_target);
+        REQUIRE(t.open(QIODevice::WriteOnly));
+        REQUIRE(t.write(QByteArray(kSize, '\0')) == kSize);
+        t.close();
+    }
+
+    static constexpr int kSize = 2 * 1024 * 1024;
+    QUrl sourceUrl() const { return QUrl::fromLocalFile(_source); }
+    QString target() const { return _target; }
+    QByteArray hash() const { return _hash; }
+    const QByteArray &payload() const { return _payload; }
+
+private:
+    QTemporaryDir _dir;
+    QString _source, _target;
+    QByteArray _payload, _hash;
+};
+
+} // namespace
+
+TEST_CASE("A compressed image is decompressed on the way to the card",
+          "[imagewriter][write]")
+{
+    // Chooses the extracting thread rather than the plain local-file one,
+    // which is the path nearly every real image takes.
+    CompressedWriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, CompressedWriteFixture::kSize);
+    w.setDst(fx.target(), CompressedWriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w, 600000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    CHECK(out.succeeded);
+
+    QFile t(fx.target());
+    REQUIRE(t.open(QIODevice::ReadOnly));
+    CHECK(t.read(CompressedWriteFixture::kSize) == fx.payload());
+}
+
+TEST_CASE("A gzip image is decompressed too", "[imagewriter][write]")
+{
+    CompressedWriteFixture fx("gzip");
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, CompressedWriteFixture::kSize);
+    w.setDst(fx.target(), CompressedWriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w, 600000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("A write with the right hash is accepted", "[imagewriter][write]")
+{
+    // Supplying an expected hash turns on the verification wiring, which is
+    // a different path through the write setup than an unverified write.
+    CompressedWriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.sourceUrl(), 0, CompressedWriteFixture::kSize, fx.hash());
+    w.setDst(fx.target(), CompressedWriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w, 600000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    CHECK(out.succeeded);
+}
+
+TEST_CASE("A write whose image does not match its hash is refused",
+          "[imagewriter][write]")
+{
+    // The download was corrupted in transit or the repository is serving
+    // something else. Reporting success here hands the user a card built
+    // from bytes nobody vouched for.
+    CompressedWriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.sourceUrl(), 0, CompressedWriteFixture::kSize,
+             QByteArray("0000000000000000000000000000000000000000000000000000000000000000"));
+    w.setDst(fx.target(), CompressedWriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w, 600000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(out.succeeded);
+    CHECK(out.failed);
+}
+
+TEST_CASE("A source file that vanished before the write starts is reported",
+          "[imagewriter][write]")
+{
+    // Validated before any thread is spawned, so the user is told rather
+    // than watching a write that cannot begin.
+    WriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(QStringLiteral("/nonexistent-9f2a/gone.img")),
+             0, WriteFixture::kSize);
+    w.setDst(fx.target(), WriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w, 60000);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(out.failed);
+    CHECK_FALSE(out.errors.isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// URLs arriving from outside the application
+//
+// handleIncomingUrl() is the rpi-imager:// scheme handler: a link somebody
+// clicks, or a hand-off from another application. It can point the OS list
+// at a different repository and carry a Connect token, so what it accepts
+// decides which images the user is offered and which organisation a device
+// is enrolled into. Neither is a decision the sender should get to make
+// unchecked.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A well-formed repository URL is accepted", "[imagewriter][url]")
+{
+    ImageWriter w(nullptr);
+    QStringList accepted;
+    QObject::connect(&w, &ImageWriter::repositoryUrlReceived,
+                     [&accepted](QString u) { accepted << u; });
+
+    w.handleIncomingUrl(QUrl(QStringLiteral(
+        "rpi-imager://open?repo=https://example.com/os_list.json")));
+
+    INFO("accepted: " << accepted.join(QStringLiteral(", ")).toStdString());
+    CHECK(accepted.size() == 1);
+}
+
+TEST_CASE("Repository URLs that are not http(s) JSON are refused",
+          "[imagewriter][url]")
+{
+    // The repository decides which images the user is offered, so a link
+    // from outside must not be able to point it anywhere it likes.
+    ImageWriter w(nullptr);
+    QStringList accepted;
+    QObject::connect(&w, &ImageWriter::repositoryUrlReceived,
+                     [&accepted](QString u) { accepted << u; });
+
+    const QStringList hostile = {
+        QStringLiteral("rpi-imager://open?repo=file:///etc/passwd"),
+        QStringLiteral("rpi-imager://open?repo=javascript:alert(1)"),
+        QStringLiteral("rpi-imager://open?repo=ftp://example.com/os_list.json"),
+        // Right scheme, but not a manifest.
+        QStringLiteral("rpi-imager://open?repo=https://example.com/payload.sh"),
+        QStringLiteral("rpi-imager://open?repo=https://example.com/"),
+        // Whitespace smuggling.
+        QStringLiteral("rpi-imager://open?repo=https://example.com/a.json%20extra"),
+    };
+
+    for (const QString &u : hostile) {
+        INFO("url: " << u.toStdString());
+        w.handleIncomingUrl(QUrl(u));
+    }
+
+    INFO("accepted: " << accepted.join(QStringLiteral(", ")).toStdString());
+    CHECK(accepted.isEmpty());
+}
+
+TEST_CASE("A repository URL with a query or fragment is still accepted",
+          "[imagewriter][url]")
+{
+    // Mirrors and CDNs append these; refusing them would reject legitimate
+    // manifests.
+    ImageWriter w(nullptr);
+    QStringList accepted;
+    QObject::connect(&w, &ImageWriter::repositoryUrlReceived,
+                     [&accepted](QString u) { accepted << u; });
+
+    w.handleIncomingUrl(QUrl(QStringLiteral(
+        "rpi-imager://open?repo=https://example.com/os_list.json%3Fv%3D2")));
+
+    INFO("accepted: " << accepted.join(QStringLiteral(", ")).toStdString());
+    CHECK(accepted.size() == 1);
+}
+
+TEST_CASE("A URL carrying nothing of interest is ignored", "[imagewriter][url]")
+{
+    // Not named "signals": that is a Qt keyword macro expanding to public.
+    ImageWriter w(nullptr);
+    int emitted = 0;
+    QObject::connect(&w, &ImageWriter::repositoryUrlReceived, [&emitted](QString) { ++emitted; });
+    QObject::connect(&w, &ImageWriter::connectTokenConflictDetected,
+                     [&emitted](QString) { ++emitted; });
+
+    CHECK_NOTHROW(w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://open"))));
+    CHECK_NOTHROW(w.handleIncomingUrl(QUrl()));
+    CHECK(emitted == 0);
+}
+
+TEST_CASE("A local file that is not a manifest is ignored", "[imagewriter][url]")
+{
+    // Dropping an arbitrary file on the application must not be taken as an
+    // OS list.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString notJson = QDir(dir.path()).filePath(QStringLiteral("notes.txt"));
+    QFile f(notJson);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write("nothing to see");
+    f.close();
+
+    ImageWriter w(nullptr);
+    const QUrl before = w.osListUrl();
+    CHECK_NOTHROW(w.handleIncomingUrl(QUrl::fromLocalFile(notJson)));
+    CHECK(w.osListUrl() == before);
+}
+
+TEST_CASE("A local manifest that is not there changes nothing",
+          "[imagewriter][url]")
+{
+    ImageWriter w(nullptr);
+    const QUrl before = w.osListUrl();
+    CHECK_NOTHROW(w.handleIncomingUrl(
+        QUrl::fromLocalFile(QStringLiteral("/nonexistent-9f2a/os_list.json"))));
+    CHECK(w.osListUrl() == before);
+}
+
+// ══════════════════════════════════════════════════════════════
+// When the OS list cannot be fetched
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A failed OS list fetch still leaves a usable chooser",
+          "[imagewriter][oslist]")
+{
+    // Offline, or the repository is down. The chooser must still offer the
+    // built-in entries rather than coming up empty with no explanation.
+    FeedableImageWriter w;
+    w.reportOsListFailure(QStringLiteral("Could not resolve host"));
+
+    const QStringList names = namesIn(w.getFilteredOSlistDocument());
+    INFO("offered: " << names.join(QStringLiteral(", ")).toStdString());
+    CHECK_FALSE(names.isEmpty());
+}
+
+TEST_CASE("A failed fetch does not discard a list already loaded",
+          "[imagewriter][oslist]")
+{
+    // A later refresh failing must not empty a chooser that was working:
+    // the user would rather see yesterday's list than none.
+    FeedableImageWriter w;
+    w.feedOsList(taggedOsList());
+    const int before = namesIn(w.getFilteredOSlistDocument()).size();
+    REQUIRE(before > 0);
+
+    w.reportOsListFailure(QStringLiteral("Network unreachable"));
+
+    const int after = namesIn(w.getFilteredOSlistDocument()).size();
+    INFO("before " << before << ", after " << after);
+    CHECK(after == before);
 }
