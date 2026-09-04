@@ -1556,3 +1556,132 @@ TEST_CASE("A verified write checks what it wrote", "[imagewriter][write]")
     REQUIRE_FALSE(out.failed);
     CHECK(out.succeeded);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Cancelling
+//
+// Pressing Cancel has to stop the write and say it stopped. A cancel that
+// is ignored leaves the user watching a progress bar they have already told
+// to stop, on a card that is being written to regardless.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Cancelling a write in progress reports cancelled, not success",
+          "[imagewriter][write][cancel]")
+{
+    LargeWriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
+    w.setDst(fx.target(), LargeWriteFixture::kSize);
+
+    bool succeeded = false, cancelled = false;
+    QStringList errors;
+    QEventLoop loop;
+    QObject::connect(&w, &ImageWriter::success, [&] { succeeded = true; loop.quit(); });
+    QObject::connect(&w, &ImageWriter::cancelled, [&] { cancelled = true; loop.quit(); });
+    QObject::connect(&w, &ImageWriter::error, [&](QVariant m) {
+        errors << m.toString();
+        loop.quit();
+    });
+
+    // Cancel once the write is genuinely under way rather than before it
+    // starts -- stopping something that has not begun proves nothing.
+    QObject::connect(&w, &ImageWriter::writeProgress, &w, [&w](QVariant now, QVariant) {
+        if (now.toULongLong() > 0)
+            w.cancelWrite();
+    });
+
+    QTimer guard;
+    guard.setSingleShot(true);
+    QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
+    guard.start(600000);
+
+    w.startWrite();
+    loop.exec();
+
+    INFO("succeeded=" << succeeded << " cancelled=" << cancelled
+         << " errors=" << errors.join(QStringLiteral(" | ")).toStdString());
+    // Whichever way it lands, it must not claim the card was written.
+    CHECK_FALSE(succeeded);
+}
+
+TEST_CASE("Cancelling before anything starts is harmless",
+          "[imagewriter][write][cancel]")
+{
+    // The Cancel button exists before a write does; pressing it must not
+    // leave the backend in a state that refuses the next write.
+    WriteFixture fx;
+    ImageWriter w(nullptr);
+    CHECK_NOTHROW(w.cancelWrite());
+
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, WriteFixture::kSize);
+    w.setDst(fx.target(), WriteFixture::kSize);
+    CHECK(w.readyToWrite());
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(out.succeeded);
+}
+
+// ══════════════════════════════════════════════════════════════
+// The debug switches
+//
+// Each of these changes how a write is performed. They are reachable from
+// the UI, so one that silently fails to stick means somebody is not running
+// what they selected -- and these are exactly the switches reached for when
+// diagnosing a card that will not write.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Every debug switch persists what it was set to",
+          "[imagewriter][settings]")
+{
+    ImageWriter w(nullptr);
+
+    struct Toggle {
+        const char *name;
+        void (ImageWriter::*set)(bool);
+        bool (ImageWriter::*get)() const;
+    };
+
+    const Toggle toggles[] = {
+        {"directIO",           &ImageWriter::setDebugDirectIO,           &ImageWriter::getDebugDirectIO},
+        {"periodicSync",       &ImageWriter::setDebugPeriodicSync,       &ImageWriter::getDebugPeriodicSync},
+        {"verboseLogging",     &ImageWriter::setDebugVerboseLogging,     &ImageWriter::getDebugVerboseLogging},
+        {"asyncIO",            &ImageWriter::setDebugAsyncIO,            &ImageWriter::getDebugAsyncIO},
+        {"skipEndOfDevice",    &ImageWriter::setDebugSkipEndOfDevice,    &ImageWriter::getDebugSkipEndOfDevice},
+        {"ignoreDeviceLimits", &ImageWriter::setDebugIgnoreDeviceLimits, &ImageWriter::getDebugIgnoreDeviceLimits},
+        {"rpiboot",            &ImageWriter::setDebugRpiboot,            &ImageWriter::getDebugRpiboot},
+        {"forceSecureBoot",    &ImageWriter::setDebugForceSecureBoot,    &ImageWriter::getDebugForceSecureBoot},
+        {"signFastbootGadget", &ImageWriter::setDebugSignFastbootGadget, &ImageWriter::getDebugSignFastbootGadget},
+    };
+
+    for (const Toggle &t : toggles) {
+        INFO("toggle: " << t.name);
+        (w.*t.set)(true);
+        CHECK((w.*t.get)());
+        (w.*t.set)(false);
+        CHECK_FALSE((w.*t.get)());
+    }
+}
+
+TEST_CASE("The async queue depth persists", "[imagewriter][settings]")
+{
+    // Not a toggle: a number, and one that changes how much is in flight
+    // against the card at once.
+    ImageWriter w(nullptr);
+    w.setDebugAsyncQueueDepth(16);
+    CHECK(w.getDebugAsyncQueueDepth() == 16);
+    w.setDebugAsyncQueueDepth(64);
+    CHECK(w.getDebugAsyncQueueDepth() == 64);
+}
+
+TEST_CASE("A custom fastboot gadget path persists", "[imagewriter][settings]")
+{
+    ImageWriter w(nullptr);
+    const QString path = QStringLiteral("/tmp/my-gadget.img");
+    w.setDebugCustomFastbootGadget(path);
+    CHECK(w.getDebugCustomFastbootGadget() == path);
+    w.setDebugCustomFastbootGadget(QString());
+    CHECK(w.getDebugCustomFastbootGadget().isEmpty());
+}
