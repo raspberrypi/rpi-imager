@@ -23,6 +23,7 @@
 #include "drivelistmodel.h"
 
 #include <QCryptographicHash>
+#include <QTimeZone>
 #include "signal_log.h"
 #include <QProcess>
 #include "fixture_process.h"
@@ -2167,4 +2168,91 @@ TEST_CASE("Skipping the cache check falls back to the source", "[imagewriter][ca
     CHECK(finished.count() == 1);
     // Skipping means the cache is discarded unread, so the source is used.
     CHECK(fx.targetBytes() == fx.sourceBytes());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The locale data behind the customisation screen
+//
+// Picking a city on the customisation page is what fills in the timezone,
+// keyboard layout and language that get written to the card. Both functions
+// that do it read a pipe-separated resource file and had never been called.
+//
+// A malformed or truncated line there is not a crash: the city still appears
+// in the picker, selecting it silently sets nothing, and the user ends up
+// with a Pi on the wrong timezone and a keyboard that types the wrong
+// symbols. The sweep at the end of this section is as much a check on the
+// data as on the code.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("The capital-cities picker is populated", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList cities = w.getCapitalCitiesList();
+
+    REQUIRE_FALSE(cities.isEmpty());
+    CHECK(cities.contains(QStringLiteral("London (United Kingdom)")));
+
+    // Every row must carry the "City (Country)" form the picker displays;
+    // a bare city name is ambiguous across countries.
+    for (const QString &c : cities) {
+        INFO("entry: " << c.toStdString());
+        REQUIRE(c.contains(QStringLiteral(" (")));
+        REQUIRE(c.endsWith(QLatin1Char(')')));
+    }
+}
+
+TEST_CASE("A capital city resolves to a complete locale set", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QVariantMap uk = w.getLocaleDataForCapital(QStringLiteral("London (United Kingdom)"));
+
+    REQUIRE_FALSE(uk.isEmpty());
+    CHECK(uk.value(QStringLiteral("cityName")).toString() == QStringLiteral("London"));
+    CHECK(uk.value(QStringLiteral("countryName")).toString() == QStringLiteral("United Kingdom"));
+    CHECK(uk.value(QStringLiteral("countryCode")).toString() == QStringLiteral("GB"));
+    CHECK(uk.value(QStringLiteral("timezone")).toString() == QStringLiteral("Europe/London"));
+    CHECK(uk.value(QStringLiteral("language")).toString() == QStringLiteral("English"));
+    CHECK(uk.value(QStringLiteral("keyboard")).toString() == QStringLiteral("gb"));
+}
+
+TEST_CASE("The bare city name resolves the same as the displayed form", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    // QML passes back whatever the picker showed, but the lookup is also used
+    // with a plain city name.
+    CHECK(w.getLocaleDataForCapital(QStringLiteral("Paris"))
+          == w.getLocaleDataForCapital(QStringLiteral("Paris (France)")));
+}
+
+TEST_CASE("An unknown city yields nothing rather than partial data", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    // Half-filled locale data would be written to the card as though chosen.
+    CHECK(w.getLocaleDataForCapital(QStringLiteral("Atlantis (Nowhere)")).isEmpty());
+    CHECK(w.getLocaleDataForCapital(QString()).isEmpty());
+}
+
+TEST_CASE("Every city offered resolves to complete locale data", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList cities = w.getCapitalCitiesList();
+    REQUIRE(cities.size() > 100);
+
+    const QStringList required{QStringLiteral("cityName"), QStringLiteral("countryName"),
+                               QStringLiteral("countryCode"), QStringLiteral("timezone"),
+                               QStringLiteral("language"), QStringLiteral("keyboard")};
+
+    for (const QString &display : cities) {
+        INFO("city: " << display.toStdString());
+        const QVariantMap data = w.getLocaleDataForCapital(display);
+        REQUIRE_FALSE(data.isEmpty());
+        for (const QString &key : required) {
+            INFO("field: " << key.toStdString());
+            REQUIRE(data.contains(key));
+            REQUIRE_FALSE(data.value(key).toString().isEmpty());
+        }
+        // A timezone that QTimeZone does not know is one systemd-timesyncd
+        // will not either.
+        REQUIRE(QTimeZone(data.value(QStringLiteral("timezone")).toString().toUtf8()).isValid());
+    }
 }
