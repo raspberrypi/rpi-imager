@@ -2751,3 +2751,171 @@ TEST_CASE("An OS list with no os_list key yields an empty chooser, not a crash",
     // Only the two built-ins.
     CHECK(names.size() == 2);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Decompressing the image on the way to the card
+//
+// Every image the chooser offers is compressed, so the extract path is on
+// the critical route for every write that is not "Use custom" with a raw
+// .img. Each container has its own decoder inside DownloadExtractThread.
+//
+// A decoder that stops early does not report an error -- the write finishes,
+// the card is short of data, and the Pi does not boot. So these check the
+// bytes that landed, not the exit status.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// The payload every archive fixture was built from.
+QByteArray fixturePayload()
+{
+    QByteArray out;
+    out.reserve(int(kFixturePayload));
+    for (int i = 0; i < int(kFixturePayload); ++i)
+        out.append(char(65 + (qint64(i) * 7) % 26));
+    return out;
+}
+
+// Copies an archive fixture next to a target big enough to take it.
+class ExtractFixture
+{
+public:
+    explicit ExtractFixture(const QString &archiveName)
+    {
+        REQUIRE(_dir.isValid());
+        const QString from = QStringLiteral(IMAGER_TEST_DATA_DIR "/") + archiveName;
+        REQUIRE(QFile::exists(from));
+        _archive = QDir(_dir.path()).filePath(archiveName);
+        REQUIRE(QFile::copy(from, _archive));
+
+        _target = QDir(_dir.path()).filePath(QStringLiteral("target.img"));
+        QFile t(_target);
+        REQUIRE(t.open(QIODevice::WriteOnly));
+        REQUIRE(t.write(QByteArray(int(kFixturePayload), '\0')) == qint64(kFixturePayload));
+        t.close();
+    }
+
+    QUrl archiveUrl() const { return QUrl::fromLocalFile(_archive); }
+    QString target() const { return _target; }
+
+    QByteArray written() const
+    {
+        QFile f(_target);
+        REQUIRE(f.open(QIODevice::ReadOnly));
+        return f.read(qint64(kFixturePayload));
+    }
+
+private:
+    QTemporaryDir _dir;
+    QString _archive, _target;
+};
+
+void checkExtractsCleanly(const QString &archiveName)
+{
+    ExtractFixture fx(archiveName);
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.archiveUrl(), 0, kFixturePayload);
+    w.setDst(fx.target(), kFixturePayload);
+    REQUIRE(w.readyToWrite());
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    // Byte-for-byte, not "no error was reported".
+    CHECK(fx.written() == fixturePayload());
+}
+
+} // namespace
+
+TEST_CASE("An xz image is decompressed onto the card", "[imagewriter][extract]")
+{
+    checkExtractsCleanly(QStringLiteral("pattern-1MiB.img.xz"));
+}
+
+TEST_CASE("A gzipped image is decompressed onto the card", "[imagewriter][extract]")
+{
+    checkExtractsCleanly(QStringLiteral("pattern-1MiB.img.gz"));
+}
+
+TEST_CASE("A zstd image is decompressed onto the card", "[imagewriter][extract]")
+{
+    checkExtractsCleanly(QStringLiteral("pattern-1MiB.img.zst"));
+}
+
+TEST_CASE("A zipped image is decompressed onto the card", "[imagewriter][extract]")
+{
+    checkExtractsCleanly(QStringLiteral("pattern-1MiB.img.zip"));
+}
+
+TEST_CASE("A truncated archive fails rather than writing a short image", "[imagewriter][extract]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    // Half an xz stream: enough to start decoding, not enough to finish.
+    QFile src(QStringLiteral(IMAGER_TEST_DATA_DIR "/pattern-1MiB.img.xz"));
+    REQUIRE(src.open(QIODevice::ReadOnly));
+    const QByteArray whole = src.readAll();
+    src.close();
+    REQUIRE(whole.size() > 64);
+
+    const QString truncated = QDir(dir.path()).filePath(QStringLiteral("cut.img.xz"));
+    QFile t(truncated);
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.write(whole.left(whole.size() / 2)) > 0);
+    t.close();
+
+    const QString target = QDir(dir.path()).filePath(QStringLiteral("target.img"));
+    QFile tf(target);
+    REQUIRE(tf.open(QIODevice::WriteOnly));
+    REQUIRE(tf.write(QByteArray(int(kFixturePayload), '\0')) == qint64(kFixturePayload));
+    tf.close();
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(QUrl::fromLocalFile(truncated), 0, kFixturePayload);
+    w.setDst(target, kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+
+    QFile got(target);
+    REQUIRE(got.open(QIODevice::ReadOnly));
+    const QByteArray landed = got.read(qint64(kFixturePayload));
+    got.close();
+
+    const QByteArray expected = fixturePayload();
+    int matching = 0;
+    while (matching < landed.size() && landed.at(matching) == expected.at(matching))
+        ++matching;
+
+    INFO("reported success: " << out.succeeded << ", failed: " << out.failed);
+    INFO("bytes matching the real image: " << matching << " of " << expected.size());
+
+    // The user must be told. A silent success here is a card that looks
+    // written and will not boot -- which is what happened before the guard in
+    // LocalFileExtractThread::run(): libarchive could not extract the
+    // truncated stream, the file was taken for a raw disk image, and its
+    // compressed bytes were copied onto the card verbatim.
+    CHECK(out.failed);
+    CHECK_FALSE(out.succeeded);
+    CHECK(matching < expected.size());
+}
+
+TEST_CASE("A verified write lands the right bytes", "[imagewriter][extract]")
+{
+    ExtractFixture fx(QStringLiteral("pattern-1MiB.img.xz"));
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.archiveUrl(), 0, kFixturePayload);
+    w.setDst(fx.target(), kFixturePayload);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    REQUIRE(out.succeeded);
+
+    CHECK(fx.written() == fixturePayload());
+}

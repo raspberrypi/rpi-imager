@@ -79,6 +79,21 @@ void LocalFileExtractThread::run()
     if (isImage())
     {
         canUseArchive = _testArchiveFormat();
+
+        // _testArchiveFormat() answers "can libarchive extract this?", and a
+        // no is treated below as "then it must be a raw disk image". That is
+        // right for a .img or an .iso. It is wrong for a file whose name says
+        // it is a compressed container: the only way libarchive fails to
+        // extract one of those is that it is corrupt or incomplete, and
+        // falling through would copy the compressed bytes onto the card
+        // verbatim and report the write as successful.
+        if (!canUseArchive && _nameClaimsCompression())
+        {
+            _onDownloadError(tr("Image file is incomplete or corrupt, and could not be extracted.\n\n"
+                                "Download it again and retry."));
+            _closeFiles();
+            return;
+        }
     }
     
     if (isImage() && canUseArchive)
@@ -164,6 +179,25 @@ void LocalFileExtractThread::extractRawImageRun()
     {
         _onDownloadError(tr("Failed to read complete image file"));
     }
+}
+
+// Does the file name claim to be a compressed container? Only unambiguous
+// container suffixes count -- notably not .cache, which is whatever the last
+// download happened to be.
+bool LocalFileExtractThread::_nameClaimsCompression() const
+{
+    static const QLatin1String containers[] = {
+        QLatin1String(".zip"), QLatin1String(".xz"),  QLatin1String(".bz2"),
+        QLatin1String(".gz"),  QLatin1String(".7z"),  QLatin1String(".zst"),
+        QLatin1String(".tar"), QLatin1String(".tgz"), QLatin1String(".txz"),
+        QLatin1String(".tbz2"),
+    };
+
+    const QString name = QUrl(QString::fromLatin1(_url)).toLocalFile().toLower();
+    for (const QLatin1String &ext : containers)
+        if (name.endsWith(ext))
+            return true;
+    return false;
 }
 
 bool LocalFileExtractThread::_testArchiveFormat()
