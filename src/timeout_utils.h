@@ -169,11 +169,20 @@ TimeoutResult runWithTimeout(
     // heap-allocated slot instead, and the value is copied out only when the
     // operation actually completed -- so a timed-out or cancelled operation
     // that finishes later cannot scribble over the caller's result either.
+    //
+    // The operation itself needs the same treatment. Capturing it by
+    // reference left the detached worker calling through a reference to the
+    // caller's lambda, which is usually a temporary that dies at the end of
+    // the full expression this function was called in. The void overload
+    // above already moves the callable into the worker; this one has to hand
+    // it over the same way, or a cancelled write segfaults once the
+    // abandoned operation unblocks.
     auto slot = std::make_shared<ResultType>(result);
 
-    const TimeoutResult outcome = runWithTimeout([slot, &operation]() {
-        *slot = operation();
-    }, config);
+    const TimeoutResult outcome = runWithTimeout(
+        [slot, op = std::forward<Func>(operation)]() mutable {
+            *slot = op();
+        }, config);
 
     if (outcome == TimeoutResult::Completed)
         result = *slot;

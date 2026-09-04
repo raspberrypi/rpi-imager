@@ -184,6 +184,62 @@ TEST_CASE("cancelled operation does not write into runWithTimeout's dead frame",
   SUCCEED("reached the end without the worker taking the process down");
 }
 
+// The overload that captures a result has a second thing to keep alive: the
+// operation itself. It used to hand the worker a reference to the caller's
+// lambda, which at every call site here is a temporary that dies at the end
+// of the full expression -- long before a cancelled worker gets round to
+// calling it. DownloadThread::_openAndPrepareDevice() hit this when a write
+// was cancelled while the end of the card was being zeroed, and took the
+// process down about one run in three.
+//
+// This case exercises that path but does NOT reproduce the crash: it passes
+// against the broken version too, including under clang's ASan with
+// stack-use-after-return detection. Whether the abandoned worker reads
+// anything poisoned depends on what the compiler did with the temporary, and
+// here it does not. The reproducer is the DownloadThread cancellation case
+// in download_thread_test; this one is here for the cancel path through the
+// result-capturing overload, and to pin that an abandoned operation cannot
+// reach the caller's result.
+// Stands in for DownloadThread::_openAndPrepareDevice(): it makes the call
+// and then returns. That is the part that matters -- the temporary lambda
+// lives in *this* frame, so it is gone the moment this returns, while the
+// detached worker still holds whatever runWithTimeout kept.
+__attribute__((noinline))
+static TimeoutResult prepareWithResult(const std::shared_ptr<Gate> &gate,
+                                       std::atomic<bool> *cancel, int &out) {
+  int local = 0;
+  const TimeoutResult outcome = runWithTimeout(
+      [gate]() { gate->wait(); return 7; },
+      local,
+      TimeoutConfig(600).withCancelFlag(cancel));
+  out = local;
+  return outcome;
+}
+
+TEST_CASE("cancelled operation with a result leaves it untouched",
+          "[timeout-utils]") {
+  auto gate = std::make_shared<Gate>();
+  std::atomic<bool> cancel{false};
+  std::thread canceller([&cancel]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    cancel.store(true);
+  });
+
+  int result = -1;
+  const TimeoutResult outcome = prepareWithResult(gate, &cancel, result);
+  canceller.join();
+
+  REQUIRE(outcome == TimeoutResult::Cancelled);
+  // The abandoned operation must not reach the caller's variable either.
+  CHECK(result == 0);
+
+  // Reuse the stack the returned frame occupied, then let the worker run.
+  clobberDeadFrame();
+  gate->release();
+  std::this_thread::sleep_for(kWorkerSettleTime);
+  SUCCEED("the abandoned worker ran its own copy of the operation");
+}
+
 // Control case. Exercises the same machinery on the path where the worker is
 // joined, so its state is still alive when it writes. A sanitiser firing here
 // would mean the harness above is at fault rather than runWithTimeout.
