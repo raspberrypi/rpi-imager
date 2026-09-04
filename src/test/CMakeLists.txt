@@ -1128,6 +1128,47 @@ if(RPI_IMAGER_COVERAGE)
 endif()
 
 # ============================================================================
+# PerformanceStats
+# ============================================================================
+# The telemetry recorder: session lifecycle, event timing, per-phase
+# throughput sampling and JSON export. It touches neither a device nor the
+# network, so all of it is reachable from a plain unit test -- it had simply
+# never had one, and its 735 branches were the largest block of genuinely
+# testable uncovered code in the tree.
+
+add_executable(performance_stats_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../performancestats.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../performancestats.cpp
+    performance_stats_test.cpp
+)
+
+set_target_properties(performance_stats_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(performance_stats_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(performance_stats_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(performance_stats_test PRIVATE cxx_std_20)
+target_compile_options(performance_stats_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+rpi_discover_tests(performance_stats_test)
+
+add_custom_target(test_performance_stats
+    COMMAND performance_stats_test
+    DEPENDS performance_stats_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running PerformanceStats tests"
+)
+
+# ============================================================================
 # FAT driver, against a filesystem in a scratch file
 # ============================================================================
 # DeviceWrapperFatPartition is the imager's own FAT implementation -- what
@@ -1186,6 +1227,33 @@ add_custom_target(test_fat_partition_image
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Running FAT driver tests against a scratch filesystem"
 )
+
+# ============================================================================
+# SystemMemoryManager
+# ============================================================================
+# Sizes every buffer in the write path. The memory-tier branches read the
+# host's real RAM and so are not selectable from a test, but the
+# parameterised sizing -- verify buffer by file size, ring buffer slots by
+# slot size, async queue depth by block size -- is fully drivable.
+
+add_executable(system_memory_manager_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../systemmemorymanager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../systemmemorymanager.cpp
+    system_memory_manager_test.cpp
+)
+
+target_include_directories(system_memory_manager_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(system_memory_manager_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(system_memory_manager_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(system_memory_manager_test)
 
 # ============================================================================
 # SecureBoot
