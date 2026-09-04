@@ -90,9 +90,9 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
     const std::optional<std::string>& eepromVersion) const
 {
     std::vector<ManifestEntry> entries;
-    const std::string usbboot(USBBOOT_RAW_BASE);
-    const std::string provisioner(PROVISIONER_RAW_BASE);
-    const std::string eeprom(EEPROM_RAW_BASE);
+    const std::string usbboot(usbbootBase());
+    const std::string provisioner(provisionerBase());
+    const std::string eeprom(eepromBase());
 
     // Bootcode file — required for all chip generations.
     // BCM2836_7: downloaded directly from the usbboot msd/ directory; this is
@@ -972,7 +972,7 @@ std::optional<std::string> FirmwareManager::resolveLatestEepromVersion(
     const std::string firmwareDir = (chip == ChipGeneration::BCM2712)
                                         ? "firmware-2712"
                                         : "firmware-2711";
-    const std::string url = std::string(EEPROM_RAW_BASE) + firmwareDir + "/versions.txt";
+    const std::string url = eepromBase() + firmwareDir + "/versions.txt";
 
     // Cache the tiny metadata file under the cache root so it can be
     // diffed against the persisted sidecar on the next run.

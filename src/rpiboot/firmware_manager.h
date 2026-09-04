@@ -83,6 +83,21 @@ public:
     static constexpr const char* PROVISIONER_RAW_BASE =
         "https://github.com/raspberrypi/rpi-sb-provisioner/raw/refs/heads/main/";
 
+    // Where the firmware comes from, as overridable accessors rather than
+    // the constants directly.
+    //
+    // ensureAvailable() is the largest untested thing in this class, and the
+    // only reason is that these are compile-time constants pointing at
+    // github.com: nothing short of real network access could reach it.
+    // Reading them through virtuals lets a test point the whole download and
+    // cache path at a local server. Production behaviour is unchanged --
+    // these return exactly the constants above.
+protected:
+    virtual std::string usbbootBase() const { return USBBOOT_RAW_BASE; }
+    virtual std::string eepromBase() const { return EEPROM_RAW_BASE; }
+    virtual std::string provisionerBase() const { return PROVISIONER_RAW_BASE; }
+
+
 // Protected rather than private so a test can subclass and drive the cache
 // logic directly.
 //
