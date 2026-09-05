@@ -9,6 +9,10 @@
 #include <atomic>
 #include <map>
 #include <QThread>
+
+#include <memory>
+
+namespace rpiboot { class IUsbContext; }
 #include <QMutex>
 #include <QWaitCondition>
 #include "drivelist/drivelist.h"
@@ -111,6 +115,15 @@ protected:
     std::map<std::string, FastbootDeviceCache> _fastbootCache; // key = port path string
 
     virtual void run() override;
+
+    // Where the USB bus comes from. Behind a factory so the fastboot scan
+    // can be driven against a bus a test describes -- the identification
+    // below decides whether a device is offered as somewhere to write.
+    virtual std::unique_ptr<rpiboot::IUsbContext> makeUsbContext();
+
+    // The fastboot half of a scan: enumerate, identify, cache, and append
+    // whatever storage the genuine Pi gadgets report.
+    void appendFastbootDevices(std::vector<Drivelist::DeviceDescriptor> &driveList);
 
 signals:
     void newDriveList(std::vector<Drivelist::DeviceDescriptor> list);
