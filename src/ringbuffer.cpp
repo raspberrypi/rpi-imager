@@ -242,10 +242,22 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
         }
     }
     
-    if (_cancelled || _stallTimeoutExceeded) {
+    if (_cancelled) {
         return nullptr;
     }
-    
+
+    // A stall is terminal for the write, but whatever is already committed
+    // is still good data -- downloaded, decompressed and paid for. Hand it
+    // back and refuse only once the buffer is empty, rather than stranding
+    // it behind the flag.
+    //
+    // The empty case has to return here rather than fall through: the wait
+    // loop above will not wait while the stall flag is set, so the
+    // spurious-wakeup retry below would recurse without bound.
+    if (_stallTimeoutExceeded && _committedCount == 0) {
+        return nullptr;
+    }
+
     // Check if producer is done and no more data
     if (_committedCount == 0) {
         if (_producerDone) {

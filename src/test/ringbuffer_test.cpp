@@ -429,10 +429,10 @@ TEST_CASE("Cancelling beats the stall timeout", "[ringbuffer][stall]") {
     CHECK_FALSE(rb.isStallTimeoutExceeded());
 }
 
-TEST_CASE("A producer stall refuses data already committed", "[ringbuffer][stall]") {
+TEST_CASE("A stall still hands back data already committed", "[ringbuffer][stall]") {
     RingBuffer rb(2, 4096, 4096, 300);
 
-    // Fill every slot: this is what a producer stall means -- the buffer is
+    // Fill every slot: that is what a producer stall means -- the buffer is
     // full because the consumer is not draining it.
     for (int i = 0; i < 2; ++i) {
         RingBuffer::Slot *slot = rb.acquireWriteSlot(100);
@@ -442,24 +442,22 @@ TEST_CASE("A producer stall refuses data already committed", "[ringbuffer][stall
     REQUIRE(rb.acquireWriteSlot(0) == nullptr);
     REQUIRE(rb.getStallType() == RingBuffer::StallType::ProducerStall);
 
-    // Both slots still hold downloaded, decompressed data. The consumer is
-    // nonetheless refused: acquireReadSlot() checks the stall flag before it
-    // checks whether anything is committed.
-    //
-    // Recorded rather than endorsed, and worth stating precisely. The
-    // watchdog's drain-and-hot-swap rung drains the file-operations async
-    // queue, not this buffer, so it is not blocked by this. What is lost is
-    // the buffer's own contents -- numSlots * slotSize of downloaded,
-    // decompressed data -- which becomes unreachable except through reset().
-    //
-    // That is defensible while a stall is terminal for the write: the
-    // operation is failing anyway. It would stop being defensible if
-    // anything ever wanted to salvage a stalled write in place, because the
-    // flag is checked before _committedCount and there is no way to ask for
-    // "what you already have".
+    // Both slots still hold downloaded, decompressed data. The stall is
+    // terminal for the write, but stranding what is already paid for helps
+    // nobody, so the consumer can still drain it.
+    RingBuffer::Slot *first = rb.acquireReadSlot(0);
+    REQUIRE(first != nullptr);
+    rb.releaseReadSlot(first);
+
+    RingBuffer::Slot *second = rb.acquireReadSlot(0);
+    REQUIRE(second != nullptr);
+    rb.releaseReadSlot(second);
+
+    // Once it is empty the flag takes over and the consumer stops, rather
+    // than waiting on a producer that has already given up.
     CHECK(rb.acquireReadSlot(0) == nullptr);
 
-    // Only a reset makes the buffered data reachable again.
-    rb.reset();
-    CHECK_FALSE(rb.isStallTimeoutExceeded());
+    // The producer stays refused throughout: adding more to a dead pipeline
+    // is what the stall exists to prevent.
+    CHECK(rb.acquireWriteSlot(0) == nullptr);
 }
