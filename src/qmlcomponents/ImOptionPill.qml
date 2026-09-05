@@ -210,7 +210,7 @@ Item {
             Accessible.description: ""
             Accessible.checkable: true
             Accessible.checked: pill.checked
-            Accessible.onToggleAction: toggle()
+            Accessible.onToggleAction: pill.activate()
             
             onToggled: {
                 pill.checked = checked
@@ -219,12 +219,22 @@ Item {
             
             // Focus styling handled by Material.accent color change only
 
-            Keys.onReturnPressed: toggle()
-            Keys.onEnterPressed: toggle()
+            // Not toggle(): it moves the switch without emitting toggled(),
+            // so the step is never told and pill.checked stays behind what
+            // is drawn. See ImCheckBox for the same mistake and its cost.
+            Keys.onReturnPressed: pill.activate()
+            Keys.onEnterPressed: pill.activate()
         }
 
     }
 
     function forceActiveFocus() { sw.forceActiveFocus() }
+
+    // Flip the pill the way a click does: sw.checked is bound to this, so the
+    // switch follows, and the step hears about it.
+    function activate() {
+        pill.checked = !pill.checked
+        pill.toggled(pill.checked)
+    }
 }
 

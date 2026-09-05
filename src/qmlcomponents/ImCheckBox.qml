@@ -75,11 +75,26 @@ CheckBox {
     Accessible.name: text
     Accessible.checkable: true
     Accessible.checked: checked
-    Accessible.onToggleAction: toggle()
+    // AbstractButton::toggle() flips `checked` and stops there -- toggled()
+    // belongs to the click path and is not emitted. Every keyboard route here
+    // used to call it, so the box changed on screen while nothing listening
+    // for a deliberate change was told.
+    //
+    // The storage step is why that matters: "Exclude system drives" raises its
+    // confirmation from onToggled, so unchecking it with the keyboard listed
+    // the user's system drives with no confirmation at all. Space was broken
+    // too -- the handler below shadows the native Space handling that would
+    // otherwise have gone through the click path.
+    function activate() {
+        control.checked = !control.checked
+        control.toggled()
+    }
 
-    Keys.onEnterPressed: toggle()
-    Keys.onReturnPressed: toggle()
-    Keys.onSpacePressed: toggle()
+    Accessible.onToggleAction: control.activate()
+
+    Keys.onEnterPressed: control.activate()
+    Keys.onReturnPressed: control.activate()
+    Keys.onSpacePressed: control.activate()
     
     Rectangle {
         // This rectangle serves as a high-contrast underline for focus
