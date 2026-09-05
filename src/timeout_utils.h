@@ -54,6 +54,22 @@ struct TimeoutConfig {
     
     /// How often to check for cancellation/completion (default: 100ms)
     std::chrono::milliseconds checkInterval = std::chrono::milliseconds(100);
+
+    /// How long to wait for the worker to finish before abandoning it, on
+    /// the timeout and cancellation paths (default: 2s).
+    ///
+    /// Most operations reaching those paths are not wedged at all -- a
+    /// cancellation usually arrives while a perfectly healthy write is in
+    /// flight, and it finishes in milliseconds. Waiting briefly lets the
+    /// thread be joined and everything it touched freed safely, instead of
+    /// being abandoned to run on against the caller's dying frame.
+    ///
+    /// It cannot be unbounded. A blocking pwrite or fsync on a device that
+    /// has stopped answering sits in uninterruptible sleep, where neither a
+    /// flag nor a signal will reach it, so joining unconditionally would
+    /// reintroduce exactly the hang this class exists to escape -- and in
+    /// the UI thread's path, which is worse than the error it replaces.
+    std::chrono::milliseconds joinGrace = std::chrono::milliseconds(2000);
     
     // Constructors
     TimeoutConfig() = default;
@@ -71,6 +87,10 @@ struct TimeoutConfig {
     }
     TimeoutConfig& withCancelFlag(std::atomic<bool>* flag) {
         cancelFlag = flag;
+        return *this;
+    }
+    TimeoutConfig& withJoinGrace(std::chrono::milliseconds grace) {
+        joinGrace = grace;
         return *this;
     }
     
@@ -172,11 +192,29 @@ TimeoutResult runWithTimeout(
     
     auto startTime = std::chrono::steady_clock::now();
     
+    // Give up on the worker, but try to take it with us first.
+    //
+    // Whatever put us here -- a timeout or a cancellation -- the operation
+    // is usually not stuck: a cancel typically lands while a healthy write
+    // is in flight and it finishes in milliseconds, and onTimeout has just
+    // tried to break a stuck one out. Waiting briefly turns the common case
+    // into a clean join, so the thread is gone and everything it captured
+    // can be freed with nothing still reading it. Only a worker that really
+    // is wedged gets abandoned, which is the case the ownership contract
+    // above exists for.
+    auto stopWaiting = [&worker, &future, &config](TimeoutResult outcome) {
+        if (future.wait_for(config.joinGrace) == std::future_status::ready) {
+            worker.join();
+        } else {
+            worker.detach();
+        }
+        return outcome;
+    };
+
     while (true) {
         // Check for external cancellation
         if (config.cancelFlag && config.cancelFlag->load()) {
-            worker.detach();
-            return TimeoutResult::Cancelled;
+            return stopWaiting(TimeoutResult::Cancelled);
         }
         
         // Check if operation completed
@@ -191,8 +229,7 @@ TimeoutResult runWithTimeout(
             if (config.onTimeout) {
                 config.onTimeout();
             }
-            worker.detach();
-            return TimeoutResult::TimedOut;
+            return stopWaiting(TimeoutResult::TimedOut);
         }
     }
 }

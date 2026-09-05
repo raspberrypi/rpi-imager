@@ -256,3 +256,59 @@ TEST_CASE("completed operation is clean", "[timeout-utils]") {
   REQUIRE(result == TimeoutResult::Completed);
   REQUIRE(sideEffect == 42);
 }
+
+// ── Abandoning is now the exception, not the rule ───────────────────────
+//
+// A cancellation usually arrives while a perfectly healthy operation is in
+// flight; the operation is not stuck, it is simply not finished. Detaching
+// unconditionally threw away a thread that was about to complete, and left
+// it running against the caller's dying frame. Waiting briefly instead
+// means the common case is joined and nothing outlives the call.
+
+TEST_CASE("a cancelled operation that finishes is joined, not abandoned",
+          "[timeout-utils]") {
+    std::atomic<bool> cancelled{true};          // cancelled before it starts
+    auto finished = std::make_shared<std::atomic<bool>>(false);
+
+    const auto result = rpi_imager::runWithTimeout(
+        [finished]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            finished->store(true);
+        },
+        rpi_imager::TimeoutConfig(5).withCancelFlag(&cancelled));
+
+    CHECK(result == rpi_imager::TimeoutResult::Cancelled);
+    // The point: by the time the call returns the worker is done and gone,
+    // so anything it captured is safe to destroy.
+    CHECK(finished->load());
+}
+
+TEST_CASE("an operation that will not finish is still abandoned",
+          "[timeout-utils]") {
+    // The grace period has to stay bounded. A worker wedged in a syscall
+    // that never returns must not hold the caller here -- that would be the
+    // hang this class exists to escape, moved somewhere worse.
+    auto release = std::make_shared<std::atomic<bool>>(false);
+    auto started = std::make_shared<std::atomic<bool>>(false);
+
+    const auto begin = std::chrono::steady_clock::now();
+    const auto result = rpi_imager::runWithTimeout(
+        [release, started]() {
+            started->store(true);
+            while (!release->load())
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        },
+        rpi_imager::TimeoutConfig(1).withJoinGrace(std::chrono::milliseconds(150)));
+    const auto took = std::chrono::steady_clock::now() - begin;
+
+    CHECK(result == rpi_imager::TimeoutResult::TimedOut);
+    CHECK(started->load());
+    // Returned rather than waiting for a worker that never finishes: the
+    // one second timeout plus the grace, not for ever.
+    CHECK(took < std::chrono::seconds(5));
+
+    // Let the abandoned worker go. Its state is shared, so this is safe
+    // whether it has been joined or detached -- which is the contract.
+    release->store(true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
