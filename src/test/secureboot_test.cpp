@@ -25,7 +25,9 @@
 #include <QByteArray>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDateTime>
 #include <QFile>
+#include <QRegularExpression>
 #include <QFileInfo>
 #include <QMap>
 #include <QProcess>
@@ -427,4 +429,235 @@ TEST_CASE("SecureBoot extracts every file from a boot partition", "[secureboot][
         INFO("file: " << it.key().toStdString());
         CHECK_FALSE(it.value().isEmpty());
     }
+}
+
+// ══════════════════════════════════════════════════════════════
+// The exact shape of boot.sig
+//
+// boot.sig is what a fused board checks before it will run the image beside
+// it. Three lines, in order: the image's SHA-256 in hex, a timestamp, and
+// the RSA signature. A board that rejects it does not boot, and a board
+// with its OTP already programmed does not get a second chance -- so the
+// format is worth holding to more tightly than "contains ts:".
+//
+// The signature is verified here with openssl's own dgst -verify rather
+// than by re-signing and comparing. That is the same check any standard
+// verifier performs, so passing it means the boot ROM would accept it too.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+QStringList bootSigLines(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    const QString text = QString::fromUtf8(f.readAll());
+    f.close();
+    return text.split(QChar('\n'), Qt::SkipEmptyParts);
+}
+
+// sha256sum via openssl, so the expectation is not computed by the same
+// code being tested.
+QByteArray opensslSha256Hex(const QString &path)
+{
+    QProcess p;
+    p.start(QStringLiteral("/usr/bin/openssl"),
+            {QStringLiteral("dgst"), QStringLiteral("-sha256"),
+             QStringLiteral("-hex"), path});
+    if (!p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
+        return {};
+    const QByteArray out = p.readAllStandardOutput().trimmed();
+    const int eq = out.lastIndexOf('=');
+    return eq >= 0 ? out.mid(eq + 1).trimmed() : out;
+}
+
+bool opensslVerify(const QString &keyPath, const QString &imgPath,
+                   const QByteArray &signatureHex, const QString &scratch)
+{
+    const QString pub = scratch + QStringLiteral("/pub.pem");
+    QProcess extract;
+    extract.start(QStringLiteral("/usr/bin/openssl"),
+                  {QStringLiteral("rsa"), QStringLiteral("-in"), keyPath,
+                   QStringLiteral("-pubout"), QStringLiteral("-out"), pub});
+    if (!extract.waitForFinished(rpi_test::kFixtureProcessTimeoutMs)
+        || extract.exitCode() != 0)
+        return false;
+
+    const QString sigBin = scratch + QStringLiteral("/sig.bin");
+    QFile sf(sigBin);
+    if (!sf.open(QIODevice::WriteOnly))
+        return false;
+    sf.write(QByteArray::fromHex(signatureHex));
+    sf.close();
+
+    QProcess verify;
+    verify.start(QStringLiteral("/usr/bin/openssl"),
+                 {QStringLiteral("dgst"), QStringLiteral("-sha256"),
+                  QStringLiteral("-verify"), pub,
+                  QStringLiteral("-signature"), sigBin, imgPath});
+    if (!verify.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
+        return false;
+    return verify.exitCode() == 0;
+}
+
+} // namespace
+
+TEST_CASE("boot.sig has the three lines the bootloader reads",
+          "[secureboot][crypto][bootsig]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    const QString img = scratch.filePath(QStringLiteral("boot.img"));
+    const QString sig = scratch.filePath(QStringLiteral("boot.sig"));
+    REQUIRE(generateRsaKey(key));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE(SecureBoot::createBootImg(files, img));
+    REQUIRE(SecureBoot::generateBootSig(img, key, sig));
+
+    const QStringList lines = bootSigLines(sig);
+    INFO("boot.sig:\n" << lines.join(QChar('\n')).toStdString());
+    REQUIRE(lines.size() == 3);
+
+    CHECK(lines[0].size() == 64);
+    CHECK(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(lines[0]).hasMatch());
+    CHECK(QRegularExpression(QStringLiteral("^ts: [0-9]+$")).match(lines[1]).hasMatch());
+    CHECK(lines[2].startsWith(QStringLiteral("rsa2048: ")));
+}
+
+TEST_CASE("The digest in boot.sig is the digest of the image",
+          "[secureboot][crypto][bootsig]")
+{
+    // Checked against openssl rather than against our own hasher, so this
+    // does not merely confirm the code agrees with itself.
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    const QString img = scratch.filePath(QStringLiteral("boot.img"));
+    const QString sig = scratch.filePath(QStringLiteral("boot.sig"));
+    REQUIRE(generateRsaKey(key));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE(SecureBoot::createBootImg(files, img));
+    REQUIRE(SecureBoot::generateBootSig(img, key, sig));
+
+    const QStringList lines = bootSigLines(sig);
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[0].toUtf8() == opensslSha256Hex(img));
+}
+
+TEST_CASE("The signature in boot.sig verifies against the key",
+          "[secureboot][crypto][bootsig]")
+{
+    // The one that matters. openssl dgst -verify is what any standard
+    // verifier does, so a signature that passes here is one the boot ROM
+    // will accept -- and one that fails is a board that will not start.
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    const QString img = scratch.filePath(QStringLiteral("boot.img"));
+    const QString sig = scratch.filePath(QStringLiteral("boot.sig"));
+    REQUIRE(generateRsaKey(key));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE(SecureBoot::createBootImg(files, img));
+    REQUIRE(SecureBoot::generateBootSig(img, key, sig));
+
+    const QStringList lines = bootSigLines(sig);
+    REQUIRE(lines.size() == 3);
+    const QByteArray sigHex =
+        lines[2].mid(QStringLiteral("rsa2048: ").size()).toUtf8();
+
+    CHECK(opensslVerify(key, img, sigHex, scratch.path()));
+}
+
+TEST_CASE("A different image gets a different signature",
+          "[secureboot][crypto][bootsig]")
+{
+    // A signature that did not depend on the image would verify against
+    // anything, which is the whole failure secure boot exists to prevent.
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    REQUIRE(generateRsaKey(key));
+
+    const QString imgA = scratch.filePath(QStringLiteral("a.img"));
+    const QString imgB = scratch.filePath(QStringLiteral("b.img"));
+    const QString sigA = scratch.filePath(QStringLiteral("a.sig"));
+    const QString sigB = scratch.filePath(QStringLiteral("b.sig"));
+
+    QMap<QString, QByteArray> a, b;
+    a.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    b.insert(QStringLiteral("config.txt"), "arm_64bit=0\n");
+    REQUIRE(SecureBoot::createBootImg(a, imgA));
+    REQUIRE(SecureBoot::createBootImg(b, imgB));
+    REQUIRE(SecureBoot::generateBootSig(imgA, key, sigA));
+    REQUIRE(SecureBoot::generateBootSig(imgB, key, sigB));
+
+    const QStringList la = bootSigLines(sigA);
+    const QStringList lb = bootSigLines(sigB);
+    REQUIRE(la.size() == 3);
+    REQUIRE(lb.size() == 3);
+
+    CHECK(la[0] != lb[0]);          // different digest
+    CHECK(la[2] != lb[2]);          // and so a different signature
+}
+
+TEST_CASE("A signature made for one image does not verify another",
+          "[secureboot][crypto][bootsig]")
+{
+    // The substitution the bootloader is checking for: a genuine signature
+    // moved onto an image it was not made for.
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    REQUIRE(generateRsaKey(key));
+
+    const QString imgA = scratch.filePath(QStringLiteral("a.img"));
+    const QString imgB = scratch.filePath(QStringLiteral("b.img"));
+    const QString sigA = scratch.filePath(QStringLiteral("a.sig"));
+
+    QMap<QString, QByteArray> a, b;
+    a.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    b.insert(QStringLiteral("config.txt"), "tampered\n");
+    REQUIRE(SecureBoot::createBootImg(a, imgA));
+    REQUIRE(SecureBoot::createBootImg(b, imgB));
+    REQUIRE(SecureBoot::generateBootSig(imgA, key, sigA));
+
+    const QStringList la = bootSigLines(sigA);
+    REQUIRE(la.size() == 3);
+    const QByteArray sigHex = la[2].mid(QStringLiteral("rsa2048: ").size()).toUtf8();
+
+    CHECK(opensslVerify(key, imgA, sigHex, scratch.path()));
+    CHECK_FALSE(opensslVerify(key, imgB, sigHex, scratch.path()));
+}
+
+TEST_CASE("The timestamp in boot.sig is a plausible time",
+          "[secureboot][crypto][bootsig]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    const QString img = scratch.filePath(QStringLiteral("boot.img"));
+    const QString sig = scratch.filePath(QStringLiteral("boot.sig"));
+    REQUIRE(generateRsaKey(key));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), "x\n");
+    REQUIRE(SecureBoot::createBootImg(files, img));
+    REQUIRE(SecureBoot::generateBootSig(img, key, sig));
+
+    const QStringList lines = bootSigLines(sig);
+    REQUIRE(lines.size() == 3);
+
+    bool ok = false;
+    const qint64 ts = lines[1].mid(4).toLongLong(&ok);
+    REQUIRE(ok);
+    CHECK(ts > 1600000000);                       // after 2020
+    CHECK(ts < QDateTime::currentSecsSinceEpoch() + 60);
 }
