@@ -6,6 +6,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include "fastboot/sparse_encoder.h"
 
@@ -487,6 +488,62 @@ TEST_CASE("Feeding data in odd chunk sizes works correctly", "[sparse]")
             break;
         segments.emplace_back(seg.begin(), seg.end());
     }
+
+    auto decoded = decodeSegments(segments);
+    REQUIRE(decoded == image);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Segment size floor
+//
+// The segment size is whatever the device answered to max-download-size.
+// It used to be taken at face value behind an assert, which compiles out of
+// release builds -- so on a shipped binary a device reporting something
+// uselessly small handed the encoder a segment that could not hold even one
+// block, and the encode loop had no way to make progress.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A segment size below the floor is raised to it", "[sparse][limits]")
+{
+    const uint32_t tiny = GENERATE(uint32_t{0}, uint32_t{1}, uint32_t{4095},
+                                   SparseEncoder::MIN_SEGMENT_SIZE - 1);
+    CAPTURE(tiny);
+
+    SparseEncoder enc(tiny, 64 * 1024);
+    CHECK(enc.maxSegmentSize() == SparseEncoder::MIN_SEGMENT_SIZE);
+}
+
+TEST_CASE("A segment size at or above the floor is taken as given", "[sparse][limits]")
+{
+    const uint32_t asked = GENERATE(SparseEncoder::MIN_SEGMENT_SIZE,
+                                    uint32_t{64 * 1024},
+                                    uint32_t{16 * 1024 * 1024});
+    CAPTURE(asked);
+
+    SparseEncoder enc(asked, 64 * 1024);
+    CHECK(enc.maxSegmentSize() == asked);
+}
+
+TEST_CASE("An encoder given a zero segment size still encodes the whole image",
+          "[sparse][limits]")
+{
+    // The floor guarantees forward progress: every segment carries at least
+    // one block, so the image completes rather than the feed loop spinning.
+    constexpr size_t IMAGE_SIZE = 32 * SPARSE_BLK_SZ;
+    std::vector<uint8_t> image(IMAGE_SIZE);
+    std::mt19937 rng(4160);
+    for (auto& b : image)
+        b = static_cast<uint8_t>(rng() % 254 + 1);   // never uniform: forces RAW
+
+    SparseEncoder enc(0, IMAGE_SIZE);
+    REQUIRE(enc.maxSegmentSize() == SparseEncoder::MIN_SEGMENT_SIZE);
+
+    auto segments = feedAndCollect(enc, image);
+
+    // One block per segment is all the floor leaves room for.
+    CHECK(segments.size() == IMAGE_SIZE / SPARSE_BLK_SZ);
+    for (const auto& seg : segments)
+        CHECK(seg.size() <= SparseEncoder::MIN_SEGMENT_SIZE);
 
     auto decoded = decodeSegments(segments);
     REQUIRE(decoded == image);
