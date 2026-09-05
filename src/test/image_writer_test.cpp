@@ -473,6 +473,88 @@ TEST_CASE("Filtering reaches into nested categories", "[imagewriter][oslist]")
     }
 }
 
+// Build a chain of categories nested `depth` deep, with one matching image
+// at the bottom. Mirrors the shape of the real list, where categories hold
+// categories, but taken further than any real one goes.
+static QByteArray nestedOsList(int depth)
+{
+    QString inner = QStringLiteral(
+        R"({ "name": "Deep image", "devices": ["pi5-64bit"] })");
+    for (int i = depth; i > 0; --i) {
+        inner = QStringLiteral(R"({ "name": "Level %1", "subitems": [ %2 ] })")
+                    .arg(i).arg(inner);
+    }
+    return QStringLiteral(
+               R"({ "imager": {}, "os_list": [ %1 ] })").arg(inner).toUtf8();
+}
+
+TEST_CASE("A deeply nested list is still filtered to the bottom",
+          "[imagewriter][oslist]")
+{
+    // Just inside the recursion limit. The top level counts as depth 1, so
+    // fifteen nested categories put the image at the last level the filter
+    // will walk.
+    FeedableImageWriter writer;
+    writer.feedOsList(nestedOsList(15));
+    writer.setHWFilterList(QJsonArray{QStringLiteral("pi5-64bit")}, false);
+
+    const QJsonDocument doc = writer.getFilteredOSlistDocument();
+    const QStringList top = namesIn(doc);
+    INFO("offered: " << top.join(QStringLiteral(", ")).toStdString());
+    CHECK(top.contains(QStringLiteral("Level 1")));
+}
+
+TEST_CASE("A list nested past the limit loses the part below it, not the app",
+          "[imagewriter][oslist]")
+{
+    // The list is fetched over the network, so its shape is not ours to
+    // trust. Past the limit the filter gives up on that subtree and returns
+    // nothing for it -- which empties the categories above it, so the whole
+    // chain drops out rather than the recursion running away.
+    FeedableImageWriter writer;
+    writer.feedOsList(nestedOsList(40));
+    writer.setHWFilterList(QJsonArray{QStringLiteral("pi5-64bit")}, false);
+
+    QJsonDocument doc;
+    REQUIRE_NOTHROW(doc = writer.getFilteredOSlistDocument());
+    const QStringList top = namesIn(doc);
+    INFO("offered: " << top.join(QStringLiteral(", ")).toStdString());
+
+    CHECK_FALSE(top.contains(QStringLiteral("Level 1")));
+    CHECK(top.contains(QStringLiteral("Erase")));
+    CHECK(top.contains(QStringLiteral("Use custom")));
+}
+
+TEST_CASE("A list nested past the limit leaves the rest of the list alone",
+          "[imagewriter][oslist]")
+{
+    // The guard drops the offending subtree. Anything beside it at the top
+    // level is unaffected, so one malformed entry does not empty the chooser.
+    FeedableImageWriter writer;
+
+    QString deep = QStringLiteral(
+        R"({ "name": "Deep image", "devices": ["pi5-64bit"] })");
+    for (int i = 40; i > 0; --i)
+        deep = QStringLiteral(R"({ "name": "D%1", "subitems": [ %2 ] })")
+                   .arg(i).arg(deep);
+
+    const QByteArray json = QStringLiteral(R"({
+        "imager": {},
+        "os_list": [
+            { "name": "Normal image", "devices": ["pi5-64bit"] },
+            %1
+        ]
+    })").arg(deep).toUtf8();
+
+    writer.feedOsList(json);
+    writer.setHWFilterList(QJsonArray{QStringLiteral("pi5-64bit")}, false);
+
+    const QStringList top = namesIn(writer.getFilteredOSlistDocument());
+    INFO("offered: " << top.join(QStringLiteral(", ")).toStdString());
+    CHECK(top.contains(QStringLiteral("Normal image")));
+    CHECK_FALSE(top.contains(QStringLiteral("D1")));
+}
+
 TEST_CASE("The built-in entries survive filtering", "[imagewriter][oslist]")
 {
     // Erase and the custom-image entry are appended after filtering, so no
