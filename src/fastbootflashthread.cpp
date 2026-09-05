@@ -28,6 +28,8 @@
 #include <archive_entry.h>
 #include <curl/curl.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <thread>
 
@@ -37,6 +39,68 @@ using rpiboot::FASTBOOT_PID;
 
 // Default max-download-size if the device doesn't report one
 static constexpr uint32_t DEFAULT_MAX_DOWNLOAD_SIZE = 256 * 1024 * 1024;  // 256 MB
+
+// Ceiling on the segment size we will honour regardless of what the device
+// asks for. SparseEncoder reserves two buffers of this size, so the real cost
+// is double. Beyond the default there is nothing to gain: segments are already
+// large enough that per-segment overhead has vanished.
+static constexpr uint32_t MAX_HONOURED_DOWNLOAD_SIZE = DEFAULT_MAX_DOWNLOAD_SIZE;
+
+uint32_t FastbootFlashThread::resolveMaxDownloadSize(const std::string *reported,
+                                                     quint64 availableBytes)
+{
+    quint64 size = DEFAULT_MAX_DOWNLOAD_SIZE;
+
+    if (reported) {
+        const std::string &val = *reported;
+        const bool hex = val.starts_with("0x") || val.starts_with("0X");
+        const size_t digitsFrom = hex ? 2 : 0;
+
+        bool parsed = false;
+        // stoull is too forgiving on its own: "0x" yields 0, "0x10zz" yields
+        // 16, and "-1" yields ULLONG_MAX rather than throwing. Anything the
+        // device sends that is not wholly a number is not a number.
+        if (val.size() > digitsFrom) {
+            const auto isDigit = [hex](unsigned char c) {
+                return hex ? std::isxdigit(c) != 0 : std::isdigit(c) != 0;
+            };
+            if (std::all_of(val.begin() + digitsFrom, val.end(), isDigit)) {
+                try {
+                    // stoull, not stoul-into-uint32_t: a device reporting
+                    // 0x100000000 used to narrow to 0, below the floor.
+                    size = std::stoull(val, nullptr, hex ? 16 : 10);
+                    parsed = true;
+                } catch (const std::out_of_range &) {
+                    // Larger than a uint64. It is getting clamped regardless.
+                    size = MAX_HONOURED_DOWNLOAD_SIZE;
+                    parsed = true;
+                } catch (...) {
+                }
+            }
+        }
+
+        if (!parsed) {
+            qDebug() << "FastbootFlashThread: could not parse max-download-size:"
+                     << QString::fromStdString(val)
+                     << "using default" << DEFAULT_MAX_DOWNLOAD_SIZE;
+            size = DEFAULT_MAX_DOWNLOAD_SIZE;
+        }
+    }
+
+    // Two buffers of this size are reserved for the duration of the flash,
+    // alongside the ring buffers the memory manager has already budgeted.
+    // Give the encoder at most an eighth of what is free, so a device that
+    // asks for a lot cannot push the machine into swap on its own say-so.
+    if (availableBytes > 0) {
+        const quint64 memoryCeiling = std::max<quint64>(
+            availableBytes / 8, fastboot::SparseEncoder::MIN_SEGMENT_SIZE);
+        size = std::min(size, memoryCeiling);
+    }
+
+    size = std::min<quint64>(size, MAX_HONOURED_DOWNLOAD_SIZE);
+    size = std::max<quint64>(size, fastboot::SparseEncoder::MIN_SEGMENT_SIZE);
+    return static_cast<uint32_t>(size);
+}
 
 FastbootFlashThread::FastbootFlashThread(const QString& fastbootId,
                                            const QString& blockDevice,
@@ -799,21 +863,15 @@ void FastbootFlashThread::runImpl()
 
     // 2. Query max-download-size
     auto maxDlSizeStr = fb.getVar(*transport, "max-download-size");
-    uint32_t maxDownloadSize = DEFAULT_MAX_DOWNLOAD_SIZE;
-    if (maxDlSizeStr) {
-        try {
-            std::string val = *maxDlSizeStr;
-            if (val.starts_with("0x") || val.starts_with("0X"))
-                maxDownloadSize = static_cast<uint32_t>(std::stoul(val, nullptr, 16));
-            else
-                maxDownloadSize = static_cast<uint32_t>(std::stoul(val));
-        } catch (...) {
-            qDebug() << "FastbootFlashThread: could not parse max-download-size:"
-                     << QString::fromStdString(*maxDlSizeStr)
-                     << "using default" << maxDownloadSize;
-        }
-    }
-    qDebug() << "FastbootFlashThread: max-download-size =" << maxDownloadSize;
+    const quint64 availableBytes =
+        static_cast<quint64>(std::max<qint64>(
+            SystemMemoryManager::instance().getAvailableMemoryMB(), 0)) * 1024 * 1024;
+    const uint32_t maxDownloadSize = resolveMaxDownloadSize(
+        maxDlSizeStr ? &*maxDlSizeStr : nullptr, availableBytes);
+    qDebug() << "FastbootFlashThread: max-download-size ="
+             << (maxDlSizeStr ? QString::fromStdString(*maxDlSizeStr)
+                              : QStringLiteral("(not reported)"))
+             << "-> using" << maxDownloadSize;
     emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), true,
                                  QStringLiteral("max-download-size=%1").arg(maxDownloadSize));
 

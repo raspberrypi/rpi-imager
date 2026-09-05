@@ -17,6 +17,8 @@
 #include <QString>
 #include <QUrl>
 
+#include <string>
+
 #include <memory>
 
 class RingBuffer;
@@ -60,6 +62,21 @@ public:
     // Failures are non-fatal and will not block successful flash.
     void setConnectRegistration(const QString &apiKey,
                                  const QString &descriptionPrefix);
+
+    // Turn the device's reported max-download-size into a segment size we are
+    // willing to allocate against.
+    //
+    // The value arrives as a decimal or 0x-prefixed string from the device, so
+    // it is attacker-shaped in the same sense any USB descriptor is: whatever
+    // happens to be plugged in chooses it. Two buffers of this size are
+    // reserved up front by SparseEncoder, so an absurd value is an absurd
+    // allocation.
+    //
+    // `reported` is null when the device answered nothing, in which case the
+    // default is used. `availableBytes` is the memory budget to size against;
+    // pass 0 to skip the memory-derived ceiling.
+    static uint32_t resolveMaxDownloadSize(const std::string *reported,
+                                           quint64 availableBytes);
 
 signals:
     void writing();   // Emitted when download+flash pipeline starts

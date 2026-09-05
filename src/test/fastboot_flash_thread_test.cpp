@@ -24,6 +24,8 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/catch_session.hpp>
 
+#include "fastboot/sparse_encoder.h"
+
 #include "fastbootflashthread.h"
 #include "fastboot/fastboot_protocol.h"
 #include "rpiboot/test/mock_usb_transport.h"
@@ -820,4 +822,128 @@ TEST_CASE("A cancelled flash does not reach the device", "[fastboot][flash]")
     INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
     for (const QString &c : cmds)
         CHECK_THAT(c.toStdString(), !ContainsSubstring("erase:"));
+}
+
+// ══════════════════════════════════════════════════════════════
+// 7. max-download-size
+//
+// The device chooses this number. SparseEncoder reserves two buffers of it
+// up front, alongside the ring buffers SystemMemoryManager has separately
+// budgeted against available RAM -- and the memory manager knows nothing
+// about these two, so whatever the device asks for is spent on top of the
+// budget it computed.
+//
+// It used to be parsed with stoul into a uint32_t and used as-is.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+constexpr quint64 kNoMemoryCeiling = 0;
+constexpr uint32_t kFloor = fastboot::SparseEncoder::MIN_SEGMENT_SIZE;
+
+uint32_t resolved(const char *reported, quint64 avail = kNoMemoryCeiling)
+{
+    const std::string s = reported ? reported : std::string();
+    return FastbootFlashThread::resolveMaxDownloadSize(reported ? &s : nullptr, avail);
+}
+} // namespace
+
+TEST_CASE("A device that reports no max-download-size gets the default",
+          "[fastboot][download-size]")
+{
+    CHECK(resolved(nullptr) == 256u * 1024 * 1024);
+}
+
+TEST_CASE("A reported max-download-size is honoured in both bases",
+          "[fastboot][download-size]")
+{
+    CHECK(resolved("1048576") == 1048576u);
+    CHECK(resolved("0x100000") == 1048576u);
+    CHECK(resolved("0X100000") == 1048576u);
+}
+
+TEST_CASE("A max-download-size that does not parse falls back to the default",
+          "[fastboot][download-size]")
+{
+    // Each of these is something std::stoull would have accepted in part and
+    // silently returned a number for: "0x" and "0x10zz" stop at the first
+    // character they cannot use, and "-1" wraps to ULLONG_MAX rather than
+    // throwing. A partial parse of a device-supplied string is not a size.
+    const char *junk = GENERATE("", "banana", "0x", "0X", "0x10zz", "-1", " ",
+                                "16 MB", "1048576\n");
+    CAPTURE(junk);
+    CHECK(resolved(junk) == 256u * 1024 * 1024);
+}
+
+TEST_CASE("A max-download-size of four gigabytes or more does not wrap",
+          "[fastboot][download-size]")
+{
+    // stoul into uint32_t truncated: 0x100000000 became 0, which is below
+    // the encoder's floor. The value is clamped down, never wrapped.
+    for (const char *big : {"0x100000000", "0x100001000", "4294967296",
+                            "18446744073709551615",
+                            "99999999999999999999999"}) {   // beyond uint64
+        CAPTURE(big);
+        const uint32_t got = resolved(big);
+        CHECK(got == 256u * 1024 * 1024);
+        CHECK(got >= kFloor);
+    }
+}
+
+TEST_CASE("A uselessly small max-download-size is raised to the floor",
+          "[fastboot][download-size]")
+{
+    // These parse cleanly -- the device really is claiming it can only take
+    // this much -- but a segment below the floor cannot carry a single block,
+    // so the encoder would never advance. Honour the device up to the point
+    // where honouring it means never finishing.
+    for (const char *small : {"0", "1", "512", "4096", "0x0", "0x1000"}) {
+        CAPTURE(small);
+        CHECK(resolved(small) == kFloor);
+    }
+}
+
+TEST_CASE("An oversized max-download-size is capped, not honoured",
+          "[fastboot][download-size]")
+{
+    CHECK(resolved("0x40000000") == 256u * 1024 * 1024);   // device asks 1 GB
+}
+
+TEST_CASE("The segment size is bounded by available memory",
+          "[fastboot][download-size]")
+{
+    // 256 MB available: the encoder's two buffers must not be a large
+    // fraction of it, whatever the device claims it can take.
+    constexpr quint64 avail = 256ull * 1024 * 1024;
+    const uint32_t got = resolved("0x10000000", avail);   // device asks 256 MB
+    CHECK(got == avail / 8);
+    CHECK(2ull * got < avail / 2);
+}
+
+TEST_CASE("A small memory budget never pushes the segment below the floor",
+          "[fastboot][download-size]")
+{
+    // An eighth of very little is less than one block. The floor still wins:
+    // an encoder that cannot hold a block cannot make progress at all.
+    for (quint64 avail : {quint64{1}, quint64{4096}, quint64{64 * 1024}}) {
+        CAPTURE(avail);
+        CHECK(resolved("0x10000000", avail) >= kFloor);
+    }
+}
+
+TEST_CASE("Whatever the device reports, the encoder accepts the result",
+          "[fastboot][download-size]")
+{
+    // The pairing that matters: every value resolveMaxDownloadSize can return
+    // is one SparseEncoder will take without clamping it further, so the size
+    // the caller logs is the size actually in use.
+    const char *reported = GENERATE("0", "1", "4096", "0x100000", "0x40000000",
+                                    "0x100000000", "banana", "0x", "-1");
+    const quint64 avail = GENERATE(quint64{0}, quint64{1024},
+                                   quint64{256ull * 1024 * 1024},
+                                   quint64{8ull * 1024 * 1024 * 1024});
+    CAPTURE(reported, avail);
+
+    const uint32_t size = resolved(reported, avail);
+    fastboot::SparseEncoder enc(size, 1024 * 1024);
+    CHECK(enc.maxSegmentSize() == size);
 }
