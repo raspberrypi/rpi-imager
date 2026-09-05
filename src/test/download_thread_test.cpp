@@ -23,6 +23,9 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "downloadthread.h"
+#include "timeout_utils.h"
+
+using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
 #include "faulty_block_device.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
@@ -383,7 +386,17 @@ TEST_CASE("DownloadThread survives cancellation during device preparation",
     // Early enough to land inside _openAndPrepareDevice() on any machine.
     QThread::msleep(5);
     dt->cancelDownload();
-    dt->wait(30000);
+
+    // Generous on purpose. Cancelling does not interrupt a write and sync
+    // already in flight -- the cancel flag lets runWithTimeout return and
+    // abandon its worker, but the end-of-device write it guards is allowed
+    // up to kHardTimeoutSeconds. Waiting only a few seconds asserts a
+    // promptness the product does not offer, and this failed exactly once in
+    // a full parallel run where several other cases were syncing tens of
+    // megabytes at the same time. What is being tested is that the thread
+    // ends at all rather than crashing in the abandoned worker, so the wait
+    // is sized to the contract.
+    dt->wait((kHardTimeoutSeconds + 15) * 1000);
 
     CHECK(dt->isFinished());
 }
