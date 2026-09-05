@@ -672,7 +672,11 @@ protected:
     void _parseZstdFile();
     QString _pubKeyFileName();
     QString _privKeyFileName();
-    QString _sshKeyDir();
+    // Virtual so the key handling can be exercised against a directory a
+    // test owns. Everything else here is derived from it, and the real one
+    // is the user's ~/.ssh -- which holds keys that are not ours to write
+    // over or to leave lying around after a test run.
+    virtual QString _sshKeyDir();
     QString _sshKeyGen();
     void _applySystemdCustomisationFromSettings(const QVariantMap &s);
     void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);

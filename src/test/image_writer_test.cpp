@@ -5424,3 +5424,133 @@ TEST_CASE("No block devices at all mounts nothing", "[imagewriter][usbmount]")
     CHECK_FALSE(w.mountUsbSourceMedia());
     CHECK(w.mountAttempts.isEmpty());
 }
+
+// ══════════════════════════════════════════════════════════════
+// The SSH key offered for public-key authentication
+//
+// The customisation step can put the user's own public key on the card so
+// they can log in without a password. It reads that key from ~/.ssh, and
+// will generate one if there is none -- which means the guard against
+// writing over a key that already exists is protecting a file that is not
+// replaceable. Somebody's private key is not ours to overwrite.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class KeyedImageWriter : public ImageWriter
+{
+public:
+    KeyedImageWriter() : ImageWriter(nullptr) {}
+    QString keyDir;
+protected:
+    QString _sshKeyDir() override { return keyDir; }
+};
+
+void writeFile(const QString &path, const QByteArray &contents)
+{
+    REQUIRE(QDir().mkpath(QFileInfo(path).absolutePath()));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(contents);
+    f.close();
+}
+
+} // namespace
+
+TEST_CASE("With no key there is none to offer", "[imagewriter][sshkey]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    KeyedImageWriter w;
+    w.keyDir = dir.filePath(QStringLiteral(".ssh"));
+
+    CHECK_FALSE(w.hasPubKey());
+    CHECK(w.getDefaultPubKey().isEmpty());
+}
+
+TEST_CASE("An existing public key is offered", "[imagewriter][sshkey]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString ssh = dir.filePath(QStringLiteral(".ssh"));
+    writeFile(ssh + "/id_rsa.pub", "ssh-rsa AAAAB3NzaC1yc2E user@host\n");
+
+    KeyedImageWriter w;
+    w.keyDir = ssh;
+
+    CHECK(w.hasPubKey());
+    CHECK(w.getDefaultPubKey()
+          == QStringLiteral("ssh-rsa AAAAB3NzaC1yc2E user@host"));
+}
+
+TEST_CASE("The offered key has no trailing newline", "[imagewriter][sshkey]")
+{
+    // It goes into authorized_keys on the card. A stray newline there makes
+    // a second, empty entry -- harmless, but the file is one the user may
+    // later read and wonder about.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString ssh = dir.filePath(QStringLiteral(".ssh"));
+    writeFile(ssh + "/id_rsa.pub", "ssh-rsa AAAA user@host\n\n");
+
+    KeyedImageWriter w;
+    w.keyDir = ssh;
+
+    const QString key = w.getDefaultPubKey();
+    CHECK_FALSE(key.endsWith(QChar('\n')));
+    CHECK(key == QStringLiteral("ssh-rsa AAAA user@host"));
+}
+
+TEST_CASE("An existing key is never generated over", "[imagewriter][sshkey]")
+{
+    // The one that matters. A private key is not replaceable: overwriting it
+    // locks the user out of every machine that trusts the old one.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString ssh = dir.filePath(QStringLiteral(".ssh"));
+    writeFile(ssh + "/id_rsa.pub", "ssh-rsa ORIGINAL user@host\n");
+    writeFile(ssh + "/id_rsa", "PRIVATE KEY MATERIAL\n");
+
+    KeyedImageWriter w;
+    w.keyDir = ssh;
+
+    w.generatePubKey();
+
+    QFile priv(ssh + "/id_rsa");
+    REQUIRE(priv.open(QIODevice::ReadOnly));
+    CHECK(priv.readAll() == QByteArray("PRIVATE KEY MATERIAL\n"));
+    CHECK(w.getDefaultPubKey() == QStringLiteral("ssh-rsa ORIGINAL user@host"));
+}
+
+TEST_CASE("A private key with no public key is left alone too",
+          "[imagewriter][sshkey]")
+{
+    // hasPubKey() is false here, so only the second half of the guard stops
+    // this -- and it has to, because the private key is the irreplaceable
+    // half. The public one can always be derived again.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString ssh = dir.filePath(QStringLiteral(".ssh"));
+    writeFile(ssh + "/id_rsa", "PRIVATE KEY MATERIAL\n");
+
+    KeyedImageWriter w;
+    w.keyDir = ssh;
+
+    CHECK_FALSE(w.hasPubKey());
+    w.generatePubKey();
+
+    QFile priv(ssh + "/id_rsa");
+    REQUIRE(priv.open(QIODevice::ReadOnly));
+    CHECK(priv.readAll() == QByteArray("PRIVATE KEY MATERIAL\n"));
+}
+
+TEST_CASE("A key directory that is not there yields no key",
+          "[imagewriter][sshkey]")
+{
+    KeyedImageWriter w;
+    w.keyDir = QStringLiteral("/nonexistent-ssh-dir-for-tests");
+
+    CHECK_FALSE(w.hasPubKey());
+    CHECK(w.getDefaultPubKey().isEmpty());
+}
