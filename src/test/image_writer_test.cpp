@@ -19,6 +19,7 @@
 #include <catch2/catch_session.hpp>
 
 #include "imagewriter.h"
+#include "cli.h"
 #include "app_resources.h"
 #include "drivelistmodel.h"
 
@@ -5553,4 +5554,128 @@ TEST_CASE("A key directory that is not there yields no key",
 
     CHECK_FALSE(w.hasPubKey());
     CHECK(w.getDefaultPubKey().isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// What the command line accepts, and how it refuses
+//
+// The CLI is how imaging gets scripted and how it runs on a machine with no
+// display. When it refuses, the message on stderr is the whole of what the
+// operator gets -- there is no dialog to read and no list to look at.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("An http source is fetched rather than looked for on disk",
+          "[cli][source]")
+{
+    CHECK(Cli::classifySource(QStringLiteral("http://example.invalid/os.img.xz"))
+          == Cli::SourceKind::Remote);
+    CHECK(Cli::classifySource(QStringLiteral("https://example.invalid/os.img.xz"))
+          == Cli::SourceKind::Remote);
+}
+
+TEST_CASE("The scheme is recognised whatever its case", "[cli][source]")
+{
+    // A URL pasted out of a browser or a spreadsheet can arrive shouting.
+    CHECK(Cli::classifySource(QStringLiteral("HTTP://example.invalid/os.img"))
+          == Cli::SourceKind::Remote);
+    CHECK(Cli::classifySource(QStringLiteral("HttpS://example.invalid/os.img"))
+          == Cli::SourceKind::Remote);
+}
+
+TEST_CASE("Another scheme is not treated as a download", "[cli][source]")
+{
+    // ftp:// and file:// are not fetched. They fall through to the
+    // filesystem, where they will not be found -- which is the honest
+    // answer, rather than handing libcurl something it will fail on later.
+    CHECK(Cli::classifySource(QStringLiteral("ftp://example.invalid/os.img"))
+          == Cli::SourceKind::Missing);
+}
+
+TEST_CASE("A path that merely contains http is still a path", "[cli][source]")
+{
+    // The check is on the start of the string, so a directory called
+    // "http-images" is not mistaken for a URL.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("http-images/os.img"));
+    REQUIRE(QDir().mkpath(QFileInfo(path).absolutePath()));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write("x");
+    f.close();
+
+    CHECK(Cli::classifySource(path) == Cli::SourceKind::LocalFile);
+}
+
+TEST_CASE("A real file on disk is used as-is", "[cli][source]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("os.img"));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(QByteArray(2048, 'x'));
+    f.close();
+
+    CHECK(Cli::classifySource(path) == Cli::SourceKind::LocalFile);
+}
+
+TEST_CASE("A source that is not there is told apart from one that is not a file",
+          "[cli][source]")
+{
+    // Two different mistakes deserving two different messages: a typo in a
+    // path, versus pointing at a directory.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    CHECK(Cli::classifySource(dir.filePath(QStringLiteral("typo.img")))
+          == Cli::SourceKind::Missing);
+    CHECK(Cli::classifySource(dir.path()) == Cli::SourceKind::NotRegular);
+}
+
+TEST_CASE("An empty source is not there", "[cli][source]")
+{
+    CHECK(Cli::classifySource(QString()) == Cli::SourceKind::Missing);
+}
+
+// -- The secure boot signing key ---------------------------------------
+
+TEST_CASE("A usable signing key passes", "[cli][secureboot-key]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("key.pem"));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write("-----BEGIN RSA PRIVATE KEY-----\n");
+    f.close();
+
+    CHECK(Cli::validateSecureBootKey(path).isEmpty());
+}
+
+TEST_CASE("A missing signing key is refused, and named", "[cli][secureboot-key]")
+{
+    // Signing is not something to fall back from silently: an unsigned image
+    // will not boot on a fused board, and the operator needs to know it was
+    // the path that was wrong.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("absent.pem"));
+
+    const QString err = Cli::validateSecureBootKey(path);
+    REQUIRE_FALSE(err.isEmpty());
+    CHECK(err.contains(QStringLiteral("does not exist")));
+    CHECK(err.contains(path));
+}
+
+TEST_CASE("A signing key that is a directory is refused separately",
+          "[cli][secureboot-key]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QString err = Cli::validateSecureBootKey(dir.path());
+    REQUIRE_FALSE(err.isEmpty());
+    CHECK(err.contains(QStringLiteral("not a regular file")));
+    CHECK(err.contains(dir.path()));
 }

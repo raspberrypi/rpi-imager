@@ -37,6 +37,30 @@ Cli::~Cli()
     delete _app;
 }
 
+Cli::SourceKind Cli::classifySource(const QString &src)
+{
+    if (src.startsWith(QLatin1String("http:"), Qt::CaseInsensitive)
+        || src.startsWith(QLatin1String("https:"), Qt::CaseInsensitive))
+        return SourceKind::Remote;
+
+    const QFileInfo fi(src);
+    if (fi.isFile())
+        return SourceKind::LocalFile;
+    if (!fi.exists())
+        return SourceKind::Missing;
+    return SourceKind::NotRegular;
+}
+
+QString Cli::validateSecureBootKey(const QString &path)
+{
+    const QFileInfo keyFile(path);
+    if (!keyFile.exists())
+        return QStringLiteral("Error: secure boot key file does not exist: ") + path;
+    if (!keyFile.isFile())
+        return QStringLiteral("Error: secure boot key path is not a regular file: ") + path;
+    return {};
+}
+
 int Cli::run()
 {
     QCommandLineParser parser;
@@ -125,15 +149,10 @@ int Cli::run()
     if (!parser.value("secure-boot-key").isEmpty())
     {
         QString keyPath = parser.value("secure-boot-key");
-        QFileInfo keyFile(keyPath);
-        if (!keyFile.exists())
+        const QString keyError = validateSecureBootKey(keyPath);
+        if (!keyError.isEmpty())
         {
-            std::cerr << "Error: secure boot key file does not exist: " << keyPath.toStdString() << std::endl;
-            return 1;
-        }
-        if (!keyFile.isFile())
-        {
-            std::cerr << "Error: secure boot key path is not a regular file: " << keyPath.toStdString() << std::endl;
+            std::cerr << keyError.toStdString() << std::endl;
             return 1;
         }
         
@@ -147,7 +166,9 @@ int Cli::run()
         }
     }
 
-    if (args[0].startsWith("http:", Qt::CaseInsensitive) || args[0].startsWith("https:", Qt::CaseInsensitive))
+    switch (classifySource(args[0]))
+    {
+    case SourceKind::Remote:
     {
         _imageWriter->setSrc(args[0], 0, 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
 
@@ -155,25 +176,20 @@ int Cli::run()
         {
             _imageWriter->setCustomCacheFile(parser.value("cache-file"), parser.value("sha256").toLatin1() );
         }
+        break;
     }
-    else
+    case SourceKind::LocalFile:
     {
         QFileInfo fi(args[0]);
-
-        if (fi.isFile())
-        {
-            _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
-        }
-        else if (!fi.exists())
-        {
-            std::cerr << "Error: source file does not exists" << std::endl;
-            return 1;
-        }
-        else
-        {
-            std::cerr << "Error: source is not a regular file" << std::endl;
-            return 1;
-        }
+        _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
+        break;
+    }
+    case SourceKind::Missing:
+        std::cerr << "Error: source file does not exists" << std::endl;
+        return 1;
+    case SourceKind::NotRegular:
+        std::cerr << "Error: source is not a regular file" << std::endl;
+        return 1;
     }
 
     if (parser.isSet("enable-writing-system-drives"))
