@@ -106,6 +106,35 @@ struct TimeoutConfig {
  * a SEGFAULT in the suite. FileOperations' sync fallback captured its
  * result variables by reference and stored into a frame that had returned.
  * Both are fixed; the pattern is easy to reintroduce.
+ *
+ * ── This should not need to exist ──────────────────────────────────────
+ *
+ * Detaching is here because a blocking pwrite() or fsync() cannot be
+ * cancelled from outside, so the thread cannot be joined without waiting
+ * for exactly the hang being escaped. The premise is what is wrong: the OS
+ * can cancel this, and two of the three platforms already ask it to.
+ *
+ * Windows has no callers of this at all -- file_operations_windows.cpp uses
+ * CancelIoEx(), which cancels in-flight I/O from any thread. Linux already
+ * uses io_uring_wait_cqe_timeout() and io_uring_prep_cancel64() on its
+ * async path. The five callers left are the two paths that bypass that
+ * machinery: the sync fallback and the end-of-device write. Routing them
+ * through the same io_uring timeout and cancel (aio_cancel on macOS) would
+ * delete the thread, the detach, the ownership contract above, and the
+ * close-to-unblock trick in one go.
+ *
+ * That trick is itself unsound and no amount of shared_ptr fixes it. The
+ * onTimeout handlers do `fd_ = -1; close(fd_copy);` to break the syscall
+ * out, but once closed the descriptor number is free for reuse -- a later
+ * open() can be handed it, and an abandoned worker that reaches its write
+ * afterwards writes image data into an unrelated descriptor. Not observed,
+ * and it needs the worker to be unscheduled across the close, but it is
+ * silent data corruption rather than a crash.
+ *
+ * If a thread ever is unavoidable: keep it joinable and hand it, with the
+ * state it owns, to something that joins at shutdown. The aim is not to
+ * cancel the operation but to be able to *wait* for it before freeing what
+ * it touches, which turns the whole class of bug above into a bounded wait.
  */
 template<typename Func>
 TimeoutResult runWithTimeout(
