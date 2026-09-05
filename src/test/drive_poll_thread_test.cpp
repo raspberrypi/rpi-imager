@@ -37,6 +37,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace {
@@ -358,6 +359,35 @@ protected:
     }
 };
 
+std::vector<uint8_t> okay(const std::string &payload)
+{
+    const std::string r = "OKAY" + payload;
+    return {r.begin(), r.end()};
+}
+
+// Answers the getvar sequence a confirmed Pi is asked: product, the block
+// device list, then a size and a type for each device on it.
+void queuePiWithStorage(rpiboot::testing::MockUsbTransport &m,
+                        const std::string &product,
+                        const std::vector<std::tuple<std::string, std::string,
+                                                     std::string>> &devices)
+{
+    m.setInterfaceString(rpiboot::FASTBOOT_INTERFACE_DESCRIPTOR);
+    m.queueBulkReadResponse(okay(product));
+
+    std::string list;
+    for (const auto &[name, size, type] : devices) {
+        if (!list.empty()) list += ",";
+        list += name;
+    }
+    m.queueBulkReadResponse(okay(list));
+
+    for (const auto &[name, size, type] : devices) {
+        m.queueBulkReadResponse(okay(size));
+        m.queueBulkReadResponse(okay(type));
+    }
+}
+
 // Count the fastboot entries a scan produced.
 int fastbootEntries(const std::vector<Drivelist::DeviceDescriptor> &list)
 {
@@ -460,4 +490,139 @@ TEST_CASE("An empty bus adds nothing and disturbs nothing",
     CHECK(list.size() == 1);
     CHECK(list[0].device == "/dev/sda");
     CHECK(t.bus.scans == 1);
+}
+
+TEST_CASE("A confirmed Pi's storage is offered as write targets",
+          "[drivepoll][fastboot]")
+{
+    // Two devices on one board become two entries, each addressable on its
+    // own. Writing to the eMMC and writing to the NVMe are different jobs.
+    rpiboot::testing::MockUsbTransport pi;
+    queuePiWithStorage(pi, "cm5", {
+        {"mmcblk0",  "0x100000000", "emmc"},
+        {"nvme0n1",  "0x200000000", "nvme"},
+    });
+
+    ScannablePollThread t;
+    t.bus.transport = &pi;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> list;
+    t.appendFastbootDevices(list);
+
+    REQUIRE(fastbootEntries(list) == 2);
+
+    const Drivelist::DeviceDescriptor *emmc = nullptr;
+    const Drivelist::DeviceDescriptor *nvme = nullptr;
+    for (const auto &d : list) {
+        if (d.fastbootBlockDevice == "mmcblk0") emmc = &d;
+        if (d.fastbootBlockDevice == "nvme0n1") nvme = &d;
+    }
+    REQUIRE(emmc);
+    REQUIRE(nvme);
+
+    CHECK(emmc->device == "fastboot://1:4/mmcblk0");
+    CHECK(emmc->size == 0x100000000ull);
+    CHECK(emmc->fastbootStorageType == "emmc");
+
+    CHECK(nvme->size == 0x200000000ull);
+    CHECK(nvme->busType == "NVME");     // drives the icon
+    CHECK(nvme->fastbootPortPath == std::vector<uint8_t>{1, 2});
+}
+
+TEST_CASE("A decimal size is read as well as a hex one",
+          "[drivepoll][fastboot]")
+{
+    rpiboot::testing::MockUsbTransport pi;
+    queuePiWithStorage(pi, "cm5", {{"mmcblk0", "34359738368", "emmc"}});
+
+    ScannablePollThread t;
+    t.bus.transport = &pi;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> list;
+    t.appendFastbootDevices(list);
+
+    REQUIRE(fastbootEntries(list) == 1);
+    CHECK(list[0].size == 34359738368ull);
+}
+
+TEST_CASE("A size that will not parse leaves the device listed at zero",
+          "[drivepoll][fastboot]")
+{
+    // Better to offer the device with an unknown size than to drop a board
+    // the user can see is plugged in.
+    rpiboot::testing::MockUsbTransport pi;
+    queuePiWithStorage(pi, "cm5", {{"mmcblk0", "not-a-number", "emmc"}});
+
+    ScannablePollThread t;
+    t.bus.transport = &pi;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> list;
+    REQUIRE_NOTHROW(t.appendFastbootDevices(list));
+
+    REQUIRE(fastbootEntries(list) == 1);
+    CHECK(list[0].size == 0);
+}
+
+TEST_CASE("A board with no storage is not offered as a target",
+          "[drivepoll][fastboot]")
+{
+    // It identified as a Pi, so it is banked and not re-probed, but there is
+    // nothing on it to write to.
+    rpiboot::testing::MockUsbTransport pi;
+    queuePiWithStorage(pi, "cm5", {});
+
+    ScannablePollThread t;
+    t.bus.transport = &pi;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> list;
+    t.appendFastbootDevices(list);
+    CHECK(fastbootEntries(list) == 0);
+}
+
+TEST_CASE("A board that is unplugged stops being offered",
+          "[drivepoll][fastboot]")
+{
+    // The cache is keyed by port path and expires what is no longer on the
+    // bus. A board left in the list after it has gone is one the user can
+    // select and then write nowhere.
+    rpiboot::testing::MockUsbTransport pi;
+    queuePiWithStorage(pi, "cm5", {{"mmcblk0", "0x100000000", "emmc"}});
+
+    ScannablePollThread t;
+    t.bus.transport = &pi;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> present;
+    t.appendFastbootDevices(present);
+    REQUIRE(fastbootEntries(present) == 1);
+
+    t.bus.devices.clear();                 // unplugged
+    std::vector<Drivelist::DeviceDescriptor> gone;
+    t.appendFastbootDevices(gone);
+    CHECK(fastbootEntries(gone) == 0);
+}
+
+TEST_CASE("A board that stays plugged in is not re-probed",
+          "[drivepoll][fastboot]")
+{
+    // Cached by port path. Re-querying every device on every tick would put
+    // a getvar storm on the bus several times a second.
+    rpiboot::testing::MockUsbTransport pi;
+    queuePiWithStorage(pi, "cm5", {{"mmcblk0", "0x100000000", "emmc"}});
+
+    ScannablePollThread t;
+    t.bus.transport = &pi;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> first, second;
+    t.appendFastbootDevices(first);
+    const int opensAfterFirst = t.bus.opens;
+    t.appendFastbootDevices(second);
+
+    CHECK(t.bus.opens == opensAfterFirst);
+    CHECK(fastbootEntries(second) == 1);   // still offered, from the cache
 }
