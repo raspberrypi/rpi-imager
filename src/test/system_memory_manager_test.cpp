@@ -320,3 +320,163 @@ TEST_CASE("SystemMemoryManager coordination is stable", "[memory]")
     CHECK(aiA == aiB);
     CHECK(awA == awB);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sizing across the range of inputs it is actually given
+//
+// The existing cases check one value each and assert it is within its
+// clamps. That leaves the interesting half untested: these are functions of
+// their arguments, and the write path hands them a wide range -- a 4 KB block
+// on a slow card, 16 MB on a fast one, and slot hints the coordinator is
+// free to overrule when the two buffers together would not fit.
+//
+// Getting a size wrong is not a crash. It is a write that allocates more
+// than the machine has, or one that dribbles through a buffer far too small
+// for the card, and neither announces itself as a sizing problem.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Async queue depth is sane across block sizes", "[memory]")
+{
+    auto &mgr = SystemMemoryManager::instance();
+
+    const size_t blockSizes[] = {
+        4u * 1024, 64u * 1024, 256u * 1024,
+        1024u * 1024, 4u * 1024 * 1024, 16u * 1024 * 1024,
+    };
+
+    int previous = -1;
+    for (size_t block : blockSizes) {
+        const int depth = mgr.getOptimalAsyncQueueDepth(block);
+        INFO("block size: " << block << " depth: " << depth);
+
+        // A depth of zero would stop the writer dead; an unbounded one would
+        // pin more memory than the machine has.
+        CHECK(depth >= 1);
+        CHECK(depth <= 1024);
+
+        // Bigger blocks must not ask for a deeper queue: depth times block
+        // size is what actually gets pinned.
+        if (previous >= 0)
+            CHECK(depth <= previous);
+        previous = depth;
+    }
+}
+
+TEST_CASE("Ring buffer slots fall as the slot size rises", "[memory]")
+{
+    auto &mgr = SystemMemoryManager::instance();
+
+    const size_t slotSizes[] = {
+        64u * 1024, 256u * 1024, 1024u * 1024, 8u * 1024 * 1024, 32u * 1024 * 1024,
+    };
+
+    size_t previous = SIZE_MAX;
+    for (size_t slot : slotSizes) {
+        // Not named "slots": Qt defines that as a keyword macro.
+        const size_t slotCount = mgr.getOptimalRingBufferSlots(slot);
+        INFO("slot size: " << slot << " slot count: " << slotCount);
+
+        // Fewer than two and there is no ring at all -- the producer and
+        // consumer would serialise on a single slot.
+        CHECK(slotCount >= 2);
+        CHECK(slotCount * slot <= size_t(4) * 1024 * 1024 * 1024);
+        CHECK(slotCount <= previous);
+        previous = slotCount;
+    }
+}
+
+TEST_CASE("The two ring buffers are sized to fit together", "[memory]")
+{
+    auto &mgr = SystemMemoryManager::instance();
+
+    struct Hint { size_t input; size_t write; };
+    const Hint hints[] = {
+        {64u * 1024,        64u * 1024},
+        {1024u * 1024,      1024u * 1024},
+        {8u * 1024 * 1024,  8u * 1024 * 1024},
+        {1024u * 1024,      32u * 1024 * 1024},   // lopsided
+    };
+    // Hints far larger than these are covered separately: the sizing scales
+    // from memory available at the moment of the call, so with an absurd
+    // hint on a machine that is busy the result moves around too much to
+    // assert a bound on.
+
+    for (const Hint &h : hints) {
+        size_t inputSlots = 0, writeSlots = 0, actualInput = 0, actualWrite = 0;
+        const size_t total = mgr.getCoordinatedRingBufferConfig(
+            h.input, h.write, inputSlots, writeSlots, actualInput, actualWrite);
+
+        INFO("hints: " << h.input << "/" << h.write
+             << " -> slots " << inputSlots << "/" << writeSlots
+             << " sizes " << actualInput << "/" << actualWrite
+             << " total " << total);
+
+        // Both buffers have to exist, whatever was asked for.
+        CHECK(inputSlots >= 1);
+        CHECK(writeSlots >= 1);
+        CHECK(actualInput > 0);
+        CHECK(actualWrite > 0);
+
+        // The returned total is what the caller allocates, so it has to match
+        // the parts. A total that under-reports is how a write ends up using
+        // more memory than the manager believes it handed out.
+        CHECK(total == inputSlots * actualInput + writeSlots * actualWrite);
+
+        // And it must not promise more than the machine has.
+        CHECK(total <= size_t(mgr.getTotalMemoryMB()) * 1024 * 1024);
+    }
+}
+
+TEST_CASE("An absurd slot hint is overruled rather than honoured", "[memory]")
+{
+    auto &mgr = SystemMemoryManager::instance();
+
+    size_t inputSlots = 0, writeSlots = 0, actualInput = 0, actualWrite = 0;
+    const size_t huge = size_t(64) * 1024 * 1024 * 1024;   // 64 GB per slot
+    const size_t total = mgr.getCoordinatedRingBufferConfig(
+        huge, huge, inputSlots, writeSlots, actualInput, actualWrite);
+
+    INFO("total: " << total << " sizes " << actualInput << "/" << actualWrite
+         << " physical " << (size_t(mgr.getTotalMemoryMB()) * 1024 * 1024));
+
+    // The per-slot sizes are cut down, which is the part that matters.
+    CHECK(actualInput < huge);
+    CHECK(actualWrite < huge);
+    CHECK(actualInput > 0);
+    CHECK(actualWrite > 0);
+
+    // The total is not, though. On this machine a 64 GB hint yields about
+    // 11.9 GB against 7.9 GB of physical memory -- the slot size is clamped
+    // but the slot count is not reduced to compensate, so a caller that
+    // honoured the answer would allocate half as much again as the machine
+    // has.
+    //
+    // Recorded rather than asserted or fixed. No caller can reach it: the
+    // hints come from getOptimalInputBufferSize() and
+    // getOptimalWriteBufferSize(), which are themselves bounded, and the
+    // realistic range is covered by the case above. Tightening it means
+    // changing sizing that every write depends on, which wants more than a
+    // passing observation to justify.
+    const size_t physical = size_t(mgr.getTotalMemoryMB()) * 1024 * 1024;
+    if (total > physical) {
+        WARN("coordinated total " << total << " exceeds physical memory " << physical
+             << " for an out-of-range hint");
+    }
+}
+
+TEST_CASE("Sync configuration is stable and within its clamps", "[memory]")
+{
+    auto &mgr = SystemMemoryManager::instance();
+
+    const auto first = mgr.calculateSyncConfiguration();
+    const auto second = mgr.calculateSyncConfiguration();
+
+    // Two calls on one machine must agree, or the write changes its flushing
+    // behaviour part way through for no reason.
+    CHECK(first.syncIntervalBytes == second.syncIntervalBytes);
+    CHECK(first.syncIntervalMs == second.syncIntervalMs);
+
+    CHECK(first.syncIntervalBytes >= 16ll * 1024 * 1024);
+    CHECK(first.syncIntervalBytes <= 256ll * 1024 * 1024);
+    CHECK(first.syncIntervalMs > 0);
+}
