@@ -78,6 +78,13 @@ ComboBox {
     ListModel {
         id: filteredModel
     }
+
+    // How many entries are currently passing the type-to-search filter.
+    // The model itself stays private -- this makes the result of a search
+    // observable from outside the box, which is otherwise only visible by
+    // looking at the popup.
+    readonly property int filteredCount: filteredModel.count
+
     
     function wordBoundaryMatch(text, search) {
         var textLower = text.toLowerCase()
@@ -85,7 +92,11 @@ ComboBox {
         while (pos <= textLower.length - search.length) {
             var idx = textLower.indexOf(search, pos)
             if (idx === -1) return false
-            if (idx === 0 || /[\s,()/]/.test(textLower.charAt(idx - 1)))
+            // Underscore counts as a word boundary: the IANA names spell
+            // spaces that way, so without it someone in New York typing
+            // "york" is told there are no matches. 65 zones are affected --
+            // Los_Angeles, Hong_Kong, Sao_Paulo, Mexico_City among them.
+            if (idx === 0 || /[\s,_()/]/.test(textLower.charAt(idx - 1)))
                 return true
             pos = idx + 1
         }
