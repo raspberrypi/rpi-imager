@@ -2,6 +2,7 @@
 #define CLI_H
 
 #include <QObject>
+#include <QStringList>
 #include <QVariant>
 
 class ImageWriter;
@@ -29,6 +30,19 @@ public:
 
     // Empty when the key is usable, otherwise the reason it is not.
     static QString validateSecureBootKey(const QString &path);
+
+    // Whether the destination is one of the removable volumes the system
+    // reports. Unless --enable-writing-system-drives is given, a destination
+    // that is not on that list is refused -- this is the CLI's equivalent of
+    // the storage picker greying out the machine's own disk, and the only
+    // thing standing between a mistyped script and somebody's root volume.
+    static bool destinationIsRemovable(class DriveListModel &drives,
+                                       const QString &destination);
+
+    // "device (description)" for each removable volume, which is what the
+    // refusal above prints so the operator can see what they could have
+    // written instead.
+    static QStringList removableDestinations(class DriveListModel &drives);
 
 protected:
     QCoreApplication *_app;

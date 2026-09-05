@@ -61,6 +61,33 @@ QString Cli::validateSecureBootKey(const QString &path)
     return {};
 }
 
+bool Cli::destinationIsRemovable(DriveListModel &drives, const QString &destination)
+{
+    const int numDrives = drives.rowCount(QModelIndex());
+    for (int i = 0; i < numDrives; i++)
+    {
+        if (drives.index(i, 0).data(DriveListModel::deviceRole).toString() == destination)
+            return true;
+    }
+    return false;
+}
+
+QStringList Cli::removableDestinations(DriveListModel &drives)
+{
+    QStringList out;
+    const int numDrives = drives.rowCount(QModelIndex());
+    out.reserve(numDrives);
+    for (int i = 0; i < numDrives; i++)
+    {
+        const QModelIndex idx = drives.index(i, 0);
+        out << idx.data(DriveListModel::deviceRole).toString()
+                + QStringLiteral(" (")
+                + idx.data(DriveListModel::descriptionRole).toString()
+                + QStringLiteral(")");
+    }
+    return out;
+}
+
 int Cli::run()
 {
     QCommandLineParser parser;
@@ -200,29 +227,14 @@ int Cli::run()
     {
         DriveListModel dlm;
         dlm.processDriveList(Drivelist::ListStorageDevices() );
-        bool foundDrive = false;
-        int numDrives = dlm.rowCount( QModelIndex() );
 
-        for (int i = 0; i < numDrives; i++)
-        {
-            if (dlm.index(i, 0).data(dlm.deviceRole) == args[1])
-            {
-                foundDrive = true;
-                break;
-            }
-        }
-
-        if (!foundDrive)
+        if (!destinationIsRemovable(dlm, args[1]))
         {
             std::cerr << "Destination drive is not in list of removable volumes. Choose one of the following:" << std::endl << std::endl;
 
-            for (int i = 0; i < numDrives; i++)
-            {
-                QModelIndex idx = dlm.index(i, 0);
-                QByteArray line = idx.data(dlm.deviceRole).toByteArray()+" ("+idx.data(dlm.descriptionRole).toByteArray()+")";
-
-                std::cerr << line.constData() << std::endl;
-            }
+            const QStringList choices = removableDestinations(dlm);
+            for (const QString &line : choices)
+                std::cerr << line.toStdString() << std::endl;
 
             std::cerr << std::endl << "Or use --enable-writing-system-drives to overrule." << std::endl;
             return 1;

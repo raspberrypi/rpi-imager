@@ -5679,3 +5679,100 @@ TEST_CASE("A signing key that is a directory is refused separately",
     CHECK(err.contains(QStringLiteral("not a regular file")));
     CHECK(err.contains(dir.path()));
 }
+
+// -- Where the command line will let a script write --------------------
+//
+// Unless --enable-writing-system-drives is given, the destination must be
+// one of the removable volumes the system reports. This is the CLI's
+// version of the storage picker greying out the machine's own disk, and
+// there is no dialog behind it: a script that names the wrong device is
+// refused here or not at all.
+
+namespace {
+
+Drivelist::DeviceDescriptor removable(const std::string &device,
+                                      const std::string &description)
+{
+    Drivelist::DeviceDescriptor d;
+    d.device = device;
+    d.description = description;
+    d.size = 32ull * 1024 * 1024 * 1024;
+    d.isRemovable = true;
+    d.isUSB = true;
+    d.isSystem = false;
+    return d;
+}
+
+} // namespace
+
+TEST_CASE("A destination among the removable volumes is allowed",
+          "[cli][destination]")
+{
+    DriveListModel drives;
+    drives.processDriveList({ removable("/dev/sdb", "Generic Card Reader") });
+
+    CHECK(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdb")));
+}
+
+TEST_CASE("A destination that is not listed is refused", "[cli][destination]")
+{
+    // The system disk is not in the removable list, so naming it here is
+    // refused. A script with a typo does not get to write over root.
+    DriveListModel drives;
+    drives.processDriveList({ removable("/dev/sdb", "Generic Card Reader") });
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sda")));
+    CHECK_FALSE(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/nvme0n1")));
+}
+
+TEST_CASE("The match is exact", "[cli][destination]")
+{
+    // /dev/sdb1 is a partition of the listed disk, not the disk. Writing an
+    // image to a partition of a card produces something that will not boot.
+    DriveListModel drives;
+    drives.processDriveList({ removable("/dev/sdb", "Generic Card Reader") });
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdb1")));
+    CHECK_FALSE(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sd")));
+    CHECK_FALSE(Cli::destinationIsRemovable(drives, QString()));
+}
+
+TEST_CASE("Nothing plugged in allows nothing", "[cli][destination]")
+{
+    DriveListModel drives;
+    drives.processDriveList({});
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdb")));
+    CHECK(Cli::removableDestinations(drives).isEmpty());
+}
+
+TEST_CASE("The refusal lists what could have been written instead",
+          "[cli][destination]")
+{
+    // With no display and no picker, this list is the operator's only way of
+    // finding out what the right answer was.
+    DriveListModel drives;
+    drives.processDriveList({
+        removable("/dev/sdb", "Generic Card Reader"),
+        removable("/dev/sdc", "SanDisk Extreme"),
+    });
+
+    const QStringList choices = Cli::removableDestinations(drives);
+    REQUIRE(choices.size() == 2);
+    CHECK(choices.contains(QStringLiteral("/dev/sdb (Generic Card Reader)")));
+    CHECK(choices.contains(QStringLiteral("/dev/sdc (SanDisk Extreme)")));
+}
+
+TEST_CASE("Every removable volume can be chosen", "[cli][destination]")
+{
+    DriveListModel drives;
+    drives.processDriveList({
+        removable("/dev/sdb", "First"),
+        removable("/dev/sdc", "Second"),
+        removable("/dev/sdd", "Third"),
+    });
+
+    CHECK(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdb")));
+    CHECK(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdc")));
+    CHECK(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdd")));
+}
