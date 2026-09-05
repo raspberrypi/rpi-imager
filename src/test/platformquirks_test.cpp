@@ -534,6 +534,20 @@ private:
 
 } // namespace
 
+// The only two cases in the suite that a non-root run genuinely loses.
+// Everything else that needs privilege adapts instead -- chowning the loop
+// device it made, or reaching for sudo -- so these are the exception rather
+// than the rule.
+//
+// They are safe to run as root: MountedLoopDisk creates its own backing
+// file, attaches its own loop device and mounts it inside a temporary
+// directory, then detaches on the way out. Nothing pre-existing is touched.
+//
+//     sudo ctest -R privileged        (or)
+//     sudo ./platformquirks_test "[privileged]"
+//
+// Doing so takes platformquirks_linux.cpp from 282 to 315 branches taken --
+// the real umount(2) path, which cannot be reached any other way.
 TEST_CASE("unmountDisk unmounts a mounted partition of the target disk",
           "[platformquirks][disk][privileged]") {
     if (!runningAsRoot())
