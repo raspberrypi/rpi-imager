@@ -86,6 +86,26 @@ struct TimeoutConfig {
  * 
  * @note On TimedOut, the operation thread is detached and may continue running.
  *       Use onTimeout to trigger an abort (e.g., close fd to unblock syscall).
+ *
+ * @warning THE OPERATION MUST OWN EVERYTHING IT TOUCHES.
+ *
+ * On the TimedOut and Cancelled paths the worker is detached and this
+ * function returns immediately, so the operation keeps running -- for as
+ * long as its syscall blocks -- while the caller's frame unwinds and the
+ * caller's objects are destroyed. Anything the callable reaches through a
+ * reference or a raw pointer is therefore liable to be freed underneath it.
+ *
+ * Capture by value, or by shared_ptr for anything that has to be written
+ * back or is too large to copy. Do not capture locals by reference, and do
+ * not hand it a raw pointer to something the caller owns.
+ *
+ * This is not hypothetical. DownloadThread's end-of-device write passed a
+ * pointer into a local buffer and a raw pointer to a member-owned file
+ * object; cancelling early in a write produced a heap-use-after-free --
+ * AddressSanitizer caught a 1 MiB read on the detached worker thread -- and
+ * a SEGFAULT in the suite. FileOperations' sync fallback captured its
+ * result variables by reference and stored into a frame that had returned.
+ * Both are fixed; the pattern is easy to reintroduce.
  */
 template<typename Func>
 TimeoutResult runWithTimeout(

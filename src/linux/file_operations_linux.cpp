@@ -905,11 +905,20 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
   
   // Replay pending writes synchronously with timeout protection
   for (const auto& pw : pendingWrites) {
-    ssize_t written = -1;
-    
+    // Shared with the worker, and the write details taken by value.
+    // runWithTimeout() detaches its worker when it times out, so a worker
+    // still inside pwrite() outlives this frame: storing through &written
+    // wrote into a stack slot that had gone, and reading pw read an element
+    // of a vector that had been destroyed. (The buffer pw.data points at is
+    // owned elsewhere and is a separate question.)
+    auto written = std::make_shared<ssize_t>(-1);
+    const std::uint8_t* const data = pw.data;
+    const std::size_t size = pw.size;
+    const std::uint64_t offset = pw.offset;
+
     auto result = runWithTimeout(
-        [this, &pw, &written]() {
-          written = pwrite(fd_, pw.data, pw.size, static_cast<off_t>(pw.offset));
+        [this, data, size, offset, written]() {
+          *written = pwrite(fd_, data, size, static_cast<off_t>(offset));
         },
         TimeoutConfig(kSyncWriteTimeoutSeconds)
             .withOnTimeout([this, &pw]() {
@@ -925,7 +934,7 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
       return FileError::kTimeout;
     }
     
-    if (written < 0 || static_cast<std::size_t>(written) != pw.size) {
+    if (*written < 0 || static_cast<std::size_t>(*written) != pw.size) {
       Log("Sync fallback: write failed at offset " + std::to_string(pw.offset));
       return FileError::kWriteError;
     }
@@ -941,9 +950,11 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
   }
   
   // Sync to device with timeout protection
-  int syncResult = -1;
+  // Shared for the same reason as the replay above: an abandoned worker
+  // still inside fsync() must not store into a frame that has returned.
+  auto syncResult = std::make_shared<int>(-1);
   auto fsyncResult = runWithTimeout(
-      [this, &syncResult]() { syncResult = fsync(fd_); },
+      [this, syncResult]() { *syncResult = fsync(fd_); },
       TimeoutConfig(kSyncFsyncTimeoutSeconds)
           .withOnTimeout([this]() {
             Log("Timeout: fsync - closing fd");
@@ -958,7 +969,7 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
     return FileError::kTimeout;
   }
   
-  if (syncResult != 0) {
+  if (*syncResult != 0) {
     Log("Sync fallback: fsync failed");
     return FileError::kSyncError;
   }
