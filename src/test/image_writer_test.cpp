@@ -5075,3 +5075,178 @@ TEST_CASE("A storage target of only whitespace is taken at its word",
 
     CHECK(w.resolveFastbootStorageTarget() == QStringLiteral(" "));
 }
+
+// ══════════════════════════════════════════════════════════════
+// Images found on inserted media
+//
+// On a kiosk or an embedded build there may be no network, so a USB stick
+// with an image on it is how the OS gets chosen. The scan walks each mounted
+// volume and offers what it finds as OS entries.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class MediaImageWriter : public ImageWriter
+{
+public:
+    MediaImageWriter() : ImageWriter(nullptr) {}
+
+    QString mediaRoot;
+
+protected:
+    QString usbMediaRoot() const override { return mediaRoot; }
+};
+
+// Lay out volumes under a root: { "STICK": { "os.img", "notes.txt" } }
+void layOutMedia(const QString &root,
+                 const QList<QPair<QString, QStringList>> &volumes)
+{
+    for (const auto &[volume, files] : volumes) {
+        const QString dir = root + "/" + volume;
+        REQUIRE(QDir().mkpath(dir));
+        for (const QString &name : files) {
+            QFile f(dir + "/" + name);
+            REQUIRE(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(1024, 'x'));
+            f.close();
+        }
+    }
+}
+
+QJsonArray mediaEntries(const QByteArray &json)
+{
+    return QJsonDocument::fromJson(json).array();
+}
+
+} // namespace
+
+TEST_CASE("An image on inserted media is offered", "[imagewriter][usbsource]")
+{
+    QTemporaryDir media;
+    REQUIRE(media.isValid());
+    layOutMedia(media.path(), {{QStringLiteral("STICK"),
+                                {QStringLiteral("raspios.img")}}});
+
+    MediaImageWriter w;
+    w.mediaRoot = media.path();
+
+    const auto entries = mediaEntries(w.getUsbSourceOSlist());
+    REQUIRE(entries.size() == 1);
+
+    const auto o = entries[0].toObject();
+    CHECK(o.value(QStringLiteral("name")).toString() == QStringLiteral("raspios.img"));
+    CHECK(o.value(QStringLiteral("description")).toString()
+          == QStringLiteral("STICK/raspios.img"));
+    CHECK(o.value(QStringLiteral("url")).toString().startsWith(QStringLiteral("file://")));
+    CHECK(o.value(QStringLiteral("image_download_size")).toInt() == 1024);
+}
+
+TEST_CASE("Only image-shaped files are offered", "[imagewriter][usbsource]")
+{
+    // A stick with holiday photos on it should not fill the OS list with
+    // them, and selecting a text file to write to a card helps nobody.
+    QTemporaryDir media;
+    REQUIRE(media.isValid());
+    layOutMedia(media.path(), {{QStringLiteral("STICK"), {
+        QStringLiteral("os.img"), QStringLiteral("os.zip"),
+        QStringLiteral("os.gz"),  QStringLiteral("os.xz"),
+        QStringLiteral("os.zst"), QStringLiteral("os.wic"),
+        QStringLiteral("notes.txt"), QStringLiteral("photo.jpg"),
+        QStringLiteral("README"),
+    }}});
+
+    MediaImageWriter w;
+    w.mediaRoot = media.path();
+
+    const auto entries = mediaEntries(w.getUsbSourceOSlist());
+    CHECK(entries.size() == 6);
+
+    QStringList names;
+    for (const auto &e : entries)
+        names << e.toObject().value(QStringLiteral("name")).toString();
+    INFO("offered: " << names.join(QStringLiteral(", ")).toStdString());
+    CHECK_FALSE(names.contains(QStringLiteral("notes.txt")));
+    CHECK_FALSE(names.contains(QStringLiteral("README")));
+}
+
+TEST_CASE("Every mounted volume is looked at", "[imagewriter][usbsource]")
+{
+    QTemporaryDir media;
+    REQUIRE(media.isValid());
+    layOutMedia(media.path(), {
+        {QStringLiteral("STICK"), {QStringLiteral("a.img")}},
+        {QStringLiteral("CARD"),  {QStringLiteral("b.img")}},
+    });
+
+    MediaImageWriter w;
+    w.mediaRoot = media.path();
+
+    const auto entries = mediaEntries(w.getUsbSourceOSlist());
+    CHECK(entries.size() == 2);
+}
+
+TEST_CASE("The volume an image came from is named", "[imagewriter][usbsource]")
+{
+    // Two sticks can hold a file of the same name. The description is the
+    // only thing telling the user which one they are picking.
+    QTemporaryDir media;
+    REQUIRE(media.isValid());
+    layOutMedia(media.path(), {
+        {QStringLiteral("STICK_A"), {QStringLiteral("os.img")}},
+        {QStringLiteral("STICK_B"), {QStringLiteral("os.img")}},
+    });
+
+    MediaImageWriter w;
+    w.mediaRoot = media.path();
+
+    QStringList descriptions;
+    for (const auto &e : mediaEntries(w.getUsbSourceOSlist()))
+        descriptions << e.toObject().value(QStringLiteral("description")).toString();
+
+    CHECK(descriptions.contains(QStringLiteral("STICK_A/os.img")));
+    CHECK(descriptions.contains(QStringLiteral("STICK_B/os.img")));
+}
+
+TEST_CASE("Nothing mounted offers nothing", "[imagewriter][usbsource]")
+{
+    QTemporaryDir media;
+    REQUIRE(media.isValid());
+
+    MediaImageWriter w;
+    w.mediaRoot = media.path();
+
+    CHECK(mediaEntries(w.getUsbSourceOSlist()).isEmpty());
+}
+
+TEST_CASE("A media root that is not there is not an error",
+          "[imagewriter][usbsource]")
+{
+    // /media does not exist on every system, and a machine without it should
+    // simply offer no local images rather than failing to build a chooser.
+    MediaImageWriter w;
+    w.mediaRoot = QStringLiteral("/nonexistent-media-root-for-tests");
+
+    QByteArray json;
+    REQUIRE_NOTHROW(json = w.getUsbSourceOSlist());
+    CHECK(mediaEntries(json).isEmpty());
+}
+
+TEST_CASE("A volume with no images contributes nothing",
+          "[imagewriter][usbsource]")
+{
+    QTemporaryDir media;
+    REQUIRE(media.isValid());
+    layOutMedia(media.path(), {
+        {QStringLiteral("EMPTY"), {}},
+        {QStringLiteral("DOCS"),  {QStringLiteral("a.txt")}},
+        {QStringLiteral("STICK"), {QStringLiteral("os.img")}},
+    });
+
+    MediaImageWriter w;
+    w.mediaRoot = media.path();
+
+    const auto entries = mediaEntries(w.getUsbSourceOSlist());
+    REQUIRE(entries.size() == 1);
+    CHECK(entries[0].toObject().value(QStringLiteral("description")).toString()
+          == QStringLiteral("STICK/os.img"));
+}

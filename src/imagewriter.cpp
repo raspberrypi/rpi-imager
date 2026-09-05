@@ -3135,21 +3135,27 @@ bool ImageWriter::mountUsbSourceMedia()
     return devices > 0;
 }
 
+QString ImageWriter::usbMediaRoot() const
+{
+    return QStringLiteral("/media");
+}
+
 QByteArray ImageWriter::getUsbSourceOSlist()
 {
 #ifdef Q_OS_LINUX
     QJsonArray oslist;
-    QDir dir("/media");
+    const QString root = usbMediaRoot();
+    QDir dir(root);
     const QStringList medialist = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz", "*.zst", "*.wic"};
 
     for (const QString &devname : medialist)
     {
-        QDir subdir("/media/"+devname);
+        QDir subdir(root+"/"+devname);
         const QStringList files = subdir.entryList(namefilters, QDir::Files, QDir::Name);
         for (const QString &file : files)
         {
-            QString path = "/media/"+devname+"/"+file;
+            QString path = root+"/"+devname+"/"+file;
             QFileInfo fi(path);
 
             QJsonObject f = {

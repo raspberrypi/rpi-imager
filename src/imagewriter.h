@@ -284,6 +284,14 @@ public:
     /* Returns a json formatted list of the OS images found on USB stick */
     Q_INVOKABLE QByteArray getUsbSourceOSlist();
 
+protected:
+    // Where inserted media appears. Virtual so the scan above can be run
+    // against a directory a test lays out, rather than only against real
+    // media mounted under /media by the running system.
+    virtual QString usbMediaRoot() const;
+
+public:
+
     /* Functions to collect information from computer running imager to make image customization easier */
     Q_INVOKABLE QString getDefaultPubKey();
     Q_INVOKABLE bool hasPubKey();
