@@ -854,6 +854,24 @@ static QString xmlEscape(const QString& input) {
     return result;
 }
 
+// Test API for unit testing internal functions
+//
+// These two decide the content and the name of a polkit policy file, which is
+// what grants pkexec the right to run this binary as root. They are pure and
+// worth pinning: an escaping mistake puts attacker-influenced text into a
+// privilege-granting document, and a filename mistake either collides with
+// another AppImage's policy or writes outside the actions directory.
+#ifdef PLATFORMQUIRKS_ENABLE_TEST_API
+namespace TestAPI {
+    QString xmlEscape(const QString& input) { return ::PlatformQuirks::xmlEscape(input); }
+
+    bool generatePolkitPolicyFilename(const char* appImagePath, char* buffer, size_t bufferSize)
+    {
+        return ::PlatformQuirks::generatePolkitPolicyFilename(appImagePath, buffer, bufferSize);
+    }
+}
+#endif
+
 // Polkit action directories in order of preference:
 // - /etc/polkit-1/actions/ is the local override location (writable on immutable distros)
 // - /usr/share/polkit-1/actions/ is the vendor location (read-only on immutable distros)

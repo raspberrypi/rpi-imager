@@ -682,3 +682,142 @@ TEST_CASE("Scroll direction follows the flag Qt reports",
     CHECK_FALSE(PlatformQuirks::isScrollInverted(false));
 }
 #endif // Q_OS_LINUX
+
+// ============================================================================
+// The polkit policy an AppImage installs for itself
+//
+// An AppImage cannot write to a block device unelevated, so it installs a
+// polkit action granting pkexec the right to run it as root. Two pure
+// functions decide that file: one escapes the text that goes into it, the
+// other names it. Both are worth pinning -- the document grants root, and its
+// content includes a path the user chose by where they saved the AppImage.
+// ============================================================================
+
+#if defined(Q_OS_LINUX) && defined(PLATFORMQUIRKS_ENABLE_TEST_API)
+
+#include <QXmlStreamReader>
+
+namespace PlatformQuirks {
+namespace TestAPI {
+    QString xmlEscape(const QString& input);
+    bool generatePolkitPolicyFilename(const char* appImagePath, char* buffer, size_t bufferSize);
+}
+}
+
+namespace {
+
+// What an XML parser makes of the escaped text, which is the only opinion
+// that matters -- the policy is read by polkit's parser, not by us.
+QString parsedBack(const QString& escaped)
+{
+    const QString doc = QStringLiteral("<r>") + escaped + QStringLiteral("</r>");
+    QXmlStreamReader xml(doc);
+    QString text;
+    while (!xml.atEnd()) {
+        if (xml.readNext() == QXmlStreamReader::Characters)
+            text += xml.text().toString();
+    }
+    REQUIRE_FALSE(xml.hasError());
+    return text;
+}
+
+} // namespace
+
+TEST_CASE("XML escaping survives a round trip through a parser",
+          "[platformquirks][polkit]")
+{
+    // Every one of these appears in real filesystem paths.
+    const QStringList inputs = {
+        QStringLiteral("/home/user/Applications/rpi-imager.AppImage"),
+        QStringLiteral("/home/user/R&D/rpi-imager.AppImage"),
+        QStringLiteral("/home/user/\"quoted\"/rpi-imager.AppImage"),
+        QStringLiteral("/home/user/it's mine/rpi-imager.AppImage"),
+        QStringLiteral("/home/user/<angle>/rpi-imager.AppImage"),
+        QStringLiteral("/tmp/a&b<c>d\"e'f"),
+        QStringLiteral(""),
+    };
+
+    for (const QString& in : inputs) {
+        const QString escaped = PlatformQuirks::TestAPI::xmlEscape(in);
+        INFO("input:   " << in.toStdString());
+        INFO("escaped: " << escaped.toStdString());
+        CHECK(parsedBack(escaped) == in);
+    }
+}
+
+TEST_CASE("XML escaping leaves no raw markup behind", "[platformquirks][polkit]")
+{
+    // The specific failure that matters: a path that closes the element it is
+    // sitting in and opens one of its own would rewrite the policy.
+    const QString hostile =
+        QStringLiteral("/tmp/x</annotate><annotate key=\"org.freedesktop.policykit.exec.path\">/bin/sh");
+    const QString escaped = PlatformQuirks::TestAPI::xmlEscape(hostile);
+
+    INFO("escaped: " << escaped.toStdString());
+    CHECK_FALSE(escaped.contains(QLatin1Char('<')));
+    CHECK_FALSE(escaped.contains(QLatin1Char('>')));
+    CHECK_FALSE(escaped.contains(QLatin1Char('"')));
+    CHECK(parsedBack(escaped) == hostile);
+}
+
+TEST_CASE("XML escaping keeps the whitespace XML allows", "[platformquirks][polkit]")
+{
+    // Tab, newline and carriage return are legal content; escaping them would
+    // be harmless but wrong, and the other control characters are not legal
+    // and have to go.
+    CHECK(PlatformQuirks::TestAPI::xmlEscape(QStringLiteral("a\tb\nc\rd"))
+          == QStringLiteral("a\tb\nc\rd"));
+
+    const QString withNul = QStringLiteral("a") + QChar(0x01) + QStringLiteral("b");
+    const QString escaped = PlatformQuirks::TestAPI::xmlEscape(withNul);
+    INFO("escaped: " << escaped.toStdString());
+    CHECK(escaped == QStringLiteral("a&#x1;b"));
+}
+
+TEST_CASE("A policy filename is stable, unique and stays in its directory",
+          "[platformquirks][polkit]")
+{
+    char a[128] = {0}, b[128] = {0}, again[128] = {0};
+
+    REQUIRE(PlatformQuirks::TestAPI::generatePolkitPolicyFilename(
+        "/home/user/Apps/rpi-imager.AppImage", a, sizeof(a)));
+    REQUIRE(PlatformQuirks::TestAPI::generatePolkitPolicyFilename(
+        "/opt/rpi-imager.AppImage", b, sizeof(b)));
+    REQUIRE(PlatformQuirks::TestAPI::generatePolkitPolicyFilename(
+        "/home/user/Apps/rpi-imager.AppImage", again, sizeof(again)));
+
+    const QString nameA = QString::fromLatin1(a);
+    INFO("A: " << nameA.toStdString() << "  B: " << b);
+
+    // The same AppImage keeps the same policy, so a second run does not
+    // litter the actions directory with a new file each time.
+    CHECK(nameA == QString::fromLatin1(again));
+
+    // Two AppImages in different places do not share one.
+    CHECK(nameA != QString::fromLatin1(b));
+
+    CHECK(nameA.startsWith(QStringLiteral("com.raspberrypi.rpi-imager.appimage-")));
+    CHECK(nameA.endsWith(QStringLiteral(".policy")));
+
+    // It is joined onto a directory, so anything that looks like a path
+    // would write somewhere nobody intended.
+    CHECK_FALSE(nameA.contains(QLatin1Char('/')));
+    CHECK_FALSE(nameA.contains(QStringLiteral("..")));
+}
+
+TEST_CASE("A policy filename refuses what it cannot write", "[platformquirks][polkit]")
+{
+    char buf[128] = {0};
+    CHECK_FALSE(PlatformQuirks::TestAPI::generatePolkitPolicyFilename(
+        nullptr, buf, sizeof(buf)));
+    CHECK_FALSE(PlatformQuirks::TestAPI::generatePolkitPolicyFilename(
+        "/opt/x.AppImage", nullptr, sizeof(buf)));
+
+    // Too small to hold the name: better to say so than to write a truncated
+    // filename that silently becomes a different policy.
+    char tiny[32] = {0};
+    CHECK_FALSE(PlatformQuirks::TestAPI::generatePolkitPolicyFilename(
+        "/opt/x.AppImage", tiny, sizeof(tiny)));
+}
+
+#endif // Q_OS_LINUX && PLATFORMQUIRKS_ENABLE_TEST_API
