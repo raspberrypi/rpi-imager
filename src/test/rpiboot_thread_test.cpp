@@ -25,6 +25,7 @@
 #include "rpibootthread.h"
 #include "rpiboot/libusb_transport.h"
 #include "rpiboot/firmware_manager.h"
+#include "rpiboot/test/mock_usb_transport.h"
 
 #include <QCoreApplication>
 #include <QStringList>
@@ -55,6 +56,13 @@ UsbDeviceInfo device(uint8_t bus, uint8_t addr, std::vector<uint8_t> port,
 
 // A bus with whatever the test says is plugged into it.
 struct FakeBus {
+    // Non-null once a test wants the board to actually open. The mock is
+    // owned by the test: openDevice() hands out a view, because the thread
+    // opens the device more than once and destroys each transport when the
+    // step is done.
+    rpiboot::testing::MockUsbTransport *transport = nullptr;
+    int opens = 0;
+
     std::vector<UsbDeviceInfo> fastbootDevices;
     std::vector<UsbDeviceInfo> bootDevices;
     int fastbootScans = 0;
@@ -63,6 +71,34 @@ struct FakeBus {
     // Runs at the top of every scan, so a test can end the poll rather than
     // waiting out the sixty seconds the real one is willing to spend.
     std::function<void(int)> onScan;
+};
+
+// Forwards to a transport the test owns. runPhase() holds each transport in
+// a local and destroys it when the step ends, so handing out the mock itself
+// would be a use-after-free the second time round.
+class TransportView : public rpiboot::IUsbTransport
+{
+public:
+    explicit TransportView(rpiboot::testing::MockUsbTransport &t) : _t(t) {}
+
+    bool controlTransfer(uint8_t rt, uint8_t r, uint16_t v, uint16_t i,
+                         std::span<const uint8_t> d, int ms) override
+    { return _t.controlTransfer(rt, r, v, i, d, ms); }
+    int controlTransferIn(uint8_t rt, uint8_t r, uint16_t v, uint16_t i,
+                          std::span<uint8_t> b, int ms) override
+    { return _t.controlTransferIn(rt, r, v, i, b, ms); }
+    int bulkWrite(uint8_t ep, std::span<const uint8_t> d, int ms) override
+    { return _t.bulkWrite(ep, d, ms); }
+    int bulkRead(uint8_t ep, std::span<uint8_t> b, int ms) override
+    { return _t.bulkRead(ep, b, ms); }
+    bool isOpen() const override { return _t.isOpen(); }
+    std::string interfaceString() const override { return _t.interfaceString(); }
+    uint8_t outEndpoint() const override { return _t.outEndpoint(); }
+    uint8_t inEndpoint() const override { return _t.inEndpoint(); }
+    QString initDiagnostics() const override { return QStringLiteral("cfg=1 if=0"); }
+
+private:
+    rpiboot::testing::MockUsbTransport &_t;
 };
 
 // Handed to the thread; the bus itself is owned by the test and outlives it.
@@ -95,7 +131,10 @@ public:
 
     std::unique_ptr<rpiboot::IUsbTransport> openDevice(const UsbDeviceInfo &) const override
     {
-        return nullptr;
+        ++_bus.opens;
+        if (!_bus.transport)
+            return nullptr;
+        return std::make_unique<TransportView>(*_bus.transport);
     }
 
 private:
@@ -638,4 +677,69 @@ TEST_CASE("A bus that cannot be opened ends the phase", "[rpiboot][phase]")
 
     QString fbId, bcDiag, fsDiag;
     CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+}
+
+TEST_CASE("A bootcode that will not upload is reported with its diagnostics",
+          "[rpiboot][phase]")
+{
+    // The board opened, so the problem is the firmware rather than the bus.
+    // An empty firmware directory is what a half-written cache looks like.
+    // The USB init account goes into the message, because by the time
+    // anyone reads it the board is usually gone from the bus.
+    rpiboot::testing::MockUsbTransport mock;
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.bus.transport = &mock;
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    CHECK(t.bus.opens >= 1);
+    CHECK(bcDiag == QStringLiteral("cfg=1 if=0"));
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK(log.errors.last().contains(QStringLiteral("rpiboot protocol failed")));
+}
+
+TEST_CASE("The board on the chosen port is the one opened", "[rpiboot][phase]")
+{
+    // Two boards on the bus. The scan picks by port path, and the one it
+    // picks is what gets opened -- reflashing the wrong module would be the
+    // whole failure.
+    rpiboot::testing::MockUsbTransport mock;
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.bus.transport = &mock;
+    t.bus.bootDevices = {
+        device(9, 9, {7, 8}, 0),      // somebody else's
+        device(1, 4, {1, 2}, 0),      // ours
+    };
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+    CHECK(t.bus.bootScans == 1);
+    CHECK(t.bus.opens == 1);
+}
+
+TEST_CASE("Cancelling during the bootcode upload reports nothing to the user",
+          "[rpiboot][phase][cancel]")
+{
+    // A cancelled upload is the user's own doing. It still stops, but it is
+    // not an error to put in front of them.
+    rpiboot::testing::MockUsbTransport mock;
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.bus.transport = &mock;
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+    t.bus.onScan = [&t](int) { t.cancel(); };
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+    CHECK(log.errors.isEmpty());
 }
