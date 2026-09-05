@@ -31,6 +31,7 @@
 #include "platformhelper.h"
 #include "app_resources.h"
 
+#include <QAccessible>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -112,6 +113,19 @@ bool prepareModule()
 
 } // namespace
 
+// Turns the accessibility flag on and off so a test can stand on both sides
+// of it. This lives here rather than on PlatformHelper: production code
+// should not carry a setter whose only caller is a test, and QAccessible's
+// own setActive() is public API that needs nothing added to reach it.
+class TestAccessibility : public QObject
+{
+    Q_OBJECT
+
+public:
+    Q_INVOKABLE void setActive(bool active) { QAccessible::setActive(active); }
+    Q_INVOKABLE bool isActive() const { return QAccessible::isActive(); }
+};
+
 class Setup : public QObject
 {
     Q_OBJECT
@@ -168,6 +182,11 @@ public slots:
                                               [](QQmlEngine *e, QJSEngine *j) -> QObject * {
                                                   return ImageWriter::create(e, j);
                                               });
+
+        qmlRegisterSingletonType<TestAccessibility>(kUri, 1, 0, "TestAccessibility",
+                                                    [](QQmlEngine *, QJSEngine *) -> QObject * {
+                                                        return new TestAccessibility;
+                                                    });
     }
 
     void qmlEngineAvailable(QQmlEngine *engine)

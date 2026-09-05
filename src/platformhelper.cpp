@@ -6,6 +6,54 @@
 #include "platformhelper.h"
 #include "platformquirks.h"
 
+#include <QAccessible>
+#include <QPointer>
+
+namespace {
+
+// One observer per process, forwarding to every PlatformHelper that has
+// asked. QAccessible::installActivationObserver takes a bare pointer and
+// keeps it, so this outlives any particular helper.
+class AccessibilityWatcher : public QAccessible::ActivationObserver
+{
+public:
+    static AccessibilityWatcher &instance()
+    {
+        static AccessibilityWatcher watcher;
+        return watcher;
+    }
+
+    void watch(PlatformHelper *helper)
+    {
+        if (!_installed) {
+            QAccessible::installActivationObserver(this);
+            _installed = true;
+        }
+        for (const auto &known : _helpers) {
+            if (known == helper)
+                return;
+        }
+        _helpers.append(helper);
+    }
+
+    void accessibilityActiveChanged(bool) override
+    {
+        // QPointer: the singleton outlives the helpers, and a QML engine
+        // teardown destroys them without telling us.
+        _helpers.removeIf([](const QPointer<PlatformHelper> &h) { return h.isNull(); });
+        for (const auto &helper : _helpers) {
+            if (helper)
+                emit helper->assistiveTechnologyActiveChanged();
+        }
+    }
+
+private:
+    QList<QPointer<PlatformHelper>> _helpers;
+    bool _installed = false;
+};
+
+} // namespace
+
 bool PlatformHelper::hasNetworkConnectivity() const
 {
     return PlatformQuirks::hasNetworkConnectivity();
@@ -44,4 +92,15 @@ qreal PlatformHelper::fontDpiCorrection() const
 bool PlatformHelper::prefersReducedMotion() const
 {
     return PlatformQuirks::prefersReducedMotion();
+}
+
+void PlatformHelper::ensureAccessibilityObserver() const
+{
+    AccessibilityWatcher::instance().watch(const_cast<PlatformHelper *>(this));
+}
+
+bool PlatformHelper::assistiveTechnologyActive() const
+{
+    ensureAccessibilityObserver();
+    return QAccessible::isActive();
 }

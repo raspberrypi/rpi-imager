@@ -291,12 +291,37 @@ WizardStepBase {
                 id: filterSystemDrives
                 checked: true
                 text: qsTr("Exclude system drives")
-                Accessible.description: qsTr("When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.")
+                // Carries what the confirmation dialog would have said, because
+                // for a screen reader user this is read instead of it.
+                Accessible.description: qsTr("When checked, system drives are hidden from the list. Unchecking shows system drives, including the one this computer is running from, and writing to one of those will destroy the installed operating system.")
 
                 onToggled: {
                     if (!checked) {
-                        // If warnings are disabled, bypass the confirmation dialog
-                        if (root.wizardContainer && root.wizardContainer.disableWarnings) {
+                        // Two ways past the confirmation.
+                        //
+                        // disableWarnings is the deployment-wide opt-out.
+                        //
+                        // The other is an assistive technology being attached.
+                        // This dialog exists to slow down someone who has not
+                        // registered what the toggle does; a screen reader has
+                        // already read the label and the description above
+                        // aloud, which is more than a sighted mouse user is
+                        // ever shown. Interrupting the user who was told the
+                        // most, to protect the one who was told the least, is
+                        // the wrong way round -- so the warning lives in the
+                        // description, where it is spoken, rather than behind
+                        // a prompt.
+                        //
+                        // This is only the filter toggle. Choosing a system
+                        // drive still goes through ConfirmSystemDriveDialog for
+                        // everybody: typing the drive's name is a statement of
+                        // intent rather than an interruption, and skipping it
+                        // would remove the confirmation rather than relocate
+                        // it.
+                        var skipConfirmation =
+                            (root.wizardContainer && root.wizardContainer.disableWarnings) ||
+                            PlatformHelper.assistiveTechnologyActive
+                        if (skipConfirmation) {
                             // Leave checkbox unchecked and continue showing system drives
                             dstlist.forceActiveFocus()
                         } else {
