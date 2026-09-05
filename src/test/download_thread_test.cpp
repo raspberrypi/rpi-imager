@@ -22,6 +22,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
 #include "downloadthread.h"
 #include "timeout_utils.h"
 
@@ -1777,4 +1778,125 @@ TEST_CASE("DownloadThread can be told to skip the end-of-device check",
     INFO("error: " << outcome.errorMessage.toStdString());
     REQUIRE(outcome.finished);
     CHECK(outcome.succeeded);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// What the user is told when a write fails
+//
+// _fileErrorToString() is the last step between a FileError and the dialog
+// somebody reads at two in the morning with a card that will not write. It
+// was entirely uncovered. The failures worth guarding against are quiet
+// ones: a forgotten case silently degrading to "Unknown storage error", or a
+// message that keeps its %1 placeholder because the .arg() was dropped.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+class ErrorStrings : public DownloadThread
+{
+public:
+    ErrorStrings() : DownloadThread("file:///nonexistent", "", "") {}
+    using DownloadThread::_fileErrorToString;
+};
+
+// Every error the enum defines, with the two that are deliberately silent
+// kept separate.
+const std::vector<rpi_imager::FileError> kReportedErrors = {
+    rpi_imager::FileError::kOpenError,
+    rpi_imager::FileError::kWriteError,
+    rpi_imager::FileError::kReadError,
+    rpi_imager::FileError::kSeekError,
+    rpi_imager::FileError::kSizeError,
+    rpi_imager::FileError::kCloseError,
+    rpi_imager::FileError::kLockError,
+    rpi_imager::FileError::kSyncError,
+    rpi_imager::FileError::kFlushError,
+    rpi_imager::FileError::kTimeout,
+};
+
+} // namespace
+
+TEST_CASE("Every storage error says something", "[download][errors]")
+{
+    ErrorStrings t;
+    for (auto e : kReportedErrors) {
+        const QString msg = t._fileErrorToString(e, QStringLiteral("verification"));
+        INFO("error " << static_cast<int>(e) << ": " << msg.toStdString());
+        CHECK_FALSE(msg.isEmpty());
+    }
+}
+
+TEST_CASE("Success and cancellation are not reported as errors",
+          "[download][errors]")
+{
+    // Cancelling is something the user did; telling them it failed would be
+    // both wrong and alarming.
+    ErrorStrings t;
+    CHECK(t._fileErrorToString(rpi_imager::FileError::kSuccess).isEmpty());
+    CHECK(t._fileErrorToString(rpi_imager::FileError::kCancelled).isEmpty());
+}
+
+TEST_CASE("No error message reaches the user with its placeholder intact",
+          "[download][errors]")
+{
+    // Several of these messages name the operation. Dropping the .arg() puts
+    // a literal %1 in front of the user, which is the kind of thing that
+    // survives review because the code reads correctly.
+    ErrorStrings t;
+    for (auto e : kReportedErrors) {
+        const QString withOp = t._fileErrorToString(e, QStringLiteral("verification"));
+        const QString without = t._fileErrorToString(e);
+        INFO("error " << static_cast<int>(e));
+        CHECK_FALSE(withOp.contains(QStringLiteral("%1")));
+        CHECK_FALSE(without.contains(QStringLiteral("%1")));
+    }
+}
+
+TEST_CASE("The operation name is used, and has a sensible default",
+          "[download][errors]")
+{
+    ErrorStrings t;
+    const QString named =
+        t._fileErrorToString(rpi_imager::FileError::kWriteError,
+                             QStringLiteral("verification"));
+    CHECK(named.contains(QStringLiteral("verification")));
+
+    // Called without one -- as the internal callers do -- it still reads as
+    // a sentence rather than trailing off.
+    const QString unnamed = t._fileErrorToString(rpi_imager::FileError::kWriteError);
+    INFO(unnamed.toStdString());
+    CHECK(unnamed.contains(QStringLiteral("storage operation")));
+}
+
+TEST_CASE("Each storage error is distinguishable from the unknown one",
+          "[download][errors]")
+{
+    // A case dropped from the switch degrades to the catch-all, which reads
+    // plausibly and tells the user nothing. Comparing against the message an
+    // unhandled value produces is what catches that.
+    ErrorStrings t;
+    const auto bogus = static_cast<rpi_imager::FileError>(9999);
+    const QString unknown = t._fileErrorToString(bogus, QStringLiteral("verification"));
+    REQUIRE_FALSE(unknown.isEmpty());
+
+    for (auto e : kReportedErrors) {
+        const QString msg = t._fileErrorToString(e, QStringLiteral("verification"));
+        INFO("error " << static_cast<int>(e) << " gave: " << msg.toStdString());
+        CHECK(msg != unknown);
+    }
+}
+
+TEST_CASE("Storage errors do not share a message with each other",
+          "[download][errors]")
+{
+    // Two errors reading identically means one of them was copied and not
+    // edited, and the user is told the wrong thing about their card.
+    ErrorStrings t;
+    std::vector<QString> seen;
+    for (auto e : kReportedErrors) {
+        const QString msg = t._fileErrorToString(e, QStringLiteral("verification"));
+        INFO("error " << static_cast<int>(e) << ": " << msg.toStdString());
+        CHECK(std::find(seen.begin(), seen.end(), msg) == seen.end());
+        seen.push_back(msg);
+    }
 }
