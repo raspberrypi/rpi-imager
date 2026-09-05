@@ -17,10 +17,18 @@ namespace {
 class AccessibilityWatcher : public QAccessible::ActivationObserver
 {
 public:
+    // Deliberately never destroyed. QAccessible keeps the bare pointer it
+    // is handed and there is no ordering guarantee between this object's
+    // destruction and Qt's accessibility teardown, so a function-local
+    // static would leave Qt holding a pointer to freed memory if an
+    // activation change arrived during shutdown. Removing the observer from
+    // a destructor has the same problem in the other direction: Qt's own
+    // registry may already be gone. One small object for the life of the
+    // process is the honest trade.
     static AccessibilityWatcher &instance()
     {
-        static AccessibilityWatcher watcher;
-        return watcher;
+        static AccessibilityWatcher *watcher = new AccessibilityWatcher;
+        return *watcher;
     }
 
     void watch(PlatformHelper *helper)
