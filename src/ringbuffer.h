@@ -88,7 +88,7 @@ public:
      * @param alignment Memory alignment for slots (default 4096 for direct I/O)
      */
     RingBuffer(size_t numSlots, size_t slotSize, size_t alignment = 4096,
-               uint32_t stallTimeoutMs = 30000);
+               uint32_t stallTimeoutMs = 90000);
     
     /**
      * @brief Destructor - frees all pre-allocated memory
@@ -264,7 +264,19 @@ private:
     // The default is the shipped value, so nothing changes for callers that
     // do not ask.
     uint32_t STALL_EVENT_THRESHOLD_MS = 50;   // = TimeoutDefaults::kRingBufferStallEventThresholdMs
-    uint32_t STALL_TIMEOUT_MS = 30000;        // = TimeoutDefaults::kRingBufferStallTimeoutMs
+    uint32_t STALL_TIMEOUT_MS = 90000;        // = TimeoutDefaults::kRingBufferStallTimeoutMs
+
+    // Time actually spent waiting since this side last made progress, guarded
+    // by _mutex. Both acquires used to keep this in a local, so it started at
+    // zero on every call; since every caller passes a positive timeout and
+    // retries in a loop, the limit was never reached and the stall was never
+    // detected. Counting only time spent waiting -- not wall-clock since the
+    // last call -- means a consumer busy writing to disk for a minute does not
+    // accuse the producer of stalling, and resetting on a successful acquire
+    // means a slow transfer that is still moving is never mistaken for one
+    // that has stopped.
+    uint64_t _producerStallMs = 0;
+    uint64_t _consumerStallMs = 0;
 };
 
 #endif // RINGBUFFER_H

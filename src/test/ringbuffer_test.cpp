@@ -342,9 +342,6 @@ TEST_CASE("A producer that never gets a slot gives up and says so", "[ringbuffer
     }
 
     // Waiting past the cumulative limit has to end, not hang the write.
-    // A positive timeout is honoured as-is and returns without accumulating;
-    // the stall ladder is only walked when the caller is prepared to wait,
-    // which is what the writer does.
     RingBuffer::Slot *blocked = rb.acquireWriteSlot(0);
     CHECK(blocked == nullptr);
     CHECK(rb.isStallTimeoutExceeded());
@@ -414,7 +411,7 @@ TEST_CASE("A slow but recovered wait is recorded", "[ringbuffer][stall]") {
 }
 
 TEST_CASE("Cancelling beats the stall timeout", "[ringbuffer][stall]") {
-    RingBuffer rb(2, 4096, 4096, 30000);   // the shipped timeout
+    RingBuffer rb(2, 4096, 4096, 30000);   // far longer than this test waits
 
     std::thread canceller([&rb] {
         std::this_thread::sleep_for(std::chrono::milliseconds(150));
@@ -460,4 +457,95 @@ TEST_CASE("A stall still hands back data already committed", "[ringbuffer][stall
     // The producer stays refused throughout: adding more to a dead pipeline
     // is what the stall exists to prevent.
     CHECK(rb.acquireWriteSlot(0) == nullptr);
+}
+
+// ── The way the shipping callers actually ask ───────────────────────────
+//
+// Every caller in the app passes a positive timeout and retries in a loop --
+// acquireReadSlot(100) until a slot arrives or the buffer says stop. The
+// stall ladder used to be walked from a local that started at zero on each
+// call, so a caller shaped like that could wait all day and never reach the
+// limit: the 30s stall layer documented in writeprogresswatchdog.h never
+// fired, and the specific "the download has stalled" message the user was
+// meant to get was unreachable.
+
+TEST_CASE("A stall is detected through a retry loop, not just one long wait",
+          "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 200);
+
+    // Ten short waits, the way DownloadExtractThread asks. Nothing is ever
+    // committed, so this is a dead stream.
+    int calls = 0;
+    for (int i = 0; i < 10 && !rb.isStallTimeoutExceeded(); ++i) {
+        CHECK(rb.acquireReadSlot(100) == nullptr);
+        ++calls;
+    }
+
+    INFO("gave up after " << calls << " calls of 100ms");
+    CHECK(rb.isStallTimeoutExceeded());
+    CHECK(rb.getStallType() == RingBuffer::StallType::ConsumerStall);
+    CHECK(calls < 10);   // detected, rather than merely running out of loop
+}
+
+TEST_CASE("A producer is caught stalling through a retry loop too",
+          "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 200);
+    for (int i = 0; i < 2; ++i) {
+        RingBuffer::Slot *slot = rb.acquireWriteSlot(100);
+        REQUIRE(slot != nullptr);
+        rb.commitWriteSlot(slot, 4096);
+    }
+
+    for (int i = 0; i < 10 && !rb.isStallTimeoutExceeded(); ++i)
+        CHECK(rb.acquireWriteSlot(100) == nullptr);
+
+    CHECK(rb.isStallTimeoutExceeded());
+    CHECK(rb.getStallType() == RingBuffer::StallType::ProducerStall);
+}
+
+TEST_CASE("A slow stream that keeps moving is not called stalled",
+          "[ringbuffer][stall]") {
+    // The other half of the fix, and the one that matters more: a stall is
+    // time spent waiting with nothing arriving, not time spent transferring.
+    // A download creeping along on a bad connection must never be aborted
+    // for being slow -- those are exactly the users the message is for.
+    RingBuffer rb(2, 4096, 4096, 200);
+
+    for (int round = 0; round < 8; ++round) {
+        // Wait a while with nothing there...
+        CHECK(rb.acquireReadSlot(100) == nullptr);
+
+        // ...then a little data arrives, well under the stall limit apart.
+        RingBuffer::Slot *w = rb.acquireWriteSlot(100);
+        REQUIRE(w != nullptr);
+        rb.commitWriteSlot(w, 64);
+
+        RingBuffer::Slot *r = rb.acquireReadSlot(100);
+        REQUIRE(r != nullptr);
+        rb.releaseReadSlot(r);
+
+        INFO("round " << round);
+        CHECK_FALSE(rb.isStallTimeoutExceeded());
+    }
+
+    // Total waiting across those rounds is several times the 200ms limit;
+    // what keeps it alive is that the clock restarts whenever data moves.
+    CHECK_FALSE(rb.isStallTimeoutExceeded());
+}
+
+TEST_CASE("reset() restarts the stall clock, not just the flag",
+          "[ringbuffer][stall]") {
+    RingBuffer rb(2, 4096, 4096, 200);
+
+    for (int i = 0; i < 10 && !rb.isStallTimeoutExceeded(); ++i)
+        rb.acquireReadSlot(100);
+    REQUIRE(rb.isStallTimeoutExceeded());
+
+    rb.reset();
+    CHECK_FALSE(rb.isStallTimeoutExceeded());
+
+    // If the accumulated wait had survived the reset, the very next call
+    // would stall again immediately and a retried write could never start.
+    CHECK(rb.acquireReadSlot(100) == nullptr);
+    CHECK_FALSE(rb.isStallTimeoutExceeded());
 }

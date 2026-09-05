@@ -113,14 +113,16 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
             if (!_writeAvailable.wait_for(lock, std::chrono::milliseconds(waitMs), waitPred)) {
                 // Timeout expired - check cumulative wait time
                 auto waitEnd = std::chrono::steady_clock::now();
-                cumulativeWaitMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
+                const uint64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
                 _producerWaitMs += waitMs;
-                
-                if (cumulativeWaitMs >= STALL_TIMEOUT_MS) {
+                _producerStallMs += (elapsedMs - cumulativeWaitMs);
+                cumulativeWaitMs = elapsedMs;
+
+                if (_producerStallMs >= STALL_TIMEOUT_MS) {
                     // Stall timeout exceeded - this is a fatal condition
                     _stallTimeoutExceeded = true;
                     _stallType.store(StallType::ProducerStall);
-                    qDebug() << "RingBuffer: Producer stall timeout exceeded after" << cumulativeWaitMs << "ms";
+                    qDebug() << "RingBuffer: Producer stall timeout exceeded after" << _producerStallMs << "ms";
                     return nullptr;
                 }
                 
@@ -158,7 +160,8 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
     size_t index = _freeSlots.back();
     _freeSlots.pop_back();
     _slotInUse[index] = 1;
-    
+
+    _producerStallMs = 0;   // progress: the stall clock starts again from here
     return &_slots[index];
 }
 
@@ -206,14 +209,19 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
             if (!_readAvailable.wait_for(lock, std::chrono::milliseconds(waitMs), waitPred)) {
                 // Timeout expired - check cumulative wait time
                 auto waitEnd = std::chrono::steady_clock::now();
-                cumulativeWaitMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
+                const uint64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
                 _consumerWaitMs += waitMs;
-                
-                if (cumulativeWaitMs >= STALL_TIMEOUT_MS) {
+                // Carry the wait across calls. Every caller passes a positive
+                // timeout and retries in a loop, so a per-call local never
+                // reached the limit and the stall was never detected.
+                _consumerStallMs += (elapsedMs - cumulativeWaitMs);
+                cumulativeWaitMs = elapsedMs;
+
+                if (_consumerStallMs >= STALL_TIMEOUT_MS) {
                     // Stall timeout exceeded - this is a fatal condition
                     _stallTimeoutExceeded = true;
                     _stallType.store(StallType::ConsumerStall);
-                    qDebug() << "RingBuffer: Consumer stall timeout exceeded after" << cumulativeWaitMs << "ms";
+                    qDebug() << "RingBuffer: Consumer stall timeout exceeded after" << _consumerStallMs << "ms";
                     return nullptr;
                 }
                 
@@ -273,7 +281,8 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
     size_t index = _committedSlots.front();
     _committedSlots.pop();
     _committedCount--;
-    
+
+    _consumerStallMs = 0;   // progress: the stall clock starts again from here
     return &_slots[index];
 }
 
@@ -365,7 +374,9 @@ void RingBuffer::reset()
     _consumerStalls = 0;
     _producerWaitMs = 0;
     _consumerWaitMs = 0;
-    
+    _producerStallMs = 0;
+    _consumerStallMs = 0;
+
     // Reset all slot sizes
     for (auto& slot : _slots) {
         slot.size = 0;

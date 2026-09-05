@@ -215,7 +215,22 @@ namespace TimeoutDefaults {
     constexpr int kWatchdogRestartThresholdMs = 120000;    // Restart only if drain fails (120s)
     
     // === Ring buffer stall detection ===
-    constexpr int kRingBufferStallTimeoutMs = 30000;  // Cumulative wait = stall timeout
+    // Cumulative wait with nothing moving = stall timeout.
+    //
+    // This has to clear the longest a working pipeline can legitimately sit
+    // still, because tripping it aborts the write. The longest such pause is
+    // one fastboot sparse segment: the consumer holds its ring slot across the
+    // whole 256 MB download and the device's commit of it, and the producer
+    // backs up behind that -- tens of seconds on a slow link, which is why 30s
+    // was too tight to enable. The disk side is the same shape; the app's own
+    // tolerance for a slow card is 180s (see kWatchdogStallTimeoutMs), and it
+    // starts intervening at 30s rather than giving up.
+    //
+    // 90s sits above anything a working device does and below the watchdog, so
+    // a genuinely dead pipeline is diagnosed specifically -- "the download has
+    // stalled", naming the network or the disk -- rather than surfacing later
+    // as a generic hard timeout.
+    constexpr int kRingBufferStallTimeoutMs = 90000;
     constexpr int kRingBufferStallEventThresholdMs = 50; // Minimum stall to record as event
     
     // === Adaptive recovery thresholds ===

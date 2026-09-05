@@ -8,6 +8,7 @@
 #include "config.h"
 #include "platformquirks.h"
 #include "systemmemorymanager.h"
+#include "timeout_utils.h"
 #include "drivelist/drivelist.h"
 #include <iostream>
 #include <archive.h>
@@ -427,11 +428,11 @@ void DownloadExtractThread::extractImageRun()
                     // Emit a ring buffer stall event
                     qint64 timestampMs = _sessionTimer.isValid() ? _sessionTimer.elapsed() : 0;
                     QString metadata = QString("buffer: write; type: stall_timeout; stall_type: %1").arg(RingBuffer::stallTypeToString(stallType));
-                    emit eventRingBufferStats(timestampMs, 30000, metadata);  // 30s stall timeout
+                    emit eventRingBufferStats(timestampMs, rpi_imager::TimeoutDefaults::kRingBufferStallTimeoutMs, metadata);
                     
                     // Convert stall type to user-facing message
                     QString errorMsg = tr("The write operation has stalled.\n\n"
-                                         "No data has been written for 30 seconds. "
+                                         "No data has been written for 90 seconds. "
                                          "This could be caused by:\n"
                                          "• Storage device disconnected or unresponsive\n"
                                          "• Device has failed or is faulty\n"
@@ -965,11 +966,11 @@ ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
         // Emit a ring buffer stall event
         qint64 timestampMs = _sessionTimer.isValid() ? _sessionTimer.elapsed() : 0;
         QString metadata = QString("buffer: input; type: stall_timeout; stall_type: %1").arg(RingBuffer::stallTypeToString(stallType));
-        emit eventRingBufferStats(timestampMs, 30000, metadata);  // 30s stall timeout
+        emit eventRingBufferStats(timestampMs, rpi_imager::TimeoutDefaults::kRingBufferStallTimeoutMs, metadata);
         
         // Set error message for user - this is a consumer stall (waiting for download data)
         _stallErrorMessage = tr("The download has stalled.\n\n"
-                               "No data received for 30 seconds. "
+                               "No data received for 90 seconds. "
                                "This could be caused by:\n"
                                "• Network connection lost or unstable\n"
                                "• Remote server became unresponsive\n"

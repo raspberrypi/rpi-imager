@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstring>
 #include <thread>
 
@@ -594,7 +595,7 @@ struct ArchiveReadContext {
     RingBuffer::Slot* currentSlot;
 };
 
-static ssize_t archiveReadFromRing(struct archive *, void *clientData, const void **buffer)
+static ssize_t archiveReadFromRing(struct archive *a, void *clientData, const void **buffer)
 {
     auto *ctx = static_cast<ArchiveReadContext*>(clientData);
 
@@ -606,12 +607,22 @@ static ssize_t archiveReadFromRing(struct archive *, void *clientData, const voi
 
     // Acquire next slot
     ctx->currentSlot = ctx->ring->acquireReadSlot(100);
-    while (!ctx->currentSlot && !ctx->ring->isCancelled() && !ctx->ring->isComplete()) {
+    while (!ctx->currentSlot && !ctx->ring->isCancelled() && !ctx->ring->isComplete()
+           && !ctx->ring->isStallTimeoutExceeded()) {
         ctx->currentSlot = ctx->ring->acquireReadSlot(100);
     }
 
     if (!ctx->currentSlot) {
         *buffer = nullptr;
+        // A stall is not the end of the archive. Reporting EOF would hand
+        // libarchive a truncated image and let the flash run on to the hash
+        // check with no idea the download had stopped -- and a stalled buffer
+        // refuses without waiting, so the loop above would spin flat out
+        // rather than block.
+        if (ctx->ring->isStallTimeoutExceeded()) {
+            archive_set_error(a, EIO, "Download stalled: no data received for 90 seconds");
+            return -1;
+        }
         return 0;  // EOF or cancelled
     }
 
@@ -670,6 +681,15 @@ void FastbootFlashThread::decompressConsumerProducer()
             if (!slot) {
                 if (_decompressedRing->isCancelled() || _cancelled.load())
                     break;
+                if (_decompressedRing->isStallTimeoutExceeded()) {
+                    // The consumer has not freed a slot in the stall window.
+                    // Spinning here would burn a core for as long as the flash
+                    // ran; carrying on would decompress into nothing.
+                    _decompressError = tr("Writing stalled: the device stopped "
+                                          "accepting data.");
+                    _decompressedRing->cancel();
+                    break;
+                }
                 continue;
             }
 
@@ -877,6 +897,11 @@ void FastbootFlashThread::runImpl()
         inputSlots, writeSlots,
         inputSlotSize, writeSlotSize);
 
+    // Both rings go idle for as long as one sparse segment takes to send: the
+    // consumer holds its slot across the whole fastboot download and the
+    // device's commit of it, and the decompressor backs up behind that. See
+    // TimeoutDefaults::kRingBufferStallTimeoutMs for why the window allows for
+    // it.
     _compressedRing = std::make_unique<RingBuffer>(inputSlots, inputSlotSize);
     _decompressedRing = std::make_unique<RingBuffer>(writeSlots, writeSlotSize);
 
@@ -991,6 +1016,19 @@ void FastbootFlashThread::runImpl()
                 break;
             if (_decompressedRing->isComplete())
                 break;
+            if (_decompressedRing->isStallTimeoutExceeded()) {
+                // Same reasoning as the archive callback: continuing here
+                // would spin, and breaking quietly would finish the sparse
+                // stream as though the image ended where the stall began.
+                emit error(tr("Writing has stalled.\n\n"
+                              "No progress for 90 seconds. This could be caused by:\n"
+                              "\u2022 The USB connection to the device being interrupted\n"
+                              "\u2022 The device becoming unresponsive\n"
+                              "\u2022 Network connection lost while downloading\n\n"
+                              "Please check the connection and try again."));
+                flashError = true;
+                break;
+            }
             continue;
         }
 
