@@ -6,6 +6,7 @@
 #include "downloadthread.h"
 #include "aligned_buffer.h"
 #include "config.h"
+#include "config_txt_merge.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "systemmemorymanager.h"
@@ -2609,20 +2610,7 @@ bool DownloadThread::_customizeImage()
             QByteArray config = fat->readFile("config.txt");
 
             for (const QByteArray& item : std::as_const(configItems))
-            {
-                if (config.contains("#"+item)) {
-                    // Uncomment existing line
-                    config.replace("#"+item, item);
-                } else if (config.contains("\n"+item)) {
-                    // config.txt already contains the line
-                } else {
-                    // Append new line to config.txt
-                    if (config.right(1) != QByteArray("\n"))
-                        config += "\n"+item+"\n";
-                    else
-                        config += item+"\n";
-                }
-            }
+                config = mergeConfigTxtItem(config, item);
 
             fat->writeFile("config.txt", config);
             _recordCustomisationWrite("config.txt", config);

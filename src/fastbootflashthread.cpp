@@ -6,6 +6,7 @@
 #include "fastbootflashthread.h"
 #include "rpiboot/libusb_transport.h"
 #include "fastboot/fastboot_protocol.h"
+#include "config_txt_merge.h"
 #include "fastboot/sparse_encoder.h"
 #include "fastboot/bmap.h"
 #include "fastboot/pieeprom.h"
@@ -378,15 +379,8 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
 
         auto items = _config.split('\n');
         items.removeAll("");
-        for (const QByteArray& item : std::as_const(items)) {
-            if (config.contains("#" + item)) {
-                config.replace("#" + item, item);
-            } else if (!config.contains("\n" + item)) {
-                if (config.right(1) != "\n")
-                    config += "\n";
-                config += item + "\n";
-            }
-        }
+        for (const QByteArray& item : std::as_const(items))
+            config = mergeConfigTxtItem(config, item);
 
         if (!fb.writeDeviceFile(transport, BOOT + "config.txt", toSpan(config), _cancelled)) {
             emit error(tr("Failed to write config.txt: %1")

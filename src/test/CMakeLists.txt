@@ -1612,6 +1612,16 @@ target_compile_features(oslist_parser_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(oslist_parser_test)
 
+# ── config.txt merging ──────────────────────────────────────────────────────
+# Header-only, and shared by both write paths so they cannot drift apart
+# again -- drifting apart is how the substring bug came to exist in two
+# places at once.
+add_executable(config_txt_merge_test config_txt_merge_test.cpp)
+target_link_libraries(config_txt_merge_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
+target_include_directories(config_txt_merge_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_features(config_txt_merge_test PRIVATE cxx_std_20)
+rpi_discover_tests(config_txt_merge_test)
+
 # ── rpiboot thread ──────────────────────────────────────────────────────────
 # The CM4/CM5 sideload sequence. Reachable since the bus went behind
 # IUsbContext; before that every line of it needed a compute module in boot
