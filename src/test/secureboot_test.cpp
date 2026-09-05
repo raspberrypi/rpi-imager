@@ -31,6 +31,7 @@
 #include <QFileInfo>
 #include <QMap>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QUuid>
 
 #include <memory>
@@ -790,4 +791,119 @@ TEST_CASE("An empty config still signs", "[secureboot][crypto][configsig]")
     // SHA-256 of the empty string.
     CHECK(lines[0] == QStringLiteral(
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+}
+
+// ── What is actually inside the boot.img ────────────────────────────────
+//
+// The case above builds an image from three files and checks it exists and
+// is larger than 4096 bytes. An implementation that formatted an empty FAT
+// volume and copied nothing into it would pass that -- and one did: the
+// directory-ordering bug fixed in bootimgcreator_linux.cpp this session
+// silently dropped files, and this test sat directly over it without
+// noticing. mtools reads the image back here, so the contents are checked
+// by something other than the code that wrote them.
+
+namespace {
+
+bool haveMtools()
+{
+    return !QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty();
+}
+
+QByteArray readFromImg(const QString &image, const QString &path)
+{
+    QProcess p;
+    p.start(QStringLiteral("mcopy"),
+            {QStringLiteral("-i"), image, QStringLiteral("::") + path,
+             QStringLiteral("-")});
+    if (!p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
+        return {};
+    return p.readAllStandardOutput();
+}
+
+} // namespace
+
+TEST_CASE("The files put in a boot.img are in the boot.img",
+          "[secureboot][bootimg-contents]")
+{
+    if (!haveMtools())
+        SKIP("mtools is needed to read the image back");
+
+    ScratchDir scratch;
+    const QString out = scratch.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    files.insert(QStringLiteral("cmdline.txt"), "console=serial0,115200\n");
+    files.insert(QStringLiteral("start4.elf"), QByteArray(4096, '\x11'));
+
+    REQUIRE(SecureBoot::createBootImg(files, out));
+
+    CHECK(readFromImg(out, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
+    CHECK(readFromImg(out, QStringLiteral("cmdline.txt"))
+          == QByteArray("console=serial0,115200\n"));
+    CHECK(readFromImg(out, QStringLiteral("start4.elf")) == QByteArray(4096, '\x11'));
+}
+
+TEST_CASE("A nested firmware tree survives into the boot.img",
+          "[secureboot][bootimg-contents]")
+{
+    // The shape that broke: directories created out of order left the files
+    // inside them missing, and the image came back reported as good.
+    if (!haveMtools())
+        SKIP("mtools is needed to read the image back");
+
+    ScratchDir scratch;
+    const QString out = scratch.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    files.insert(QStringLiteral("overlays/vc4-kms-v3d.dtbo"), "OVERLAY");
+    files.insert(QStringLiteral("a/b/c/deep.bin"), "DEEP");
+
+    REQUIRE(SecureBoot::createBootImg(files, out));
+
+    CHECK(readFromImg(out, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
+    CHECK(readFromImg(out, QStringLiteral("overlays/vc4-kms-v3d.dtbo"))
+          == QByteArray("OVERLAY"));
+    CHECK(readFromImg(out, QStringLiteral("a/b/c/deep.bin")) == QByteArray("DEEP"));
+}
+
+TEST_CASE("A boot.img is at least the FAT32 minimum", "[secureboot][bootimg-contents]")
+{
+    // Three small files come to a few kilobytes, but FAT32 needs 33 MB
+    // before mkfs.vfat will make one at all. Sizing from the contents alone
+    // would produce an image no tool can format.
+    if (!haveMtools())
+        SKIP("mtools is needed to read the image back");
+
+    ScratchDir scratch;
+    const QString out = scratch.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), "x\n");
+
+    REQUIRE(SecureBoot::createBootImg(files, out));
+    CHECK(QFileInfo(out).size() >= 33 * 1024 * 1024);
+}
+
+TEST_CASE("A boot.img grows to hold what is put in it",
+          "[secureboot][bootimg-contents]")
+{
+    // Past the minimum the size follows the contents, with room for the
+    // filesystem's own structures on top.
+    if (!haveMtools())
+        SKIP("mtools is needed to read the image back");
+
+    ScratchDir scratch;
+    const QString out = scratch.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("big.bin"), QByteArray(48 * 1024 * 1024, '\x7e'));
+
+    REQUIRE(SecureBoot::createBootImg(files, out));
+    const qint64 size = QFileInfo(out).size();
+    INFO("image size: " << size);
+    CHECK(size > 48 * 1024 * 1024);
+    CHECK(readFromImg(out, QStringLiteral("big.bin")).size() == 48 * 1024 * 1024);
 }
