@@ -89,7 +89,7 @@ ListView {
             // Delay selection to allow VoiceOver to announce the list container first
             Qt.callLater(function() {
                 if (activeFocus && currentIndex === -1 && count > 0) {
-                    currentIndex = 0
+                    currentIndex = root.findNextSelectableIndex(-1, 1)
                 }
             })
         }
@@ -101,7 +101,7 @@ ListView {
             // Delay selection to allow VoiceOver to announce the list container first
             Qt.callLater(function() {
                 if (count > 0 && currentIndex === -1) {
-                    currentIndex = 0
+                    currentIndex = root.findNextSelectableIndex(-1, 1)
                 }
             })
         }
@@ -176,33 +176,37 @@ ListView {
         }
     }
     
+    // Arrow navigation cannot land the highlight on an unselectable row, but
+    // it is not the only thing that moves it: the model is refreshed while the
+    // page is open, and a row can stop being selectable underneath a highlight
+    // that is already on it. A card whose lock switch is set, or one that goes
+    // read-only after a media error, becomes unselectable on the next poll of
+    // the drive list. Without this check the row is still greyed out, and
+    // Enter still picks it -- the write then fails somewhere much less
+    // legible than the picker refusing in the first place.
+    function _activateCurrent(signalFn) {
+        if (root.currentIndex === -1 || !root.isItemSelectable(root.currentIndex))
+            return
+        var item = root.itemAtIndex(root.currentIndex)
+        signalFn(root.currentIndex, item)
+        root.handleKeyboardSelection(root.currentIndex, item)
+    }
+
     Keys.onSpacePressed: {
-        if (currentIndex !== -1) {
-            var item = itemAtIndex(currentIndex)
-            root.spacePressed(currentIndex, item)
-            root.handleKeyboardSelection(currentIndex, item)
-        }
+        root._activateCurrent(function(i, item) { root.spacePressed(i, item) })
     }
-    
+
     Keys.onEnterPressed: {
-        if (currentIndex !== -1) {
-            var item = itemAtIndex(currentIndex)
-            root.enterPressed(currentIndex, item)
-            root.handleKeyboardSelection(currentIndex, item)
-        }
+        root._activateCurrent(function(i, item) { root.enterPressed(i, item) })
     }
-    
+
     Keys.onReturnPressed: {
-        if (currentIndex !== -1) {
-            var item = itemAtIndex(currentIndex)
-            root.returnPressed(currentIndex, item)
-            root.handleKeyboardSelection(currentIndex, item)
-        }
+        root._activateCurrent(function(i, item) { root.returnPressed(i, item) })
     }
     
     // Accessibility support
     Accessible.onPressAction: {
-        if (currentIndex !== -1) {
+        if (currentIndex !== -1 && root.isItemSelectable(currentIndex)) {
             var item = itemAtIndex(currentIndex)
             root.itemSelected(currentIndex, item)
         }
@@ -259,9 +263,10 @@ ListView {
         return data
     }
     
-    // Helper function to select an item programmatically
+    // Helper function to select an item programmatically. Refuses an
+    // unselectable index for the same reason the key handlers do.
     function selectItem(index) {
-        if (index >= 0 && index < count) {
+        if (index >= 0 && index < count && root.isItemSelectable(index)) {
             currentIndex = index
             var item = itemAtIndex(index)
             root.itemSelected(index, item)
