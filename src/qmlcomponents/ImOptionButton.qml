@@ -75,7 +75,12 @@ Item {
             Text {
                 id: helpText
                 Layout.alignment: Qt.AlignVCenter
-                visible: control.helpLabel !== "" && control.helpUrl !== ""
+                // String(): a QML url property is a JS object in Qt 6, not a
+                // string, so `helpUrl !== ""` compares an object to a string
+                // and is true even when the url is empty. The guard then
+                // reduced to the label alone, and a row given a label with
+                // no url offered a link that went nowhere.
+                visible: control.helpLabel !== "" && String(control.helpUrl) !== ""
                 text: control.helpLabel
                 font.family: Style.fontFamily
                 font.pointSize: Style.fontSizeDescription

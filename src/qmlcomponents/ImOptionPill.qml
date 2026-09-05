@@ -83,7 +83,9 @@ Item {
                 id: helpText
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
-                visible: pill.helpLabel !== "" && pill.helpUrl !== ""
+                // See ImOptionButton: a url property is a JS object in Qt 6,
+                // so a strict comparison against "" is always true.
+                visible: pill.helpLabel !== "" && String(pill.helpUrl) !== ""
                 text: pill.helpLabel
                 font.family: Style.fontFamily
                 font.pointSize: Style.fontSizeDescription

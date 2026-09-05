@@ -167,6 +167,27 @@ TestCase {
         compare(pill.toggledCount, 0)
     }
 
+    // -- The help link -----------------------------------------------------
+
+    function test_the_help_link_needs_both_a_label_and_a_url() {
+        // Half a link is a piece of text that looks clickable and is not.
+        // The url half of this guard never worked: a QML url property is a
+        // JS object in Qt 6, so `helpUrl !== ""` compares an object to a
+        // string and is true however empty the url is.
+        const pill = create({})
+        verify(!pill.helpLinkItem.visible, "neither given")
+
+        pill.helpLabel = "Learn more"
+        verify(!pill.helpLinkItem.visible, "a label with nowhere to go")
+
+        pill.helpLabel = ""
+        pill.helpUrl = "https://example.invalid/help"
+        verify(!pill.helpLinkItem.visible, "a url with nothing to click")
+
+        pill.helpLabel = "Learn more"
+        verify(pill.helpLinkItem.visible, "both, so it is offered")
+    }
+
     // -- Label and accessibility -------------------------------------------
 
     function test_the_label_is_what_was_asked_for() {
