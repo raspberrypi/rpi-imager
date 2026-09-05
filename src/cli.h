@@ -44,6 +44,14 @@ public:
     // written instead.
     static QStringList removableDestinations(class DriveListModel &drives);
 
+    // Read a customisation file named on the command line. `what` is how the
+    // file is described back to the operator. Returns false with `error`
+    // filled when the file cannot be used -- unreadable is told apart from
+    // absent, because a permissions problem and a typo need different fixes
+    // and there is no dialog here to work it out from.
+    static bool readCustomisationFile(const QString &path, const QString &what,
+                                      QByteArray &contents, QString &error);
+
 protected:
     QCoreApplication *_app;
     ImageWriter *_imageWriter;

@@ -18,6 +18,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/catch_session.hpp>
 
+#include <unistd.h>
+
 #include "imagewriter.h"
 #include "cli.h"
 #include "app_resources.h"
@@ -5775,4 +5777,127 @@ TEST_CASE("Every removable volume can be chosen", "[cli][destination]")
     CHECK(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdb")));
     CHECK(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdc")));
     CHECK(Cli::destinationIsRemovable(drives, QStringLiteral("/dev/sdd")));
+}
+
+// -- Customisation files named on the command line ---------------------
+//
+// Three of these can be given: cloud-init user-data, cloud-init
+// network-config, and a first-run script. All three were read by the same
+// twenty lines written out three times; they now share one, and what it
+// refuses on is what a script author sees when they get a path wrong.
+
+TEST_CASE("A customisation file is read whole", "[cli][customisation-file]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("user-data"));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write("#cloud-config\nhostname: pi\n");
+    f.close();
+
+    QByteArray contents;
+    QString error;
+    REQUIRE(Cli::readCustomisationFile(path, QStringLiteral("user-data file"),
+                                       contents, error));
+
+    CHECK(error.isEmpty());
+    CHECK(contents == QByteArray("#cloud-config\nhostname: pi\n"));
+}
+
+TEST_CASE("An empty customisation file is read, not refused",
+          "[cli][customisation-file]")
+{
+    // An empty user-data is a legitimate thing to hand cloud-init.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("empty"));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.close();
+
+    QByteArray contents("not cleared");
+    QString error;
+    REQUIRE(Cli::readCustomisationFile(path, QStringLiteral("user-data file"),
+                                       contents, error));
+    CHECK(contents.isEmpty());
+}
+
+TEST_CASE("A customisation file that is not there names what was wanted",
+          "[cli][customisation-file]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    QByteArray contents;
+    QString error;
+    CHECK_FALSE(Cli::readCustomisationFile(dir.filePath(QStringLiteral("absent")),
+                                           QStringLiteral("network-config file"),
+                                           contents, error));
+
+    CHECK(error.contains(QStringLiteral("network-config file")));
+    CHECK(error.contains(QStringLiteral("does not exists")));
+}
+
+TEST_CASE("Each of the three files is described by its own name",
+          "[cli][customisation-file]")
+{
+    // The operator gave up to three paths. A message that did not say which
+    // one was wrong would leave them checking all of them.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString absent = dir.filePath(QStringLiteral("nope"));
+
+    QByteArray contents;
+    QString e1, e2, e3;
+    Cli::readCustomisationFile(absent, QStringLiteral("user-data file"), contents, e1);
+    Cli::readCustomisationFile(absent, QStringLiteral("network-config file"), contents, e2);
+    Cli::readCustomisationFile(absent, QStringLiteral("firstrun script"), contents, e3);
+
+    CHECK(e1.contains(QStringLiteral("user-data")));
+    CHECK(e2.contains(QStringLiteral("network-config")));
+    CHECK(e3.contains(QStringLiteral("firstrun script")));
+    CHECK(e1 != e2);
+    CHECK(e2 != e3);
+}
+
+TEST_CASE("A file that cannot be opened is told apart from one that is absent",
+          "[cli][customisation-file]")
+{
+    // A permissions problem and a typo need different fixes, and with no
+    // dialog to interrogate the wording is all the operator has.
+    if (::geteuid() == 0)
+        SKIP("running as root, which can read a file with no permissions");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("locked"));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write("secret");
+    f.close();
+    REQUIRE(QFile::setPermissions(path, QFileDevice::Permissions()));
+
+    QByteArray contents;
+    QString error;
+    CHECK_FALSE(Cli::readCustomisationFile(path, QStringLiteral("user-data file"),
+                                           contents, error));
+    CHECK(error.contains(QStringLiteral("opening")));
+    CHECK_FALSE(error.contains(QStringLiteral("does not exists")));
+
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+}
+
+TEST_CASE("A directory given where a file was wanted is refused",
+          "[cli][customisation-file]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    QByteArray contents;
+    QString error;
+    CHECK_FALSE(Cli::readCustomisationFile(dir.path(),
+                                           QStringLiteral("firstrun script"),
+                                           contents, error));
+    CHECK_FALSE(error.isEmpty());
 }

@@ -88,6 +88,27 @@ QStringList Cli::removableDestinations(DriveListModel &drives)
     return out;
 }
 
+bool Cli::readCustomisationFile(const QString &path, const QString &what,
+                                QByteArray &contents, QString &error)
+{
+    QFile f(path);
+
+    if (!f.exists())
+    {
+        error = QStringLiteral("Error: ") + what + QStringLiteral(" does not exists");
+        return false;
+    }
+    if (!f.open(QIODevice::ReadOnly))
+    {
+        error = QStringLiteral("Error: opening ") + what;
+        return false;
+    }
+
+    contents = f.readAll();
+    f.close();
+    return true;
+}
+
 int Cli::run()
 {
     QCommandLineParser parser;
@@ -246,42 +267,22 @@ int Cli::run()
         QByteArray userData, networkConfig;
         if (!parser.value("cloudinit-userdata").isEmpty())
         {
-            QFile f(parser.value("cloudinit-userdata"));
-
-            if (!f.exists())
+            QString err;
+            if (!readCustomisationFile(parser.value("cloudinit-userdata"),
+                                       QStringLiteral("user-data file"), userData, err))
             {
-                std::cerr << "Error: user-data file does not exists" << std::endl;
-                return 1;
-            }
-            if (f.open(f.ReadOnly))
-            {
-                userData = f.readAll();
-                f.close();
-            }
-            else
-            {
-                std::cerr << "Error: opening user-data file" << std::endl;
+                std::cerr << err.toStdString() << std::endl;
                 return 1;
             }
         }
 
         if (!parser.value("cloudinit-networkconfig").isEmpty())
         {
-            QFile f(parser.value("cloudinit-networkconfig"));
-
-            if (!f.exists())
+            QString err;
+            if (!readCustomisationFile(parser.value("cloudinit-networkconfig"),
+                                       QStringLiteral("network-config file"), networkConfig, err))
             {
-                std::cerr << "Error: network-config file does not exists" << std::endl;
-                return 1;
-            }
-            if (f.open(f.ReadOnly))
-            {
-                networkConfig = f.readAll();
-                f.close();
-            }
-            else
-            {
-                std::cerr << "Error: opening network-config file" << std::endl;
+                std::cerr << err.toStdString() << std::endl;
                 return 1;
             }
         }
@@ -291,20 +292,11 @@ int Cli::run()
     else if (!parser.value("first-run-script").isEmpty())
     {
         QByteArray firstRunScript;
-        QFile f(parser.value("first-run-script"));
-        if (!f.exists())
+        QString err;
+        if (!readCustomisationFile(parser.value("first-run-script"),
+                                   QStringLiteral("firstrun script"), firstRunScript, err))
         {
-            std::cerr << "Error: firstrun script does not exists" << std::endl;
-            return 1;
-        }
-        if (f.open(f.ReadOnly))
-        {
-            firstRunScript = f.readAll();
-            f.close();
-        }
-        else
-        {
-            std::cerr << "Error: opening firstrun script" << std::endl;
+            std::cerr << err.toStdString() << std::endl;
             return 1;
         }
 
