@@ -928,3 +928,172 @@ TEST_CASE("A bus that throws mid-scan lists nothing rather than propagating",
     REQUIRE_NOTHROW(found = rpiboot::scanRpibootDevices(view));
     CHECK(found.empty());
 }
+
+// ══════════════════════════════════════════════════════════════
+// The order the phases run in
+//
+// Normally one phase. A CM5 being re-provisioned runs two: secure-boot
+// recovery to rewrite the bootloader, then fastboot to make it writable.
+// Which signal comes out at the end is what the wizard waits on, so a phase
+// that failed must produce none of them.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Records what run() asked for instead of doing it.
+class PhaseRecordingThread : public TestableRpibootThread
+{
+public:
+    using TestableRpibootThread::TestableRpibootThread;
+    using RpibootThread::run;
+
+    std::vector<rpiboot::SideloadMode> phasesRun;
+    int failAfter = -1;              // -1 never; 0 fails the first phase
+    bool cancelAfterFirst = false;
+
+protected:
+    bool runPhase(rpiboot::SideloadMode mode, QString &fastbootId,
+                  QString &, QString &) override
+    {
+        phasesRun.push_back(mode);
+        fastbootId = QStringLiteral("1:9");
+        if (cancelAfterFirst && phasesRun.size() == 1)
+            cancel();
+        if (failAfter >= 0 && static_cast<int>(phasesRun.size()) > failAfter)
+            return false;
+        return true;
+    }
+};
+
+struct TerminalLog {
+    bool success = false;
+    QString readyId;
+    bool ready = false;
+
+    void attach(RpibootThread *t)
+    {
+        QObject::connect(t, &RpibootThread::success, [this] { success = true; });
+        QObject::connect(t, &RpibootThread::fastbootDeviceReady,
+                         [this](const QString &id) { ready = true; readyId = id; });
+    }
+};
+
+} // namespace
+
+TEST_CASE("An ordinary fastboot sideload runs one phase and announces the device",
+          "[rpiboot][phases]")
+{
+    PhaseRecordingThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    TerminalLog log;
+    log.attach(&t);
+
+    t.run();
+
+    REQUIRE(t.phasesRun.size() == 1);
+    CHECK(t.phasesRun[0] == rpiboot::SideloadMode::Fastboot);
+    CHECK(log.ready);
+    CHECK(log.readyId == QStringLiteral("1:9"));
+    CHECK_FALSE(log.success);
+}
+
+TEST_CASE("A secure-boot recovery on its own reports success rather than a device",
+          "[rpiboot][phases]")
+{
+    // Nothing is written afterwards, so there is no fastboot device to hand
+    // on to the writer -- the job was the EEPROM.
+    PhaseRecordingThread t{chosenDevice(), rpiboot::SideloadMode::SecureBootRecovery};
+    TerminalLog log;
+    log.attach(&t);
+
+    t.run();
+
+    REQUIRE(t.phasesRun.size() == 1);
+    CHECK(t.phasesRun[0] == rpiboot::SideloadMode::SecureBootRecovery);
+    CHECK(log.success);
+    CHECK_FALSE(log.ready);
+}
+
+TEST_CASE("Re-provisioning a CM5 runs recovery before fastboot",
+          "[rpiboot][phases]")
+{
+    // The order is the point: the bootloader is rewritten first, and only
+    // then is the board brought up in a mode that can be written to.
+    PhaseRecordingThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.setReprovisionDevice(true);
+    TerminalLog log;
+    log.attach(&t);
+
+    t.run();
+
+    REQUIRE(t.phasesRun.size() == 2);
+    CHECK(t.phasesRun[0] == rpiboot::SideloadMode::SecureBootRecovery);
+    CHECK(t.phasesRun[1] == rpiboot::SideloadMode::Fastboot);
+    CHECK(log.ready);
+}
+
+TEST_CASE("Re-provisioning is only for BCM2712", "[rpiboot][phases]")
+{
+    // A CM4 asked to re-provision runs the single phase it was given. The
+    // two-phase sequence is specific to the chip that has the fuses.
+    RpibootThread::DeviceInfo d = chosenDevice();
+    d.chipGeneration = rpiboot::ChipGeneration::BCM2711;
+
+    PhaseRecordingThread t{d, rpiboot::SideloadMode::Fastboot};
+    t.setReprovisionDevice(true);
+
+    t.run();
+
+    REQUIRE(t.phasesRun.size() == 1);
+    CHECK(t.phasesRun[0] == rpiboot::SideloadMode::Fastboot);
+}
+
+TEST_CASE("A failed phase announces nothing", "[rpiboot][phases]")
+{
+    // runPhase has already told the user what went wrong. A success signal
+    // on top of that would have the wizard move on from a board that was
+    // never made writable.
+    PhaseRecordingThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.failAfter = 0;
+    TerminalLog log;
+    log.attach(&t);
+
+    t.run();
+
+    CHECK(t.phasesRun.size() == 1);
+    CHECK_FALSE(log.ready);
+    CHECK_FALSE(log.success);
+}
+
+TEST_CASE("A failed recovery phase does not go on to fastboot",
+          "[rpiboot][phases]")
+{
+    // If the bootloader was not rewritten, bringing the board up to be
+    // written to is the wrong next move.
+    PhaseRecordingThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.setReprovisionDevice(true);
+    t.failAfter = 0;
+    TerminalLog log;
+    log.attach(&t);
+
+    t.run();
+
+    CHECK(t.phasesRun.size() == 1);
+    CHECK(t.phasesRun[0] == rpiboot::SideloadMode::SecureBootRecovery);
+    CHECK_FALSE(log.ready);
+}
+
+TEST_CASE("Cancelling between phases stops before the second",
+          "[rpiboot][phases][cancel]")
+{
+    PhaseRecordingThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.setReprovisionDevice(true);
+    t.cancelAfterFirst = true;
+    TerminalLog log;
+    log.attach(&t);
+
+    t.run();
+
+    CHECK(t.phasesRun.size() == 1);
+    CHECK_FALSE(log.ready);
+    CHECK_FALSE(log.success);
+}

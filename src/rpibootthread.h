@@ -82,7 +82,9 @@ protected:
     // "device hasn't disappeared yet".
     bool pollForRpibootReturn(std::atomic<bool>& found, uint8_t priorDeviceAddress);
     bool waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice);
-    bool runPhase(rpiboot::SideloadMode mode,
+    // Virtual so run()'s decision about which phases to run, and in what
+    // order, can be checked without running them.
+    virtual bool runPhase(rpiboot::SideloadMode mode,
                   QString& fastbootId,
                   QString& bootcodeDiag,
                   QString& fileServeDiag);
