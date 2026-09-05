@@ -308,7 +308,13 @@ protected:
     int _inputBufferSize;
 
     // Unified cross-platform file operations
-    std::unique_ptr<rpi_imager::FileOperations> _file;
+    // shared, not unique: runWithTimeout() abandons its worker on the cancel
+    // and timeout paths, and _openAndPrepareDevice() hands that worker this
+    // file. A worker still inside a stuck write when DownloadThread is
+    // destroyed would otherwise call through a freed FileOperations. Sharing
+    // ownership keeps the object alive until the abandoned operation lets go,
+    // which is a leak only for as long as the syscall is genuinely stuck.
+    std::shared_ptr<rpi_imager::FileOperations> _file;
     
     // Async cache writer for non-blocking cache file I/O
     std::unique_ptr<AsyncCacheWriter> _asyncCacheWriter;

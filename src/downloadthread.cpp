@@ -520,19 +520,29 @@ bool DownloadThread::_openAndPrepareDevice()
         _timer.restart();
         emit preparationStatusUpdate(tr("Zero'ing out end of drive..."));
         
-        // Capture needed values for the lambda
-        auto file = _file.get();
-        const uint8_t* bufferData = emptyMB.data();
+        // Everything the lambda touches has to outlive it, because
+        // runWithTimeout() detaches its worker on the cancel and timeout
+        // paths and the worker runs on for as long as the syscall blocks.
+        // A raw _file.get() and a pointer into the local emptyMB were both
+        // dangling by the time a cancelled worker unblocked -- pressing
+        // Cancel early in a write could take the process down with it.
+        auto file = _file;                       // shares ownership
+        auto buffer = std::make_shared<rpi_imager::AlignedBuffer>(emptyMBSize);
+        if (!*buffer) {
+            emit error(tr("Failed to allocate buffer for MBR zeroing.\n\n"
+                          "The system may be low on memory."));
+            return false;
+        }
         uint64_t seekPosition = knownsize - emptyMBSize;
         
         // Write to end of device can hang on counterfeit cards with fake capacity
         // Use timeout to detect counterfeit cards with fake capacity
         int lastMBResultInt = 0;
         auto timeoutResult = runWithTimeout(
-            [file, seekPosition, bufferData, emptyMBSize]() {
+            [file, seekPosition, buffer, emptyMBSize]() {
                 if (file->Seek(seekPosition) != rpi_imager::FileError::kSuccess)
                     return static_cast<int>(rpi_imager::FileError::kSeekError);
-                if (file->WriteSequential(bufferData, emptyMBSize) != rpi_imager::FileError::kSuccess)
+                if (file->WriteSequential(buffer->data(), emptyMBSize) != rpi_imager::FileError::kSuccess)
                     return static_cast<int>(rpi_imager::FileError::kWriteError);
                 if (file->Flush() != rpi_imager::FileError::kSuccess)
                     return static_cast<int>(rpi_imager::FileError::kFlushError);
