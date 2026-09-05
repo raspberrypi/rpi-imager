@@ -34,6 +34,11 @@ RpibootThread::~RpibootThread()
     }
 }
 
+std::unique_ptr<rpiboot::FirmwareManager> RpibootThread::makeFirmwareManager()
+{
+    return std::make_unique<rpiboot::FirmwareManager>();
+}
+
 std::unique_ptr<rpiboot::IUsbContext> RpibootThread::makeUsbContext()
 {
     // LibusbContext's constructor throws if libusb will not initialise --
@@ -64,7 +69,13 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
     QElapsedTimer phaseTimer;
     phaseTimer.start();
 
-    FirmwareManager fwMgr;
+    auto fwMgrOwned = makeFirmwareManager();
+    if (!fwMgrOwned) {
+        emit error(tr("Failed to obtain rpiboot firmware: %1")
+                   .arg(tr("no firmware source available")));
+        return false;
+    }
+    FirmwareManager &fwMgr = *fwMgrOwned;
     if (!_customFastbootGadget.isEmpty())
         fwMgr.setCustomFastbootGadget(_customFastbootGadget.toStdString());
     if (!_signFastbootGadgetKey.isEmpty())

@@ -24,12 +24,15 @@
 
 #include "rpibootthread.h"
 #include "rpiboot/libusb_transport.h"
+#include "rpiboot/firmware_manager.h"
 
 #include <QCoreApplication>
+#include <QStringList>
 #include <QStandardPaths>
 
 #include <atomic>
 #include <functional>
+#include <filesystem>
 #include <stdexcept>
 
 using rpiboot::UsbDeviceInfo;
@@ -99,6 +102,30 @@ private:
     FakeBus &_bus;
 };
 
+// Stands in for the download. ensureAvailable() is where runPhase() begins,
+// so without this a test gets no further than "Failed to obtain firmware".
+class FakeFirmware : public rpiboot::FirmwareManager
+{
+public:
+    std::filesystem::path dir;
+    std::string error;
+
+    std::filesystem::path ensureAvailable(rpiboot::SideloadMode,
+                                          rpiboot::ChipGeneration,
+                                          rpiboot::ProgressCallback,
+                                          std::atomic<bool> &) override
+    {
+        if (!error.empty())
+            _reportedError = error;
+        return dir;
+    }
+
+    const std::string &lastError() const override { return _reportedError; }
+
+private:
+    std::string _reportedError;
+};
+
 class TestableRpibootThread : public RpibootThread
 {
 public:
@@ -106,9 +133,15 @@ public:
     using RpibootThread::pollForFastbootDevice;
     using RpibootThread::waitForBootDeviceReEnum;
     using RpibootThread::pollForRpibootReturn;
+    using RpibootThread::runPhase;
 
     FakeBus bus;
     bool busUnavailable = false;
+
+    // What the firmware step will hand back.
+    std::filesystem::path firmwareDir;
+    std::string firmwareError;
+    bool noFirmwareManager = false;
 
 protected:
     std::unique_ptr<rpiboot::IUsbContext> makeUsbContext() override
@@ -116,6 +149,32 @@ protected:
         if (busUnavailable)
             return nullptr;
         return std::make_unique<BusView>(bus);
+    }
+
+    std::unique_ptr<rpiboot::FirmwareManager> makeFirmwareManager() override
+    {
+        if (noFirmwareManager)
+            return nullptr;
+        auto fw = std::make_unique<FakeFirmware>();
+        fw->dir = firmwareDir;
+        fw->error = firmwareError;
+        return fw;
+    }
+};
+
+// What the thread told the user. The board is headless, so these signals
+// are the whole of what a person has to go on when a sideload fails.
+struct SignalLog
+{
+    QStringList errors;
+    QStringList status;
+
+    void attach(RpibootThread *t)
+    {
+        QObject::connect(t, &RpibootThread::error,
+                         [this](QString m) { errors << m; });
+        QObject::connect(t, &RpibootThread::preparationStatusUpdate,
+                         [this](QString m) { status << m; });
     }
 };
 
@@ -492,4 +551,91 @@ TEST_CASE("A bus that cannot be opened ends the reprovision wait",
 
     std::atomic<bool> found{false};
     CHECK_FALSE(t.pollForRpibootReturn(found, 4));
+}
+
+// ══════════════════════════════════════════════════════════════
+// The sequence itself, at the points where it gives up
+//
+// runPhase() downloads firmware, finds the board, opens it, pushes the
+// bootcode, waits for the reboot and serves the second stage. Each of those
+// can fail, and what the user is told when one does is the whole of what
+// they have to work with -- the board is headless and the imager is the
+// only thing that can see it.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Firmware that cannot be obtained is reported to the user",
+          "[rpiboot][phase]")
+{
+    // What an offline user meets. The message has to name the cause, since
+    // nothing else on screen will.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir.clear();                    // nothing came back
+    t.firmwareError = "network unreachable";
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK(log.errors.last().contains(QStringLiteral("firmware")));
+    CHECK(log.errors.last().contains(QStringLiteral("network unreachable")));
+}
+
+TEST_CASE("A missing firmware source is reported rather than crashed into",
+          "[rpiboot][phase]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.noFirmwareManager = true;
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+    REQUIRE_FALSE(log.errors.isEmpty());
+}
+
+TEST_CASE("Cancelling during the firmware step stops the sequence",
+          "[rpiboot][phase][cancel]")
+{
+    // Cancelled after the download but before the bus is touched: the user
+    // pressed the button, so nothing should be sent to the board.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.cancel();
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+    CHECK(t.bus.bootScans == 0);
+}
+
+TEST_CASE("A device that cannot be opened is reported", "[rpiboot][phase]")
+{
+    // The board is on the bus but will not open -- no permission on the
+    // usbfs node is the usual reason, and it is worth saying so rather than
+    // failing silently.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };   // openDevice returns nullptr
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK(log.errors.last().contains(QStringLiteral("open")));
+}
+
+TEST_CASE("A bus that cannot be opened ends the phase", "[rpiboot][phase]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.busUnavailable = true;
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
 }

@@ -16,7 +16,7 @@
 
 #include "rpiboot/rpiboot_types.h"
 
-namespace rpiboot { class IUsbContext; }
+namespace rpiboot { class IUsbContext; class FirmwareManager; }
 
 namespace rpiboot { struct UsbDeviceInfo; }
 
@@ -62,6 +62,11 @@ protected:
     // line below unreachable without a Pi in boot mode on the bus; behind a
     // factory, a test supplies its own bus and drives the sequence.
     virtual std::unique_ptr<rpiboot::IUsbContext> makeUsbContext();
+
+    // Where the firmware comes from. Constructed inline the same way the bus
+    // was, so the first thing runPhase() did was reach for the network --
+    // which is as far as a test could follow it.
+    virtual std::unique_ptr<rpiboot::FirmwareManager> makeFirmwareManager();
 
 // Protected rather than private for the same reason FastbootFlashThread's
 // are: these decide whether a board is about to be reflashed and what is

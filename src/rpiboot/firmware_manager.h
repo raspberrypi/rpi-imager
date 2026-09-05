@@ -33,7 +33,10 @@ public:
     // available in the local cache.  Downloads on first use; subsequent
     // calls return the cached path.
     // Returns the path to the firmware directory, or empty on failure.
-    std::filesystem::path ensureAvailable(SideloadMode mode,
+    // Virtual for the same reason cacheRoot() is: RpibootThread's sequence
+    // begins here, and a test that cannot get past the download cannot
+    // reach any of it.
+    virtual std::filesystem::path ensureAvailable(SideloadMode mode,
                                            ChipGeneration chip,
                                            ProgressCallback progress,
                                            std::atomic<bool>& cancelled);
@@ -60,7 +63,10 @@ public:
     // Clear all cached firmware
     void clearCache();
 
-    const std::string& lastError() const { return _lastError; }
+    // Virtual alongside ensureAvailable(): the pair is what a caller reports
+    // to the user when firmware cannot be had, so a stand-in has to be able
+    // to supply both.
+    virtual const std::string& lastError() const { return _lastError; }
 
     // usbboot hosts the rpiboot USB-protocol scaffolding — gadget kernels
     // (fastboot-gadget.img, mass-storage-gadget64), the fastboot bootfiles
