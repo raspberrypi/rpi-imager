@@ -200,3 +200,49 @@ TEST_CASE("Only the first commented copy is uncommented", "[configtxt]")
     CHECK(live == 1);
     CHECK(commented == 1);
 }
+
+// ── Round-tripping the file ─────────────────────────────────────────────
+//
+// The merge splits on newlines and rejoins. Anything that survives an
+// unrelated edit has to come back byte for byte, or a customisation run
+// quietly reformats a file the user wrote.
+
+TEST_CASE("Uncommenting does not add a trailing newline that was not there",
+          "[configtxt]")
+{
+    // A config.txt with no final newline is unusual but legal, and it is
+    // not the customiser's business to change it.
+    const QByteArray before = "[all]\n#dtparam=audio=on";
+    const QByteArray after = merge(before, {"dtparam=audio=on"});
+
+    CHECK(after == "[all]\ndtparam=audio=on");
+    CHECK_FALSE(after.endsWith('\n'));
+}
+
+TEST_CASE("A setting already present leaves the file byte for byte",
+          "[configtxt]")
+{
+    // Not merely equivalent -- identical. The file is returned untouched
+    // rather than rebuilt.
+    const QByteArray before = "[all]\r\n\r\ndtparam=audio=on\r\n\r\n# trailing\r\n";
+    CHECK(merge(before, {"dtparam=audio=on"}) == before);
+}
+
+TEST_CASE("Blank lines and spacing survive an append", "[configtxt]")
+{
+    const QByteArray before = "[all]\n\n\narm_64bit=1\n\n";
+    const QByteArray after = merge(before, {"dtparam=audio=on"});
+
+    CHECK(after == "[all]\n\n\narm_64bit=1\n\ndtparam=audio=on\n");
+}
+
+TEST_CASE("A setting is not matched inside a longer line", "[configtxt]")
+{
+    // "dtparam=audio=on" appears within this line but is not this line.
+    // Substring matching treated it as present; whole-line matching does not.
+    const QByteArray before = "[all]\n# see also dtparam=audio=on for sound\n";
+    const QByteArray after = merge(before, {"dtparam=audio=on"});
+
+    CHECK(hasLine(after, "dtparam=audio=on"));
+    CHECK(hasLine(after, "# see also dtparam=audio=on for sound"));
+}
