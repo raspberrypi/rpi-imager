@@ -289,6 +289,10 @@ WizardStepBase {
             
             ImCheckBox {
                 id: filterSystemDrives
+                // Named so a test can reach it: getStorageStatusMessage()
+                // branches on this, and an id is not visible from outside
+                // the component.
+                objectName: "filterSystemDrives"
                 checked: true
                 text: qsTr("Exclude system drives")
                 // Carries what the confirmation dialog would have said, because
