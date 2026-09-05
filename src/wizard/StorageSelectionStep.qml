@@ -318,10 +318,9 @@ WizardStepBase {
                         // intent rather than an interruption, and skipping it
                         // would remove the confirmation rather than relocate
                         // it.
-                        var skipConfirmation =
-                            (root.wizardContainer && root.wizardContainer.disableWarnings) ||
-                            PlatformHelper.assistiveTechnologyActive
-                        if (skipConfirmation) {
+                        var warningsOff = root.wizardContainer
+                                       && root.wizardContainer.disableWarnings
+                        if (!ConfirmationPolicy.shouldConfirm(warningsOff)) {
                             // Leave checkbox unchecked and continue showing system drives
                             dstlist.forceActiveFocus()
                         } else {

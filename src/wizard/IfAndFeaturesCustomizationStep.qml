@@ -174,7 +174,10 @@ WizardStepBase {
                                 id: chkEnableUsbGadget
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
-                                accessibleDescription: qsTr("Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage")
+                                // Carries what the confirmation dialog says, so
+                                // that skipping the dialog relocates the warning
+                                // rather than dropping it.
+                                accessibleDescription: qsTr("Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage. This can change how your device behaves and may affect connectivity and host interaction; only enable it if you are sure you know what you are doing.")
                                 helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
                                 helpUrl: ImageWriterSingleton.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-usb-gadget?tab=readme-ov-file"
                                 checked: false
@@ -325,7 +328,10 @@ WizardStepBase {
         wizardContainer.ifSerial         = supportsSerial ? comboSerial.editText : "Disabled"
         wizardContainer.featUsbGadgetEnabled = usbGadgetVal
 
-        if (usbGadgetVal && !wizardContainer.disableWarnings) {
+        // As on the storage and user steps: the deployment-wide opt-out, or
+        // an assistive technology having already read the toggle's
+        // description -- which carries this warning -- aloud.
+        if (usbGadgetVal && ConfirmationPolicy.shouldConfirm(wizardContainer.disableWarnings)) {
             confirmDialog.open()
         } else {
             root.isConfirmed = true

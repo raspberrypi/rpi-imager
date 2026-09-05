@@ -50,12 +50,10 @@ TestCase {
 
             onToggled: {
                 if (!gate.checked) {
-                    var skipConfirmation = gate.disableWarnings
-                                        || PlatformHelper.assistiveTechnologyActive
-                    if (skipConfirmation)
-                        gate.filterDisabledCount++
-                    else
+                    if (ConfirmationPolicy.shouldConfirm(gate.disableWarnings))
                         gate.confirmationsRaised++
+                    else
+                        gate.filterDisabledCount++
                 }
             }
         }
@@ -77,6 +75,40 @@ TestCase {
         // attached: the flag is global and the next test case would inherit
         // it, quietly passing for the wrong reason.
         TestAccessibility.setActive(false)
+    }
+
+    // -- The policy the three steps share ----------------------------------
+    //
+    // Disabling the system drive filter, enabling passwordless sudo and
+    // turning on USB gadget mode all ask this one function, so they cannot
+    // drift apart. Pinning it here pins all three.
+
+    function test_an_understanding_confirmation_is_raised_by_default() {
+        compare(ConfirmationPolicy.shouldConfirm(false), true)
+    }
+
+    function test_disabling_warnings_suppresses_it() {
+        compare(ConfirmationPolicy.shouldConfirm(true), false)
+    }
+
+    function test_an_attached_assistive_technology_suppresses_it() {
+        TestAccessibility.setActive(true)
+        compare(ConfirmationPolicy.shouldConfirm(false), false)
+    }
+
+    function test_either_reason_alone_is_enough() {
+        TestAccessibility.setActive(true)
+        compare(ConfirmationPolicy.shouldConfirm(true), false,
+                "both reasons at once is still just skipped")
+
+        TestAccessibility.setActive(false)
+        compare(ConfirmationPolicy.shouldConfirm(true), false, "warnings off")
+
+        TestAccessibility.setActive(true)
+        compare(ConfirmationPolicy.shouldConfirm(false), false, "AT attached")
+
+        TestAccessibility.setActive(false)
+        compare(ConfirmationPolicy.shouldConfirm(false), true, "neither")
     }
 
     // -- The property itself -----------------------------------------------

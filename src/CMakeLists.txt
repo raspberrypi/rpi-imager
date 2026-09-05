@@ -495,6 +495,7 @@ if(NOT BUILD_CLI_ONLY)
     set(IMAGER_QML_FILES
         main.qml
         CommonStrings.qml
+        ConfirmationPolicy.qml
         Style.qml
         wizard/dialogs/ConfirmUnfilterDialog.qml
         wizard/dialogs/ConfirmSystemDriveDialog.qml
@@ -548,6 +549,7 @@ if(NOT BUILD_CLI_ONLY)
 
     set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
     set_source_files_properties(CommonStrings.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+    set_source_files_properties(ConfirmationPolicy.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
     # C++ types exposed to QML
     set(IMAGER_QML_CPP_TYPES

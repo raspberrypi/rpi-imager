@@ -109,11 +109,22 @@ WizardStepBase {
                     id: checkPasswordlessSudo
                     text: qsTr("Enable passwordless sudo")
                     checked: false
-                    Accessible.description: qsTr("Allow this user to run sudo commands without entering a password.")
+                    // Carries the risk the dialog explains, because when the
+                    // dialog is skipped this is read in its place. Shared with
+                    // the info icon below so there is one wording, not two.
+                    Accessible.description: sudoInfoIcon.infoText
                     onCheckedChanged: {
-                        if (checked) {
+                        if (!checked)
+                            return
+                        // Skipped for the same two reasons as the storage
+                        // step's filter warning: the deployment-wide opt-out,
+                        // and an assistive technology having already read the
+                        // description above aloud. See StorageSelectionStep
+                        // for why the second one is the right way round.
+                        var warningsOff = root.wizardContainer
+                                       && root.wizardContainer.disableWarnings
+                        if (ConfirmationPolicy.shouldConfirm(warningsOff))
                             passwordlessSudoWarningDialog.askForConfirmation()
-                        }
                     }
                 }
 
