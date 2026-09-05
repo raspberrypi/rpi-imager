@@ -22,6 +22,7 @@
 
 #include "imagewriter.h"
 #include "cli.h"
+#include "bootimgcreator.h"
 #include "app_resources.h"
 #include "drivelistmodel.h"
 
@@ -5900,4 +5901,228 @@ TEST_CASE("A directory given where a file was wanted is refused",
                                            QStringLiteral("firstrun script"),
                                            contents, error));
     CHECK_FALSE(error.isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Building the boot image the compute module is handed
+//
+// createBootImg() packs a set of files into a FAT32 image using mkfs.vfat
+// and mtools. That image is what a CM4 or CM5 is booted from during a
+// sideload, so a file landing at the wrong path -- or not landing at all --
+// is a board that does not come up, with nothing on screen to say why.
+//
+// mtools is used here as an independent reader: the image is inspected with
+// the same tools a person would use, rather than by the code that wrote it.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+bool haveMtools()
+{
+    return !QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
+               {QStringLiteral("/usr/sbin"), QStringLiteral("/sbin"),
+                QStringLiteral("/usr/bin")}).isEmpty()
+        && !QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty();
+}
+
+// Read a file back out of the image with mtools.
+QByteArray readFromImage(const QString &image, const QString &path)
+{
+    QProcess p;
+    p.start(QStringLiteral("mcopy"),
+            {QStringLiteral("-i"), image, QStringLiteral("::") + path,
+             QStringLiteral("-")});
+    if (!p.waitForFinished(10000))
+        return {};
+    return p.readAllStandardOutput();
+}
+
+// List the image the way somebody checking it by hand would.
+QString listImage(const QString &image, const QString &dir = QString())
+{
+    QProcess p;
+    p.start(QStringLiteral("mdir"),
+            {QStringLiteral("-i"), image, QStringLiteral("::") + dir});
+    if (!p.waitForFinished(10000))
+        return {};
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
+constexpr qint64 kBootImgSize = 8 * 1024 * 1024;
+
+} // namespace
+
+TEST_CASE("A file put in the boot image can be read back out",
+          "[bootimg]")
+{
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["config.txt"] = "arm_64bit=1\n";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+    REQUIRE(QFileInfo::exists(img));
+
+    CHECK(readFromImage(img, QStringLiteral("config.txt"))
+          == QByteArray("arm_64bit=1\n"));
+}
+
+TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
+{
+    // The firmware tree is nested. A file flattened into the root is a file
+    // the bootloader will not find.
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["overlays/vc4-kms-v3d.dtbo"] = "OVERLAY";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+
+    CHECK(readFromImage(img, QStringLiteral("overlays/vc4-kms-v3d.dtbo"))
+          == QByteArray("OVERLAY"));
+}
+
+TEST_CASE("Directories several deep are all created", "[bootimg]")
+{
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["a/b/c/deep.bin"] = "DEEP";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+
+    CHECK(readFromImage(img, QStringLiteral("a/b/c/deep.bin"))
+          == QByteArray("DEEP"));
+}
+
+TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
+{
+    // The directory is created once for the first file; the rest have to
+    // land in it rather than being lost to an "already exists" failure.
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["overlays/one.dtbo"] = "ONE";
+    files["overlays/two.dtbo"] = "TWO";
+    files["overlays/three.dtbo"] = "THREE";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+
+    CHECK(readFromImage(img, QStringLiteral("overlays/one.dtbo")) == QByteArray("ONE"));
+    CHECK(readFromImage(img, QStringLiteral("overlays/two.dtbo")) == QByteArray("TWO"));
+    CHECK(readFromImage(img, QStringLiteral("overlays/three.dtbo")) == QByteArray("THREE"));
+}
+
+TEST_CASE("Root files and nested files coexist", "[bootimg]")
+{
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["config.txt"] = "arm_64bit=1\n";
+    files["cmdline.txt"] = "console=serial0\n";
+    files["overlays/x.dtbo"] = "X";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+
+    CHECK(readFromImage(img, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
+    CHECK(readFromImage(img, QStringLiteral("cmdline.txt")) == QByteArray("console=serial0\n"));
+    CHECK(readFromImage(img, QStringLiteral("overlays/x.dtbo")) == QByteArray("X"));
+}
+
+TEST_CASE("Binary content survives unchanged", "[bootimg]")
+{
+    // The bootcode and firmware blobs are binary. A text-mode copy would
+    // mangle them in ways that do not show up until the board fails to boot.
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QByteArray blob;
+    for (int i = 0; i < 4096; ++i)
+        blob.append(static_cast<char>(i & 0xFF));
+
+    QMap<QString, QByteArray> files;
+    files["start4.elf"] = blob;
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+    CHECK(readFromImage(img, QStringLiteral("start4.elf")) == blob);
+}
+
+TEST_CASE("An empty set of files makes no image", "[bootimg]")
+{
+    // Nothing to boot from. Better to refuse than to hand a compute module
+    // a formatted but empty volume.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    CHECK_FALSE(BootImgCreator::createBootImg({}, img, kBootImgSize));
+    CHECK_FALSE(QFileInfo::exists(img));
+}
+
+TEST_CASE("The output directory is created if it is not there", "[bootimg]")
+{
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("nested/deeper/boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["config.txt"] = "x\n";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+    CHECK(QFileInfo::exists(img));
+}
+
+TEST_CASE("The image is a filesystem, not just a sized file", "[bootimg]")
+{
+    // Read back with mdir, which is a different tool from the one that
+    // wrote it -- so this checks the image really is mountable FAT32 rather
+    // than that our own writer agrees with itself.
+    if (!haveMtools())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["config.txt"] = "arm_64bit=1\n";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+
+    const QString listing = listImage(img);
+    INFO("mdir said: " << listing.toStdString());
+    CHECK(listing.contains(QStringLiteral("config")));
+    CHECK(QFileInfo(img).size() == kBootImgSize);
 }

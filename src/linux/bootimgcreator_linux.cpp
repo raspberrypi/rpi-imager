@@ -61,7 +61,17 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
         }
     }
     
-    for (const QString &dir : dirsToCreate) {
+    // Sorted, so a parent is always created before anything inside it. A
+    // QSet has no order, and mmd cannot make ::a/b/c while ::a does not
+    // exist -- it fails with "File not found", which was then swallowed
+    // below, and every file destined for that directory failed to copy in
+    // turn. The image came back reported as good with its contents missing.
+    // A parent is a strict prefix of its children, so plain sorting is
+    // enough to order them.
+    QStringList orderedDirs = QStringList(dirsToCreate.constBegin(), dirsToCreate.constEnd());
+    orderedDirs.sort();
+
+    for (const QString &dir : orderedDirs) {
         QString destDir = "::" + dir;
         QProcess mmdProc;
         mmdProc.start("mmd", QStringList() << "-i" << outputPath << destDir);
@@ -89,7 +99,7 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
         QFile outFile(tempFile);
         if (!outFile.open(QIODevice::WriteOnly)) {
             qDebug() << "BootImgCreator (Linux): failed to create temp file";
-            continue;
+            return false;
         }
         outFile.write(it.value());
         outFile.close();
@@ -99,8 +109,13 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
         QProcess mcopyProc;
         mcopyProc.start("mcopy", QStringList() << "-i" << outputPath << tempFile << destPath);
         if (!mcopyProc.waitForFinished(10000) || mcopyProc.exitCode() != 0) {
+            // Not a warning to log and carry on from: a boot image missing
+            // one of its files is one the board will not come up from, and
+            // saying so here is the only chance to notice before it is
+            // handed over.
             qDebug() << "BootImgCreator (Linux): mcopy failed for" << it.key() 
                      << ":" << mcopyProc.readAllStandardError();
+            return false;
         }
     }
     
