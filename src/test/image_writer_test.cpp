@@ -3583,6 +3583,45 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
     REQUIRE(card.open(QIODevice::ReadOnly));
     const QByteArray written = card.read(qint64(BootPartitionFixture::kImageSize));
     CHECK(written.contains(QByteArray("rpi-imager-device-marker")));
+    card.close();
+
+    // Finding the bytes somewhere in 48 MiB is weaker than it looks: it holds
+    // just as well if the script was written outside any directory entry,
+    // where the OS would never run it. Ask an independent FAT reader whether
+    // firstrun.sh is genuinely a file in the root, and whether it contains
+    // what was asked for.
+    if (QFileInfo::exists(QStringLiteral("/usr/bin/mtype"))) {
+        // The image is a partitioned disk, so the filesystem does not start
+        // at sector zero. Take the offset from the card's own partition table
+        // rather than assuming it, so this keeps working if the fixture is
+        // ever rebuilt with a different layout.
+        REQUIRE(card.open(QIODevice::ReadOnly));
+        const QByteArray mbr = card.read(512);
+        card.close();
+        REQUIRE(mbr.size() == 512);
+        REQUIRE(static_cast<quint8>(mbr[510]) == 0x55);
+        REQUIRE(static_cast<quint8>(mbr[511]) == 0xAA);
+
+        quint32 firstLba = 0;
+        for (int i = 0; i < 4; ++i)
+            firstLba |= static_cast<quint32>(static_cast<quint8>(mbr[0x1BE + 8 + i])) << (8 * i);
+        REQUIRE(firstLba > 0);
+
+        QProcess mtype;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("MTOOLS_SKIP_CHECK"), QStringLiteral("1"));
+        mtype.setProcessEnvironment(env);
+        const QString atOffset =
+            dev + QStringLiteral("@@") + QString::number(qint64(firstLba) * 512);
+        mtype.start(QStringLiteral("/usr/bin/mtype"),
+                    {QStringLiteral("-i"), atOffset, QStringLiteral("::firstrun.sh")});
+        REQUIRE(mtype.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
+
+        const QByteArray body = mtype.readAllStandardOutput();
+        INFO("mtype stderr: " << QString::fromUtf8(mtype.readAllStandardError()).toStdString());
+        CHECK(mtype.exitCode() == 0);
+        CHECK(body.contains(QByteArray("rpi-imager-device-marker")));
+    }
 }
 
 // Each container the picker accepts, truncated. The guard in
