@@ -531,6 +531,65 @@ TEST_CASE("LocalFileExtractThread reports a corrupt local archive", "[extract][l
     CHECK_FALSE(outcome.succeeded);
 }
 
+TEST_CASE("A .xz that is not an archive at all is refused, not written raw",
+          "[extract][local]")
+{
+    // The probe answers "can libarchive extract this?", and a no used to mean
+    // "then it must be a raw disk image". For a file whose name says it is a
+    // container, the only way the probe fails is that the file is corrupt or
+    // half-downloaded -- and writing it raw puts the compressed bytes on the
+    // card and calls the write a success. The user gets a card that does not
+    // boot and nothing that says why.
+    ScratchDir scratch;
+    const QString archive = scratch.filePath(QStringLiteral("truncated.img.xz"));
+    REQUIRE(writeFile(archive, imageOfSize(64 * 1024, 109)));   // not xz at all
+
+    const QByteArray blank(1024 * 1024, '\0');
+    const QString dest = scratch.filePath(QStringLiteral("notxz-dest.img"));
+    REQUIRE(writeFile(dest, blank));
+
+    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    REQUIRE(outcome.finished);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.succeeded);
+
+    // And it must say so rather than failing silently.
+    CHECK_FALSE(outcome.errorMessage.isEmpty());
+
+    // The card is left as it was: nothing half-written to boot from.
+    CHECK(readFile(dest) == blank);
+}
+
+TEST_CASE("A .cache file is still written raw when it is a plain image",
+          "[extract][local]")
+{
+    // .cache is deliberately not treated as claiming compression: it holds
+    // whatever the last download happened to be, which is usually already
+    // decompressed. Refusing it would break every write from the cache.
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(256 * 1024, 111);
+    const QString cached = scratch.filePath(QStringLiteral("lastdownload.cache"));
+    REQUIRE(writeFile(cached, image));
+
+    const QString dest = scratch.filePath(QStringLiteral("cache-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (1024 * 1024), '\0')));
+
+    LocalFileExtractThread dt(QByteArray("file://") + cached.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+    CHECK(readFile(dest).left(image.size()) == image);
+}
+
 TEST_CASE("LocalFileExtractThread can be cancelled before it starts", "[extract][local]")
 {
     LocalFileExtractThread dt("/nonexistent", "", "");
