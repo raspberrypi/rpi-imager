@@ -1772,6 +1772,52 @@ TEST_CASE("Cancelling a write in progress reports cancelled, not success",
     CHECK_FALSE(succeeded);
 }
 
+TEST_CASE("A source file with nothing in it is refused", "[imagewriter][write]")
+{
+    // An interrupted copy, or a download that failed and still left a file
+    // behind. Zero bytes clears the capacity check trivially and extracts to
+    // nothing, so the write ran to the end and reported success -- the user is
+    // told the card is imaged, and finds out otherwise when it will not boot.
+    WriteFixture fx;
+    const QString source = fx.sourceUrl().toLocalFile();
+    {
+        QFile s(source);
+        REQUIRE(s.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    }
+    REQUIRE(QFileInfo(source).size() == 0);
+
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, 0);
+    w.setDst(fx.target(), WriteFixture::kSize);
+
+    bool succeeded = false;
+    QStringList errors;
+    QEventLoop loop;
+    QObject ctx;
+    QObject::connect(&w, &ImageWriter::success, &ctx, [&] { succeeded = true; loop.quit(); });
+    QObject::connect(&w, &ImageWriter::error, &ctx, [&](QVariant m) {
+        errors << m.toString();
+        loop.quit();
+    });
+
+    // Started from inside the loop so the refusal, which arrives
+    // synchronously out of startWrite(), still ends the wait rather than
+    // quitting a loop that has not begun.
+    QTimer::singleShot(0, &w, [&w] { w.startWrite(); });
+
+    QTimer guard;
+    guard.setSingleShot(true);
+    QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
+    guard.start(120000);
+    loop.exec();
+
+    INFO("errors: " << errors.join(QStringLiteral(" | ")).toStdString());
+    // The part that matters: it must not claim to have written the card.
+    CHECK_FALSE(succeeded);
+    CHECK_FALSE(errors.isEmpty());
+}
+
 TEST_CASE("Cancelling before anything starts is harmless",
           "[imagewriter][write][cancel]")
 {
@@ -3450,21 +3496,14 @@ TEST_CASE("A zstd image with no recorded size still writes", "[imagewriter][arch
 
 namespace {
 
-QString testBlockDevicePath()
-{
-    const QByteArray dev = qgetenv("RPI_IMAGER_TEST_BLOCK_DEVICE");
-    if (dev.isEmpty() || !dev.startsWith("/dev/loop"))
-        return {};
-    return QString::fromLatin1(dev);
-}
-
 } // namespace
 
 TEST_CASE("An image is written to a real block device", "[imagewriter][device]")
 {
-    const QString dev = testBlockDevicePath();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QString dev = device.path();
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -3489,9 +3528,10 @@ TEST_CASE("An image is written to a real block device", "[imagewriter][device]")
 
 TEST_CASE("A verified write to a real block device reads back clean", "[imagewriter][device]")
 {
-    const QString dev = testBlockDevicePath();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QString dev = device.path();
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -3513,9 +3553,10 @@ TEST_CASE("A verified write to a real block device reads back clean", "[imagewri
 
 TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
 {
-    const QString dev = testBlockDevicePath();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QString dev = device.path();
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -4564,9 +4605,10 @@ TEST_CASE("A second eject while one is running is ignored", "[imagewriter][eject
 
 TEST_CASE("Ejecting a real block device settles", "[imagewriter][eject][device]")
 {
-    const QString dev = testBlockDevicePath();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QString dev = device.path();
 
     ImageWriter w(nullptr);
     w.setDst(dev, 64ull * 1024 * 1024);
@@ -4578,9 +4620,10 @@ TEST_CASE("Ejecting a real block device settles", "[imagewriter][eject][device]"
 
 TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][device]")
 {
-    const QString dev = testBlockDevicePath();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QString dev = device.path();
 
     ImageWriter w(nullptr);
     w.setVerifyEnabled(false);
@@ -4926,9 +4969,10 @@ TEST_CASE("A card failing mid-write in sync mode reports it too", "[imagewriter]
 
 TEST_CASE("Ignoring device limits reallocates the buffers", "[imagewriter][device]")
 {
-    const QString dev = testBlockDevicePath();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QString dev = device.path();
 
     QTemporaryDir served;
     REQUIRE(served.isValid());
