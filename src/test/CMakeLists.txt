@@ -1319,6 +1319,11 @@ rpi_discover_tests(secureboot_test)
 # for, so this target finds them on its own.
 find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
+# QuickTest drives the QML controls. The Qt we ship is built without testlib
+# (qt/features_exclude.list), so this is optional: found, the driven UI tests
+# are built; absent, they are skipped and the rest of the suite is unaffected.
+find_package(Qt6 QUIET COMPONENTS QuickTest)
+
 # The write pipeline links as one unit -- DownloadThread reaches the device
 # wrapper, the memory manager, platform quirks, the cache writer and the
 # secure-boot helpers -- so both targets below share the list.
@@ -1536,6 +1541,25 @@ if(NOT BUILD_CLI_ONLY)
     target_compile_definitions(qml_load_test PRIVATE
         IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}")
     rpi_discover_tests(qml_load_test)
+
+    # Driven tests for the controls themselves: real clicks and keystrokes
+    # against real instances. Needs a Qt built with testlib -- the Qt we ship
+    # excludes it, so this target simply does not exist against that build.
+    if(TARGET Qt6::QuickTest)
+        add_executable(qml_ui_test qml_ui_test.cpp)
+        set_target_properties(qml_ui_test PROPERTIES AUTOMOC ON)
+        target_link_libraries(qml_ui_test PRIVATE
+            rpi_imager_testable Qt6::Quick Qt6::QuickTest)
+        target_compile_definitions(qml_ui_test PRIVATE
+            IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}"
+            QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+        add_test(NAME qml_ui_test
+                 COMMAND qml_ui_test -platform offscreen)
+        set_tests_properties(qml_ui_test PROPERTIES
+            ENVIRONMENT "QT_QUICK_BACKEND=software")
+    else()
+        message(STATUS "Qt6::QuickTest not found -- skipping driven QML tests")
+    endif()
 
     # Saving a copy of the image while it downloads.
     add_executable(async_cache_writer_test async_cache_writer_test.cpp)
