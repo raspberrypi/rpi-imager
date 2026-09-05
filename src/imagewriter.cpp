@@ -3100,21 +3100,39 @@ bool ImageWriter::hasWindowDecorations() const
 }
 
 /* Mount any USB sticks that can contain source images under /media */
+QString ImageWriter::sysBlockRoot() const
+{
+    return QStringLiteral("/sys/class/block");
+}
+
+int ImageWriter::mountReadOnly(const QString &devicePath, const QString &mountPoint)
+{
+    const QStringList args = { QStringLiteral("-o"), QStringLiteral("ro"),
+                               devicePath, mountPoint };
+    return QProcess::execute(QStringLiteral("mount"), args);
+}
+
 bool ImageWriter::mountUsbSourceMedia()
 {
     int devices = 0;
 #ifdef Q_OS_LINUX
-    QDir dir("/sys/class/block");
+    const QString blockRoot = sysBlockRoot();
+    const QString mediaRoot = usbMediaRoot();
+
+    QDir dir(blockRoot);
     const QStringList list = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
 
-    if (!dir.exists("/media"))
-        dir.mkdir("/media");
+    if (!dir.exists(mediaRoot))
+        dir.mkdir(mediaRoot);
 
     for (const QString &devname : list)
     {
-        if (!devname.startsWith("mmcblk0") && !QFile::symLinkTarget("/sys/class/block/"+devname).contains("/devices/virtual/"))
+        // mmcblk0 is the card the machine is running from, and anything
+        // under devices/virtual is not real storage. Mounting either would
+        // be reaching for the wrong disk entirely.
+        if (!devname.startsWith("mmcblk0") && !QFile::symLinkTarget(blockRoot+"/"+devname).contains("/devices/virtual/"))
         {
-            QString mntdir = "/media/"+devname;
+            QString mntdir = mediaRoot+"/"+devname;
 
             if (dir.exists(mntdir))
             {
@@ -3123,9 +3141,8 @@ bool ImageWriter::mountUsbSourceMedia()
             }
 
             dir.mkdir(mntdir);
-            QStringList args = { "-o", "ro", QString("/dev/")+devname, mntdir };
 
-            if ( QProcess::execute("mount", args) == 0 )
+            if ( mountReadOnly(QStringLiteral("/dev/")+devname, mntdir) == 0 )
                 devices++;
             else
                 dir.rmdir(mntdir);

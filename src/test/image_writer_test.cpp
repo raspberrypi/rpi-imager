@@ -5092,10 +5092,43 @@ public:
     MediaImageWriter() : ImageWriter(nullptr) {}
 
     QString mediaRoot;
+    QString blockRoot;
+
+    // What would have been mounted, and what to pretend happened. Nothing
+    // is mounted for real: the point is the choice of device, not the
+    // syscall.
+    QStringList mountAttempts;
+    int mountResult = 0;
 
 protected:
     QString usbMediaRoot() const override { return mediaRoot; }
+    QString sysBlockRoot() const override { return blockRoot; }
+    int mountReadOnly(const QString &devicePath, const QString &) override
+    {
+        mountAttempts << devicePath;
+        return mountResult;
+    }
 };
+
+// Fake /sys/class/block: a directory per device. `virtualDevices` get a
+// symlink under devices/virtual, the way loop and ram devices really do.
+void layOutBlockDevices(const QString &root, const QStringList &devices,
+                        const QStringList &virtualDevices = {})
+{
+    REQUIRE(QDir().mkpath(root));
+    const QString virtRoot = root + "/../devices/virtual/block";
+    REQUIRE(QDir().mkpath(virtRoot));
+
+    for (const QString &d : devices) {
+        if (virtualDevices.contains(d)) {
+            REQUIRE(QDir().mkpath(virtRoot + "/" + d));
+            QFile::link(QFileInfo(virtRoot + "/" + d).absoluteFilePath(),
+                        root + "/" + d);
+        } else {
+            REQUIRE(QDir().mkpath(root + "/" + d));
+        }
+    }
+}
 
 // Lay out volumes under a root: { "STICK": { "os.img", "notes.txt" } }
 void layOutMedia(const QString &root,
@@ -5249,4 +5282,145 @@ TEST_CASE("A volume with no images contributes nothing",
     REQUIRE(entries.size() == 1);
     CHECK(entries[0].toObject().value(QStringLiteral("description")).toString()
           == QStringLiteral("STICK/os.img"));
+}
+
+// ══════════════════════════════════════════════════════════════
+// Which block devices get mounted to look for images
+//
+// This runs as root on an embedded build and mounts what it finds. Two
+// things must never be reached for: the card the machine is running from,
+// and anything that is not real storage.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A removable disk is mounted to look for images",
+          "[imagewriter][usbmount]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    layOutBlockDevices(blocks, {QStringLiteral("sda")});
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = tmp.filePath(QStringLiteral("media"));
+
+    CHECK(w.mountUsbSourceMedia());
+    CHECK(w.mountAttempts == QStringList{QStringLiteral("/dev/sda")});
+}
+
+TEST_CASE("The card the machine is running from is never mounted",
+          "[imagewriter][usbmount]")
+{
+    // mmcblk0 is the boot card on a Pi. Mounting it here and offering its
+    // contents as images to write is reaching for the disk under your feet.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    layOutBlockDevices(blocks, {
+        QStringLiteral("mmcblk0"),
+        QStringLiteral("mmcblk0p1"),
+        QStringLiteral("mmcblk0p2"),
+    });
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = tmp.filePath(QStringLiteral("media"));
+
+    CHECK_FALSE(w.mountUsbSourceMedia());
+    CHECK(w.mountAttempts.isEmpty());
+}
+
+TEST_CASE("Another card is still eligible", "[imagewriter][usbmount]")
+{
+    // The guard is on mmcblk0 specifically, not on cards in general -- a
+    // second card reader is a perfectly good place to keep an image.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    layOutBlockDevices(blocks, {
+        QStringLiteral("mmcblk0"),
+        QStringLiteral("mmcblk1"),
+    });
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = tmp.filePath(QStringLiteral("media"));
+
+    CHECK(w.mountUsbSourceMedia());
+    CHECK(w.mountAttempts == QStringList{QStringLiteral("/dev/mmcblk1")});
+}
+
+TEST_CASE("Devices that are not real storage are skipped",
+          "[imagewriter][usbmount]")
+{
+    // loop and ram devices live under devices/virtual. Mounting them finds
+    // nothing and clutters /media with mount points.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    layOutBlockDevices(blocks,
+                       {QStringLiteral("sda"), QStringLiteral("loop0"),
+                        QStringLiteral("ram0")},
+                       {QStringLiteral("loop0"), QStringLiteral("ram0")});
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = tmp.filePath(QStringLiteral("media"));
+
+    CHECK(w.mountUsbSourceMedia());
+    CHECK(w.mountAttempts == QStringList{QStringLiteral("/dev/sda")});
+}
+
+TEST_CASE("A mount that fails leaves no empty mount point behind",
+          "[imagewriter][usbmount]")
+{
+    // An unformatted or unreadable disk. The directory made for it has to go
+    // again, or /media fills with empty folders that later scans walk.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    const QString media = tmp.filePath(QStringLiteral("media"));
+    layOutBlockDevices(blocks, {QStringLiteral("sda")});
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = media;
+    w.mountResult = 1;                       // mount refused it
+
+    CHECK_FALSE(w.mountUsbSourceMedia());
+    CHECK(w.mountAttempts.size() == 1);
+    CHECK_FALSE(QDir(media + "/sda").exists());
+}
+
+TEST_CASE("An already-mounted disk is counted, not mounted again",
+          "[imagewriter][usbmount]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    const QString media = tmp.filePath(QStringLiteral("media"));
+    layOutBlockDevices(blocks, {QStringLiteral("sda")});
+    REQUIRE(QDir().mkpath(media + "/sda"));
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = media;
+
+    CHECK(w.mountUsbSourceMedia());
+    CHECK(w.mountAttempts.isEmpty());
+}
+
+TEST_CASE("No block devices at all mounts nothing", "[imagewriter][usbmount]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    REQUIRE(QDir().mkpath(blocks));
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = tmp.filePath(QStringLiteral("media"));
+
+    CHECK_FALSE(w.mountUsbSourceMedia());
+    CHECK(w.mountAttempts.isEmpty());
 }

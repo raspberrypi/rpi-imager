@@ -290,6 +290,13 @@ protected:
     // media mounted under /media by the running system.
     virtual QString usbMediaRoot() const;
 
+    // Where block devices are enumerated from, and how one is mounted.
+    // Both virtual so the decision about *which* devices to mount can be
+    // checked without mounting anything -- that decision is what keeps the
+    // running system's own card from being touched.
+    virtual QString sysBlockRoot() const;
+    virtual int mountReadOnly(const QString &devicePath, const QString &mountPoint);
+
 public:
 
     /* Functions to collect information from computer running imager to make image customization easier */
