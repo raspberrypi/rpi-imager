@@ -26,6 +26,7 @@
 #include "rpiboot/libusb_transport.h"
 #include "rpiboot/firmware_manager.h"
 #include "rpiboot/test/mock_usb_transport.h"
+#include "rpiboot/rpiboot_scanner.h"
 
 #include <QCoreApplication>
 #include <QStringList>
@@ -837,4 +838,93 @@ TEST_CASE("An empty bootcode file is refused before anything is sent",
 
     CHECK(mock.capturedBulkWrites().empty());
     REQUIRE_FALSE(log.errors.isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Turning boot-mode devices into drive-list entries
+//
+// The scanner builds a synthetic path, rpiboot://bus:addr:port:pid, and
+// RpibootThread reads the board back out of it. The two have to agree, and
+// the pid in it is what selects bootcode4.bin over bootcode5.bin -- get
+// that wrong and the wrong first-stage goes to the board.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A port path becomes a dotted string", "[rpiboot][scanner]")
+{
+    CHECK(rpiboot::portPathToString({}) == "");
+    CHECK(rpiboot::portPathToString({1}) == "1");
+    CHECK(rpiboot::portPathToString({1, 2}) == "1.2");
+    CHECK(rpiboot::portPathToString({1, 2, 3, 4}) == "1.2.3.4");
+    CHECK(rpiboot::portPathToString({10, 255}) == "10.255");
+}
+
+TEST_CASE("A board on the bus becomes a drive-list entry", "[rpiboot][scanner]")
+{
+    FakeBus bus;
+    bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+    BusView view(bus);
+
+    const auto found = rpiboot::scanRpibootDevices(view);
+    REQUIRE(found.size() == 1);
+
+    const auto &d = found[0];
+    INFO("device path: " << d.device);
+    CHECK(d.device.rfind("rpiboot://", 0) == 0);
+    CHECK(d.device.find("1:4:1.2:") != std::string::npos);
+
+    // What the drive list needs to know about it.
+    CHECK(d.isRpiboot);
+    CHECK(d.isUSB);
+    CHECK(d.isRemovable);
+    CHECK_FALSE(d.isSystem);
+    CHECK_FALSE(d.isReadOnly);
+    CHECK(d.size == 0);          // nothing to write to yet
+    CHECK(d.usbPortPath == std::vector<uint8_t>{1, 2});
+}
+
+TEST_CASE("A board with no port path still gets an entry", "[rpiboot][scanner]")
+{
+    FakeBus bus;
+    bus.bootDevices = { device(2, 7, {}, 0) };
+    BusView view(bus);
+
+    const auto found = rpiboot::scanRpibootDevices(view);
+    REQUIRE(found.size() == 1);
+    INFO("device path: " << found[0].device);
+    CHECK(found[0].device.find("2:7::") != std::string::npos);
+}
+
+TEST_CASE("Every board on the bus is listed", "[rpiboot][scanner]")
+{
+    FakeBus bus;
+    bus.bootDevices = {
+        device(1, 4, {1, 2}, 0),
+        device(1, 5, {1, 3}, 0),
+        device(2, 9, {4}, 0),
+    };
+    BusView view(bus);
+
+    CHECK(rpiboot::scanRpibootDevices(view).size() == 3);
+}
+
+TEST_CASE("An empty bus lists nothing", "[rpiboot][scanner]")
+{
+    FakeBus bus;
+    BusView view(bus);
+    CHECK(rpiboot::scanRpibootDevices(view).empty());
+}
+
+TEST_CASE("A bus that throws mid-scan lists nothing rather than propagating",
+          "[rpiboot][scanner]")
+{
+    // This runs on the drive-list poll thread. An exception escaping here
+    // would take out the polling that populates the whole storage picker,
+    // not just the rpiboot part of it.
+    FakeBus bus;
+    bus.throwOnScan = true;
+    BusView view(bus);
+
+    std::vector<Drivelist::DeviceDescriptor> found;
+    REQUIRE_NOTHROW(found = rpiboot::scanRpibootDevices(view));
+    CHECK(found.empty());
 }
