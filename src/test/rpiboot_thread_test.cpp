@@ -480,13 +480,22 @@ TEST_CASE("Cancelling stops the wait before the bus is touched",
     CHECK(t.bus.bootScans == 0);
 }
 
-TEST_CASE("A bus that cannot be opened ends the wait", "[rpiboot][re-enum]")
+TEST_CASE("A bus that cannot be opened ends the wait, and says so",
+          "[rpiboot][re-enum]")
 {
+    // Silently returning false here leaves run() with nothing to emit and
+    // the wizard waiting on a device that is never coming. Every other way
+    // out of this sequence tells the user why.
     TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
     t.busUnavailable = true;
 
+    SignalLog log;
+    log.attach(&t);
+
     rpiboot::UsbDeviceInfo out{};
     CHECK_FALSE(t.waitForBootDeviceReEnum(out));
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK(log.errors.last().contains(QStringLiteral("USB")));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -672,14 +681,22 @@ TEST_CASE("A device that cannot be opened is reported", "[rpiboot][phase]")
     CHECK(log.errors.last().contains(QStringLiteral("open")));
 }
 
-TEST_CASE("A bus that cannot be opened ends the phase", "[rpiboot][phase]")
+TEST_CASE("A bus that cannot be opened ends the phase, and says so",
+          "[rpiboot][phase]")
 {
+    // The likeliest real cause is a permissions problem on the usbfs node,
+    // which is worth naming: there is nothing else on screen to suggest it.
     TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
     t.firmwareDir = std::filesystem::temp_directory_path();
     t.busUnavailable = true;
 
+    SignalLog log;
+    log.attach(&t);
+
     QString fbId, bcDiag, fsDiag;
     CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK(log.errors.last().contains(QStringLiteral("permission")));
 }
 
 TEST_CASE("A bootcode that will not upload is reported with its diagnostics",
@@ -1096,4 +1113,24 @@ TEST_CASE("Cancelling between phases stops before the second",
     CHECK(t.phasesRun.size() == 1);
     CHECK_FALSE(log.ready);
     CHECK_FALSE(log.success);
+}
+
+TEST_CASE("The scanner-thread polls stay quiet when the bus will not open",
+          "[rpiboot][fastboot-wait][sbr]")
+{
+    // Deliberately different from the two above. These run on a detached
+    // scanner thread whose return value is discarded -- they report through
+    // _nextStageFound, and the main flow times out with its own message.
+    // An error from here would be a second one for the same failure.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.busUnavailable = true;
+
+    SignalLog log;
+    log.attach(&t);
+
+    std::atomic<bool> found{false};
+    QString id;
+    CHECK_FALSE(t.pollForFastbootDevice(found, id));
+    CHECK_FALSE(t.pollForRpibootReturn(found, 4));
+    CHECK(log.errors.isEmpty());
 }

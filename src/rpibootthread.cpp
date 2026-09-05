@@ -122,8 +122,15 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
         fileServerDevice.chipGeneration = _device.chipGeneration;
 
         auto ctx = makeUsbContext();
-        if (!ctx)
+        if (!ctx) {
+            // Every other way out of runPhase() says why. Returning quietly
+            // here leaves run() with nothing to emit and the wizard waiting
+            // on a device that is never coming.
+            emit error(tr("Could not open the USB bus to reach the device. "
+                          "On Linux this usually means the application does "
+                          "not have permission to access it."));
             return false;
+        }
         for (const auto& dev : ctx->scanBootDevices()) {
             bool matches = (!_device.portPath.empty())
                 ? (dev.portPath == _device.portPath)
@@ -346,8 +353,11 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
     };
 
     auto pollCtx = makeUsbContext();
-    if (!pollCtx)
+    if (!pollCtx) {
+        emit error(tr("Could not open the USB bus while waiting for the "
+                      "device to reconnect."));
         return false;
+    }
 
     constexpr int DISCONNECT_POLLS = 6;
     for (int i = 0; i < DISCONNECT_POLLS; ++i) {
