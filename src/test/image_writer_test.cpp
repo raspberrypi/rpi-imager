@@ -23,6 +23,8 @@
 #include "imagewriter.h"
 #include "cli.h"
 #include "bootimgcreator.h"
+#include "downloadthread.h"
+#include "file_operations.h"
 #include "app_resources.h"
 #include "drivelistmodel.h"
 
@@ -6125,4 +6127,166 @@ TEST_CASE("The image is a filesystem, not just a sized file", "[bootimg]")
     INFO("mdir said: " << listing.toStdString());
     CHECK(listing.contains(QStringLiteral("config")));
     CHECK(QFileInfo(img).size() == kBootImgSize);
+}
+
+// ══════════════════════════════════════════════════════════════
+// The check that customisation actually landed
+//
+// DownloadThread records a digest of every customisation file it writes and
+// reads them back afterwards, because a customisation that fails to land
+// fails silently: the card boots, and the hostname, the user and the Wi-Fi
+// are simply not the ones that were asked for.
+//
+// The happy path of that check runs in the write tests. The branches that
+// detect a problem did not run anywhere -- which is the half that matters,
+// since a verifier that cannot fail is the same as no verifier at all.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Drives _verifyCustomisation() against a FAT image the test controls.
+class VerifiableDownloadThread : public DownloadThread
+{
+public:
+    explicit VerifiableDownloadThread(const QString &imagePath)
+        : DownloadThread(QByteArray("file:///dev/null"))
+    {
+        _file = rpi_imager::FileOperations::Create();
+        REQUIRE(_file);
+        REQUIRE(_file->OpenDevice(imagePath.toStdString())
+                == rpi_imager::FileError::kSuccess);
+    }
+
+    // Claim a file was written with these contents, whether or not it was.
+    void claimWritten(const QString &name, const QByteArray &contents)
+    {
+        _recordCustomisationWrite(name, contents);
+    }
+
+    void setBytesWrittenForTest(quint64 n) { _bytesWritten.store(n); }
+
+    using DownloadThread::_verifyCustomisation;
+};
+
+// BootPartitionFixture's target starts blank -- the image only lands on it
+// when a write runs. _verifyCustomisation() needs a real FAT partition to
+// read, and without one it takes its "could not check" path and returns true,
+// which is not the branch under test here.
+void layDownImage(const BootPartitionFixture &fx)
+{
+    QProcess xz;
+    xz.start(QStringLiteral("xz"),
+             {QStringLiteral("-dc"), fx.sourceUrl().toLocalFile()});
+    REQUIRE(xz.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
+    const QByteArray image = xz.readAllStandardOutput();
+    REQUIRE(image.size() > 0);
+
+    QFile t(fx.target());
+    REQUIRE(t.open(QIODevice::WriteOnly));
+    REQUIRE(t.write(image) == image.size());
+    t.close();
+}
+
+// Put a file into the FAT partition of a prepared image.
+void putFileOnCard(const QString &imagePath, const QString &name,
+                   const QByteArray &contents)
+{
+    QProcess p;
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString local = tmp.filePath(name);
+    QFile f(local);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(contents);
+    f.close();
+
+    p.start(QStringLiteral("mcopy"),
+            {QStringLiteral("-i"), imagePath + QStringLiteral("@@1M"),
+             QStringLiteral("-o"), local, QStringLiteral("::") + name});
+    p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+}
+
+} // namespace
+
+TEST_CASE("Customisation verification passes when the card matches",
+          "[imagewriter][customisation-verify]")
+{
+    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+        SKIP("mtools is needed to place a file on the card");
+
+    BootPartitionFixture fx;
+    layDownImage(fx);
+    const QByteArray contents = "#!/bin/bash\nexit 0\n";
+    putFileOnCard(fx.target(), QStringLiteral("firstrun.sh"), contents);
+
+    VerifiableDownloadThread t(fx.target());
+    t.setBytesWrittenForTest(BootPartitionFixture::kImageSize);
+    t.claimWritten(QStringLiteral("firstrun.sh"), contents);
+
+    CHECK(t._verifyCustomisation());
+}
+
+TEST_CASE("Customisation verification fails when the file never arrived",
+          "[imagewriter][customisation-verify]")
+{
+    // The failure the check exists for. Nothing was written, but the writer
+    // believes it was -- without this branch the card would be handed over
+    // as customised.
+    BootPartitionFixture fx;
+    layDownImage(fx);
+
+    VerifiableDownloadThread t(fx.target());
+    t.setBytesWrittenForTest(BootPartitionFixture::kImageSize);
+    t.claimWritten(QStringLiteral("firstrun.sh"), "#!/bin/bash\nexit 0\n");
+
+    CHECK_FALSE(t._verifyCustomisation());
+}
+
+TEST_CASE("Customisation verification fails when the contents differ",
+          "[imagewriter][customisation-verify]")
+{
+    // Same name, same length, different bytes: a digest check catches this
+    // and a size check does not.
+    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+        SKIP("mtools is needed to place a file on the card");
+
+    BootPartitionFixture fx;
+    layDownImage(fx);
+    putFileOnCard(fx.target(), QStringLiteral("firstrun.sh"), "AAAAAAAAAA");
+
+    VerifiableDownloadThread t(fx.target());
+    t.setBytesWrittenForTest(BootPartitionFixture::kImageSize);
+    t.claimWritten(QStringLiteral("firstrun.sh"), "BBBBBBBBBB");
+
+    CHECK_FALSE(t._verifyCustomisation());
+}
+
+TEST_CASE("Customisation verification fails when the length differs",
+          "[imagewriter][customisation-verify]")
+{
+    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+        SKIP("mtools is needed to place a file on the card");
+
+    BootPartitionFixture fx;
+    layDownImage(fx);
+    putFileOnCard(fx.target(), QStringLiteral("config.txt"), "arm_64bit=1\n");
+
+    VerifiableDownloadThread t(fx.target());
+    t.setBytesWrittenForTest(BootPartitionFixture::kImageSize);
+    t.claimWritten(QStringLiteral("config.txt"), "arm_64bit=1\ndtparam=audio=on\n");
+
+    CHECK_FALSE(t._verifyCustomisation());
+}
+
+TEST_CASE("Verification of nothing is not a failure",
+          "[imagewriter][customisation-verify]")
+{
+    // A write with no customisation has nothing to check, and must not be
+    // reported as a verification failure.
+    BootPartitionFixture fx;
+    layDownImage(fx);
+    VerifiableDownloadThread t(fx.target());
+    t.setBytesWrittenForTest(BootPartitionFixture::kImageSize);
+
+    CHECK(t._verifyCustomisation());
 }
