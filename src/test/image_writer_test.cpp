@@ -5000,3 +5000,78 @@ TEST_CASE("A zero-length image is refused rather than written", "[imagewriter][e
     INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
     CHECK_FALSE(out.succeeded);
 }
+
+// ══════════════════════════════════════════════════════════════
+// The handoff from rpiboot to the fastboot write
+//
+// When a compute module comes back in fastboot mode, two decisions get made
+// on the user's behalf before anything is written: where the image is read
+// from, and which storage on the board it goes to.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("With no cache the fastboot write reads from where it was told",
+          "[imagewriter][rpiboot-handoff]")
+{
+    ImageWriter w(nullptr);
+    const QUrl src(QStringLiteral("https://example.invalid/os.img.xz"));
+    w.setSrc(src, 0, 0, QByteArray("deadbeef"));
+
+    CHECK(w.resolveFlashSource() == src);
+}
+
+TEST_CASE("Without an expected hash there is no cache to consult",
+          "[imagewriter][rpiboot-handoff]")
+{
+    // Nothing to match a cached file against, so the network URL stands.
+    ImageWriter w(nullptr);
+    const QUrl src(QStringLiteral("https://example.invalid/os.img.xz"));
+    w.setSrc(src);
+
+    CHECK(w.resolveFlashSource() == src);
+}
+
+TEST_CASE("A local source is handed through unchanged",
+          "[imagewriter][rpiboot-handoff]")
+{
+    ImageWriter w(nullptr);
+    const QUrl src = QUrl::fromLocalFile(QStringLiteral("/tmp/custom.img"));
+    w.setSrc(src);
+
+    CHECK(w.resolveFlashSource() == src);
+}
+
+TEST_CASE("The storage the user picked is the storage written",
+          "[imagewriter][rpiboot-handoff]")
+{
+    ImageWriter w(nullptr);
+    w.setRpibootDevice(QStringLiteral("rpiboot://1:4:1.2:5"),
+                       QStringLiteral("nvme0n1"));
+
+    CHECK(w.resolveFastbootStorageTarget() == QStringLiteral("nvme0n1"));
+}
+
+TEST_CASE("A handoff that carried no storage target falls back to eMMC",
+          "[imagewriter][rpiboot-handoff]")
+{
+    // eMMC is the only storage every compute module is guaranteed to have,
+    // so it is the one safe guess. The BOOT_ORDER written afterwards will
+    // say SD/eMMC rather than what the user picked, which is why the code
+    // warns about it -- but writing nowhere would be worse.
+    ImageWriter w(nullptr);
+    w.setRpibootDevice(QStringLiteral("rpiboot://1:4:1.2:5"), QString());
+
+    CHECK(w.resolveFastbootStorageTarget() == QStringLiteral("mmcblk0"));
+}
+
+TEST_CASE("A storage target of only whitespace is taken at its word",
+          "[imagewriter][rpiboot-handoff]")
+{
+    // Recorded rather than desired: the check is isEmpty(), so a target that
+    // is blank but not empty passes through to the flash thread as-is. No
+    // caller produces one today.
+    ImageWriter w(nullptr);
+    w.setRpibootDevice(QStringLiteral("rpiboot://1:4:1.2:5"),
+                       QStringLiteral(" "));
+
+    CHECK(w.resolveFastbootStorageTarget() == QStringLiteral(" "));
+}

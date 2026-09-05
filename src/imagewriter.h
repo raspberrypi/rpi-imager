@@ -194,6 +194,12 @@ public:
     /* Overload which returns QJsonDocument */
     Q_INVOKABLE QJsonDocument getFilteredOSlistDocument();
 
+    // Which source a fastboot write reads from, and which storage it targets.
+    // Both are decisions the handoff makes on the user's behalf, and both
+    // were buried in the middle of onRpibootFastbootReady().
+    QUrl resolveFlashSource() const;
+    QString resolveFastbootStorageTarget() const;
+
     /** Begin the asynchronous fetch of the OS lists, and associated sublists. */
     Q_INVOKABLE void beginOSListFetch();
 

@@ -807,6 +807,53 @@ void ImageWriter::onBootstrapError(const QString &portPathKey, const QString &ms
     }
 }
 
+QUrl ImageWriter::resolveFlashSource() const
+{
+    // The regular write path substitutes a file:// URL for _src when a
+    // verified cache exists, so libcurl reads off disk instead of going to
+    // the network. The fastboot handoff did not, which meant a fastboot
+    // write always hit the network even with the image fully cached -- and
+    // showed up as "Recv failure: Connection reset by peer" to a user who
+    // could see the download had already happened.
+    //
+    // Verified is the condition, not merely present: an unverified cache
+    // file may be a partial download, and writing that to a board is worse
+    // than fetching it again.
+    if (!_cacheManager || _expectedHash.isEmpty())
+        return _src;
+    if (!_cacheManager->hasPotentialCache(_expectedHash))
+        return _src;
+
+    const auto cacheStatus = _cacheManager->getCacheStatus();
+    if (!cacheStatus.verificationComplete || !cacheStatus.isValid) {
+        qDebug() << "FastbootFlashThread: cached file present but not yet"
+                    " verified — falling back to network download";
+        return _src;
+    }
+
+    qDebug() << "FastbootFlashThread: using verified cache file"
+             << cacheStatus.cacheFileName;
+    return QUrl::fromLocalFile(cacheStatus.cacheFileName);
+}
+
+QString ImageWriter::resolveFastbootStorageTarget() const
+{
+    // Drives both where the image is written and the BOOT_ORDER nibble set
+    // in the EEPROM afterwards. Empty means the rpiboot selection did not
+    // carry one through; eMMC is the only storage every compute module is
+    // guaranteed to have, so it is the safe fallback -- but the mismatch is
+    // logged, because the resulting BOOT_ORDER will not be what the user
+    // picked.
+    if (!_rpibootStorageTarget.isEmpty())
+        return _rpibootStorageTarget;
+
+    qWarning() << "rpiboot fastboot handoff: no storage target carried"
+                  " through selection --- defaulting to mmcblk0;"
+                  " EEPROM BOOT_ORDER will reflect SD/eMMC, not the"
+                  " user's intended target";
+    return QStringLiteral("mmcblk0");
+}
+
 void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
 {
     qDebug() << "rpiboot fastboot device ready:" << fastbootId;
@@ -824,19 +871,7 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     // hit the network even when the OS image is fully cached locally,
     // which is what produced the "Recv failure: Connection reset by peer"
     // we just saw despite the user reporting a cached image.
-    QUrl flashSrc = _src;
-    if (_cacheManager && !_expectedHash.isEmpty() &&
-        _cacheManager->hasPotentialCache(_expectedHash)) {
-        auto cacheStatus = _cacheManager->getCacheStatus();
-        if (cacheStatus.verificationComplete && cacheStatus.isValid) {
-            qDebug() << "FastbootFlashThread: using verified cache file"
-                     << cacheStatus.cacheFileName;
-            flashSrc = QUrl::fromLocalFile(cacheStatus.cacheFileName);
-        } else {
-            qDebug() << "FastbootFlashThread: cached file present but not yet"
-                        " verified — falling back to network download";
-        }
-    }
+    const QUrl flashSrc = resolveFlashSource();
 
     // Start FastbootFlashThread.  Use the storage target the user picked
     // in the wizard --- this drives both where the image is written and
@@ -845,14 +880,7 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     // in which case fall back to the eMMC (the only storage every CM is
     // guaranteed to have) and log a warning so the mismatch is visible
     // in support logs.
-    QString storageTarget = _rpibootStorageTarget;
-    if (storageTarget.isEmpty()) {
-        qWarning() << "rpiboot fastboot handoff: no storage target carried"
-                      " through selection --- defaulting to mmcblk0;"
-                      " EEPROM BOOT_ORDER will reflect SD/eMMC, not the"
-                      " user's intended target";
-        storageTarget = QStringLiteral("mmcblk0");
-    }
+    const QString storageTarget = resolveFastbootStorageTarget();
     _fastbootFlashThread = new FastbootFlashThread(fastbootId, storageTarget, flashSrc, _downloadLen, _extrLen, _expectedHash, this);
     _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
     if (!_bmapUrl.isEmpty())
