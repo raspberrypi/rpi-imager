@@ -871,6 +871,9 @@ public:
     // Make any command starting with this prefix answer FAIL.
     void failCommand(std::string prefix) { _failPrefix = std::move(prefix); }
 
+    // Called with each command as it arrives, so a test can cancel partway.
+    std::function<void(const std::string&)> onCommand;
+
     void seedFile(const std::string& path, const QByteArray& content)
     {
         _files[path] = std::vector<uint8_t>(content.begin(), content.end());
@@ -903,6 +906,8 @@ public:
 
         const std::string cmd(reinterpret_cast<const char*>(data.data()), data.size());
         _commands.push_back(cmd);
+        if (onCommand)
+            onCommand(cmd);
         answer(cmd);
         return MockUsbTransport::bulkWrite(endpoint, data, timeoutMs);
     }
@@ -1090,6 +1095,137 @@ TEST_CASE("An image larger than one segment arrives in order and complete",
         rpi_test::applySparse(segment, received);
 
     CHECK(received == image);
+}
+
+TEST_CASE("A device that refuses a segment does not get a success",
+          "[fastboot][flash][pipeline]")
+{
+    // Half an image on a card is worse than none, because the card looks
+    // written. The flash has to stop at the refusal and say so.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(4 * 1024 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     1024u * 1024};
+    t.device.failCommand("flash:");
+
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    CHECK_FALSE(log.success);
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+}
+
+TEST_CASE("Cancelling partway stops sending and does not report success",
+          "[fastboot][flash][pipeline][cancel]")
+{
+    // Cancel is pressed while the segments are going down the wire. What is
+    // already written cannot be taken back, but nothing more should be sent
+    // and the result must not be a success.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(4 * 1024 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     1024u * 1024};
+
+    int flashes = 0;
+    t.device.onCommand = [&t, &flashes](const std::string &cmd) {
+        if (cmd.rfind("flash:", 0) == 0 && ++flashes == 1)
+            t.cancel();
+    };
+
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(log.success);
+
+    // The image needs four segments at this download size; stopping at the
+    // first means the rest were never sent.
+    INFO("segments flashed: " << t.device.flashed().size());
+    CHECK(t.device.flashed().size() < 4);
+}
+
+TEST_CASE("A bmap keeps unmapped blocks off the wire", "[fastboot][flash][pipeline]")
+{
+    // bmap is what makes a Compute Module write quick: the image is mostly
+    // empty space, and blocks the filesystem never allocated are sent as
+    // DONT_CARE instead of as data. The risk is skipping a block that did
+    // matter, which produces a card missing part of its filesystem and no
+    // error at all -- so this checks both halves: the mapped blocks arrive
+    // intact, and the unmapped ones genuinely do not travel.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    constexpr size_t kBlock = 4096;
+    constexpr size_t kBlocks = 256;                 // 1 MiB
+    const std::vector<uint8_t> image = patternImage(kBlock * kBlocks);
+    const QString path = writeImage(dir.path(), image);
+
+    // Only the first and last quarter are mapped; the middle half is not.
+    const QString bmapPath = QDir(dir.path()).filePath(QStringLiteral("os.bmap"));
+    {
+        QFile f(bmapPath);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        const QByteArray doc =
+            "<?xml version=\"1.0\" ?>\n"
+            "<bmap version=\"2.0\">\n"
+            "  <BlockSize>4096</BlockSize>\n"
+            "  <BlocksCount>256</BlocksCount>\n"
+            "  <MappedBlocksCount>128</MappedBlocksCount>\n"
+            "  <BlockMap>\n"
+            "    <Range>0-63</Range>\n"
+            "    <Range>192-255</Range>\n"
+            "  </BlockMap>\n"
+            "</bmap>\n";
+        REQUIRE(f.write(doc) == doc.size());
+    }
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     64u * 1024 * 1024};
+    t.setBmapUrl(QUrl::fromLocalFile(bmapPath));
+
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(log.success);
+    REQUIRE_FALSE(t.device.flashed().empty());
+
+    size_t wire = 0;
+    for (const auto &segment : t.device.flashed())
+        wire += segment.size();
+    INFO("wire bytes " << wire << " for an image of " << image.size());
+    CHECK(wire < image.size() / 2 + kBlock * 4);   // the unmapped half stayed home
+
+    std::vector<uint8_t> received(image.size(), 0);
+    for (const auto &segment : t.device.flashed())
+        rpi_test::applySparse(segment, received);
+
+    // Every mapped block arrives byte for byte. The unmapped ones are not
+    // checked: the device keeps whatever was already there, which is the
+    // whole point of not sending them.
+    const std::vector<uint8_t> mappedHead(received.begin(),
+                                          received.begin() + 64 * kBlock);
+    const std::vector<uint8_t> expectHead(image.begin(), image.begin() + 64 * kBlock);
+    CHECK(mappedHead == expectHead);
+
+    const std::vector<uint8_t> mappedTail(received.begin() + 192 * kBlock, received.end());
+    const std::vector<uint8_t> expectTail(image.begin() + 192 * kBlock, image.end());
+    CHECK(mappedTail == expectTail);
 }
 
 TEST_CASE("Customisation is written into the boot partition it just flashed",
