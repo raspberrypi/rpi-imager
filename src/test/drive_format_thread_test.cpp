@@ -19,6 +19,8 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
+#include "faulty_block_device.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/catch_session.hpp>
 
@@ -192,18 +194,6 @@ int main(int argc, char *argv[])
 
 namespace {
 
-QByteArray testBlockDevice()
-{
-    const QByteArray dev = qgetenv("RPI_IMAGER_TEST_BLOCK_DEVICE");
-    if (dev.isEmpty())
-        return {};
-    // Refuse anything that is not a loop device, whatever the environment
-    // says. A typo here would format a real disk.
-    if (!dev.startsWith("/dev/loop"))
-        return {};
-    return dev;
-}
-
 QByteArray firstSectorOf(const QByteArray &device)
 {
     QFile f(QString::fromLatin1(device));
@@ -215,9 +205,10 @@ QByteArray firstSectorOf(const QByteArray &device)
 
 TEST_CASE("Formatting a device writes a partition table", "[format][device]")
 {
-    const QByteArray dev = testBlockDevice();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QByteArray dev = device.path().toLatin1();
 
     DriveFormatThread t(dev);
     const Outcome out = runToCompletion(t);
@@ -241,9 +232,10 @@ TEST_CASE("Formatting a device writes a partition table", "[format][device]")
 
 TEST_CASE("Formatting the same device twice is fine", "[format][device]")
 {
-    const QByteArray dev = testBlockDevice();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QByteArray dev = device.path().toLatin1();
 
     // Erasing a card that was already erased is ordinary, and must not trip
     // over the table left by the previous run.
@@ -258,9 +250,10 @@ TEST_CASE("Formatting the same device twice is fine", "[format][device]")
 
 TEST_CASE("A formatted device reports its size", "[format][device]")
 {
-    const QByteArray dev = testBlockDevice();
-    if (dev.isEmpty())
-        SKIP("set RPI_IMAGER_TEST_BLOCK_DEVICE to a loop device to run this");
+    rpi_imager::testing::TestBlockDevice device(64);
+    if (!device.isReady())
+        SKIP("no loop device to write to: allow passwordless sudo so one can be provisioned, or set RPI_IMAGER_TEST_BLOCK_DEVICE to one");
+    const QByteArray dev = device.path().toLatin1();
 
     DriveFormatThread t(dev);
     REQUIRE(runToCompletion(t).succeeded);

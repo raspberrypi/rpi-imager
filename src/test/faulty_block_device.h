@@ -31,6 +31,7 @@
 #include <QThread>
 #include <QUuid>
 
+#include <memory>
 #include "fixture_process.h"
 
 namespace rpi_imager::testing {
@@ -52,6 +53,102 @@ inline bool runPrivileged(const QString &program, const QStringList &args, QByte
         *stdOut = proc.readAllStandardOutput();
     return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
 }
+
+// A plain loop device backed by a temporary file.
+//
+// A real block device, with the alignment rules, the direct-I/O path, the
+// discard before the write and the size read back out of the kernel -- none
+// of which a regular file reproduces, and all of which are what actually
+// fails on a card.
+//
+// The device tests took theirs from RPI_IMAGER_TEST_BLOCK_DEVICE and skipped
+// when it was unset, so the write path was only exercised by someone who had
+// set a device up by hand. In practice that meant never: the whole group sat
+// skipped in every run. This provisions one where the suite is allowed to,
+// and still skips where it is not.
+class LoopDevice
+{
+public:
+    explicit LoopDevice(int megabytes)
+    {
+        if (!canRunPrivileged())
+            return;
+
+        _dir = QDir::temp().filePath(
+            QStringLiteral("rpi-imager-loop-%1")
+                .arg(QUuid::createUuid().toString(QUuid::WithoutBraces).left(8)));
+        if (!QDir().mkpath(_dir))
+            return;
+
+        const QString backing = QDir(_dir).filePath(QStringLiteral("backing.img"));
+        QFile f(backing);
+        if (!f.open(QIODevice::WriteOnly) ||
+            !f.resize(static_cast<qint64>(megabytes) * 1024 * 1024))
+            return;
+        f.close();
+
+        // -f only ever returns a device that is not already attached, so this
+        // cannot land on anything of the user's.
+        QByteArray out;
+        if (!runPrivileged(QStringLiteral("losetup"),
+                           {QStringLiteral("-f"), QStringLiteral("--show"), backing}, &out))
+            return;
+        _loop = QString::fromUtf8(out).trimmed();
+        if (!_loop.startsWith(QStringLiteral("/dev/loop"))) {
+            _loop.clear();
+            return;
+        }
+
+        // Writable by this user, so the imager opens it without being root.
+        runPrivileged(QStringLiteral("chmod"), {QStringLiteral("0666"), _loop});
+        _ready = QFileInfo::exists(_loop);
+    }
+
+    ~LoopDevice()
+    {
+        if (!_loop.isEmpty())
+            runPrivileged(QStringLiteral("losetup"), {QStringLiteral("-d"), _loop});
+        if (!_dir.isEmpty())
+            QDir(_dir).removeRecursively();
+    }
+
+    LoopDevice(const LoopDevice &) = delete;
+    LoopDevice &operator=(const LoopDevice &) = delete;
+
+    bool isReady() const { return _ready; }
+    QString path() const { return _loop; }
+
+private:
+    QString _dir, _loop;
+    bool _ready = false;
+};
+
+// The device a test should write to: one named in the environment if the
+// runner supplied it, otherwise one provisioned here. Refuses anything that
+// is not a loop device however it arrived, so a mistyped environment variable
+// cannot point the write path at a real disk.
+class TestBlockDevice
+{
+public:
+    explicit TestBlockDevice(int megabytes)
+    {
+        const QByteArray fromEnv = qgetenv("RPI_IMAGER_TEST_BLOCK_DEVICE");
+        if (fromEnv.startsWith("/dev/loop")) {
+            _path = QString::fromLatin1(fromEnv);
+            return;
+        }
+        _owned = std::make_unique<LoopDevice>(megabytes);
+        if (_owned->isReady())
+            _path = _owned->path();
+    }
+
+    bool isReady() const { return !_path.isEmpty(); }
+    QString path() const { return _path; }
+
+private:
+    std::unique_ptr<LoopDevice> _owned;
+    QString _path;
+};
 
 // A block device whose first `goodMegabytes` are writable and whose remainder
 // returns EIO. Tears itself down, including on an assertion failure.
