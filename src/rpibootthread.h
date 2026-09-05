@@ -82,6 +82,9 @@ protected:
                   QString& bootcodeDiag,
                   QString& fileServeDiag);
 
+// State stays private. Widening the sequence above is what makes it
+// testable; the members it works on are nobody else's business.
+private:
     DeviceInfo _device;
     rpiboot::SideloadMode _mode;
     std::atomic<bool> _cancelled{false};

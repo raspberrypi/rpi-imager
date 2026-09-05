@@ -105,6 +105,7 @@ public:
     using RpibootThread::RpibootThread;
     using RpibootThread::pollForFastbootDevice;
     using RpibootThread::waitForBootDeviceReEnum;
+    using RpibootThread::pollForRpibootReturn;
 
     FakeBus bus;
     bool busUnavailable = false;
@@ -385,4 +386,110 @@ TEST_CASE("A bus that cannot be opened ends the wait", "[rpiboot][re-enum]")
 
     rpiboot::UsbDeviceInfo out{};
     CHECK_FALSE(t.waitForBootDeviceReEnum(out));
+}
+
+// ══════════════════════════════════════════════════════════════
+// Secure-boot reprovision: waiting for the board after an EEPROM write
+//
+// Unlike the fastboot wait, this one has no fallback. The board is coming
+// back from having its bootloader rewritten, so there is no "sole device on
+// the bus, must be it" -- without a port path nothing is accepted at all.
+// The board is told apart from its pre-reboot self by the address, since a
+// fresh enumeration is given a new one.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("The board returning on the same port with a new address is taken",
+          "[rpiboot][sbr]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.bus.bootDevices = { device(1, 21, {1, 2}) };
+
+    std::atomic<bool> found{false};
+    REQUIRE(t.pollForRpibootReturn(found, /*priorDeviceAddress=*/4));
+    CHECK(found.load());
+}
+
+TEST_CASE("A board still at its old address has not come back yet",
+          "[rpiboot][sbr]")
+{
+    // The reboot has not happened. Treating this as the return would carry
+    // on against a board midway through rewriting its own bootloader.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.bus.bootDevices = { device(1, 4, {1, 2}) };
+    t.bus.onScan = [&t](int n) { if (n >= 2) t.cancel(); };
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, /*priorDeviceAddress=*/4));
+    CHECK_FALSE(found.load());
+}
+
+TEST_CASE("A board on another port is not the one that was reprovisioned",
+          "[rpiboot][sbr]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.bus.bootDevices = { device(1, 21, {7, 8}) };
+    t.bus.onScan = [&t](int n) { if (n >= 2) t.cancel(); };
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, 4));
+}
+
+TEST_CASE("With no port path nothing is accepted at all", "[rpiboot][sbr]")
+{
+    // The deliberate difference from the fastboot wait. A board whose fuses
+    // are being programmed is not one to guess about, so an enumeration that
+    // gave no port path means this path simply cannot proceed -- even with a
+    // single device sitting on the bus.
+    TestableRpibootThread t{chosenDevice({}), rpiboot::SideloadMode::Fastboot};
+    t.bus.bootDevices = { device(1, 21, {}) };
+    t.bus.onScan = [&t](int n) { if (n >= 2) t.cancel(); };
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, 4));
+    CHECK_FALSE(found.load());
+}
+
+TEST_CASE("The returning board is found among others on the bus",
+          "[rpiboot][sbr]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.bus.bootDevices = {
+        device(1, 4, {5, 6}),      // another board, untouched
+        device(1, 21, {1, 2}),     // ours, new address
+    };
+
+    std::atomic<bool> found{false};
+    REQUIRE(t.pollForRpibootReturn(found, 4));
+}
+
+TEST_CASE("Cancelling stops the reprovision wait", "[rpiboot][sbr][cancel]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.cancel();
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, 4));
+    CHECK(t.bus.bootScans == 0);
+}
+
+TEST_CASE("A scan that throws does not end the reprovision wait",
+          "[rpiboot][sbr]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.bus.throwOnScan = true;
+    t.bus.onScan = [&t](int n) { if (n >= 3) t.cancel(); };
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, 4));
+    CHECK(t.bus.bootScans >= 3);
+}
+
+TEST_CASE("A bus that cannot be opened ends the reprovision wait",
+          "[rpiboot][sbr]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.busUnavailable = true;
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, 4));
 }
