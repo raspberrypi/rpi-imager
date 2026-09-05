@@ -24,6 +24,9 @@
 
 #include "drivelistmodelpollthread.h"
 #include "drivelist/drivelist.h"
+#include "rpiboot/libusb_transport.h"
+#include "rpiboot/rpiboot_types.h"
+#include "rpiboot/test/mock_usb_transport.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -32,6 +35,9 @@
 #include <QTimer>
 
 #include <atomic>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -258,4 +264,200 @@ TEST_CASE("A thread can be restarted after being stopped", "[drivepoll]")
 
     t.stop();
     REQUIRE(t.wait(5000));
+}
+
+// ══════════════════════════════════════════════════════════════
+// Which fastboot devices are offered as somewhere to write
+//
+// The Pi's fastboot gadget borrows Google's 18d1:4e40, so an Android phone
+// left in fastboot mode enumerates identically. identifyRpiFastboot() is
+// the only thing between that phone and the storage picker, and a user who
+// picks it writes a Raspberry Pi OS image over their phone's storage.
+//
+// The three answers are treated differently on purpose. A confirmed Pi is
+// queried for storage and listed. A confirmed non-Pi is banked, so it is
+// neither listed nor probed again every tick. A device that did not answer
+// is left open and retried, because a Pi whose gadget is still coming up
+// looks exactly like one that is not there.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+rpiboot::UsbDeviceInfo fbDevice(uint8_t bus, uint8_t addr, std::vector<uint8_t> port)
+{
+    rpiboot::UsbDeviceInfo d{};
+    d.busNumber = bus;
+    d.deviceAddress = addr;
+    d.portPath = std::move(port);
+    return d;
+}
+
+// A bus the test describes, with one transport behind every device on it.
+struct FakeFastbootBus {
+    std::vector<rpiboot::UsbDeviceInfo> devices;
+    rpiboot::testing::MockUsbTransport *transport = nullptr;
+    int scans = 0;
+    int opens = 0;
+};
+
+class FbTransportView : public rpiboot::IUsbTransport
+{
+public:
+    explicit FbTransportView(rpiboot::testing::MockUsbTransport &t) : _t(t) {}
+    bool controlTransfer(uint8_t rt, uint8_t r, uint16_t v, uint16_t i,
+                         std::span<const uint8_t> d, int ms) override
+    { return _t.controlTransfer(rt, r, v, i, d, ms); }
+    int controlTransferIn(uint8_t rt, uint8_t r, uint16_t v, uint16_t i,
+                          std::span<uint8_t> b, int ms) override
+    { return _t.controlTransferIn(rt, r, v, i, b, ms); }
+    int bulkWrite(uint8_t ep, std::span<const uint8_t> d, int ms) override
+    { return _t.bulkWrite(ep, d, ms); }
+    int bulkRead(uint8_t ep, std::span<uint8_t> b, int ms) override
+    { return _t.bulkRead(ep, b, ms); }
+    bool isOpen() const override { return _t.isOpen(); }
+    std::string interfaceString() const override { return _t.interfaceString(); }
+    uint8_t outEndpoint() const override { return _t.outEndpoint(); }
+    uint8_t inEndpoint() const override { return _t.inEndpoint(); }
+private:
+    rpiboot::testing::MockUsbTransport &_t;
+};
+
+class FbBusView : public rpiboot::IUsbContext
+{
+public:
+    explicit FbBusView(FakeFastbootBus &bus) : _bus(bus) {}
+    std::vector<rpiboot::UsbDeviceInfo> scanBootDevices() const override { return {}; }
+    std::vector<rpiboot::UsbDeviceInfo> scanFastbootDevices() const override
+    {
+        ++_bus.scans;
+        return _bus.devices;
+    }
+    std::unique_ptr<rpiboot::IUsbTransport> openDevice(
+        const rpiboot::UsbDeviceInfo &) const override
+    {
+        ++_bus.opens;
+        if (!_bus.transport)
+            return nullptr;
+        return std::make_unique<FbTransportView>(*_bus.transport);
+    }
+private:
+    FakeFastbootBus &_bus;
+};
+
+class ScannablePollThread : public DriveListModelPollThread
+{
+public:
+    using DriveListModelPollThread::appendFastbootDevices;
+
+    FakeFastbootBus bus;
+
+protected:
+    std::unique_ptr<rpiboot::IUsbContext> makeUsbContext() override
+    {
+        return std::make_unique<FbBusView>(bus);
+    }
+};
+
+// Count the fastboot entries a scan produced.
+int fastbootEntries(const std::vector<Drivelist::DeviceDescriptor> &list)
+{
+    int n = 0;
+    for (const auto &d : list)
+        if (d.device.rfind("fastboot://", 0) == 0)
+            ++n;
+    return n;
+}
+
+} // namespace
+
+TEST_CASE("A device that is not a Pi is not offered as a write target",
+          "[drivepoll][fastboot]")
+{
+    // A phone in fastboot mode: right VID and PID, wrong interface string,
+    // and it fails the RPi-specific getvar.
+    rpiboot::testing::MockUsbTransport phone;
+    phone.setInterfaceString("Android Fastboot");
+    phone.queueBulkReadResponse({'F', 'A', 'I', 'L'});
+
+    ScannablePollThread t;
+    t.bus.transport = &phone;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> list;
+    t.appendFastbootDevices(list);
+
+    CHECK(fastbootEntries(list) == 0);
+}
+
+TEST_CASE("A device that is not a Pi is not probed again",
+          "[drivepoll][fastboot]")
+{
+    // Banked after the first answer. Re-probing a phone on every tick would
+    // hammer somebody else's device several times a second.
+    rpiboot::testing::MockUsbTransport phone;
+    phone.setInterfaceString("Android Fastboot");
+    phone.queueBulkReadResponse({'F', 'A', 'I', 'L'});
+
+    ScannablePollThread t;
+    t.bus.transport = &phone;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> first, second;
+    t.appendFastbootDevices(first);
+    const int opensAfterFirst = t.bus.opens;
+    t.appendFastbootDevices(second);
+
+    CHECK(t.bus.opens == opensAfterFirst);
+    CHECK(fastbootEntries(second) == 0);
+}
+
+TEST_CASE("A device that does not answer is asked again",
+          "[drivepoll][fastboot]")
+{
+    // A Pi whose gadget is still coming up looks exactly like a device that
+    // is not there. Banking a "no" would leave the board unusable until the
+    // application is restarted.
+    rpiboot::testing::MockUsbTransport quiet;
+    quiet.setInterfaceString("");           // nothing to go on
+    // No queued response: the read fails, which is a transport error.
+
+    ScannablePollThread t;
+    t.bus.transport = &quiet;
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> first, second;
+    t.appendFastbootDevices(first);
+    const int opensAfterFirst = t.bus.opens;
+    t.appendFastbootDevices(second);
+
+    CHECK(t.bus.opens > opensAfterFirst);
+    CHECK(fastbootEntries(first) == 0);
+}
+
+TEST_CASE("A device that cannot be opened is skipped", "[drivepoll][fastboot]")
+{
+    ScannablePollThread t;
+    t.bus.transport = nullptr;              // openDevice returns nothing
+    t.bus.devices = { fbDevice(1, 4, {1, 2}) };
+
+    std::vector<Drivelist::DeviceDescriptor> list;
+    REQUIRE_NOTHROW(t.appendFastbootDevices(list));
+    CHECK(fastbootEntries(list) == 0);
+}
+
+TEST_CASE("An empty bus adds nothing and disturbs nothing",
+          "[drivepoll][fastboot]")
+{
+    ScannablePollThread t;
+
+    std::vector<Drivelist::DeviceDescriptor> list;
+    Drivelist::DeviceDescriptor existing;
+    existing.device = "/dev/sda";
+    list.push_back(existing);
+
+    t.appendFastbootDevices(list);
+
+    CHECK(list.size() == 1);
+    CHECK(list[0].device == "/dev/sda");
+    CHECK(t.bus.scans == 1);
 }
