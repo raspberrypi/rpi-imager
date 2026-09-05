@@ -378,8 +378,30 @@ TEST_CASE("CacheManager refuses to cache a download larger than the disk", "[cac
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
+
+    // Test mode alone keeps this off the developer's real cache, but it does
+    // not keep the cases apart from each other. Each TEST_CASE runs as its own
+    // process and ctest -j runs several at once, so without a name unique to
+    // the process they all share one cache directory and one settings file --
+    // and clearCacheDir() is remove_all() on that directory while
+    // clearCacheSettings() wipes that file. One case deletes what another is
+    // partway through using.
+    //
+    // It surfaced as "A cache file that cannot be read is discarded on
+    // startup" failing on setPermissions() returning false: the path had been
+    // removed by a sibling between being written and being chmodded. Once in
+    // 1157, only when those two happened to overlap.
+    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
+    QCoreApplication::setApplicationName(
+        QStringLiteral("cache_manager_test-%1").arg(QCoreApplication::applicationPid()));
     QStandardPaths::setTestModeEnabled(true);
-    return Catch::Session().run(argc, argv);
+
+    const int rc = Catch::Session().run(argc, argv);
+
+    // Nothing else knows this directory's name, so nothing else will remove it.
+    QDir(QStandardPaths::writableLocation(QStandardPaths::CacheLocation))
+        .removeRecursively();
+    return rc;
 }
 
 // ---------------------------------------------------------------------------
