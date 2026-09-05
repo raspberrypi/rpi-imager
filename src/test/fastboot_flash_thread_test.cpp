@@ -32,7 +32,12 @@
 #include <memory>
 #include "rpiboot/libusb_transport.h"
 #include "rpiboot/rpiboot_types.h"
+#include "sparse_decode.h"
 
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QCoreApplication>
 #include <QString>
 #include <QStringList>
@@ -53,9 +58,11 @@ class TestableFlashThread : public FastbootFlashThread
 {
 public:
     explicit TestableFlashThread(const QUrl& imageUrl,
-                                 const QString& blockDevice = QStringLiteral("mmcblk0"))
+                                 const QString& blockDevice = QStringLiteral("mmcblk0"),
+                                 quint64 extractLen = 0,
+                                 const QByteArray& expectedHash = QByteArray())
         : FastbootFlashThread(QStringLiteral("0001-fastboot"), blockDevice,
-                              imageUrl, 0, 0, QByteArray())
+                              imageUrl, 0, extractLen, expectedHash)
     {
     }
 
@@ -822,6 +829,226 @@ TEST_CASE("A cancelled flash does not reach the device", "[fastboot][flash]")
     INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
     for (const QString &c : cmds)
         CHECK_THAT(c.toStdString(), !ContainsSubstring("erase:"));
+}
+
+// ══════════════════════════════════════════════════════════════
+// 6b. The whole flash, end to end
+//
+// Everything above stops at the edges of the pipeline: the erase commands,
+// the EEPROM, the size arithmetic. The pipeline itself -- curl into the
+// compressed ring, libarchive out of it, the sparse encoder, the segments
+// going down the wire, the hash of what was read -- was reachable only with
+// a Compute Module attached, and so was never run.
+//
+// It does not need one. The image can come off disk through the same curl
+// call, and the device end is a few hundred bytes of state machine: answer
+// getvar, accept a download, acknowledge a flash. What that device receives
+// can then be decoded back into an image and compared with the one that went
+// in, which is the only assertion that really matters -- every stage in
+// between is load-bearing for it.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A fastboot device that actually answers, and keeps what it was sent.
+class FakeFastbootDevice : public MockUsbTransport
+{
+public:
+    explicit FakeFastbootDevice(uint32_t maxDownload)
+        : _maxDownload(maxDownload)
+    {
+        setInterfaceString(rpiboot::FASTBOOT_INTERFACE_DESCRIPTOR);
+        setOpen(true);
+    }
+
+    // The payload of each flash command, in the order they arrived.
+    const std::vector<std::vector<uint8_t>>& flashed() const { return _flashed; }
+    const std::vector<std::string>& commands() const { return _commands; }
+
+    int bulkWrite(uint8_t endpoint, std::span<const uint8_t> data, int timeoutMs) override
+    {
+        // Mid-download the writes are image bytes, not commands. Accumulate
+        // them here rather than through the base, which keeps every write it
+        // sees -- that would hold a second copy of the whole image.
+        if (_awaiting > 0) {
+            _payload.insert(_payload.end(), data.begin(), data.end());
+            if (_payload.size() >= _awaiting) {
+                _awaiting = 0;
+                queueBulkReadResponse(okay());
+            }
+            return static_cast<int>(data.size());
+        }
+
+        const std::string cmd(reinterpret_cast<const char*>(data.data()), data.size());
+        _commands.push_back(cmd);
+        answer(cmd);
+        return MockUsbTransport::bulkWrite(endpoint, data, timeoutMs);
+    }
+
+private:
+    void answer(const std::string& cmd)
+    {
+        const auto startsWith = [&cmd](const char* p) { return cmd.rfind(p, 0) == 0; };
+
+        if (startsWith("getvar:max-download-size")) {
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "0x%08x", _maxDownload);
+            queueBulkReadResponse(okay(buf));
+            return;
+        }
+        if (startsWith("download:")) {
+            const std::string hex = cmd.substr(std::strlen("download:"));
+            _awaiting = std::stoul(hex, nullptr, 16);
+            _payload.clear();
+            _payload.reserve(_awaiting);
+            const std::string data = "DATA" + hex;
+            queueBulkReadResponse({data.begin(), data.end()});
+            return;
+        }
+        if (startsWith("flash:")) {
+            _flashed.push_back(std::move(_payload));
+            _payload.clear();
+            queueBulkReadResponse(okay());
+            return;
+        }
+        queueBulkReadResponse(okay());
+    }
+
+    uint32_t _maxDownload;
+    size_t _awaiting = 0;
+    std::vector<uint8_t> _payload;
+    std::vector<std::vector<uint8_t>> _flashed;
+    std::vector<std::string> _commands;
+};
+
+class FlashingThread : public TestableFlashThread
+{
+public:
+    FlashingThread(const QUrl& url, quint64 extractLen, const QByteArray& hash,
+                   uint32_t maxDownload)
+        : TestableFlashThread(url, QStringLiteral("mmcblk0"), extractLen, hash)
+        , device(maxDownload)
+    {
+    }
+
+    FakeFastbootDevice device;      // outlives runImpl()
+
+protected:
+    std::unique_ptr<rpiboot::IUsbTransport> openFastbootTransport(
+        rpiboot::LibusbContext&, const rpiboot::UsbDeviceInfo&) override
+    {
+        return std::make_unique<TransportView>(device);
+    }
+};
+
+// A pattern with no long runs, so the encoder cannot turn any of it into
+// FILL or DONT_CARE chunks and every byte has to travel.
+std::vector<uint8_t> patternImage(size_t bytes)
+{
+    std::vector<uint8_t> img(bytes);
+    for (size_t i = 0; i < bytes; ++i)
+        img[i] = static_cast<uint8_t>((i * 31 + (i >> 8) * 7 + 11) & 0xFF);
+    return img;
+}
+
+QString writeImage(const QString& dir, const std::vector<uint8_t>& img)
+{
+    const QString path = QDir(dir).filePath(QStringLiteral("os.img"));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    REQUIRE(f.write(reinterpret_cast<const char*>(img.data()),
+                    static_cast<qint64>(img.size())) == qint64(img.size()));
+    return path;
+}
+
+} // namespace
+
+TEST_CASE("An image reaches the device byte for byte", "[fastboot][flash][pipeline]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(2 * 1024 * 1024);
+    const QString path = writeImage(dir.path(), image);
+    const QByteArray hash =
+        QCryptographicHash::hash(QByteArray(reinterpret_cast<const char*>(image.data()),
+                                            static_cast<int>(image.size())),
+                                 QCryptographicHash::Sha256).toHex();
+
+    // Larger than the image, so the whole thing goes in one segment.
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), hash, 64u * 1024 * 1024};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.success);
+    REQUIRE_FALSE(t.device.flashed().empty());
+
+    std::vector<uint8_t> received(image.size(), 0);
+    for (const auto& segment : t.device.flashed())
+        rpi_test::applySparse(segment, received);
+
+    CHECK(received == image);
+}
+
+TEST_CASE("An image larger than one segment arrives in order and complete",
+          "[fastboot][flash][pipeline]")
+{
+    // A device that will only take a small download at a time, which is the
+    // normal case: the image is split into segments, each with its own sparse
+    // header and its own place in the image. Getting the offsets wrong here
+    // writes the right bytes to the wrong blocks, and only shows up as a card
+    // that does not boot.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(4 * 1024 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     1024u * 1024};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.success);
+    INFO("segments: " << t.device.flashed().size());
+    CHECK(t.device.flashed().size() > 1);
+
+    std::vector<uint8_t> received(image.size(), 0);
+    for (const auto& segment : t.device.flashed())
+        rpi_test::applySparse(segment, received);
+
+    CHECK(received == image);
+}
+
+TEST_CASE("A wrong hash is reported rather than called a success",
+          "[fastboot][flash][pipeline]")
+{
+    // The hash is taken over what was decompressed and fed to the encoder,
+    // so it is the end-to-end check that the card got the image the catalogue
+    // named. A mismatch has to stop the write being called a success.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(1024 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    const QByteArray wrong(64, 'a');
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), wrong, 64u * 1024 * 1024};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    CHECK_FALSE(log.success);
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_THAT(log.errors.last().toStdString(), ContainsSubstring("hash"));
 }
 
 // ══════════════════════════════════════════════════════════════
