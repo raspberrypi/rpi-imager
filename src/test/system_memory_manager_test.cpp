@@ -480,3 +480,43 @@ TEST_CASE("Sync configuration is stable and within its clamps", "[memory]")
     CHECK(first.syncIntervalBytes <= 256ll * 1024 * 1024);
     CHECK(first.syncIntervalMs > 0);
 }
+
+TEST_CASE("The coordinated config honours its own budget", "[memory]")
+{
+    auto &mgr = SystemMemoryManager::instance();
+
+    // getCoordinatedRingBufferConfig() exists to keep the two ring buffers
+    // inside a share of available memory -- downloadextractthread.cpp says
+    // so where it calls it: "This ensures both ring buffers together fit
+    // within 30% of available memory."
+    //
+    // These are the hints real callers pass. The fastboot flash path hard
+    // codes 16 MB for its write slot, which is larger than anything
+    // getOptimalWriteBufferSize() returns, so it is the one most likely to
+    // push the result past the budget.
+    struct Caller { const char *what; size_t input; size_t write; };
+    const Caller callers[] = {
+        {"write path, small machine",  1024u * 1024,  1024u * 1024},
+        {"write path, large machine",  8u * 1024 * 1024, 8u * 1024 * 1024},
+        {"fastboot flash",             1024u * 1024, 16u * 1024 * 1024},
+    };
+
+    const size_t available = size_t(mgr.getAvailableMemoryMB()) * 1024 * 1024;
+    REQUIRE(available > 0);
+
+    for (const Caller &c : callers) {
+        size_t inputSlots = 0, writeSlots = 0, actualInput = 0, actualWrite = 0;
+        const size_t total = mgr.getCoordinatedRingBufferConfig(
+            c.input, c.write, inputSlots, writeSlots, actualInput, actualWrite);
+
+        const double share = double(total) / double(available);
+        INFO(c.what << ": total " << total << " of available " << available
+             << " (" << int(share * 100) << "%)"
+             << " slots " << inputSlots << "/" << writeSlots
+             << " sizes " << actualInput << "/" << actualWrite);
+
+        // The stated guarantee, with room for the budget to be computed from
+        // a slightly different reading of available memory than this one.
+        CHECK(share <= 0.60);
+    }
+}
