@@ -29,6 +29,7 @@
 #include "fastbootflashthread.h"
 #include "fastboot/fastboot_protocol.h"
 #include "rpiboot/test/mock_usb_transport.h"
+#include <map>
 #include <memory>
 #include "rpiboot/libusb_transport.h"
 #include "rpiboot/rpiboot_types.h"
@@ -865,6 +866,25 @@ public:
     const std::vector<std::vector<uint8_t>>& flashed() const { return _flashed; }
     const std::vector<std::string>& commands() const { return _commands; }
 
+    // The filesystem the device exposes once mounted. Seed what the image is
+    // supposed to have put there; read back what the customisation wrote.
+    // Make any command starting with this prefix answer FAIL.
+    void failCommand(std::string prefix) { _failPrefix = std::move(prefix); }
+
+    void seedFile(const std::string& path, const QByteArray& content)
+    {
+        _files[path] = std::vector<uint8_t>(content.begin(), content.end());
+    }
+    bool hasFile(const std::string& path) const { return _files.count(path) != 0; }
+    QByteArray file(const std::string& path) const
+    {
+        const auto it = _files.find(path);
+        if (it == _files.end())
+            return {};
+        return QByteArray(reinterpret_cast<const char*>(it->second.data()),
+                          static_cast<int>(it->second.size()));
+    }
+
     int bulkWrite(uint8_t endpoint, std::span<const uint8_t> data, int timeoutMs) override
     {
         // Mid-download the writes are image bytes, not commands. Accumulate
@@ -874,6 +894,8 @@ public:
             _payload.insert(_payload.end(), data.begin(), data.end());
             if (_payload.size() >= _awaiting) {
                 _awaiting = 0;
+                _staged = std::move(_payload);
+                _payload.clear();
                 queueBulkReadResponse(okay());
             }
             return static_cast<int>(data.size());
@@ -889,6 +911,11 @@ private:
     void answer(const std::string& cmd)
     {
         const auto startsWith = [&cmd](const char* p) { return cmd.rfind(p, 0) == 0; };
+
+        if (!_failPrefix.empty() && cmd.rfind(_failPrefix, 0) == 0) {
+            queueBulkReadResponse(fail("simulated device refusal"));
+            return;
+        }
 
         if (startsWith("getvar:max-download-size")) {
             char buf[32];
@@ -906,19 +933,58 @@ private:
             return;
         }
         if (startsWith("flash:")) {
-            _flashed.push_back(std::move(_payload));
-            _payload.clear();
+            _flashed.push_back(std::move(_staged));
+            _staged.clear();
             queueBulkReadResponse(okay());
             return;
         }
+
+        // ── the mounted boot partition ──
+        //
+        // A write is a download followed by "oem download-file <path>"; a read
+        // is "oem upload-file <path>" followed by an "upload" the device
+        // answers with DATA, the bytes and an OKAY.
+        if (startsWith("oem download-file ")) {
+            _files[cmd.substr(std::strlen("oem download-file "))] = std::move(_staged);
+            _staged.clear();
+            queueBulkReadResponse(okay());
+            return;
+        }
+        if (startsWith("oem upload-file ")) {
+            _pendingUpload = cmd.substr(std::strlen("oem upload-file "));
+            queueBulkReadResponse(okay());
+            return;
+        }
+        if (cmd == "upload") {
+            static const std::vector<uint8_t> kNothing;
+            const auto it = _files.find(_pendingUpload);
+            const std::vector<uint8_t>& body = it == _files.end() ? kNothing : it->second;
+
+            char hdr[32];
+            std::snprintf(hdr, sizeof(hdr), "DATA%08zx", body.size());
+            queueBulkReadResponse({hdr, hdr + std::strlen(hdr)});
+            // Chunked: the mock serves one queued entry per bulkRead and drops
+            // whatever does not fit the caller's buffer.
+            for (size_t off = 0; off < body.size(); off += rpiboot::BULK_CHUNK_SIZE) {
+                const size_t n = std::min(body.size() - off, rpiboot::BULK_CHUNK_SIZE);
+                queueBulkReadResponse({body.begin() + off, body.begin() + off + n});
+            }
+            queueBulkReadResponse(okay());
+            return;
+        }
+
         queueBulkReadResponse(okay());
     }
 
     uint32_t _maxDownload;
     size_t _awaiting = 0;
-    std::vector<uint8_t> _payload;
+    std::vector<uint8_t> _payload;      // arriving
+    std::vector<uint8_t> _staged;       // complete, awaiting its verb
     std::vector<std::vector<uint8_t>> _flashed;
     std::vector<std::string> _commands;
+    std::map<std::string, std::vector<uint8_t>> _files;
+    std::string _pendingUpload;
+    std::string _failPrefix;
 };
 
 class FlashingThread : public TestableFlashThread
@@ -1024,6 +1090,98 @@ TEST_CASE("An image larger than one segment arrives in order and complete",
         rpi_test::applySparse(segment, received);
 
     CHECK(received == image);
+}
+
+TEST_CASE("Customisation is written into the boot partition it just flashed",
+          "[fastboot][flash][pipeline]")
+{
+    // The Compute Module equivalent of everything the customisation screen
+    // collects. Unlike the SD card path it cannot edit a file on disk before
+    // writing: the image goes down first, then the device mounts its own boot
+    // partition and the files are pushed over the wire one at a time. Only the
+    // refusals had ever been tested -- nothing had ever checked that the files
+    // arrive, or that config.txt is merged rather than replaced.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(1024 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     64u * 1024 * 1024};
+
+    // What the flashed image is supposed to have left on the partition. The
+    // setting asked for is present but commented out, which is the case that
+    // has to be uncommented in place rather than appended.
+    t.device.seedFile("/mnt/bootfs/config.txt",
+                      "[all]\n#dtparam=audio=on\n[pi5]\narm_boost=1\n");
+    t.device.seedFile("/mnt/bootfs/cmdline.txt", "console=serial0,115200 rootwait\n");
+
+    const QByteArray firstrun = "#!/bin/bash\n# marker-fastboot-customisation\nexit 0\n";
+    t.setImageCustomisation(QByteArray("dtparam=audio=on\ndtoverlay=vc4-kms-v3d"),
+                            QByteArray(),
+                            firstrun,
+                            QByteArray(), QByteArray(),
+                            QByteArray("systemd"));
+
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.success);
+
+    // The script has to be there to run at all.
+    REQUIRE(t.device.hasFile("/mnt/bootfs/firstrun.sh"));
+    CHECK(t.device.file("/mnt/bootfs/firstrun.sh") == firstrun);
+
+    // config.txt is merged, not replaced: the commented setting is turned on
+    // where it stood, the new one is added, and what the user already had is
+    // still there.
+    const QByteArray config = t.device.file("/mnt/bootfs/config.txt");
+    INFO("config.txt:\n" << config.toStdString());
+    CHECK(config.contains("\ndtparam=audio=on\n"));
+    CHECK_FALSE(config.contains("#dtparam=audio=on"));
+    CHECK(config.contains("dtoverlay=vc4-kms-v3d"));
+    CHECK(config.contains("[pi5]"));
+    CHECK(config.contains("arm_boost=1"));
+
+    // And the partition was mounted and released again, rather than left
+    // mounted on a device about to be rebooted.
+    const QStringList cmds = commandsSent(t.device);
+    CHECK_FALSE(cmds.filter(QStringLiteral("oem mount ")).isEmpty());
+    CHECK_FALSE(cmds.filter(QStringLiteral("oem umount ")).isEmpty());
+}
+
+TEST_CASE("A boot partition that will not mount stops the write being a success",
+          "[fastboot][flash][pipeline]")
+{
+    // The image is already on the device by this point. Reporting success
+    // anyway would leave a card that boots without any of the settings the
+    // user entered -- no network, no account, no way in.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(512 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     64u * 1024 * 1024};
+    t.device.failCommand("oem mount ");
+    t.setImageCustomisation(QByteArray(), QByteArray(),
+                            "#!/bin/bash\nexit 0\n", QByteArray(), QByteArray(),
+                            QByteArray("systemd"));
+
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    CHECK_FALSE(log.success);
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_THAT(log.errors.last().toStdString(), ContainsSubstring("mount"));
 }
 
 TEST_CASE("A wrong hash is reported rather than called a success",
