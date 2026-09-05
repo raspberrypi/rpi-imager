@@ -350,9 +350,12 @@ FocusScope {
             }
         }
 
-        // Ensure initialFocusItem set
+        // Ensure initialFocusItem set, and that it is still one of the items
+        // the ring actually contains -- see BaseDialog.rebuildFocusOrder()
+        // for why a stale one puts focus on something invisible.
         var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
-        if (!initialFocusItem) initialFocusItem = firstField
+        if (!initialFocusItem || _focusableItems.indexOf(initialFocusItem) === -1)
+            initialFocusItem = firstField
     }
 
     // Helper functions for global Tab navigation fallback
