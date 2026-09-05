@@ -10,9 +10,13 @@
 #define RPIBOOTTHREAD_H
 
 #include <QThread>
+
+#include <memory>
 #include <QString>
 
 #include "rpiboot/rpiboot_types.h"
+
+namespace rpiboot { class IUsbContext; }
 
 namespace rpiboot { struct UsbDeviceInfo; }
 
@@ -53,7 +57,17 @@ signals:
 protected:
     void run() override;
 
-private:
+    // The whole sideload sequence talks to the bus through this. Each step
+    // used to construct a LibusbContext inline, which is what kept every
+    // line below unreachable without a Pi in boot mode on the bus; behind a
+    // factory, a test supplies its own bus and drives the sequence.
+    virtual std::unique_ptr<rpiboot::IUsbContext> makeUsbContext();
+
+// Protected rather than private for the same reason FastbootFlashThread's
+// are: these decide whether a board is about to be reflashed and what is
+// sent to it, and every one of them already takes or returns plain data.
+// The only thing standing in the way was the access specifier.
+protected:
     bool pollForFastbootDevice(std::atomic<bool>& found, QString& fastbootId);
     // SBR equivalent of pollForFastbootDevice: watches for the original
     // rpiboot device returning on the same port path after the EEPROM

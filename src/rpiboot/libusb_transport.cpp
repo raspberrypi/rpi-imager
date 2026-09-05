@@ -21,6 +21,8 @@ LibusbContext::LibusbContext()
         throw std::runtime_error(std::string("libusb_init failed: ") + libusb_strerror(static_cast<libusb_error>(rc)));
 }
 
+IUsbContext::~IUsbContext() = default;
+
 LibusbContext::~LibusbContext()
 {
     if (_ctx)
@@ -106,7 +108,7 @@ std::vector<UsbDeviceInfo> LibusbContext::scanFastbootDevices() const
     return result;
 }
 
-std::unique_ptr<LibusbTransport> LibusbContext::openDevice(const UsbDeviceInfo& info) const
+std::unique_ptr<IUsbTransport> LibusbContext::openDevice(const UsbDeviceInfo& info) const
 {
     libusb_device** list = nullptr;
     ssize_t count = libusb_get_device_list(_ctx, &list);

@@ -34,6 +34,19 @@ RpibootThread::~RpibootThread()
     }
 }
 
+std::unique_ptr<rpiboot::IUsbContext> RpibootThread::makeUsbContext()
+{
+    // LibusbContext's constructor throws if libusb will not initialise --
+    // no permissions, no usbfs. Callers get nullptr and report it rather
+    // than the exception escaping into a QThread::run().
+    try {
+        return std::make_unique<rpiboot::LibusbContext>();
+    } catch (const std::exception &e) {
+        qWarning() << "RpibootThread: cannot open the USB bus:" << e.what();
+        return nullptr;
+    }
+}
+
 void RpibootThread::cancel()
 {
     _cancelled.store(true);
@@ -97,8 +110,10 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
         fileServerDevice.portPath       = _device.portPath;
         fileServerDevice.chipGeneration = _device.chipGeneration;
 
-        LibusbContext ctx;
-        for (const auto& dev : ctx.scanBootDevices()) {
+        auto ctx = makeUsbContext();
+        if (!ctx)
+            return false;
+        for (const auto& dev : ctx->scanBootDevices()) {
             bool matches = (!_device.portPath.empty())
                 ? (dev.portPath == _device.portPath)
                 : (dev.busNumber == _device.busNumber &&
@@ -119,8 +134,8 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
 
     if (needsBootcode) {
         try {
-            LibusbContext ctx;
-            auto transport = ctx.openDevice(fileServerDevice);
+            auto ctx = makeUsbContext();
+            auto transport = ctx ? ctx->openDevice(fileServerDevice) : nullptr;
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device"));
@@ -184,8 +199,8 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
     {
         bool fileServerOk = false;
         try {
-            LibusbContext ctx;
-            auto transport = ctx.openDevice(fileServerDevice);
+            auto ctx = makeUsbContext();
+            auto transport = ctx ? ctx->openDevice(fileServerDevice) : nullptr;
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device after re-enumeration"));
@@ -319,7 +334,9 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
         return true;
     };
 
-    LibusbContext pollCtx;
+    auto pollCtx = makeUsbContext();
+    if (!pollCtx)
+        return false;
 
     constexpr int DISCONNECT_POLLS = 6;
     for (int i = 0; i < DISCONNECT_POLLS; ++i) {
@@ -329,7 +346,7 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
         QThread::msleep(500);
 
         try {
-            auto devices = pollCtx.scanBootDevices();
+            auto devices = pollCtx->scanBootDevices();
             bool stillPresent = false;
             for (const auto& dev : devices) {
                 if (matchesPort(dev) &&
@@ -358,7 +375,7 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
                                          .arg((i + 1) / 2).arg(RECONNECT_POLLS / 2));
 
         try {
-            auto devices = pollCtx.scanBootDevices();
+            auto devices = pollCtx->scanBootDevices();
             for (const auto& dev : devices) {
                 if (!matchesPort(dev))
                     continue;
@@ -386,7 +403,9 @@ bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fas
 {
     using namespace rpiboot;
 
-    LibusbContext pollCtx;
+    auto pollCtx = makeUsbContext();
+    if (!pollCtx)
+        return false;
 
     constexpr int FB_POLLS = 120;
     for (int attempt = 0; attempt < FB_POLLS; ++attempt) {
@@ -395,7 +414,7 @@ bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fas
         QThread::msleep(500);
 
         try {
-            auto devices = pollCtx.scanFastbootDevices();
+            auto devices = pollCtx->scanFastbootDevices();
 
             for (const auto& dev : devices) {
                 if (!_device.portPath.empty() && dev.portPath == _device.portPath) {
@@ -434,7 +453,9 @@ bool RpibootThread::pollForRpibootReturn(std::atomic<bool>& found,
 {
     using namespace rpiboot;
 
-    LibusbContext pollCtx;
+    auto pollCtx = makeUsbContext();
+    if (!pollCtx)
+        return false;
 
     constexpr int POLLS = 120;
     for (int attempt = 0; attempt < POLLS; ++attempt) {
@@ -443,7 +464,7 @@ bool RpibootThread::pollForRpibootReturn(std::atomic<bool>& found,
         QThread::msleep(500);
 
         try {
-            auto devices = pollCtx.scanBootDevices();
+            auto devices = pollCtx->scanBootDevices();
             for (const auto& dev : devices) {
                 const bool portMatches = !_device.portPath.empty() &&
                                          dev.portPath == _device.portPath;

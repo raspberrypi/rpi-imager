@@ -1612,6 +1612,17 @@ target_compile_features(oslist_parser_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(oslist_parser_test)
 
+# ── rpiboot thread ──────────────────────────────────────────────────────────
+# The CM4/CM5 sideload sequence. Reachable since the bus went behind
+# IUsbContext; before that every line of it needed a compute module in boot
+# mode plugged in.
+# rpibootthread.cpp is already in rpi_imager_testable; listing it here too
+# gives two copies of its moc output and a duplicate-symbol link failure.
+add_executable(rpiboot_thread_test rpiboot_thread_test.cpp)
+set_target_properties(rpiboot_thread_test PROPERTIES AUTOMOC ON)
+target_link_libraries(rpiboot_thread_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+rpi_discover_tests(rpiboot_thread_test)
+
 # ── fastboot flash thread ───────────────────────────────────────────────────
 # Covers the erase path: the most destructive operation in the fastboot flow.
 add_executable(fastboot_flash_thread_test
