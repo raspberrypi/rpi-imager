@@ -29,6 +29,8 @@
 
 #include <QCoreApplication>
 #include <QStringList>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QStandardPaths>
 
 #include <atomic>
@@ -742,4 +744,97 @@ TEST_CASE("Cancelling during the bootcode upload reports nothing to the user",
     QString fbId, bcDiag, fsDiag;
     CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
     CHECK(log.errors.isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Getting the bootcode across
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A firmware directory with the file the loader will look for. BCM2712 wants
+// bootcode5.bin; the contents are never interpreted here, only pushed.
+struct FirmwareDir {
+    QTemporaryDir dir;
+
+    FirmwareDir()
+    {
+        REQUIRE(dir.isValid());
+        QFile f(dir.filePath(QStringLiteral("bootcode5.bin")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray(4096, '\x5a'));
+        f.close();
+    }
+
+    std::filesystem::path path() const
+    {
+        return std::filesystem::path(dir.path().toStdString());
+    }
+};
+
+} // namespace
+
+TEST_CASE("The bootcode reaches the board", "[rpiboot][phase][bootcode]")
+{
+    // The upload itself: header then payload, over the transport. What is
+    // checked is that the board was written to at all, and that the payload
+    // that went out is the one that was on disk -- pushing the wrong bytes
+    // at a compute module in ROM mode is not something it recovers from
+    // gracefully.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    t.bus.transport = &mock;
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+    // Board goes away after the upload, then never returns: the phase ends
+    // at the re-enumeration wait rather than running on into the file
+    // server, which wants a whole firmware tree.
+    t.bus.onScan = [&t](int n) {
+        if (n >= 2) t.bus.bootDevices.clear();
+        if (n >= 4) t.cancel();
+    };
+
+    QString fbId, bcDiag, fsDiag;
+    t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag);
+
+    const auto &writes = mock.capturedBulkWrites();
+    INFO("bulk writes: " << writes.size());
+    REQUIRE_FALSE(writes.empty());
+
+    // Somewhere in what went out is the 4 KiB of 0x5a from the file.
+    size_t payloadBytes = 0;
+    for (const auto &w : writes)
+        for (uint8_t b : w)
+            if (b == 0x5a)
+                ++payloadBytes;
+    CHECK(payloadBytes >= 4096);
+}
+
+TEST_CASE("An empty bootcode file is refused before anything is sent",
+          "[rpiboot][phase][bootcode]")
+{
+    // A truncated download. Pushing a zero-length payload at a board in ROM
+    // mode is worse than not trying.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    QFile f(dir.filePath(QStringLiteral("bootcode5.bin")));
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.close();
+
+    rpiboot::testing::MockUsbTransport mock;
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::path(dir.path().toStdString());
+    t.bus.transport = &mock;
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    CHECK(mock.capturedBulkWrites().empty());
+    REQUIRE_FALSE(log.errors.isEmpty());
 }
