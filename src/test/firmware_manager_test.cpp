@@ -758,10 +758,26 @@ private:
 };
 
 // A FirmwareManager whose three sources are the local server.
+// Serves firmware from a local URL and caches into a directory of its own.
+//
+// The cache root matters as much as the source. These tests call clearCache(),
+// which is remove_all() on the root -- against the real cache that is both a
+// developer's firmware download deleted by running the suite, and, under
+// ctest -j, one test wiping the directory another is renaming its download
+// into. That surfaced as an intermittent "Failed to rename downloaded file:
+// No such file or directory".
 class ServedFirmwareManager : public FirmwareManager
 {
 public:
-    explicit ServedFirmwareManager(std::string base) : _base(std::move(base)) {}
+    explicit ServedFirmwareManager(std::string base) : _base(std::move(base))
+    {
+        REQUIRE(_cache.isValid());
+    }
+
+    std::filesystem::path cacheRoot() const override
+    {
+        return std::filesystem::path(_cache.path().toStdString()) / "rpiboot-firmware";
+    }
 
 protected:
     std::string usbbootBase() const override { return _base; }
@@ -770,6 +786,7 @@ protected:
 
 private:
     std::string _base;
+    QTemporaryDir _cache;
 };
 
 // Lay out the files the fastboot manifest asks for.

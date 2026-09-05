@@ -27,6 +27,7 @@ namespace rpiboot {
 class FirmwareManager {
 public:
     FirmwareManager();
+    virtual ~FirmwareManager() = default;
 
     // Ensure that firmware for the given mode and chip generation is
     // available in the local cache.  Downloads on first use; subsequent
@@ -37,8 +38,10 @@ public:
                                            ProgressCallback progress,
                                            std::atomic<bool>& cancelled);
 
-    // Return the cache root (platform-appropriate app data directory)
-    std::filesystem::path cacheRoot() const;
+    // Return the cache root (platform-appropriate app data directory).
+    // Virtual so a test can point an instance somewhere disposable rather
+    // than at the developer's real cache -- see usbbootBase() and friends.
+    virtual std::filesystem::path cacheRoot() const;
 
     // Set a local fastboot gadget image (boot.img) to use instead of
     // downloading from GitHub.  When non-empty, ensureAvailable() copies
