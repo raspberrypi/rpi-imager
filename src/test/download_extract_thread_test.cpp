@@ -971,6 +971,118 @@ TEST_CASE("DownloadExtractThread reports a multi-file archive it cannot read",
     CHECK_FALSE(outcome.succeeded);
 }
 
+TEST_CASE("A multi-file archive that fails leaves nothing behind on the card",
+          "[extract][multifile]")
+{
+    // The failure path deletes what it already unpacked, and that matters
+    // more here than for a disk image: an image that stops halfway leaves a
+    // card that plainly will not boot, but a directory tree that stops
+    // halfway leaves one that looks populated. A user who does not notice the
+    // error has a card with some of an OS on it.
+    //
+    // Reached by giving a good archive the wrong expected hash, which is what
+    // a corrupted download looks like: everything unpacks, then the check at
+    // the end rejects it.
+    if (!canRunPrivileged())
+        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed");
+    if (!haveTool(QStringLiteral("zip")))
+        SKIP("zip is not installed, so no multi-file archive can be built");
+
+    MountedFatDevice device(48);
+    if (!device.isReady())
+        SKIP("the loop-backed FAT device could not be mounted");
+
+    ScratchDir scratch;
+    const QStringList names = {QStringLiteral("config.txt"), QStringLiteral("cmdline.txt"),
+                               QStringLiteral("kernel8.img")};
+    for (const QString &n : names)
+        REQUIRE(writeFile(scratch.filePath(n), ("contents of " + n).toUtf8()));
+
+    const QString archive = scratch.filePath(QStringLiteral("corrupt.zip"));
+    QStringList zipArgs{QStringLiteral("-q"), QStringLiteral("-0"), archive};
+    zipArgs << names;
+    REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
+
+    // A hash that is the right shape and the wrong value.
+    const QByteArray wrongHash(64, 'b');
+
+    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+                             device.device().toUtf8(), wrongHash);
+    dt.setVerifyEnabled(false);
+    dt.enableMultipleFileExtraction();
+
+    const Outcome outcome = runToCompletion(dt, 240000);
+    REQUIRE(outcome.finished);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.succeeded);
+    CHECK_FALSE(outcome.errorMessage.isEmpty());
+
+    // Nothing it unpacked is still there.
+    for (const QString &n : names) {
+        const QString onDisk = QDir(device.mountPoint()).filePath(n);
+        INFO("should have been removed: " << onDisk.toStdString());
+        CHECK_FALSE(QFileInfo::exists(onDisk));
+    }
+}
+
+TEST_CASE("A truncated multi-file archive leaves no partial tree",
+          "[extract][multifile]")
+{
+    // The other way it fails: the download stopped early, so the archive ends
+    // mid-entry. Some files unpack, then libarchive gives up. Those files must
+    // go too, directories included -- an empty overlays/ left behind is the
+    // kind of thing that makes a later write look like it worked.
+    if (!canRunPrivileged())
+        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed");
+    if (!haveTool(QStringLiteral("zip")))
+        SKIP("zip is not installed, so no multi-file archive can be built");
+
+    MountedFatDevice device(48);
+    if (!device.isReady())
+        SKIP("the loop-backed FAT device could not be mounted");
+
+    ScratchDir scratch;
+    REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("overlays"))));
+    const QStringList names = {QStringLiteral("config.txt"),
+                               QStringLiteral("cmdline.txt"),
+                               QStringLiteral("overlays/disable-bt.dtbo"),
+                               QStringLiteral("kernel8.img")};
+    for (const QString &n : names)
+        REQUIRE(writeFile(scratch.filePath(n), QByteArray(64 * 1024, 'Z')));
+
+    const QString archive = scratch.filePath(QStringLiteral("short.zip"));
+    QStringList zipArgs{QStringLiteral("-q"), QStringLiteral("-0"), QStringLiteral("-r"), archive};
+    zipArgs << names;
+    REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
+
+    // Cut it off partway so the first entries are whole and the rest is not.
+    {
+        const QByteArray whole = readFile(archive);
+        REQUIRE(whole.size() > 100 * 1024);
+        REQUIRE(writeFile(archive, whole.left(whole.size() * 2 / 5)));
+    }
+
+    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+                             device.device().toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.enableMultipleFileExtraction();
+
+    const Outcome outcome = runToCompletion(dt, 240000);
+    REQUIRE(outcome.finished);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.succeeded);
+
+    for (const QString &n : names) {
+        const QString onDisk = QDir(device.mountPoint()).filePath(n);
+        INFO("should have been removed: " << onDisk.toStdString());
+        CHECK_FALSE(QFileInfo::exists(onDisk));
+    }
+}
+
 TEST_CASE("DownloadExtractThread unpacks nested directories", "[extract][multifile]")
 {
     if (!canRunPrivileged())
