@@ -1224,6 +1224,68 @@ TEST_CASE("A fetched sub-list is merged into the category that asked for it",
     CHECK(found);
 }
 
+TEST_CASE("A repository naming an unusable sub-list URL still gives a chooser",
+          "[imagewriter][oslist]")
+{
+    // The repository can be pointed anywhere, including at something whose
+    // subitems_url is not a URL at all. Those entries are refused before a
+    // fetch is attempted; what matters here is that the rest of the list
+    // survives and the user is not left staring at nothing.
+    FeedableImageWriter writer;
+    writer.feedOsList(QByteArray(R"JSON({
+        "imager": { "latest_version": "1.9.0" },
+        "os_list": [
+            { "name": "Good image", "devices": [] },
+            { "name": "No scheme",  "subitems_url": "example.invalid/x.json" },
+            { "name": "No host",    "subitems_url": "https:///x.json" },
+            { "name": "Empty",      "subitems_url": "" }
+        ]
+    })JSON"));
+
+    QJsonDocument doc;
+    REQUIRE_NOTHROW(doc = writer.getFilteredOSlistDocument());
+    const QStringList names = namesIn(doc);
+    INFO("offered: " << names.join(QStringLiteral(", ")).toStdString());
+
+    CHECK(names.contains(QStringLiteral("Good image")));
+    CHECK(names.contains(QStringLiteral("Erase")));
+    CHECK(names.contains(QStringLiteral("Use custom")));
+}
+
+TEST_CASE("A sub-list spliced into a deeply nested category does not run away",
+          "[imagewriter][oslist]")
+{
+    // The splice walks the same tree the filter does and stops at the same
+    // depth. Past it the category's contents are replaced with nothing
+    // rather than the recursion continuing, so a list shaped to nest
+    // forever costs the entries below the limit and no more.
+    FeedableImageWriter writer;
+
+    QString inner = QStringLiteral(
+        R"({ "name": "Deferred", "subitems_url": "https://example.invalid/w.json" })");
+    for (int i = 40; i > 0; --i)
+        inner = QStringLiteral(R"({ "name": "N%1", "subitems": [ %2 ] })")
+                    .arg(i).arg(inner);
+
+    writer.feedOsList(QStringLiteral(R"({
+        "imager": {},
+        "os_list": [
+            { "name": "Shallow", "devices": [] },
+            %1
+        ]
+    })").arg(inner).toUtf8());
+
+    REQUIRE_NOTHROW(writer.feedSubList(QByteArray(R"JSON({
+        "os_list": [ { "name": "Spliced" } ]
+    })JSON"), QUrl(QStringLiteral("https://example.invalid/w.json"))));
+
+    const QStringList names = namesIn(writer.getFilteredOSlistDocument());
+    INFO("offered: " << names.join(QStringLiteral(", ")).toStdString());
+    // The entry beside the deep one is unaffected.
+    CHECK(names.contains(QStringLiteral("Shallow")));
+    CHECK(names.contains(QStringLiteral("Erase")));
+}
+
 TEST_CASE("A sub-list for a URL nobody asked for changes nothing",
           "[imagewriter][oslist]")
 {
