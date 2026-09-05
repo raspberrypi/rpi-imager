@@ -149,6 +149,55 @@ TestCase {
         compare(field.text, "ab")
     }
 
+    // -- Tab navigation reaching the inner field ---------------------------
+    //
+    // Focus lives on the inner ImTextField while KeyNavigation is set on the
+    // wrapper by whatever lays the step out, so the wrapper's tab targets
+    // have to be copied inward. There are two syncs: one on completion, and
+    // one when the field takes focus, for the case where the step wired the
+    // ring after the field was built.
+
+    function test_tab_targets_reach_the_inner_field_on_construction() {
+        const field = create({})
+        const other = create({})
+        field.KeyNavigation.tab = other
+
+        // The completion sync is deferred, so give it the event loop.
+        tryCompare(field.textField.KeyNavigation, "tab", other)
+    }
+
+    function test_tab_targets_set_after_construction_still_reach_it() {
+        // The case the focus-time sync exists for: the step assigns the ring
+        // once every control is built, which is after this field's own
+        // completion handler has already run.
+        const field = create({})
+        const other = create({})
+        // Long enough to flush the deferred completion sync, so what is
+        // asserted below is the focus-time one and not that arriving late.
+        wait(100)
+        verify(!field.textField.KeyNavigation.tab,
+               "nothing has been copied inward yet")
+
+        field.KeyNavigation.tab = other
+        field.textField.forceActiveFocus()
+        verify(field.textField.activeFocus)
+
+        // 4th arg is the timeout; the message goes after it.
+        tryCompare(field.textField.KeyNavigation, "tab", other, 2000,
+                   "taking focus re-reads the wrapper's tab target")
+    }
+
+    function test_backtab_is_carried_inward_too() {
+        const field = create({})
+        const previous = create({})
+        wait(100)
+
+        field.KeyNavigation.backtab = previous
+        field.textField.forceActiveFocus()
+
+        tryCompare(field.textField.KeyNavigation, "backtab", previous)
+    }
+
     // -- What the caller reads back ----------------------------------------
 
     function test_surrounding_spaces_are_kept() {
