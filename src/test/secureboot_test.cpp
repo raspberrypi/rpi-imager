@@ -661,3 +661,133 @@ TEST_CASE("The timestamp in boot.sig is a plausible time",
     CHECK(ts > 1600000000);                       // after 2020
     CHECK(ts < QDateTime::currentSecsSinceEpoch() + 60);
 }
+
+// ── The same three lines, for config.txt ────────────────────────────────
+//
+// generateConfigSig() signs the config text a secure-boot board reads at
+// boot. Its output has the same shape as boot.sig and was asserted just as
+// loosely -- non-empty and containing "ts:". A board that rejects this
+// signature will not honour its own configuration; one that accepts a wrong
+// one is the failure secure boot exists to stop.
+
+namespace {
+
+QStringList sigLines(const QByteArray &sig)
+{
+    return QString::fromUtf8(sig).split(QChar('\n'), Qt::SkipEmptyParts);
+}
+
+} // namespace
+
+TEST_CASE("A config signature has the three lines the bootloader reads",
+          "[secureboot][crypto][configsig]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    REQUIRE(generateRsaKey(key));
+
+    const QByteArray config = "[all]\narm_64bit=1\n";
+    const QStringList lines = sigLines(SecureBoot::generateConfigSig(config, key));
+
+    INFO("config.sig:\n" << lines.join(QChar('\n')).toStdString());
+    REQUIRE(lines.size() == 3);
+    CHECK(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(lines[0]).hasMatch());
+    CHECK(QRegularExpression(QStringLiteral("^ts: [0-9]+$")).match(lines[1]).hasMatch());
+    CHECK(lines[2].startsWith(QStringLiteral("rsa2048: ")));
+}
+
+TEST_CASE("The config digest is of the config text exactly",
+          "[secureboot][crypto][configsig]")
+{
+    // Signed over the raw bytes given, with nothing appended or trimmed --
+    // a board hashes what is on the card, so any difference here is a
+    // signature that will not match.
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    REQUIRE(generateRsaKey(key));
+
+    const QByteArray config = "[all]\narm_64bit=1\n";
+    const QString configFile = scratch.filePath(QStringLiteral("config.txt"));
+    QFile cf(configFile);
+    REQUIRE(cf.open(QIODevice::WriteOnly));
+    cf.write(config);
+    cf.close();
+
+    const QStringList lines = sigLines(SecureBoot::generateConfigSig(config, key));
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[0].toUtf8() == opensslSha256Hex(configFile));
+}
+
+TEST_CASE("The config signature verifies against the key",
+          "[secureboot][crypto][configsig]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    REQUIRE(generateRsaKey(key));
+
+    const QByteArray config = "[all]\narm_64bit=1\n";
+    const QString configFile = scratch.filePath(QStringLiteral("config.txt"));
+    QFile cf(configFile);
+    REQUIRE(cf.open(QIODevice::WriteOnly));
+    cf.write(config);
+    cf.close();
+
+    const QStringList lines = sigLines(SecureBoot::generateConfigSig(config, key));
+    REQUIRE(lines.size() == 3);
+    const QByteArray sigHex = lines[2].mid(QStringLiteral("rsa2048: ").size()).toUtf8();
+
+    CHECK(opensslVerify(key, configFile, sigHex, scratch.path()));
+}
+
+TEST_CASE("A changed config does not keep its old signature",
+          "[secureboot][crypto][configsig]")
+{
+    // Editing config.txt on the card without re-signing has to stop the
+    // board booting. If the old signature still verified, the file would
+    // not be protected at all.
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    REQUIRE(generateRsaKey(key));
+
+    const QByteArray original = "[all]\narm_64bit=1\n";
+    const QByteArray edited   = "[all]\narm_64bit=0\n";
+
+    const QString editedFile = scratch.filePath(QStringLiteral("edited.txt"));
+    QFile ef(editedFile);
+    REQUIRE(ef.open(QIODevice::WriteOnly));
+    ef.write(edited);
+    ef.close();
+
+    const QStringList before = sigLines(SecureBoot::generateConfigSig(original, key));
+    const QStringList after  = sigLines(SecureBoot::generateConfigSig(edited, key));
+    REQUIRE(before.size() == 3);
+    REQUIRE(after.size() == 3);
+
+    CHECK(before[0] != after[0]);
+    CHECK(before[2] != after[2]);
+
+    // And the original signature does not cover the edited file.
+    const QByteArray originalSig =
+        before[2].mid(QStringLiteral("rsa2048: ").size()).toUtf8();
+    CHECK_FALSE(opensslVerify(key, editedFile, originalSig, scratch.path()));
+}
+
+TEST_CASE("An empty config still signs", "[secureboot][crypto][configsig]")
+{
+    // A board with no configuration is a legitimate state; refusing to sign
+    // it would leave it unbootable for want of a file it does not need.
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("private.pem"));
+    REQUIRE(generateRsaKey(key));
+
+    const QStringList lines = sigLines(SecureBoot::generateConfigSig(QByteArray(), key));
+    REQUIRE(lines.size() == 3);
+    // SHA-256 of the empty string.
+    CHECK(lines[0] == QStringLiteral(
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+}
