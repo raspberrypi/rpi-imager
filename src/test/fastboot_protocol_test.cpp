@@ -14,6 +14,7 @@
 #include <QByteArray>
 #include <QList>
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 
@@ -1192,5 +1193,179 @@ TEST_CASE("Customisation pattern: readDeviceFile failure aborts before write", "
         std::string s(w.begin(), w.end());
         CHECK_FALSE(s.starts_with("stage:"));
         CHECK_FALSE(s.starts_with("oem download-file"));
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// What actually goes over the wire
+//
+// The cases above check that the right commands were sent. For flashImage
+// the commands are only half of it: the point of the function is getting
+// the image bytes onto the device, and a version that sent
+// "download:..." and "flash:boot" while transmitting nothing at all would
+// satisfy every assertion made of it so far.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Everything written to the device, concatenated, so a payload can be
+// looked for wherever the protocol chose to split it.
+std::vector<uint8_t> allBytesWritten(const MockUsbTransport &mock)
+{
+    std::vector<uint8_t> all;
+    for (const auto &w : mock.capturedBulkWrites())
+        all.insert(all.end(), w.begin(), w.end());
+    return all;
+}
+
+bool containsSubsequence(const std::vector<uint8_t> &haystack,
+                         const std::vector<uint8_t> &needle)
+{
+    if (needle.empty() || haystack.size() < needle.size())
+        return false;
+    return std::search(haystack.begin(), haystack.end(),
+                       needle.begin(), needle.end()) != haystack.end();
+}
+
+std::string commandAt(const MockUsbTransport &mock, size_t index)
+{
+    const auto &writes = mock.capturedBulkWrites();
+    if (index >= writes.size())
+        return {};
+    return std::string(writes[index].begin(), writes[index].end());
+}
+
+} // namespace
+
+TEST_CASE("FastbootProtocol flashImage sends the image itself",
+          "[fastboot][protocol][wire]")
+{
+    MockUsbTransport mock;
+
+    // A payload with structure, so finding it proves the bytes travelled
+    // rather than that some run of zeroes happened to match.
+    std::vector<uint8_t> payload(512);
+    for (size_t i = 0; i < payload.size(); ++i)
+        payload[i] = static_cast<uint8_t>((i * 7 + 3) & 0xFF);
+
+    char sizeHex[9];
+    snprintf(sizeHex, sizeof(sizeHex), "%08x", static_cast<unsigned>(payload.size()));
+    mock.queueBulkReadResponse(makeResponse("DATA", sizeHex));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    REQUIRE(fb.flashImage(mock, "boot", std::span<const uint8_t>(payload), nullptr, cancelled));
+
+    const auto sent = allBytesWritten(mock);
+    INFO("bytes written: " << sent.size());
+    CHECK(containsSubsequence(sent, payload));
+}
+
+TEST_CASE("FastbootProtocol announces the size it is about to send",
+          "[fastboot][protocol][wire]")
+{
+    // The device allocates against this number. Announcing one size and
+    // sending another is how a transfer ends up truncated or refused.
+    MockUsbTransport mock;
+
+    std::vector<uint8_t> payload(1234, 0xAB);
+    char sizeHex[9];
+    snprintf(sizeHex, sizeof(sizeHex), "%08x", static_cast<unsigned>(payload.size()));
+    mock.queueBulkReadResponse(makeResponse("DATA", sizeHex));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    REQUIRE(fb.flashImage(mock, "boot", std::span<const uint8_t>(payload), nullptr, cancelled));
+
+    // The first command is the download announcement, and the size in it is
+    // the payload's, in the eight hex digits the protocol specifies.
+    const std::string first = commandAt(mock, 0);
+    INFO("first command: " << first);
+    CHECK(first == std::string("download:") + sizeHex);
+    CHECK(first.size() == std::string("download:").size() + 8);
+}
+
+TEST_CASE("FastbootProtocol flashes the partition it was asked for",
+          "[fastboot][protocol][wire]")
+{
+    // Naming the wrong partition writes the image over something else on
+    // the same device.
+    MockUsbTransport mock;
+
+    std::vector<uint8_t> payload(64, 0x11);
+    char sizeHex[9];
+    snprintf(sizeHex, sizeof(sizeHex), "%08x", static_cast<unsigned>(payload.size()));
+    mock.queueBulkReadResponse(makeResponse("DATA", sizeHex));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    REQUIRE(fb.flashImage(mock, "mmcblk0", std::span<const uint8_t>(payload), nullptr, cancelled));
+
+    bool sawOtherFlash = false;
+    bool sawOurs = false;
+    for (const auto &w : mock.capturedBulkWrites()) {
+        const std::string s(w.begin(), w.end());
+        if (s.rfind("flash:", 0) == 0) {
+            if (s == "flash:mmcblk0") sawOurs = true;
+            else sawOtherFlash = true;
+        }
+    }
+    CHECK(sawOurs);
+    CHECK_FALSE(sawOtherFlash);
+}
+
+TEST_CASE("FastbootProtocol sends the download before the flash",
+          "[fastboot][protocol][wire]")
+{
+    // Flashing before the data has been staged writes whatever was in the
+    // device's buffer from last time.
+    MockUsbTransport mock;
+
+    std::vector<uint8_t> payload(128, 0x22);
+    char sizeHex[9];
+    snprintf(sizeHex, sizeof(sizeHex), "%08x", static_cast<unsigned>(payload.size()));
+    mock.queueBulkReadResponse(makeResponse("DATA", sizeHex));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    REQUIRE(fb.flashImage(mock, "boot", std::span<const uint8_t>(payload), nullptr, cancelled));
+
+    int downloadAt = -1, flashAt = -1;
+    const auto &writes = mock.capturedBulkWrites();
+    for (size_t i = 0; i < writes.size(); ++i) {
+        const std::string s(writes[i].begin(), writes[i].end());
+        if (downloadAt < 0 && s.rfind("download:", 0) == 0) downloadAt = int(i);
+        if (flashAt < 0 && s.rfind("flash:", 0) == 0) flashAt = int(i);
+    }
+    REQUIRE(downloadAt >= 0);
+    REQUIRE(flashAt >= 0);
+    CHECK(downloadAt < flashAt);
+}
+
+TEST_CASE("FastbootProtocol does not flash when the download was refused",
+          "[fastboot][protocol][wire]")
+{
+    // The device said no. Sending flash anyway would commit whatever it
+    // still had staged.
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("FAIL", "no space"));
+
+    std::vector<uint8_t> payload(64, 0x33);
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    CHECK_FALSE(fb.flashImage(mock, "boot", std::span<const uint8_t>(payload), nullptr, cancelled));
+
+    for (const auto &w : mock.capturedBulkWrites()) {
+        const std::string s(w.begin(), w.end());
+        INFO("write: " << s);
+        CHECK(s.rfind("flash:", 0) != 0);
     }
 }
