@@ -1880,7 +1880,21 @@ void DownloadThread::_writeComplete()
             return;
         }
 
-        _file->Seek(0);
+        // The partition table was held back until the image was down; this
+        // puts it at sector zero. If the seek fails and the write does not,
+        // those 512 bytes land wherever the file position happens to be --
+        // the end of the image -- and the card is returned with no partition
+        // table and a successful write behind it.
+        const rpi_imager::FileError seekResult = _file->Seek(0);
+        if (seekResult != rpi_imager::FileError::kSuccess)
+        {
+            qFreeAligned(_firstBlock);
+            _firstBlock = nullptr;
+            DownloadThread::_onDownloadError(
+                _fileErrorToString(seekResult, tr("seeking to write the partition table")));
+            return;
+        }
+
         rpi_imager::FileError writeResult = _file->WriteSequential(reinterpret_cast<const std::uint8_t*>(_firstBlock), _firstBlockSize);
         rpi_imager::FileError flushResult = (writeResult == rpi_imager::FileError::kSuccess) ? _file->Flush() : writeResult;
         
