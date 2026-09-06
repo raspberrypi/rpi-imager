@@ -15,6 +15,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/catch_session.hpp>
 
@@ -7205,4 +7206,74 @@ TEST_CASE("A repository URL copied out of a browser is not accepted with its new
 
     // Trailing whitespace after a query string is the same hazard.
     CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/os.json?sig=a\n")));
+}
+
+// ══════════════════════════════════════════════════════════════
+// What may go into an Authorization header
+//
+// The organisation API key is pasted by the user and then concatenated
+// into "Authorization: Bearer <key>" before it reaches curl. A pasted
+// value carrying a carriage return or newline would end the header early
+// and let whatever followed be read as further headers -- request
+// splitting, from a field whose whole purpose is to accept an opaque
+// string from the clipboard. The guard refuses control characters up
+// front rather than trusting the receiver, and nothing tested it.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("An organisation key carrying control characters is refused",
+          "[imagewriter][connect]")
+{
+    auto key = GENERATE(
+        QStringLiteral("abc\rdef"),          // CR alone ends a header line
+        QStringLiteral("abc\ndef"),          // LF alone does too
+        QStringLiteral("abc\r\nX-Evil: 1"),  // the full injection
+        QStringLiteral("abc\tdef"),          // any C0, not just the useful ones
+        QStringLiteral("abc\x01" "def"),
+        QStringLiteral("abc\x7F" "def"));    // DEL is not printable either
+
+    ImageWriter w(nullptr);
+    w.clearConnectOrgRegistration();
+    REQUIRE_FALSE(w.hasConnectOrgRegistration());
+
+    w.setConnectOrgRegistration(key, QStringLiteral("Some description"));
+
+    INFO("key: " << key.toStdString());
+    CHECK_FALSE(w.hasConnectOrgRegistration());
+
+    w.clearConnectOrgRegistration();
+}
+
+TEST_CASE("A refused organisation key leaves the previous one alone",
+          "[imagewriter][connect]")
+{
+    // Rejecting has to mean "nothing happened", not "the good key is gone
+    // and the bad one was not stored" -- which would silently unenrol the
+    // user from an organisation because of a bad paste.
+    ImageWriter w(nullptr);
+    w.setConnectOrgRegistration(QStringLiteral("good-key"), QStringLiteral("Mine"));
+    REQUIRE(w.hasConnectOrgRegistration());
+
+    w.setConnectOrgRegistration(QStringLiteral("bad\r\nkey"), QStringLiteral("Replaced"));
+
+    CHECK(w.hasConnectOrgRegistration());
+    CHECK(w.getConnectOrgDescription() == QStringLiteral("Mine"));
+
+    w.clearConnectOrgRegistration();
+}
+
+TEST_CASE("An ordinary organisation key is accepted and trimmed",
+          "[imagewriter][connect]")
+{
+    ImageWriter w(nullptr);
+    w.clearConnectOrgRegistration();
+
+    // Pasting from a browser brings whitespace with it; that is not a
+    // reason to refuse the key.
+    w.setConnectOrgRegistration(QStringLiteral("  rpi-org-key-123  "),
+                                QStringLiteral("  Lab bench  "));
+
+    CHECK(w.hasConnectOrgRegistration());
+    CHECK(w.getConnectOrgDescription() == QStringLiteral("Lab bench"));
+
+    w.clearConnectOrgRegistration();
 }
