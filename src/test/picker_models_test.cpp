@@ -1426,3 +1426,56 @@ TEST_CASE("A soft refresh of an empty list is harmless", "[models][oslist]")
     model->softRefresh();
     CHECK(changes == 0);
 }
+
+// ══════════════════════════════════════════════════════════════
+// The role number StorageSelectionStep.qml hardcodes
+//
+// conditionalNext() in the storage step decides whether pressing Enter
+// carries the user straight on to the next step, and it must not do that
+// for a system drive -- the confirmation dialog is the only thing between
+// the user and writing over the operating system they are running.
+//
+// It normally asks the delegate. When the delegate has not been realised
+// -- which happens with a screen reader attached on Windows -- it falls
+// back to asking the model directly, and QML cannot see the C++ enum, so
+// it passes the role as a literal: 0x107.
+//
+// Nothing ties that literal to the enum. Insert a role anywhere before
+// isSystemRole and the QML silently starts reading isReadOnlyRole instead,
+// with no compiler error and no failing test. A read-only system drive
+// would then answer "not a system drive", auto-advance would fire, and the
+// person carried past the confirmation is the screen-reader user who
+// triggered the fallback in the first place.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("The role number the storage step hardcodes is still the system-drive role",
+          "[models][roles]")
+{
+    // If this fails, fix the literal in
+    // src/wizard/StorageSelectionStep.qml (conditionalNext, isSystemRole)
+    // rather than this number.
+    constexpr int kRoleUsedByStorageSelectionStepQml = 0x107;
+
+    CHECK(static_cast<int>(DriveListModel::isSystemRole)
+          == kRoleUsedByStorageSelectionStepQml);
+
+    DriveListModel model;
+    const auto names = model.roleNames();
+    REQUIRE(names.contains(kRoleUsedByStorageSelectionStepQml));
+    CHECK(names.value(kRoleUsedByStorageSelectionStepQml) == QByteArray("isSystem"));
+}
+
+TEST_CASE("Every role the QML asks for by name resolves", "[models][roles]")
+{
+    // The delegate binds these by name. A rename in the C++ hash makes the
+    // property undefined in QML, which reads as false -- so a renamed
+    // isSystem would silently stop hiding system drives rather than error.
+    DriveListModel model;
+    const auto names = model.roleNames();
+
+    for (const char *bound : {"device", "description", "size", "isUsb", "isScsi",
+                              "isReadOnly", "isSystem", "mountpoints"}) {
+        INFO("role bound by the storage delegate: " << bound);
+        CHECK(names.key(QByteArray(bound), -1) != -1);
+    }
+}
