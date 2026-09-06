@@ -25,38 +25,75 @@ ColumnLayout {
     
     spacing: Style.spacingSmall
     
+    // Which algorithm a key blob is for.
+    //
+    // RFC 4716 -- the "---- BEGIN SSH2 PUBLIC KEY ----" format PuTTY exports
+    // -- carries no algorithm in its headers, but the blob itself does:
+    // RFC 4253 starts it with a string field naming the algorithm, four bytes
+    // of big-endian length followed by that many bytes of name. Reading it
+    // there is the only way to know, and it matters: PuTTYgen exports
+    // ed25519 and ecdsa keys as readily as RSA, and an authorized_keys entry
+    // whose prefix disagrees with its blob is one sshd refuses. Getting this
+    // wrong locks the user out of the board with a key they watched go in.
+    //
+    // Returns "" when the blob cannot be read, so the caller can fall back.
+    function sshAlgorithmFromBlob(base64Body) {
+        try {
+            var raw = Qt.atob(base64Body)
+            if (!raw || raw.length < 4)
+                return ""
+            var len = (raw.charCodeAt(0) << 24) | (raw.charCodeAt(1) << 16)
+                    | (raw.charCodeAt(2) << 8) | raw.charCodeAt(3)
+            // A sane algorithm name. The bound rejects a body that decoded to
+            // something else entirely rather than trusting its first word.
+            if (len <= 0 || len > 64 || raw.length < 4 + len)
+                return ""
+            var name = raw.substr(4, len)
+            return /^[A-Za-z0-9@._-]+$/.test(name) ? name : ""
+        } catch (e) {
+            return ""
+        }
+    }
+
     // Helper function to split text by newlines and filter empty lines
     function splitKeys(text) {
         if (!text || text.length === 0) return []
         var lines = text.split(/\r?\n/)
         var result = []
-        var puttyKey = ""
+        var inPutty = false
+        var puttyBody = ""
         for (var i = 0; i < lines.length; i++) {
             var trimmed = lines[i].trim()
             // State 1 of PuTTY key (key begins)
             if (trimmed.startsWith("---- BEGIN SSH")) {
-                puttyKey = "ssh-rsa " // Add the required prefix
+                inPutty = true
+                puttyBody = ""
                 continue
             }
             // Optional(?) state 2 of PuTTY key (comment)
-            if (puttyKey.length > 0 && trimmed.startsWith("Comment:")) {
+            if (inPutty && trimmed.startsWith("Comment:")) {
                 continue
             }
             // Final state (4) of PuTTY key (end of key)
             if (trimmed.startsWith("---- END SSH")) {
                 // FIXME: put comment text after the key?
-                if (puttyKey.length > 0) {
-                    result.push(puttyKey)
+                if (inPutty && puttyBody.length > 0) {
+                    // ssh-rsa only as a fallback for a blob we could not
+                    // read; naming the algorithm after the blob is what
+                    // keeps a non-RSA PuTTY key working.
+                    var algorithm = sshAlgorithmFromBlob(puttyBody) || "ssh-rsa"
+                    result.push(algorithm + " " + puttyBody)
                 }
-                puttyKey = ""
+                inPutty = false
+                puttyBody = ""
                 continue
             }
             // We'll be in state 3 of PuTTY key (the key itself) for a few lines.
-            if (puttyKey.length > 0) {
-                puttyKey += trimmed
+            if (inPutty) {
+                puttyBody += trimmed
                 continue
             }
-            if (trimmed.length > 0 && puttyKey.length == 0) {
+            if (trimmed.length > 0) {
                 result.push(trimmed)
             }
         }
@@ -65,7 +102,12 @@ ColumnLayout {
     
     // Helper function to deduplicate keys
     function deduplicateKeys(keyList) {
-        var seen = {}
+        // Object.create(null) rather than {}: a plain object inherits
+        // Object.prototype, so `seen["constructor"]` is truthy before
+        // anything has been seen and the line is dropped as a duplicate of
+        // nothing. Every key in the file is attacker-chosen text as far as
+        // this loop is concerned.
+        var seen = Object.create(null)
         var result = []
         for (var i = 0; i < keyList.length; i++) {
             var key = keyList[i]
