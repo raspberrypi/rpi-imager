@@ -286,7 +286,11 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             emit error(tr("Timed out waiting for fastboot device to appear."));
             return false;
         }
-        emit eventFastbootWait(static_cast<quint32>(phaseTimer.elapsed()), true);
+        // Only when the device actually turned up. Cancelling reaches here
+        // too, and recording that as a successful wait put a wait that never
+        // completed into the report as one that did.
+        if (_nextStageFound.load())
+            emit eventFastbootWait(static_cast<quint32>(phaseTimer.elapsed()), true);
         break;
 
     case SideloadMode::SecureBootRecovery:
