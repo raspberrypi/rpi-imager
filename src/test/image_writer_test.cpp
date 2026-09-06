@@ -33,6 +33,7 @@
 #include "signal_log.h"
 #include "local_http_server.h"
 #include "faulty_block_device.h"
+#include <QJsonParseError>
 #include <QProcess>
 #include "fixture_process.h"
 #include <QDir>
@@ -6372,4 +6373,142 @@ TEST_CASE("Verification of nothing is not a failure",
     t.setBytesWrittenForTest(BootPartitionFixture::kImageSize);
 
     CHECK(t._verifyCustomisation());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Reading a file the user picked
+//
+// readFileContents() is how a file chosen in the UI -- an SSH public key,
+// most often -- becomes a string. It answers every failure the same way, with
+// an empty string, so the caller cannot tell "you picked an empty file" from
+// "I could not open it". That is worth pinning rather than discovering later.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Reading a file the user picked", "[imagewriter][files]")
+{
+    ImageWriter w(nullptr);
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    SECTION("no path at all") {
+        CHECK(w.readFileContents(QString()).isEmpty());
+    }
+
+    SECTION("a path that is not there") {
+        // Not a crash and not a throw: the picker can hand over a file that
+        // has since been moved.
+        CHECK(w.readFileContents(QDir(dir.path()).filePath(QStringLiteral("absent")))
+                  .isEmpty());
+    }
+
+    SECTION("a directory rather than a file") {
+        CHECK(w.readFileContents(dir.path()).isEmpty());
+    }
+
+    SECTION("the contents come back") {
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("id_ed25519.pub"));
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 user@host");
+        f.close();
+        CHECK(w.readFileContents(path)
+              == QStringLiteral("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 user@host"));
+    }
+
+    SECTION("trailing whitespace is trimmed") {
+        // Keys arrive from editors that add a newline. A key with a trailing
+        // newline pasted into authorized_keys is a key that does not work.
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("padded.pub"));
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("  ssh-rsa AAAAB3 user@host \n\n");
+        f.close();
+        CHECK(w.readFileContents(path) == QStringLiteral("ssh-rsa AAAAB3 user@host"));
+    }
+
+    SECTION("an empty file is empty, not an error") {
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("empty.pub"));
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.close();
+        CHECK(w.readFileContents(path).isEmpty());
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// The diagnostics file
+//
+// exportPerformanceData() produces what somebody attaches to a bug report
+// about a slow or failing write. If it writes nothing, or writes something
+// that will not parse, the report arrives useless and nobody notices until
+// they try to read it.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Exporting performance data before there is any", "[imagewriter][files]")
+{
+    ImageWriter w(nullptr);
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("nothing.json"));
+
+    // Nothing has been written yet, so there is nothing to export. Saying so
+    // beats leaving an empty file that looks like a report.
+    CHECK_FALSE(w.exportPerformanceDataToFile(path));
+    CHECK_FALSE(QFileInfo::exists(path));
+}
+
+TEST_CASE("A finished write exports a report that parses", "[imagewriter][files]")
+{
+    WriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, WriteFixture::kSize);
+    w.setDst(fx.target(), WriteFixture::kSize);
+
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    // Given a name without an extension, as somebody typing into a save
+    // dialog would: the file that appears has to be the one named.
+    const QString typed = QDir(dir.path()).filePath(QStringLiteral("report"));
+    REQUIRE(w.exportPerformanceDataToFile(typed));
+
+    const QString expected = typed + QStringLiteral(".json");
+    REQUIRE(QFileInfo::exists(expected));
+    CHECK_FALSE(QFileInfo::exists(typed));          // not the extensionless one
+
+    QFile f(expected);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    const QByteArray body = f.readAll();
+    CHECK(body.size() > 0);
+
+    QJsonParseError err{};
+    const QJsonDocument doc = QJsonDocument::fromJson(body, &err);
+    INFO("parse error: " << err.errorString().toStdString());
+    CHECK(err.error == QJsonParseError::NoError);
+    CHECK_FALSE(doc.isNull());
+}
+
+TEST_CASE("An exported report keeps the extension it was given",
+          "[imagewriter][files]")
+{
+    WriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    w.setSrc(fx.sourceUrl(), 0, WriteFixture::kSize);
+    w.setDst(fx.target(), WriteFixture::kSize);
+    REQUIRE(runWrite(w).succeeded);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString named = QDir(dir.path()).filePath(QStringLiteral("run.json"));
+
+    REQUIRE(w.exportPerformanceDataToFile(named));
+    CHECK(QFileInfo::exists(named));
+    // Not run.json.json.
+    CHECK_FALSE(QFileInfo::exists(named + QStringLiteral(".json")));
 }
