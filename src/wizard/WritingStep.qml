@@ -385,6 +385,7 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
+        objectName: "confirmWriteDialog"
         parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
 
@@ -488,6 +489,7 @@ WizardStepBase {
 
             ImButtonRed {
                 id: acceptBtn
+                objectName: "confirmWriteAcceptButton"
                 text: confirmDialog.allowAccept ? qsTr("I understand, erase and write") : qsTr("Please wait...")
                 accessibleDescription: qsTr("Confirm erasure and begin writing the image to the storage device")
                 enabled: confirmDialog.allowAccept
