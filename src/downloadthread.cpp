@@ -1656,14 +1656,31 @@ void DownloadThread::_closeFiles()
 {
     QElapsedTimer closeTimer;
     closeTimer.start();
-    
-    // Close unified file operations
+
+    // Close unified file operations.
+    //
+    // The result is worth keeping here. Closing a block device is where
+    // deferred write errors surface -- data the kernel took and never managed
+    // to put on the card -- and this discarded it, then reported the close as
+    // a success below regardless of what had happened.
+    bool closedCleanly = true;
+
     if (_file && _file->IsOpen()) {
-        _file->Close();
+        const rpi_imager::FileError err = _file->Close();
+        if (err != rpi_imager::FileError::kSuccess) {
+            closedCleanly = false;
+            qWarning() << "DownloadThread: closing the storage device failed:"
+                       << _fileErrorToString(err, tr("closing the storage device"));
+        }
     }
 #ifdef Q_OS_WIN
     if (_volumeFile && _volumeFile->IsOpen()) {
-        _volumeFile->Close();
+        const rpi_imager::FileError err = _volumeFile->Close();
+        if (err != rpi_imager::FileError::kSuccess) {
+            closedCleanly = false;
+            qWarning() << "DownloadThread: closing the volume failed:"
+                       << _fileErrorToString(err, tr("closing the volume"));
+        }
     }
 #endif
     // Cancel async cache writer if still running (regardless of error state)
@@ -1674,8 +1691,11 @@ void DownloadThread::_closeFiles()
     }
     
     quint32 closeDurationMs = static_cast<quint32>(closeTimer.elapsed());
-    if (closeDurationMs > 0) {
-        emit eventDeviceClose(closeDurationMs, true);
+    // Reported whenever it went wrong, not only when it took long enough to
+    // measure: a close that failed in under a millisecond is precisely the one
+    // worth knowing about, and the duration gate hid it.
+    if (closeDurationMs > 0 || !closedCleanly) {
+        emit eventDeviceClose(closeDurationMs, closedCleanly);
     }
 }
 
