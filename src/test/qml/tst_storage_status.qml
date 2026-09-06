@@ -32,7 +32,12 @@ TestCase {
     QtObject {
         id: containerStub
         property bool disableWarnings: false
-        property var overlayRootRef: null
+        // An actual item, not null: the step parents its confirmation
+        // dialogs onto this, and null makes that an undefined assignment to
+        // a QQuickItem* -- the dialogs then have no parent, which nothing
+        // here notices until something tries to open one.
+        property var overlayRootRef: testCase
+        property string networkInfoText: ""
         property string selectedStorageName: ""
         property bool targetIsFastboot: false
     }

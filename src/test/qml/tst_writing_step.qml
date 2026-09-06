@@ -39,8 +39,16 @@ TestCase {
         property bool wifiConfigured: false
         property bool sshEnabled: false
         property bool piConnectEnabled: false
+        // The summary lists every interface the image will enable, so the
+        // step reads all of them. Missing, they resolve to undefined and the
+        // rows silently do not render -- which no assertion here would catch.
+        property bool ifI2cEnabled: false
+        property bool if1WireEnabled: false
         property bool ifSpiEnabled: false
         property string ifSerial: ""
+        // WizardStepBase reads this on every step; undefined assigns nothing
+        // and warns on each construction.
+        property string networkInfoText: ""
         property string selectedDeviceName: "Raspberry Pi 5"
         property string selectedOsName: "Raspberry Pi OS (64-bit)"
         property string selectedStorageName: "Generic Mass-Storage 32 GB"

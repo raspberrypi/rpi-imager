@@ -42,8 +42,14 @@ ColumnLayout {
             var raw = Qt.atob(base64Body)
             if (!raw || raw.length < 4)
                 return ""
-            var len = (raw.charCodeAt(0) << 24) | (raw.charCodeAt(1) << 16)
-                    | (raw.charCodeAt(2) << 8) | raw.charCodeAt(3)
+            // Masked to a byte each: Qt.atob returns a string, and Qt warns
+            // that its output differs from the Web API's. Every byte read
+            // here is in the ASCII range for a well-formed blob -- three
+            // zeroes and a small length, then the name -- and the bounds
+            // below reject anything that is not, but the mask means a
+            // surprising code point cannot become a large length.
+            var len = ((raw.charCodeAt(0) & 0xFF) << 24) | ((raw.charCodeAt(1) & 0xFF) << 16)
+                    | ((raw.charCodeAt(2) & 0xFF) << 8) | (raw.charCodeAt(3) & 0xFF)
             // A sane algorithm name. The bound rejects a body that decoded to
             // something else entirely rather than trusting its first word.
             if (len <= 0 || len > 64 || raw.length < 4 + len)

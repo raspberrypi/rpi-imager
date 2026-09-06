@@ -47,6 +47,15 @@ TestCase {
         // the step is left half-initialised.
         property bool ccRpiAvailable: true
         property bool ifAndFeaturesAvailable: true
+        // The step watches this for capability changes and calls the other
+        // two on skip. Missing, the Connections block warns that no signal
+        // matches and the skip path throws -- neither of which fails a test.
+        property string selectedDeviceName: "Raspberry Pi 5"
+        property string networkInfoText: ""
+        property int stepWriting: 9
+        property int jumpedTo: -1
+        function jumpToStep(n) { jumpedTo = n }
+        function nextStep() {}
     }
 
     Component {

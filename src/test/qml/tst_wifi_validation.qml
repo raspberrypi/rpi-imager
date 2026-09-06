@@ -44,6 +44,8 @@ TestCase {
 
     QtObject {
         id: containerStub
+        // WizardStepBase reads this on every step.
+        property string networkInfoText: ""
         property var customizationSettings: settingsStub
         property bool hostnameConfigured: false
         property bool localeConfigured: false
