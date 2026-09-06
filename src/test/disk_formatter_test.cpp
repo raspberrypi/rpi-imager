@@ -401,13 +401,56 @@ class DiskFormatterTest {
       }
     }
 
-    // Verify filesystem with fsck.fat if available
+    // Verify the filesystem with an independent checker.
+    //
+    // This used to report a rejected filesystem as "skipped (tool may not be
+    // available)" and leave all_passed alone, so the strongest check of what
+    // the formatter produces could not fail the test -- a corrupt FAT32 and a
+    // missing fsck.fat looked identical. The two are now told apart, and only
+    // the genuinely missing tool is a skip.
     {
-      std::vector<const char*> argv = {"fsck.fat", "-v", test_file.c_str(), nullptr};
-      if (runCommand("/usr/sbin/fsck.fat", argv) == 0) {
-        std::cout << "fsck.fat validation passed\n";
+      const char* fsck = "/usr/sbin/fsck.fat";
+      if (!std::filesystem::exists(fsck)) {
+        std::cout << "fsck.fat is not installed, filesystem not independently checked\n";
       } else {
-        std::cout << "fsck.fat validation skipped (tool may not be available)\n";
+        // fsck.fat has to be given the filesystem, not the disk holding it.
+        // Pointed at the image it reads the MBR as a boot sector and answers
+        // "Logical sector size is zero" -- which is what it had always been
+        // doing, since the result was discarded and reported as a skip.
+        //
+        // The partition is copied out rather than loop-mounted so this needs
+        // no privileges, and the offset is read from the image's own
+        // partition table rather than assumed.
+        std::vector<std::uint8_t> mbr(512);
+        std::ifstream in(test_file, std::ios::binary);
+        in.read(reinterpret_cast<char*>(mbr.data()), 512);
+        const bool signature_ok = in.gcount() == 512 && mbr[510] == 0x55 && mbr[511] == 0xAA;
+        std::uint32_t first_lba = 0;
+        for (int i = 0; i < 4; ++i)
+          first_lba |= static_cast<std::uint32_t>(mbr[0x1BE + 8 + i]) << (8 * i);
+
+        if (!signature_ok || first_lba == 0) {
+          std::cout << "could not read a partition offset from the image\n";
+          all_passed = false;
+        } else {
+          const std::string part_file = scratch().file("partition.img");
+          std::ifstream src(test_file, std::ios::binary);
+          std::ofstream dst(part_file, std::ios::binary | std::ios::trunc);
+          src.seekg(static_cast<std::streamoff>(first_lba) * 512);
+          dst << src.rdbuf();
+          dst.close();
+
+          // -n answers no to every question, so it reports without repairing:
+          // a filesystem it wanted to fix is one this test should fail.
+          std::vector<const char*> argv = {"fsck.fat", "-n", "-v", part_file.c_str(), nullptr};
+          const int rc = runCommand(fsck, argv);
+          if (rc == 0) {
+            std::cout << "fsck.fat validation passed\n";
+          } else {
+            std::cout << "fsck.fat rejected the filesystem (exit " << rc << ")\n";
+            all_passed = false;
+          }
+        }
       }
     }
 
