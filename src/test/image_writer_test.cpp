@@ -6755,3 +6755,175 @@ TEST_CASE("Erasing a Compute Module goes over USB, not down the card path",
     w.setSrc(QUrl(QStringLiteral("internal://format")), 0, 0);
     CHECK(w.choosePath() == ImageWriter::WritePath::FastbootDevice);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Pulling the drive out
+//
+// onSelectedDeviceRemoved() branches five ways on the state the write is in,
+// and three of those branches exist to say nothing. That is the part worth
+// pinning down: a card ejected after a write finished, or pulled after a
+// write already failed, must not raise a second complaint about a problem
+// the user has either already seen or does not have. Nothing here was
+// tested, so the silent branches and the speaking one were indistinguishable.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// The removal handling is a set of protected slots the drive-list poller
+// calls. Exposing them is enough to drive it; none of them touch a device.
+class RemovableDriveWriter : public ImageWriter
+{
+public:
+    RemovableDriveWriter() : ImageWriter(nullptr) {}
+
+    using ImageWriter::onSelectedDeviceRemoved;
+    using ImageWriter::onSuccess;
+    using ImageWriter::onError;
+    using ImageWriter::onCancelled;
+
+    int state() const { return property("writeState").toInt(); }
+};
+
+// A writer with an image and a drive chosen, ready to go.
+std::unique_ptr<RemovableDriveWriter> writerWithDriveChosen(const QString &drive)
+{
+    auto w = std::make_unique<RemovableDriveWriter>();
+    w->setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
+    w->setDst(drive, 1024 * 1024);
+    return w;
+}
+
+} // namespace
+
+TEST_CASE("Some other drive disappearing leaves the chosen one alone", "[imagewriter][removal]")
+{
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+    REQUIRE(w->readyToWrite());
+
+    rpi_test::SignalLog removed(w.get(), &ImageWriter::selectedDeviceRemoved);
+
+    w->onSelectedDeviceRemoved(QStringLiteral("/dev/sdz"));
+
+    CHECK(removed.count() == 0);
+    CHECK(w->readyToWrite());
+}
+
+TEST_CASE("Losing the chosen drive takes the Write button with it", "[imagewriter][removal]")
+{
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+    REQUIRE(w->readyToWrite());
+
+    rpi_test::SignalLog removed(w.get(), &ImageWriter::selectedDeviceRemoved);
+
+    w->onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    CHECK(removed.count() == 1);
+    CHECK_FALSE(w->readyToWrite());
+}
+
+TEST_CASE("A card ejected after the write finished is not reported as a fault", "[imagewriter][removal]")
+{
+    // Taking the card out is the next thing anyone does after a successful
+    // write. Announcing it as a removal would turn the last thing the user
+    // sees from "done" into a warning.
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+    w->onSuccess();
+    REQUIRE(w->state() == static_cast<int>(ImageWriter::WriteState::Succeeded));
+
+    rpi_test::SignalLog removed(w.get(), &ImageWriter::selectedDeviceRemoved);
+
+    w->onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    CHECK(removed.count() == 0);
+}
+
+TEST_CASE("A drive pulled after a failure does not raise a second complaint", "[imagewriter][removal]")
+{
+    // The error is already on screen. Pulling the card that caused it should
+    // not add a second, less specific message on top.
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+    w->onError(QStringLiteral("write failed"));
+    REQUIRE(w->state() == static_cast<int>(ImageWriter::WriteState::Failed));
+
+    rpi_test::SignalLog removed(w.get(), &ImageWriter::selectedDeviceRemoved);
+
+    w->onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    CHECK(removed.count() == 0);
+}
+
+TEST_CASE("A drive pulled after cancelling does not raise a second complaint", "[imagewriter][removal]")
+{
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+    w->onCancelled();
+    REQUIRE(w->state() == static_cast<int>(ImageWriter::WriteState::Cancelled));
+
+    rpi_test::SignalLog removed(w.get(), &ImageWriter::selectedDeviceRemoved);
+
+    w->onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    CHECK(removed.count() == 0);
+}
+
+TEST_CASE("Cancelling on purpose is reported as an ordinary cancellation", "[imagewriter][removal]")
+{
+    // onCancelled() chooses between two signals, and the UI says something
+    // different for each. With nothing having removed a device, it is the
+    // plain one.
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+
+    rpi_test::SignalLog cancelled(w.get(), &ImageWriter::cancelled);
+    rpi_test::SignalLog removalCancelled(w.get(), &ImageWriter::writeCancelledDueToDeviceRemoval);
+
+    w->onCancelled();
+
+    CHECK(cancelled.count() == 1);
+    CHECK(removalCancelled.count() == 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Not telling the user two different things about one write
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A success arriving after a failure is ignored", "[imagewriter][removal]")
+{
+    // The guard exists because FastbootFlashThread can fall through to its
+    // success path after a flash has already failed. Were it to get through,
+    // the user would be shown a completed write over the top of the error
+    // explaining why it did not complete.
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+
+    rpi_test::SignalLog succeeded(w.get(), &ImageWriter::success);
+
+    w->onError(QStringLiteral("flash failed"));
+    w->onSuccess();
+
+    CHECK(succeeded.count() == 0);
+    CHECK(w->state() == static_cast<int>(ImageWriter::WriteState::Failed));
+}
+
+TEST_CASE("A success arriving after a cancellation is ignored", "[imagewriter][removal]")
+{
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+
+    rpi_test::SignalLog succeeded(w.get(), &ImageWriter::success);
+
+    w->onCancelled();
+    w->onSuccess();
+
+    CHECK(succeeded.count() == 0);
+    CHECK(w->state() == static_cast<int>(ImageWriter::WriteState::Cancelled));
+}
+
+TEST_CASE("A second error does not reach the user twice", "[imagewriter][removal]")
+{
+    auto w = writerWithDriveChosen(QStringLiteral("/dev/null"));
+
+    rpi_test::SignalLog failed(w.get(), &ImageWriter::error);
+
+    w->onError(QStringLiteral("the real problem"));
+    w->onError(QStringLiteral("a later consequence of it"));
+
+    REQUIRE(failed.count() == 1);
+    CHECK(failed.at(0).at(0).toString() == QStringLiteral("the real problem"));
+}
