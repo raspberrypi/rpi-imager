@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "imagewriter.h"
+#include "config.h"
 #include "cli.h"
 #include "bootimgcreator.h"
 #include "downloadthread.h"
@@ -7127,4 +7128,81 @@ TEST_CASE("A directory that was not chosen does not overwrite the remembered one
     QSettings after;
     CHECK(after.value(QStringLiteral("lastpath")).toString()
           == QStringLiteral("/the/previous/one"));
+}
+
+// ══════════════════════════════════════════════════════════════
+// Which repository URLs are allowed to become the OS list
+//
+// isValidRepoUrl() decides whether an address the user typed, or one that
+// arrived in a deep link, is allowed to replace the source of every image
+// the application offers. It had no test, including the part that exists
+// because of a bug that already reached users.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A repository URL must be http and must name a list", "[imagewriter][repo]")
+{
+    ImageWriter w(nullptr);
+
+    SECTION("an ordinary json list is accepted") {
+        CHECK(w.isValidRepoUrl(QStringLiteral("https://example.com/os_list.json")));
+        CHECK(w.isValidRepoUrl(QStringLiteral("http://example.com/os_list.json")));
+    }
+
+    SECTION("the manifest extension is accepted too") {
+        CHECK(w.isValidRepoUrl(
+            QStringLiteral("https://example.com/repo." MANIFEST_EXTENSION)));
+    }
+
+    SECTION("a pre-signed URL keeps its query string") {
+        // Cloud blob storage hands out the list with a SAS token attached.
+        // Rejecting those would make a perfectly ordinary hosting
+        // arrangement unusable.
+        CHECK(w.isValidRepoUrl(QStringLiteral(
+            "https://acct.blob.core.windows.net/c/manifest.json?sv=2021&sig=abc%3D")));
+        CHECK(w.isValidRepoUrl(QStringLiteral("https://example.com/os.json#section")));
+    }
+
+    SECTION("the extension has to come before the query, not merely appear") {
+        // Otherwise ".../evil?x=.json" passes by putting the extension
+        // somewhere the server never sees as a path.
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/evil?x=.json")));
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/evil#.json")));
+    }
+
+    SECTION("a scheme that is not http is refused") {
+        // file:// would read the local disk, and the others are not fetches
+        // at all.
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("file:///etc/passwd.json")));
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("ftp://example.com/os.json")));
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("javascript:alert(1)//.json")));
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("data:application/json,[]")));
+    }
+
+    SECTION("something that is not a list is refused") {
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/os_list.xml")));
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/")));
+        CHECK_FALSE(w.isValidRepoUrl(QString()));
+        CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("not a url at all")));
+    }
+}
+
+TEST_CASE("A repository URL copied out of a browser is not accepted with its newline",
+          "[imagewriter][repo]")
+{
+    // Issue #1687. PCRE2 lets '$' match immediately before a trailing
+    // newline, so an address copied from a browser -- which is exactly how
+    // someone gets a URL into this field -- validated, and then reached the
+    // fetch as a %0A-suffixed URL that could not resolve. The pattern is
+    // anchored \A..\z for this reason, and nothing checked it.
+    ImageWriter w(nullptr);
+
+    CHECK(w.isValidRepoUrl(QStringLiteral("https://example.com/os_list.json")));
+
+    CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/os_list.json\n")));
+    CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/os_list.json\r\n")));
+    CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/os_list.json ")));
+    CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("\nhttps://example.com/os_list.json")));
+
+    // Trailing whitespace after a query string is the same hazard.
+    CHECK_FALSE(w.isValidRepoUrl(QStringLiteral("https://example.com/os.json?sig=a\n")));
 }

@@ -92,6 +92,7 @@ BaseDialog {
 
             ImRadioButton {
                 id: radioOfficial
+                objectName: "repoOfficialRadio"
                 text: "Raspberry Pi (default)"
                 accessibleDescription: qsTr("Use the official Raspberry Pi operating system repository")
                 checked: true
@@ -117,6 +118,7 @@ BaseDialog {
 
             ImRadioButton {
                 id: radioCustomUri
+                objectName: "repoCustomUriRadio"
                 text: qsTr("Use custom URL")
                 accessibleDescription: qsTr("Download operating system list from a custom web address")
                 checked: false
@@ -169,6 +171,7 @@ BaseDialog {
 
             ImTextField {
                 id: fieldCustomUri
+                objectName: "repoCustomUriField"
                 visible: radioCustomUri.checked
                 Layout.fillWidth: true
                 text: popup.customRepoUri
@@ -221,6 +224,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: saveButton
+                objectName: "repoApplyButton"
                 enabled: (radioOfficial.checked
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
                          || (radioCustomUri.checked && fieldCustomUri.isValid))
