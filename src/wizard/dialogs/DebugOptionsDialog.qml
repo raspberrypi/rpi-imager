@@ -97,6 +97,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkDirectIO
+                objectName: "debugDirectIO"
                 text: qsTr("Enable Direct I/O (F_NOCACHE / O_DIRECT)")
                 accessibleDescription: qsTr("Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.")
                 Layout.fillWidth: true
@@ -107,6 +108,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkAsyncIO
+                objectName: "debugAsyncIO"
                 text: qsTr("Enable Async I/O")
                 accessibleDescription: qsTr("Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.")
                 Layout.fillWidth: true
@@ -182,6 +184,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkIgnoreDeviceLimits
+                objectName: "debugIgnoreDeviceLimits"
                 text: qsTr("Ignore Device I/O Limits")
                 accessibleDescription: qsTr("Ignore the device-reported queue depth and transfer size limits. Useful for USB-NVMe enclosures that under-report their capabilities.")
                 Layout.fillWidth: true
@@ -193,6 +196,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkPeriodicSync
+                objectName: "debugPeriodicSync"
                 text: qsTr("Enable Periodic Sync")
                 accessibleDescription: qsTr("Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.")
                 Layout.fillWidth: true
@@ -218,6 +222,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkVerboseLogging
+                objectName: "debugVerboseLogging"
                 text: qsTr("Verbose Performance Logging")
                 accessibleDescription: qsTr("Log detailed timing information for each write operation to help diagnose performance issues.")
                 Layout.fillWidth: true
@@ -243,6 +248,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkIPv4Only
+                objectName: "debugIPv4Only"
                 text: qsTr("Force IPv4-only Downloads")
                 accessibleDescription: qsTr("Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.")
                 Layout.fillWidth: true
@@ -268,6 +274,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkSkipEndOfDevice
+                objectName: "debugSkipEndOfDevice"
                 text: qsTr("Counterfeit Card Mode (skip end-of-device checks)")
                 accessibleDescription: qsTr("Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card's real capacity.")
                 Layout.fillWidth: true
@@ -305,6 +312,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkRpiboot
+                objectName: "debugRpiboot"
                 text: qsTr("Enable Rpiboot/Fastboot Support")
                 accessibleDescription: qsTr("Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.")
                 Layout.fillWidth: true
@@ -392,6 +400,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkForceSecureBoot
+                objectName: "debugForceSecureBoot"
                 text: qsTr("Force Secure Boot Available")
                 accessibleDescription: qsTr("Show secure boot customisation regardless of OS capabilities. Equivalent to the --enable-secure-boot CLI flag.")
                 Layout.fillWidth: true
@@ -402,6 +411,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkSignFastbootGadget
+                objectName: "debugSignFastbootGadget"
                 text: qsTr("CM5 re-provisioning mode (special-reprovision-device)")
                 accessibleDescription: qsTr("Match rpi-sb-provisioner's special-reprovision-device: run secure-boot recovery (re-sign recovery.bin from upstream, reuse cached pieeprom) then fastboot (sign bootfiles and gadget). Requires the RSA key in App Options. Only for Compute Modules whose secure-boot OTP is already fused.")
                 Layout.fillWidth: true
