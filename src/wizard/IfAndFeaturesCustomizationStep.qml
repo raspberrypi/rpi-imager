@@ -94,6 +94,7 @@ WizardStepBase {
                         // Interface toggles
                         ImOptionPill {
                             id: chkEnableI2C
+                            objectName: "enableI2CToggle"
                             Layout.fillWidth: true
                             text: qsTr("Enable I2C")
                             accessibleDescription: qsTr("Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals")
@@ -172,6 +173,7 @@ WizardStepBase {
 
                             ImOptionPill {
                                 id: chkEnableUsbGadget
+                                objectName: "enableUsbGadgetToggle"
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
                                 // Carries what the confirmation dialog says, so
@@ -341,6 +343,7 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
+        objectName: "usbGadgetWarningDialog"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
