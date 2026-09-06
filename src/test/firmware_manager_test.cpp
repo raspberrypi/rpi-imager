@@ -863,10 +863,28 @@ TEST_CASE("Firmware is fetched and cached from the configured source",
     CHECK(std::filesystem::exists(dir));
 
     // A second call is served from the cache rather than fetched again.
+    //
+    // Comparing the two paths does not show that: the path is derived from
+    // the mode and the chip, so it is the same whether the second call read
+    // the cache or downloaded everything over again. Taking the source away
+    // first is what distinguishes them -- a fetch now has nothing to fetch.
+    const QDir servedDir(served.path());
+    for (const QFileInfo &fi : servedDir.entryInfoList(QDir::Dirs | QDir::Files
+                                                       | QDir::NoDotAndDotDot)) {
+        if (fi.isDir())
+            QDir(fi.absoluteFilePath()).removeRecursively();
+        else
+            QFile::remove(fi.absoluteFilePath());
+    }
+    REQUIRE(servedDir.entryList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot).isEmpty());
+
     const auto again = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
                                           rpiboot::ChipGeneration::BCM2712,
                                           nullptr, cancelled);
+    INFO("second call error: " << fm.lastError());
     CHECK(again == dir);
+    CHECK_FALSE(again.empty());
+    CHECK(std::filesystem::exists(again));
 
     fm.clearCache();
 }
