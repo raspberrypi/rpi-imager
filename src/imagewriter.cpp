@@ -996,6 +996,62 @@ QString ImageWriter::getHardwareName()
 }
 
 /* Start writing */
+// Point the thread at a cache file for this download, if caching is on.
+//
+// Both write paths did this identically; only the condition guarding it
+// differs between them, which is why the condition stays with each caller.
+void ImageWriter::_attachDownloadCache()
+{
+    // Use CacheManager to setup cache for download
+    QString cacheFilePath;
+    if (_cacheManager->setupCacheForDownload(_expectedHash, _downloadLen, cacheFilePath))
+    {
+        qDebug() << "Setting up cache file for download:" << cacheFilePath;
+        _thread->setCacheFile(cacheFilePath, _downloadLen);
+        // Connect to CacheManager for cache updates (extract uncompressed hash from signal)
+        connect(_thread, &DownloadThread::cacheFileHashUpdated,
+                this, [this](const QByteArray& cacheFileHash, const QByteArray& imageHash) {
+                    qDebug() << "DownloadThread cache update - cacheFileHash:" << cacheFileHash << "imageHash:" << imageHash;
+                    // Update cache with both uncompressed hash (imageHash) and compressed hash (cacheFileHash)
+                    _cacheManager->updateCacheFile(imageHash, cacheFileHash);
+                });
+    }
+    else
+    {
+        qDebug() << "Cache setup failed or disabled - proceeding without caching";
+    }
+}
+
+// Start the configured thread and begin reporting progress.
+//
+// A multi-file archive is unpacked onto a filesystem rather than written as
+// an image, so the card is formatted first and the write starts from that
+// thread's success signal instead of directly.
+void ImageWriter::_startConfiguredWrite()
+{
+    if (_multipleFilesInZip)
+    {
+        static_cast<DownloadExtractThread *>(_thread)->enableMultipleFileExtraction();
+        DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
+        connect(dft, SIGNAL(success()), _thread, SLOT(start()));
+        connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
+        connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+        connect(dft, &DriveFormatThread::eventDriveFormat,
+                this, [this](quint32 durationMs, bool success){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
+                });
+        dft->start();
+        setWriteState(WriteState::Writing);
+    }
+    else
+    {
+        _thread->start();
+        setWriteState(WriteState::Writing);
+    }
+
+    startProgressPolling();
+}
+
 // Wire up the freshly constructed DownloadThread.
 //
 // startWrite() and the continuation that resumes after cache verification
@@ -1816,51 +1872,14 @@ void ImageWriter::startWrite()
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
     {
-        // Use CacheManager to setup cache for download
-        QString cacheFilePath;
-        if (_cacheManager->setupCacheForDownload(_expectedHash, _downloadLen, cacheFilePath))
-        {
-            qDebug() << "Setting up cache file for download:" << cacheFilePath;
-            _thread->setCacheFile(cacheFilePath, _downloadLen);
-            // Connect to CacheManager for cache updates (extract uncompressed hash from signal)
-            connect(_thread, &DownloadThread::cacheFileHashUpdated,
-                    this, [this](const QByteArray& cacheFileHash, const QByteArray& imageHash) {
-                        qDebug() << "DownloadThread cache update - cacheFileHash:" << cacheFileHash << "imageHash:" << imageHash;
-                        // Update cache with both uncompressed hash (imageHash) and compressed hash (cacheFileHash)
-                        _cacheManager->updateCacheFile(imageHash, cacheFileHash);
-                    });
-        }
-        else
-        {
-            qDebug() << "Cache setup failed or disabled - proceeding without caching";
-        }
+        _attachDownloadCache();
     }
     else if (!_expectedHash.isEmpty() && QUrl(urlstr).isLocalFile())
     {
         qDebug() << "Using cached file as source - skipping cache setup";
     }
 
-    if (_multipleFilesInZip)
-    {
-        static_cast<DownloadExtractThread *>(_thread)->enableMultipleFileExtraction();
-        DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
-        connect(dft, SIGNAL(success()), _thread, SLOT(start()));
-        connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
-        connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
-        connect(dft, &DriveFormatThread::eventDriveFormat,
-                this, [this](quint32 durationMs, bool success){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
-                });
-        dft->start();
-        setWriteState(WriteState::Writing);
-    }
-    else
-    {
-        _thread->start();
-        setWriteState(WriteState::Writing);
-    }
-
-    startProgressPolling();
+    _startConfiguredWrite();
 }
 
 // Cache file update methods removed - now handled by connecting DownloadThread directly to CacheManager
@@ -4580,24 +4599,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     // disk space, not a bad write.
     if (!_expectedHash.isEmpty() && !cacheIsValid)
     {
-        // Use CacheManager to setup cache for download
-        QString cacheFilePath;
-        if (_cacheManager->setupCacheForDownload(_expectedHash, _downloadLen, cacheFilePath))
-        {
-            qDebug() << "Setting up cache file for download:" << cacheFilePath;
-            _thread->setCacheFile(cacheFilePath, _downloadLen);
-            // Connect to CacheManager for cache updates (pass both hashes correctly)
-            connect(_thread, &DownloadThread::cacheFileHashUpdated,
-                    this, [this](const QByteArray& cacheFileHash, const QByteArray& imageHash) {
-                        qDebug() << "DownloadThread cache update - cacheFileHash:" << cacheFileHash << "imageHash:" << imageHash;
-                        // Update cache with both uncompressed hash (imageHash) and compressed hash (cacheFileHash)
-                        _cacheManager->updateCacheFile(imageHash, cacheFileHash);
-                    });
-        }
-        else
-        {
-            qDebug() << "Cache setup failed or disabled - proceeding without caching";
-        }
+        _attachDownloadCache();
     }
     else if (cacheIsValid)
     {
@@ -4605,27 +4607,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     }
 
     // Start the actual write operation
-    if (_multipleFilesInZip)
-    {
-        static_cast<DownloadExtractThread *>(_thread)->enableMultipleFileExtraction();
-        DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
-        connect(dft, SIGNAL(success()), _thread, SLOT(start()));
-        connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
-        connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
-        connect(dft, &DriveFormatThread::eventDriveFormat,
-                this, [this](quint32 durationMs, bool success){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
-                });
-        dft->start();
-        setWriteState(WriteState::Writing);
-    }
-    else
-    {
-        _thread->start();
-        setWriteState(WriteState::Writing);
-    }
-
-    startProgressPolling();
+    _startConfiguredWrite();
 }
 
 void ImageWriter::reboot()

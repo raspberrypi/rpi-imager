@@ -283,6 +283,13 @@ public:
     /// post-cache-verification continuation, which each had their own copy.
     void _configureWriteThread();
 
+    /// Attach a download cache file to _thread. Shared by both write paths;
+    /// the condition deciding whether to call it is not.
+    void _attachDownloadCache();
+
+    /// Start the configured thread and begin progress polling.
+    void _startConfiguredWrite();
+
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
 
