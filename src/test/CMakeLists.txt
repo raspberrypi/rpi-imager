@@ -1602,6 +1602,53 @@ if(NOT BUILD_CLI_ONLY)
                  COMMAND qml_ui_test -platform offscreen)
         set_tests_properties(qml_ui_test PROPERTIES
             ENVIRONMENT "QT_QUICK_BACKEND=software")
+
+        # `qml_coverage`: which of the QML actually ran.
+        #
+        # gcov cannot see QML. qmlcachegen emits bytecode as a byte array with
+        # no line mapping, so the .cpp it generates is instrumented and says
+        # nothing about what executed, and qmlsc -- which would emit real C++ --
+        # is not in the open-source Qt. The UI was therefore not merely
+        # uncovered but unmeasured, which is worse: a gap you cannot see does
+        # not appear on any list of gaps.
+        #
+        # So the sites are counted directly. tools/qml_coverage_instrument.py
+        # injects a probe into every function body and block-bodied signal
+        # handler of a *copy* of the generated module, the driven tests run
+        # against that copy, and the report says which probes fired. The
+        # shipping QML is never touched, and the injection is inline after the
+        # opening brace so line numbers do not move.
+        #
+        # Function and handler level, not statement level. Statement coverage
+        # would need much more of the grammar understood, and a coverage number
+        # that is wrong is worse than not having one.
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+        if(Python3_Interpreter_FOUND)
+            add_custom_target(qml_coverage
+                COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/qml_coverage_instrument.py"
+                        "${CMAKE_BINARY_DIR}/RpiImager"
+                        "${CMAKE_BINARY_DIR}/qmlcov/RpiImager"
+                        --inventory "${CMAKE_BINARY_DIR}/qmlcov/inventory.json"
+                COMMAND "${CMAKE_COMMAND}" -E env
+                        "RPI_QML_MODULE_OVERRIDE=${CMAKE_BINARY_DIR}/qmlcov/RpiImager"
+                        "RPI_QML_COVERAGE_HITS=${CMAKE_BINARY_DIR}/qmlcov/hits.json"
+                        "QT_QUICK_BACKEND=software"
+                        $<TARGET_FILE:qml_ui_test> -platform offscreen
+                COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/qml_coverage_report.py"
+                        "${CMAKE_BINARY_DIR}/qmlcov/inventory.json"
+                        "${CMAKE_BINARY_DIR}/qmlcov/hits.json"
+                        --out "${CMAKE_BINARY_DIR}/qmlcov/summary.txt"
+                DEPENDS qml_ui_test ${PROJECT_NAME}
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+                COMMENT "Running the driven QML tests against an instrumented copy of the module"
+                USES_TERMINAL
+                VERBATIM
+            )
+        else()
+            message(STATUS "Python3 not found -- skipping the qml_coverage target")
+        endif()
     else()
         message(STATUS "Qt6::QuickTest not found -- skipping driven QML tests")
     endif()

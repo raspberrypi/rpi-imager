@@ -32,6 +32,11 @@
 #include "app_resources.h"
 
 #include <QAccessible>
+#include <QCoreApplication>
+#include <QHash>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QFile>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -46,6 +51,12 @@ constexpr const char *kUri = "RpiImager";
 
 QString moduleDir()
 {
+    // RPI_QML_MODULE_OVERRIDE points the run at an instrumented copy of the
+    // module (see tools/qml_coverage_instrument.py). Unset, which is every
+    // ordinary run, this is the module the build generated.
+    const QByteArray override = qgetenv("RPI_QML_MODULE_OVERRIDE");
+    if (!override.isEmpty())
+        return QString::fromLocal8Bit(override);
     return QStringLiteral(IMAGER_QML_MODULE_PARENT) + QStringLiteral("/RpiImager");
 }
 
@@ -126,6 +137,53 @@ public:
     Q_INVOKABLE bool isActive() const { return QAccessible::isActive(); }
 };
 
+// Counts which instrumented QML sites ran.
+//
+// QML has no coverage tool -- gcov cannot see it, and the compiler that
+// would turn it into instrumentable C++ is not in the open-source Qt -- so
+// the sites are counted by a probe injected into a copy of the source. This
+// is what those probes call. It exists only when RPI_QML_COVERAGE_HITS names
+// somewhere to write the result, so an ordinary run neither instruments nor
+// counts anything.
+class QmlCoverage : public QObject
+{
+    Q_OBJECT
+
+public:
+    Q_INVOKABLE void hit(int id) { ++_hits[id]; }
+
+    void writeTo(const QString &path) const
+    {
+        QJsonObject counts;
+        for (auto it = _hits.cbegin(); it != _hits.cend(); ++it)
+            counts.insert(QString::number(it.key()), it.value());
+        QFile out(path);
+        if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return;
+        out.write(QJsonDocument(counts).toJson(QJsonDocument::Compact));
+    }
+
+private:
+    QHash<int, int> _hits;
+};
+
+QmlCoverage *coverageCounter()
+{
+    static QmlCoverage *counter = [] {
+        if (qEnvironmentVariableIsEmpty("RPI_QML_COVERAGE_HITS"))
+            return static_cast<QmlCoverage *>(nullptr);
+        auto *c = new QmlCoverage;
+        // Written on the way out rather than per hit: the probes fire in
+        // tight loops inside bindings, and a run writes tens of thousands.
+        qAddPostRoutine([] {
+            if (auto *existing = coverageCounter())
+                existing->writeTo(QString::fromLocal8Bit(qgetenv("RPI_QML_COVERAGE_HITS")));
+        });
+        return c;
+    }();
+    return counter;
+}
+
 class Setup : public QObject
 {
     Q_OBJECT
@@ -193,6 +251,15 @@ public slots:
     {
         if (prepareModule())
             engine->addImportPath(importRoot()->path());
+
+        // A global rather than a registered singleton: the probe is injected
+        // into files that already have their own imports, and adding one to
+        // each of them would be a much larger edit to get wrong.
+        if (auto *counter = coverageCounter()) {
+            QQmlEngine::setObjectOwnership(counter, QQmlEngine::CppOwnership);
+            engine->globalObject().setProperty(QStringLiteral("__qmlcov"),
+                                               engine->newQObject(counter));
+        }
     }
 };
 
