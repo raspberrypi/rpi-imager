@@ -64,6 +64,44 @@ cmake --build build
 [qt/qt-build-common.sh](./qt/qt-build-common.sh) says — the single place the Qt
 version is selected.
 
+#### Run the tests under a sanitiser
+
+Worth doing before touching anything that owns a buffer or a file handle
+across threads. The write path hands work to threads that outlive the call
+that started them, and the ordinary suite passes clean through mistakes that
+AddressSanitizer catches at once.
+
+```sh
+cmake -B build-asan -G Ninja src \
+    -DQt6_ROOT=$PWD/.debian/qt/amd64/<version>/gcc_64 \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DBUILD_TESTING=ON \
+    -DXZ_SANDBOX=no \
+    -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+cmake --build build-asan --target generate_version
+cmake --build build-asan
+cd build-asan && ASAN_OPTIONS=detect_leaks=0 ctest -j3
+```
+
+Three of those are not obvious and each stops the build dead:
+
+- `-DXZ_SANDBOX=no` — the bundled xz refuses to configure with `-fsanitize=`
+  in the flags, because it is incompatible with Landlock sandboxing. It says
+  so, and names this option.
+- `-DBUILD_TESTING=ON` — without it no test target exists and
+  `--build --target <something>_test` fails with "unknown target".
+- `generate_version` first — the generated `imager_version.h` is a byproduct
+  of a custom target that the test targets do not depend on, so a fresh
+  sanitiser tree fails on the missing header until it has been made once.
+
+`detect_leaks=0` keeps Qt's static initialisers from burying the report.
+Leave leak detection on if that is what you are looking for.
+
+A race is a different question and wants `-fsanitize=thread` in place of
+`address`, in its own build directory — the two cannot be combined.
+
 ### Windows
 
 #### Get dependencies
