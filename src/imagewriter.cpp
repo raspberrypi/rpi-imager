@@ -996,6 +996,343 @@ QString ImageWriter::getHardwareName()
 }
 
 /* Start writing */
+// Wire up the freshly constructed DownloadThread.
+//
+// startWrite() and the continuation that resumes after cache verification
+// both built a thread and then configured it with the same three hundred
+// lines: the extract total, roughly thirty signal connections, the telemetry
+// events, verification, the user agent, the customisation payloads and every
+// debug switch. The two copies differed by a comment and the prefix on one
+// qDebug line, and nothing kept them in step -- which is how the empty-source
+// check came to exist on one write path and not the other.
+void ImageWriter::_configureWriteThread()
+{
+    // Set the extract size for accurate write progress (compressed images have larger extracted size)
+    _thread->setExtractTotal(_extrLen > 0 ? _extrLen : _downloadLen);
+
+    connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
+    connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
+    connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
+    connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+    connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
+    connect(_thread, &DownloadThread::ejectFinished, this, &ImageWriter::onEjectFinished);
+    // Ensure cleanup of thread pointer on finish in all paths
+    connect(_thread, &QThread::finished, this, [this]() {
+        if (_thread)
+        {
+            _thread->deleteLater();
+            _thread = nullptr;
+        }
+    });
+
+    // Connect to progress signals if this is a DownloadExtractThread
+    DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
+    if (downloadThread) {
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
+                this, &ImageWriter::downloadProgress);
+        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
+                this, &ImageWriter::writeProgress);
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
+                this, &ImageWriter::verifyProgress);
+        
+        // Connect async write progress signal for event-driven UI updates during WaitForPendingWrites
+        // This signal is emitted from IOCP completion callbacks, providing real-time progress
+        connect(downloadThread, &DownloadThread::asyncWriteProgress,
+                this, &ImageWriter::writeProgress, Qt::QueuedConnection);
+        
+        // Capture progress for performance stats (lightweight - just stores raw samples)
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordDownloadProgress(now, total);
+                });
+        connect(downloadThread, &DownloadExtractThread::decompressProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordDecompressProgress(now, total);
+                });
+        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordWriteProgress(now, total);
+                });
+        connect(downloadThread, &DownloadThread::asyncWriteProgress,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordWriteProgress(now, total);
+                }, Qt::QueuedConnection);
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordVerifyProgress(now, total);
+                });
+        
+        // Also transition state to Verifying when verify progress first arrives
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
+                this, [this](quint64 /*now*/, quint64 /*total*/){
+                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
+                        _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
+                        setWriteState(WriteState::Verifying);
+                });
+        
+        // Capture ring buffer stall events for time-series correlation
+        connect(downloadThread, &DownloadExtractThread::eventRingBufferStats,
+                this, [this](qint64 timestampMs, quint32 durationMs, QString metadata){
+                    // Record as an event with explicit startMs from the stall timestamp
+                    PerformanceStats::TimedEvent event;
+                    event.type = PerformanceStats::EventType::RingBufferStarvation;
+                    event.startMs = static_cast<uint32_t>(timestampMs);
+                    event.durationMs = durationMs;
+                    event.metadata = metadata;
+                    event.success = true;
+                    event.bytesTransferred = 0;
+                    _performanceStats->addEvent(event);
+                });
+        
+        // Pipeline timing summary events (emitted at end of extraction)
+        connect(downloadThread, &DownloadExtractThread::eventPipelineDecompressionTime,
+                this, [this](quint32 totalMs, quint64 bytesDecompressed){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineDecompressionTime,
+                        totalMs, bytesDecompressed, true,
+                        QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
+                });
+        connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
+                this, [this](quint32 totalMs, quint64 bytesRead){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineRingBufferWaitTime,
+                        totalMs, bytesRead, true,
+                        QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
+                });
+        connect(downloadThread, &DownloadExtractThread::eventWriteRingBufferStats,
+                this, [this](quint64 producerStalls, quint64 consumerStalls, 
+                             quint64 producerWaitMs, quint64 consumerWaitMs){
+                    QString metadata = QString("producer_stalls: %1 (%2 ms); consumer_stalls: %3 (%4 ms)")
+                        .arg(producerStalls).arg(producerWaitMs)
+                        .arg(consumerStalls).arg(consumerWaitMs);
+                    // Use combined wait time as duration for the event
+                    quint32 totalWaitMs = static_cast<quint32>(producerWaitMs + consumerWaitMs);
+                    _performanceStats->recordEvent(
+                        PerformanceStats::EventType::WriteRingBufferStats,
+                        totalWaitMs, true, metadata);
+                });
+    }
+    
+    // Connect performance event signals from DownloadThread
+    connect(_thread, &DownloadThread::eventDriveUnmount,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmount, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveUnmountVolumes,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmountVolumes, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveDiskClean,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveDiskClean, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveRescan,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveOpen,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventDriveAuthorization,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
+                // Start the progress watchdog only after device authorization completes.
+                // On macOS, authorization shows system dialogs (passkey + removable media access)
+                // that can take an indeterminate amount of time. Starting the watchdog earlier
+                // would cause false stall detection during this auth period. (#1511)
+                if (success && _progressWatchdog && _thread) {
+                    _progressWatchdog->start(_thread);
+                }
+            });
+    // Stop the watchdog before the post-write sync. The fdatasync/fsync can
+    // block for minutes on slow cards and no progress indicators advance during
+    // it, so the watchdog would otherwise fire a false stall timeout.
+    // BlockingQueuedConnection ensures the watchdog is stopped before the
+    // download thread enters fdatasync (safe — main thread never waits on
+    // the download thread during normal operation).
+    connect(_thread, &DownloadThread::finalSyncStarting,
+            this, [this](){
+                if (_progressWatchdog) {
+                    _progressWatchdog->stop();
+                }
+            }, Qt::BlockingQueuedConnection);
+    connect(_thread, &DownloadThread::eventDriveMbrZeroing,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventDirectIOAttempt,
+            this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
+                QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
+                    .arg(attempted ? "yes" : "no")
+                    .arg(succeeded ? "yes" : "no")
+                    .arg(currentlyEnabled ? "yes" : "no")
+                    .arg(errorCode)
+                    .arg(errorMessage.isEmpty() ? "none" : errorMessage);
+                _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
+                // Update systemInfo with actual direct I/O state now that we know it
+                _performanceStats->updateDirectIOEnabled(currentlyEnabled);
+            });
+    connect(_thread, &DownloadThread::eventCustomisation,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventCustomisationVerify,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::CustomisationVerify, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventFinalSync,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventVerify,
+            this, [this](quint32 durationMs, bool success, QByteArray writeHash, QByteArray verifyHash){
+                QString metadata = QString("Post-write verification; writeHash: %1; verifyHash: %2")
+                    .arg(QString::fromLatin1(writeHash), QString::fromLatin1(verifyHash));
+                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventPeriodicSync,
+            this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
+                QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
+                _performanceStats->recordEvent(PerformanceStats::EventType::PeriodicSync, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventImageExtraction,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::ImageExtraction, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventPartitionTableWrite,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::PartitionTableWrite, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventFatPartitionSetup,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FatPartitionSetup, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDeviceClose,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDeviceIOTimeout,
+            this, [this](quint32 pendingWrites, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
+                    30000, false, QString("pending=%1; %2").arg(pendingWrites).arg(metadata));
+            });
+    connect(_thread, &DownloadThread::eventQueueDepthReduction,
+            this, [this](int oldDepth, int newDepth, int pendingWrites){
+                _performanceStats->recordEvent(PerformanceStats::EventType::QueueDepthReduction, 0, true,
+                    QString("depth=%1->%2; pending=%3").arg(oldDepth).arg(newDepth).arg(pendingWrites));
+            });
+    connect(_thread, &DownloadThread::eventDrainAndHotSwap,
+            this, [this](quint32 durationMs, int pendingBefore, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DrainAndHotSwap, durationMs, success,
+                    QString("pending=%1").arg(pendingBefore));
+            });
+    connect(_thread, &DownloadThread::syncFallbackActivated,
+            this, [this](QString reason){
+                _performanceStats->recordEvent(PerformanceStats::EventType::SyncFallbackActivated, 0, true, reason);
+                emit operationWarning(reason);
+            });
+    connect(_thread, &DownloadThread::requestWriteRestart,
+            this, &ImageWriter::restartWrite);
+    connect(_thread, &DownloadThread::eventNetworkRetry,
+            this, [this](quint32 sleepMs, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventNetworkConnectionStats,
+            this, [this](QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
+            });
+    
+    // Write timing breakdown signals (for detailed hypothesis testing)
+    connect(_thread, &DownloadThread::eventWriteTimingBreakdown,
+            this, [this](quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
+                         quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount){
+                QString metadata = QString("writeOps: %1; syscallMs: %2; preHashWaitMs: %3; postHashWaitMs: %4; syncMs: %5; syncCount: %6")
+                    .arg(totalWriteOps).arg(totalSyscallMs).arg(totalPreHashWaitMs)
+                    .arg(totalPostHashWaitMs).arg(totalSyncMs).arg(syncCount);
+                // Use total time (syscall + hash waits) as duration
+                quint32 totalMs = static_cast<quint32>(totalSyscallMs + totalPreHashWaitMs + totalPostHashWaitMs);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteTimingBreakdown, totalMs, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventWriteSizeDistribution,
+            this, [this](quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount){
+                QString metadata = QString("minKB: %1; maxKB: %2; avgKB: %3; totalBytes: %4; count: %5")
+                    .arg(minSizeKB).arg(maxSizeKB).arg(avgSizeKB).arg(totalBytes).arg(writeCount);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteSizeDistribution, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventWriteAfterSyncImpact,
+            this, [this](quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount){
+                QString metadata = QString("beforeSyncKBps: %1; afterSyncKBps: %2; samples: %3")
+                    .arg(avgThroughputBeforeSyncKBps).arg(avgThroughputAfterSyncKBps).arg(sampleCount);
+                // Calculate the impact percentage (positive = degradation after sync)
+                int impactPercent = 0;
+                if (avgThroughputBeforeSyncKBps > 0) {
+                    impactPercent = static_cast<int>(100 * (static_cast<int>(avgThroughputBeforeSyncKBps) - static_cast<int>(avgThroughputAfterSyncKBps)) / static_cast<int>(avgThroughputBeforeSyncKBps));
+                }
+                metadata += QString("; impactPercent: %1").arg(impactPercent);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventAsyncIOConfig,
+            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
+                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
+                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
+                _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventAsyncIOTiming,
+            this, [this](quint32 totalMs, quint64 bytesWritten, quint32 writeCount){
+                QString metadata = QString("wallClockMs: %1; bytesWritten: %2 MB; writeCount: %3")
+                    .arg(totalMs).arg(bytesWritten / (1024*1024)).arg(writeCount);
+                _performanceStats->recordTransferEvent(
+                    PerformanceStats::EventType::AsyncIOTiming,
+                    totalMs, bytesWritten, true, metadata);
+            });
+    
+    // Forward bottleneck state to QML for UI feedback
+    connect(_thread, &DownloadThread::bottleneckStateChanged,
+            this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
+                QString statusText;
+                switch (state) {
+                    case DownloadThread::BottleneckState::None:
+                        statusText = "";
+                        break;
+                    case DownloadThread::BottleneckState::Network:
+                        statusText = tr("Limited by download speed");
+                        break;
+                    case DownloadThread::BottleneckState::Decompression:
+                        statusText = tr("Limited by decompression speed");
+                        break;
+                    case DownloadThread::BottleneckState::Storage:
+                        statusText = tr("Limited by storage device speed");
+                        break;
+                    case DownloadThread::BottleneckState::Verifying:
+                        statusText = tr("Verifying written data");
+                        break;
+                }
+                emit bottleneckStatusChanged(statusText, throughputKBps);
+            });
+
+    _thread->setVerifyEnabled(_verifyEnabled);
+    // Single source of truth for the User-Agent: CurlNetworkConfig (also used by
+    // all the libcurl fetch paths via applyCurlSettings) so it can never drift.
+    _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
+    qDebug() << "configureWriteThread: passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
+    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    
+    // Pass debug options to the thread
+    _thread->setDebugDirectIO(_debugDirectIO);
+    _thread->setDebugPeriodicSync(_debugPeriodicSync);
+    _thread->setDebugVerboseLogging(_debugVerboseLogging);
+    // Disable async I/O if forced to sync mode (due to previous recovery)
+    _thread->setDebugAsyncIO(_debugAsyncIO && !_forceSyncMode);
+    if (_forceSyncMode) {
+        qDebug() << "Compatibility mode active - using synchronous I/O";
+    }
+    _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
+    _thread->setDebugIPv4Only(_debugIPv4Only);
+    _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
+    _thread->setDebugIgnoreDeviceLimits(_debugIgnoreDeviceLimits);
+}
+
 // Which kind of write this is going to be.
 //
 // Extracted from the head of startWrite() so the precedence can be tested.
@@ -1474,330 +1811,7 @@ void ImageWriter::startWrite()
         return;
     }
 
-    // Set the extract size for accurate write progress (compressed images have larger extracted size)
-    _thread->setExtractTotal(_extrLen > 0 ? _extrLen : _downloadLen);
-
-    connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
-    connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
-    connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
-    connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
-    connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
-    connect(_thread, &DownloadThread::ejectFinished, this, &ImageWriter::onEjectFinished);
-    // Ensure cleanup of thread pointer on finish in all paths
-    connect(_thread, &QThread::finished, this, [this]() {
-        if (_thread)
-        {
-            _thread->deleteLater();
-            _thread = nullptr;
-        }
-    });
-
-    // Connect to progress signals if this is a DownloadExtractThread
-    DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
-    if (downloadThread) {
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
-                this, &ImageWriter::downloadProgress);
-        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
-                this, &ImageWriter::writeProgress);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, &ImageWriter::verifyProgress);
-        
-        // Connect async write progress signal for event-driven UI updates during WaitForPendingWrites
-        // This signal is emitted from IOCP completion callbacks, providing real-time progress
-        connect(downloadThread, &DownloadThread::asyncWriteProgress,
-                this, &ImageWriter::writeProgress, Qt::QueuedConnection);
-        
-        // Capture progress for performance stats (lightweight - just stores raw samples)
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDownloadProgress(now, total);
-                });
-        connect(downloadThread, &DownloadExtractThread::decompressProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDecompressProgress(now, total);
-                });
-        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                });
-        connect(downloadThread, &DownloadThread::asyncWriteProgress,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                }, Qt::QueuedConnection);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordVerifyProgress(now, total);
-                });
-        
-        // Also transition state to Verifying when verify progress first arrives
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, [this](quint64 /*now*/, quint64 /*total*/){
-                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
-                        _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
-                        setWriteState(WriteState::Verifying);
-                });
-        
-        // Capture ring buffer stall events for time-series correlation
-        connect(downloadThread, &DownloadExtractThread::eventRingBufferStats,
-                this, [this](qint64 timestampMs, quint32 durationMs, QString metadata){
-                    // Record as an event with explicit startMs from the stall timestamp
-                    PerformanceStats::TimedEvent event;
-                    event.type = PerformanceStats::EventType::RingBufferStarvation;
-                    event.startMs = static_cast<uint32_t>(timestampMs);
-                    event.durationMs = durationMs;
-                    event.metadata = metadata;
-                    event.success = true;
-                    event.bytesTransferred = 0;
-                    _performanceStats->addEvent(event);
-                });
-        
-        // Pipeline timing summary events (emitted at end of extraction)
-        connect(downloadThread, &DownloadExtractThread::eventPipelineDecompressionTime,
-                this, [this](quint32 totalMs, quint64 bytesDecompressed){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineDecompressionTime,
-                        totalMs, bytesDecompressed, true,
-                        QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
-                });
-        connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
-                this, [this](quint32 totalMs, quint64 bytesRead){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineRingBufferWaitTime,
-                        totalMs, bytesRead, true,
-                        QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
-                });
-        connect(downloadThread, &DownloadExtractThread::eventWriteRingBufferStats,
-                this, [this](quint64 producerStalls, quint64 consumerStalls, 
-                             quint64 producerWaitMs, quint64 consumerWaitMs){
-                    QString metadata = QString("producer_stalls: %1 (%2 ms); consumer_stalls: %3 (%4 ms)")
-                        .arg(producerStalls).arg(producerWaitMs)
-                        .arg(consumerStalls).arg(consumerWaitMs);
-                    // Use combined wait time as duration for the event
-                    quint32 totalWaitMs = static_cast<quint32>(producerWaitMs + consumerWaitMs);
-                    _performanceStats->recordEvent(
-                        PerformanceStats::EventType::WriteRingBufferStats,
-                        totalWaitMs, true, metadata);
-                });
-    }
-    
-    // Connect performance event signals from DownloadThread
-    connect(_thread, &DownloadThread::eventDriveUnmount,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmount, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveUnmountVolumes,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmountVolumes, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveDiskClean,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveDiskClean, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveRescan,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveOpen,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventDriveAuthorization,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
-                // Start the progress watchdog only after device authorization completes.
-                // On macOS, authorization shows system dialogs (passkey + removable media access)
-                // that can take an indeterminate amount of time. Starting the watchdog earlier
-                // would cause false stall detection during this auth period. (#1511)
-                if (success && _progressWatchdog && _thread) {
-                    _progressWatchdog->start(_thread);
-                }
-            });
-    // Stop the watchdog before the post-write sync. The fdatasync/fsync can
-    // block for minutes on slow cards and no progress indicators advance during
-    // it, so the watchdog would otherwise fire a false stall timeout.
-    // BlockingQueuedConnection ensures the watchdog is stopped before the
-    // download thread enters fdatasync (safe — main thread never waits on
-    // the download thread during normal operation).
-    connect(_thread, &DownloadThread::finalSyncStarting,
-            this, [this](){
-                if (_progressWatchdog) {
-                    _progressWatchdog->stop();
-                }
-            }, Qt::BlockingQueuedConnection);
-    connect(_thread, &DownloadThread::eventDriveMbrZeroing,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventDirectIOAttempt,
-            this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
-                QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
-                    .arg(attempted ? "yes" : "no")
-                    .arg(succeeded ? "yes" : "no")
-                    .arg(currentlyEnabled ? "yes" : "no")
-                    .arg(errorCode)
-                    .arg(errorMessage.isEmpty() ? "none" : errorMessage);
-                _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
-                // Update systemInfo with actual direct I/O state now that we know it
-                _performanceStats->updateDirectIOEnabled(currentlyEnabled);
-            });
-    connect(_thread, &DownloadThread::eventCustomisation,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventCustomisationVerify,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::CustomisationVerify, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventFinalSync,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventVerify,
-            this, [this](quint32 durationMs, bool success, QByteArray writeHash, QByteArray verifyHash){
-                QString metadata = QString("Post-write verification; writeHash: %1; verifyHash: %2")
-                    .arg(QString::fromLatin1(writeHash), QString::fromLatin1(verifyHash));
-                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventPeriodicSync,
-            this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
-                QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
-                _performanceStats->recordEvent(PerformanceStats::EventType::PeriodicSync, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventImageExtraction,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::ImageExtraction, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventPartitionTableWrite,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::PartitionTableWrite, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventFatPartitionSetup,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FatPartitionSetup, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDeviceClose,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDeviceIOTimeout,
-            this, [this](quint32 pendingWrites, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
-                    30000, false, QString("pending=%1; %2").arg(pendingWrites).arg(metadata));
-            });
-    connect(_thread, &DownloadThread::eventQueueDepthReduction,
-            this, [this](int oldDepth, int newDepth, int pendingWrites){
-                _performanceStats->recordEvent(PerformanceStats::EventType::QueueDepthReduction, 0, true,
-                    QString("depth=%1->%2; pending=%3").arg(oldDepth).arg(newDepth).arg(pendingWrites));
-            });
-    connect(_thread, &DownloadThread::eventDrainAndHotSwap,
-            this, [this](quint32 durationMs, int pendingBefore, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DrainAndHotSwap, durationMs, success,
-                    QString("pending=%1").arg(pendingBefore));
-            });
-    connect(_thread, &DownloadThread::syncFallbackActivated,
-            this, [this](QString reason){
-                _performanceStats->recordEvent(PerformanceStats::EventType::SyncFallbackActivated, 0, true, reason);
-                emit operationWarning(reason);
-            });
-    connect(_thread, &DownloadThread::requestWriteRestart,
-            this, &ImageWriter::restartWrite);
-    connect(_thread, &DownloadThread::eventNetworkRetry,
-            this, [this](quint32 sleepMs, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventNetworkConnectionStats,
-            this, [this](QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
-            });
-    
-    // Write timing breakdown signals (for detailed hypothesis testing)
-    connect(_thread, &DownloadThread::eventWriteTimingBreakdown,
-            this, [this](quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
-                         quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount){
-                QString metadata = QString("writeOps: %1; syscallMs: %2; preHashWaitMs: %3; postHashWaitMs: %4; syncMs: %5; syncCount: %6")
-                    .arg(totalWriteOps).arg(totalSyscallMs).arg(totalPreHashWaitMs)
-                    .arg(totalPostHashWaitMs).arg(totalSyncMs).arg(syncCount);
-                // Use total time (syscall + hash waits) as duration
-                quint32 totalMs = static_cast<quint32>(totalSyscallMs + totalPreHashWaitMs + totalPostHashWaitMs);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteTimingBreakdown, totalMs, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventWriteSizeDistribution,
-            this, [this](quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount){
-                QString metadata = QString("minKB: %1; maxKB: %2; avgKB: %3; totalBytes: %4; count: %5")
-                    .arg(minSizeKB).arg(maxSizeKB).arg(avgSizeKB).arg(totalBytes).arg(writeCount);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteSizeDistribution, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventWriteAfterSyncImpact,
-            this, [this](quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount){
-                QString metadata = QString("beforeSyncKBps: %1; afterSyncKBps: %2; samples: %3")
-                    .arg(avgThroughputBeforeSyncKBps).arg(avgThroughputAfterSyncKBps).arg(sampleCount);
-                // Calculate the impact percentage (positive = degradation after sync)
-                int impactPercent = 0;
-                if (avgThroughputBeforeSyncKBps > 0) {
-                    impactPercent = static_cast<int>(100 * (static_cast<int>(avgThroughputBeforeSyncKBps) - static_cast<int>(avgThroughputAfterSyncKBps)) / static_cast<int>(avgThroughputBeforeSyncKBps));
-                }
-                metadata += QString("; impactPercent: %1").arg(impactPercent);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventAsyncIOConfig,
-            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
-                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
-                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
-                _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventAsyncIOTiming,
-            this, [this](quint32 totalMs, quint64 bytesWritten, quint32 writeCount){
-                QString metadata = QString("wallClockMs: %1; bytesWritten: %2 MB; writeCount: %3")
-                    .arg(totalMs).arg(bytesWritten / (1024*1024)).arg(writeCount);
-                _performanceStats->recordTransferEvent(
-                    PerformanceStats::EventType::AsyncIOTiming,
-                    totalMs, bytesWritten, true, metadata);
-            });
-    
-    // Forward bottleneck state to QML for UI feedback
-    connect(_thread, &DownloadThread::bottleneckStateChanged,
-            this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
-                QString statusText;
-                switch (state) {
-                    case DownloadThread::BottleneckState::None:
-                        statusText = "";
-                        break;
-                    case DownloadThread::BottleneckState::Network:
-                        statusText = tr("Limited by download speed");
-                        break;
-                    case DownloadThread::BottleneckState::Decompression:
-                        statusText = tr("Limited by decompression speed");
-                        break;
-                    case DownloadThread::BottleneckState::Storage:
-                        statusText = tr("Limited by storage device speed");
-                        break;
-                    case DownloadThread::BottleneckState::Verifying:
-                        statusText = tr("Verifying written data");
-                        break;
-                }
-                emit bottleneckStatusChanged(statusText, throughputKBps);
-            });
-
-    _thread->setVerifyEnabled(_verifyEnabled);
-    // Single source of truth for the User-Agent: CurlNetworkConfig (also used by
-    // all the libcurl fetch paths via applyCurlSettings) so it can never drift.
-    _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
-    qDebug() << "startWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
-    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
-    
-    // Pass debug options to the thread
-    _thread->setDebugDirectIO(_debugDirectIO);
-    _thread->setDebugPeriodicSync(_debugPeriodicSync);
-    _thread->setDebugVerboseLogging(_debugVerboseLogging);
-    // Disable async I/O if forced to sync mode (due to previous recovery)
-    _thread->setDebugAsyncIO(_debugAsyncIO && !_forceSyncMode);
-    if (_forceSyncMode) {
-        qDebug() << "Compatibility mode active - using synchronous I/O";
-    }
-    _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
-    _thread->setDebugIPv4Only(_debugIPv4Only);
-    _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
-    _thread->setDebugIgnoreDeviceLimits(_debugIgnoreDeviceLimits);
+    _configureWriteThread();
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -4547,329 +4561,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         }
     }
 
-    // Set the extract size for accurate write progress (compressed images have larger extracted size)
-    _thread->setExtractTotal(_extrLen > 0 ? _extrLen : _downloadLen);
-
-    connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
-    connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
-    connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
-    connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
-    connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
-    connect(_thread, &DownloadThread::ejectFinished, this, &ImageWriter::onEjectFinished);
-    // Ensure cleanup of thread pointer on finish in all paths
-    connect(_thread, &QThread::finished, this, [this]() {
-        if (_thread)
-        {
-            _thread->deleteLater();
-            _thread = nullptr;
-        }
-    });
-
-    // Connect to progress signals if this is a DownloadExtractThread
-    DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
-    if (downloadThread) {
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
-                this, &ImageWriter::downloadProgress);
-        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
-                this, &ImageWriter::writeProgress);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, &ImageWriter::verifyProgress);
-        
-        // Connect async write progress signal for event-driven UI updates during WaitForPendingWrites
-        // This signal is emitted from IOCP completion callbacks, providing real-time progress
-        connect(downloadThread, &DownloadThread::asyncWriteProgress,
-                this, &ImageWriter::writeProgress, Qt::QueuedConnection);
-        
-        // Capture progress for performance stats (lightweight - just stores raw samples)
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDownloadProgress(now, total);
-                });
-        connect(downloadThread, &DownloadExtractThread::decompressProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDecompressProgress(now, total);
-                });
-        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                });
-        connect(downloadThread, &DownloadThread::asyncWriteProgress,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                }, Qt::QueuedConnection);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordVerifyProgress(now, total);
-                });
-        
-        // Also transition state to Verifying when verify progress first arrives
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, [this](quint64 /*now*/, quint64 /*total*/){
-                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
-                        _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
-                        setWriteState(WriteState::Verifying);
-                });
-        
-        // Capture ring buffer stall events for time-series correlation
-        connect(downloadThread, &DownloadExtractThread::eventRingBufferStats,
-                this, [this](qint64 timestampMs, quint32 durationMs, QString metadata){
-                    // Record as an event with explicit startMs from the stall timestamp
-                    PerformanceStats::TimedEvent event;
-                    event.type = PerformanceStats::EventType::RingBufferStarvation;
-                    event.startMs = static_cast<uint32_t>(timestampMs);
-                    event.durationMs = durationMs;
-                    event.metadata = metadata;
-                    event.success = true;
-                    event.bytesTransferred = 0;
-                    _performanceStats->addEvent(event);
-                });
-        
-        // Pipeline timing summary events (emitted at end of extraction)
-        connect(downloadThread, &DownloadExtractThread::eventPipelineDecompressionTime,
-                this, [this](quint32 totalMs, quint64 bytesDecompressed){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineDecompressionTime,
-                        totalMs, bytesDecompressed, true,
-                        QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
-                });
-        connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
-                this, [this](quint32 totalMs, quint64 bytesRead){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineRingBufferWaitTime,
-                        totalMs, bytesRead, true,
-                        QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
-                });
-        connect(downloadThread, &DownloadExtractThread::eventWriteRingBufferStats,
-                this, [this](quint64 producerStalls, quint64 consumerStalls, 
-                             quint64 producerWaitMs, quint64 consumerWaitMs){
-                    QString metadata = QString("producer_stalls: %1 (%2 ms); consumer_stalls: %3 (%4 ms)")
-                        .arg(producerStalls).arg(producerWaitMs)
-                        .arg(consumerStalls).arg(consumerWaitMs);
-                    // Use combined wait time as duration for the event
-                    quint32 totalWaitMs = static_cast<quint32>(producerWaitMs + consumerWaitMs);
-                    _performanceStats->recordEvent(
-                        PerformanceStats::EventType::WriteRingBufferStats,
-                        totalWaitMs, true, metadata);
-                });
-    }
-    
-    // Connect performance event signals from DownloadThread
-    connect(_thread, &DownloadThread::eventDriveUnmount,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmount, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveUnmountVolumes,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmountVolumes, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveDiskClean,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveDiskClean, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveRescan,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveOpen,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventDriveAuthorization,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
-                // Start the progress watchdog only after device authorization completes.
-                // On macOS, authorization shows system dialogs (passkey + removable media access)
-                // that can take an indeterminate amount of time. Starting the watchdog earlier
-                // would cause false stall detection during this auth period. (#1511)
-                if (success && _progressWatchdog && _thread) {
-                    _progressWatchdog->start(_thread);
-                }
-            });
-    // Stop the watchdog before the post-write sync. The fdatasync/fsync can
-    // block for minutes on slow cards and no progress indicators advance during
-    // it, so the watchdog would otherwise fire a false stall timeout.
-    // BlockingQueuedConnection ensures the watchdog is stopped before the
-    // download thread enters fdatasync (safe — main thread never waits on
-    // the download thread during normal operation).
-    connect(_thread, &DownloadThread::finalSyncStarting,
-            this, [this](){
-                if (_progressWatchdog) {
-                    _progressWatchdog->stop();
-                }
-            }, Qt::BlockingQueuedConnection);
-    connect(_thread, &DownloadThread::eventDriveMbrZeroing,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventDirectIOAttempt,
-            this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
-                QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
-                    .arg(attempted ? "yes" : "no")
-                    .arg(succeeded ? "yes" : "no")
-                    .arg(currentlyEnabled ? "yes" : "no")
-                    .arg(errorCode)
-                    .arg(errorMessage.isEmpty() ? "none" : errorMessage);
-                _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
-                // Update systemInfo with actual direct I/O state now that we know it
-                _performanceStats->updateDirectIOEnabled(currentlyEnabled);
-            });
-    connect(_thread, &DownloadThread::eventCustomisation,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventCustomisationVerify,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::CustomisationVerify, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventFinalSync,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventVerify,
-            this, [this](quint32 durationMs, bool success, QByteArray writeHash, QByteArray verifyHash){
-                QString metadata = QString("Post-write verification; writeHash: %1; verifyHash: %2")
-                    .arg(QString::fromLatin1(writeHash), QString::fromLatin1(verifyHash));
-                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventPeriodicSync,
-            this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
-                QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
-                _performanceStats->recordEvent(PerformanceStats::EventType::PeriodicSync, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventImageExtraction,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::ImageExtraction, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventPartitionTableWrite,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::PartitionTableWrite, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventFatPartitionSetup,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FatPartitionSetup, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDeviceClose,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDeviceIOTimeout,
-            this, [this](quint32 pendingWrites, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
-                    30000, false, QString("pending=%1; %2").arg(pendingWrites).arg(metadata));
-            });
-    connect(_thread, &DownloadThread::eventQueueDepthReduction,
-            this, [this](int oldDepth, int newDepth, int pendingWrites){
-                _performanceStats->recordEvent(PerformanceStats::EventType::QueueDepthReduction, 0, true,
-                    QString("depth=%1->%2; pending=%3").arg(oldDepth).arg(newDepth).arg(pendingWrites));
-            });
-    connect(_thread, &DownloadThread::eventDrainAndHotSwap,
-            this, [this](quint32 durationMs, int pendingBefore, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DrainAndHotSwap, durationMs, success,
-                    QString("pending=%1").arg(pendingBefore));
-            });
-    connect(_thread, &DownloadThread::syncFallbackActivated,
-            this, [this](QString reason){
-                _performanceStats->recordEvent(PerformanceStats::EventType::SyncFallbackActivated, 0, true, reason);
-                emit operationWarning(reason);
-            });
-    connect(_thread, &DownloadThread::requestWriteRestart,
-            this, &ImageWriter::restartWrite);
-    connect(_thread, &DownloadThread::eventNetworkRetry,
-            this, [this](quint32 sleepMs, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventNetworkConnectionStats,
-            this, [this](QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
-            });
-    
-    // Write timing breakdown signals (for detailed hypothesis testing)
-    connect(_thread, &DownloadThread::eventWriteTimingBreakdown,
-            this, [this](quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
-                         quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount){
-                QString metadata = QString("writeOps: %1; syscallMs: %2; preHashWaitMs: %3; postHashWaitMs: %4; syncMs: %5; syncCount: %6")
-                    .arg(totalWriteOps).arg(totalSyscallMs).arg(totalPreHashWaitMs)
-                    .arg(totalPostHashWaitMs).arg(totalSyncMs).arg(syncCount);
-                // Use total time (syscall + hash waits) as duration
-                quint32 totalMs = static_cast<quint32>(totalSyscallMs + totalPreHashWaitMs + totalPostHashWaitMs);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteTimingBreakdown, totalMs, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventWriteSizeDistribution,
-            this, [this](quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount){
-                QString metadata = QString("minKB: %1; maxKB: %2; avgKB: %3; totalBytes: %4; count: %5")
-                    .arg(minSizeKB).arg(maxSizeKB).arg(avgSizeKB).arg(totalBytes).arg(writeCount);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteSizeDistribution, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventWriteAfterSyncImpact,
-            this, [this](quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount){
-                QString metadata = QString("beforeSyncKBps: %1; afterSyncKBps: %2; samples: %3")
-                    .arg(avgThroughputBeforeSyncKBps).arg(avgThroughputAfterSyncKBps).arg(sampleCount);
-                // Calculate the impact percentage (positive = degradation after sync)
-                int impactPercent = 0;
-                if (avgThroughputBeforeSyncKBps > 0) {
-                    impactPercent = static_cast<int>(100 * (static_cast<int>(avgThroughputBeforeSyncKBps) - static_cast<int>(avgThroughputAfterSyncKBps)) / static_cast<int>(avgThroughputBeforeSyncKBps));
-                }
-                metadata += QString("; impactPercent: %1").arg(impactPercent);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventAsyncIOConfig,
-            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
-                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
-                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
-                _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventAsyncIOTiming,
-            this, [this](quint32 totalMs, quint64 bytesWritten, quint32 writeCount){
-                QString metadata = QString("wallClockMs: %1; bytesWritten: %2 MB; writeCount: %3")
-                    .arg(totalMs).arg(bytesWritten / (1024*1024)).arg(writeCount);
-                _performanceStats->recordTransferEvent(
-                    PerformanceStats::EventType::AsyncIOTiming,
-                    totalMs, bytesWritten, true, metadata);
-            });
-    
-    // Forward bottleneck state to QML for UI feedback
-    connect(_thread, &DownloadThread::bottleneckStateChanged,
-            this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
-                QString statusText;
-                switch (state) {
-                    case DownloadThread::BottleneckState::None:
-                        statusText = "";
-                        break;
-                    case DownloadThread::BottleneckState::Network:
-                        statusText = tr("Limited by download speed");
-                        break;
-                    case DownloadThread::BottleneckState::Decompression:
-                        statusText = tr("Limited by decompression speed");
-                        break;
-                    case DownloadThread::BottleneckState::Storage:
-                        statusText = tr("Limited by storage device speed");
-                        break;
-                    case DownloadThread::BottleneckState::Verifying:
-                        statusText = tr("Verifying written data");
-                        break;
-                }
-                emit bottleneckStatusChanged(statusText, throughputKBps);
-            });
-
-    _thread->setVerifyEnabled(_verifyEnabled);
-    // Single source of truth for the User-Agent (see startWrite).
-    _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
-    qDebug() << "_continueStartWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
-    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
-    
-    // Pass debug options to the thread
-    _thread->setDebugDirectIO(_debugDirectIO);
-    _thread->setDebugPeriodicSync(_debugPeriodicSync);
-    _thread->setDebugVerboseLogging(_debugVerboseLogging);
-    // Disable async I/O if forced to sync mode (due to previous recovery)
-    _thread->setDebugAsyncIO(_debugAsyncIO && !_forceSyncMode);
-    if (_forceSyncMode) {
-        qDebug() << "Compatibility mode active - using synchronous I/O";
-    }
-    _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
-    _thread->setDebugIPv4Only(_debugIPv4Only);
-    _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
-    _thread->setDebugIgnoreDeviceLimits(_debugIgnoreDeviceLimits);
+    _configureWriteThread();
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)

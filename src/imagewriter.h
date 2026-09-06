@@ -278,6 +278,11 @@ public:
     /// cannot drift apart again.
     QString _localSourceError(const QString &localPath) const;
 
+    /// Configure the freshly constructed _thread: signals, telemetry,
+    /// customisation and debug switches. Shared by startWrite() and the
+    /// post-cache-verification continuation, which each had their own copy.
+    void _configureWriteThread();
+
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
 
