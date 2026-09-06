@@ -4565,6 +4565,19 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)
+    //
+    // startWrite() asks this differently -- !QUrl(urlstr).isLocalFile() rather
+    // than !cacheIsValid -- and the two disagree in one reachable case: a
+    // local source with an expected hash, which the CLI allows
+    // (`--sha256 <hash> /path/image.img`), where a stale cache for that hash
+    // sends us here with cacheIsValid false and urlstr still pointing at the
+    // user's own file. This branch then sets up a download cache for a file
+    // already on disk and copies it into the cache for nothing.
+    //
+    // Left as it is rather than quietly aligned: which of the two is right is
+    // a question about whether a local source should ever populate the cache,
+    // and the answer belongs to whoever owns that behaviour. The cost today is
+    // disk space, not a bad write.
     if (!_expectedHash.isEmpty() && !cacheIsValid)
     {
         // Use CacheManager to setup cache for download
