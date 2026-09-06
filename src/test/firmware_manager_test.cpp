@@ -390,13 +390,30 @@ TEST_CASE("FirmwareManager does not accept one chip's cache for another", "[firm
 
 TEST_CASE("FirmwareManager finds nothing in an unpopulated cache", "[firmware]")
 {
-    TestableFirmwareManager fm;
+    // This ran against the real cache root, so it could only assert that
+    // nothing threw -- the answer depended on whether the developer had
+    // sideloaded recently. Pointed at an empty directory of its own it can
+    // say what the name claims, and it stops reading the user's cache.
+    class EmptyCacheManager : public TestableFirmwareManager
+    {
+    public:
+        EmptyCacheManager() { REQUIRE(_dir.isValid()); }
+        std::filesystem::path cacheRoot() const override
+        {
+            return std::filesystem::path(_dir.path().toStdString()) / "empty-cache";
+        }
+    private:
+        QTemporaryDir _dir;
+    };
 
-    // Whatever is or is not in the real cache directory, this must answer
-    // rather than throw -- it runs before every sideload.
-    CHECK_NOTHROW(fm.findCachedVersion(SideloadMode::Fastboot, ChipGeneration::BCM2712));
-    CHECK_NOTHROW(fm.findCachedVersion(SideloadMode::SecureBootRecovery,
-                                       ChipGeneration::BCM2711));
+    EmptyCacheManager fm;
+
+    CHECK_FALSE(fm.findCachedVersion(SideloadMode::Fastboot,
+                                     ChipGeneration::BCM2712).has_value());
+    CHECK_FALSE(fm.findCachedVersion(SideloadMode::SecureBootRecovery,
+                                     ChipGeneration::BCM2711).has_value());
+    CHECK_FALSE(fm.findCachedVersion(SideloadMode::Fastboot,
+                                     ChipGeneration::BCM2711).has_value());
 }
 
 // ---------------------------------------------------------------------------

@@ -239,7 +239,22 @@ TEST_CASE("CacheManager updates the recorded cache hashes", "[cache-manager]")
 
     // Both are recorded: a cached .xz is looked up by the archive hash but
     // has to be verified against the image hash once expanded.
-    CHECK_NOTHROW(manager.updateCacheFile(uncompressed, compressed));
+    //
+    // Which of the two goes out to the UI is the point, and it was not
+    // checked. The signal carries the uncompressed hash, because that is what
+    // the OS list holds and what a cache hit is matched against; sending the
+    // archive hash instead would leave every cached image looking like a miss
+    // and quietly re-downloading. The two are easy to transpose and nothing
+    // here would have noticed.
+    QList<QByteArray> announced;
+    QObject::connect(&manager, &CacheManager::cacheFileUpdated, &manager,
+                     [&announced](const QByteArray &hash) { announced << hash; });
+
+    manager.updateCacheFile(uncompressed, compressed);
+
+    REQUIRE(announced.size() == 1);
+    CHECK(announced.first() == uncompressed);
+    CHECK(announced.first() != compressed);
 }
 
 // ---------------------------------------------------------------------------
