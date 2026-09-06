@@ -599,6 +599,51 @@ add_custom_target(test_eeprom_signer
     COMMENT "Running EEPROM signer tests"
 )
 
+# Tests for the real libusb transport, run against an emulated USB device
+# (see rpiboot_usb_device_test.cpp and data/usb_gadget_emulator.sh). Kept
+# separate from rpiboot_integration_test because that one wants a Compute
+# Module plugged in and these bring their own; they skip with a reason when
+# the machine cannot emulate one.
+add_executable(rpiboot_usb_device_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/usb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/libusb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/libusb_transport.cpp
+    rpiboot_usb_device_test.cpp
+)
+
+target_link_libraries(rpiboot_usb_device_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${LIBUSB_LIBRARIES}
+)
+
+target_include_directories(rpiboot_usb_device_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${LIBUSB_INCLUDE_DIR}
+)
+
+target_compile_definitions(rpiboot_usb_device_test PRIVATE
+    IMAGER_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+
+target_compile_features(rpiboot_usb_device_test PRIVATE cxx_std_20)
+target_compile_options(rpiboot_usb_device_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+# Not rpi_discover_tests: every case here brings the same emulated device up
+# and takes it down again, so two of them running at once under `ctest -j`
+# would pull the device out from under each other. The resource lock makes
+# ctest run them one at a time while still allowing the rest of the suite to
+# run alongside.
+catch_discover_tests(rpiboot_usb_device_test
+    PROPERTIES
+        SKIP_RETURN_CODE 4
+        RESOURCE_LOCK usb_gadget_emulator
+        TIMEOUT 300
+)
+
 # Hardware integration tests (gated by RPIBOOT_TEST_DEVICE env var)
 add_executable(rpiboot_integration_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h

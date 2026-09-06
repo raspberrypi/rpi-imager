@@ -116,6 +116,50 @@ succeeds and then CMake's test discovery fails, because it runs each
 executable to enumerate its cases. A 4 KB-page kernel is the way round it.
 AddressSanitizer has no such restriction and runs fine there.
 
+#### Run the Compute Module tests without a Compute Module
+
+`rpiboot_usb_device_test` exercises the real libusb transport
+(`src/rpiboot/libusb_transport.cpp`) against a USB device that does not
+exist. Two in-tree kernel modules make that possible:
+
+- `usbip-vudc` is a USB device controller implemented in software. A gadget
+  bound to it behaves like a device plugged into a port that is not there.
+- `vhci-hcd` is a USB host controller implemented in software, which attaches
+  a usbip-exported device to this machine's USB tree.
+
+Pointing the second at the first loops the emulated device back to the host
+that created it. It then appears in `lsusb`, in `/dev/bus/usb`, and to libusb
+as an ordinary device — the USB stack is not pretending, from its point of
+view the device is real. The descriptors come from configfs, so the vendor ID,
+product ID and interface count are ours to set, which is the part that matters:
+it makes the code that decides *which Compute Module this is*, and therefore
+which firmware to send it, testable at all.
+
+`src/test/data/usb_gadget_emulator.sh` does the setup and the tests call it.
+It needs root and the usbip tools:
+
+```
+sudo apt install usbip
+```
+
+The tests skip with a reason when it cannot run — not root, no usbip, modules
+unavailable — so an ordinary unprivileged `ctest` run stays green and simply
+does not cover that file. To run them:
+
+```
+sudo ctest --test-dir build -R "Compute Module|interface descriptor"
+```
+
+They hold a `RESOURCE_LOCK`, so `ctest -j` runs them one at a time while the
+rest of the suite continues in parallel. Each case brings the gadget up and
+takes it down again; a run that is interrupted partway can leave one behind,
+and `sudo src/test/data/usb_gadget_emulator.sh down` clears it.
+
+Nothing here touches a block device. The gadget's function is `Loopback`,
+chosen because it is the one in-tree function that presents bulk endpoints
+without also pretending to be storage — and because it echoes what it is
+sent, which is what lets the bulk transfer tests check a real round trip.
+
 ### Windows
 
 #### Get dependencies
