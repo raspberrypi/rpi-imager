@@ -35,6 +35,9 @@
 #include "rpiboot/rpiboot_types.h"
 #include "sparse_decode.h"
 
+#include <archive.h>
+#include <archive_entry.h>
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -1318,6 +1321,74 @@ TEST_CASE("A boot partition that will not mount stops the write being a success"
     REQUIRE_FALSE(log.errors.isEmpty());
     INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
     CHECK_THAT(log.errors.last().toStdString(), ContainsSubstring("mount"));
+}
+
+TEST_CASE("An image that ends early is refused, not flashed as far as it got",
+          "[fastboot][flash][pipeline]")
+{
+    // A download that stopped partway. The decompressor's read loop ended on
+    // the first non-OK return whatever it was, and then told the consumer the
+    // stream had finished normally, so the device was flashed with as much of
+    // the image as arrived and the write completed. A catalogue image is
+    // caught after the fact by its hash; one supplied without a hash is not.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    // Incompressible on purpose: the ordinary pattern squeezes 2 MiB down to
+    // under a kilobyte, and truncating that removes no image content worth
+    // speaking of. This keeps the compressed stream about the size of the
+    // image, so cutting it short really does lose most of the data.
+    std::vector<uint8_t> image(2 * 1024 * 1024);
+    {
+        uint64_t x = 0x9E3779B97F4A7C15ull;
+        for (auto &b : image) {
+            x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+            b = static_cast<uint8_t>(x & 0xFF);
+        }
+    }
+
+    std::vector<uint8_t> compressed(8 * 1024 * 1024);
+    size_t used = 0;
+    {
+        archive *w = archive_write_new();
+        REQUIRE(archive_write_add_filter_xz(w) == ARCHIVE_OK);
+        REQUIRE(archive_write_set_format_raw(w) == ARCHIVE_OK);
+        REQUIRE(archive_write_open_memory(w, compressed.data(), compressed.size(), &used)
+                == ARCHIVE_OK);
+
+        archive_entry *e = archive_entry_new();
+        archive_entry_set_pathname(e, "os.img");
+        archive_entry_set_size(e, static_cast<la_int64_t>(image.size()));
+        archive_entry_set_filetype(e, AE_IFREG);
+        REQUIRE(archive_write_header(w, e) == ARCHIVE_OK);
+        REQUIRE(archive_write_data(w, image.data(), image.size())
+                == static_cast<la_ssize_t>(image.size()));
+        archive_entry_free(e);
+        REQUIRE(archive_write_close(w) == ARCHIVE_OK);
+        archive_write_free(w);
+    }
+    REQUIRE(used > 512 * 1024);   // genuinely incompressible
+
+    // Keep the first two thirds and drop the rest.
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("truncated.img.xz"));
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        const qint64 keep = static_cast<qint64>(used) * 2 / 3;
+        REQUIRE(f.write(reinterpret_cast<const char *>(compressed.data()), keep) == keep);
+    }
+
+    // No expected hash, so nothing downstream can catch it either.
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     64u * 1024 * 1024};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(log.success);
+    CHECK_FALSE(log.errors.isEmpty());
 }
 
 TEST_CASE("A wrong hash is reported rather than called a success",

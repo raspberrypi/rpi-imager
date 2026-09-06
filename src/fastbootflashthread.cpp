@@ -670,7 +670,8 @@ void FastbootFlashThread::decompressConsumerProducer()
     const void *buff;
     size_t size;
     la_int64_t offset;
-    while (archive_read_data_block(a, &buff, &size, &offset) == ARCHIVE_OK) {
+    int readResult;
+    while ((readResult = archive_read_data_block(a, &buff, &size, &offset)) == ARCHIVE_OK) {
         if (_cancelled.load())
             break;
 
@@ -698,6 +699,24 @@ void FastbootFlashThread::decompressConsumerProducer()
             _decompressedRing->commitWriteSlot(slot, chunk);
             pos += chunk;
         }
+    }
+
+    // Only ARCHIVE_EOF means the image ended; anything else means it stopped.
+    //
+    // The loop exited on the first non-OK return whatever it was, and
+    // producerDone() then told the consumer the stream had finished
+    // normally. A truncated download or a zip whose CRC does not match was
+    // therefore flashed as far as it went and the write completed. An image
+    // from the catalogue is caught afterwards by the hash, but one supplied
+    // without a hash is not, and even with one the user is told the hash
+    // mismatched rather than that the download was corrupt.
+    if (!_cancelled.load() && readResult != ARCHIVE_EOF) {
+        const char *why = archive_error_string(a);
+        _decompressError = why ? QString::fromUtf8(why)
+                               : tr("The image data ended unexpectedly.");
+        archive_read_free(a);
+        _decompressedRing->cancel();
+        return;
     }
 
     archive_read_free(a);
