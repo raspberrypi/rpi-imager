@@ -1158,3 +1158,260 @@ TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
     CHECK(readAll(older).find("set_boot_order=0x3") != std::string::npos);
     CHECK(readAll(newer).find("set_boot_order=0x3") == std::string::npos);
 }
+
+// ══════════════════════════════════════════════════════════════
+// A new EEPROM release must not leave the old payload cached
+//
+// Secure-boot provisioning writes pieeprom to the device's EEPROM. The
+// binary is dated -- pieeprom-2024-09-23.bin -- and which date to fetch is
+// resolved at runtime from rpi-eeprom's versions.txt, so the cached copy
+// under secure-boot-recovery5/ has no name to distinguish it from a copy of
+// a different release. ensureAvailable() therefore records the version it
+// fetched in a .eeprom-version sidecar and purges the payload when the
+// resolved version no longer matches.
+//
+// Without that, a Compute Module provisioned after an rpi-eeprom release
+// gets whatever bootloader firmware happened to be cached first, and there
+// is nothing on the device or in the log to say so. Neither the purge nor
+// the sidecar that drives it was tested.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// The files a BCM2712 secure-boot-recovery run asks for, on top of what
+// layOutFirmware() already serves.
+void layOutSecureBootRecovery(const QString &root,
+                              const QString &eepromVersion,
+                              const QByteArray &pieepromBody)
+{
+    struct Entry { QString path; QByteArray body; };
+    const Entry entries[] = {
+        {QStringLiteral("secure-boot-recovery5/boot.conf"),  QByteArrayLiteral("BOOT_ORDER=0xf1")},
+        {QStringLiteral("secure-boot-recovery5/config.txt"), QByteArrayLiteral("# recovery config")},
+        {QStringLiteral("firmware-2712/latest/pieeprom-") + eepromVersion + QStringLiteral(".bin"),
+         pieepromBody},
+        // "Sorted newest-first"; the first usable row is the one taken.
+        {QStringLiteral("firmware-2712/versions.txt"),
+         (eepromVersion + QStringLiteral("  1727086800  abc  latest\n")).toLatin1()},
+    };
+    for (const Entry &e : entries) {
+        const QString full = QDir(root).filePath(e.path);
+        QDir().mkpath(QFileInfo(full).absolutePath());
+        QFile f(full);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(e.body);
+        f.close();
+    }
+}
+
+std::string readFileContents(const std::filesystem::path &p)
+{
+    std::ifstream in(p, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+} // namespace
+
+TEST_CASE("A secure-boot run records which EEPROM version it cached",
+          "[firmware][sbr][eeprom]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+    layOutSecureBootRecovery(served.path(), QStringLiteral("2024-09-23"),
+                             QByteArrayLiteral("pieeprom for 2024-09-23"));
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    ServedFirmwareManager fm(server.base());
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+    INFO("error: " << fm.lastError());
+    REQUIRE_FALSE(dir.empty());
+
+    const auto sub = dir / "secure-boot-recovery5";
+    CHECK(std::filesystem::exists(sub / "pieeprom.original.bin"));
+
+    // The sidecar is what the next run compares against. Without it every
+    // run looks like a version change, or none of them do.
+    const auto sidecar = sub / ".eeprom-version";
+    REQUIRE(std::filesystem::exists(sidecar));
+    CHECK(readFileContents(sidecar) == "2024-09-23\n");
+
+    fm.clearCache();
+}
+
+TEST_CASE("A newer EEPROM release is fetched in place of the old one",
+          "[firmware][sbr][eeprom]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+    layOutSecureBootRecovery(served.path(), QStringLiteral("2024-09-23"),
+                             QByteArrayLiteral("pieeprom for 2024-09-23"));
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    ServedFirmwareManager fm(server.base());
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+    INFO("first run error: " << fm.lastError());
+    REQUIRE_FALSE(dir.empty());
+
+    const auto payload = dir / "secure-boot-recovery5" / "pieeprom.original.bin";
+    REQUIRE(std::filesystem::exists(payload));
+    REQUIRE(readFileContents(payload) == "pieeprom for 2024-09-23");
+
+    // rpi-eeprom publishes a new build. The cached file keeps its name, so
+    // nothing but the sidecar can tell the two apart.
+    layOutSecureBootRecovery(served.path(), QStringLiteral("2025-01-15"),
+                             QByteArrayLiteral("pieeprom for 2025-01-15"));
+
+    const auto again = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                          rpiboot::ChipGeneration::BCM2712,
+                                          nullptr, cancelled);
+    INFO("second run error: " << fm.lastError());
+    REQUIRE_FALSE(again.empty());
+
+    // Note this passes with the purge disabled: the manifest URL carries the
+    // version, so a reachable source overwrites the payload regardless. What
+    // the purge is actually for is the next test.
+    CHECK(readFileContents(payload) == "pieeprom for 2025-01-15");
+    CHECK(readFileContents(dir / "secure-boot-recovery5" / ".eeprom-version")
+          == "2025-01-15\n");
+
+    fm.clearCache();
+}
+
+TEST_CASE("An unchanged EEPROM version keeps the payload it already has",
+          "[firmware][sbr][eeprom]")
+{
+    // The counterpart: the purge must be driven by the version actually
+    // changing, not fire on every run. Purging unconditionally would turn
+    // every secure-boot provisioning into a fresh download of the
+    // bootloader, and would fail outright whenever the source is
+    // unreachable -- the case the cache exists for.
+    //
+    // Comparing file contents cannot show this, because the test server has
+    // no ETag support and so serves a fresh 200 every time; the cached copy
+    // is rewritten either way. Taking the payload off the server is what
+    // separates them. With the version unchanged the file is not purged, the
+    // download fails, and ensureAvailable() proceeds with what it already
+    // has. Had the purge fired there would be nothing left to proceed with.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+    layOutSecureBootRecovery(served.path(), QStringLiteral("2024-09-23"),
+                             QByteArrayLiteral("pieeprom for 2024-09-23"));
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    ServedFirmwareManager fm(server.base());
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+    INFO("first run error: " << fm.lastError());
+    REQUIRE_FALSE(dir.empty());
+
+    const auto payload = dir / "secure-boot-recovery5" / "pieeprom.original.bin";
+    REQUIRE(std::filesystem::exists(payload));
+
+    REQUIRE(QFile::remove(QDir(served.path())
+                              .filePath(QStringLiteral("firmware-2712/latest/pieeprom-2024-09-23.bin"))));
+
+    const auto again = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                          rpiboot::ChipGeneration::BCM2712,
+                                          nullptr, cancelled);
+    INFO("second run error: " << fm.lastError());
+    CHECK_FALSE(again.empty());
+    CHECK(std::filesystem::exists(payload));
+    CHECK(readFileContents(payload) == "pieeprom for 2024-09-23");
+
+    fm.clearCache();
+}
+
+TEST_CASE("A new EEPROM version whose payload cannot be fetched fails rather than "
+          "provisioning the old one", "[firmware][sbr][eeprom]")
+{
+    // This is what the purge is for, and the only case that distinguishes it
+    // from doing nothing.
+    //
+    // Downloads degrade gracefully: a network failure on a file that is
+    // already cached proceeds with the cached copy rather than failing the
+    // run. That is right for a file whose content does not depend on the
+    // version -- and wrong for pieeprom, whose cached copy belongs to the
+    // release it was fetched for. Left alone, a resolved-but-unreachable new
+    // version would fall back to the previous bootloader and write it to the
+    // device's EEPROM, reporting success and leaving nothing to say which
+    // firmware the Compute Module actually got.
+    //
+    // Purging on a version change removes the fallback, so the run fails
+    // where it can still be seen.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+    layOutSecureBootRecovery(served.path(), QStringLiteral("2024-09-23"),
+                             QByteArrayLiteral("pieeprom for 2024-09-23"));
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    ServedFirmwareManager fm(server.base());
+    fm.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+    INFO("first run error: " << fm.lastError());
+    REQUIRE_FALSE(dir.empty());
+
+    const auto payload = dir / "secure-boot-recovery5" / "pieeprom.original.bin";
+    REQUIRE(readFileContents(payload) == "pieeprom for 2024-09-23");
+
+    // A new release is announced, but its payload is not there to fetch --
+    // a partially published release, or a source reachable for the small
+    // metadata file and not for the binary.
+    {
+        const QString versions =
+            QDir(served.path()).filePath(QStringLiteral("firmware-2712/versions.txt"));
+        QFile f(versions);
+        REQUIRE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("2025-01-15  1727086800  abc  latest\n");
+    }
+
+    const auto again = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                          rpiboot::ChipGeneration::BCM2712,
+                                          nullptr, cancelled);
+
+    INFO("second run error: " << fm.lastError());
+    INFO("payload now: "
+         << (std::filesystem::exists(payload) ? readFileContents(payload)
+                                              : std::string("<absent>")));
+
+    // Refusing to proceed is the correct outcome. Silently provisioning the
+    // 2024-09-23 bootloader under the name of the 2025-01-15 release is not.
+    CHECK(again.empty());
+    CHECK_FALSE(fm.lastError().empty());
+    CHECK_FALSE(std::filesystem::exists(payload));
+
+    fm.clearCache();
+}
