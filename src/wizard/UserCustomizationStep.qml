@@ -165,6 +165,7 @@ WizardStepBase {
 
     PasswordlessSudoWarningDialog {
         id: passwordlessSudoWarningDialog
+        objectName: "passwordlessSudoWarning"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false

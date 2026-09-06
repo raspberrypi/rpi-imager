@@ -41,8 +41,9 @@ TestCase {
         property bool wifiConfigured: false
         property bool sshEnabled: false
         property bool passwordlessSudoAvailable: true
-        property bool warningsDisabled: false
+        property bool disableWarnings: false
         property string networkInfoText: ""
+        property Item overlayRootRef: null
         property int stepWriting: 9
         property int jumpedTo: -1
         function jumpToStep(n) { jumpedTo = n }
@@ -60,6 +61,9 @@ TestCase {
     property var step: null
 
     function init() {
+        TestAccessibility.setActive(false)
+        fakeContainer.overlayRootRef = testCase
+        fakeContainer.disableWarnings = false
         fakeContainer.customizationSettings = ({})
         fakeContainer.userConfigured = false
         fakeContainer.hostnameConfigured = true
@@ -75,6 +79,7 @@ TestCase {
     }
 
     function cleanup() {
+        TestAccessibility.setActive(false)
         if (step) {
             step.destroy()
             step = null
@@ -221,5 +226,89 @@ TestCase {
         verify(!fakeContainer.sshEnabled, "ssh was cleared")
         compare(fakeContainer.jumpedTo, fakeContainer.stepWriting,
                 "and it goes straight to writing")
+    }
+
+    // ── The warning before passwordless sudo ──────────────────────────
+    //
+    // Passwordless sudo lets any process running as this user become root
+    // without authentication. Ticking the box raises an understanding
+    // confirmation, and that confirmation is skipped in exactly two cases:
+    // the deployment-wide opt-out, and an assistive technology having
+    // already read the risk out as the checkbox's description.
+    //
+    // The second is only defensible because the wording is relocated rather
+    // than dropped. If the description were ever emptied, the skip would
+    // remove the warning outright for precisely the users who cannot see
+    // the checkbox they are ticking.
+
+    function sudoWarning() {
+        var d = findChild(step, "passwordlessSudoWarning")
+        verify(d, "found the sudo warning dialog")
+        return d
+    }
+
+    function test_enabling_passwordless_sudo_warns_first() {
+        field("passwordlessSudoCheck").checked = true
+
+        tryVerify(function () { return sudoWarning().opened }, 3000,
+                  "the warning was raised")
+    }
+
+    function test_turning_it_back_off_does_not_warn() {
+        // Making things safer again is not something to interrupt.
+        field("passwordlessSudoCheck").checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+        sudoWarning().close()
+        tryVerify(function () { return !sudoWarning().opened }, 3000)
+
+        field("passwordlessSudoCheck").checked = false
+
+        wait(200)
+        verify(!sudoWarning().opened)
+    }
+
+    function test_cancelling_the_warning_unticks_the_box() {
+        // Otherwise the box reads as enabled while the setting was refused.
+        var check = field("passwordlessSudoCheck")
+        check.checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+
+        sudoWarning().cancelled()
+
+        tryVerify(function () { return !check.checked }, 3000)
+    }
+
+    function test_the_deployment_opt_out_skips_the_warning() {
+        fakeContainer.disableWarnings = true
+
+        field("passwordlessSudoCheck").checked = true
+
+        wait(300)
+        verify(!sudoWarning().opened)
+    }
+
+    function test_an_assistive_technology_skips_the_warning() {
+        TestAccessibility.setActive(true)
+        tryVerify(function () { return PlatformHelper.assistiveTechnologyActive },
+                  4000, "the accessibility state took effect")
+
+        field("passwordlessSudoCheck").checked = true
+
+        wait(300)
+        verify(!sudoWarning().opened,
+               "the dialog was skipped for a screen reader")
+    }
+
+    function test_the_skipped_warning_is_still_carried_by_the_checkbox() {
+        // The condition on skipping at all. A screen reader reads this
+        // description when the control is reached, which is why the dialog
+        // can be left out -- so it has to say what the dialog would have.
+        var description = field("passwordlessSudoCheck").Accessible.description
+
+        verify(description.length > 0, "the checkbox carries a description")
+        verify(description.indexOf("root") !== -1,
+               "it names the privilege being granted")
+        verify(description.indexOf("without a password") !== -1,
+               "and that no password will be required")
     }
 }
