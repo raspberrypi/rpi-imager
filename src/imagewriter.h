@@ -257,6 +257,22 @@ public:
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
+    /// Which kind of write startWrite() is about to start.
+    ///
+    /// The three special targets are decided in a fixed order and the order is
+    /// load-bearing: a device already in fastboot mode is flashed as one even
+    /// when the erase sentinel was selected, because a Compute Module cannot
+    /// be erased through the SD card path. Naming the decision keeps that
+    /// precedence somewhere it can be read and tested rather than implied by
+    /// the order of three ifs.
+    enum class WritePath {
+        FastbootDevice,   ///< already in fastboot mode; flash over USB
+        RpibootDevice,    ///< needs sideloading into fastboot first
+        Erase,            ///< the internal://format sentinel
+        Normal,           ///< an ordinary image, cached or downloaded
+    };
+    WritePath choosePath() const;
+
     /// Why a local source cannot be written, or empty if it can. Shared by
     /// startWrite() and the post-cache-verification continuation so the two
     /// cannot drift apart again.

@@ -996,6 +996,24 @@ QString ImageWriter::getHardwareName()
 }
 
 /* Start writing */
+// Which kind of write this is going to be.
+//
+// Extracted from the head of startWrite() so the precedence can be tested.
+// The order matters and is not obvious: a device already in fastboot mode
+// takes the fastboot path even when the erase sentinel is the selected
+// source, because erasing a Compute Module means talking to it over USB
+// rather than writing a partition table to a block device.
+ImageWriter::WritePath ImageWriter::choosePath() const
+{
+    if (_isFastbootDevice)
+        return WritePath::FastbootDevice;
+    if (_isRpibootDevice)
+        return WritePath::RpibootDevice;
+    if (_src.toString() == QStringLiteral("internal://format"))
+        return WritePath::Erase;
+    return WritePath::Normal;
+}
+
 // Why a local source cannot be written, or an empty string if it can.
 //
 // Two callers ask this: startWrite(), and the continuation that resumes
@@ -1100,7 +1118,7 @@ void ImageWriter::startWrite()
     setWriteState(WriteState::Preparing);
     setEjectState(EjectState::EjectIdle);
 
-    if (_isFastbootDevice)
+    if (choosePath() == WritePath::FastbootDevice)
     {
         // Already in fastboot mode — go directly to flash
         emit preparationStatusUpdate(tr("Starting fastboot flash..."));
@@ -1158,7 +1176,7 @@ void ImageWriter::startWrite()
         return;
     }
 
-    if (_isRpibootDevice)
+    if (choosePath() == WritePath::RpibootDevice)
     {
         emit preparationStatusUpdate(tr("Preparing device for imaging..."));
 
@@ -1226,7 +1244,7 @@ void ImageWriter::startWrite()
         return;
     }
 
-    if (_src.toString() == "internal://format")
+    if (choosePath() == WritePath::Erase)
     {
         // For formatting operations, skip all cache operations since we don't need cached files
         qDebug() << "Starting format operation - skipping cache operations";

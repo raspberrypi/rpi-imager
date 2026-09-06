@@ -6615,3 +6615,104 @@ TEST_CASE("A local source is judged the same way whichever path asks",
         CHECK(w._localSourceError(dir.path()).contains(dir.path()));
     }
 }
+
+// ══════════════════════════════════════════════════════════════
+// Which kind of write this is going to be
+//
+// startWrite() decides between four routes by asking three questions in a
+// fixed order, and the order is the interesting part: it is what happens when
+// more than one is true at once. That was implied by the arrangement of three
+// ifs at the top of an eight-hundred-line function and tested nowhere.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("An ordinary image takes the ordinary path", "[imagewriter][write]")
+{
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img.xz")), 0, 0);
+    CHECK(w.choosePath() == ImageWriter::WritePath::Normal);
+}
+
+TEST_CASE("The erase sentinel takes the erase path", "[imagewriter][write]")
+{
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl(QStringLiteral("internal://format")), 0, 0);
+    CHECK(w.choosePath() == ImageWriter::WritePath::Erase);
+}
+
+TEST_CASE("A near miss for the erase sentinel is an ordinary image",
+          "[imagewriter][write]")
+{
+    // The single gate between writing an image and destroying a card, so
+    // anything that is not the sentinel has to miss it. Note the trailing
+    // slash counts as a miss: QUrl keeps the path, so it does not normalise
+    // away.
+    ImageWriter w(nullptr);
+    for (const char *almost : {"internal://formatt", "internal://forma",
+                               "internal://format/", "internal://reformat",
+                               "https://example.invalid/internal://format"}) {
+        w.setSrc(QUrl(QString::fromLatin1(almost)), 0, 0);
+        INFO(almost);
+        CHECK(w.choosePath() == ImageWriter::WritePath::Normal);
+    }
+}
+
+TEST_CASE("The erase sentinel is matched however it is capitalised",
+          "[imagewriter][write]")
+{
+    // Not leniency in the comparison -- QUrl normalises a scheme and host to
+    // lower case, as RFC 3986 says they are case-insensitive, so all of these
+    // are literally the same URL by the time anything compares them. Measured
+    // rather than assumed: QUrl("INTERNAL://FORMAT").toString() really is
+    // "internal://format".
+    ImageWriter w(nullptr);
+    for (const char *spelling : {"internal://format", "INTERNAL://FORMAT",
+                                 "Internal://Format"}) {
+        w.setSrc(QUrl(QString::fromLatin1(spelling)), 0, 0);
+        INFO(spelling);
+        CHECK(w.choosePath() == ImageWriter::WritePath::Erase);
+    }
+}
+
+TEST_CASE("A device in fastboot mode takes the fastboot path",
+          "[imagewriter][write]")
+{
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img.xz")), 0, 0);
+    w.setFastbootDevice(QStringLiteral("0001-fastboot"), 8ull * 1024 * 1024 * 1024);
+    CHECK(w.choosePath() == ImageWriter::WritePath::FastbootDevice);
+}
+
+TEST_CASE("A device needing sideloading takes the rpiboot path",
+          "[imagewriter][write]")
+{
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img.xz")), 0, 0);
+    w.setRpibootDevice(QStringLiteral("0001-rpiboot"), QStringLiteral("mmcblk0"));
+    CHECK(w.choosePath() == ImageWriter::WritePath::RpibootDevice);
+}
+
+TEST_CASE("Fastboot beats rpiboot when both are somehow set",
+          "[imagewriter][write]")
+{
+    // setFastbootDevice() clears the rpiboot flag, which is the real
+    // protection; this pins the decision as well, so a future caller that
+    // sets them separately still lands somewhere defined.
+    ImageWriter w(nullptr);
+    w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img.xz")), 0, 0);
+    w.setRpibootDevice(QStringLiteral("0001-rpiboot"), QStringLiteral("mmcblk0"));
+    w.setFastbootDevice(QStringLiteral("0001-fastboot"), 8ull * 1024 * 1024 * 1024);
+    CHECK(w.choosePath() == ImageWriter::WritePath::FastbootDevice);
+}
+
+TEST_CASE("Erasing a Compute Module goes over USB, not down the card path",
+          "[imagewriter][write]")
+{
+    // Both true at once: the erase sentinel selected against a device already
+    // in fastboot mode. The fastboot path wins, and it has to -- there is no
+    // block device here to write a partition table to, so taking the erase
+    // path would be reaching for a card that is not there.
+    ImageWriter w(nullptr);
+    w.setFastbootDevice(QStringLiteral("0001-fastboot"), 8ull * 1024 * 1024 * 1024);
+    w.setSrc(QUrl(QStringLiteral("internal://format")), 0, 0);
+    CHECK(w.choosePath() == ImageWriter::WritePath::FastbootDevice);
+}
