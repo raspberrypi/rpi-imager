@@ -6927,3 +6927,204 @@ TEST_CASE("A second error does not reach the user twice", "[imagewriter][removal
     REQUIRE(failed.count() == 1);
     CHECK(failed.at(0).at(0).toString() == QStringLiteral("the real problem"));
 }
+
+// ══════════════════════════════════════════════════════════════
+// What the custom repository field shows the user
+//
+// customRepoHost() is the string someone reads before deciding whether to
+// trust an OS list from somewhere other than Raspberry Pi. It is the only
+// place the origin of that list is shown, which makes it a security control
+// rather than a label: it deliberately displays the punycode form, so a
+// hostname built from lookalike Unicode cannot render as the name it is
+// imitating. None of that was tested.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("The default repository is not presented as a custom one", "[imagewriter][repo]")
+{
+    ImageWriter w(nullptr);
+    CHECK_FALSE(w.customRepo());
+    CHECK(w.customRepoHost().isEmpty());
+}
+
+TEST_CASE("A custom repository shows the host it will fetch from", "[imagewriter][repo]")
+{
+    ImageWriter w(nullptr);
+    w.setCustomRepo(QUrl(QStringLiteral("https://mirror.example.com/os_list.json")));
+
+    REQUIRE(w.customRepo());
+    CHECK(w.customRepoHost() == QStringLiteral("mirror.example.com"));
+}
+
+TEST_CASE("A lookalike hostname cannot render as the name it imitates", "[imagewriter][repo]")
+{
+    // U+0430 CYRILLIC SMALL LETTER A is indistinguishable from Latin 'a' in
+    // most fonts, so this URL reads as raspberrypi.com to a human being while
+    // resolving somewhere else entirely. Displaying the decoded form would
+    // hand an attacker the appearance of the real thing.
+    ImageWriter w(nullptr);
+    const QString deceptive =
+        QString::fromUtf8("https://r\xD0\xB0spberrypi.com/os_list.json");
+    w.setCustomRepo(QUrl(deceptive));
+
+    REQUIRE(w.customRepo());
+    const QString shown = w.customRepoHost();
+    INFO("shown as: " << shown.toStdString());
+
+    // The whole point: what is displayed is not the name being imitated.
+    CHECK(shown != QStringLiteral("raspberrypi.com"));
+    CHECK_FALSE(shown.contains(QString::fromUtf8("\xD0\xB0")));
+
+    // Punycode makes the substitution visible rather than merely absent.
+    CHECK(shown.contains(QStringLiteral("xn--")));
+}
+
+TEST_CASE("An ordinary hostname is shown without a warning", "[imagewriter][repo]")
+{
+    // The counterpart to the test above: the marker has to mean something,
+    // so it must not appear on a hostname that is exactly what it looks like.
+    ImageWriter w(nullptr);
+    w.setCustomRepo(QUrl(QStringLiteral("https://raspberrypi.com/os_list.json")));
+
+    const QString shown = w.customRepoHost();
+    CHECK(shown == QStringLiteral("raspberrypi.com"));
+    CHECK_FALSE(shown.contains(QStringLiteral("xn--")));
+}
+
+TEST_CASE("A repository read from a file shows the file, not a host", "[imagewriter][repo]")
+{
+    // A file:// URL has no host at all, so without this the field would go
+    // blank and the user would be told nothing about where the list came from.
+    ImageWriter w(nullptr);
+    w.setCustomRepo(QUrl(QStringLiteral("file:///home/someone/my_os_list.json")));
+
+    REQUIRE(w.customRepo());
+    CHECK(w.customRepoHost() == QStringLiteral("my_os_list.json"));
+}
+
+TEST_CASE("A hostname too long for the field is truncated visibly", "[imagewriter][repo]")
+{
+    // Built from short labels: a single label over 63 characters is not a
+    // legal hostname and QUrl discards it, which would test nothing.
+    QString host;
+    for (int i = 0; i < 8; ++i)
+        host += QStringLiteral("segment%1.").arg(i);
+    host += QStringLiteral("example.com");
+    REQUIRE(host.length() > 50);
+
+    ImageWriter w(nullptr);
+    w.setCustomRepo(QUrl(QStringLiteral("https://") + host + QStringLiteral("/os_list.json")));
+
+    const QString shown = w.customRepoHost();
+    CHECK(shown.length() == 50);
+    CHECK(shown.endsWith(QStringLiteral("...")));
+    CHECK(shown.startsWith(QStringLiteral("segment0.")));
+}
+
+// ══════════════════════════════════════════════════════════════
+// Choosing a local image from the file dialog
+//
+// onFileSelected() is the slot the native file dialog hands its answer to.
+// It filters that answer -- anything that is not a regular file is dropped
+// on the floor with a qDebug() line and no signal -- and it remembers the
+// directory so the next dialog opens where the last one did.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class FileChoosingWriter : public ImageWriter
+{
+public:
+    FileChoosingWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::onFileSelected;
+};
+
+} // namespace
+
+TEST_CASE("Choosing a file reports it as a local URL", "[imagewriter][filedialog]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString imagePath = dir.filePath(QStringLiteral("chosen.img"));
+    {
+        QFile f(imagePath);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("not really an image");
+    }
+
+    FileChoosingWriter w;
+    rpi_test::SignalLog chosen(&w, &ImageWriter::fileSelected);
+
+    w.onFileSelected(imagePath);
+
+    REQUIRE(chosen.count() == 1);
+    CHECK(chosen.at(0).at(0).toUrl() == QUrl::fromLocalFile(imagePath));
+}
+
+TEST_CASE("Choosing a directory reports nothing at all", "[imagewriter][filedialog]")
+{
+    // A dialog can hand back a directory, and the rest of the write path
+    // assumes a file it can open. Passing one through would fail later and
+    // further away than here.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    FileChoosingWriter w;
+    rpi_test::SignalLog chosen(&w, &ImageWriter::fileSelected);
+
+    w.onFileSelected(dir.path());
+
+    CHECK(chosen.count() == 0);
+}
+
+TEST_CASE("Choosing a file that is not there reports nothing", "[imagewriter][filedialog]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    FileChoosingWriter w;
+    rpi_test::SignalLog chosen(&w, &ImageWriter::fileSelected);
+
+    w.onFileSelected(dir.filePath(QStringLiteral("never_created.img")));
+
+    CHECK(chosen.count() == 0);
+}
+
+TEST_CASE("Choosing a file remembers the directory for next time", "[imagewriter][filedialog]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString imagePath = dir.filePath(QStringLiteral("remembered.img"));
+    {
+        QFile f(imagePath);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+
+    QSettings settings;
+    settings.setValue(QStringLiteral("lastpath"), QStringLiteral("/somewhere/else"));
+    settings.sync();
+
+    FileChoosingWriter w;
+    w.onFileSelected(imagePath);
+
+    QSettings after;
+    CHECK(after.value(QStringLiteral("lastpath")).toString() == QFileInfo(imagePath).path());
+}
+
+TEST_CASE("A directory that was not chosen does not overwrite the remembered one",
+          "[imagewriter][filedialog]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    QSettings settings;
+    settings.setValue(QStringLiteral("lastpath"), QStringLiteral("/the/previous/one"));
+    settings.sync();
+
+    FileChoosingWriter w;
+    w.onFileSelected(dir.path());
+
+    QSettings after;
+    CHECK(after.value(QStringLiteral("lastpath")).toString()
+          == QStringLiteral("/the/previous/one"));
+}
