@@ -1018,19 +1018,6 @@ TEST_CASE("Choosing another image updates what it supports",
     CHECK_FALSE(w.imageSupportsCustomization());
 }
 
-TEST_CASE("Applying customisation to an image that supports none clears it",
-          "[imagewriter][customisation]")
-{
-    // Rather than carrying settings over from a previous selection onto an
-    // image that will not read them.
-    ImageWriter w(nullptr);
-    selectImageWithFormat(w, QByteArray());
-
-    QVariantMap settings;
-    settings.insert(QStringLiteral("hostname"), QStringLiteral("test-pi"));
-    CHECK_NOTHROW(w.applyCustomisationFromSettings(settings));
-}
-
 TEST_CASE("Customisation is generated for each supported format",
           "[imagewriter][customisation]")
 {
@@ -3550,6 +3537,59 @@ TEST_CASE("A verified write to a real block device reads back clean", "[imagewri
     INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
     REQUIRE_FALSE(out.failed);
     CHECK(out.succeeded);
+}
+
+TEST_CASE("An image that supports no customisation is written without any",
+          "[imagewriter][customisation]")
+{
+    // Settings from a previous selection must not reach an image that cannot
+    // read them.
+    //
+    // This replaces a case named "Applying customisation to an image that
+    // supports none clears it", whose only assertion was that nothing threw.
+    // Writing the card and looking is the way to see it, since the staged
+    // payloads have no accessor.
+    //
+    // What it pins is the outcome, not the mechanism. Two things guard it:
+    // applyCustomisationFromSettings() drops the staged payloads when the
+    // image declares no init format, and DownloadThread writes none of those
+    // files unless the format asks for them. Removing the first leaves this
+    // passing, because the second still holds -- so the name says what is
+    // actually verified rather than which guard did it.
+    BootPartitionFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+
+    // First an image that does support customisation, with something
+    // recognisable staged against it.
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize, QByteArray(), false,
+             QString(), QStringLiteral("Supported OS"), QByteArray("systemd"));
+    w.setImageCustomisation(QByteArray(), QByteArray(),
+                            "#!/bin/bash\n# marker-should-be-cleared\nexit 0\n",
+                            QByteArray(), QByteArray(),
+                            ImageOptions::NoAdvancedOptions, QByteArray("systemd"));
+
+    // Then the user picks an image that reads none of it. Re-applying the
+    // settings against that image has to drop what was staged.
+    w.setSrc(fx.sourceUrl(), 0, BootPartitionFixture::kImageSize, QByteArray(), false,
+             QString(), QStringLiteral("Plain OS"), QByteArray());
+    REQUIRE_FALSE(w.imageSupportsCustomization());
+
+    QVariantMap settings;
+    settings.insert(QStringLiteral("hostname"), QStringLiteral("test-pi"));
+    w.applyCustomisationFromSettings(settings);
+
+    w.setDst(fx.target(), BootPartitionFixture::kImageSize);
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    // Nothing from the earlier selection reached the card.
+    QFile card(fx.target());
+    REQUIRE(card.open(QIODevice::ReadOnly));
+    const QByteArray written = card.readAll();
+    CHECK_FALSE(written.contains(QByteArray("marker-should-be-cleared")));
+    CHECK_FALSE(written.contains(QByteArray("test-pi")));
 }
 
 TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
