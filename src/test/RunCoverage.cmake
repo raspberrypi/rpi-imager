@@ -200,6 +200,76 @@ if(NOT _ctest_result EQUAL 0)
 endif()
 
 # ---------------------------------------------------------------------------
+# 2a. Drop duplicate copies of sources the suite never executed
+# ---------------------------------------------------------------------------
+# Most of this project's sources are compiled more than once: into the app
+# target, into the rpi_imager_testable library the test binaries link, and
+# historically into individual test targets that have since been changed to
+# link the library instead. gcov emits a .gcno per copy, and gcovr counts
+# every one of them -- so a file measured once was being reported several
+# times over, with the copies that never ran contributing their full branch
+# count and nothing taken.
+#
+# It is not a small correction. Left in, imagewriter.cpp read 1196 of 3872
+# branches; the copy that actually ran has 2138. Across the tree the report
+# said 54.1% of 25,330 branches when the true figure for the same run was
+# 67.0% of 20,449 -- thirteen points of a report that exists to say where the
+# gaps are, spent describing object files rather than code. Line coverage was
+# out by the same margin, 61.9% against 75.5%. The counters were identical
+# either way: 13,691 branches taken, 12,684 lines. Nothing was measured
+# differently, it was only divided by the wrong number.
+#
+# The stale ones a clean build would not produce are the worst of it, but the
+# app target's copy is never run by definition, so this cannot be fixed by
+# rebuilding.
+#
+# The rule has to be narrow, because the obvious version of it is wrong:
+# deleting every .gcno with no .gcda would also delete the genuinely untested
+# files -- the ones with a single copy that nothing executes -- and hide real
+# gaps behind a better-looking number. So an orphan is only dropped when the
+# *same source* has counters somewhere else, which makes it a duplicate of
+# something already measured and never the only record of a file.
+#
+# The key is the path below the target's .dir, with the ../ segments CMake
+# spells `__` removed, so that CMakeFiles/rpi-imager.dir/imagewriter.cpp and
+# test/CMakeFiles/rpi_imager_testable.dir/__/imagewriter.cpp compare equal.
+file(GLOB_RECURSE _gcda_files "${COVERAGE_BINARY_DIR}/*.gcda")
+set(_measured_sources)
+foreach(_gcda IN LISTS _gcda_files)
+    string(REGEX REPLACE "^.*\\.dir/" "" _key "${_gcda}")
+    string(REGEX REPLACE "(__/)+" "" _key "${_key}")
+    string(REGEX REPLACE "\\.gcda$" "" _key "${_key}")
+    list(APPEND _measured_sources "${_key}")
+endforeach()
+
+file(GLOB_RECURSE _gcno_files "${COVERAGE_BINARY_DIR}/*.gcno")
+set(_duplicate_gcno)
+foreach(_gcno IN LISTS _gcno_files)
+    string(REGEX REPLACE "\\.gcno$" "" _base "${_gcno}")
+    if(EXISTS "${_base}.gcda")
+        continue()
+    endif()
+    string(REGEX REPLACE "^.*\\.dir/" "" _key "${_gcno}")
+    string(REGEX REPLACE "(__/)+" "" _key "${_key}")
+    string(REGEX REPLACE "\\.gcno$" "" _key "${_key}")
+    # list(FIND) rather than IN_LIST: this file runs under `cmake -P`, where
+    # IN_LIST needs policy CMP0057 set and silently degrades to a string
+    # comparison without it -- which matches nothing and prunes nothing.
+    list(FIND _measured_sources "${_key}" _measured_index)
+    if(NOT _measured_index EQUAL -1)
+        list(APPEND _duplicate_gcno "${_gcno}")
+    endif()
+endforeach()
+
+list(LENGTH _duplicate_gcno _duplicate_count)
+if(_duplicate_count GREATER 0)
+    message(STATUS
+        "Coverage: dropping ${_duplicate_count} unexecuted duplicate object file(s) "
+        "so each source is counted once")
+    file(REMOVE ${_duplicate_gcno})
+endif()
+
+# ---------------------------------------------------------------------------
 # 3. Render
 # ---------------------------------------------------------------------------
 file(MAKE_DIRECTORY "${COVERAGE_OUTPUT_DIR}")
