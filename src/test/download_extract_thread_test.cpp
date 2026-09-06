@@ -1229,11 +1229,12 @@ TEST_CASE("DownloadExtractThread unpacks a compressed multi-file archive",
 // user-visible outcome is a card that looks written and will not boot, with
 // nothing in the log to say why.
 //
-// Tagged so it documents the gap without failing the suite. Remove the tag
-// once the multi-file path verifies what it extracted; the case already
-// asserts the behaviour that is wanted.
+// The gap was in _checkResult(): a zip CRC mismatch comes back as
+// ARCHIVE_FAILED, which it logged and swallowed, so the entry was written
+// out and the write reported successful. The data loop now treats
+// ARCHIVE_FAILED as terminal, which is what libarchive means by it.
 TEST_CASE("DownloadExtractThread reports a corrupt multi-file archive",
-          "[.known-bug][extract][multifile]")
+          "[extract][multifile]")
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");

@@ -797,6 +797,23 @@ void DownloadExtractThread::extractMultiFileRun()
 
               while ( (r = archive_read_data_block(a, &buff, &size, &offset)) != ARCHIVE_EOF)
               {
+                  // ARCHIVE_FAILED from a data read means this entry cannot be
+                  // continued -- for a zip it is a CRC mismatch, so the bytes
+                  // just read are not the bytes that were archived.
+                  //
+                  // _checkResult() only throws on ARCHIVE_FATAL and merely
+                  // logs anything else, so a corrupt multi-file archive was
+                  // unpacked to the end and the write reported successful:
+                  // a card that looks written, will not boot, and says
+                  // nothing about why. libarchive's own contract separates
+                  // these -- WARN means carry on, FAILED does not -- so only
+                  // WARN and RETRY stay non-fatal here.
+                  if (r <= ARCHIVE_FAILED)
+                  {
+                      const char *why = archive_error_string(a);
+                      throw runtime_error(why ? why
+                                              : "Archive entry could not be read");
+                  }
                   _checkResult(r, a);
 
                   ++blockCount;
