@@ -179,4 +179,85 @@ TestCase {
         verify(acceptButton().enabled, "accept was available at once")
         compare(confirmDialog().countdown, 0)
     }
+
+    // ── One button, four meanings ─────────────────────────────────────
+    //
+    // The same control starts a write, cancels one, skips verification and
+    // moves on when it is done, choosing its label and its action from the
+    // write state. They are chosen in two separate places, so nothing but a
+    // test stops them drifting -- and a button that says Cancel while doing
+    // Write, or the reverse, is about as bad as this application gets.
+    //
+    // The states reachable from here are Idle, one that counts as writing,
+    // and finished. Verifying is set only from inside a running write, so
+    // "Skip verification" stays unverified.
+
+    function test_before_a_write_the_button_says_write() {
+        compare(step.nextButtonText, qsTr("Write"))
+        verify(!step.isWriting)
+        verify(!step.isComplete)
+    }
+
+    function test_while_writing_the_button_offers_to_cancel() {
+        // onFinalizing lands in a state isWriting counts, which is what a
+        // write in progress looks like to this step.
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return step.isWriting }, 3000, "the step sees a write")
+
+        compare(step.nextButtonText, qsTr("Cancel write"))
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_while_writing_the_button_actually_cancels() {
+        // The other half. Pressing it must reach cancelWrite() rather than
+        // starting a second write over the top of the first.
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return step.isWriting }, 3000)
+
+        step.nextClicked()
+
+        // Cancelling is the state while a thread winds down. With nothing
+        // running there is nothing to wait for, so it completes straight to
+        // Cancelled; both mean the button cancelled rather than started.
+        tryVerify(function () {
+            var s = ImageWriterSingleton.writeState
+            return s === ImageWriterSingleton.Cancelling || s === ImageWriterSingleton.Cancelled
+        }, 3000, "the write was cancelled")
+        verify(!confirmDialog().opened, "and no erase confirmation was raised")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_when_the_write_is_done_the_button_moves_on() {
+        // Via a writing state: onSuccess is deliberately ignored once a run
+        // has failed or been cancelled, which is the guard tested in
+        // image_writer_test.
+        ImageWriterSingleton.onFinalizing()
+        ImageWriterSingleton.onSuccess()
+        tryVerify(function () { return step.isComplete }, 3000, "the step sees it finished")
+
+        compare(step.nextButtonText, CommonStrings.continueText)
+
+        var before = fakeContainer.steps
+        step.nextClicked()
+
+        compare(fakeContainer.steps, before + 1, "it advanced rather than writing again")
+        verify(!confirmDialog().opened, "and raised no confirmation")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_a_finished_write_is_not_offered_a_cancel() {
+        // Idle and finished both leave isWriting false, but they must not
+        // produce the same label -- one starts a write and one leaves.
+        ImageWriterSingleton.onFinalizing()
+        ImageWriterSingleton.onSuccess()
+        tryVerify(function () { return step.isComplete }, 3000)
+
+        verify(step.nextButtonText !== qsTr("Cancel write"))
+        verify(step.nextButtonText !== qsTr("Write"))
+
+        ImageWriterSingleton.onCancelled()
+    }
 }
