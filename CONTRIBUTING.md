@@ -102,6 +102,20 @@ Leave leak detection on if that is what you are looking for.
 A race is a different question and wants `-fsanitize=thread` in place of
 `address`, in its own build directory — the two cannot be combined.
 
+ThreadSanitizer will not start on every machine. It supports 39-, 42- and
+48-bit virtual address spaces only, and an arm64 kernel with 16 KB pages
+gives 47, so every binary dies immediately with:
+
+```
+FATAL: ThreadSanitizer: unsupported VMA range
+FATAL: Found 47 - Supported 39, 42 and 48
+```
+
+`getconf PAGESIZE` returning 16384 on aarch64 is the tell — the build
+succeeds and then CMake's test discovery fails, because it runs each
+executable to enumerate its cases. A 4 KB-page kernel is the way round it.
+AddressSanitizer has no such restriction and runs fine there.
+
 ### Windows
 
 #### Get dependencies
