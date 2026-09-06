@@ -201,6 +201,45 @@ TEST_CASE("An image that fits is not refused on capacity", "[imagewriter]")
     }
 }
 
+TEST_CASE("An image exactly filling the card is allowed", "[imagewriter]")
+{
+    // The boundary. Images are often built to exactly the size they are meant
+    // to occupy, so an off-by-one here -- >= where > was meant -- would refuse
+    // a whole class of perfectly good writes, and the two cases either side of
+    // it look identical in a diff.
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    SourceFile source;
+    const quint64 card = 4ull * 1024 * 1024 * 1024;
+    writer.setSrc(source.url(), 0, card);
+    writer.setDst(QStringLiteral("/dev/null"), card);
+    writer.startWrite();
+
+    for (const QString &e : log.errors) {
+        INFO("reported: " << e.toStdString());
+        CHECK_THAT(e.toStdString(), !ContainsSubstring("capacity"));
+    }
+}
+
+TEST_CASE("An image one byte too big is refused", "[imagewriter]")
+{
+    // The other side of the same boundary, so the pair pins it from both
+    // directions rather than leaving the comparison free to drift.
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    SourceFile source;
+    const quint64 card = 4ull * 1024 * 1024 * 1024;
+    writer.setSrc(source.url(), 0, card + 1);
+    writer.setDst(QStringLiteral("/dev/null"), card);
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("capacity"));
+}
+
 TEST_CASE("A card of unknown size does not trigger the capacity check",
           "[imagewriter]")
 {
