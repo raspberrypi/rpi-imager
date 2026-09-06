@@ -245,6 +245,37 @@ class DiskFormatterTest {
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
   }
 
+  // As runCommand(), but hands back what the tool printed. Some tools answer
+  // by describing what they found rather than by their exit status -- file(1)
+  // succeeds on anything readable, so its verdict is in its output.
+  static int runCommandCapture(const char *path, const std::vector<const char*> &argv,
+                               std::string &output) {
+    int fds[2];
+    if (pipe(fds) != 0) return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) { close(fds[0]); close(fds[1]); return -1; }
+    if (pid == 0) {
+      close(fds[0]);
+      dup2(fds[1], 1);
+      dup2(fds[1], 2);
+      close(fds[1]);
+      execv(path, const_cast<char *const *>(argv.data()));
+      _exit(127);
+    }
+
+    close(fds[1]);
+    char buf[4096];
+    ssize_t n;
+    while ((n = read(fds[0], buf, sizeof(buf))) > 0)
+      output.append(buf, static_cast<size_t>(n));
+    close(fds[0]);
+
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  }
+
   // Run a privileged command: directly when we are already root, via sudo -n
   // otherwise.
   //
@@ -326,22 +357,50 @@ class DiskFormatterTest {
     bool all_passed = true;
 
     // Test with fdisk to check partition table (safe: test_file is a hardcoded constant)
+    //
+    // A rejected partition table used to be reported as "tool may not be
+    // available" and ignored. execv() answers 127 when the binary is not
+    // there, which tells the two apart.
     {
       std::vector<const char*> argv = {"fdisk", "-l", test_file.c_str(), nullptr};
-      if (runCommand("/usr/sbin/fdisk", argv) != 0) {
-        std::cout << "fdisk validation failed (tool may not be available)\n";
+      std::string listing;
+      const int rc = runCommandCapture("/usr/sbin/fdisk", argv, listing);
+      if (rc == 127) {
+        std::cout << "fdisk is not installed, partition table not checked\n";
+      } else if (rc != 0) {
+        std::cout << "fdisk could not read the image (exit " << rc << ")\n";
+        all_passed = false;
+      } else if (listing.find("FAT32") == std::string::npos) {
+        // The exit status alone proves nothing: fdisk -l answers 0 for an
+        // image of zeroes with no partition table at all. What it prints is
+        // the verdict, and a FAT32 entry is what this formatter is for.
+        std::cout << "fdisk lists no FAT32 partition:\n" << listing;
+        all_passed = false;
       } else {
         std::cout << "fdisk validation passed\n";
       }
     }
 
     // Test with file command to detect filesystem
+    //
+    // Its exit status says whether it could read the file, not whether the
+    // file is what we meant to write -- file(1) succeeds on a directory of
+    // zeroes just as happily. The verdict is in what it prints, so that is
+    // what gets checked.
     {
       std::vector<const char*> argv = {"file", test_file.c_str(), nullptr};
-      if (runCommand("/usr/bin/file", argv) != 0) {
-        std::cout << "file command validation failed\n";
+      std::string described;
+      const int rc = runCommandCapture("/usr/bin/file", argv, described);
+      if (rc == 127) {
+        std::cout << "file(1) is not installed, image not identified\n";
+      } else if (rc != 0) {
+        std::cout << "file(1) could not read the image (exit " << rc << ")\n";
+        all_passed = false;
+      } else if (described.find("boot sector") == std::string::npos) {
+        std::cout << "file(1) does not see a boot sector: " << described;
+        all_passed = false;
       } else {
-        std::cout << "file command validation passed\n";
+        std::cout << "file command validation passed (" << described.substr(0, 120) << ")\n";
       }
     }
 
