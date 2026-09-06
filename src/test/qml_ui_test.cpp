@@ -32,6 +32,7 @@
 #include "app_resources.h"
 
 #include <QAccessible>
+#include <QUrl>
 #include <QCoreApplication>
 #include <QHash>
 #include <QJsonDocument>
@@ -251,6 +252,15 @@ public slots:
     {
         if (prepareModule())
             engine->addImportPath(importRoot()->path());
+
+        // Where the module actually got copied to. A test that wants to
+        // load main.qml -- the application entry, which is not an exported
+        // type -- has to name a file, and naming the one in the source tree
+        // would bypass the instrumented copy and report the file as never
+        // run while a test was driving it.
+        engine->globalObject().setProperty(
+            QStringLiteral("__qmlModuleRoot"),
+            QUrl::fromLocalFile(importRoot()->path() + QStringLiteral("/RpiImager/")).toString());
 
         // A global rather than a registered singleton: the probe is injected
         // into files that already have their own imports, and adding one to

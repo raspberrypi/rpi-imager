@@ -266,6 +266,7 @@ ApplicationWindow {
     // Quit dialog (modern style)
     BaseDialog {
         id: quitDialog
+        objectName: "quitWhileWritingDialog"
         parent: overlayRoot
         anchors.centerIn: parent
 
