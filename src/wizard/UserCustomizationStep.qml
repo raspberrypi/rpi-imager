@@ -51,6 +51,7 @@ WizardStepBase {
                 
                 ImTextField {
                     id: fieldUsername
+                    objectName: "userNameField"
                     Layout.fillWidth: true
                     placeholderText: qsTr("Enter your username")
                     font.pointSize: Style.fontSizeInput
@@ -69,6 +70,7 @@ WizardStepBase {
                 
                 ImPasswordField {
                     id: fieldPassword
+                    objectName: "userPasswordField"
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Enter password")
                     font.pointSize: Style.fontSizeInput
@@ -82,6 +84,7 @@ WizardStepBase {
                 
                 ImPasswordField {
                     id: fieldPasswordConfirm
+                    objectName: "userPasswordConfirmField"
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                     font.pointSize: Style.fontSizeInput
@@ -107,6 +110,7 @@ WizardStepBase {
 
                 ImCheckBox {
                     id: checkPasswordlessSudo
+                    objectName: "passwordlessSudoCheck"
                     text: qsTr("Enable passwordless sudo")
                     checked: false
                     // Carries the risk the dialog explains, because when the
