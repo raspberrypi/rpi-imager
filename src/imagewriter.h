@@ -290,6 +290,10 @@ public:
     /// Start the configured thread and begin progress polling.
     void _startConfiguredWrite();
 
+    /// Configure the fastboot flash thread and start it. Shared by the
+    /// post-sideload path and the directly-selected fastboot device path.
+    void _configureAndStartFastbootFlash();
+
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
 

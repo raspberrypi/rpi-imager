@@ -882,62 +882,7 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     // in support logs.
     const QString storageTarget = resolveFastbootStorageTarget();
     _fastbootFlashThread = new FastbootFlashThread(fastbootId, storageTarget, flashSrc, _downloadLen, _extrLen, _expectedHash, this);
-    _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
-    if (!_bmapUrl.isEmpty())
-        _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
-
-    // Propagate Raspberry Pi Connect organisation registration.
-    // The API key is persisted in QSettings but never handed back to
-    // QML; read it directly here and forward to the flash thread.
-    // Only applies when "Raspberry Pi Connect for Organisations" is
-    // enabled in App Options.
-    if (_settings.value(QStringLiteral("connect_org_enabled")).toBool()) {
-        const QString orgKey =
-            _settings.value(QStringLiteral("connect_org_api_key")).toString();
-        if (!orgKey.isEmpty()) {
-            const QString orgDesc =
-                _settings.value(QStringLiteral("connect_org_description")).toString();
-            _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
-        }
-    }
-    connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
-    connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
-    connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
-    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
-        emit downloadProgress(QVariant(now), QVariant(total));
-    });
-    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
-        emit writeProgress(QVariant(now), QVariant(total));
-    });
-    connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
-    connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
-        setWriteState(WriteState::Writing);
-        startProgressPolling();
-    });
-
-    // Clean up thread pointer when finished
-    connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
-        if (_fastbootFlashThread) {
-            _fastbootFlashThread->deleteLater();
-            _fastbootFlashThread = nullptr;
-        }
-    });
-
-    // Wire fastboot timing events and progress to PerformanceStats
-    connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
-            this, [this](quint32 ms, bool ok, QString meta){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
-            });
-    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
-            this, [this](quint64 now, quint64 total){
-                _performanceStats->recordDownloadProgress(now, total);
-            });
-    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
-            this, [this](quint64 now, quint64 total){
-                _performanceStats->recordWriteProgress(now, total);
-            });
-
-    _fastbootFlashThread->start();
+    _configureAndStartFastbootFlash();
 }
 
 void ImageWriter::onRpibootError(const QString &msg)
@@ -996,6 +941,74 @@ QString ImageWriter::getHardwareName()
 }
 
 /* Start writing */
+// Configure the fastboot flash thread and start it.
+//
+// Two paths reach this with a device already in fastboot mode: the one that
+// has just sideloaded it there, and the one where the user picked a fastboot
+// storage device directly. Both configured the thread with the same
+// forty-five lines -- customisation, the bmap URL, the Connect organisation
+// registration, ten signal connections and the telemetry -- differing only in
+// indentation and the wording of two comments.
+void ImageWriter::_configureAndStartFastbootFlash()
+{
+    _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    if (!_bmapUrl.isEmpty())
+        _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
+
+    // Propagate Raspberry Pi Connect organisation registration.
+    // The API key is persisted in QSettings but never handed back to
+    // QML; read it directly here and forward to the flash thread.
+    // Only applies when "Raspberry Pi Connect for Organisations" is
+    // enabled in App Options.
+    if (_settings.value(QStringLiteral("connect_org_enabled")).toBool()) {
+        const QString orgKey =
+            _settings.value(QStringLiteral("connect_org_api_key")).toString();
+        if (!orgKey.isEmpty()) {
+            const QString orgDesc =
+                _settings.value(QStringLiteral("connect_org_description")).toString();
+            _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
+        }
+    }
+    connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
+    connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
+        emit downloadProgress(QVariant(now), QVariant(total));
+    });
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
+        emit writeProgress(QVariant(now), QVariant(total));
+    });
+    connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+    connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
+        setWriteState(WriteState::Writing);
+        startProgressPolling();
+    });
+
+    // Clean up thread pointer when finished
+    connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
+        if (_fastbootFlashThread) {
+            _fastbootFlashThread->deleteLater();
+            _fastbootFlashThread = nullptr;
+        }
+    });
+
+    // Wire fastboot timing events and progress to PerformanceStats
+    connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
+            this, [this](quint32 ms, bool ok, QString meta){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
+            });
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordDownloadProgress(now, total);
+            });
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordWriteProgress(now, total);
+            });
+
+    _fastbootFlashThread->start();
+}
+
 // Point the thread at a cache file for this download, if caching is on.
 //
 // Both write paths did this identically; only the condition guarding it
@@ -1517,55 +1530,7 @@ void ImageWriter::startWrite()
         emit preparationStatusUpdate(tr("Starting fastboot flash..."));
         _fastbootFlashThread = new FastbootFlashThread(
             _fastbootId, _fastbootBlockDevice, _src, _downloadLen, _extrLen, _expectedHash, this);
-        _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
-        if (!_bmapUrl.isEmpty())
-            _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
-        // Same Connect-org wire-up as the rpiboot path: when the user
-        // picked a fastboot storage device directly, register the
-        // device's firmware identity with the organisation before
-        // reboot.
-        if (_settings.value(QStringLiteral("connect_org_enabled")).toBool()) {
-            const QString orgKey =
-                _settings.value(QStringLiteral("connect_org_api_key")).toString();
-            if (!orgKey.isEmpty()) {
-                const QString orgDesc =
-                    _settings.value(QStringLiteral("connect_org_description")).toString();
-                _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
-            }
-        }
-        connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
-        connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
-        connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
-        connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
-            emit downloadProgress(QVariant(now), QVariant(total));
-        });
-        connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
-            emit writeProgress(QVariant(now), QVariant(total));
-        });
-        connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
-        connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
-            setWriteState(WriteState::Writing);
-            startProgressPolling();
-        });
-        connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
-            if (_fastbootFlashThread) {
-                _fastbootFlashThread->deleteLater();
-                _fastbootFlashThread = nullptr;
-            }
-        });
-        connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
-                this, [this](quint32 ms, bool ok, QString meta){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
-                });
-        connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDownloadProgress(now, total);
-                });
-        connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                });
-        _fastbootFlashThread->start();
+        _configureAndStartFastbootFlash();
         return;
     }
 
