@@ -257,6 +257,11 @@ public:
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
+    /// Why a local source cannot be written, or empty if it can. Shared by
+    /// startWrite() and the post-cache-verification continuation so the two
+    /// cannot drift apart again.
+    QString _localSourceError(const QString &localPath) const;
+
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
 

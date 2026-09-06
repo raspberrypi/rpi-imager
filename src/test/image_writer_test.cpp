@@ -6512,3 +6512,66 @@ TEST_CASE("An exported report keeps the extension it was given",
     // Not run.json.json.
     CHECK_FALSE(QFileInfo::exists(named + QStringLiteral(".json")));
 }
+
+// ══════════════════════════════════════════════════════════════
+// Why a local source is refused
+//
+// One definition, two callers: startWrite() and the continuation that
+// resumes after cache verification. They had a copy each and the copies had
+// already drifted -- the empty-file case existed on one path only. Testing
+// the shared helper is what keeps the next addition from landing on one of
+// them again.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A local source is judged the same way whichever path asks",
+          "[imagewriter][write]")
+{
+    ImageWriter w(nullptr);
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    SECTION("a good file is accepted") {
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("ok.img"));
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray(4096, 'x'));
+        f.close();
+        CHECK(w._localSourceError(path).isEmpty());
+    }
+
+    SECTION("a file that is not there") {
+        const QString msg =
+            w._localSourceError(QDir(dir.path()).filePath(QStringLiteral("gone.img")));
+        INFO(msg.toStdString());
+        CHECK_FALSE(msg.isEmpty());
+        CHECK(msg.contains(QStringLiteral("not found")));
+    }
+
+    SECTION("a directory is not a source") {
+        const QString msg = w._localSourceError(dir.path());
+        INFO(msg.toStdString());
+        CHECK_FALSE(msg.isEmpty());
+        CHECK(msg.contains(QStringLiteral("regular file")));
+    }
+
+    SECTION("an empty file is refused on both paths") {
+        // The case that had drifted. Zero bytes clears the capacity check,
+        // extracts to nothing, and the write used to report success.
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("empty.img"));
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.close();
+        const QString msg = w._localSourceError(path);
+        INFO(msg.toStdString());
+        CHECK_FALSE(msg.isEmpty());
+        CHECK(msg.contains(QStringLiteral("empty")));
+    }
+
+    SECTION("every refusal names the file") {
+        // The message goes straight to a dialog; a user with several images
+        // needs to know which one was rejected.
+        const QString missing = QDir(dir.path()).filePath(QStringLiteral("which-one.img"));
+        CHECK(w._localSourceError(missing).contains(QStringLiteral("which-one.img")));
+        CHECK(w._localSourceError(dir.path()).contains(dir.path()));
+    }
+}

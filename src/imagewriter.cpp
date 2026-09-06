@@ -996,6 +996,34 @@ QString ImageWriter::getHardwareName()
 }
 
 /* Start writing */
+// Why a local source cannot be written, or an empty string if it can.
+//
+// Two callers ask this: startWrite(), and the continuation that resumes
+// after cache verification. They had a copy each, and the copies had already
+// drifted -- the empty-file case was added to one and not the other. One
+// definition means the next check added lands on both paths.
+QString ImageWriter::_localSourceError(const QString &localPath) const
+{
+    const QFileInfo fi(localPath);
+
+    if (!fi.exists())
+        return tr("Source file not found: %1").arg(localPath);
+    if (!fi.isFile())
+        return tr("Source is not a regular file: %1").arg(localPath);
+    if (!fi.isReadable())
+        return tr("Source file is not readable: %1").arg(localPath);
+    if (fi.size() == 0)
+    {
+        // An interrupted copy or a failed download saved to disk. It passes
+        // the capacity check, extracts to nothing, and the write finishes
+        // reporting success -- leaving the user with a card they believe is
+        // imaged and no indication otherwise.
+        return tr("Source file is empty: %1").arg(localPath);
+    }
+
+    return QString();
+}
+
 void ImageWriter::startWrite()
 {
     // Refuse re-entry while a write is already in progress.  The deferred-watchdog
@@ -1219,30 +1247,10 @@ void ImageWriter::startWrite()
     // Proactive validation for local sources before spawning threads
     if (_src.isLocalFile())
     {
-        const QString localPath = _src.toLocalFile();
-        QFileInfo localFi(localPath);
-        if (!localFi.exists())
+        const QString err = _localSourceError(_src.toLocalFile());
+        if (!err.isEmpty())
         {
-            onError(tr("Source file not found: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isFile())
-        {
-            onError(tr("Source is not a regular file: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isReadable())
-        {
-            onError(tr("Source file is not readable: %1").arg(localPath));
-            return;
-        }
-        if (localFi.size() == 0)
-        {
-            // An interrupted copy or a failed download saved to disk. It
-            // passes the capacity check, extracts to nothing, and finishes
-            // reporting success -- leaving the user with a card they believe
-            // is imaged and no indication otherwise.
-            onError(tr("Source file is empty: %1").arg(localPath));
+            onError(err);
             return;
         }
     }
@@ -4480,21 +4488,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     // Proactive validation for local sources before spawning threads
     if (QUrl(urlstr).isLocalFile())
     {
-        const QString localPath = QUrl(urlstr).toLocalFile();
-        QFileInfo localFi(localPath);
-        if (!localFi.exists())
+        const QString err = _localSourceError(QUrl(urlstr).toLocalFile());
+        if (!err.isEmpty())
         {
-            onError(tr("Source file not found: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isFile())
-        {
-            onError(tr("Source is not a regular file: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isReadable())
-        {
-            onError(tr("Source file is not readable: %1").arg(localPath));
+            onError(err);
             return;
         }
 
