@@ -2236,7 +2236,19 @@ bool DownloadThread::_verify()
     qDebug() << "Verify hash:" << _verifyhash.result().toHex();
     qDebug() << "Verify done in" << t1.elapsed() / 1000.0 << "seconds";
 
-    if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)
+    // Verification that did not happen is not verification that passed.
+    //
+    // Disabled, or cancelled partway, this used to emit the same success
+    // event as a clean read-back. That event becomes a HashComputation entry
+    // in the performance report -- the file someone exports and attaches to a
+    // bug report about a card that will not boot -- so it read as "post-write
+    // verification succeeded" with an empty verify hash next to it. Saying
+    // nothing is the honest answer; the absence of the event is what tells a
+    // reader it did not run.
+    if (!_verifyEnabled || _cancelled)
+        return true;
+
+    if (_verifyhash.result() == _writehash.result())
     {
         emit eventVerify(static_cast<quint32>(t1.elapsed()), true, 
                          _writehash.result().toHex(), _verifyhash.result().toHex());

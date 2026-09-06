@@ -1900,3 +1900,71 @@ TEST_CASE("Storage errors do not share a message with each other",
         seen.push_back(msg);
     }
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Reporting the verification that happened, and only that one
+//
+// eventVerify becomes a HashComputation entry in the performance report --
+// the file somebody exports and attaches to a bug report about a card that
+// will not boot. A verification that was switched off reported the same
+// success as a clean read-back, so the report said post-write verification
+// had passed, with an empty verify hash beside it.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A write with verification off reports no verification",
+          "[download][verify]")
+{
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(512 * 1024, 41);
+    auto dt = makeDownload(scratch, payload, QStringLiteral("noverify-src.img"),
+                           QStringLiteral("noverify-dst.img"));
+    dt->setVerifyEnabled(false);
+
+    int events = 0;
+    QObject ctx;
+    QObject::connect(dt.get(), &DownloadThread::eventVerify, &ctx,
+                     [&events](quint32, bool, QByteArray, QByteArray) { ++events; });
+
+    const Outcome out = runToCompletion(*dt);
+    INFO("error: " << out.errorMessage.toStdString());
+    REQUIRE(out.finished);
+    CHECK(out.succeeded);
+
+    // Nothing was verified, so nothing is claimed.
+    CHECK(events == 0);
+}
+
+TEST_CASE("A verified write reports the verification it performed",
+          "[download][verify]")
+{
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(512 * 1024, 43);
+    auto dt = makeDownload(scratch, payload, QStringLiteral("verify-src.img"),
+                           QStringLiteral("verify-dst.img"));
+    dt->setVerifyEnabled(true);
+
+    int events = 0;
+    bool reportedSuccess = false;
+    QByteArray writeHash, verifyHash;
+    QObject ctx;
+    QObject::connect(dt.get(), &DownloadThread::eventVerify, &ctx,
+                     [&](quint32, bool ok, QByteArray w, QByteArray v) {
+                         ++events;
+                         reportedSuccess = ok;
+                         writeHash = w;
+                         verifyHash = v;
+                     });
+
+    const Outcome out = runToCompletion(*dt, 240000);
+    INFO("error: " << out.errorMessage.toStdString());
+    REQUIRE(out.finished);
+    REQUIRE(out.succeeded);
+
+    REQUIRE(events == 1);
+    CHECK(reportedSuccess);
+    // And the hashes it reports are real ones that agree, rather than the
+    // empty pair a skipped verification used to record.
+    CHECK_FALSE(writeHash.isEmpty());
+    CHECK_FALSE(verifyHash.isEmpty());
+    CHECK(writeHash == verifyHash);
+}
