@@ -576,7 +576,16 @@ bool DownloadThread::_openAndPrepareDevice()
         }
         qDebug() << "  Last MB + flush + sync took" << _timer.elapsed() << "ms";
     }
-    _file->Seek(0);
+    // Back to the start for the image itself. The position is currently at
+    // the end of the device, where the last megabyte was just zeroed, so a
+    // failure here that went unnoticed would begin the image there.
+    const rpi_imager::FileError rewind = _file->Seek(0);
+    if (rewind != rpi_imager::FileError::kSuccess)
+    {
+        emit error(_fileErrorToString(rewind, tr("returning to the start of the device")));
+        return false;
+    }
+
     qint64 mbrTotalMs = mbrTimer.elapsed();
     qDebug() << "Done zero'ing out start and end of drive. Total MBR prep:" << mbrTotalMs << "ms";
     
