@@ -142,6 +142,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkDisableWarnings
+                objectName: "disableWarningsToggle"
                 text: qsTr("Disable warnings")
                 accessibleDescription: qsTr("Skip confirmation dialogs before writing images (advanced users only)")
                 Layout.fillWidth: true
@@ -452,6 +453,7 @@ BaseDialog {
     // Confirmation dialog for disabling warnings
     BaseDialog {
         id: confirmDisableWarnings
+        objectName: "confirmDisableWarningsDialog"
         parent: popup.contentItem
         anchors.centerIn: parent
 
@@ -524,6 +526,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: confirmDisableButton
+                objectName: "confirmDisableWarningsButton"
                 text: qsTr("Disable warnings")
                 accessibleDescription: qsTr("Disable confirmation prompts before writing images, requiring only exact name entry for system drives")
                 activeFocusOnTab: true
