@@ -355,16 +355,28 @@ void DownloadExtractThread::cancelDownload()
 }
 
 // Raise exception on libarchive errors
+//
+// The line is drawn where libarchive draws it. ARCHIVE_WARN and
+// ARCHIVE_RETRY mean the operation got there in the end and the caller may
+// carry on; ARCHIVE_FAILED means this operation did not happen; ARCHIVE_FATAL
+// means the archive is finished with.
+//
+// Only FATAL used to abort, so FAILED was written to the debug log and
+// ignored. A zip entry whose CRC does not match reports exactly FAILED,
+// which is how a corrupt multi-file archive came to be unpacked to the end
+// and the write reported successful. The same applies writing outwards: a
+// block that did not reach the card is not something to note and continue
+// past.
 static inline void _checkResult(int r, struct archive *a)
 {
-    if (r == ARCHIVE_FATAL)
+    if (r <= ARCHIVE_FAILED)
     {
-        // Fatal
-        throw runtime_error(archive_error_string(a));
+        const char *why = archive_error_string(a);
+        throw runtime_error(why ? why : "libarchive operation failed");
     }
     if (r < ARCHIVE_OK)
     {
-        // Non-fatal (e.g., WARN, RETRY): log but do not abort
+        // WARN or RETRY: worth knowing about, not worth abandoning the write.
         qDebug() << archive_error_string(a);
     }
 }
@@ -797,23 +809,8 @@ void DownloadExtractThread::extractMultiFileRun()
 
               while ( (r = archive_read_data_block(a, &buff, &size, &offset)) != ARCHIVE_EOF)
               {
-                  // ARCHIVE_FAILED from a data read means this entry cannot be
-                  // continued -- for a zip it is a CRC mismatch, so the bytes
-                  // just read are not the bytes that were archived.
-                  //
-                  // _checkResult() only throws on ARCHIVE_FATAL and merely
-                  // logs anything else, so a corrupt multi-file archive was
-                  // unpacked to the end and the write reported successful:
-                  // a card that looks written, will not boot, and says
-                  // nothing about why. libarchive's own contract separates
-                  // these -- WARN means carry on, FAILED does not -- so only
-                  // WARN and RETRY stay non-fatal here.
-                  if (r <= ARCHIVE_FAILED)
-                  {
-                      const char *why = archive_error_string(a);
-                      throw runtime_error(why ? why
-                                              : "Archive entry could not be read");
-                  }
+                  // A CRC mismatch arrives here as ARCHIVE_FAILED, which
+                  // _checkResult() now treats as terminal.
                   _checkResult(r, a);
 
                   ++blockCount;
