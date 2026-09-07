@@ -30,6 +30,10 @@ TestCase {
     QtObject {
         id: fakeContainer
         property bool disableWarnings: false
+        // applySettings() restarts the wizard when the source changed,
+        // because the OS the user picked came from the old one.
+        property int resets: 0
+        function resetWizard() { fakeContainer.resets++ }
     }
 
     Component {
@@ -42,6 +46,7 @@ TestCase {
     property var dialog: null
 
     function init() {
+        fakeContainer.resets = 0
         dialog = dialogComponent.createObject(testCase)
         verify(dialog, "the dialog was created")
         dialog.open()
@@ -135,5 +140,86 @@ TestCase {
                   "the pasted address was accepted")
         compare(child("repoCustomUriField").value, "https://example.com/os_list.json",
                 "and the newline is gone from what would be fetched")
+    }
+
+
+    // ── What Apply and Cancel do to the rest of the wizard ────────────
+    //
+    // Changing the content repository invalidates everything downstream:
+    // the OS the user chose came from the old source and may not be in the
+    // new one. So applySettings() restarts the wizard -- and only when the
+    // source actually changed, because a restart throws away the device,
+    // the card and every customisation setting along with the OS.
+    //
+    // Which makes the guard the interesting half. Open the options, look at
+    // the repository, press Apply without touching anything, and all of
+    // that work has to still be there.
+    //
+    // The branches that did change something are deliberately not driven
+    // here. Each calls refreshOsListFrom(), which clears the application's
+    // OS list and starts a fetch on the singleton every other test file in
+    // this process shares. What is checked instead is that Apply ran at all
+    // -- it clears `initialized` on every path -- so "nothing changed"
+    // cannot be confused with "Apply did nothing".
+
+    function test_applying_without_changing_anything_leaves_the_wizard_alone() {
+        // The official repository, which is what the dialog opens on when
+        // no custom one is set, and nothing touched.
+        verify(child("repoOfficialRadio").checked,
+               "the dialog opened on the official source")
+
+        child("repoApplyButton").clicked()
+
+        compare(fakeContainer.resets, 0,
+                "the device, the card and the customisation are still there")
+        verify(!dialog.initialized,
+               "and Apply did run -- it re-reads its state next time")
+    }
+
+    function test_cancelling_leaves_the_wizard_alone() {
+        chooseCustomUri("https://example.com/os_list.json")
+        tryVerify(function () { return child("repoApplyButton").enabled }, 3000)
+
+        child("repoCancelButton").clicked()
+
+        compare(fakeContainer.resets, 0)
+        tryVerify(function () { return !dialog.visible }, 3000)
+        verify(!dialog.initialized,
+               "so a later open reads the source that is actually in use, "
+               + "not the one that was typed and abandoned")
+    }
+
+    // ── Choosing a file rather than typing an address ─────────────────
+
+    function test_a_file_chosen_from_the_picker_becomes_the_pending_source() {
+        // The picker is used where no native dialog is available. Its answer
+        // has to land on the dialog, or the Apply button stays disabled and
+        // the user has no way to use a local list at all.
+        dialog.selectedRepo = ""
+        dialog.repoFileDialog.selectedFile = "file:///tmp/imager-test/os_list.json"
+
+        dialog.repoFileDialog.accepted()
+
+        compare(String(dialog.selectedRepo),
+                "file:///tmp/imager-test/os_list.json")
+    }
+
+    function test_a_chosen_file_enables_apply() {
+        child("repoCustomFileRadio").checked = true
+        dialog.repoFileDialog.selectedFile = "file:///tmp/imager-test/os_list.json"
+        dialog.repoFileDialog.accepted()
+
+        tryVerify(function () { return child("repoApplyButton").enabled }, 3000,
+                  "a chosen file is enough to apply")
+    }
+
+    function test_choosing_the_file_option_puts_the_cursor_in_the_field() {
+        // The field is read-only and filled by the picker, so the focus is
+        // what carries a keyboard user on to the Browse button next to it.
+        child("repoCustomFileRadio").checked = true
+
+        tryVerify(function () {
+            return child("repoCustomFilePathField").activeFocus
+        }, 3000, "the path field took focus")
     }
 }

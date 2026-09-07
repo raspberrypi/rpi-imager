@@ -106,6 +106,7 @@ BaseDialog {
 
             ImRadioButton {
                 id: radioCustomFile
+                objectName: "repoCustomFileRadio"
                 text: qsTr("Use custom file")
                 accessibleDescription: qsTr("Load operating system list from a JSON file on your computer")
                 checked: false
@@ -144,6 +145,7 @@ BaseDialog {
 
                 ImTextField {
                     id: fieldCustomRepository
+                    objectName: "repoCustomFilePathField"
                     text: popup.selectedRepo !== "" ? UrlFmt.display(popup.selectedRepo) : ""
                     Layout.fillWidth: true
                     placeholderText: qsTr("Please select a custom repository json file")
@@ -154,6 +156,7 @@ BaseDialog {
 
                 ImButton {
                     id: browseButton
+                    objectName: "repoBrowseButton"
                     text: CommonStrings.browse
                     accessibleDescription: qsTr("Select a custom repository JSON file from your computer")
                     Layout.minimumWidth: 80
@@ -216,6 +219,7 @@ BaseDialog {
 
             ImButton {
                 id: cancelButton
+                objectName: "repoCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Close the repository dialog without changing the content source")
                 Layout.minimumWidth: Style.buttonWidthMinimum
