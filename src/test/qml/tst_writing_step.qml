@@ -268,4 +268,143 @@ TestCase {
 
         ImageWriterSingleton.onCancelled()
     }
+
+    // ── What the screen says while it runs, and afterwards ────────────
+    //
+    // These handlers are the only account the user gets of a write. The
+    // guard on them is the part worth pinning: every one checks isWriting
+    // first, so a progress signal that arrives after the write has ended
+    // cannot paint over the outcome. Without it a trailing update replaces
+    // "Write failed: no space left on device" with "Writing... 50%", and
+    // the reason is gone from the one place it was shown.
+
+    function progressText() {
+        var t = findChild(step, "writeProgressText")
+        verify(t, "found the progress text")
+        return t
+    }
+
+    function progressBar() {
+        var b = findChild(step, "writeProgressBar")
+        verify(b, "found the progress bar")
+        return b
+    }
+
+    function beWriting() {
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return step.isWriting }, 3000, "a write is under way")
+    }
+
+    function test_progress_is_shown_as_a_percentage() {
+        beWriting()
+
+        step.onWriteProgress(512, 1024)
+
+        compare(progressBar().value, 50)
+        verify(progressText().text.indexOf("50") !== -1,
+               "the figure is on screen: " + progressText().text)
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_progress_without_a_known_total_shows_what_has_been_written() {
+        // A gzip stream over 4 GB does not report its size, so a percentage
+        // would sit at zero and read as stuck. Bytes written at least moves.
+        beWriting()
+        step.isIndeterminateProgress = true
+
+        step.onWriteProgress(3 * 1024 * 1024, 0)
+
+        verify(progressText().text.indexOf("3") !== -1,
+               "megabytes written are shown: " + progressText().text)
+        verify(progressText().text.indexOf("%") === -1,
+               "and no percentage is invented")
+
+        step.isIndeterminateProgress = false
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_verification_says_it_is_verifying() {
+        // Distinct from writing, because it takes about as long again and a
+        // user told "Writing... 100%" for minutes assumes it has hung.
+        beWriting()
+
+        step.onVerifyProgress(256, 1024)
+
+        compare(progressBar().value, 25)
+        verify(progressText().text.toLowerCase().indexOf("verif") !== -1,
+               progressText().text)
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_verification_clears_a_warning_from_the_write() {
+        // A warning about the write phase -- a sync fallback, say -- is not
+        // true of verification and must not be left on screen beside it.
+        beWriting()
+        step.operationWarning = "the write fell back to synchronous I/O"
+
+        step.onVerifyProgress(1, 2)
+
+        compare(step.operationWarning, "")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_a_preparation_message_is_passed_through() {
+        beWriting()
+
+        step.onPreparationStatusUpdate("Checking the cached image")
+
+        compare(progressText().text, "Checking the cached image")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    // ── The outcome, and nothing painting over it ────────────────────
+
+    function test_a_failure_says_why() {
+        // "Write failed:" with nothing after it leaves the user with no
+        // reason and nothing to search for.
+        beWriting()
+
+        ImageWriterSingleton.onError("no space left on device")
+
+        tryVerify(function () {
+            return progressText().text.indexOf("no space left on device") !== -1
+        }, 3000, "the reason is on screen: " + progressText().text)
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_a_late_progress_signal_does_not_hide_a_failure() {
+        // The guard. Progress arriving after the write ended must not
+        // replace the failure text with a percentage.
+        beWriting()
+        ImageWriterSingleton.onError("no space left on device")
+        tryVerify(function () {
+            return progressText().text.indexOf("no space left on device") !== -1
+        }, 3000)
+
+        step.onWriteProgress(512, 1024)
+        step.onVerifyProgress(512, 1024)
+        step.onPreparationStatusUpdate("something else entirely")
+
+        verify(progressText().text.indexOf("no space left on device") !== -1,
+               "the failure is still what is shown: " + progressText().text)
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_a_warning_from_the_write_is_carried_to_the_screen() {
+        beWriting()
+
+        ImageWriterSingleton.onOperationWarning("the write fell back to synchronous I/O")
+
+        tryVerify(function () {
+            return step.operationWarning === "the write fell back to synchronous I/O"
+        }, 3000)
+
+        ImageWriterSingleton.onCancelled()
+    }
 }

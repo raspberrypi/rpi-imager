@@ -284,6 +284,7 @@ WizardStepBase {
 
             FocusableText {
                 id: progressText
+                objectName: "writeProgressText"
                 text: qsTr("Starting write process...")
                 font.pointSize: Style.fontSizeHeading
                 font.family: Style.fontFamilyBold
@@ -296,6 +297,7 @@ WizardStepBase {
 
             ProgressBar {
                 id: progressBar
+                objectName: "writeProgressBar"
                 Layout.fillWidth: true
                 Layout.preferredHeight: Style.spacingLarge
                 value: 0
