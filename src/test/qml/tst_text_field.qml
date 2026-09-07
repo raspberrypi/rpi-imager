@@ -223,4 +223,96 @@ TestCase {
         compare(field.text, "     ")
         compare(field.value, "", "a hostname of spaces is no hostname")
     }
+
+
+    // -- The right-click menu ----------------------------------------------
+    //
+    // Cut and Copy were uncovered. What they do is ordinary; when they are
+    // offered is not, and that is the part worth pinning.
+    //
+    // This field is used for the Wi-Fi passphrase and the user password as
+    // well as the hostname, and it can be set to show dots instead of
+    // characters. Both items are refused on a masked field: a passphrase the
+    // user cannot see is one they cannot lift out through a context menu
+    // either, and the same menu is a click away on somebody else's machine
+    // that has been left at the customisation screen.
+    //
+    // Cut is refused on a read-only field too -- the repository path is one
+    // -- because removing text from a field the user cannot type into leaves
+    // them with no way to put it back.
+
+    function menuItem(field, name) {
+        const item = findChild(field, name)
+        verify(item, "found " + name)
+        return item
+    }
+
+    function test_copy_puts_the_selection_on_the_clipboard() {
+        const field = create({ text: "pi-in-the-shed" })
+        field.select(0, 2)
+        compare(field.selectedText, "pi")
+
+        menuItem(field, "textFieldCopyItem").triggered()
+
+        compare(ClipboardHelper.getText(), "pi")
+        compare(field.text, "pi-in-the-shed", "and leaves the field alone")
+    }
+
+    function test_cut_puts_it_on_the_clipboard_and_takes_it_out() {
+        const field = create({ text: "pi-in-the-shed" })
+        field.select(0, 3)
+        compare(field.selectedText, "pi-")
+
+        menuItem(field, "textFieldCutItem").triggered()
+
+        compare(ClipboardHelper.getText(), "pi-",
+                "it went to the clipboard")
+        compare(field.text, "in-the-shed",
+                "and came out of the field")
+    }
+
+    function test_neither_is_offered_with_nothing_selected() {
+        const field = create({ text: "pi-in-the-shed" })
+        compare(field.selectedText, "")
+
+        verify(!menuItem(field, "textFieldCutItem").enabled)
+        verify(!menuItem(field, "textFieldCopyItem").enabled)
+    }
+
+    function test_neither_is_offered_on_a_field_showing_dots() {
+        // The privacy one. A field masked because it holds a passphrase
+        // must not hand that passphrase to the clipboard.
+        const field = create({ text: "correct horse battery" })
+        field.echoMode = TextInput.Password
+        field.selectAll()
+        verify(field.selectedText.length > 0, "there is a selection")
+
+        verify(!menuItem(field, "textFieldCopyItem").enabled,
+               "a masked field cannot be copied out of")
+        verify(!menuItem(field, "textFieldCutItem").enabled,
+               "nor cut out of")
+    }
+
+    function test_cut_is_not_offered_on_a_field_that_cannot_be_typed_into() {
+        const field = create({ text: "/home/pi/os_list.json", readOnly: true })
+        field.selectAll()
+        verify(field.selectedText.length > 0)
+
+        verify(!menuItem(field, "textFieldCutItem").enabled,
+               "nothing can be removed from a read-only field")
+        verify(menuItem(field, "textFieldCopyItem").enabled,
+               "but it can still be copied, which is the point of showing it")
+    }
+
+    function test_select_all_and_paste_are_offered_when_they_apply() {
+        // The two either side of them, so the menu is not simply inert.
+        const field = create({ text: "pi-in-the-shed" })
+
+        verify(menuItem(field, "textFieldSelectAllItem").enabled,
+               "there is something to select")
+
+        const empty = create({})
+        verify(!menuItem(empty, "textFieldSelectAllItem").enabled,
+               "and nothing to select in an empty field")
+    }
 }
