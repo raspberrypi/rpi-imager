@@ -319,4 +319,106 @@ TestCase {
         verify(description.indexOf("without a password") !== -1,
                "and that no password will be required")
     }
+
+    // ── The answer the warning comes back with ────────────────────────────
+    //
+    // Above, cancelled() is emitted straight at the dialog, which says what
+    // the step does with the answer but nothing about the dialog producing
+    // it. The buttons and the escape key were uncovered, so a CANCEL that
+    // stopped reporting a refusal would leave every case above passing while
+    // the box the user unticked stayed ticked -- and passwordless sudo went
+    // onto the card.
+    //
+    // The dialog decides in onClosed, from a flag the buttons set. That
+    // makes the closing route the thing that matters rather than the button
+    // press: anything that puts the dialog away without an explicit ENABLE
+    // has to come back as a refusal, because the safe answer to a question
+    // about handing out root is no.
+
+    function sudoButton(name) {
+        var b = findChild(sudoWarning(), name)
+        verify(b, "found " + name)
+        return b
+    }
+
+    function test_pressing_cancel_unticks_the_box() {
+        var check = field("passwordlessSudoCheck")
+        check.checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+
+        sudoButton("sudoCancelButton").clicked()
+
+        tryVerify(function () { return !check.checked }, 3000,
+                  "refusing the warning leaves the option off")
+    }
+
+    function test_escape_unticks_the_box() {
+        // Dismissing a warning is not agreeing to it.
+        //
+        // The route is what this covers. escapePressed() also clears the
+        // agreed flag, and removing that clear fails nothing: the step only
+        // ever opens this dialog through askForConfirmation(), which has
+        // already cleared it. Redundant rather than load-bearing, so no
+        // claim is made here that it bites.
+        var check = field("passwordlessSudoCheck")
+        check.checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+
+        sudoWarning().escapePressed()
+
+        tryVerify(function () { return !check.checked }, 3000)
+    }
+
+    function test_the_dialog_going_away_on_its_own_unticks_the_box() {
+        // Nothing in the dialog was pressed. The user is left with whatever
+        // the box says, so it has to say off.
+        var check = field("passwordlessSudoCheck")
+        check.checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+
+        sudoWarning().close()
+
+        tryVerify(function () { return !check.checked }, 3000)
+    }
+
+    function test_pressing_enable_leaves_the_box_ticked() {
+        // The one answer that keeps it. Without this the cases above would
+        // all pass on a dialog that refused every time, which would be a
+        // setting the user cannot turn on at all.
+        var check = field("passwordlessSudoCheck")
+        check.checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+
+        sudoButton("sudoEnableButton").clicked()
+
+        tryVerify(function () { return !sudoWarning().opened }, 3000,
+                  "the dialog closed")
+        verify(check.checked, "and the option the user agreed to is still on")
+        fill("pi", "correct horse", "correct horse")
+        step.nextClicked()
+        compare(fakeContainer.customizationSettings.passwordlessSudo, true,
+                "and it reaches the card")
+    }
+
+    function test_a_second_showing_does_not_inherit_the_first_answer() {
+        // The dialog remembers its answer in a flag that onClosed reads.
+        // Asking again has to start from no, or a user who agreed once has
+        // every later showing counted as agreement -- including the ones
+        // they walked away from.
+        var check = field("passwordlessSudoCheck")
+        check.checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+        sudoButton("sudoEnableButton").clicked()
+        tryVerify(function () { return !sudoWarning().opened }, 3000)
+        verify(check.checked, "agreed the first time")
+
+        check.checked = false
+        check.checked = true
+        tryVerify(function () { return sudoWarning().opened }, 3000)
+
+        sudoWarning().close()
+
+        tryVerify(function () { return !check.checked }, 3000,
+                  "the second showing was not agreed to")
+    }
 }
