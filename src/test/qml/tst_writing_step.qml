@@ -407,4 +407,114 @@ TestCase {
 
         ImageWriterSingleton.onCancelled()
     }
+
+    // ── The end of the write, and what the bar says while it happens ──
+    //
+    // Finalising is the sync: everything written is being flushed to the card,
+    // and on a slow card it takes a while with no more bytes to count. So the
+    // bar goes to 100 and the text says what is happening -- a bar sitting at
+    // 97% through a long sync reads as a stalled write, and a user who pulls
+    // the card then has a half-written one.
+
+    function test_finalising_fills_the_bar_and_says_so() {
+        beWriting()
+        // beWriting() gets there through onFinalizing(), which has already
+        // filled the bar -- so it is put back part-way first, or the assertion
+        // below holds whether or not the call does anything.
+        progressBar().value = 40
+        progressText().text = "part-way"
+
+        step.onFinalizing()
+
+        compare(progressBar().value, 100,
+                "nothing is left to count, so the bar is full")
+        compare(String(progressText().text), "Finalising...",
+                "and the text says why it is sitting there")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_the_writer_saying_it_is_finalising_reaches_the_screen() {
+        // The other route to the same state: the step listens for the signal
+        // as well as being called directly by the container.
+        beWriting()
+
+        ImageWriterSingleton.onFinalizing()
+
+        tryVerify(function () {
+            return String(progressText().text) === "Finalising..."
+        }, 3000, "the writer's own signal says it too: "
+                 + progressText().text)
+        compare(progressBar().value, 100)
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_every_route_to_finalising_says_the_same_thing() {
+        // Three places set this text -- the direct call, the signal handler,
+        // and cancelling a write -- and they used to disagree by an ellipsis:
+        // "Finalising..." against "Finalising…". That made one user-visible
+        // state into two translatable strings, translators duly did both, and
+        // German ended up with "Finalisiere..." for one and "Finalisiere...."
+        // for the other.
+        //
+        // Comparing the routes against each other rather than against a
+        // literal, so this fails if they diverge again whatever wording is
+        // chosen.
+        beWriting()
+        progressText().text = "part-way"
+        step.onFinalizing()
+        const fromTheCall = String(progressText().text)
+        verify(fromTheCall !== "part-way", "the direct call set the text")
+
+        progressText().text = "cleared"
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () {
+            return String(progressText().text) !== "cleared"
+        }, 3000)
+        const fromTheSignal = String(progressText().text)
+
+        compare(fromTheSignal, fromTheCall,
+                "the signal and the direct call say the same thing")
+        verify(fromTheCall.length > 0, "and it is not empty")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    // ── Starting a write clears the last one's news ───────────────────
+    //
+    // The step is reused between writes, so a bottleneck message or a
+    // throughput figure left over from the previous card would be shown
+    // against this one -- a "slow card" warning about a card that was
+    // swapped out.
+
+    function test_a_bottleneck_report_reaches_the_step() {
+        beWriting()
+
+        ImageWriterSingleton.onBottleneckStatusChanged("Slow SD card", 2048)
+
+        tryVerify(function () {
+            return step.bottleneckStatus === "Slow SD card"
+        }, 3000, "the bottleneck is carried to the step")
+        compare(step.writeThroughputKBps, 2048,
+                "with the throughput that goes with it")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_a_bottleneck_report_replaces_the_previous_one() {
+        // It arrives repeatedly as conditions change, so the step has to show
+        // the current reading rather than the first.
+        beWriting()
+        ImageWriterSingleton.onBottleneckStatusChanged("Slow SD card", 2048)
+        tryVerify(function () { return step.bottleneckStatus === "Slow SD card" }, 3000)
+
+        ImageWriterSingleton.onBottleneckStatusChanged("", 51200)
+
+        tryVerify(function () { return step.bottleneckStatus === "" }, 3000,
+                  "a cleared bottleneck clears the message")
+        compare(step.writeThroughputKBps, 51200)
+
+        ImageWriterSingleton.onCancelled()
+    }
 }

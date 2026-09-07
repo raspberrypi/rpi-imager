@@ -3252,8 +3252,11 @@ TEST_CASE("A download interrupted twice still writes the whole image",
 // one message that would have told them what had happened.
 //
 // Nothing covered the contract. These cases drive a submission failure through
-// that path; re-adding the free makes the process abort, which is a blunt
-// reversion signal but an unambiguous one.
+// that path. Re-adding the free is detected, though not the way you would
+// expect: rather than glibc catching it and aborting, the heap corruption
+// leaves the process spinning, so the reversion shows up as these cases
+// hanging instead of failing. Blunt, but unambiguous -- and a reminder that a
+// double free is not reliably a crash you can see.
 
 class FailingAsyncDevice : public rpi_imager::LinuxFileOperations
 {

@@ -362,7 +362,9 @@ WizardStepBase {
             } else {
                 // Cancel the actual write operation
                 progressBar.value = 100
-                progressText.text = qsTr("Finalising…")
+                // The ASCII form, as in the two handlers below: one
+                // user-visible state, one translatable string.
+                progressText.text = qsTr("Finalising...")
                 ImageWriterSingleton.cancelWrite()
             }
         } else if (!root.isComplete) {
@@ -596,7 +598,14 @@ WizardStepBase {
 
         function onFinalizing() {
             if (root.isWriting) {
-                progressText.text = qsTr("Finalising…")
+                // Same string as onFinalizing() above, deliberately. It used
+                // to differ by its ellipsis -- "Finalising…" here against
+                // "Finalising..." there -- which made one user-visible state
+                // into two translatable strings. Translators duly did both,
+                // and German ended up with "Finalisiere..." for one and
+                // "Finalisiere...." for the other. The ASCII form is kept
+                // because more locales have already translated it.
+                progressText.text = qsTr("Finalising...")
                 progressBar.value = 100
             }
         }
