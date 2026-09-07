@@ -60,6 +60,10 @@ TestCase {
         // WizardStepBase reads this on every step; undefined assigns nothing
         // and warns on each construction.
         property string networkInfoText: ""
+        // The step names the chosen board here. Without the property the
+        // assignment fails silently and the selection looks like it never
+        // happened.
+        property string selectedDeviceName: ""
         property int steps: 0
         function nextStep() { steps++ }
     }
@@ -77,6 +81,7 @@ TestCase {
 
     function init() {
         fakeContainer.steps = 0
+        fakeContainer.selectedDeviceName = ""
         step = createTemporaryObject(stepComponent, testCase)
         verify(step !== null, "the step has to instantiate")
     }
@@ -327,5 +332,89 @@ TestCase {
         step.hwlist.currentIndex = -1
         verify(!step.hasDeviceSelected,
                "and losing the selection means it is not")
+    }
+
+
+    // ── Choosing a board with the mouse ───────────────────────────────
+    //
+    // The delegate's own click and double-click handlers were uncovered.
+    // They are how nearly everyone picks their board, and they are separate
+    // from the keyboard path already covered: losing them leaves a list that
+    // can be tabbed through and not clicked.
+    //
+    // Both need a populated list, so both skip in a run that never fetched
+    // one, the same way as the cases above. Advancing is watched through
+    // nextClicked rather than the container, because a step on its own has
+    // no container listening -- the wizard connects that signal at the
+    // point it builds the step.
+
+    function rowAt(list, index) {
+        list.positionViewAtIndex(index, ListView.Beginning)
+        waitForRendering(testCase)
+        var row = list.itemAtIndex(index)
+        verify(row, "the row is instantiated")
+        return row
+    }
+
+    function listWithBoards() {
+        if (!requireList())
+            return null
+        var list = step.hwlist
+        verify(list, "found the device list")
+        if (list.count === 0) {
+            skip("the list is there but empty in this run")
+            return null
+        }
+        return list
+    }
+
+    function test_clicking_a_board_chooses_it() {
+        var list = listWithBoards()
+        if (!list)
+            return
+
+        mouseClick(rowAt(list, 0))
+        waitForRendering(testCase)
+
+        verify(step.hasDeviceSelected, "a board was chosen")
+        verify(String(fakeContainer.selectedDeviceName).length > 0,
+               "and named to the wizard; got "
+               + fakeContainer.selectedDeviceName)
+        compare(list.currentIndex, 0, "with the row it came from highlighted")
+    }
+
+    function test_clicking_a_board_does_not_move_on_by_itself() {
+        // One click chooses; it does not leave the screen. Someone comparing
+        // two boards clicks between them, and a list that advanced on the
+        // first click would take the choice away from them.
+        var list = listWithBoards()
+        if (!list)
+            return
+        const spy = nextSpy.createObject(testCase, { target: step })
+        verify(spy !== null)
+
+        mouseClick(rowAt(list, 0))
+        waitForRendering(testCase)
+        wait(200)
+
+        compare(spy.count, 0, "still on the board chooser")
+        spy.destroy()
+    }
+
+    function test_double_clicking_a_board_chooses_it_and_moves_on() {
+        // The shortcut for someone who knows which board they have.
+        var list = listWithBoards()
+        if (!list)
+            return
+        const spy = nextSpy.createObject(testCase, { target: step })
+        verify(spy !== null)
+
+        mouseDoubleClick(rowAt(list, 0))
+        waitForRendering(testCase)
+
+        verify(step.hasDeviceSelected, "the board was chosen")
+        tryVerify(function () { return spy.count === 1 }, 3000,
+                  "and the wizard was asked to move on")
+        spy.destroy()
     }
 }

@@ -306,6 +306,7 @@ WizardStepBase {
             // OS SwipeView for navigation between categories
             SwipeView {
                 id: osswipeview
+                objectName: "osCategorySwipeView"
                 anchors.fill: parent
                 interactive: false
                 clip: true
@@ -566,6 +567,7 @@ WizardStepBase {
             // announces the new list.
             announcePopulationChanges: false
             id: sublistview
+            objectName: "osSublistView"
             model: ListModel {
                 id: sublistModel
                 

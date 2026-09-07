@@ -482,4 +482,59 @@ TestCase {
         verify(!fakeContainer.userConfigured)
         verify(!fakeContainer.sshEnabled)
     }
+
+
+    // ── Getting back out of a category ────────────────────────────────
+    //
+    // The OS list has categories -- "Raspberry Pi OS (other)", the media
+    // players, the emulators -- and choosing one slides the view across to
+    // its contents. Going back was uncovered, both the function that does it
+    // and the Left arrow bound to it.
+    //
+    // Left is the only key that goes back. There is a back row at the top of
+    // the sublist for the mouse, but for someone driving the list from the
+    // keyboard, losing that handler means arriving in a category and having
+    // no way out of it except Tab-hunting for a control off the list
+    // entirely. The view stays on the sublist, and the main list -- with
+    // every other operating system on it -- is unreachable.
+    //
+    // The Left arrow binding itself is not covered here and cannot be from
+    // this file. The sublist lives in a Component that is only instantiated
+    // when a real category is chosen, which needs an OS list with categories
+    // in it -- and that list is fetched, process-wide, and shared with every
+    // other test file. Loading a synthetic one would put the whole suite at
+    // the mercy of restoring it afterwards. So what is pinned here is the
+    // function the key calls; the one line binding them is left as a known
+    // gap rather than a test that cannot run.
+
+    function swipeView() {
+        var v = findChild(step, "osCategorySwipeView")
+        verify(v, "found the category view")
+        return v
+    }
+
+    function test_going_back_returns_to_the_main_list() {
+        // Driven from the sublist page, because from the main list there is
+        // nowhere further back and the case would hold either way.
+        swipeView().currentIndex = 1
+        compare(swipeView().currentIndex, 1, "showing a category")
+        step.categorySelected = "Raspberry Pi OS (other)"
+
+        step.handleBackNavigation()
+
+        compare(swipeView().currentIndex, 0,
+                "back on the list with everything else on it")
+        compare(step.categorySelected, "",
+                "and no longer inside a category")
+    }
+
+    function test_going_back_from_the_main_list_stays_there() {
+        // Nothing above it. Stepping past the first page would leave the
+        // view on nothing at all.
+        swipeView().currentIndex = 0
+
+        step.handleBackNavigation()
+
+        compare(swipeView().currentIndex, 0)
+    }
 }
