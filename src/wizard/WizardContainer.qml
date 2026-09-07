@@ -240,7 +240,20 @@ Item {
     readonly property int firstCustomizationStep: stepHostnameCustomization
 
     function clampSidebarWidth(width) {
-        return Math.max(Style.sidebarMinWidth, Math.min(Style.sidebarMaxWidth, width))
+        // Anything that is not a finite number goes through Math.min/max
+        // untouched and lands in sidebarWidthValue -- an int property, where
+        // it becomes 0. A sidebar of no width takes the whole navigation off
+        // the screen and the splitter that would reset it with it, so there is
+        // nothing left to drag back; and since the value comes from a
+        // persisted setting, it happens again on every launch. The application
+        // only ever writes a clamped integer here, but a corrupted or
+        // hand-edited settings file does not have to.
+        const asNumber = Number(width)
+        if (!isFinite(asNumber)) {
+            return Style.sidebarWidth
+        }
+        return Math.max(Style.sidebarMinWidth,
+                        Math.min(Style.sidebarMaxWidth, asNumber))
     }
 
     function saveSidebarWidth(width) {
