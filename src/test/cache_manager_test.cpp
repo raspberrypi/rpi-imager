@@ -27,6 +27,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QCoreApplication>
+#include "config.h"
 #include "signal_log.h"
 #include <QStandardPaths>
 #include <QSettings>
@@ -711,4 +712,157 @@ TEST_CASE("A custom cache file is not written into settings", "[cache-manager][p
     // permanent cache; the temporary directory it lived in is gone by now.
     CacheManager second;
     CHECK(second.getCacheStatus().cacheFileName != custom);
+}
+
+// ---------------------------------------------------------------------------
+// Deciding whether the next download may be cached
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// What the background disk-space check reports back. It is a private slot,
+// which the metaobject can still reach by name -- the alternative would be
+// widening the class's interface for the benefit of a test.
+void reportDiskSpace(CacheManager &manager, qint64 availableBytes)
+{
+    const bool invoked = QMetaObject::invokeMethod(
+        &manager, "onDiskSpaceCheckComplete", Qt::DirectConnection,
+        Q_ARG(qint64, availableBytes), Q_ARG(QString, QDir::tempPath()));
+    REQUIRE(invoked);
+}
+
+} // namespace
+//
+// setupCacheForDownload() answers that, and its refusals were uncovered.
+//
+// Two of them matter to a user. A cache holding one image has to be thrown
+// away before another is downloaded into it, or a later run can be handed
+// the file it already had for a different selection -- an image written to
+// a card that is not the one that was chosen. And the disk-space guards are
+// what stop a download filling the drive the application is running from,
+// which on a laptop means the machine, not just the download.
+
+TEST_CASE("A cache holding another image is thrown away first",
+          "[cache-manager]")
+{
+    clearCacheDir();
+    CacheManager manager;
+    manager.updateCacheFile(QByteArray("hash-of-the-old-image"),
+                            QByteArray("compressed-hash-of-the-old-image"));
+    REQUIRE(manager.getCacheStatus().cachedHash
+            == QByteArray("hash-of-the-old-image"));
+
+    rpi_test::SignalLog invalidated(&manager, &CacheManager::cacheInvalidated);
+
+    QString path;
+    manager.setupCacheForDownload(QByteArray("hash-of-a-different-image"),
+                                  1024, path);
+
+    CHECK(invalidated.count() == 1);
+    CHECK(manager.getCacheStatus().cachedHash.isEmpty());
+}
+
+TEST_CASE("A cache holding the same image is left where it is",
+          "[cache-manager]")
+{
+    // The counterpart. Throwing it away every time would mean downloading
+    // the image again on every write of the same card.
+    clearCacheDir();
+    CacheManager manager;
+    manager.updateCacheFile(QByteArray("hash-of-the-image"),
+                            QByteArray("compressed-hash"));
+
+    rpi_test::SignalLog invalidated(&manager, &CacheManager::cacheInvalidated);
+
+    QString path;
+    manager.setupCacheForDownload(QByteArray("hash-of-the-image"), 1024, path);
+
+    CHECK(invalidated.count() == 0);
+    CHECK(manager.getCacheStatus().cachedHash == QByteArray("hash-of-the-image"));
+}
+
+TEST_CASE("Nothing is cached before the disk has been looked at",
+          "[cache-manager]")
+{
+    // The check runs on a background thread. Until it answers there is no
+    // way to know whether writing a copy of the image would fill the drive.
+    //
+    // Defended twice: the explicit "has the check finished" test, and the
+    // floor below it, which refuses anyway because the available space is
+    // still zero. Removing the first fails nothing, so what is pinned here
+    // is the outcome rather than either guard.
+    clearCacheDir();
+    CacheManager manager;
+    REQUIRE(!manager.getCacheStatus().diskSpaceCheckComplete);
+
+    QString path;
+    CHECK_FALSE(manager.setupCacheForDownload(QByteArray("some-hash"), 1024, path));
+    CHECK(path.isEmpty());
+}
+
+TEST_CASE("Nothing is cached when the disk is too full", "[cache-manager]")
+{
+    clearCacheDir();
+    CacheManager manager;
+    // What the background check reports when it finds the drive nearly full.
+    reportDiskSpace(manager, 1024LL * 1024 * 1024);
+
+    QString path;
+    CHECK_FALSE(manager.setupCacheForDownload(QByteArray("some-hash"),
+                                              1024, path));
+}
+
+TEST_CASE("Nothing is cached when the download would leave too little",
+          "[cache-manager]")
+{
+    // Enough space for the download itself is not enough: the application
+    // keeps a floor free, because a drive filled to the last byte by a
+    // cached copy is a machine that stops working for reasons the user will
+    // not connect to having written a card.
+    clearCacheDir();
+    CacheManager manager;
+    const qint64 floor = IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING;
+    reportDiskSpace(manager, floor + (2LL * 1024 * 1024 * 1024));
+
+    QString path;
+    // Three gigabytes on top of the floor leaves less than the floor.
+    CHECK_FALSE(manager.setupCacheForDownload(QByteArray("some-hash"),
+                                              3LL * 1024 * 1024 * 1024, path));
+
+    // One gigabyte leaves more than it, so this one is allowed.
+    CHECK(manager.setupCacheForDownload(QByteArray("some-hash"),
+                                        1LL * 1024 * 1024 * 1024, path));
+    CHECK(!path.isEmpty());
+}
+
+TEST_CASE("A download that is allowed to be cached is given somewhere to go",
+          "[cache-manager]")
+{
+    clearCacheDir();
+    CacheManager manager;
+    reportDiskSpace(manager, 200LL * 1024 * 1024 * 1024);
+
+    QString path;
+    REQUIRE(manager.setupCacheForDownload(QByteArray("some-hash"), 1024, path));
+
+    CHECK(!path.isEmpty());
+    CHECK(manager.getCacheStatus().cacheFileName == path);
+}
+
+TEST_CASE("A custom cache file is used rather than the default one",
+          "[cache-manager]")
+{
+    // Set from the debug options. A download that ignored it would write to
+    // the default location while the user watched the one they chose.
+    clearCacheDir();
+    CacheManager manager;
+    const QString chosen = QDir::temp().filePath(
+        QStringLiteral("rpi-imager-chosen-cache.img"));
+    manager.setCustomCacheFile(chosen, QByteArray("some-hash"));
+    reportDiskSpace(manager, 200LL * 1024 * 1024 * 1024);
+
+    QString path;
+    REQUIRE(manager.setupCacheForDownload(QByteArray("some-hash"), 1024, path));
+
+    CHECK(path == chosen);
 }
