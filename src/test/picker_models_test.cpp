@@ -1446,23 +1446,32 @@ TEST_CASE("A soft refresh of an empty list is harmless", "[models][oslist]")
 // would then answer "not a system drive", auto-advance would fire, and the
 // person carried past the confirmation is the screen-reader user who
 // triggered the fallback in the first place.
+//
+// isStorageItemSelectable() hardcodes two: the system role and the
+// read-only one. Both are checked here, because a wrong read-only role
+// either offers an unwritable card as a target or hides a good one, and
+// neither shows up as anything but a confused user.
 // ══════════════════════════════════════════════════════════════
 
 TEST_CASE("The role number the storage step hardcodes is still the system-drive role",
           "[models][roles]")
 {
-    // If this fails, fix the literal in
-    // src/wizard/StorageSelectionStep.qml (conditionalNext, isSystemRole)
-    // rather than this number.
-    constexpr int kRoleUsedByStorageSelectionStepQml = 0x107;
+    // If either fails, fix the literal in
+    // src/wizard/StorageSelectionStep.qml -- conditionalNext() hardcodes
+    // the system role and isStorageItemSelectable() hardcodes both --
+    // rather than these numbers.
+    constexpr int kSystemRoleUsedByQml = 0x107;
+    constexpr int kReadOnlyRoleUsedByQml = 0x106;
 
-    CHECK(static_cast<int>(DriveListModel::isSystemRole)
-          == kRoleUsedByStorageSelectionStepQml);
+    CHECK(static_cast<int>(DriveListModel::isSystemRole) == kSystemRoleUsedByQml);
+    CHECK(static_cast<int>(DriveListModel::isReadOnlyRole) == kReadOnlyRoleUsedByQml);
 
     DriveListModel model;
     const auto names = model.roleNames();
-    REQUIRE(names.contains(kRoleUsedByStorageSelectionStepQml));
-    CHECK(names.value(kRoleUsedByStorageSelectionStepQml) == QByteArray("isSystem"));
+    REQUIRE(names.contains(kSystemRoleUsedByQml));
+    CHECK(names.value(kSystemRoleUsedByQml) == QByteArray("isSystem"));
+    REQUIRE(names.contains(kReadOnlyRoleUsedByQml));
+    CHECK(names.value(kReadOnlyRoleUsedByQml) == QByteArray("isReadOnly"));
 }
 
 TEST_CASE("Every role the QML asks for by name resolves", "[models][roles]")
