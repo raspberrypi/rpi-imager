@@ -115,6 +115,7 @@ WizardStepBase {
         // Error banner for drive enumeration failures
         Rectangle {
             id: enumerationErrorBanner
+            objectName: "storageEnumerationErrorBanner"
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? errorBannerContent.implicitHeight + Style.spacingMedium * 2 : 0
             visible: root.enumerationErrorMessage.length > 0

@@ -406,4 +406,94 @@ TestCase {
         verify(!systemChild("systemDriveContinueButton").enabled,
                "so the drive has to be named again")
     }
+
+
+    // ── When the drives cannot be listed at all ───────────────────────
+    //
+    // The operating system can refuse to enumerate: no permission, a driver
+    // that will not answer, a service that is not running. The model reports
+    // it and the step is supposed to say so.
+    //
+    // The handler was uncovered, which means the failure it exists for was
+    // untested. Without it the user gets an empty card list and no reason --
+    // indistinguishable from having nothing plugged in, so they go and find
+    // another card rather than the message that would have told them what to
+    // fix.
+
+    function errorBanner() {
+        var b = findChild(step, "storageEnumerationErrorBanner")
+        verify(b, "found the error banner")
+        return b
+    }
+
+    function reportEnumerationFailure(message) {
+        // The model's own signal, raised the way the drive poller raises it.
+        ImageWriterSingleton.getDriveList().enumerationError(message)
+    }
+
+    function test_a_listing_failure_is_shown_rather_than_an_empty_list() {
+        verify(!errorBanner().visible, "nothing wrong to begin with")
+
+        reportEnumerationFailure("Permission denied opening /dev/disk")
+
+        compare(step.enumerationErrorMessage,
+                "Permission denied opening /dev/disk")
+        verify(errorBanner().visible,
+               "and the user is told rather than left with an empty list")
+    }
+
+    function test_the_reason_is_carried_into_what_the_user_reads() {
+        // The message is the actionable part. A banner that says only that
+        // something went wrong is no better than the empty list.
+        reportEnumerationFailure("udisks2 is not running")
+
+        var shown = findChild(step, "storageEnumerationErrorBanner")
+        verify(String(shown.Accessible.name).indexOf("udisks2 is not running") !== -1,
+               "a screen reader hears the reason too; got "
+               + shown.Accessible.name)
+    }
+
+    function test_the_banner_goes_away_when_the_listing_recovers() {
+        // Plugging in a reader, or starting the service, should clear it --
+        // otherwise the warning outlives the problem and the user distrusts
+        // a list that is now correct.
+        reportEnumerationFailure("Permission denied")
+        verify(errorBanner().visible)
+
+        reportEnumerationFailure("")
+
+        compare(step.enumerationErrorMessage, "")
+        verify(!errorBanner().visible)
+    }
+
+    // ── Choosing a drive without a delegate to click ──────────────────
+    //
+    // Under a screen reader itemAtIndex() returns nothing, so the step has a
+    // second route that works from the row number alone. Its refusals were
+    // uncovered: an index outside the list has to select nothing rather than
+    // read past the end of the model and hand the writer whatever it finds.
+    //
+    // The accepting half is not driven here. It would point the writer at
+    // whatever drive this machine happens to have in row zero, which on the
+    // machine running the suite is its own disk. For the same reason the
+    // bounds check is not reversion-checked: removing it makes the step ask
+    // the model for a row it does not have, and what comes back is not a
+    // wrong answer so much as whatever is there.
+
+    function test_a_row_that_is_not_there_selects_no_drive_data() {
+        return [
+            { tag: "before the first", index: -1 },
+            { tag: "far before",       index: -99 },
+            { tag: "past the last",    index: 100000 }
+        ]
+    }
+
+    function test_a_row_that_is_not_there_selects_no_drive(data) {
+        containerStub.selectedStorageName = ""
+
+        step.selectDriveByIndex(data.index)
+
+        compare(containerStub.selectedStorageName, "", data.tag)
+        verify(!step.nextButtonEnabled)
+    }
 }
