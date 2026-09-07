@@ -168,6 +168,7 @@ BaseDialog {
 
             ImOptionButton {
                 id: editRepoButton
+                objectName: "editRepoButton"
                 text: qsTr("Content Repository")
                 btnText: qsTr("Edit")
                 accessibleDescription: qsTr("Change the source of operating system images between official Raspberry Pi repository and custom sources")
@@ -193,6 +194,7 @@ BaseDialog {
 
             ImOptionButton {
                 id: secureBootKeyButton
+                objectName: "secureBootKeyButton"
                 text: qsTr("Secure Boot RSA Key")
                 btnText: rsaKeyPath.text ? qsTr("Change") : qsTr("Select")
                 accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
@@ -250,6 +252,7 @@ BaseDialog {
 
             ImOptionButton {
                 id: clearSettingsButton
+                objectName: "clearSettingsButton"
                 text: qsTr("Saved Customisation")
                 btnText: qsTr("Clear")
                 // Disabled mid-write: clearing only wipes the persisted settings
@@ -346,6 +349,7 @@ BaseDialog {
 
     RepositoryDialog {
         id: repoDialog
+        objectName: "optionsRepoDialog"
         parent: popup.parent
         wizardContainer: popup.wizardContainer
     }
@@ -353,6 +357,7 @@ BaseDialog {
     // File dialog for RSA key selection (embedded mode)
     ImFileDialog {
         id: rsaKeyFileDialog
+        objectName: "rsaKeyFileDialog"
         parent: popup.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select RSA Private Key")
@@ -550,6 +555,7 @@ BaseDialog {
     // Confirmation dialog for clearing saved customisation settings
     BaseDialog {
         id: confirmClearSettings
+        objectName: "confirmClearSettingsDialog"
         parent: popup.contentItem
         anchors.centerIn: parent
 
@@ -604,6 +610,7 @@ BaseDialog {
 
             ImButton {
                 id: clearSettingsCancelButton
+                objectName: "clearSettingsCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Keep saved customisation settings and return to the options dialog")
                 activeFocusOnTab: true
@@ -612,6 +619,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: clearSettingsConfirmButton
+                objectName: "clearSettingsConfirmButton"
                 text: qsTr("Clear")
                 accessibleDescription: qsTr("Remove all saved OS customisation settings permanently")
                 activeFocusOnTab: true
