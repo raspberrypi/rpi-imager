@@ -349,4 +349,137 @@ TestCase {
         compare(fakeContainer.selectedOsName, "Raspberry Pi OS Lite (64-bit)",
                 "the chosen image is recorded")
     }
+
+
+    // ── Choosing an OS by name ────────────────────────────────────────
+    //
+    // selectNamedOS() is how a deployment pre-selects an image: the
+    // os_list.json an organisation serves carries "default_os", and this
+    // walks the list looking for it. It had never run.
+    //
+    // What it does wrong is quiet. Match too loosely and a fleet gets
+    // "Raspberry Pi OS Lite" where the manifest asked for "Raspberry Pi
+    // OS"; fall back to the first entry when the name is absent and a typo
+    // in the manifest silently images every board with whatever happens to
+    // be at the top of the list. Neither shows up as an error anywhere.
+    //
+    // It takes the model as an argument, so the cases hand it one.
+
+    function fakeModel(names) {
+        var rows = []
+        for (var i = 0; i < names.length; i++)
+            rows.push(osEntry({ name: names[i] }))
+        return {
+            rowCount: function () { return rows.length },
+            get: function (i) { return rows[i] }
+        }
+    }
+
+    function test_the_named_os_is_the_one_chosen() {
+        step.selectNamedOS("Raspberry Pi OS Lite (64-bit)",
+                           fakeModel(["Raspberry Pi OS (64-bit)",
+                                      "Raspberry Pi OS Lite (64-bit)",
+                                      "Raspberry Pi OS (Legacy)"]))
+
+        compare(fakeContainer.selectedOsName, "Raspberry Pi OS Lite (64-bit)")
+    }
+
+    function test_a_name_that_is_not_there_chooses_nothing() {
+        // Rather than the first entry, which is what a loop without the
+        // name check would leave selected.
+        step.selectNamedOS("Some OS that is not on the list",
+                           fakeModel(["Raspberry Pi OS (64-bit)",
+                                      "Raspberry Pi OS Lite (64-bit)"]))
+
+        compare(fakeContainer.selectedOsName, "",
+                "nothing was chosen for a name the list does not have")
+    }
+
+    function test_the_name_has_to_match_in_full_data() {
+        return [
+            { tag: "a prefix of it",   asked: "Raspberry Pi OS" },
+            { tag: "a superset of it", asked: "Raspberry Pi OS (64-bit) v2" },
+            { tag: "the wrong case",   asked: "raspberry pi os (64-bit)" },
+            { tag: "with a space",     asked: "Raspberry Pi OS (64-bit) " }
+        ]
+    }
+
+    function test_the_name_has_to_match_in_full(data) {
+        step.selectNamedOS(data.asked,
+                           fakeModel(["Raspberry Pi OS (64-bit)",
+                                      "Raspberry Pi OS Lite (64-bit)"]))
+
+        compare(fakeContainer.selectedOsName, "", data.tag)
+    }
+
+    function test_an_empty_list_chooses_nothing() {
+        // The manifest naming a default while the list has not arrived.
+        step.selectNamedOS("Raspberry Pi OS (64-bit)", fakeModel([]))
+
+        compare(fakeContainer.selectedOsName, "")
+    }
+
+    function test_the_first_entry_with_the_name_wins() {
+        // Two entries can share a name across categories. Taking the first
+        // and stopping is what the loop does; carrying on would leave the
+        // last one selected instead, so which image gets written would
+        // depend on the order the server happened to send.
+        var rows = [osEntry({ name: "Duplicate", url: "https://example.invalid/first.img.xz" }),
+                    osEntry({ name: "Duplicate", url: "https://example.invalid/second.img.xz" })]
+        var model = {
+            rowCount: function () { return rows.length },
+            get: function (i) { return rows[i] }
+        }
+
+        step.selectNamedOS("Duplicate", model)
+
+        compare(fakeContainer.selectedOsName, "Duplicate")
+        compare(String(ImageWriterSingleton.srcFileName()), "first.img.xz",
+                "the first of the two is what will be written")
+    }
+
+    // ── The custom image picker used where there is no native one ─────
+    //
+    // On a machine with no native file dialog -- the embedded build, and
+    // any desktop whose portal is not reachable -- this styled picker is
+    // how "Use custom" gets an image. Its accepted handler was uncovered,
+    // so the whole fallback route was untested: the dialog would open, the
+    // user would choose a file, and nothing would happen.
+    //
+    // Its rejected handler is deliberately empty and is not asserted here;
+    // there is nothing it could do wrong that a test could see.
+    //
+    // The file named has to exist: the C++ side refuses a selection that is
+    // not a regular file, which is its own guard and has its own test. Any
+    // real file will do, so the cases use one out of the copied module
+    // rather than needing a fixture.
+
+    function test_a_file_chosen_from_the_fallback_picker_becomes_the_os() {
+        fakeContainer.selectedOsName = ""
+
+        step.customImageFileDialog.selectedFile = __qmlModuleRoot + "Style.qml"
+        step.customImageFileDialog.accepted()
+
+        tryVerify(function () {
+            return fakeContainer.selectedOsName === "Style.qml"
+        }, 3000, "the chosen file is what will be written; got "
+           + fakeContainer.selectedOsName)
+    }
+
+    function test_a_custom_image_clears_the_customisation_it_cannot_carry() {
+        // Same rule as the native path, and worth pinning on this one too:
+        // the two routes into the custom-image handler are separate pieces
+        // of wiring and only one of them was covered.
+        fakeContainer.wifiConfigured = true
+        fakeContainer.userConfigured = true
+        fakeContainer.sshEnabled = true
+
+        step.customImageFileDialog.selectedFile = __qmlModuleRoot + "Style.qml"
+        step.customImageFileDialog.accepted()
+
+        tryVerify(function () { return !fakeContainer.wifiConfigured }, 3000,
+                  "the wireless setting went with the image change")
+        verify(!fakeContainer.userConfigured)
+        verify(!fakeContainer.sshEnabled)
+    }
 }
