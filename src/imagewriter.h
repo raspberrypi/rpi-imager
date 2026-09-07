@@ -230,7 +230,18 @@ public:
     Q_INVOKABLE bool checkSWCapability(const QString &cap);
 
     /* Utility function to open OS file dialog */
-    Q_INVOKABLE void openFileDialog(const QString &title, const QString &filter);
+    /* Which request a file selection is answering.
+
+       The file dialog is a single shared entry point and its result is
+       broadcast to every listener, so a chooser has to say what it asked
+       for. Without that, choosing a custom repository file was also taken
+       as choosing a custom image: the selected OS became the repository
+       file and the user's staged customisation was discarded with it.
+
+       Defaults to the custom image, which is what an untagged selection
+       has always meant. */
+    Q_INVOKABLE void openFileDialog(const QString &title, const QString &filter,
+                                    const QString &purpose = QStringLiteral("customImage"));
 
     /* Expose native file dialog availability to QML */
     Q_INVOKABLE bool nativeFileDialogAvailable() {
@@ -242,7 +253,7 @@ public:
     }
 
     /* Accept selection from QML fallback FileDialog */
-    Q_INVOKABLE void acceptCustomImageFromQml(const QUrl &fileUrl) { onFileSelected(fileUrl.toLocalFile()); }
+    Q_INVOKABLE void acceptCustomImageFromQml(const QUrl &fileUrl) { onFileSelected(fileUrl.toLocalFile(), QStringLiteral("customImage")); }
 
     /* Generic native open-file dialog for QML callsites (sync) */
     Q_INVOKABLE QString getNativeOpenFileName(const QString &title = QString(),
@@ -537,7 +548,7 @@ signals:
     void verifyProgress(QVariant now, QVariant total);
     void error(QVariant msg);
     void success();
-    void fileSelected(QVariant filename);
+    void fileSelected(QVariant filename, QString purpose);
     void cancelled();
     void finalizing();
     void networkOnline();
@@ -578,7 +589,8 @@ protected slots:
     void onError(QString msg);
     void onEjectStarted();
     void onEjectFinished(bool succeeded);
-    void onFileSelected(QString filename);
+    void onFileSelected(QString filename,
+                        const QString &purpose = QStringLiteral("customImage"));
     void onCancelled();
     void onFinalizing();
     void onPreparationStatusUpdate(QString msg);

@@ -2914,7 +2914,7 @@ void ImageWriter::onPreparationStatusUpdate(QString msg)
     emit preparationStatusUpdate(msg);
 }
 
-void ImageWriter::openFileDialog(const QString &title, const QString &filter)
+void ImageWriter::openFileDialog(const QString &title, const QString &filter, const QString &purpose)
 {
 #ifndef CLI_ONLY_BUILD
     QSettings settings;
@@ -2928,7 +2928,10 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
         path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
     // Use native file dialog with modal behavior to main window
-    QString filename = NativeFileDialog::getOpenFileName(tr("Select image"),
+    // The caller's title, not a fixed one: this dialog is also used to pick a
+    // repository file, and titling that window "Select image" tells the user
+    // to choose the wrong kind of file.
+    QString filename = NativeFileDialog::getOpenFileName(title.isEmpty() ? tr("Select image") : title,
                                                         path,
                                                         filter,
                                                         _mainWindow);
@@ -2936,15 +2939,16 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
     // Process the selected file if one was chosen
     if (!filename.isEmpty())
     {
-        onFileSelected(filename);
+        onFileSelected(filename, purpose);
     }
 #else
     Q_UNUSED(title);
+    Q_UNUSED(purpose);
     Q_UNUSED(filter);
 #endif
 }
 
-void ImageWriter::onFileSelected(QString filename)
+void ImageWriter::onFileSelected(QString filename, const QString &purpose)
 {
     QFileInfo fi(filename);
     QSettings settings;
@@ -2958,7 +2962,7 @@ void ImageWriter::onFileSelected(QString filename)
             settings.sync();
         }
 
-        emit fileSelected(QUrl::fromLocalFile(filename));
+        emit fileSelected(QUrl::fromLocalFile(filename), purpose);
     }
     else
     {

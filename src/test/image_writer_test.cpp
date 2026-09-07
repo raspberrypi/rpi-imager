@@ -7131,6 +7131,80 @@ TEST_CASE("A directory that was not chosen does not overwrite the remembered one
           == QStringLiteral("/the/previous/one"));
 }
 
+TEST_CASE("A chosen file says what it was chosen for", "[imagewriter][filedialog]")
+{
+    // There is one file dialog and one signal reporting its result, and more
+    // than one part of the interface asks. Without saying which request a
+    // selection is answering, a repository file chosen from the options
+    // dialog was also taken as a custom image: the selected OS became the
+    // json file and the user's staged customisation went with it. See
+    // tst_file_choice_routing.qml for that, measured.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString repoPath = dir.filePath(QStringLiteral("repo.json"));
+    {
+        QFile f(repoPath);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("{}");
+    }
+
+    FileChoosingWriter w;
+    rpi_test::SignalLog chosen(&w, &ImageWriter::fileSelected);
+
+    w.onFileSelected(repoPath, QStringLiteral("repository"));
+
+    REQUIRE(chosen.count() == 1);
+    CHECK(chosen.at(0).at(0).toUrl() == QUrl::fromLocalFile(repoPath));
+    CHECK(chosen.at(0).at(1).toString() == QStringLiteral("repository"));
+}
+
+TEST_CASE("A choice that does not say is a custom image", "[imagewriter][filedialog]")
+{
+    // What an untagged selection has always meant, kept so a caller that
+    // has not been told about purposes still behaves as it did.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString imagePath = dir.filePath(QStringLiteral("untagged.img"));
+    {
+        QFile f(imagePath);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+
+    FileChoosingWriter w;
+    rpi_test::SignalLog chosen(&w, &ImageWriter::fileSelected);
+
+    w.onFileSelected(imagePath);
+
+    REQUIRE(chosen.count() == 1);
+    CHECK(chosen.at(0).at(1).toString() == QStringLiteral("customImage"));
+}
+
+TEST_CASE("The fallback image picker reports a custom image", "[imagewriter][filedialog]")
+{
+    // The styled dialog used where no native one is available goes through
+    // its own entry point, which has to tag the selection the same way --
+    // otherwise choosing a custom image works on one platform and silently
+    // does nothing on another.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString imagePath = dir.filePath(QStringLiteral("fallback.img"));
+    {
+        QFile f(imagePath);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+
+    FileChoosingWriter w;
+    rpi_test::SignalLog chosen(&w, &ImageWriter::fileSelected);
+
+    w.acceptCustomImageFromQml(QUrl::fromLocalFile(imagePath));
+
+    REQUIRE(chosen.count() == 1);
+    CHECK(chosen.at(0).at(0).toUrl() == QUrl::fromLocalFile(imagePath));
+    CHECK(chosen.at(0).at(1).toString() == QStringLiteral("customImage"));
+}
+
 // ══════════════════════════════════════════════════════════════
 // Which repository URLs are allowed to become the OS list
 //

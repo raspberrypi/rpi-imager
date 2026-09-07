@@ -159,7 +159,15 @@ WizardStepBase {
             }
         }
         // Handle native file selection for "Use custom"
-        function onFileSelected(fileUrl) {
+        function onFileSelected(fileUrl, purpose) {
+            // The dialog is shared and its result is broadcast, so a
+            // selection made for something else -- the custom repository
+            // file, chosen from the options dialog while this step is the
+            // one on screen -- is not a custom image. Taking it as one
+            // replaced the chosen OS with a repository json file and threw
+            // away the user's staged customisation with it.
+            if (purpose !== "customImage")
+                return
             // Ensure ImageWriter src is set to the chosen file explicitly
             ImageWriterSingleton.setSrc(fileUrl)
             // OS swapped — drop any stale org-minted auth key so it
@@ -683,7 +691,8 @@ WizardStepBase {
                     Qt.callLater(function() {
                         ImageWriterSingleton.openFileDialog(
                             qsTr("Select image"),
-                            CommonStrings.imageFiltersString)
+                            CommonStrings.imageFiltersString,
+                            "customImage")
                     })
                 } else if (root.hasOwnProperty("customImageFileDialog")) {
                     // Ensure reasonable defaults

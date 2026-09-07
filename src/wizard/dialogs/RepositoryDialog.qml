@@ -54,7 +54,11 @@ BaseDialog {
 
     Connections {
         target: ImageWriterSingleton
-        function onFileSelected(fileUrl) {
+        function onFileSelected(fileUrl, purpose) {
+            // See OSSelectionStep: one shared dialog, one broadcast result,
+            // so only the selection this dialog asked for is ours.
+            if (purpose !== "repository")
+                return
             popup.selectedRepo = fileUrl
         }
     }
@@ -159,7 +163,7 @@ BaseDialog {
                         if (ImageWriterSingleton.nativeFileDialogAvailable()) {
                             // Defer opening the native dialog until after the current event completes
                             Qt.callLater(function () {
-                                ImageWriterSingleton.openFileDialog(qsTr("Select Repository"), CommonStrings.repoFiltersString);
+                                ImageWriterSingleton.openFileDialog(qsTr("Select Repository"), CommonStrings.repoFiltersString, "repository");
                             });
                         } else {
                             // Fallback to QML dialog (forced non-native)
