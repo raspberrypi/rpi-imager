@@ -488,6 +488,7 @@ ApplicationWindow {
     // QML fallback save dialog for performance data export
     ImSaveFileDialog {
         id: performanceSaveDialog
+        objectName: "performanceSaveDialog"
         parent: overlayRoot
         anchors.centerIn: parent
         dialogTitle: qsTr("Save Performance Data")

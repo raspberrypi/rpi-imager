@@ -579,4 +579,96 @@ TestCase {
 
         keychainDialog().reject()
     }
+
+
+    // ── Dismissing the window's own dialogs ───────────────────────────
+    //
+    // Both of these are raised over a write in progress, and both had their
+    // escape handling uncovered. The quit one is the dangerous half: the
+    // window's close button raises it rather than quitting, and if escape
+    // there were taken as the answer, closing the window and then pressing
+    // escape would abort a write that was half way through a card.
+
+    function test_escape_on_the_quit_question_leaves_the_write_running() {
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () {
+            return ImageWriterSingleton.writeState === ImageWriterSingleton.Finalizing
+        }, 3000, "a write is in progress")
+        win.close()
+        tryVerify(function () { return quitDialog().opened }, 3000,
+                  "the question was raised instead of quitting")
+
+        quitDialog().escapePressed()
+
+        tryVerify(function () { return !quitDialog().visible }, 3000,
+                  "the question went away")
+        verify(win.visible, "the window is still up")
+        verify(!win.forceQuit, "and nothing was taken as an answer to quit")
+        compare(ImageWriterSingleton.writeState,
+                ImageWriterSingleton.Finalizing,
+                "with the write still going")
+    }
+
+    function test_escape_dismisses_the_lost_card_notice() {
+        // Told once is enough; it must be possible to get rid of it and
+        // carry on with the chooser it put the user back on.
+        container().currentStep = container().stepWriting
+        container().selectedStorageName = "Generic Mass-Storage"
+        win.onSelectedDeviceRemoved()
+        tryVerify(function () { return removalDialog().opened }, 3000)
+
+        removalDialog().escapePressed()
+
+        tryVerify(function () { return !removalDialog().visible }, 3000)
+    }
+
+    // ── Saving the performance data where there is no native dialog ───
+    //
+    // The export falls back to a styled save dialog when the platform has
+    // no native one. The handler that sets it up had never run, so on those
+    // platforms the export offered nothing at all.
+
+    function performanceSave() {
+        var d = findChild(win, "performanceSaveDialog")
+        verify(d, "found the performance save dialog")
+        return d
+    }
+
+    function test_the_fallback_save_dialog_opens_where_it_was_told_to() {
+        ImageWriterSingleton.performanceSaveDialogNeeded("imager-perf.json",
+                                                         "/tmp")
+
+        tryVerify(function () { return performanceSave().opened }, 3000,
+                  "the save dialog came up")
+        compare(performanceSave().suggestedFilename, "imager-perf.json",
+                "with the name it was given")
+        verify(String(performanceSave().currentFolder).indexOf("/tmp") !== -1,
+               "and the folder; got " + performanceSave().currentFolder)
+
+        performanceSave().close()
+        tryVerify(function () { return !performanceSave().visible }, 3000)
+    }
+
+    // ── The export shortcut ───────────────────────────────────────────
+
+    function test_asking_to_export_with_nothing_recorded_does_nothing() {
+        // Ctrl+Shift+P. With no write behind it there is nothing to write
+        // out, and the shortcut has to say so rather than producing an empty
+        // file the user then has to make sense of.
+        // Skipped rather than pressed when there is data, and deliberately:
+        // the other branch asks the platform for a save dialog, and where
+        // there is a native one that is a modal window with nobody to close
+        // it. The run stops there.
+        if (ImageWriterSingleton.hasPerformanceData()) {
+            skip("this session has performance data, so pressing the "
+                 + "shortcut would open a native save dialog and hang")
+            return
+        }
+
+        keyClick(Qt.Key_P, Qt.ControlModifier | Qt.ShiftModifier)
+
+        wait(200)
+        verify(!performanceSave().visible,
+               "no save dialog was raised for data that is not there")
+    }
 }
