@@ -396,32 +396,56 @@ Result<void> DiskFormatter::WriteFatTables(
     std::uint32_t fat_start_sector,
     const Fat32Config& config) const {
   
-  std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
-  std::uint64_t fat_size_bytes = static_cast<std::uint64_t>(sectors_per_fat) * kSectorSize;
-  
+  const std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
+
+  // An empty FAT is three entries followed by zeros to its end, so it is
+  // written a chunk at a time rather than assembled whole in memory.
+  //
+  // Assembling it whole meant one allocation the size of the FAT, zeroed
+  // before a single byte reached the card: 8 MB for a 32 GB card, but 134 MB
+  // for a 512 GB drive and 536 MB for a 2 TiB one. On a Pi with 512 MB of RAM
+  // that allocation fails, and the only thing the failure could be reported as
+  // was "Error writing to device during formatting" -- a device error for what
+  // is actually the host running out of memory. Peak use is now one chunk
+  // whatever the card's size.
+  constexpr std::uint32_t kChunkSectors = 2048;  // 1 MB
+  const std::uint32_t chunk_sectors = std::min(kChunkSectors, sectors_per_fat);
+
   // Use aligned buffer for O_DIRECT compatibility on Linux
-  AlignedBuffer fat_table(fat_size_bytes);
-  if (!fat_table.valid()) {
+  AlignedBuffer chunk(static_cast<std::uint64_t>(chunk_sectors) * kSectorSize);
+  if (!chunk.valid()) {
     return Result<void>(FormatError::kFileWriteError);
   }
-  
-  auto* fat_entries = fat_table.as<std::uint32_t>();
-  
-  // First three entries are special
-  fat_entries[0] = ToLittleEndian(0x0FFFFFF8);  // Media descriptor + end marker
-  fat_entries[1] = ToLittleEndian(0x0FFFFFFF);  // End of cluster chain
-  fat_entries[2] = ToLittleEndian(0x0FFFFFFF);  // Root directory end marker
 
   // Write both FAT copies
   for (std::uint8_t fat_num = 0; fat_num < config.num_fats; ++fat_num) {
-    std::uint64_t fat_offset = (static_cast<std::uint64_t>(fat_start_sector)
+    const std::uint64_t fat_offset = (static_cast<std::uint64_t>(fat_start_sector)
         + static_cast<std::uint64_t>(fat_num) * sectors_per_fat) * kSectorSize;
-    FileError error = file_ops_->WriteAtOffset(fat_offset, fat_table.data(), fat_size_bytes);
-    if (error != FileError::kSuccess) {
-      return Result<void>(ConvertError(error));
+
+    for (std::uint32_t written = 0; written < sectors_per_fat; ) {
+      const std::uint32_t sectors =
+          std::min(chunk_sectors, sectors_per_fat - written);
+      const std::size_t bytes = static_cast<std::size_t>(sectors) * kSectorSize;
+      std::memset(chunk.data(), 0, bytes);
+
+      // Only the start of each copy carries entries; the rest is zeros.
+      if (written == 0) {
+        auto* fat_entries = chunk.as<std::uint32_t>();
+        fat_entries[0] = ToLittleEndian(0x0FFFFFF8);  // Media descriptor + end marker
+        fat_entries[1] = ToLittleEndian(0x0FFFFFFF);  // End of cluster chain
+        fat_entries[2] = ToLittleEndian(0x0FFFFFFF);  // Root directory end marker
+      }
+
+      const FileError error = file_ops_->WriteAtOffset(
+          fat_offset + static_cast<std::uint64_t>(written) * kSectorSize,
+          chunk.data(), bytes);
+      if (error != FileError::kSuccess) {
+        return Result<void>(ConvertError(error));
+      }
+      written += sectors;
     }
   }
-  
+
   return Result<void>();
 }
 

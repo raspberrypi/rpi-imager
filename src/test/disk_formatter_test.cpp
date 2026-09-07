@@ -194,6 +194,7 @@ class DiskFormatterTest {
     all_passed &= TestDeviceErrorsReachTheUser();
     all_passed &= TestPartitionTableAndFilesystemAgree();
     all_passed &= TestAcceptedDevicesGetAValidFat32();
+    all_passed &= TestFatIsWrittenInBoundedPieces();
     
     if (all_passed) {
       std::cout << "All tests passed!\n";
@@ -1143,6 +1144,141 @@ class DiskFormatterTest {
     if (all_passed)
       std::cout << "✅ every accepted device gets a valid FAT32 (" << accepted
                 << " accepted, " << refused << " refused)\n";
+    return all_passed;
+  }
+
+  // The FAT is written in bounded pieces, so peak memory does not scale with
+  // the card.
+  //
+  // Each FAT copy for a 2 TiB card is half a gigabyte. It used to be
+  // assembled in one allocation of that size and zeroed before a byte reached
+  // the card, so formatting a large drive needed that much RAM up front; on a
+  // Pi that does not have it the allocation failed and the only thing it could
+  // be reported as was a device write error. What matters to a user is that
+  // the FAT still lands correctly, so this checks the pieces tile each copy
+  // exactly -- no gap, no overlap, nothing past the end -- that none exceeds
+  // the bound, and that the three entries a FAT starts with are at the start
+  // of each copy and nowhere else.
+  static bool TestFatIsWrittenInBoundedPieces() {
+    std::cout << "Testing that the FAT is written in bounded pieces...\n";
+
+    constexpr std::uint64_t kStartSector = 8192;
+    constexpr std::size_t kMaxPiece = 1024 * 1024;  // the 1 MB chunk
+    constexpr std::uint64_t kGiB = 1024ULL * 1024 * 1024;
+
+    struct Case {
+      const char* name;
+      std::uint64_t size_bytes;
+    };
+    const Case kCases[] = {
+      {"64 MB", 64ULL * 1024 * 1024},   // one piece per copy
+      {"32 GB", 32 * kGiB},             // a handful of pieces
+      {"2 TiB", 2048 * kGiB},           // the largest an MBR can describe
+    };
+
+    bool all_passed = true;
+
+    for (const auto& c : kCases) {
+      auto device = std::make_unique<ScriptedDevice>(c.size_bytes);
+      auto* raw = device.get();
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatDrive("/dev/fake");
+      if (!result) {
+        std::cout << "❌ " << c.name << ": the format failed\n";
+        all_passed = false;
+        continue;
+      }
+
+      const auto* boot = raw->writeAt(kStartSector * 512);
+      if (boot == nullptr) {
+        std::cout << "❌ " << c.name << ": no boot sector was written\n";
+        all_passed = false;
+        continue;
+      }
+      const std::uint32_t sectors_per_fat =
+          le32(boot->head, offsetof(Fat32BootSector, sectors_per_fat_32));
+      const unsigned num_fats = boot->head[offsetof(Fat32BootSector, num_fats)];
+      const unsigned reserved =
+          boot->head[offsetof(Fat32BootSector, reserved_sectors)] |
+          (boot->head[offsetof(Fat32BootSector, reserved_sectors) + 1] << 8);
+
+      for (unsigned fat = 0; fat < num_fats; ++fat) {
+        const std::uint64_t start =
+            (kStartSector + reserved +
+             std::uint64_t{fat} * sectors_per_fat) * 512;
+        const std::uint64_t length = std::uint64_t{sectors_per_fat} * 512;
+
+        // Every write that landed inside this copy, in the order it was made.
+        std::vector<const ScriptedDevice::Write*> pieces;
+        for (const auto& w : raw->writeLog())
+          if (w.offset >= start && w.offset < start + length)
+            pieces.push_back(&w);
+
+        if (pieces.empty()) {
+          std::cout << "❌ " << c.name << ": FAT copy " << fat
+                    << " was never written\n";
+          all_passed = false;
+          continue;
+        }
+
+        std::uint64_t cursor = start;
+        bool tiled = true;
+        for (std::size_t i = 0; i < pieces.size(); ++i) {
+          const auto* w = pieces[i];
+          if (w->offset != cursor) {
+            std::cout << "❌ " << c.name << ": FAT copy " << fat << " piece "
+                      << i << " starts at " << w->offset << ", expected "
+                      << cursor << " -- the pieces leave a gap or overlap\n";
+            all_passed = false;
+            tiled = false;
+            break;
+          }
+          if (w->size > kMaxPiece) {
+            std::cout << "❌ " << c.name << ": FAT copy " << fat
+                      << " was written in a piece of " << w->size
+                      << " bytes, over the " << kMaxPiece << " byte bound\n";
+            all_passed = false;
+          }
+          // The three entries belong at the start of the copy and nowhere
+          // else; every later piece begins as zeros.
+          if (i == 0) {
+            if (le32(w->head, 0) != 0x0FFFFFF8u ||
+                le32(w->head, 4) != 0x0FFFFFFFu ||
+                le32(w->head, 8) != 0x0FFFFFFFu) {
+              std::cout << "❌ " << c.name << ": FAT copy " << fat
+                        << " does not start with the three reserved entries\n";
+              all_passed = false;
+            }
+          } else if (le32(w->head, 0) != 0 || le32(w->head, 4) != 0) {
+            std::cout << "❌ " << c.name << ": FAT copy " << fat << " piece "
+                      << i << " does not begin as zeros\n";
+            all_passed = false;
+          }
+          cursor += w->size;
+        }
+
+        if (tiled && cursor != start + length) {
+          std::cout << "❌ " << c.name << ": FAT copy " << fat
+                    << " was written up to " << cursor << ", but the boot "
+                       "sector says it runs to " << (start + length) << "\n";
+          all_passed = false;
+        }
+      }
+
+      // And a large card really is written in more than one piece, or the
+      // bound above is not being exercised at all.
+      if (c.size_bytes >= 32 * kGiB) {
+        const std::uint64_t fat_bytes = std::uint64_t{sectors_per_fat} * 512;
+        if (fat_bytes <= kMaxPiece) {
+          std::cout << "❌ " << c.name << ": each FAT is only " << fat_bytes
+                    << " bytes, so this size does not exercise chunking\n";
+          all_passed = false;
+        }
+      }
+    }
+
+    if (all_passed)
+      std::cout << "✅ the FAT is written in bounded pieces that tile it exactly\n";
     return all_passed;
   }
 };
