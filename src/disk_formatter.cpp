@@ -102,6 +102,17 @@ FormatError DiskFormatter::ConvertError(FileError error) const {
   return ConvertFileError(error);
 }
 
+std::uint32_t DiskFormatter::PartitionSectorsFor(
+    std::uint64_t device_size_bytes) {
+  const std::uint64_t total_sectors = device_size_bytes / kSectorSize;
+  if (total_sectors <= kPartitionStartSector) {
+    return 0;
+  }
+  const std::uint64_t available = total_sectors - kPartitionStartSector;
+  return static_cast<std::uint32_t>(
+      std::min<std::uint64_t>(available, UINT32_MAX));
+}
+
 Result<void> DiskFormatter::FormatDrive(const std::string& device_path) {
   // Pre-format checks for Windows physical drives
 #ifdef _WIN32
@@ -126,38 +137,33 @@ Result<void> DiskFormatter::FormatDrive(const std::string& device_path) {
     return Result<void>(ConvertError(error));
   }
 
-  // Write MBR
-  // The partition starts 4 MB in, and everything downstream computes the
-  // partition size as (total sectors - that offset) in 32-bit arithmetic. On
-  // a device smaller than the offset it underflows: a 64 KB device produced a
-  // filesystem claiming 4,294,959,232 sectors, which fsck rejects outright.
-  // Refuse instead of laying down a table describing two terabytes of card
-  // that is not there.
-  {
-    const std::uint64_t total_sectors = device_size_bytes / kSectorSize;
-    const std::uint64_t minimum_sectors =
-        static_cast<std::uint64_t>(kPartitionStartSector) + kMinimumPartitionSectors;
-    if (total_sectors < minimum_sectors) {
-      return Result<void>(FormatError::kInsufficientSpace);
-    }
+  // The partition starts 4 MB in, so a device smaller than that offset plus a
+  // usable minimum has nothing to format. PartitionSectorsFor answers 0 rather
+  // than underflowing, but a filesystem of no sectors is not a filesystem:
+  // refuse instead of laying down a table for a card that is not there.
+  if (PartitionSectorsFor(device_size_bytes) < kMinimumPartitionSectors) {
+    return Result<void>(FormatError::kInsufficientSpace);
   }
 
   if (auto result = WriteMbr(device_size_bytes); !result) {
     return result;
   }
 
-  // Calculate partition size
-  std::uint32_t total_sectors = device_size_bytes / kSectorSize;
-  std::uint32_t partition_size_sectors = total_sectors - kPartitionStartSector;
-
-  // Write FAT32 filesystem
-  return WriteFat32(kPartitionStartSector, partition_size_sectors);
+  // Write FAT32 filesystem, over exactly the partition the table describes.
+  return WriteFat32(kPartitionStartSector,
+                    PartitionSectorsFor(device_size_bytes));
 }
 
 Result<void> DiskFormatter::FormatFile(
     const std::string& file_path,
     std::uint64_t file_size_bytes) {
   
+  // The same floor as FormatDrive. This entry point had no such check, so a
+  // small file went on to be given a partition size that had underflowed.
+  if (PartitionSectorsFor(file_size_bytes) < kMinimumPartitionSectors) {
+    return Result<void>(FormatError::kInsufficientSpace);
+  }
+
   // Create and open the file with the specified size
   FileError error = file_ops_->CreateTestFile(file_path, file_size_bytes);
   if (error != FileError::kSuccess) {
@@ -169,12 +175,9 @@ Result<void> DiskFormatter::FormatFile(
     return result;
   }
 
-  // Calculate partition size
-  std::uint32_t total_sectors = file_size_bytes / kSectorSize;
-  std::uint32_t partition_size_sectors = total_sectors - kPartitionStartSector;
-
-  // Write FAT32 filesystem
-  return WriteFat32(kPartitionStartSector, partition_size_sectors);
+  // Write FAT32 filesystem, over exactly the partition the table describes.
+  return WriteFat32(kPartitionStartSector,
+                    PartitionSectorsFor(file_size_bytes));
 }
 
 Result<void> DiskFormatter::WriteMbr(
@@ -187,13 +190,7 @@ Result<void> DiskFormatter::WriteMbr(
     return Result<void>(FormatError::kFileWriteError);
   }
   
-  // Calculate total sectors
-  std::uint64_t total_sectors = device_size_bytes / kSectorSize;
-  if (total_sectors > UINT32_MAX) {
-    total_sectors = UINT32_MAX;  // MBR limitation
-  }
-  
-  std::uint32_t partition_sectors = static_cast<std::uint32_t>(total_sectors) - kPartitionStartSector;
+  const std::uint32_t partition_sectors = PartitionSectorsFor(device_size_bytes);
 
   // Create partition entry at offset 446
   MbrPartitionEntry partition{};
@@ -212,14 +209,16 @@ Result<void> DiskFormatter::WriteMbr(
   partition.first_head = start_head;
   partition.first_sector = ((start_cyl >> 2) & 0xC0) | (start_sect & 0x3F);
 
-  std::uint32_t end_lba = kPartitionStartSector + partition_sectors - 1;
-  std::uint32_t end_cyl = end_lba / (63 * 255);
-  std::uint32_t end_head = (end_lba / 63) % 255;
-  std::uint32_t end_sect = (end_lba % 63) + 1;
+  const std::uint64_t end_lba =
+      std::uint64_t{kPartitionStartSector} + partition_sectors - 1;
+  std::uint64_t end_cyl = end_lba / (63 * 255);
+  std::uint64_t end_head = (end_lba / 63) % 255;
+  std::uint64_t end_sect = (end_lba % 63) + 1;
   
-  partition.last_cylinder = std::min(end_cyl, 1023U) & 0xFF;
-  partition.last_head = end_head;
-  partition.last_sector = ((std::min(end_cyl, 1023U) >> 2) & 0xC0) | (end_sect & 0x3F);
+  const std::uint64_t capped_end_cyl = std::min<std::uint64_t>(end_cyl, 1023U);
+  partition.last_cylinder = capped_end_cyl & 0xFF;
+  partition.last_head = static_cast<std::uint8_t>(end_head);
+  partition.last_sector = ((capped_end_cyl >> 2) & 0xC0) | (end_sect & 0x3F);
 
   // Copy partition entry to MBR
   std::memcpy(mbr_sector.data() + 446, &partition, sizeof(partition));

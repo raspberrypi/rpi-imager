@@ -164,6 +164,20 @@ class DiskFormatter {
   // Convert FileError to FormatError
   FormatError ConvertError(FileError error) const;
 
+  // The size of the partition, in sectors, that both the partition table and
+  // the filesystem inside it must describe.
+  //
+  // MBR holds it in a 32-bit field, so on a device too large for that field
+  // the partition can only cover as much as the field can express and the rest
+  // of the card is unreachable through this table. That is a limitation of
+  // MBR, not a choice -- but it has to be applied in exactly one place.
+  // WriteMbr and the WriteFat32 call used to each do their own arithmetic, one
+  // clamping and the other truncating, and disagreed on every device over
+  // 2 TiB: at 3 TiB the table described 4294959103 sectors while the FAT32
+  // inside it described 2147475456, and at 2 and 4 TiB the filesystem claimed
+  // one sector more than the partition held.
+  static std::uint32_t PartitionSectorsFor(std::uint64_t device_size_bytes);
+
   // Write MBR with single partition
   Result<void> WriteMbr(std::uint64_t device_size_bytes) const;
 
