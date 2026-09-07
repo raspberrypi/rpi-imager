@@ -15,14 +15,27 @@ BaseDialog {
 
     property bool userAccepted: false
 
+    // Whether this showing has been answered yet.
+    //
+    // onClosed below is the catch-all for a prompt that went away without
+    // an answer -- clicked away, or closed from outside. Without this it
+    // also fired behind the No button and the escape key, both of which
+    // have already refused: the request was then answered twice, once by
+    // the button and once on the way out. Yes did not do it, because
+    // onClosed checks userAccepted, so refusing and agreeing behaved
+    // differently for no reason a caller could see.
+    property bool answeredThisTime: false
+
     function askForPermission() {
         root.userAccepted = false
+        root.answeredThisTime = false
         open()
     }
 
     // Custom escape handling
     function escapePressed() {
         root.userAccepted = false
+        root.answeredThisTime = true
         root.reject()
     }
 
@@ -77,31 +90,35 @@ BaseDialog {
 
         ImButton {
             id: noButton
+            objectName: "keychainNoButton"
             text: CommonStrings.no
             accessibleDescription: qsTr("Skip keychain access and manually enter the Wi-Fi password")
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {
                 root.userAccepted = false
+                root.answeredThisTime = true
                 root.reject()
             }
         }
 
         ImButtonRed {
             id: yesButton
+            objectName: "keychainYesButton"
             text: CommonStrings.yes
             accessibleDescription: qsTr("Retrieve the Wi-Fi password from the system keychain using administrator authentication")
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {
                 root.userAccepted = true
+                root.answeredThisTime = true
                 root.accept()
             }
         }
     }
 
     onClosed: {
-        if (!root.userAccepted) {
+        if (!root.answeredThisTime && !root.userAccepted) {
             root.rejected()
         }
     }

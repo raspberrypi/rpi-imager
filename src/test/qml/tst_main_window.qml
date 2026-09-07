@@ -469,4 +469,114 @@ TestCase {
         dlg.close()
         tryVerify(function () { return !dlg.visible }, 3000)
     }
+
+
+    // ── Answering the keychain prompt with its own buttons ────────────
+    //
+    // The cases above call accept() and reject() on the dialog. Its two
+    // buttons do something first: they set the flag that onClosed reads to
+    // decide whether an unanswered dialog counts as a refusal. Neither
+    // button had ever been pressed.
+    //
+    // Which means the shape those handlers protect against was untested. Go
+    // through accept() without setting the flag, as those cases do, and the
+    // dialog reports a grant and then, once it has finished closing,
+    // a refusal as well -- two contradicting answers to one request, and
+    // the writer acts on the last one. The buttons are what stop that, so
+    // these press them and then wait for the dialog to be fully gone before
+    // counting.
+
+    function keychainButton(name) {
+        var b = findChild(keychainDialog(), name)
+        verify(b, "found " + name)
+        return b
+    }
+
+    // Note on the Yes case: with the answered flag in place, removing
+    // `userAccepted = true` from the Yes button fails nothing, because the
+    // flag is what now keeps onClosed quiet. userAccepted is still read
+    // from outside -- the escape case above checks it -- so it is not dead,
+    // but it no longer carries this path on its own.
+    function test_pressing_yes_grants_it_once_and_only_once() {
+        container().disableWarnings = false
+        armKeychainSpies()
+        win.onKeychainPermissionRequested()
+        tryVerify(function () { return keychainDialog().opened }, 3000)
+
+        keychainButton("keychainYesButton").clicked()
+
+        tryVerify(function () { return !keychainDialog().visible }, 3000,
+                  "the prompt is gone")
+        wait(200)
+        compare(granted.count, 1, "granted")
+        compare(refused.count, 0,
+                "and not also refused on the way out")
+        compare(answered.count, 1, "one answer reached the writer")
+    }
+
+    function test_pressing_no_refuses_it_once_and_only_once() {
+        container().disableWarnings = false
+        armKeychainSpies()
+        win.onKeychainPermissionRequested()
+        tryVerify(function () { return keychainDialog().opened }, 3000)
+
+        keychainButton("keychainNoButton").clicked()
+
+        tryVerify(function () { return !keychainDialog().visible }, 3000)
+        wait(200)
+        compare(refused.count, 1, "refused")
+        compare(granted.count, 0)
+        compare(answered.count, 1)
+    }
+
+    function test_escape_refuses_it_once_and_only_once() {
+        // Same shape as the No button, and the same fix: escape refuses,
+        // and the catch-all behind it must not refuse again.
+        container().disableWarnings = false
+        armKeychainSpies()
+        win.onKeychainPermissionRequested()
+        tryVerify(function () { return keychainDialog().opened }, 3000)
+
+        keychainDialog().escapePressed()
+
+        tryVerify(function () { return !keychainDialog().visible }, 3000)
+        wait(200)
+        compare(refused.count, 1)
+        compare(granted.count, 0)
+        compare(answered.count, 1)
+    }
+
+    function test_a_prompt_that_goes_away_unanswered_is_a_refusal() {
+        // The case the catch-all exists for: closed from outside, with
+        // neither button pressed. Silence has to be no.
+        container().disableWarnings = false
+        armKeychainSpies()
+        win.onKeychainPermissionRequested()
+        tryVerify(function () { return keychainDialog().opened }, 3000)
+
+        keychainDialog().close()
+
+        tryVerify(function () { return !keychainDialog().visible }, 3000)
+        tryVerify(function () { return refused.count === 1 }, 3000,
+                  "it was refused on the way out")
+        compare(granted.count, 0)
+    }
+
+    function test_the_prompt_says_what_each_answer_costs() {
+        // On macOS "yes" raises an administrator password prompt from the
+        // system, which is a surprising thing to be shown without warning.
+        container().disableWarnings = false
+        armKeychainSpies()
+        win.onKeychainPermissionRequested()
+        tryVerify(function () { return keychainDialog().opened }, 3000)
+
+        var yes = keychainButton("keychainYesButton")
+        var no = keychainButton("keychainNoButton")
+        verify(String(yes.accessibleDescription).length > 0)
+        verify(String(no.accessibleDescription).length > 0)
+        verify(yes.activeFocusOnTab, "and both are reachable by keyboard")
+        verify(no.activeFocusOnTab)
+
+        keychainDialog().reject()
+    }
 }
