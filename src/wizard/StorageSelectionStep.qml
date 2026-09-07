@@ -680,6 +680,7 @@ WizardStepBase {
     // Stern confirmation when disabling system drive filtering
     ConfirmUnfilterDialog {
         id: confirmUnfilterPopup
+        objectName: "confirmUnfilterPopup"
         overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         onConfirmed: {
             // user chose to disable filter; leave checkbox unchecked
@@ -702,6 +703,7 @@ WizardStepBase {
     // Confirmation when selecting a system drive: type the exact name
     ConfirmSystemDriveDialog {
         id: systemDriveConfirm
+        objectName: "systemDriveConfirmDialog"
         overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         onConfirmed: {
             ImageWriterSingleton.setDst(systemDriveConfirm.device, systemDriveConfirm.deviceSize)
