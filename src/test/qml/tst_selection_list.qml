@@ -259,4 +259,78 @@ TestCase {
         keyClick(Qt.Key_Down)
         compare(list.currentIndex, 3, "and nothing is skipped")
     }
+
+
+    // -- The two keys the tests above did not press ------------------------
+    //
+    // Everything above presses Return. Enter is a different key to Qt --
+    // Return is the main one, Enter the numeric keypad -- and the list has a
+    // separate handler for each, so one being dropped is invisible to anyone
+    // testing with the other. A user on a full-size keyboard who reaches for
+    // the keypad Enter finds the list dead.
+    //
+    // The accessibility press action is the third way in. It is what a
+    // screen reader sends when the user activates the list, and it is the
+    // only route that does not involve a key or a click at all: without it,
+    // a screen reader user can move the highlight and never choose anything.
+
+    function test_the_keypad_enter_selects_the_highlighted_row() {
+        const list = create({ currentIndex: 2 })
+
+        keyClick(Qt.Key_Enter)
+
+        compare(list.selectedCount, 1)
+        compare(list.selectedIndex, 2)
+        compare(list.enterCount, 1, "and the step was told which key it was")
+    }
+
+    function test_the_keypad_enter_refuses_a_row_that_became_unselectable() {
+        const list = create({ currentIndex: 2 })
+        list.blocked = [2]
+
+        keyClick(Qt.Key_Enter)
+
+        compare(list.selectedCount, 0)
+        compare(list.enterCount, 0)
+    }
+
+    function test_the_keypad_enter_with_nothing_highlighted_selects_nothing() {
+        const list = create({})
+        compare(list.currentIndex, -1)
+
+        keyClick(Qt.Key_Enter)
+
+        compare(list.selectedCount, 0)
+    }
+
+    function test_a_screen_reader_can_choose_the_highlighted_row() {
+        // Accessible's actions are signals, so a test raises one the same
+        // way a screen reader does.
+        const list = create({ currentIndex: 3 })
+
+        list.Accessible.pressAction()
+
+        compare(list.selectedCount, 1)
+        compare(list.selectedIndex, 3)
+    }
+
+    function test_a_screen_reader_is_refused_an_unselectable_row() {
+        // The same rule as every other route in. A read-only card is not
+        // selectable by any of them.
+        const list = create({ currentIndex: 2 })
+        list.blocked = [2]
+
+        list.Accessible.pressAction()
+
+        compare(list.selectedCount, 0)
+    }
+
+    function test_a_screen_reader_with_nothing_highlighted_chooses_nothing() {
+        const list = create({})
+        compare(list.currentIndex, -1)
+
+        list.Accessible.pressAction()
+
+        compare(list.selectedCount, 0)
+    }
 }
