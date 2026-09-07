@@ -289,4 +289,135 @@ TestCase {
         d._goUp()
         compare(d._toDisplayPath(d.currentFolder), "/home/pi")
     }
+
+    // ── Typing a path instead of browsing to it ───────────────────────
+    //
+    // The path field is the way through this dialog without a mouse, which
+    // on an embedded build is the only way. What Return does there depends
+    // on what was typed: a file is chosen and the dialog closes, a
+    // directory is opened. Getting that the wrong way round either refuses
+    // to accept a file the user named, or "chooses" a directory and hands
+    // whatever opens it a path to something that is not a file.
+
+    function openedDialog(props) {
+        const d = createTemporaryObject(dialogComponent, testCase, props)
+        verify(d, "the dialog was created")
+        d.open()
+        tryVerify(function () { return d.visible }, 3000, "the dialog opened")
+        return d
+    }
+
+    function pathFieldOf(d) {
+        const f = findChild(d, "fileDialogPathField")
+        verify(f, "found the path field")
+        return f
+    }
+
+    function test_typing_a_file_path_chooses_it() {
+        const dir = StandardPaths.writableLocation(StandardPaths.TempLocation)
+        const d = openedDialog({})
+        const spy = createTemporaryQmlObject(
+            'import QtTest; SignalSpy {}', testCase)
+        spy.target = d
+        spy.signalName = "accepted"
+
+        const field = pathFieldOf(d)
+        field.text = String(dir).replace("file://", "") + "/some-image.img"
+        field.accepted()
+
+        tryVerify(function () { return spy.count === 1 }, 3000,
+                  "the dialog accepted")
+        // Waited for rather than asserted outright: this is a Popup, and
+        // clearing visible starts an exit transition rather than finishing
+        // one.
+        tryVerify(function () { return !d.visible }, 3000, "and closed")
+        verify(String(d.selectedFile).indexOf("some-image.img") !== -1,
+               "with the file that was typed: " + d.selectedFile)
+    }
+
+    function test_typing_a_directory_navigates_into_it() {
+        // Not an acceptance: the user asked to go somewhere, not to choose
+        // the somewhere.
+        const dir = String(StandardPaths.writableLocation(
+            StandardPaths.TempLocation)).replace("file://", "")
+        const d = openedDialog({})
+        const spy = createTemporaryQmlObject(
+            'import QtTest; SignalSpy {}', testCase)
+        spy.target = d
+        spy.signalName = "accepted"
+
+        const field = pathFieldOf(d)
+        field.text = dir
+        field.accepted()
+
+        wait(200)
+        compare(spy.count, 0, "nothing was chosen")
+        verify(d.visible, "the dialog is still open")
+        verify(String(d.currentFolder).indexOf(dir) !== -1,
+               "and it moved there: " + d.currentFolder)
+    }
+
+    function test_typing_nothing_does_nothing() {
+        // An empty field must not resolve to the current folder and be
+        // accepted as a choice.
+        const d = openedDialog({})
+        const spy = createTemporaryQmlObject(
+            'import QtTest; SignalSpy {}', testCase)
+        spy.target = d
+        spy.signalName = "accepted"
+
+        const field = pathFieldOf(d)
+        field.text = ""
+        field.accepted()
+
+        wait(200)
+        compare(spy.count, 0)
+        verify(d.visible)
+    }
+
+    // ── Naming a file to save ─────────────────────────────────────────
+
+    function test_naming_a_file_to_save_accepts_it() {
+        const d = openedDialog({ isSaveDialog: true, suggestedFilename: "report.json" })
+        const spy = createTemporaryQmlObject(
+            'import QtTest; SignalSpy {}', testCase)
+        spy.target = d
+        spy.signalName = "accepted"
+
+        const field = findChild(d, "fileDialogFilenameField")
+        verify(field, "found the filename field")
+        field.text = "chosen-name.json"
+        field.accepted()
+
+        tryVerify(function () { return spy.count === 1 }, 3000)
+        verify(String(d.selectedFile).indexOf("chosen-name.json") !== -1,
+               "the name given is the name used: " + d.selectedFile)
+    }
+
+    function test_saving_with_no_name_does_not_accept() {
+        // The path would otherwise end in a slash, and whatever opens it
+        // would be handed a directory to write a file into.
+        const d = openedDialog({ isSaveDialog: true, suggestedFilename: "report.json" })
+        const spy = createTemporaryQmlObject(
+            'import QtTest; SignalSpy {}', testCase)
+        spy.target = d
+        spy.signalName = "accepted"
+
+        const field = findChild(d, "fileDialogFilenameField")
+        verify(field)
+        field.text = ""
+        field.accepted()
+
+        wait(200)
+        compare(spy.count, 0, "nothing was accepted")
+        verify(d.visible, "and the dialog waits for a name")
+    }
+
+    function test_a_save_dialog_opens_with_the_suggested_name() {
+        // Offered rather than left blank, so Return is a sensible default
+        // and the user is not made to invent a filename.
+        const d = openedDialog({ isSaveDialog: true, suggestedFilename: "performance.json" })
+
+        compare(d._currentFilename, "performance.json")
+    }
 }

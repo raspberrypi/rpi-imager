@@ -306,6 +306,7 @@ BaseDialog {
         // previously set by hand.
         ImTextField {
             id: pathField
+            objectName: "fileDialogPathField"
             Layout.fillWidth: true
             text: dialog._toDisplayPath(dialog.currentFolder)
             placeholderText: dialog.isSaveDialog
@@ -349,6 +350,7 @@ BaseDialog {
         
         ImTextField {
             id: filenameField
+            objectName: "fileDialogFilenameField"
             Layout.fillWidth: true
             text: dialog._currentFilename
             placeholderText: qsTr("Enter filename…")
