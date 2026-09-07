@@ -50,6 +50,7 @@ WizardStepBase {
             // RSA Key selection button
             ImOptionButton {
                 id: rsaKeyButton
+                objectName: "secureBootKeyButton"
                 text: qsTr("RSA Private Key")
                 btnText: root.rsaKeyPath ? qsTr("Change") : qsTr("Select")
                 accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
@@ -96,6 +97,7 @@ WizardStepBase {
             // Enable/disable Secure Boot option pill
             ImOptionPill {
                 id: secureBootEnablePill
+                objectName: "secureBootEnablePill"
                 Layout.fillWidth: true
                 Layout.topMargin: Style.spacingMedium
                 text: qsTr("Enable Secure Boot Signing")
@@ -249,6 +251,7 @@ WizardStepBase {
     // File dialog for RSA key selection (fallback when native dialog unavailable)
     ImFileDialog {
         id: rsaKeyFileDialog
+        objectName: "secureBootKeyFileDialog"
         parent: root.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select RSA Private Key")
