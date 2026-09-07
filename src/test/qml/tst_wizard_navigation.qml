@@ -452,6 +452,105 @@ TestCase {
         compare(snap.wifiConfigured, false)
     }
 
+    // -- Going back --------------------------------------------------------
+    //
+    // previousStep() has to skip the same optional steps forward navigation
+    // does, or Back lands on a screen for a feature the selected OS cannot
+    // use -- and from writing with no customisation at all it has to clear
+    // the whole section in one move rather than walking backwards through
+    // steps that were never shown.
+    //
+    // The offline guards are not covered here. Both read
+    // hasNetworkConnectivity, which is derived from whether the OS list is
+    // empty, and the list lives on the singleton shared by every case in
+    // this binary -- so whether a test is "offline" depends on what ran
+    // before it. Asserting the precondition instead means these cases fail
+    // loudly if that ever changes, rather than quietly testing the other
+    // branch.
+
+    function test_going_back_skips_the_same_steps_going_forward_did_data() {
+        return [
+            { tag: "interfaces: no cc-rpi",  from: "ifAndFeatures",
+              flag: "ccRpiAvailable",       to: "piConnect" },
+            { tag: "interfaces: none there", from: "ifAndFeatures",
+              flag: "ifAndFeaturesAvailable", to: "piConnect" },
+            { tag: "pi connect",             from: "piConnect",
+              flag: "piConnectAvailable",   to: "secureBoot" },
+            { tag: "secure boot",            from: "secureBoot",
+              flag: "secureBootAvailable",  to: "remoteAccess" }
+        ]
+    }
+
+    function stepFor(name) {
+        switch (name) {
+        case "ifAndFeatures": return wiz.stepIfAndFeatures
+        case "piConnect":     return wiz.stepPiConnectCustomization
+        case "secureBoot":    return wiz.stepSecureBootCustomization
+        case "remoteAccess":  return wiz.stepRemoteAccess
+        }
+        return -99
+    }
+
+    function test_going_back_skips_the_same_steps_going_forward_did(data) {
+        verify(wiz.hasNetworkConnectivity,
+               "these cases assume the OS list is populated")
+        startAt(stepFor(data.from) + 1)
+        wiz[data.flag] = false
+
+        wiz.previousStep()
+
+        compare(wiz.currentStep, stepFor(data.to), data.tag)
+    }
+
+    function test_going_back_from_writing_without_customisation_reaches_the_card() {
+        // One move, not eleven: none of the customisation steps were shown
+        // on the way in, so walking back through them would show screens the
+        // user has never seen and cannot use.
+        verify(wiz.hasNetworkConnectivity)
+        startAt(wiz.stepWriting)
+        wiz.customizationSupported = false
+
+        wiz.previousStep()
+
+        compare(wiz.currentStep, wiz.stepStorageSelection)
+    }
+
+    function test_going_back_from_the_first_step_does_nothing() {
+        startAt(wiz.stepDeviceSelection)
+
+        wiz.previousStep()
+
+        compare(wiz.currentStep, wiz.stepDeviceSelection)
+    }
+
+    // -- Jumping from the sidebar ------------------------------------------
+
+    function test_jumping_to_a_step_goes_there() {
+        verify(wiz.hasNetworkConnectivity)
+        startAt(wiz.stepDeviceSelection)
+
+        wiz.jumpToStep(wiz.stepStorageSelection)
+
+        compare(wiz.currentStep, wiz.stepStorageSelection)
+    }
+
+    function test_jumping_outside_the_wizard_does_nothing_data() {
+        return [
+            { tag: "before the first", index: -1 },
+            { tag: "past the last",    index: 13 },
+            { tag: "far past",         index: 999 }
+        ]
+    }
+
+    function test_jumping_outside_the_wizard_does_nothing(data) {
+        verify(wiz.hasNetworkConnectivity)
+        startAt(wiz.stepStorageSelection)
+
+        wiz.jumpToStep(data.index)
+
+        compare(wiz.currentStep, wiz.stepStorageSelection, data.tag)
+    }
+
     // -- The customisation substeps ----------------------------------------
 
     function test_the_base_substeps_are_always_offered() {
