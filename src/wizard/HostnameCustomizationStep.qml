@@ -96,15 +96,6 @@ WizardStepBase {
     }
     
     // Handle skip button
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 } 

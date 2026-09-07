@@ -47,6 +47,12 @@ TestCase {
         property int stepWriting: 9
         property int jumpedTo: -1
         function jumpToStep(n) { jumpedTo = n }
+        // Skipping is one function on the real container, shared by every
+        // step that offers the button. This records the call rather than
+        // repeating what it does -- reimplementing it here would only test
+        // the copy.
+        property int skipAllCalls: 0
+        function skipAllCustomisation() { skipAllCalls++ }
     }
 
     Component {
@@ -210,22 +216,24 @@ TestCase {
 
     // ── Skipping customisation ────────────────────────────────────────
 
-    function test_skipping_clears_every_customisation_and_goes_to_writing() {
+    function test_skipping_disowns_the_whole_customisation_section() {
         // Skip is offered from this step but disowns the whole customisation
-        // section, not just the account. Leaving any of these set writes
+        // section, not just the account. Leaving any of it set writes
         // configuration the user just declined -- a hostname or a Wi-Fi
         // network they thought they had backed out of.
+        //
+        // The clearing itself used to be written out here, and separately in
+        // each of the seven other steps that offer the button, in four
+        // versions that had drifted apart. It is now one function on the
+        // container, so what this step is responsible for is asking for it.
+        // That the function clears everything, from every step, is checked
+        // against the real container in tst_skip_customisation.qml.
         fill("pi", "correct horse", "correct horse")
 
         step.skipClicked()
 
-        verify(!fakeContainer.hostnameConfigured, "hostname was cleared")
-        verify(!fakeContainer.localeConfigured, "locale was cleared")
-        verify(!fakeContainer.userConfigured, "user was cleared")
-        verify(!fakeContainer.wifiConfigured, "wifi was cleared")
-        verify(!fakeContainer.sshEnabled, "ssh was cleared")
-        compare(fakeContainer.jumpedTo, fakeContainer.stepWriting,
-                "and it goes straight to writing")
+        compare(fakeContainer.skipAllCalls, 1,
+                "the button asks the container to skip all customisation")
     }
 
     // ── The warning before passwordless sudo ──────────────────────────

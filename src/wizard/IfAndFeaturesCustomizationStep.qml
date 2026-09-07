@@ -201,7 +201,14 @@ WizardStepBase {
             wizardContainer.ifI2cEnabled     = false
             wizardContainer.ifSpiEnabled     = false
             wizardContainer.if1WireEnabled   = false
-            wizardContainer.ifSerial         = false
+            // "Disabled", not false. ifSerial is a string, so a boolean here
+            // became the string "false" -- which is neither "" nor "Disabled",
+            // the two values every reader treats as unconfigured. The sidebar
+            // then marked this step done, and both the pre-erase summary and
+            // the completion screen listed a serial console the user had never
+            // been offered, on any OS without interface support. The sibling
+            // block below gets it right.
+            wizardContainer.ifSerial         = "Disabled"
             wizardContainer.featUsbGadgetEnabled = false
             // skip page
             wizardContainer.nextStep()
@@ -458,22 +465,8 @@ WizardStepBase {
         }
     }
 
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        wizardContainer.piConnectEnabled = false
-        wizardContainer.ifI2cEnabled = false
-        wizardContainer.ifSpiEnabled = false
-        wizardContainer.ifSerial = "Disabled"
-        wizardContainer.featUsbGadgetEnabled = false
-
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 
     Connections {
         // Recompute caps if the selected device changes elsewhere

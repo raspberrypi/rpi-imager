@@ -1568,6 +1568,43 @@ Item {
         wizardStack.push(storageSelectionStep)
     }
 
+    // "Skip customisation", from whichever customisation step it is pressed on.
+    //
+    // The button is labelled "Skip customisation" rather than "skip this step",
+    // so the answer has to be the same everywhere: nothing the user configured
+    // is configured any more, and the wizard goes straight to the write.
+    //
+    // This used to be written out in each of the eight steps that offer the
+    // button, in four different versions. Five cleared five flags, SecureBoot
+    // and PiConnect cleared those plus their own, and Interfaces cleared ten
+    // -- and if1WireEnabled was cleared by none of them, though every other
+    // clear-all path here includes it. Since the sidebar lets a user go back to any step already reached,
+    // pressing Skip on the Wi-Fi screen after enabling an interface left that
+    // interface set: the writing step's summary reads these flags live and
+    // would list it on a card the user had just declined to customise, while
+    // the completion screen reads a snapshot and would not, so the two screens
+    // disagreed about the same card.
+    //
+    // Only what the user chose is cleared. The availability flags beside these
+    // describe what the chosen OS supports, and clearing those would leave the
+    // wizard thinking the OS supports nothing if the user came back.
+    function skipAllCustomisation() {
+        hostnameConfigured = false
+        localeConfigured = false
+        userConfigured = false
+        wifiConfigured = false
+        sshEnabled = false
+        secureBootEnabled = false
+        piConnectEnabled = false
+        ifI2cEnabled = false
+        ifSpiEnabled = false
+        if1WireEnabled = false
+        ifSerial = ""
+        featUsbGadgetEnabled = false
+
+        jumpToStep(stepWriting)
+    }
+
     // Detect device selection changes and invalidate dependent steps
     onSelectedDeviceNameChanged: {
         if (previousDeviceName !== "" && previousDeviceName !== selectedDeviceName) {
