@@ -2091,3 +2091,185 @@ TEST_CASE("A cancelled write is not reported as a failure",
 
     CHECK(failed.count() == 0);
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// When the write pauses to sync
+//
+// _periodicSync() decides whether to stop and flush part-way through a
+// write. Both answers matter. Syncing too rarely leaves more in the page
+// cache than a card can absorb at the end; syncing too often is the reason
+// a write to an SD card over USB can take several times longer than it
+// should, because each fsync() waits on the slowest device in the chain.
+//
+// The decision is a pure function of a handful of protected members, and it
+// reports itself through eventPeriodicSync, so it can be driven directly
+// rather than by writing an image and waiting.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+class SyncCountingDevice : public rpi_imager::LinuxFileOperations
+{
+public:
+    bool directIo = false;
+    bool flushFails = false;
+    bool forceSyncFails = false;
+    int flushes = 0;
+    int forceSyncs = 0;
+
+    bool IsDirectIOEnabled() const override { return directIo; }
+
+    rpi_imager::FileError Flush() override
+    {
+        ++flushes;
+        return flushFails ? rpi_imager::FileError::kFlushError
+                          : rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ForceSync() override
+    {
+        ++forceSyncs;
+        return forceSyncFails ? rpi_imager::FileError::kSyncError
+                              : rpi_imager::FileError::kSuccess;
+    }
+};
+
+class SyncDecision : public DownloadThread
+{
+public:
+    SyncDecision() : DownloadThread("file:///nonexistent", "", "")
+    {
+        _debugPeriodicSync = true;
+        device = std::make_shared<SyncCountingDevice>();
+        _file = device;
+        _lastSyncTime.start();
+        _lastSyncBytes = 0;
+    }
+
+    // Enough written since the last sync to be worth one.
+    void haveWritten(qint64 bytes) { _bytesWritten = bytes; }
+    qint64 syncThreshold() const { return _syncConfig.syncIntervalBytes; }
+    void beCancelled() { _cancelled = true; }
+    void disableViaDebugOption() { _debugPeriodicSync = false; }
+
+    // Make the time-based trigger eligible without waiting for the real
+    // interval, which is five seconds. Nothing else in the decision changes,
+    // so what remains is whether the "and something was written" clause
+    // holds it back.
+    void makeAnyElapsedTimeEnough() { _syncConfig.syncIntervalMs = 0; }
+
+    std::shared_ptr<SyncCountingDevice> device;
+
+    using DownloadThread::_periodicSync;
+};
+
+} // namespace
+
+TEST_CASE("A write syncs once it has put down enough data",
+          "[downloadthread][periodicsync]")
+{
+    SyncDecision thread;
+    rpi_test::SignalLog synced(&thread, &DownloadThread::eventPeriodicSync);
+    thread.haveWritten(thread.syncThreshold());
+
+    thread._periodicSync();
+
+    REQUIRE(synced.count() == 1);
+    CHECK(synced.at(0).at(1).toBool() == true);
+    CHECK(thread.device->forceSyncs == 1);
+}
+
+TEST_CASE("Direct I/O writes do not stop to sync",
+          "[downloadthread][periodicsync]")
+{
+    // With O_DIRECT the data is not sitting in the page cache, so there is
+    // nothing for fsync() to push and every call is pure delay -- which on a
+    // card behind a USB reader is where a write's time goes. The sync at the
+    // end still happens; this is only about the ones part-way through.
+    SyncDecision thread;
+    rpi_test::SignalLog synced(&thread, &DownloadThread::eventPeriodicSync);
+    thread.device->directIo = true;
+    thread.haveWritten(thread.syncThreshold() * 4);
+
+    thread._periodicSync();
+
+    CHECK(synced.count() == 0);
+    CHECK(thread.device->forceSyncs == 0);
+    CHECK(thread.device->flushes == 0);
+}
+
+TEST_CASE("Time passing on its own is not a reason to sync",
+          "[downloadthread][periodicsync]")
+{
+    // The time-based trigger requires that something was actually written.
+    // Without that clause a stalled write would sync on a timer, repeatedly
+    // flushing nothing.
+    SyncDecision thread;
+    rpi_test::SignalLog synced(&thread, &DownloadThread::eventPeriodicSync);
+    thread.makeAnyElapsedTimeEnough();
+    thread.haveWritten(0);
+
+    thread._periodicSync();
+
+    CHECK(synced.count() == 0);
+    CHECK(thread.device->forceSyncs == 0);
+}
+
+TEST_CASE("A cancelled write does not stop to sync",
+          "[downloadthread][periodicsync]")
+{
+    SyncDecision thread;
+    rpi_test::SignalLog synced(&thread, &DownloadThread::eventPeriodicSync);
+    thread.haveWritten(thread.syncThreshold());
+    thread.beCancelled();
+
+    thread._periodicSync();
+
+    CHECK(synced.count() == 0);
+}
+
+TEST_CASE("Periodic sync can be turned off for diagnosis",
+          "[downloadthread][periodicsync]")
+{
+    SyncDecision thread;
+    rpi_test::SignalLog synced(&thread, &DownloadThread::eventPeriodicSync);
+    thread.disableViaDebugOption();
+    thread.haveWritten(thread.syncThreshold() * 4);
+
+    thread._periodicSync();
+
+    CHECK(synced.count() == 0);
+}
+
+TEST_CASE("A sync that fails is recorded as having failed",
+          "[downloadthread][periodicsync]")
+{
+    // The event is what the performance capture is read from afterwards, so
+    // a failed sync reported as a success would hide the thing somebody is
+    // looking for.
+    SECTION("the flush fails") {
+        SyncDecision thread;
+        rpi_test::SignalLog synced(&thread, &DownloadThread::eventPeriodicSync);
+        thread.device->flushFails = true;
+        thread.haveWritten(thread.syncThreshold());
+
+        thread._periodicSync();
+
+        REQUIRE(synced.count() == 1);
+        CHECK(synced.at(0).at(1).toBool() == false);
+        CHECK(thread.device->forceSyncs == 0);
+    }
+
+    SECTION("the flush works and the sync fails") {
+        SyncDecision thread;
+        rpi_test::SignalLog synced(&thread, &DownloadThread::eventPeriodicSync);
+        thread.device->forceSyncFails = true;
+        thread.haveWritten(thread.syncThreshold());
+
+        thread._periodicSync();
+
+        REQUIRE(synced.count() == 1);
+        CHECK(synced.at(0).at(1).toBool() == false);
+        CHECK(thread.device->flushes == 1);
+    }
+}
