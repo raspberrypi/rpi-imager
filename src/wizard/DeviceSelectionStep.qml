@@ -153,6 +153,8 @@ WizardStepBase {
         // Device list (fills available space, hidden when showing offline placeholder)
         SelectionListView {
             id: hwlist
+            itemNoun: qsTr("Raspberry Pi model")
+            itemNounPlural: qsTr("Raspberry Pi models")
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: !offlinePlaceholder.visible

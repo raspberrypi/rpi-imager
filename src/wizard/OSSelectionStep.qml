@@ -319,6 +319,12 @@ WizardStepBase {
                     
                     // Main OS list
                     OSSelectionListView {
+                        // Population changes here are navigation, not
+                        // arrival: descending into a category replaces the
+                        // rows. "A device was connected" would be wrong, and
+                        // the swipe view already moves focus, which is what
+                        // announces the new list.
+                        announcePopulationChanges: false
                         id: oslist
                         model: root.osmodel
                         delegate: osdelegate
@@ -545,6 +551,12 @@ WizardStepBase {
         id: suboslist
         
         OSSelectionListView {
+            // Population changes here are navigation, not
+            // arrival: descending into a category replaces the
+            // rows. "A device was connected" would be wrong, and
+            // the swipe view already moves focus, which is what
+            // announces the new list.
+            announcePopulationChanges: false
             id: sublistview
             model: ListModel {
                 id: sublistModel
