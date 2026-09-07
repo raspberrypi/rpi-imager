@@ -7206,6 +7206,136 @@ TEST_CASE("The fallback image picker reports a custom image", "[imagewriter][fil
 }
 
 // ══════════════════════════════════════════════════════════════
+// Whose Wi-Fi passphrase gets written into the image
+//
+// The wireless step offers to reuse the network this computer is on, which
+// means reading this machine's own passphrase out of NetworkManager and
+// writing it into the image. That is a credential the user never typed into
+// Imager, so which requests it answers matters: a request naming a
+// different network must not be handed the passphrase for this one.
+//
+// Getting that wrong is quiet in both directions. Written into an image
+// configured for another network the Pi simply fails to associate, and the
+// user has this machine's home passphrase sitting in plain text in a
+// firstrun script on a card they may pass on. NetworkManagerApi was at 0%:
+// nothing had ever called it.
+//
+// getPSKForSSID() is what decides, and it is not virtual, so it runs here
+// exactly as it ships. What the fake replaces is the two calls that reach
+// the host -- which network this computer is on, and its passphrase --
+// because those are the machine's, not the test's.
+
+#if defined(__linux__) && !defined(CLI_ONLY_BUILD)
+
+#include "linux/networkmanagerapi.h"
+
+namespace {
+
+class FakeHostNetwork : public NetworkManagerApi
+{
+public:
+    QByteArray ssid;
+    QByteArray psk;
+    int psk_reads = 0;
+
+    QByteArray getSSID() override { return ssid; }
+    QByteArray getPSK() override { ++psk_reads; return psk; }
+
+    using NetworkManagerApi::_getSSIDofInterface;
+};
+
+} // namespace
+
+TEST_CASE("The passphrase is offered for the network it belongs to", "[wlan]")
+{
+    FakeHostNetwork net;
+    net.ssid = "Pi Towers";
+    net.psk = "correct horse battery staple";
+
+    CHECK(net.getPSKForSSID("Pi Towers") == QByteArray("correct horse battery staple"));
+}
+
+TEST_CASE("The passphrase is not offered for any other network", "[wlan]")
+{
+    // The one that matters. Answering this with the local passphrase writes
+    // it into an image meant for somewhere else.
+    FakeHostNetwork net;
+    net.ssid = "Pi Towers";
+    net.psk = "correct horse battery staple";
+
+    CHECK(net.getPSKForSSID("Next Door") == QByteArray());
+    CHECK(net.psk_reads == 0);  // not even read, let alone returned
+}
+
+TEST_CASE("A network name has to match exactly to be answered", "[wlan]")
+{
+    // SSIDs are bytes, and two that differ by case or by a space are two
+    // different networks as far as any access point is concerned.
+    FakeHostNetwork net;
+    net.ssid = "Pi Towers";
+    net.psk = "correct horse battery staple";
+
+    CHECK(net.getPSKForSSID("pi towers") == QByteArray());
+    CHECK(net.getPSKForSSID("PI TOWERS") == QByteArray());
+    CHECK(net.getPSKForSSID("Pi Towers ") == QByteArray());
+    CHECK(net.getPSKForSSID(" Pi Towers") == QByteArray());
+    CHECK(net.getPSKForSSID("Pi") == QByteArray());
+    CHECK(net.getPSKForSSID("Pi Towers 5GHz") == QByteArray());
+    CHECK(net.psk_reads == 0);
+}
+
+TEST_CASE("A machine on no network answers nothing", "[wlan]")
+{
+    // Without the "is there a network at all" half of the condition, an
+    // empty request matches an empty current network and the passphrase
+    // goes out to a caller that named nothing.
+    FakeHostNetwork net;
+    net.ssid = "";
+    net.psk = "correct horse battery staple";
+
+    CHECK(net.getPSKForSSID("") == QByteArray());
+    CHECK(net.getPSKForSSID("Pi Towers") == QByteArray());
+    CHECK(net.psk_reads == 0);
+}
+
+TEST_CASE("A request naming nothing is answered with nothing", "[wlan]")
+{
+    // Defended twice: ImageWriter::getPSKForSSID() refuses an empty name
+    // before this is reached. Pinned at this level because it is the layer
+    // that holds the credential, and because the caller's guard is the one
+    // more likely to be moved.
+    FakeHostNetwork net;
+    net.ssid = "Pi Towers";
+    net.psk = "correct horse battery staple";
+
+    CHECK(net.getPSKForSSID("") == QByteArray());
+    CHECK(net.psk_reads == 0);
+}
+
+TEST_CASE("An interface that is not there has no network name", "[wlan]")
+{
+    // The wireless-extensions ioctl against a name no interface has. It
+    // fails, and the buffer it would have filled has to be treated as
+    // empty rather than read back as whatever was on the stack.
+    FakeHostNetwork net;
+
+    CHECK(net._getSSIDofInterface("nosuchif0") == QByteArray());
+    CHECK(net._getSSIDofInterface("") == QByteArray());
+}
+
+TEST_CASE("There is one holder of the local credentials", "[wlan]")
+{
+    // Everything reaches this through WlanCredentials::instance(). A second
+    // instance would mean a second trip to the keychain or the system bus,
+    // which on macOS is a second password prompt for the user.
+    WlanCredentials *first = WlanCredentials::instance();
+    REQUIRE(first != nullptr);
+    CHECK(WlanCredentials::instance() == first);
+}
+
+#endif  // __linux__ && !CLI_ONLY_BUILD
+
+// ══════════════════════════════════════════════════════════════
 // Which repository URLs are allowed to become the OS list
 //
 // isValidRepoUrl() decides whether an address the user typed, or one that
