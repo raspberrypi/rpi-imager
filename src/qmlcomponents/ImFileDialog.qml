@@ -398,6 +398,7 @@ BaseDialog {
 
                 ListView {
                     id: placesList
+                    objectName: "fileDialogPlacesList"
                     Layout.fillWidth: true
                     Layout.preferredHeight: contentHeight
                     clip: true
@@ -478,6 +479,7 @@ BaseDialog {
 
                 ListView {
                     id: subfoldersList
+                    objectName: "fileDialogFoldersList"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
@@ -624,6 +626,7 @@ BaseDialog {
                     // Up entry at top of right pane - always show when not at root
                     ImButton {
                         id: upEntry
+                        objectName: "fileDialogUpEntry"
                         width: parent.width
                         visible: dialog._canGoUp()
                         height: visible ? implicitHeight : 0
@@ -662,6 +665,7 @@ BaseDialog {
                     // Files list with focus support (hidden in save mode)
                     ListView {
                         id: filesList
+                        objectName: "fileDialogFilesList"
                         width: fileColumn.width
                         height: dialog.isSaveDialog ? 0 : Math.max(contentHeight, filesOnlyModel.count === 0 ? 60 : 0)
                         visible: !dialog.isSaveDialog
@@ -784,12 +788,14 @@ BaseDialog {
         Item { Layout.fillWidth: true }
         ImButton {
             id: cancelButton
+            objectName: "fileDialogCancelButton"
             text: CommonStrings.cancel
             activeFocusOnTab: true
             onClicked: { dialog.close(); dialog.rejected() }
         }
         ImButton {
             id: openButton
+            objectName: "fileDialogOpenButton"
             text: dialog.isSaveDialog ? qsTr("Save") : qsTr("Open")
             enabled: dialog.isSaveDialog
                 ? String(dialog._currentFilename).trim().length > 0
