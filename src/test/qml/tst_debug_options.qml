@@ -178,4 +178,96 @@ TestCase {
         ImageWriterSingleton.setDebugSkipEndOfDevice(wasSkip)
         ImageWriterSingleton.setDebugRpiboot(wasRpiboot)
     }
+
+
+    // ── Leaving the dialog without applying anything ──────────────────
+    //
+    // Every case above calls applySettings() directly. The three ways a
+    // person actually leaves this dialog -- Apply, Cancel, escape -- were
+    // uncovered, and the two that are supposed to change nothing are the
+    // ones that matter.
+    //
+    // These switches change how the next write behaves: forcing secure
+    // boot, ignoring the device's own I/O limits, skipping the end-of-device
+    // check. Someone opening the dialog to look at it, flicking a switch and
+    // then thinking better of it must not be left with that setting in force
+    // for a card they write afterwards.
+
+    function test_cancelling_applies_nothing() {
+        var was = ImageWriterSingleton.getDebugForceSecureBoot()
+        child("debugForceSecureBoot").checked = !was
+
+        child("debugCancelButton").clicked()
+
+        tryVerify(function () { return !dialog.visible }, 3000,
+                  "the dialog closed")
+        compare(ImageWriterSingleton.getDebugForceSecureBoot(), was,
+                "and the switch that was flicked was not applied")
+    }
+
+    function test_escape_applies_nothing_either() {
+        var was = ImageWriterSingleton.getDebugIgnoreDeviceLimits()
+        child("debugIgnoreDeviceLimits").checked = !was
+
+        dialog.escapePressed()
+
+        tryVerify(function () { return !dialog.visible }, 3000)
+        compare(ImageWriterSingleton.getDebugIgnoreDeviceLimits(), was)
+    }
+
+    function test_apply_applies_and_closes() {
+        // The counterpart, without which the two above would pass on a
+        // dialog that could never change anything at all.
+        var was = ImageWriterSingleton.getDebugVerboseLogging()
+        child("debugVerboseLogging").checked = !was
+
+        child("debugApplyButton").clicked()
+
+        compare(ImageWriterSingleton.getDebugVerboseLogging(), !was,
+                "the switch took effect")
+        tryVerify(function () { return !dialog.visible }, 3000,
+                  "and the dialog closed behind it")
+
+        ImageWriterSingleton.setDebugVerboseLogging(was)
+    }
+
+    // ── The queue depth is not a free number ──────────────────────────
+
+    function test_the_queue_depth_snaps_to_a_value_the_writer_supports_data() {
+        return [
+            { tag: "just above 16",  dropped: 17,  lands: 16 },
+            { tag: "just below 32",  dropped: 30,  lands: 32 },
+            { tag: "between 64 and 128", dropped: 100, lands: 128 },
+            { tag: "the very bottom", dropped: 1,   lands: 1 },
+            { tag: "the very top",    dropped: 512, lands: 512 }
+        ]
+    }
+
+    function test_the_queue_depth_snaps_to_a_value_the_writer_supports(data) {
+        // The slider moves one at a time across a range of five hundred, and
+        // what it lands on is handed to the writer as a ring-buffer depth.
+        // Snapping is what keeps that a value the ring is built for; without
+        // it the number depends on where a mouse happened to stop.
+        var slider = child("debugQueueDepthSlider")
+        slider.value = data.dropped
+
+        slider.moved()
+
+        compare(Math.round(slider.value), data.lands, data.tag)
+    }
+
+    function test_a_snapped_depth_is_what_gets_applied() {
+        // End to end: what the writer is given is the snapped value, not
+        // the one the slider was left on.
+        var original = ImageWriterSingleton.getDebugAsyncQueueDepth()
+        var slider = child("debugQueueDepthSlider")
+        slider.value = 100
+        slider.moved()
+
+        child("debugApplyButton").clicked()
+
+        compare(ImageWriterSingleton.getDebugAsyncQueueDepth(), 128)
+
+        ImageWriterSingleton.setDebugAsyncQueueDepth(original)
+    }
 }

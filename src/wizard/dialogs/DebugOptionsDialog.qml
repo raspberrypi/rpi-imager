@@ -133,6 +133,7 @@ BaseDialog {
                 
                 Slider {
                     id: asyncQueueDepthSlider
+                    objectName: "debugQueueDepthSlider"
                     Layout.fillWidth: true
                     from: 1
                     to: 512  // Max supported by ring buffer - high values mainly benefit NVMe/USB4
@@ -512,6 +513,7 @@ BaseDialog {
 
             ImButton {
                 id: cancelButton
+                objectName: "debugCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Close the debug options dialog without saving any changes")
                 Layout.minimumWidth: Style.buttonWidthMinimum
@@ -523,6 +525,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: applyButton
+                objectName: "debugApplyButton"
                 text: qsTr("Apply")
                 accessibleDescription: qsTr("Apply the selected debug options")
                 Layout.minimumWidth: Style.buttonWidthMinimum
