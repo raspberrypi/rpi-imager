@@ -348,4 +348,75 @@ TestCase {
         compare(accepted.count, 0)
         tryVerify(function () { return !dialog.visible }, 3000)
     }
+
+
+    // -- And the same three lists with a mouse -----------------------------
+    //
+    // The keyboard cases above are the half that was missing entirely. The
+    // delegates' own click handlers were uncovered too, which is the route
+    // most people take: clicking a folder to go into it, clicking a file to
+    // choose it, clicking a place to jump there.
+    //
+    // They are separate handlers from the keyboard ones and can be lost
+    // separately, which would leave a dialog that works by keyboard and
+    // does nothing at all when clicked.
+
+    function rowAt(list, index) {
+        list.positionViewAtIndex(index, ListView.Beginning)
+        waitForRendering(testCase)
+        const row = list.itemAtIndex(index)
+        verify(row, "the row is instantiated")
+        return row
+    }
+
+    function test_clicking_a_folder_opens_it() {
+        const before = String(dialog.currentFolder)
+        const row = rowAt(folders(), 0)
+
+        mouseClick(row)
+        waitForRendering(testCase)
+
+        verify(String(dialog.currentFolder) !== before,
+               "the folder was opened; still at " + before)
+    }
+
+    function test_clicking_a_file_chooses_it() {
+        dialog.selectedFile = ""
+        const row = rowAt(files(), 0)
+
+        mouseClick(row)
+        waitForRendering(testCase)
+
+        verify(String(dialog.selectedFile).length > 0,
+               "a file was chosen")
+        compare(files().currentIndex, 0,
+                "and the row it came from is the highlighted one")
+    }
+
+    function test_clicking_a_file_is_enough_to_open_it() {
+        // End to end for the mouse: click a file, press Open, and the
+        // dialog hands it back.
+        dialog.selectedFile = ""
+        mouseClick(rowAt(files(), 0))
+        waitForRendering(testCase)
+        verify(child("fileDialogOpenButton").enabled,
+               "Open became available")
+
+        child("fileDialogOpenButton").clicked()
+
+        compare(accepted.count, 1)
+    }
+
+    function test_clicking_a_place_goes_there() {
+        const before = String(dialog.currentFolder)
+        const row = rowAt(places(), 0)
+
+        mouseClick(row)
+        waitForRendering(testCase)
+
+        verify(String(dialog.currentFolder) !== before,
+               "the place was opened; still at " + before)
+        compare(places().currentIndex, 0,
+                "and it is shown as the one in use")
+    }
 }
