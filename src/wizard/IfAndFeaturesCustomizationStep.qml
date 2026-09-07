@@ -430,6 +430,7 @@ WizardStepBase {
 
             ImButton {
                 id: cancelBtn
+                objectName: "usbGadgetCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Cancel and return to the interfaces and features settings without enabling USB Gadget Mode")
                 activeFocusOnTab: true
@@ -438,6 +439,7 @@ WizardStepBase {
 
             ImButtonRed {
                 id: acceptBtn
+                objectName: "usbGadgetAcceptButton"
                 text: qsTr("I understand, continue")
                 accessibleDescription: confirmDialog.allowAccept ? qsTr("Confirm that you understand the risks and continue with USB Gadget Mode enabled") : qsTr("This button will be enabled after 2 seconds")
                 enabled: confirmDialog.allowAccept

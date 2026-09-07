@@ -55,7 +55,8 @@ TestCase {
         property int stepWriting: 9
         property int jumpedTo: -1
         function jumpToStep(n) { jumpedTo = n }
-        function nextStep() {}
+        property int advanced: 0
+        function nextStep() { fakeContainer.advanced++ }
     }
 
     Component {
@@ -204,5 +205,127 @@ TestCase {
         var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         verify(saved[data.key] === undefined,
                data.tag + " was not left in the saved settings")
+    }
+
+
+    // ── Answering the USB gadget warning ──────────────────────────────
+    //
+    // The cases above cover the warning being raised. What happens to the
+    // answer was uncovered: both buttons, the escape key, the two-second
+    // hold on the accept button, and the reset behind it.
+    //
+    // USB gadget mode changes how the board enumerates over USB, which is
+    // what the warning is about, and the step only proceeds once
+    // isConfirmed is set. So a dismissal that set it anyway would carry the
+    // user past a warning they closed, and a hold that did not reset would
+    // let them dismiss once and click straight through the second time --
+    // which is the whole of what a deliberate delay is for.
+
+    // updateCaps() is deferred with Qt.callLater and recomputes the
+    // capability flags from the chosen OS, of which there is none here, so
+    // it decides the step has nothing to offer and marks it already
+    // confirmed. Anything that spins the event loop -- tryVerify, wait --
+    // lets that run, so the flags are put back afterwards rather than in
+    // init(). Which capabilities are detected is not what these cover.
+    function armTheStep() {
+        wait(150)
+        step.supportsUsbOtg = true
+        step.supportsI2c = true
+        step.isConfirmed = false
+        fakeContainer.advanced = 0
+    }
+
+    function usbGadgetOn() {
+        armTheStep()
+        child("enableUsbGadgetToggle").checked = true
+        step.nextClicked()
+        tryVerify(function () { return warning().opened }, 3000,
+                  "the warning was raised")
+        verify(!step.isConfirmed,
+               "and nothing has been confirmed by raising it")
+    }
+
+    function acceptButton() {
+        var b = findChild(step, "usbGadgetAcceptButton")
+        verify(b, "found the accept button")
+        return b
+    }
+
+    function test_the_accept_button_is_held_for_a_moment() {
+        // Long enough that it cannot be part of the same click that opened
+        // the dialog.
+        usbGadgetOn()
+
+        verify(!acceptButton().enabled,
+               "there is nothing to click yet")
+        verify(!step.isConfirmed)
+    }
+
+    function test_the_hold_ends_and_accepting_becomes_possible() {
+        usbGadgetOn()
+
+        tryVerify(function () { return acceptButton().enabled }, 5000,
+                  "the button became available")
+    }
+
+    function test_cancelling_is_available_immediately() {
+        // The safe answer is never held back.
+        usbGadgetOn()
+
+        verify(findChild(step, "usbGadgetCancelButton").enabled)
+    }
+
+    function test_accepting_confirms_and_moves_on() {
+        usbGadgetOn()
+        tryVerify(function () { return acceptButton().enabled }, 5000)
+
+        acceptButton().clicked()
+
+        verify(step.isConfirmed, "the warning was understood")
+        compare(fakeContainer.advanced, 1, "and the step moved on")
+        tryVerify(function () { return !warning().visible }, 3000)
+    }
+
+    function test_cancelling_does_not_confirm_or_move_on() {
+        usbGadgetOn()
+
+        findChild(step, "usbGadgetCancelButton").clicked()
+
+        verify(!step.isConfirmed, "the warning was not answered")
+        compare(fakeContainer.advanced, 0, "and the step stayed where it was")
+        tryVerify(function () { return !warning().visible }, 3000)
+    }
+
+    function test_escape_does_not_confirm_either() {
+        // Dismissing a warning is not reading it.
+        usbGadgetOn()
+
+        warning().escapePressed()
+
+        verify(!step.isConfirmed)
+        compare(fakeContainer.advanced, 0)
+        tryVerify(function () { return !warning().visible }, 3000)
+    }
+
+    function test_a_second_showing_has_to_be_waited_out_again() {
+        // Otherwise dismissing once and reopening is a way round the delay,
+        // which leaves it protecting nobody.
+        //
+        // The reset happens in two places -- when the dialog closes and
+        // again when it opens -- so removing the one in onClosed fails
+        // nothing. It is the opening one this rests on.
+        usbGadgetOn()
+        tryVerify(function () { return acceptButton().enabled }, 5000)
+        warning().escapePressed()
+        tryVerify(function () { return !warning().visible }, 3000)
+
+        step.supportsUsbOtg = true
+        step.nextClicked()
+        tryVerify(function () { return warning().opened }, 3000,
+                  "the warning came up again")
+
+        verify(!acceptButton().enabled,
+               "and the hold started over rather than carrying on from "
+               + "where the first showing left it")
     }
 }
