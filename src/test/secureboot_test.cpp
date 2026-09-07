@@ -18,6 +18,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "secureboot.h"
+#include "secureboot_crypto.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "file_operations.h"
@@ -906,4 +907,222 @@ TEST_CASE("A boot.img grows to hold what is put in it",
     INFO("image size: " << size);
     CHECK(size > 48 * 1024 * 1024);
     CHECK(readFromImg(out, QStringLiteral("big.bin")).size() == 48 * 1024 * 1024);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Reading the RSA public key the board will be locked to
+//
+// parseSubjectPublicKeyInfoDerToNE turns the DER a key file yields into the
+// 264 bytes the boot ROM expects: the modulus, little-endian, then the
+// exponent, little-endian. It is what decides which key a device with
+// programmed OTP will accept for the rest of its life, and OTP cannot be
+// rewritten -- a board locked to the wrong bytes is not recoverable.
+//
+// Every refusal in it was uncovered. It is a pure function over a byte
+// array, so the DER can be built by hand and each malformed shape given its
+// own case: a parser that accepts something it should not and returns 264
+// plausible-looking bytes is exactly the failure that cannot be undone.
+
+namespace {
+
+// Minimal ASN.1 writing, enough to build a SubjectPublicKeyInfo by hand.
+QByteArray derLength(int n)
+{
+    QByteArray out;
+    if (n < 0x80) {
+        out.append(static_cast<char>(n));
+    } else if (n < 0x100) {
+        out.append(char(0x81));
+        out.append(static_cast<char>(n));
+    } else {
+        out.append(char(0x82));
+        out.append(static_cast<char>((n >> 8) & 0xFF));
+        out.append(static_cast<char>(n & 0xFF));
+    }
+    return out;
+}
+
+QByteArray derTagged(quint8 tag, const QByteArray &contents)
+{
+    QByteArray out;
+    out.append(static_cast<char>(tag));
+    out.append(derLength(contents.size()));
+    out.append(contents);
+    return out;
+}
+
+// An INTEGER, with the leading zero ASN.1 prepends when the top bit is set
+// so the value stays positive.
+QByteArray derInteger(const QByteArray &beValue)
+{
+    QByteArray body = beValue;
+    if (!body.isEmpty() && (static_cast<quint8>(body.at(0)) & 0x80))
+        body.prepend(char(0x00));
+    return derTagged(0x02, body);
+}
+
+QByteArray modulusOf(int bytes, quint8 firstByte = 0xC7)
+{
+    QByteArray n(bytes, char(0x5A));
+    n[0] = static_cast<char>(firstByte);
+    n[bytes - 1] = char(0x01);
+    return n;
+}
+
+// SubjectPublicKeyInfo := SEQUENCE { AlgorithmIdentifier, BIT STRING }
+QByteArray publicKeyInfo(const QByteArray &modulusBE,
+                         const QByteArray &exponentBE)
+{
+    const QByteArray rsaPublicKey =
+        derTagged(0x30, derInteger(modulusBE) + derInteger(exponentBE));
+
+    QByteArray bitStringBody;
+    bitStringBody.append(char(0x00));  // unused bits
+    bitStringBody.append(rsaPublicKey);
+
+    // A stand-in AlgorithmIdentifier; the parser skips over it by length.
+    const QByteArray algorithm = derTagged(0x30, QByteArray(13, char(0x2A)));
+
+    return derTagged(0x30, algorithm + derTagged(0x03, bitStringBody));
+}
+
+const QByteArray kExponent = QByteArray::fromHex("010001");  // 65537
+
+} // namespace
+
+TEST_CASE("A 2048-bit public key becomes the bytes the boot ROM wants",
+          "[secureboot][pubkey]")
+{
+    const QByteArray modulus = modulusOf(256);
+    const QByteArray parsed =
+        SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+            publicKeyInfo(modulus, kExponent));
+
+    REQUIRE(parsed.size() == 264);
+
+    // The modulus, reversed: the ROM reads it little-endian and DER holds it
+    // big-endian. Getting this backwards would lock a board to a key nobody
+    // holds.
+    QByteArray expectedN;
+    for (int i = modulus.size() - 1; i >= 0; --i)
+        expectedN.append(modulus.at(i));
+    CHECK(parsed.left(256) == expectedN);
+
+    // 65537 little-endian in eight bytes.
+    CHECK(parsed.mid(256) == QByteArray::fromHex("0100010000000000"));
+}
+
+TEST_CASE("The leading zero ASN.1 adds to a modulus is not part of it",
+          "[secureboot][pubkey]")
+{
+    // A modulus with its top bit set is written with a 0x00 in front so the
+    // INTEGER stays positive. Keeping it would shift every byte and yield a
+    // key one byte too long.
+    const QByteArray modulus = modulusOf(256, 0xFF);
+    const QByteArray parsed =
+        SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+            publicKeyInfo(modulus, kExponent));
+
+    REQUIRE(parsed.size() == 264);
+    CHECK(static_cast<quint8>(parsed.at(255)) == 0xFF);
+}
+
+TEST_CASE("A key that is not 2048 bits is refused", "[secureboot][pubkey]")
+{
+    // The ROM format has room for exactly 256 bytes of modulus. A shorter
+    // key padded out, or a longer one truncated, is a key the device would
+    // not accept afterwards.
+    CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+              publicKeyInfo(modulusOf(128), kExponent)).isEmpty());
+    CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+              publicKeyInfo(modulusOf(384), kExponent)).isEmpty());
+    CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+              publicKeyInfo(modulusOf(512), kExponent)).isEmpty());
+}
+
+TEST_CASE("Nothing at all is refused", "[secureboot][pubkey]")
+{
+    // Defended twice: the explicit empty check, and the tag check after it,
+    // which finds nothing to read either. Removing the first fails nothing,
+    // so no claim is made for it -- what is pinned is the outcome.
+    CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE({}).isEmpty());
+}
+
+TEST_CASE("A blob that is not a public key is refused", "[secureboot][pubkey]")
+{
+    CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+              QByteArray("not der at all")).isEmpty());
+    CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+              QByteArray::fromHex("0201FF")).isEmpty());  // an INTEGER, not a SEQUENCE
+}
+
+TEST_CASE("A public key cut short at any point is refused",
+          "[secureboot][pubkey]")
+{
+    // Every prefix of a valid key. A parser that reads past the end of a
+    // truncated one is reading whatever follows it in memory and calling the
+    // result a key.
+    const QByteArray whole = publicKeyInfo(modulusOf(256), kExponent);
+    REQUIRE(!SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(whole).isEmpty());
+
+    QStringList accepted;
+    for (int cut = 1; cut < whole.size(); ++cut) {
+        if (!SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(whole.left(cut)).isEmpty())
+            accepted << QString::number(cut);
+    }
+    CHECK(accepted.join(QStringLiteral(", ")).toStdString() == std::string());
+}
+
+TEST_CASE("A public key with the wrong shape inside is refused",
+          "[secureboot][pubkey]")
+{
+    const QByteArray modulus = modulusOf(256);
+
+    SECTION("the outer wrapper is not a SEQUENCE") {
+        QByteArray der = publicKeyInfo(modulus, kExponent);
+        der[0] = char(0x31);
+        CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(der).isEmpty());
+    }
+
+    SECTION("the algorithm is not a SEQUENCE") {
+        QByteArray der = publicKeyInfo(modulus, kExponent);
+        // Just past the outer tag and its two-byte length.
+        der[4] = char(0x05);
+        CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(der).isEmpty());
+    }
+
+    // Also defended twice: replacing the BIT STRING tag check with a bare
+    // bounds check still refuses this, because the unused-bits byte that
+    // follows is checked as well and an OCTET STRING does not have one. The
+    // case is kept for the shape it describes, not for a failure it was
+    // watched to produce on its own.
+    SECTION("the key is not wrapped in a BIT STRING") {
+        const QByteArray rsaPublicKey =
+            derTagged(0x30, derInteger(modulus) + derInteger(kExponent));
+        const QByteArray algorithm = derTagged(0x30, QByteArray(13, char(0x2A)));
+        // An OCTET STRING where the BIT STRING belongs.
+        const QByteArray der =
+            derTagged(0x30, algorithm + derTagged(0x04, rsaPublicKey));
+        CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(der).isEmpty());
+    }
+
+    SECTION("the exponent is longer than the format holds") {
+        // Eight bytes is the room there is for it.
+        const QByteArray tooBig = QByteArray::fromHex("0102030405060708090A");
+        CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(
+                  publicKeyInfo(modulus, tooBig)).isEmpty());
+    }
+
+    SECTION("the modulus is not an INTEGER") {
+        const QByteArray notAnInteger = derTagged(0x04, modulus);
+        const QByteArray rsaPublicKey =
+            derTagged(0x30, notAnInteger + derInteger(kExponent));
+        QByteArray bitStringBody;
+        bitStringBody.append(char(0x00));
+        bitStringBody.append(rsaPublicKey);
+        const QByteArray algorithm = derTagged(0x30, QByteArray(13, char(0x2A)));
+        const QByteArray der =
+            derTagged(0x30, algorithm + derTagged(0x03, bitStringBody));
+        CHECK(SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(der).isEmpty());
+    }
 }
