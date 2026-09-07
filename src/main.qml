@@ -138,6 +138,10 @@ ApplicationWindow {
     // Modern error dialog (replaces legacy MsgPopup for error/info cases)
     BaseDialog {
         id: errorDialog
+        // Named so a test can reach it: every failure the writer reports is
+        // put in front of the user through this one dialog, and a Popup is
+        // not an Item child, so an id is not enough to find it from outside.
+        objectName: "errorDialog"
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -365,6 +369,7 @@ ApplicationWindow {
     // Permission warning dialog for when not running with elevated privileges
     BaseDialog {
         id: permissionWarningDialog
+        objectName: "permissionWarningDialog"
         parent: overlayRoot
         anchors.centerIn: parent
         closePolicy: Popup.NoAutoClose  // Prevent closing with escape or clicking outside
