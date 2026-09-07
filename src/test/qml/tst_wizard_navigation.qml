@@ -16,6 +16,12 @@
  * The customisation substeps are a separate hazard: the list is built at
  * runtime from what the board supports, so the same index means different
  * steps on different hardware.
+ *
+ * Note for anyone running this file on its own with -input: nine of the
+ * cases below need a populated OS list and there is nothing in this file
+ * that populates one, so they fail in isolation and pass in the full run,
+ * where another file has already fetched or fed it. That is the harness,
+ * not the wizard.
  */
 
 import QtQuick
@@ -891,5 +897,158 @@ TestCase {
         wiz.ifSerial = ""
         verify(!wiz.isCustomizationSubstepConfigured(idx),
                "and neither is empty")
+    }
+
+
+    // -- When Next is allowed to move the wizard on ------------------------
+    //
+    // Two of the steps do not let the container advance on their own say-so.
+    // Pi Connect holds until the token it was given is one the service will
+    // accept, and the writing step holds until the write has finished; in
+    // each case the container asks the step first and the step handles the
+    // press itself when the answer is no. Those handlers were uncovered.
+    //
+    // They are the other half of the confirmations tested elsewhere: a step
+    // that records an answer is decorative if the container advances
+    // regardless of it. The writing one is the worst of them -- the
+    // completion screen is what tells a user the card can come out, and
+    // reaching it during a write is how a card gets pulled half-written.
+
+    // The stack is an id inside the container rather than an exposed
+    // property, so it is found by walking the object tree.
+    function findStepStack(item) {
+        if (!item)
+            return null
+        if (item.currentItem !== undefined && item.depth !== undefined)
+            return item
+        const kids = item.children || []
+        for (let i = 0; i < kids.length; i++) {
+            const found = findStepStack(kids[i])
+            if (found)
+                return found
+        }
+        return null
+    }
+
+    function goToStep(step) {
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedDeviceName = "Raspberry Pi 5"
+        wiz.selectedOsName = "Raspberry Pi OS (64-bit)"
+        wiz.selectedStorageName = "Generic Mass-Storage 32 GB"
+        wiz.jumpToStep(step)
+        compare(wiz.currentStep, step, "the wizard is on the step")
+        const stack = findStepStack(wiz)
+        verify(stack !== null, "the container has a step stack")
+        verify(stack.currentItem !== null, "and something on it")
+        // Several steps finish setting themselves up on the next turn of the
+        // event loop; anything read before that is the half-built version.
+        wait(150)
+        return stack.currentItem
+    }
+
+    // Left behind, a write in progress changes what every later case in this
+    // file sees on the container.
+    function leaveTheWriterIdle() {
+        ImageWriterSingleton.onCancelled()
+        wait(50)
+    }
+
+    function test_the_writing_step_does_not_advance_while_it_is_writing() {
+        const step = goToStep(wiz.stepWriting)
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return step.isWriting }, 3000,
+                  "a write is running")
+        verify(!step.isComplete, "and it is not finished")
+
+        step.nextClicked()
+
+        compare(wiz.currentStep, wiz.stepWriting,
+                "the user is still watching the write")
+        leaveTheWriterIdle()
+    }
+
+    function test_a_cancelled_write_does_not_count_as_a_finished_one() {
+        // Cancelling leaves the card partly written. The step stays put and
+        // says what happened rather than handing the user a completion
+        // screen for a card that is not usable.
+        const step = goToStep(wiz.stepWriting)
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return step.isWriting }, 3000)
+        ImageWriterSingleton.onCancelled()
+        tryVerify(function () { return !step.isWriting }, 3000)
+        verify(!step.isComplete)
+
+        step.nextClicked()
+
+        compare(wiz.currentStep, wiz.stepWriting)
+        leaveTheWriterIdle()
+    }
+
+    function test_a_finished_write_moves_on_by_itself() {
+        // Not what a first draft asserted. Next is not what leaves this
+        // screen on success: a finished write takes the user to the
+        // completion screen on its own, so a case that pressed Next and
+        // then checked it had arrived was reading a step the wizard had
+        // already reached. Measured -- making the container refuse every
+        // press from this screen left that case passing.
+        //
+        // So the container's condition is pinned by the two refusals above,
+        // both of which fail when it advances regardless. What this pins is
+        // that a user who has just watched a write does not have to press
+        // anything to be told the card is ready.
+        //
+        // Through finalising first: a success arriving while the writer is
+        // in a cancelled state is refused as a late signal, and the cases
+        // above leave it cancelled behind them.
+        const step = goToStep(wiz.stepWriting)
+        compare(wiz.currentStep, wiz.stepWriting, "starting on the write")
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return step.isWriting }, 3000)
+
+        ImageWriterSingleton.onSuccess()
+
+        tryVerify(function () { return wiz.currentStep === wiz.stepDone }, 3000,
+                  "the screen that says the card is safe to remove")
+        leaveTheWriterIdle()
+    }
+
+    // The Pi Connect step has its own handler on the same signal, which runs
+    // the validation and sets the flag the container then reads. So these
+    // drive the real states rather than assigning the flag: assigning it is
+    // pointless, because the step's own handler clears it before deciding.
+
+    function test_pi_connect_does_not_advance_with_no_token() {
+        const step = goToStep(wiz.stepPiConnectCustomization)
+        const toggle = findChild(step, "connectUseTokenToggle")
+        verify(toggle, "found the Connect toggle")
+        toggle.checked = true
+        const tokenField = findChild(step, "connectTokenField")
+        verify(tokenField, "found the token field")
+        tokenField.text = ""
+        wait(100)
+
+        step.nextClicked()
+
+        wait(200)
+        compare(wiz.currentStep, wiz.stepPiConnectCustomization,
+                "the step kept the user where the problem is")
+    }
+
+    function test_pi_connect_advances_when_it_is_not_being_used() {
+        // Turned off there is nothing to validate and nothing to hold on,
+        // and without this the case above would pass on a step that could
+        // never be left.
+        const step = goToStep(wiz.stepPiConnectCustomization)
+        const toggle = findChild(step, "connectUseTokenToggle")
+        verify(toggle, "found the Connect toggle")
+        toggle.checked = false
+        wait(100)
+
+        step.nextClicked()
+
+        tryVerify(function () {
+            return wiz.currentStep !== wiz.stepPiConnectCustomization
+        }, 3000, "the wizard moved on")
     }
 }
