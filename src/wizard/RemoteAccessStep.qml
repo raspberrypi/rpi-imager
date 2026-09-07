@@ -59,6 +59,7 @@ WizardStepBase {
                 // Replace checkbox with an option pill and help link
                 ImOptionPill {
                     id: sshEnablePill
+                    objectName: "sshEnableToggle"
                     Layout.fillWidth: true
                     text: qsTr("Enable SSH")
                     accessibleDescription: qsTr("Enable secure shell access for remote command-line control of your Raspberry Pi")
@@ -93,6 +94,7 @@ WizardStepBase {
                             
                             ImRadioButton {
                                 id: radioPassword
+                                objectName: "sshPasswordAuthRadio"
                                 text: qsTr("Use password authentication")
                                 checked: true
                                 ButtonGroup.group: authGroup
@@ -102,6 +104,7 @@ WizardStepBase {
                             
                             ImRadioButton {
                                 id: radioPublicKey
+                                objectName: "sshPublicKeyAuthRadio"
                                 text: qsTr("Use public key authentication")
                                 checked: false
                                 ButtonGroup.group: authGroup
@@ -114,6 +117,7 @@ WizardStepBase {
                     // SSH Key Manager (expands naturally within outer ScrollView)
                     SshKeyManager {
                         id: sshKeyManager
+                        objectName: "sshKeyManager"
                         Layout.fillWidth: true
                         visible: radioPublicKey.checked
                     }
