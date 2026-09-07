@@ -93,4 +93,86 @@ TestCase {
         wait(200)
         verify(!quitDialog().opened, "the second close went through")
     }
+
+    // ── The card being pulled out ─────────────────────────────────────
+    //
+    // When the selected drive disappears, the destination the writer holds
+    // has to go with it. Leaving it set means a later write aims at a drive
+    // that is not there -- or, worse, at whatever the operating system gave
+    // that name to next.
+    //
+    // Whether to say anything depends on where the user is. Past the card
+    // chooser they are moved back to it and told why; on the chooser itself
+    // they watched the row vanish, and a dialog explaining what they just
+    // saw is noise.
+
+    function container() {
+        var c = findChild(win, "mainWizardContainer")
+        verify(c, "found the wizard container")
+        return c
+    }
+
+    function removalDialog() {
+        var d = findChild(win, "storageRemovedDialog")
+        verify(d, "found the storage-removed dialog")
+        return d
+    }
+
+    function test_losing_the_drive_past_the_chooser_goes_back_and_says_so() {
+        container().currentStep = container().stepWriting
+        container().selectedStorageName = "Generic Mass-Storage"
+        ImageWriterSingleton.setSrc("file:///tmp/whatever.img")
+        ImageWriterSingleton.setDst("/dev/null", 1024 * 1024)
+        verify(ImageWriterSingleton.readyToWrite())
+
+        win.onSelectedDeviceRemoved()
+
+        compare(container().selectedStorageName, "")
+        verify(!ImageWriterSingleton.readyToWrite(),
+               "the writer no longer has a target")
+        compare(container().currentStep, container().stepStorageSelection,
+                "and the user is back on the chooser")
+        tryVerify(function () { return removalDialog().opened }, 3000,
+                  "having been told why")
+
+        removalDialog().close()
+        tryVerify(function () { return !removalDialog().visible }, 3000)
+    }
+
+    function test_losing_the_drive_on_the_chooser_says_nothing() {
+        // Nothing was navigated, so there is nothing to explain -- the row
+        // disappearing is the explanation.
+        container().currentStep = container().stepStorageSelection
+        container().selectedStorageName = "Generic Mass-Storage"
+        ImageWriterSingleton.setSrc("file:///tmp/whatever.img")
+        ImageWriterSingleton.setDst("/dev/null", 1024 * 1024)
+
+        win.onSelectedDeviceRemoved()
+
+        compare(container().selectedStorageName, "",
+                "the selection still goes")
+        verify(!ImageWriterSingleton.readyToWrite())
+        wait(300)
+        verify(!removalDialog().opened, "but no dialog was raised")
+    }
+
+    function test_a_write_cancelled_by_removal_always_explains_itself() {
+        // Distinct from the case above: a write was in progress, so the user
+        // is told regardless of where they were standing.
+        container().currentStep = container().stepStorageSelection
+        container().selectedStorageName = "Generic Mass-Storage"
+        ImageWriterSingleton.setSrc("file:///tmp/whatever.img")
+        ImageWriterSingleton.setDst("/dev/null", 1024 * 1024)
+
+        win.onWriteCancelledDueToDeviceRemoval()
+
+        compare(container().selectedStorageName, "")
+        verify(!ImageWriterSingleton.readyToWrite())
+        compare(container().currentStep, container().stepStorageSelection)
+        tryVerify(function () { return removalDialog().opened }, 3000,
+                  "the cancellation was explained")
+
+        removalDialog().close()
+        tryVerify(function () { return !removalDialog().visible }, 3000)
+    }
 }

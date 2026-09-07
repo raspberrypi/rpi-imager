@@ -107,6 +107,7 @@ ApplicationWindow {
 
         WizardContainer {
             id: wizardContainer
+            objectName: "mainWizardContainer"
             anchors.fill: parent
             overlayRootRef: overlayRoot
             // Show Language step if C++ requested it
@@ -204,6 +205,7 @@ ApplicationWindow {
     // Specific dialog for storage removal during write
     BaseDialog {
         id: storageRemovedDialog
+        objectName: "storageRemovedDialog"
         parent: overlayRoot
         anchors.centerIn: parent
 
