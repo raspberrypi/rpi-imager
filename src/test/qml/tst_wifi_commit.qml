@@ -227,4 +227,129 @@ TestCase {
                "nothing was written")
         verify(!fakeContainer.wifiConfigured)
     }
+
+
+    // ── Choosing between a secure and an open network ─────────────────
+    //
+    // The cases above set wifiMode directly. The two tabs that set it were
+    // uncovered, and they are the only way a user reaches it.
+    //
+    // With the handler gone the tab does not even light up -- its highlight
+    // binds to the same property -- so someone on an open network presses
+    // "Open network", nothing changes, and the step goes on demanding a
+    // password they do not have. The other direction matters as much: a
+    // passphrase typed before switching to open must not be left behind to
+    // be written for a network that has none.
+
+    function tab(name) {
+        var t = findChild(step, name)
+        verify(t, "found " + name)
+        return t
+    }
+
+    function field(name) {
+        var f = findChild(step, name)
+        verify(f, "found " + name)
+        return f
+    }
+
+    function test_choosing_an_open_network_takes_the_password_away() {
+        field("wifiSsidField").text = "Pi Towers"
+        field("wifiPasswordField").text = passphrase
+        field("wifiPasswordConfirmField").text = passphrase
+
+        tab("wifiOpenTab").clicked()
+
+        compare(step.wifiMode, "open", "the step is on an open network")
+        compare(field("wifiPasswordField").text, "",
+                "and the passphrase typed for a secure one is gone")
+        compare(field("wifiPasswordConfirmField").text, "")
+        verify(!field("wifiPasswordField").enabled,
+               "with nothing to type into")
+    }
+
+    function test_an_open_network_chosen_by_its_tab_writes_no_key() {
+        // End to end: the tab, not the property, and then what is written.
+        field("wifiSsidField").text = "Pi Towers"
+        field("wifiPasswordField").text = passphrase
+        field("wifiPasswordConfirmField").text = passphrase
+
+        tab("wifiOpenTab").clicked()
+        step.nextClicked()
+
+        compare(fakeContainer.customizationSettings.wifiSSID, "Pi Towers")
+        // wifiPasswordCrypt, which is the name the key is written under. A
+        // first draft asserted on "wifiPassword", a property that never
+        // exists, so it passed however the tab behaved -- caught by the tab
+        // being disabled and the case not noticing.
+        verify(fakeContainer.customizationSettings.wifiPasswordCrypt === undefined,
+               "no key was written for a network that has none")
+    }
+
+    function test_choosing_a_secure_network_gives_the_password_back() {
+        field("wifiSsidField").text = "Pi Towers"
+        tab("wifiOpenTab").clicked()
+        verify(!field("wifiPasswordField").enabled)
+
+        tab("wifiSecureTab").clicked()
+
+        compare(step.wifiMode, "secure")
+        verify(field("wifiPasswordField").enabled,
+               "the field is usable again")
+    }
+
+    function test_the_tabs_show_which_one_is_in_use() {
+        // Two tabs and no other indication of which network type is being
+        // configured; a highlight that does not follow the choice is a step
+        // whose state the user cannot read.
+        tab("wifiOpenTab").clicked()
+        verify(tab("wifiOpenTab").active, "open is shown as chosen")
+        verify(!tab("wifiSecureTab").active)
+
+        tab("wifiSecureTab").clicked()
+        verify(tab("wifiSecureTab").active, "and secure when it is")
+        verify(!tab("wifiOpenTab").active)
+    }
+
+    // ── The network this computer is on, arriving late ────────────────
+    //
+    // On macOS the SSID cannot be read until the user allows location
+    // access, and they may take longer to answer than the initial attempt
+    // waits. The signal that arrives when they do allow it retries the
+    // detection -- but only into a field the user has not filled in
+    // themselves, because overwriting what they typed would put them on a
+    // different network than the one they asked for.
+
+    function test_a_late_permission_fills_in_a_network_name_not_yet_given() {
+        field("wifiSsidField").text = ""
+
+        ImageWriterSingleton.locationPermissionGranted()
+        wait(100)
+
+        // What is detected depends on the machine, so what is checked is
+        // that the field is only ever filled from a detection, never
+        // cleared or left in a state the user did not put it in.
+        const detected = ImageWriterSingleton.getSSID()
+        if (detected && detected.length > 0) {
+            compare(field("wifiSsidField").text, detected,
+                    "the network this computer is on was filled in")
+            verify(step.ssidAutoDetected, "and marked as a detection")
+        } else {
+            compare(field("wifiSsidField").text, "",
+                    "nothing was detected, so nothing was invented")
+        }
+    }
+
+    function test_a_late_permission_does_not_overwrite_a_typed_name() {
+        // The one that matters. Someone who has typed the network they want
+        // must not have it replaced by the one this computer happens to be
+        // on -- they would write a card for the wrong network and only find
+        // out when the board does not appear.
+        field("wifiSsidField").text = "A network I chose myself"
+
+        ImageWriterSingleton.locationPermissionGranted()
+        wait(100)
+
+        compare(field("wifiSsidField").text, "A network I chose myself")
+    }
 }
