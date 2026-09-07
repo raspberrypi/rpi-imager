@@ -7467,3 +7467,287 @@ TEST_CASE("A deep link's repository is taken only when it is well formed",
         CHECK(repos.count() == 0);
     }
 }
+
+// ══════════════════════════════════════════════════════════════
+// The guard that stops a script erasing the machine it runs on
+//
+// In CLI mode the destination is whatever the operator typed, and there is no
+// list to pick from and no confirmation to read. So before writing, the
+// destination is looked up in the drive list and refused if it is not there --
+// unless --enable-writing-system-drives is passed, which says the operator
+// meant it.
+//
+// Get that comparison wrong and `rpi-imager --cli image.img /dev/sda` from a
+// cron job writes over the system disk. Neither the check nor the list of
+// alternatives it prints was covered; both are static and take the model by
+// reference, so a model populated by hand reaches them without any hardware.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+Drivelist::DeviceDescriptor removableDrive(const std::string &device,
+                                           const std::string &description,
+                                           uint64_t size = 32000000000ULL)
+{
+    Drivelist::DeviceDescriptor d;
+    d.device = device;
+    d.raw = device;
+    d.description = description;
+    d.size = size;
+    d.isRemovable = true;
+    d.isUSB = true;
+    d.isSystem = false;
+    d.isReadOnly = false;
+    return d;
+}
+
+// The model as the CLI builds it: constructed, then handed a device list.
+struct PopulatedDriveList
+{
+    DriveListModel model;
+
+    explicit PopulatedDriveList(std::vector<Drivelist::DeviceDescriptor> drives)
+    {
+        model.processDriveList(std::move(drives));
+    }
+};
+
+} // namespace
+
+TEST_CASE("A destination in the drive list is accepted", "[cli][destination]")
+{
+    PopulatedDriveList drives({removableDrive("/dev/sdz", "Generic Mass-Storage")});
+
+    CHECK(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("A destination that is not in the drive list is refused",
+          "[cli][destination]")
+{
+    // The whole point. /dev/sda is a plausible thing to type and a plausible
+    // system disk, and nothing else stands between it and the write.
+    PopulatedDriveList drives({removableDrive("/dev/sdz", "Generic Mass-Storage")});
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sda")));
+}
+
+TEST_CASE("A partition of a listed drive is not itself a listed drive",
+          "[cli][destination]")
+{
+    // The comparison is on the whole device path, so /dev/sdz1 is refused even
+    // though /dev/sdz is offered. Writing an image to a partition rather than
+    // the disk produces a card that will not boot, and a prefix match here
+    // would let it through.
+    PopulatedDriveList drives({removableDrive("/dev/sdz", "Generic Mass-Storage")});
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sdz1")));
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sd")));
+}
+
+TEST_CASE("With no drives to write to, every destination is refused",
+          "[cli][destination]")
+{
+    // An empty list is what a machine with nothing plugged in reports. The
+    // answer has to be no rather than "nothing said no".
+    PopulatedDriveList drives({});
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sdz")));
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QString()));
+}
+
+TEST_CASE("An empty destination is refused", "[cli][destination]")
+{
+    PopulatedDriveList drives({removableDrive("/dev/sdz", "Generic Mass-Storage")});
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QString()));
+}
+
+TEST_CASE("The refusal names every drive that could be written to instead",
+          "[cli][destination]")
+{
+    // This list is the operator's only way to find out what they should have
+    // typed, so it has to carry both the path to type and enough description
+    // to tell two cards apart.
+    PopulatedDriveList drives({
+        removableDrive("/dev/sdy", "SanDisk Ultra"),
+        removableDrive("/dev/sdz", "Generic Mass-Storage")
+    });
+
+    const QStringList choices = Cli::removableDestinations(drives.model);
+
+    REQUIRE(choices.size() == 2);
+    const QString joined = choices.join(QStringLiteral("\n"));
+    INFO("choices:\n" << joined.toStdString());
+    CHECK_THAT(joined.toStdString(), Catch::Matchers::ContainsSubstring("/dev/sdy"));
+    CHECK_THAT(joined.toStdString(), Catch::Matchers::ContainsSubstring("/dev/sdz"));
+    CHECK_THAT(joined.toStdString(), Catch::Matchers::ContainsSubstring("SanDisk Ultra"));
+    CHECK_THAT(joined.toStdString(),
+               Catch::Matchers::ContainsSubstring("Generic Mass-Storage"));
+}
+
+TEST_CASE("With nothing plugged in the refusal offers nothing",
+          "[cli][destination]")
+{
+    // Better an empty list than a stale one: the operator needs to know there
+    // is nothing to write to, not be given a device that has gone.
+    PopulatedDriveList drives({});
+
+    CHECK(Cli::removableDestinations(drives.model).isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// What the drive list refuses to offer
+//
+// The storage list is where the user picks the thing that is about to be
+// erased, and the model decides what appears in it. The QML side has a filter
+// and a typed confirmation for system drives, both tested there -- but they can
+// only act on what the model puts in front of them, and the model's own
+// refusals were untested.
+//
+// The last line of defence is here: a disk mounted at / never reaches the list
+// at all, whatever else is or is not set on it.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+QStringList devicesOffered(DriveListModel &model)
+{
+    QStringList out;
+    const int n = model.rowCount(QModelIndex());
+    for (int i = 0; i < n; i++)
+        out << model.index(i, 0).data(DriveListModel::deviceRole).toString();
+    return out;
+}
+
+bool offeredAsSystemDrive(DriveListModel &model, const QString &device)
+{
+    const int n = model.rowCount(QModelIndex());
+    for (int i = 0; i < n; i++) {
+        const QModelIndex idx = model.index(i, 0);
+        if (idx.data(DriveListModel::deviceRole).toString() == device)
+            return idx.data(DriveListModel::isSystemRole).toBool();
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("The disk the system is running from is never offered",
+          "[drivelist][safety]")
+{
+    // Checked on the mountpoint rather than on the isSystem flag, so it holds
+    // even when whatever sets that flag has missed. Nothing downstream gets a
+    // chance to offer it: not the filter, not the confirmation.
+    Drivelist::DeviceDescriptor root = removableDrive("/dev/sda", "System disk");
+    root.mountpoints = {"/"};
+    root.isSystem = false;   // deliberately not set: the mountpoint decides
+
+    DriveListModel model;
+    model.processDriveList({root, removableDrive("/dev/sdz", "A card")});
+
+    const QStringList offered = devicesOffered(model);
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    CHECK_FALSE(offered.contains(QStringLiteral("/dev/sda")));
+    CHECK(offered.contains(QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("A card reader with no card in it is not offered",
+          "[drivelist][safety]")
+{
+    // An empty reader reports a size of zero. Offering it lets the user pick a
+    // target that cannot be written, and the failure comes later and reads as
+    // a broken card.
+    Drivelist::DeviceDescriptor empty = removableDrive("/dev/sdy", "Card reader", 0);
+
+    DriveListModel model;
+    model.processDriveList({empty, removableDrive("/dev/sdz", "A card")});
+
+    const QStringList offered = devicesOffered(model);
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    CHECK_FALSE(offered.contains(QStringLiteral("/dev/sdy")));
+    CHECK(offered.contains(QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("A read-only virtual device is not offered", "[drivelist][safety]")
+{
+    // A mounted ISO or a read-only loop device cannot be written and is not
+    // something anyone means to image.
+    Drivelist::DeviceDescriptor iso = removableDrive("/dev/loop9", "Mounted image");
+    iso.isVirtual = true;
+    iso.isReadOnly = true;
+
+    DriveListModel model;
+    model.processDriveList({iso, removableDrive("/dev/sdz", "A card")});
+
+    CHECK_FALSE(devicesOffered(model).contains(QStringLiteral("/dev/loop9")));
+}
+
+TEST_CASE("A virtual device that is a system device is not offered",
+          "[drivelist][safety]")
+{
+    Drivelist::DeviceDescriptor vol = removableDrive("/dev/loop8", "System volume");
+    vol.isVirtual = true;
+    vol.isSystem = true;
+
+    DriveListModel model;
+    model.processDriveList({vol, removableDrive("/dev/sdz", "A card")});
+
+    CHECK_FALSE(devicesOffered(model).contains(QStringLiteral("/dev/loop8")));
+}
+
+TEST_CASE("A writable loop device is offered, but as a system drive",
+          "[drivelist][safety]")
+{
+    // Loop devices are how an image gets written to a file, so they are kept
+    // -- and the comment in the model says why they cannot be required to be
+    // removable: losetup never marks them so, and requiring it would hide
+    // them.
+    //
+    // They are flagged as system drives even when they are not, which is what
+    // makes the QML side ask for the device's name to be typed before
+    // selecting one. Being offered without that flag is the dangerous half of
+    // this, so both are checked.
+    Drivelist::DeviceDescriptor loop = removableDrive("/dev/loop7", "Disk image");
+    loop.isVirtual = true;
+    loop.isReadOnly = false;
+    loop.isSystem = false;
+    loop.isRemovable = false;   // as losetup reports it
+
+    DriveListModel model;
+    model.processDriveList({loop});
+
+    const QStringList offered = devicesOffered(model);
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    REQUIRE(offered.contains(QStringLiteral("/dev/loop7")));
+    CHECK(offeredAsSystemDrive(model, QStringLiteral("/dev/loop7")));
+}
+
+TEST_CASE("An ordinary card is not flagged as a system drive",
+          "[drivelist][safety]")
+{
+    // The other side of the case above: if everything were flagged, the typed
+    // confirmation would be asked for on every write and stop meaning
+    // anything.
+    DriveListModel model;
+    model.processDriveList({removableDrive("/dev/sdz", "A card")});
+
+    REQUIRE(devicesOffered(model).contains(QStringLiteral("/dev/sdz")));
+    CHECK_FALSE(offeredAsSystemDrive(model, QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("A drive reported as a system drive is offered and flagged",
+          "[drivelist][safety]")
+{
+    // Not hidden -- the user may genuinely mean to write to an internal disk,
+    // and the filter on the QML side is what hides these by default -- but it
+    // has to arrive flagged, or the filter has nothing to act on.
+    Drivelist::DeviceDescriptor internal = removableDrive("/dev/sdb", "Internal SSD");
+    internal.isSystem = true;
+    internal.isRemovable = false;
+
+    DriveListModel model;
+    model.processDriveList({internal});
+
+    REQUIRE(devicesOffered(model).contains(QStringLiteral("/dev/sdb")));
+    CHECK(offeredAsSystemDrive(model, QStringLiteral("/dev/sdb")));
+}
