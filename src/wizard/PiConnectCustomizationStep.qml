@@ -159,17 +159,13 @@ WizardStepBase {
             // Request token button (only when enabled and no token present)
             ImButton {
                 id: btnOpenConnect
+                objectName: "connectOpenSignInButton"
                 Layout.fillWidth: true
                 text: qsTr("Open Raspberry Pi Connect")
                 accessibleDescription: qsTr("Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token")
                 enabled: useTokenPill.checked
                 visible: !root.orgModeEnabled && useTokenPill.checked && !root.connectTokenReceived
-                onClicked: {
-                    if (ImageWriterSingleton) {
-                        var authUrl = Qt.resolvedUrl("https://connect.raspberrypi.com/imager/")
-                        ImageWriterSingleton.openUrl(authUrl)
-                    }
-                }
+                onClicked: root.openConnectSignIn()
             }
 
             // Token input field label and field (only when enabled)
@@ -216,6 +212,20 @@ WizardStepBase {
     }
     ]
 
+    // Sending the user off to sign in, in one place.
+    //
+    // The button that does it carries a second handler, in a Connections
+    // block further down, which starts the hold on the token field. Both
+    // run on the same click, so a test cannot press the button without
+    // also launching a browser on the machine running the suite -- unless
+    // the launching is a method it can shadow, which is what this is.
+    function openConnectSignIn() {
+        if (ImageWriterSingleton) {
+            ImageWriterSingleton.openUrl(
+                Qt.resolvedUrl("https://connect.raspberrypi.com/imager/"))
+        }
+    }
+
     // Token state and parsing helpers
     property bool connectTokenReceived: false
     property string connectToken: ""
@@ -259,6 +269,7 @@ WizardStepBase {
     // Countdown timer
     Timer {
         id: countdownTimer
+        objectName: "connectCountdownTimer"
         interval: 1000
         repeat: true
         running: false

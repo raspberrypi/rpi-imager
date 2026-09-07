@@ -178,4 +178,124 @@ TestCase {
         verify(String(JSON.stringify(saved)).indexOf("rpuak_") === -1,
                "and the token itself is nowhere in them")
     }
+
+
+    // ── The hold on the token field ───────────────────────────────────
+    //
+    // Signing in happens in a browser: the user presses "Open Raspberry Pi
+    // Connect", the site gives them a token, and they bring it back here.
+    // The field they paste it into starts disabled and is released by a
+    // countdown started when they leave for the browser, so it is not sitting
+    // there empty and editable before there is anything to put in it.
+    //
+    // The countdown had never run. A countdown that never reaches zero
+    // leaves that field disabled for good, which means Pi Connect cannot be
+    // configured at all -- the user is sent to a website, comes back with a
+    // token and has nowhere to type it.
+    //
+    // The button carries two handlers: one opens the browser, the other
+    // starts the countdown. Pressing it runs both, so the browser-opening
+    // one is shadowed in a derived type -- a derived QML method wins over
+    // the base's, including for the base's own internal calls -- rather
+    // than putting a browser on the screen of whoever runs the suite.
+
+    Component {
+        id: shadowedStepComponent
+
+        PiConnectCustomizationStep {
+            id: shadowed
+            wizardContainer: fakeContainer
+            width: 900
+            height: 700
+
+            property int signInsOpened: 0
+            function openConnectSignIn() { shadowed.signInsOpened++ }
+        }
+    }
+
+    property var held: null
+
+    function makeHeldStep() {
+        held = createTemporaryObject(shadowedStepComponent, testCase)
+        verify(held, "the step was created")
+        findChild(held, "connectUseTokenToggle").checked = true
+        waitForRendering(held)
+        return held
+    }
+
+    function signInButton() {
+        var b = findChild(held, "connectOpenSignInButton")
+        verify(b, "found the sign-in button")
+        return b
+    }
+
+    function countdown() {
+        var t = findChild(held, "connectCountdownTimer")
+        verify(t, "found the countdown")
+        return t
+    }
+
+    function test_the_token_field_is_not_editable_before_signing_in() {
+        makeHeldStep()
+
+        verify(!held.tokenFieldEnabled,
+               "there is nothing to paste yet")
+    }
+
+    function test_going_to_sign_in_starts_the_hold() {
+        makeHeldStep()
+
+        signInButton().clicked()
+
+        compare(held.signInsOpened, 1, "the browser was sent for")
+        verify(countdown().running, "and the hold started")
+        compare(held.countdownSeconds, 25)
+    }
+
+    function test_the_hold_counts_down_and_releases_the_field() {
+        // Driven from one second rather than twenty-five: what is under
+        // test is that the count reaches zero and does something, not how
+        // long the wait is.
+        makeHeldStep()
+        signInButton().clicked()
+        held.countdownSeconds = 1
+
+        tryVerify(function () { return held.tokenFieldEnabled }, 5000,
+                  "the field the token goes in became editable")
+        verify(!countdown().running, "and the countdown stopped")
+        compare(held.countdownSeconds, 0)
+    }
+
+    function test_the_count_does_not_run_past_zero() {
+        // The timer repeats, so the count reaching zero has to be the end
+        // of it.
+        //
+        // Two things see to that -- a floor on the decrement and the
+        // stop() at zero -- and the stop() alone is enough: removing the
+        // floor fails nothing, because the timer never gets another tick.
+        // What this pins is the outcome rather than either guard.
+        makeHeldStep()
+        signInButton().clicked()
+        held.countdownSeconds = 1
+        tryVerify(function () { return held.countdownSeconds === 0 }, 5000)
+
+        wait(300)
+
+        compare(held.countdownSeconds, 0, "it stayed at zero")
+    }
+
+    function test_going_back_to_sign_in_again_does_not_restart_the_hold() {
+        // Pressing it twice is an ordinary thing to do when a browser takes
+        // a moment to appear. Restarting the count each time would put the
+        // field out of reach for another twenty-five seconds every press.
+        makeHeldStep()
+        signInButton().clicked()
+        held.countdownSeconds = 5
+
+        signInButton().clicked()
+
+        compare(held.signInsOpened, 2, "the browser was sent for again")
+        compare(held.countdownSeconds, 5,
+                "and the hold carried on from where it was")
+    }
 }
