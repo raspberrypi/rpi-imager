@@ -1050,3 +1050,94 @@ TEST_CASE("Garbage from the device does not wedge the file server",
     // It returned, which is the whole point.
     SUCCEED("run() terminated on garbage input");
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// A Compute Module that stops answering
+//
+// The device going quiet mid-serve means one of two opposite things, and
+// which one depends on whether anything was served yet. After the boot
+// files have gone across, a disconnect is the device rebooting into the
+// next stage -- the thing that was supposed to happen. Before any file has
+// been served, the same disconnect is a cable that fell out.
+//
+// Reading those the wrong way round reports a successful sideload as a
+// failure, or a failed one as success, and neither is recoverable by the
+// user without knowing which happened. None of it was covered.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A device that reboots after being served is a success",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // The mock returns -1 once its queue is empty, and -1 is
+    // LIBUSB_ERROR_IO -- so a queue that runs dry after one file is a device
+    // that answered once and then went away, which is exactly the shape of a
+    // Compute Module restarting into the gadget.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("bootcode.bin", "second stage bootloader");
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "bootcode.bin"));
+
+    std::atomic<bool> cancelled{false};
+    std::string lastStatus;
+    FileServer server;
+
+    const bool ok = server.run(
+        mock, fw.path(),
+        [&](int, int, const std::string& status) { lastStatus = status; },
+        cancelled);
+
+    CHECK(ok);
+    CHECK_THAT(lastStatus, Catch::Matchers::ContainsSubstring("rebooted"));
+}
+
+TEST_CASE("A device that goes away before serving anything is a failure",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // Nothing was transferred, so there is nothing the device could have
+    // rebooted into. Reported as a disconnect rather than a completion.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    const bool ok = server.run(mock, fw.path(), nullptr, cancelled);
+
+    CHECK_FALSE(ok);
+    CHECK_THAT(server.lastError(), Catch::Matchers::ContainsSubstring("disconnected"));
+}
+
+TEST_CASE("A device confirmed as re-enumerated is a success",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // With confirmation required, the server waits for the caller to say the
+    // device came back as the next stage. The caller signals that through
+    // the same flag it would use to cancel -- a bridge the rpiboot thread
+    // sets when the fastboot device appears -- so the flag is flipped from
+    // the progress callback here, which is where the real one flips it.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("bootcode.bin", "second stage bootloader");
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "bootcode.bin"));
+
+    std::atomic<bool> cancelled{false};
+    std::string lastStatus;
+    FileServer server;
+
+    const bool ok = server.run(
+        mock, fw.path(),
+        [&](int, int, const std::string& status) {
+            lastStatus = status;
+            // Flipped while the server is already waiting, not during
+            // serving: the outer loop checks the same flag, so setting it
+            // any earlier ends the run before the disconnect is reached.
+            // The real bridge has the same timing -- the device goes away
+            // first, and comes back as the next stage during the wait.
+            if (status.find("Confirming") != std::string::npos)
+                cancelled = true;
+        },
+        cancelled, nullptr, /*requireReEnumConfirmation=*/true);
+
+    CHECK(ok);
+    CHECK_THAT(lastStatus, Catch::Matchers::ContainsSubstring("rebooted"));
+}
