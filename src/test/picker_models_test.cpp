@@ -29,7 +29,9 @@
 #include "drivelistmodelpollthread.h"
 #include "drivelist/drivelist.h"
 #include "hwlistmodel.h"
+#include "model_row_diff.h"
 #include "oslistmodel.h"
+#include "signal_log.h"
 
 #include <QByteArray>
 #include <QGuiApplication>
@@ -217,6 +219,387 @@ TEST_CASE("Asking the OS list for a row that is not there is harmless",
 }
 
 // ══════════════════════════════════════════════════════════════
+// Working out what changed between two lists of rows
+//
+// The arithmetic both choosers share. It answers one question -- which run
+// of rows came out and which run went in -- and the models do the
+// signalling themselves, because beginRemoveRows and its siblings are
+// protected members of QAbstractItemModel.
+//
+// Getting it wrong is not a cosmetic matter: an insert reported at the wrong
+// row leaves the view showing one thing and the model holding another, which
+// is how a user clicks the operating system above the one they meant.
+
+TEST_CASE("Two identical lists have no difference", "[models][rowdiff]")
+{
+    const QStringList rows{"a", "b", "c"};
+    const rpi_model::RowDiff diff = rpi_model::planRowDiff(rows, rows);
+
+    CHECK(diff.isEmpty());
+    CHECK(diff.removed == 0);
+    CHECK(diff.inserted == 0);
+}
+
+TEST_CASE("Rows appended go in at the end", "[models][rowdiff]")
+{
+    const auto diff = rpi_model::planRowDiff({"a", "b"}, {"a", "b", "c", "d"});
+
+    CHECK(diff.at == 2);
+    CHECK(diff.removed == 0);
+    CHECK(diff.inserted == 2);
+}
+
+TEST_CASE("Rows arriving above the ones already there go in at the top",
+          "[models][rowdiff]")
+{
+    // The case the OS list is in before its fetch lands: the two internal
+    // entries are there and the real list appears above them. Reporting it
+    // this way is what lets those two keep their delegates -- and with them,
+    // any click the user has in progress.
+    const auto diff = rpi_model::planRowDiff(
+        {"Erase", "Use custom"},
+        {"Alpha", "Beta", "Gamma", "Erase", "Use custom"});
+
+    CHECK(diff.at == 0);
+    CHECK(diff.removed == 0);
+    CHECK(diff.inserted == 3);
+}
+
+TEST_CASE("A row taken out of the middle is reported where it was",
+          "[models][rowdiff]")
+{
+    const auto diff = rpi_model::planRowDiff({"a", "b", "c"}, {"a", "c"});
+
+    CHECK(diff.at == 1);
+    CHECK(diff.removed == 1);
+    CHECK(diff.inserted == 0);
+}
+
+TEST_CASE("A row replaced in the middle is a removal and an insertion",
+          "[models][rowdiff]")
+{
+    const auto diff = rpi_model::planRowDiff({"a", "b", "c"}, {"a", "x", "c"});
+
+    CHECK(diff.at == 1);
+    CHECK(diff.removed == 1);
+    CHECK(diff.inserted == 1);
+}
+
+TEST_CASE("Emptying a list removes all of it", "[models][rowdiff]")
+{
+    const auto diff = rpi_model::planRowDiff({"a", "b", "c"}, {});
+
+    CHECK(diff.at == 0);
+    CHECK(diff.removed == 3);
+    CHECK(diff.inserted == 0);
+}
+
+TEST_CASE("Filling an empty list inserts all of it", "[models][rowdiff]")
+{
+    const auto diff = rpi_model::planRowDiff({}, {"a", "b"});
+
+    CHECK(diff.at == 0);
+    CHECK(diff.removed == 0);
+    CHECK(diff.inserted == 2);
+}
+
+TEST_CASE("Two empty lists have no difference", "[models][rowdiff]")
+{
+    CHECK(rpi_model::planRowDiff({}, {}).isEmpty());
+}
+
+TEST_CASE("A repeated key is not mistaken for the row before it",
+          "[models][rowdiff]")
+{
+    // Keys are not required to be unique -- two entries can share a name and
+    // an empty url -- so the walk must compare positions rather than search.
+    const auto diff = rpi_model::planRowDiff({"a", "a", "b"}, {"a", "b"});
+
+    CHECK(diff.removed == 1);
+    CHECK(diff.inserted == 0);
+}
+
+TEST_CASE("A list that swapped ends replaces the part that moved",
+          "[models][rowdiff]")
+{
+    // Not minimal, and deliberately so: a reorder is reported as replacing
+    // the run that moved. Nothing here reorders, and doing better would mean
+    // a full edit-distance pass. What matters is that it is correct.
+    const auto diff = rpi_model::planRowDiff({"a", "b", "c"}, {"c", "b", "a"});
+
+    CHECK(diff.at == 0);
+    CHECK(diff.removed == 3);
+    CHECK(diff.inserted == 3);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Rebuilding the OS list without throwing the view away
+//
+// reload() used to reset the model. A reset destroys every delegate in the
+// view, and Qt delivers a click only when the press and the release reach
+// the same item -- so a list rebuilt between the two swallows the click
+// entirely. The user presses a row, the list refills, nothing is selected,
+// and they have to click again. Reported by users as the OS list sometimes
+// needing two clicks, on a first-level entry or on "Use custom".
+//
+// That window is not rare. Until the OS list arrives the model holds
+// exactly two rows -- "Erase" and "Use custom", appended unconditionally --
+// and the arrival of the real list is what rebuilds it. Anyone who reaches
+// the screen before the fetch lands is clicking on a list that is about to
+// be replaced.
+//
+// So reload() now reports the difference. The rows that were already there
+// keep their delegates and shift down as the real entries are inserted
+// above them, which also keeps the scroll position and the highlight.
+
+namespace {
+
+// A list whose entries are all real, so the two internal rows are appended
+// after them.
+QByteArray twoRealEntriesJson()
+{
+    return QByteArray(R"JSON({
+        "imager": { "devices": [] },
+        "os_list": [
+            { "name": "Alpha OS", "description": "the first",
+              "url": "https://example.invalid/alpha.img.xz",
+              "icon": "", "release_date": "2025-01-01",
+              "extract_size": 100, "image_download_size": 50,
+              "extract_sha256": "aa" },
+            { "name": "Beta OS", "description": "the second",
+              "url": "https://example.invalid/beta.img.xz",
+              "icon": "", "release_date": "2025-01-02",
+              "extract_size": 100, "image_download_size": 50,
+              "extract_sha256": "bb" }
+        ]
+    })JSON");
+}
+
+QStringList namesIn(QAbstractItemModel &model)
+{
+    QStringList out;
+    const QHash<int, QByteArray> names = model.roleNames();
+    int nameRole = -1;
+    for (auto it = names.cbegin(); it != names.cend(); ++it) {
+        if (it.value() == "name")
+            nameRole = it.key();
+    }
+    for (int i = 0; i < model.rowCount(QModelIndex()); ++i)
+        out << model.data(model.index(i, 0), nameRole).toString();
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("Before the list arrives there are two rows to click on",
+          "[models][oslist]")
+{
+    // The premise of everything below: this state exists and is reachable.
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model != nullptr);
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+
+    CHECK(namesIn(*view) == QStringList{QStringLiteral("Erase"),
+                                        QStringLiteral("Use custom")});
+}
+
+TEST_CASE("The list arriving does not throw the view away", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model != nullptr);
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    REQUIRE(view->rowCount(QModelIndex()) == 2);
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+
+    writer.feedOsList(twoRealEntriesJson());
+    REQUIRE(model->reload());
+
+    CHECK(reset.count() == 0);  // the delegates, and any click in flight, survive
+    CHECK(removed.count() == 0);
+    REQUIRE(inserted.count() == 1);
+
+    // Inserted above the two that were already there, which is what lets
+    // them keep their delegates.
+    CHECK(inserted.at(0).at(1).toInt() == 0);
+    CHECK(inserted.at(0).at(2).toInt() == 1);
+
+    CHECK(namesIn(*view) == QStringList{QStringLiteral("Alpha OS"),
+                                        QStringLiteral("Beta OS"),
+                                        QStringLiteral("Erase"),
+                                        QStringLiteral("Use custom")});
+}
+
+TEST_CASE("Reloading the same list changes nothing at all", "[models][oslist]")
+{
+    // The periodic refresh, and every cache-status update behind it. A reset
+    // here would drop the user's scroll position and highlight on a timer.
+    TestableImageWriter writer;
+    writer.feedOsList(twoRealEntriesJson());
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    const QStringList before = namesIn(*view);
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+    rpi_test::SignalLog changed(view, &QAbstractItemModel::dataChanged);
+
+    REQUIRE(model->reload());
+
+    CHECK(reset.count() == 0);
+    CHECK(inserted.count() == 0);
+    CHECK(removed.count() == 0);
+    CHECK(changed.count() == 0);
+    CHECK(namesIn(*view) == before);
+}
+
+// The cases below build the rows by hand and hand them to the model.
+// Feeding a second list through the fetch does not replace the first one --
+// it merges into it, which is how sublists arrive -- so it cannot express
+// "the list is now different". What is under test here is the difference
+// being reported correctly, not how the list came to change.
+
+namespace {
+
+OSListModel::OS osRow(const QString &name, const QString &url,
+                      const QString &description = QStringLiteral("something"))
+{
+    OSListModel::OS os;
+    os.name = name;
+    os.url = url;
+    os.description = description;
+    return os;
+}
+
+} // namespace
+
+TEST_CASE("A list that loses an entry reports the removal", "[models][oslist]")
+{
+    // What a hardware filter change does. The rows either side of the one
+    // that went keep their delegates, so a click on one of them survives.
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model != nullptr);
+    QAbstractItemModel *view = model;
+
+    model->applyRows({osRow("Alpha", "a"), osRow("Beta", "b"),
+                      osRow("Erase", "internal://format"),
+                      osRow("Use custom", "internal://custom")});
+    REQUIRE(view->rowCount(QModelIndex()) == 4);
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+
+    model->applyRows({osRow("Alpha", "a"),
+                      osRow("Erase", "internal://format"),
+                      osRow("Use custom", "internal://custom")});
+
+    CHECK(reset.count() == 0);
+    CHECK(inserted.count() == 0);
+    REQUIRE(removed.count() == 1);
+    CHECK(removed.at(0).at(1).toInt() == 1);  // Beta, the second row
+    CHECK(removed.at(0).at(2).toInt() == 1);
+    CHECK(namesIn(*view) == QStringList{QStringLiteral("Alpha"),
+                                        QStringLiteral("Erase"),
+                                        QStringLiteral("Use custom")});
+}
+
+TEST_CASE("A row whose contents changed is reported as changed, not replaced",
+          "[models][oslist]")
+{
+    // A description or a size moving is not a reason to rebuild the row.
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+    QAbstractItemModel *view = model;
+    model->applyRows({osRow("Alpha", "a", "the first"),
+                      osRow("Beta", "b", "the second")});
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+    rpi_test::SignalLog changed(view, &QAbstractItemModel::dataChanged);
+
+    model->applyRows({osRow("Alpha", "a", "now says something else"),
+                      osRow("Beta", "b", "the second")});
+
+    CHECK(reset.count() == 0);
+    CHECK(inserted.count() == 0);
+    CHECK(removed.count() == 0);
+    REQUIRE(changed.count() == 1);
+    CHECK(changed.at(0).at(0).toModelIndex().row() == 0);
+}
+
+TEST_CASE("An entry appearing in the middle keeps the rows around it",
+          "[models][oslist]")
+{
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+    QAbstractItemModel *view = model;
+    model->applyRows({osRow("Alpha", "a"), osRow("Gamma", "g")});
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+
+    model->applyRows({osRow("Alpha", "a"), osRow("Beta", "b"),
+                      osRow("Gamma", "g")});
+
+    CHECK(reset.count() == 0);
+    CHECK(removed.count() == 0);
+    REQUIRE(inserted.count() == 1);
+    CHECK(inserted.at(0).at(1).toInt() == 1);
+    CHECK(inserted.at(0).at(2).toInt() == 1);
+}
+
+TEST_CASE("Two entries that differ only by url are different rows",
+          "[models][oslist]")
+{
+    // The key is the url and the name together. Two builds of the same
+    // release share a name and differ by url, and treating them as one row
+    // would leave the view showing one and the model holding the other.
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+    QAbstractItemModel *view = model;
+    model->applyRows({osRow("Raspberry Pi OS", "a.img.xz")});
+
+    rpi_test::SignalLog changed(view, &QAbstractItemModel::dataChanged);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+
+    model->applyRows({osRow("Raspberry Pi OS", "b.img.xz")});
+
+    CHECK(removed.count() == 1);
+    CHECK(inserted.count() == 1);
+    CHECK(changed.count() == 0);
+}
+
+TEST_CASE("Emptying the list removes every row", "[models][oslist]")
+{
+    TestableImageWriter writer;
+    OSListModel *model = writer.getOSList();
+    QAbstractItemModel *view = model;
+    model->applyRows({osRow("Alpha", "a"), osRow("Beta", "b")});
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+
+    model->applyRows({});
+
+    CHECK(reset.count() == 0);
+    REQUIRE(removed.count() == 1);
+    CHECK(view->rowCount(QModelIndex()) == 0);
+}
+
+// ══════════════════════════════════════════════════════════════
 // The hardware chooser
 // ══════════════════════════════════════════════════════════════
 
@@ -387,6 +770,84 @@ TEST_CASE("A bundled board icon is found from where the chooser lives",
 
     CHECK(view->data(view->index(0, 0), roleFor(*view, "icon")).toString()
           == QStringLiteral("../icons/pi5.png"));
+}
+
+TEST_CASE("The board list arriving does not throw the view away",
+          "[models][hwlist]")
+{
+    // The same reason as the OS list: a reset destroys every delegate, and
+    // any click in progress with it. The board chooser is refreshed by the
+    // same osListPrepared that refreshes the OS list, so a refresh landing
+    // while the user is clicking a board used to lose the click.
+    TestableImageWriter writer;
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model != nullptr);
+    QAbstractItemModel *view = model;
+
+    HWListModel::HardwareDevice pi5;
+    pi5.name = QStringLiteral("Raspberry Pi 5");
+    HWListModel::HardwareDevice pi4;
+    pi4.name = QStringLiteral("Raspberry Pi 4");
+    model->applyRows({pi5, pi4});
+    REQUIRE(view->rowCount(QModelIndex()) == 2);
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+
+    HWListModel::HardwareDevice pi3;
+    pi3.name = QStringLiteral("Raspberry Pi 3");
+    model->applyRows({pi5, pi4, pi3});
+
+    CHECK(reset.count() == 0);
+    CHECK(removed.count() == 0);
+    REQUIRE(inserted.count() == 1);
+    CHECK(inserted.at(0).at(1).toInt() == 2);
+}
+
+TEST_CASE("Reloading the same board list changes nothing", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    HWListModel *model = writer.getHWList();
+    QAbstractItemModel *view = model;
+    HWListModel::HardwareDevice pi5;
+    pi5.name = QStringLiteral("Raspberry Pi 5");
+    model->applyRows({pi5});
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+    rpi_test::SignalLog changed(view, &QAbstractItemModel::dataChanged);
+
+    model->applyRows({pi5});
+
+    CHECK(reset.count() == 0);
+    CHECK(inserted.count() == 0);
+    CHECK(removed.count() == 0);
+    CHECK(changed.count() == 0);
+}
+
+TEST_CASE("A board whose description changed is reported as changed",
+          "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    HWListModel *model = writer.getHWList();
+    QAbstractItemModel *view = model;
+    HWListModel::HardwareDevice before;
+    before.name = QStringLiteral("Raspberry Pi 5");
+    before.description = QStringLiteral("the one with the fan header");
+    model->applyRows({before});
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog changed(view, &QAbstractItemModel::dataChanged);
+
+    HWListModel::HardwareDevice after = before;
+    after.description = QStringLiteral("now says something else");
+    model->applyRows({after});
+
+    CHECK(reset.count() == 0);
+    REQUIRE(changed.count() == 1);
+    CHECK(changed.at(0).at(0).toModelIndex().row() == 0);
 }
 
 TEST_CASE("A board is marked attached only when its own chip is",

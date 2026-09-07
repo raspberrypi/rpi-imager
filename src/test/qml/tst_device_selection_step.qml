@@ -409,7 +409,11 @@ TestCase {
         const spy = nextSpy.createObject(testCase, { target: step })
         verify(spy !== null)
 
-        mouseDoubleClick(rowAt(list, 0))
+        // mouseDoubleClickSequence, not mouseDoubleClick: TestCase has no
+        // such function, and the case only reaches this line in a run where
+        // the device list was fetched -- so a single-file run skips it and
+        // says nothing.
+        mouseDoubleClickSequence(rowAt(list, 0))
         waitForRendering(testCase)
 
         verify(step.hasDeviceSelected, "the board was chosen")
