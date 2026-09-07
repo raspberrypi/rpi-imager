@@ -233,6 +233,7 @@ WizardStepBase {
                 }
                 contentItem: Flickable {
                     id: customizationsFlickable
+                    objectName: "writeSummaryFlickable"
                     contentWidth: width
                     contentHeight: customizationsColumn.implicitHeight
                     interactive: contentHeight > height
@@ -485,6 +486,7 @@ WizardStepBase {
 
             ImButton {
                 id: cancelButton
+                objectName: "confirmWriteCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Cancel and return to the write summary without erasing the storage device")
                 activeFocusOnTab: true
@@ -532,6 +534,7 @@ WizardStepBase {
     // to avoid OS authentication prompts being cancelled by focus changes.
     Timer {
         id: beginWriteDelay
+        objectName: "beginWriteDelayTimer"
         interval: 300
         running: false
         repeat: false

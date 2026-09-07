@@ -76,6 +76,24 @@ TestCase {
 
     function cleanup() {
         TestAccessibility.setActive(false)
+        // Leave no write running whatever happened. A case that fails
+        // part-way through would otherwise hand the next one a writer that
+        // is still busy, and the failure would appear to be somewhere else
+        // -- which is exactly what happened while these were being checked.
+        ImageWriterSingleton.onCancelled()
+        // The summary cases turn every customisation on; left set, the rows
+        // they add change what the other cases are looking at.
+        fakeContainer.hostnameConfigured = false
+        fakeContainer.localeConfigured = false
+        fakeContainer.userConfigured = false
+        fakeContainer.wifiConfigured = false
+        fakeContainer.sshEnabled = false
+        fakeContainer.piConnectEnabled = false
+        fakeContainer.featUsbGadgetEnabled = false
+        fakeContainer.ifI2cEnabled = false
+        fakeContainer.ifSpiEnabled = false
+        fakeContainer.if1WireEnabled = false
+        fakeContainer.ifSerial = ""
         if (step) {
             step.destroy()
             step = null
@@ -516,5 +534,166 @@ TestCase {
         compare(step.writeThroughputKBps, 51200)
 
         ImageWriterSingleton.onCancelled()
+    }
+
+
+    // ── Answering the erase confirmation ──────────────────────────────
+    //
+    // The countdown is covered above. What each answer does was not: the
+    // accept button, the cancel button, the escape key, and the short delay
+    // between agreeing and the write actually starting.
+    //
+    // This is the last thing between a user and their card being erased, so
+    // the direction that matters is the refusals. Escape is how people
+    // dismiss a dialog they did not mean to open, and it must not be the
+    // gesture that starts an irreversible write.
+    //
+    // The write itself is never started here. The accept path arms a timer
+    // whose last act is startWrite(); the cases either stop it first, or --
+    // where the timer's own body is what is being covered -- leave the
+    // writer already busy, which startWrite() refuses at a guard of its own.
+
+    function cancelButton() {
+        var b = findChild(step, "confirmWriteCancelButton")
+        verify(b, "found the cancel button")
+        return b
+    }
+
+    function writeDelay() {
+        var t = findChild(step, "beginWriteDelayTimer")
+        verify(t, "found the delay before the write")
+        return t
+    }
+
+    function atTheConfirmation() {
+        step.nextClicked()
+        tryVerify(function () { return confirmDialog().opened }, 3000,
+                  "the confirmation was raised")
+        tryVerify(function () { return acceptButton().enabled }, 5000,
+                  "and the countdown has run")
+        verify(!writeDelay().running, "nothing armed yet")
+    }
+
+    function test_escape_does_not_start_the_write() {
+        atTheConfirmation()
+
+        confirmDialog().escapePressed()
+
+        tryVerify(function () { return !confirmDialog().visible }, 3000,
+                  "the question went away")
+        verify(!writeDelay().running,
+               "and nothing was set in motion by dismissing it")
+        verify(!step.isWriting)
+    }
+
+    function test_cancel_does_not_start_the_write() {
+        atTheConfirmation()
+
+        cancelButton().clicked()
+
+        tryVerify(function () { return !confirmDialog().visible }, 3000)
+        verify(!writeDelay().running)
+        verify(!step.isWriting)
+    }
+
+    function test_agreeing_closes_the_question_and_arms_the_write() {
+        // Deliberately not immediate: the write raises an authentication
+        // prompt on some platforms, and starting it while the dialog is
+        // still closing has that prompt cancelled by the focus change.
+        atTheConfirmation()
+
+        acceptButton().clicked()
+
+        verify(writeDelay().running, "the write was armed")
+        tryVerify(function () { return !confirmDialog().visible }, 3000,
+                  "and the question is out of the way first")
+
+        // Disarmed before it can fire: what happens after it is the case
+        // below, which arranges for the write to be refused.
+        writeDelay().stop()
+    }
+
+    function test_the_armed_write_sets_the_screen_up_for_it() {
+        // The delay's own body. It clears what the last write left behind
+        // and says what is happening, so the screen is not showing the
+        // previous attempt's warning while this one starts.
+        //
+        // The writer is left busy on purpose: the last thing this does is
+        // ask for a write, and a write already in progress is refused by
+        // ImageWriter itself. Everything before that still runs.
+        step.operationWarning = "something from last time"
+        step.bottleneckStatus = "slow reader"
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return step.isWriting }, 3000,
+                  "the writer is busy, so the request will be refused")
+
+        writeDelay().triggered()
+
+        compare(step.operationWarning, "", "last time's warning is gone")
+        compare(step.bottleneckStatus, "")
+        compare(String(progressText().text), "Starting write process...",
+                "and the screen says what is happening")
+    }
+
+    // ── Reading the summary without a mouse ───────────────────────────
+
+    function test_the_summary_of_what_will_be_written_can_be_scrolled() {
+        // The list of everything the image will carry sits in the
+        // confirmation, and it is what the user is being asked to agree to.
+        // On a short window it scrolls, and a keyboard user has the arrow
+        // keys and nothing else.
+        fakeContainer.hostnameConfigured = true
+        fakeContainer.localeConfigured = true
+        fakeContainer.userConfigured = true
+        fakeContainer.wifiConfigured = true
+        fakeContainer.sshEnabled = true
+        fakeContainer.ifI2cEnabled = true
+        fakeContainer.ifSpiEnabled = true
+        fakeContainer.if1WireEnabled = true
+        fakeContainer.piConnectEnabled = true
+        fakeContainer.featUsbGadgetEnabled = true
+        fakeContainer.ifSerial = "Console"
+        atTheConfirmation()
+
+        var f = findChild(step, "writeSummaryFlickable")
+        verify(f, "found the summary")
+        if (f.contentHeight <= f.height) {
+            skip("the summary fits without scrolling at this size, so moving "
+                 + "it cannot be told from not moving")
+            return
+        }
+        f.contentY = 0
+        f.forceActiveFocus()
+
+        keyClick(Qt.Key_Down)
+        verify(f.contentY > 0, "down moved further into the list")
+
+        keyClick(Qt.Key_Up)
+        compare(f.contentY, 0, "and up came back to the top")
+    }
+
+    function test_the_summary_does_not_scroll_off_either_end() {
+        fakeContainer.hostnameConfigured = true
+        fakeContainer.userConfigured = true
+        atTheConfirmation()
+
+        var f = findChild(step, "writeSummaryFlickable")
+        verify(f, "found the summary")
+        f.contentY = 0
+        f.forceActiveFocus()
+
+        keyClick(Qt.Key_Up)
+        keyClick(Qt.Key_Up)
+
+        compare(f.contentY, 0, "the top is the top")
+
+        const maxY = Math.max(0, f.contentHeight - f.height)
+        f.contentY = maxY
+        for (let i = 0; i < 6; i++)
+            keyClick(Qt.Key_Down)
+
+        verify(f.contentY <= maxY + 1,
+               "and the bottom is the bottom; contentY " + f.contentY
+               + " against " + maxY)
     }
 }
