@@ -2118,7 +2118,17 @@ bool DownloadThread::_verifyCustomisation()
 
             if (it.value().size > kAlwaysVerifyMaxBytes && !_verifyEnabled)
             {
-                notContentChecked << it.key();
+                /* Skipping the content read is the whole point of this branch,
+                   but the length is in the directory entry, so checking it
+                   costs one seek rather than a block-by-block read of the
+                   file. Worth doing: for a secure-boot write the large file is
+                   the signed bootloader payload, and a short one leaves a
+                   board that will not boot. */
+                const qint64 recorded = fat->fileSize(it.key());
+                if (recorded >= 0 && recorded != it.value().size)
+                    sizeMismatched << it.key();
+                else
+                    notContentChecked << it.key();
                 continue;
             }
 

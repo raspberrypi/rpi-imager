@@ -2553,3 +2553,552 @@ TEST_CASE("A card that cannot be read back is called broken",
     CHECK_THAT(failed.at(0).at(0).toString().toStdString(),
                Catch::Matchers::ContainsSubstring("may be broken"));
 }
+
+// The read-back that decides whether the customisation actually reached the
+// card.
+//
+// After a write, DownloadThread reads its own customisation files back off the
+// media and compares them with what it recorded writing. The success path was
+// covered; the failure path was not, and it is the one that matters. A card
+// whose config.txt or user-data never landed boots without the hostname, the
+// user account or the Wi-Fi the user asked for -- and if the read-back does not
+// fail the write, they are told it completed and find out when the board does
+// not appear on the network.
+//
+// There is a deliberate asymmetry here worth pinning: a read that cannot be
+// performed at all -- an unreadable partition, an unexpected layout -- lets the
+// write stand, because that is not evidence the customisation is bad and
+// failing a good card is worse. A read that succeeds and disagrees fails it.
+// Both directions are checked.
+//
+// The verification needs a real FAT partition to read, so these use the same
+// mkfs.vfat-built image the customisation cases use, and reach the protected
+// members through a subclass rather than driving a whole write.
+class CustomisationVerifier : public DownloadThread
+{
+public:
+    CustomisationVerifier(const QByteArray &src, const QByteArray &dst)
+        : DownloadThread(src, dst, QByteArray()) {}
+
+    // Open the destination for reading without going through
+    // _openAndPrepareDevice(), which zeroes the first and last megabyte -- and
+    // would take the partition table this test needs with it.
+    bool openForReadBack(const QString &path)
+    {
+        _file = rpi_imager::FileOperations::Create();
+        if (_file->OpenDevice(path.toStdString()) != rpi_imager::FileError::kSuccess)
+            return false;
+        std::uint64_t size = 0;
+        if (_file->GetSize(size) != rpi_imager::FileError::kSuccess)
+            return false;
+        _bytesWritten.store(size);
+        return true;
+    }
+
+    void expect(const QString &name, const QByteArray &contents)
+    {
+        _recordCustomisationWrite(name, contents);
+    }
+
+    bool expectationCount() const { return _customisationDigests.size(); }
+    void setVerifyReadBack(bool on) { _verifyEnabled = on; }
+
+    using DownloadThread::_verifyCustomisation;
+};
+
+// Plant a file directly in the boot partition, standing in for what the
+// customisation pass would have written.
+bool plantInBootPartition(const QString &devicePath, const QString &name,
+                          const QByteArray &contents)
+{
+    auto ops = rpi_imager::FileOperations::Create();
+    if (ops->OpenDevice(devicePath.toStdString()) != rpi_imager::FileError::kSuccess)
+        return false;
+    DeviceWrapper dw(ops.get());
+    DeviceWrapperFatPartition *fat = dw.fatPartition(1);
+    if (!fat)
+        return false;
+    fat->writeFile(name, contents);
+    return true;
+}
+
+TEST_CASE("Customisation read-back passes when the card kept what was written",
+          "[download][customise][verify]")
+{
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-ok.img"));
+    REQUIRE(buildPartitionedImage(dest, 48));
+
+    const QByteArray contents = QByteArray("hostname=raspberrypi\n");
+    REQUIRE(plantInBootPartition(dest, QStringLiteral("user-data"), contents));
+
+    CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+    REQUIRE(v.openForReadBack(dest));
+    v.expect(QStringLiteral("user-data"), contents);
+
+    CHECK(v._verifyCustomisation());
+}
+
+TEST_CASE("Customisation read-back fails when a file never reached the card",
+          "[download][customise][verify]")
+{
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-missing.img"));
+    REQUIRE(buildPartitionedImage(dest, 48));
+
+    // Nothing planted: the customisation pass believes it wrote a file that
+    // is not there. A board written this way comes up with no user account.
+    CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+    REQUIRE(v.openForReadBack(dest));
+    v.expect(QStringLiteral("user-data"), QByteArray("hostname=raspberrypi\n"));
+
+    CHECK_FALSE(v._verifyCustomisation());
+}
+
+TEST_CASE("Customisation read-back fails when a file came back truncated",
+          "[download][customise][verify]")
+{
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-short.img"));
+    REQUIRE(buildPartitionedImage(dest, 48));
+
+    // The card kept less than was written -- the classic result of a write
+    // that was not synced before the card was pulled.
+    REQUIRE(plantInBootPartition(dest, QStringLiteral("user-data"),
+                                 QByteArray("hostname=ras")));
+
+    CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+    REQUIRE(v.openForReadBack(dest));
+    v.expect(QStringLiteral("user-data"), QByteArray("hostname=raspberrypi\n"));
+
+    CHECK_FALSE(v._verifyCustomisation());
+}
+
+TEST_CASE("Customisation read-back fails when a file came back corrupted",
+          "[download][customise][verify]")
+{
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-corrupt.img"));
+    REQUIRE(buildPartitionedImage(dest, 48));
+
+    // Same length, different bytes: a size check alone would pass this, which
+    // is why the small files are content-checked.
+    const QByteArray written = QByteArray("hostname=raspberrypi\n");
+    QByteArray onCard = written;
+    onCard[9] = 'X';
+    REQUIRE(onCard.size() == written.size());
+    REQUIRE(plantInBootPartition(dest, QStringLiteral("user-data"), onCard));
+
+    CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+    REQUIRE(v.openForReadBack(dest));
+    v.expect(QStringLiteral("user-data"), written);
+
+    CHECK_FALSE(v._verifyCustomisation());
+}
+
+TEST_CASE("Customisation read-back checks every file it recorded",
+          "[download][customise][verify]")
+{
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-many.img"));
+    REQUIRE(buildPartitionedImage(dest, 48));
+
+    // Several files, one of them wrong. Stopping at the first match would let
+    // this through.
+    const QByteArray good = QByteArray("ok\n");
+    REQUIRE(plantInBootPartition(dest, QStringLiteral("config.txt"), good));
+    REQUIRE(plantInBootPartition(dest, QStringLiteral("cmdline.txt"), good));
+    REQUIRE(plantInBootPartition(dest, QStringLiteral("user-data"),
+                                 QByteArray("wrong\n")));
+
+    CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+    REQUIRE(v.openForReadBack(dest));
+    v.expect(QStringLiteral("config.txt"), good);
+    v.expect(QStringLiteral("cmdline.txt"), good);
+    v.expect(QStringLiteral("user-data"), QByteArray("right\n"));
+
+    CHECK_FALSE(v._verifyCustomisation());
+}
+
+TEST_CASE("Nothing customised means nothing to read back",
+          "[download][customise][verify]")
+{
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-none.img"));
+    REQUIRE(writeFile(dest, QByteArray(1024 * 1024, '\0')));
+
+    // No expectations recorded, so there is nothing to check and no partition
+    // to go looking for -- it must not fail a write that asked for no
+    // customisation at all.
+    CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+    REQUIRE(v.openForReadBack(dest));
+
+    CHECK(v._verifyCustomisation());
+}
+
+TEST_CASE("A card that cannot be read back is not failed for it",
+          "[download][customise][verify]")
+{
+    // The deliberate asymmetry. If the partition cannot be found or read, that
+    // is not evidence the customisation is bad, and failing a good card over an
+    // unreadable check is worse than letting it stand with a warning. A read
+    // that succeeds and disagrees is a different matter -- see the cases above.
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-nofat.img"));
+    REQUIRE(writeFile(dest, QByteArray(4 * 1024 * 1024, '\0')));
+
+    CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+    REQUIRE(v.openForReadBack(dest));
+    v.expect(QStringLiteral("user-data"), QByteArray("hostname=raspberrypi\n"));
+
+    CHECK(v._verifyCustomisation());
+}
+
+TEST_CASE("A large file is still size-checked when verification is off",
+          "[download][customise][verify]")
+{
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+
+    // Content-checking a large file means reading it back a 4 KiB block at a
+    // time with direct I/O, which for a secure-boot boot.img is thousands of
+    // syscalls on every write -- so the content check is done only when the
+    // user has already opted into a read-back by enabling verification.
+    //
+    // The length is a different matter: it is recorded in the directory entry,
+    // so checking it costs one seek rather than a read of the file. It used to
+    // be skipped along with the content, which meant a truncated boot.img went
+    // unnoticed unless verification was on -- and for a secure-boot write that
+    // file is the signed bootloader payload, so a short one leaves a board
+    // that will not boot.
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("verify-large.img"));
+    REQUIRE(buildPartitionedImage(dest, 48));
+
+    const qint64 kAlwaysVerifyMaxBytes = 1024 * 1024;
+    const QByteArray written(kAlwaysVerifyMaxBytes + 4096, '\xA5');
+    const QByteArray truncated(1024, '\xA5');
+    REQUIRE(truncated.size() < written.size());
+    REQUIRE(plantInBootPartition(dest, QStringLiteral("boot.img"), truncated));
+
+    {
+        CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+        REQUIRE(v.openForReadBack(dest));
+        v.setVerifyReadBack(false);
+        v.expect(QStringLiteral("boot.img"), written);
+
+        CHECK_FALSE(v._verifyCustomisation());
+    }
+
+    // And with verification on, the same truncation is caught by the content
+    // comparison rather than the length -- both routes reach it.
+    {
+        CustomisationVerifier v(QByteArray("file:///dev/null"), dest.toUtf8());
+        REQUIRE(v.openForReadBack(dest));
+        v.setVerifyReadBack(true);
+        v.expect(QStringLiteral("boot.img"), written);
+
+        CHECK_FALSE(v._verifyCustomisation());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The partition table, written last
+// ---------------------------------------------------------------------------
+//
+// The first 512 bytes of the image are held back until everything behind them
+// is on the card, so that a card only ever shows a partition whose filesystem
+// is already durable. That means the last thing a write does is seek to sector
+// zero and put them there.
+//
+// The guard on that seek was added without a test. Without it, a failed seek
+// followed by a successful write puts those 512 bytes wherever the file
+// position happens to be -- the end of the image -- and the card is handed back
+// with no partition table and a successful write behind it. It looks blank, and
+// nothing said anything went wrong.
+
+class SeekingDevice : public rpi_imager::LinuxFileOperations
+{
+public:
+    bool seekFails = false;
+    bool writeFails = false;
+    int seeks = 0;
+    int sequentialWrites = 0;
+    int flushes = 0;
+    // Which flush to fail, counting from 1. _writeComplete() flushes twice
+    // before the partition table: once for the final sync, and again just
+    // before the table goes down. They are separate guards with separate
+    // messages, so a fake that failed both would only ever reach the first.
+    int failFlushNumber = 0;
+    std::uint64_t lastSeek = ~0ULL;
+
+    // Async off, so _writeComplete() takes the straightforward path down to
+    // the partition table rather than the drain.
+    bool IsAsyncIOSupported() const override { return false; }
+    int GetAsyncQueueDepth() const override { return 1; }
+    bool IsDirectIOEnabled() const override { return true; }
+
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        ++seeks;
+        lastSeek = position;
+        return seekFails ? rpi_imager::FileError::kSeekError
+                         : rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t len) override
+    {
+        ++sequentialWrites;
+        (void)len;
+        return writeFails ? rpi_imager::FileError::kWriteError
+                          : rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError Flush() override
+    {
+        ++flushes;
+        return flushes == failFlushNumber ? rpi_imager::FileError::kFlushError
+                                          : rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Close() override { return rpi_imager::FileError::kSuccess; }
+    bool IsOpen() const override { return true; }
+};
+
+class FirstBlockWriter : public DownloadThread
+{
+public:
+    FirstBlockWriter() : DownloadThread("file:///nonexistent", "", "")
+    {
+        device = std::make_shared<SeekingDevice>();
+        _file = device;
+        _verifyEnabled = false;
+        _cacheEnabled = false;
+        _ejectEnabled = false;
+    }
+
+    // Stand in for the partition table the write held back. Allocated the way
+    // _writeData does it, because _writeComplete frees it with qFreeAligned.
+    void holdBackPartitionTable(std::size_t len = 512)
+    {
+        _firstBlock = static_cast<char *>(qMallocAligned(len, 4096));
+        _firstBlockSize = len;
+        ::memset(_firstBlock, 0xAA, len);
+    }
+
+    std::shared_ptr<SeekingDevice> device;
+
+    using DownloadThread::_writeComplete;
+};
+
+TEST_CASE("The held-back partition table goes to sector zero",
+          "[downloadthread][mbr]")
+{
+    FirstBlockWriter thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.holdBackPartitionTable();
+
+    thread._writeComplete();
+
+    CHECK(thread.device->lastSeek == 0);
+    CHECK(thread.device->sequentialWrites == 1);
+    CHECK(failed.count() == 0);
+}
+
+TEST_CASE("A write whose final seek fails does not report success",
+          "[downloadthread][mbr]")
+{
+    // The 512 bytes would otherwise land at the end of the image, and the card
+    // would come back looking blank with a completed write behind it.
+    FirstBlockWriter thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.holdBackPartitionTable();
+    thread.device->seekFails = true;
+
+    thread._writeComplete();
+
+    REQUIRE(failed.count() == 1);
+    CHECK_THAT(failed.at(0).at(0).toString().toStdString(),
+               Catch::Matchers::ContainsSubstring("partition table"));
+    CHECK(thread.device->sequentialWrites == 0);
+}
+
+TEST_CASE("A write whose pre-table flush fails does not report success",
+          "[downloadthread][mbr]")
+{
+    // Everything behind the partition table has to be durable before it
+    // appears, or a host can see a partition whose filesystem is not all
+    // there -- which is what prompts Windows to offer to format the card.
+    // This is the second flush: the first is the final sync, guarded
+    // separately below.
+    FirstBlockWriter thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.holdBackPartitionTable();
+    thread.device->failFlushNumber = 2;
+
+    thread._writeComplete();
+
+    REQUIRE(failed.count() == 1);
+    // The message says a flush failed but not which one:
+    // _fileErrorToString() interpolates its operation argument for write,
+    // read, seek and timeout errors and ignores it for flush and sync, so the
+    // "flushing image before writing partition table" this caller passes is
+    // built and discarded. Left alone rather than fixed -- adding %1 to those
+    // strings would invalidate their translations in every locale, for a
+    // message that already tells the user what to do. What matters here is
+    // that the table did not go down.
+    CHECK_THAT(failed.at(0).at(0).toString().toStdString(),
+               Catch::Matchers::ContainsSubstring("flushing"));
+    CHECK(thread.device->sequentialWrites == 0);
+    CHECK(thread.device->lastSeek == ~0ULL);
+}
+
+TEST_CASE("A write whose final sync fails does not reach the partition table",
+          "[downloadthread][mbr]")
+{
+    // The first flush. Nothing is durable yet, so the table must not go down
+    // at all -- and the message names the sync rather than the table, because
+    // that is what failed.
+    FirstBlockWriter thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.holdBackPartitionTable();
+    thread.device->failFlushNumber = 1;
+
+    thread._writeComplete();
+
+    REQUIRE(failed.count() == 1);
+    CHECK(thread.device->sequentialWrites == 0);
+    CHECK(thread.device->lastSeek == ~0ULL);
+}
+
+TEST_CASE("A write whose partition table cannot be written does not report success",
+          "[downloadthread][mbr]")
+{
+    FirstBlockWriter thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.holdBackPartitionTable();
+    thread.device->writeFails = true;
+
+    thread._writeComplete();
+
+    REQUIRE(failed.count() == 1);
+    CHECK(thread.device->lastSeek == 0);
+}
+
+// ---------------------------------------------------------------------------
+// Secure-boot packaging, when there is nothing to package
+// ---------------------------------------------------------------------------
+//
+// _createSecureBootFiles() extracts every file from the boot partition, repacks
+// them into a boot.img and signs that. Its first two refusals -- no key
+// configured, key file missing -- are covered above through a whole write. The
+// third is not reachable that way: by the time the packaging runs, the
+// customisation pass has already written config.txt, so the partition is never
+// empty.
+//
+// It is worth having anyway. A secure-boot card carries boot.img and a boot.sig
+// over it, and the firmware refuses to boot if they do not agree. Packaging
+// nothing and signing it would produce a card that fails at the bootloader,
+// after the one-way OTP fuses have been programmed. Called directly, with a
+// boot partition that really is empty.
+//
+// The refusal turns out to be defended three deep: the empty extraction, then
+// the empty boot-file map, then SecureBoot::createBootImg refusing to pack
+// nothing. Removing any one of them -- or the first two together -- leaves the
+// outcome unchanged, so no reversion of a single guard makes these fail. They
+// assert the outcome rather than any one guard, which is the property that
+// matters and the one that survives the internals being rearranged.
+
+class SecureBootPackager : public DownloadThread
+{
+public:
+    SecureBootPackager() : DownloadThread("file:///nonexistent", "", "") {}
+    using DownloadThread::_createSecureBootFiles;
+};
+
+TEST_CASE("Secure boot refuses to package an empty boot partition",
+          "[download][secureboot]")
+{
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!haveOpenssl())
+        SKIP("openssl is not installed, so no signing key can be generated");
+
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("sb-empty.pem"));
+    REQUIRE(generateRsaKey(key));
+    setConfiguredRsaKey(key);
+
+    const QString image = scratch.filePath(QStringLiteral("sb-empty.img"));
+    REQUIRE(buildPartitionedImage(image, 48));
+
+    auto ops = rpi_imager::FileOperations::Create();
+    REQUIRE(ops->OpenDevice(image.toStdString()) == rpi_imager::FileError::kSuccess);
+    DeviceWrapper dw(ops.get());
+    DeviceWrapperFatPartition *fat = dw.fatPartition(1);
+    REQUIRE(fat != nullptr);
+    REQUIRE(fat->listAllFiles().isEmpty());
+
+    SecureBootPackager packager;
+    rpi_test::SignalLog failed(&packager, &DownloadThread::error);
+
+    CHECK_FALSE(packager._createSecureBootFiles(fat));
+
+    REQUIRE(failed.count() >= 1);
+    INFO("error: " << failed.at(0).at(0).toString().toStdString());
+    CHECK_FALSE(failed.at(0).at(0).toString().isEmpty());
+
+    setConfiguredRsaKey(QString());
+}
+
+TEST_CASE("Secure boot packaging leaves no signature behind when it refuses",
+          "[download][secureboot]")
+{
+    // Refusing has to leave the card as it was. A boot.sig with no boot.img,
+    // or either of them half-written, is worse than neither: the firmware
+    // would find a signature it cannot check.
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!haveOpenssl())
+        SKIP("openssl is not installed, so no signing key can be generated");
+
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("sb-none.pem"));
+    REQUIRE(generateRsaKey(key));
+    setConfiguredRsaKey(key);
+
+    const QString image = scratch.filePath(QStringLiteral("sb-none.img"));
+    REQUIRE(buildPartitionedImage(image, 48));
+
+    {
+        auto ops = rpi_imager::FileOperations::Create();
+        REQUIRE(ops->OpenDevice(image.toStdString()) == rpi_imager::FileError::kSuccess);
+        DeviceWrapper dw(ops.get());
+        DeviceWrapperFatPartition *fat = dw.fatPartition(1);
+        REQUIRE(fat != nullptr);
+
+        SecureBootPackager packager;
+        CHECK_FALSE(packager._createSecureBootFiles(fat));
+    }
+
+    CHECK(readFromBootPartition(image, QStringLiteral("boot.img")).isEmpty());
+    CHECK(readFromBootPartition(image, QStringLiteral("boot.sig")).isEmpty());
+
+    setConfiguredRsaKey(QString());
+}

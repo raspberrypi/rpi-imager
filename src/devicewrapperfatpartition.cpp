@@ -233,6 +233,14 @@ bool DeviceWrapperFatPartition::fileExists(const QString &filename)
     return getDirEntry(filename, &entry);
 }
 
+qint64 DeviceWrapperFatPartition::fileSize(const QString &filename)
+{
+    struct dir_entry entry;
+    if (!getDirEntry(filename, &entry))
+        return -1;
+    return static_cast<qint64>(entry.DIR_FileSize);
+}
+
 bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
 {
     struct dir_entry entry;

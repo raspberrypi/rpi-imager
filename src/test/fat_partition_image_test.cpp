@@ -1836,3 +1836,63 @@ TEST_CASE("Every name the recursive listing returns can be read", "[fat][image]"
     INFO("unreadable: " << unreadable.join(QStringLiteral(", ")).toStdString());
     CHECK(unreadable.isEmpty());
 }
+
+// ---------------------------------------------------------------------------
+// File length without reading the file
+// ---------------------------------------------------------------------------
+//
+// fileSize() exists so a caller can check a large file's length without paying
+// for a block-by-block read of its contents. DownloadThread's customisation
+// read-back uses it for exactly that: content-checking a secure-boot boot.img
+// means thousands of direct-I/O reads, but its length is in the directory
+// entry, so a truncated payload can be caught for the cost of one seek.
+
+TEST_CASE("FAT driver reports a file's length without reading it", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    FatImage image(32, 64);
+
+    const QByteArray contents(4097, '\xA5');
+    image.fat().writeFile(QStringLiteral("boot.img"), contents);
+    image.sync();
+
+    CHECK(image.fat().fileSize(QStringLiteral("boot.img")) == contents.size());
+}
+
+TEST_CASE("FAT driver reports no length for a file that is not there", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    FatImage image(32, 64);
+
+    // -1 rather than 0: a caller comparing a recorded length against this
+    // needs to tell "not there" from "there and empty", or an absent file
+    // would read as a zero-length one that matched.
+    CHECK(image.fat().fileSize(QStringLiteral("never-written.img")) == -1);
+}
+
+TEST_CASE("FAT driver reports zero for a file that is there and empty", "[fat][image]")
+{
+    REQUIRE_MKFS();
+    FatImage image(32, 64);
+
+    image.fat().writeFile(QStringLiteral("empty.txt"), QByteArray());
+    image.sync();
+
+    CHECK(image.fat().fileExists(QStringLiteral("empty.txt")));
+    CHECK(image.fat().fileSize(QStringLiteral("empty.txt")) == 0);
+}
+
+TEST_CASE("FAT driver reports the length of a file spanning many clusters",
+          "[fat][image]")
+{
+    REQUIRE_MKFS();
+    FatImage image(32, 64);
+
+    // Several clusters, so the length comes from the directory entry rather
+    // than from anything the cluster chain happens to imply.
+    const QByteArray contents(200 * 1024 + 7, '\x5A');
+    image.fat().writeFile(QStringLiteral("multi.img"), contents);
+    image.sync();
+
+    CHECK(image.fat().fileSize(QStringLiteral("multi.img")) == contents.size());
+}
