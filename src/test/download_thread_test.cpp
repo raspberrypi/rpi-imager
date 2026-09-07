@@ -24,6 +24,9 @@
 
 #include <algorithm>
 #include "downloadthread.h"
+#include <catch2/generators/catch_generators.hpp>
+#include "signal_log.h"
+#include "linux/file_operations_linux.h"
 #include "timeout_utils.h"
 
 using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
@@ -1967,4 +1970,124 @@ TEST_CASE("A verified write reports the verification it performed",
     CHECK_FALSE(writeHash.isEmpty());
     CHECK_FALSE(verifyHash.isEmpty());
     CHECK(writeHash == verifyHash);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// What the user is told when a write fails
+//
+// _onWriteError() asks the device what went wrong and turns the answer into
+// one sentence. The answers are not interchangeable: a write-protect switch,
+// a full card, a counterfeit one and a disconnected reader each need
+// something different done about them, and the generic fallback tells
+// somebody to check three things when only one is wrong.
+//
+// Only the I/O-error class is reachable through a real faulty device -- the
+// rest are reported by the platform layer, several of them only on Windows
+// -- so the classification is driven directly instead.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// The real Linux implementation with one answer replaced, so the other
+// twenty-nine members of the interface behave as they always do.
+class ClassifyingDevice : public rpi_imager::LinuxFileOperations
+{
+public:
+    explicit ClassifyingDevice(rpi_imager::WriteErrorClass klass) : _klass(klass) {}
+
+    rpi_imager::WriteErrorClass ClassifyLastWriteError() const override
+    {
+        return _klass;
+    }
+
+private:
+    rpi_imager::WriteErrorClass _klass;
+};
+
+class FailingWrite : public DownloadThread
+{
+public:
+    FailingWrite() : DownloadThread("file:///nonexistent", "", "") {}
+
+    void deviceReports(rpi_imager::WriteErrorClass klass)
+    {
+        _file = std::make_shared<ClassifyingDevice>(klass);
+    }
+
+    void beCancelled() { _cancelled = true; }
+
+    using DownloadThread::_onWriteError;
+};
+
+} // namespace
+
+TEST_CASE("Each kind of write failure is explained in its own terms",
+          "[downloadthread][writeerror]")
+{
+    struct Case {
+        rpi_imager::WriteErrorClass klass;
+        const char *mustMention;
+        const char *tag;
+    };
+
+    auto c = GENERATE(
+        // Names the switch to look for, rather than "not writable".
+        Case{rpi_imager::WriteErrorClass::kWriteProtected, "write-protect", "write protected"},
+        // The card is too small; a larger one is the answer, not retrying.
+        Case{rpi_imager::WriteErrorClass::kDiskFull, "larger", "disk full"},
+        // The one worth saying out loud: a card that fails mid-write is
+        // often not the size it claims.
+        Case{rpi_imager::WriteErrorClass::kMediaError, "counterfeit", "media error"},
+        Case{rpi_imager::WriteErrorClass::kIoDeviceError, "disconnected", "I/O error"},
+        Case{rpi_imager::WriteErrorClass::kInvalidParameter, "reconnecting", "invalid parameter"},
+        Case{rpi_imager::WriteErrorClass::kAccessDenied, "another application", "access denied"},
+        // Windows only, and undiagnosable without being named: the write is
+        // refused by a security feature, not by the card.
+        Case{rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess,
+             "Controlled Folder Access", "controlled folder access"});
+
+    FailingWrite thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.deviceReports(c.klass);
+
+    thread._onWriteError();
+
+    REQUIRE(failed.count() == 1);
+    const QString message = failed.at(0).at(0).toString();
+    INFO(c.tag << " -> " << message.toStdString());
+    CHECK_THAT(message.toStdString(), Catch::Matchers::ContainsSubstring(c.mustMention));
+}
+
+TEST_CASE("An unrecognised write failure still says something useful",
+          "[downloadthread][writeerror]")
+{
+    // The fallback. It has to cover the ground the specific messages would
+    // have, since there is nothing else to go on.
+    FailingWrite thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.deviceReports(rpi_imager::WriteErrorClass::kUnknown);
+
+    thread._onWriteError();
+
+    REQUIRE(failed.count() == 1);
+    const std::string message = failed.at(0).at(0).toString().toStdString();
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("writable"));
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("space"));
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("write-protected"));
+}
+
+TEST_CASE("A cancelled write is not reported as a failure",
+          "[downloadthread][writeerror]")
+{
+    // Cancelling makes the write in flight fail, which is expected rather
+    // than wrong. Reporting it would show the user an error dialog for
+    // something they just asked for.
+    FailingWrite thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.deviceReports(rpi_imager::WriteErrorClass::kIoDeviceError);
+    thread.beCancelled();
+
+    thread._onWriteError();
+
+    CHECK(failed.count() == 0);
 }
