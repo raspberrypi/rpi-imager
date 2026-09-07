@@ -44,6 +44,10 @@ TestCase {
     function initTestCase() {
         wiz = containerComponent.createObject(testCase)
         verify(wiz, "the wizard container was created")
+        // main.qml supplies this in the application; the steps parent their
+        // dialogs onto it, and without it those assignments fail and the
+        // dialogs end up unparented -- which nothing here would notice.
+        wiz.overlayRootRef = testCase
     }
 
     function cleanupTestCase() {
