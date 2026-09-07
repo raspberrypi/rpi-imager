@@ -177,6 +177,135 @@ TestCase {
         compare(wiz.hostnameConfigured, false)
     }
 
+    // -- When a change counts as a change ----------------------------------
+    //
+    // The case above calls invalidateDeviceDependentSteps() directly, so it
+    // shows what invalidation does but not when it happens. That decision
+    // lives in the property-change handlers, and it has to distinguish three
+    // things: the first selection, a real change, and re-selecting what is
+    // already chosen.
+    //
+    // The third is the one with teeth. Without the inequality check, clicking
+    // the board you already had selected would discard the OS, the card and
+    // every customisation flag -- work the user had done, thrown away by an
+    // action that changed nothing.
+
+    function selectDeviceFresh(name) {
+        // As a fresh run arrives at this step: nothing chosen before.
+        //
+        // Clearing first matters. These cases share one container, so the
+        // name may already be the one being selected -- and assigning a
+        // property its current value emits no change, so the handler under
+        // test would never run and the case would pass having exercised
+        // nothing. previousDeviceName is emptied before the clear so that
+        // the clear itself is not treated as a change either.
+        wiz.previousDeviceName = ""
+        if (wiz.selectedDeviceName === name)
+            wiz.selectedDeviceName = ""
+        wiz.previousDeviceName = ""
+        wiz.selectedDeviceName = name
+    }
+
+    function test_the_first_device_choice_invalidates_nothing() {
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedOsName = "Raspberry Pi OS"
+        wiz.previousOsName = "Raspberry Pi OS"
+
+        selectDeviceFresh("Raspberry Pi 5")
+
+        verify(wiz.isStepPermissible(wiz.stepOSSelection),
+               "nothing was thrown away")
+        compare(wiz.selectedOsName, "Raspberry Pi OS")
+        compare(wiz.previousDeviceName, "Raspberry Pi 5",
+                "and the choice is remembered for next time")
+    }
+
+    function test_choosing_a_different_device_invalidates_what_followed() {
+        selectDeviceFresh("Raspberry Pi 5")
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedOsName = "Raspberry Pi OS"
+        wiz.selectedStorageName = "Generic SD"
+        wiz.hostnameConfigured = true
+
+        wiz.selectedDeviceName = "Raspberry Pi 4"
+
+        verify(!wiz.isStepPermissible(wiz.stepOSSelection),
+               "the OS chosen for the other board is no longer reachable")
+        compare(wiz.selectedOsName, "")
+        compare(wiz.selectedStorageName, "")
+        compare(wiz.hostnameConfigured, false)
+    }
+
+    function test_arriving_at_the_device_already_recorded_keeps_everything() {
+        // The handler's second condition: it fires only when the name it
+        // last saw differs from the one now set.
+        //
+        // Re-clicking the selected board cannot show this. QML emits no
+        // change for an assignment of the value a property already holds, so
+        // the handler never runs and the condition is never reached -- a test
+        // written that way passes whatever the condition says, which is how
+        // this one started out.
+        //
+        // Reaching it needs the two to agree at the moment the handler runs,
+        // so the remembered name is set to the incoming one first. That is
+        // the shape resetWizard() leaves behind, since it clears both.
+        selectDeviceFresh("Raspberry Pi 5")
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedOsName = "Raspberry Pi OS"
+        wiz.selectedStorageName = "Generic SD"
+        wiz.hostnameConfigured = true
+
+        wiz.previousDeviceName = "Raspberry Pi 4"
+        wiz.selectedDeviceName = "Raspberry Pi 4"
+
+        verify(wiz.isStepPermissible(wiz.stepOSSelection))
+        compare(wiz.selectedOsName, "Raspberry Pi OS", "the OS survived")
+        compare(wiz.selectedStorageName, "Generic SD")
+        compare(wiz.hostnameConfigured, true)
+    }
+
+    function test_choosing_a_different_os_invalidates_the_card_but_not_the_board() {
+        // An OS change invalidates from storage onward: the card was chosen
+        // knowing the image size, and the customisation depends on the OS.
+        // The board is upstream of the choice and stays.
+        wiz.previousOsName = "Raspberry Pi OS"
+        wiz.selectedOsName = "Raspberry Pi OS"
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedStorageName = "Generic SD"
+        wiz.hostnameConfigured = true
+
+        wiz.selectedOsName = "Ubuntu Server"
+
+        verify(wiz.isStepPermissible(wiz.stepDeviceSelection),
+               "the board is untouched")
+        verify(wiz.isStepPermissible(wiz.stepOSSelection),
+               "and so is the step that was just used")
+        verify(!wiz.isStepPermissible(wiz.stepStorageSelection))
+        compare(wiz.selectedStorageName, "")
+        compare(wiz.hostnameConfigured, false)
+    }
+
+    function test_arriving_at_the_os_already_recorded_keeps_everything() {
+        // As above, for the OS handler: the two are made to agree so the
+        // condition is actually evaluated rather than skipped.
+        wiz.previousOsName = "Raspberry Pi OS"
+        wiz.selectedOsName = "Ubuntu Server"
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedStorageName = "Generic SD"
+        wiz.hostnameConfigured = true
+
+        wiz.previousOsName = "Raspberry Pi OS"
+        wiz.selectedOsName = "Raspberry Pi OS"
+
+        compare(wiz.selectedStorageName, "Generic SD")
+        compare(wiz.hostnameConfigured, true)
+    }
+
     // -- The customisation substeps ----------------------------------------
 
     function test_the_base_substeps_are_always_offered() {
