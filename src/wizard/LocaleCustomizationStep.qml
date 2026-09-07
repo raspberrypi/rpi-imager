@@ -128,6 +128,7 @@ WizardStepBase {
 
                     ImComboBox {
                         id: comboCapitalCity
+                        objectName: "localeCapitalCityCombo"
                         Layout.fillWidth: true
                         editable: false
                         selectTextByMouse: true
@@ -169,6 +170,7 @@ WizardStepBase {
                 }
                 ImComboBox {
                     id: comboTimezone
+                    objectName: "localeTimezoneCombo"
                     Layout.fillWidth: true
                     editable: false
                     selectTextByMouse: true
@@ -185,6 +187,7 @@ WizardStepBase {
                 }
                 ImComboBox {
                     id: comboKeyboard
+                    objectName: "localeKeyboardCombo"
                     Layout.fillWidth: true
                     editable: false
                     selectTextByMouse: true
