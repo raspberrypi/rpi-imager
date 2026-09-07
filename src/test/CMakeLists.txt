@@ -1603,6 +1603,23 @@ if(NOT BUILD_CLI_ONLY)
         set_tests_properties(qml_ui_test PROPERTIES
             ENVIRONMENT "QT_QUICK_BACKEND=software")
 
+        # The same binary again, on one file, on its own.
+        #
+        # Every QtQuickTest file in a run shares one ImageWriter singleton, so
+        # the device list holds whatever the files before it left behind. By
+        # the time tst_device_selection_step runs in the suite above, another
+        # file has fetched a list -- which is a state worth testing, but it
+        # means the screen a user meets with no network is never reached, and
+        # those cases skip. Running the file by itself reaches it.
+        #
+        # The file covers both states and says which each case needs, so
+        # between the two entries neither is left out.
+        add_test(NAME qml_ui_test_device_selection_offline
+                 COMMAND qml_ui_test -platform offscreen
+                         -input "${CMAKE_CURRENT_SOURCE_DIR}/qml/tst_device_selection_step.qml")
+        set_tests_properties(qml_ui_test_device_selection_offline PROPERTIES
+            ENVIRONMENT "QT_QUICK_BACKEND=software")
+
         # `qml_coverage`: which of the QML actually ran.
         #
         # gcov cannot see QML. qmlcachegen emits bytecode as a byte array with
