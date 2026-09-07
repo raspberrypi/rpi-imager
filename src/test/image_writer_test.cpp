@@ -7277,3 +7277,193 @@ TEST_CASE("An ordinary organisation key is accepted and trimmed",
 
     w.clearConnectOrgRegistration();
 }
+
+// ══════════════════════════════════════════════════════════════
+// Which Pi Connect tokens are accepted
+//
+// The token is pasted from the Connect website, or arrives in a deep link
+// the browser hands back, and it is what enrols the device on first boot.
+// Getting the check wrong goes wrong in both directions: too lax and a
+// mistyped token ships in the image, so the board comes up and never
+// appears in the user's Connect account with nothing to say why; too
+// strict and a perfectly good token is refused at the last step before
+// writing. Neither verifyAuthKey nor parseTokenFromUrl had a test.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+// 24 Base58 characters, which is the length the current tokens carry.
+const QString kPayload24 = QStringLiteral("abcdefghijkmnpqrstuvwxyz");
+}
+
+TEST_CASE("A well-formed Connect token is accepted", "[imagewriter][connect]")
+{
+    ImageWriter w(nullptr);
+
+    // rpuak_ is a per-user key, rpoak_ an organisation one; both are real.
+    CHECK(w.verifyAuthKey(QStringLiteral("rpuak_") + kPayload24, true));
+    CHECK(w.verifyAuthKey(QStringLiteral("rpoak_") + kPayload24, true));
+}
+
+TEST_CASE("A token without a recognised prefix is refused", "[imagewriter][connect]")
+{
+    ImageWriter w(nullptr);
+
+    CHECK_FALSE(w.verifyAuthKey(kPayload24, true));
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("rpxak_") + kPayload24, true));
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("RPUAK_") + kPayload24, true));
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("rpuak") + kPayload24, true));
+    CHECK_FALSE(w.verifyAuthKey(QString(), true));
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("rpuak_"), true));
+}
+
+TEST_CASE("A token carrying a character Base58 leaves out is refused",
+          "[imagewriter][connect]")
+{
+    // Base58 omits 0, O, I and l precisely because they are hard to tell
+    // apart. A token containing one is a transcription error, which is
+    // exactly the case worth catching before it reaches an image.
+    auto ambiguous = GENERATE(QChar('0'), QChar('O'), QChar('I'), QChar('l'));
+
+    ImageWriter w(nullptr);
+    QString payload = kPayload24;
+    payload[0] = ambiguous;
+
+    INFO("payload begins with: " << QString(ambiguous).toStdString());
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("rpuak_") + payload, true));
+}
+
+TEST_CASE("A token of the wrong length is refused in strict mode",
+          "[imagewriter][connect]")
+{
+    ImageWriter w(nullptr);
+    const QString prefix = QStringLiteral("rpuak_");
+
+    CHECK_FALSE(w.verifyAuthKey(prefix + kPayload24.left(23), true));
+    CHECK_FALSE(w.verifyAuthKey(prefix + kPayload24 + QStringLiteral("z"), true));
+    CHECK(w.verifyAuthKey(prefix + kPayload24, true));
+}
+
+TEST_CASE("A longer token is accepted when the length is not pinned",
+          "[imagewriter][connect]")
+{
+    // The non-strict form exists so a future token that grows is not
+    // rejected by a client shipped before it. Shorter than today's is still
+    // refused either way.
+    ImageWriter w(nullptr);
+    const QString prefix = QStringLiteral("rpuak_");
+
+    CHECK(w.verifyAuthKey(prefix + kPayload24 + QStringLiteral("abcdef"), false));
+    CHECK(w.verifyAuthKey(prefix + kPayload24, false));
+    CHECK_FALSE(w.verifyAuthKey(prefix + kPayload24.left(23), false));
+}
+
+TEST_CASE("A deep link's token is taken only when it is well formed",
+          "[imagewriter][connect]")
+{
+    // The path with no user in front of it: the browser hands the
+    // application a URL and whatever is in auth_key would otherwise go
+    // straight into the image.
+    ImageWriter w(nullptr);
+    const QString good = QStringLiteral("rpuak_") + kPayload24;
+
+    rpi_test::SignalLog received(&w, &ImageWriter::connectTokenReceived);
+
+    SECTION("a good token is accepted and reported") {
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?auth_key=") + good));
+
+        REQUIRE(received.count() == 1);
+        CHECK(received.at(0).at(0).toString() == good);
+    }
+
+    SECTION("other query parameters do not confuse it") {
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?state=x&auth_key=")
+                                 + good + QStringLiteral("&next=y")));
+
+        REQUIRE(received.count() == 1);
+        CHECK(received.at(0).at(0).toString() == good);
+    }
+
+    SECTION("a malformed token is dropped rather than passed on") {
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?auth_key=nonsense")));
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?auth_key=rpuak_short")));
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?auth_key=")));
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect")));
+
+        CHECK(received.count() == 0);
+    }
+}
+
+TEST_CASE("A second deep link does not silently replace the token in use",
+          "[imagewriter][connect]")
+{
+    // Two links can arrive: a stale browser tab, or a second sign-in. The
+    // token already held is what the user configured this image with, so a
+    // different one is raised as a conflict for the UI to resolve rather
+    // than swapped in underneath them.
+    ImageWriter w(nullptr);
+    const QString first = QStringLiteral("rpuak_") + kPayload24;
+    const QString second = QStringLiteral("rpuak_") + QStringLiteral("zyxwvutsrqpnmkjihgfedcba");
+
+    rpi_test::SignalLog received(&w, &ImageWriter::connectTokenReceived);
+    rpi_test::SignalLog conflicts(&w, &ImageWriter::connectTokenConflictDetected);
+
+    w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?auth_key=") + first));
+    REQUIRE(received.count() == 1);
+
+    SECTION("a different token is reported as a conflict, not adopted") {
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?auth_key=") + second));
+
+        REQUIRE(conflicts.count() == 1);
+        CHECK(conflicts.at(0).at(0).toString() == second);
+        CHECK(received.count() == 1);
+        // The stronger statement: what the image would be built with is
+        // still the token the user set it up with.
+        CHECK(w.getRuntimeConnectToken() == first);
+    }
+
+    SECTION("the same token again is not a conflict") {
+        // A link opened twice is not a disagreement about anything.
+        w.handleIncomingUrl(QUrl(QStringLiteral("rpi-imager://connect?auth_key=") + first));
+
+        CHECK(conflicts.count() == 0);
+        CHECK(received.count() == 1);
+        CHECK(w.getRuntimeConnectToken() == first);
+    }
+}
+
+TEST_CASE("A deep link's repository is taken only when it is well formed",
+          "[imagewriter][connect]")
+{
+    // This is the path the anchored \\A..\\z pattern exists for. A URL
+    // typed into the repository dialog is trimmed by the field before it is
+    // checked, so a trailing newline never reaches the validator there --
+    // here nothing trims, and issue #1687 was a %0A-suffixed URL reaching
+    // the fetch.
+    ImageWriter w(nullptr);
+    rpi_test::SignalLog repos(&w, &ImageWriter::repositoryUrlReceived);
+
+    SECTION("a good repository comes through") {
+        w.handleIncomingUrl(QUrl(QStringLiteral(
+            "rpi-imager://open?repo=https://example.com/os_list.json")));
+
+        REQUIRE(repos.count() == 1);
+        CHECK(repos.at(0).at(0).toString()
+              == QStringLiteral("https://example.com/os_list.json"));
+    }
+
+    SECTION("a newline-suffixed repository is ignored") {
+        w.handleIncomingUrl(QUrl(QStringLiteral(
+            "rpi-imager://open?repo=https://example.com/os_list.json%0A")));
+
+        CHECK(repos.count() == 0);
+    }
+
+    SECTION("a repository that is not a list is ignored") {
+        w.handleIncomingUrl(QUrl(QStringLiteral(
+            "rpi-imager://open?repo=file:///etc/passwd.json")));
+        w.handleIncomingUrl(QUrl(QStringLiteral(
+            "rpi-imager://open?repo=https://example.com/evil?x=.json")));
+
+        CHECK(repos.count() == 0);
+    }
+}

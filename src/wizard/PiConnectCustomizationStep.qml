@@ -141,6 +141,7 @@ WizardStepBase {
             // Enable/disable Connect
             ImOptionPill {
                 id: useTokenPill
+                objectName: "connectUseTokenToggle"
                 Layout.fillWidth: true
                 visible: !root.orgModeEnabled
                 text: qsTr("Enable Raspberry Pi Connect")
@@ -181,6 +182,7 @@ WizardStepBase {
 
             ImTextField {
                 id: fieldConnectToken
+                objectName: "connectTokenField"
                 Layout.fillWidth: true
                 font.pointSize: Style.fontSizeInput
                 visible: !root.orgModeEnabled && useTokenPill.checked
@@ -497,6 +499,7 @@ WizardStepBase {
     // Invalid token dialog
     BaseDialog {
         id: invalidTokenDialog
+        objectName: "connectInvalidTokenDialog"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
