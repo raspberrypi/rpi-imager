@@ -240,6 +240,203 @@ TEST_CASE("The hardware list populates and has a current selection",
     CHECK(model->currentArchitecture() == QStringLiteral("armhf"));
 }
 
+// The chooser is a QML list view, so every field it shows is fetched by
+// asking the model for a role by name. roleNames() and data() had never
+// run: a role missing from the map, or a case missing from the switch,
+// leaves that line of the device blank on screen with nothing in a log to
+// say so. The board a user picks is what filters the whole OS list, so the
+// description they are picking by has to be the right one.
+
+namespace {
+
+QByteArray hwListJson()
+{
+    return QByteArray(R"JSON({
+        "imager": {
+            "devices": [
+                {
+                    "name": "Raspberry Pi 5",
+                    "tags": ["pi5-64bit"],
+                    "capabilities": ["secure-boot"],
+                    "icon": "icons/pi5.png",
+                    "description": "The one with the fan header",
+                    "matching_type": "exclusive",
+                    "architecture": "arm64",
+                    "default": true
+                },
+                {
+                    "name": "Raspberry Pi 4",
+                    "tags": ["pi4-64bit"],
+                    "capabilities": [],
+                    "icon": "https://example.invalid/pi4.png",
+                    "description": "The one before that",
+                    "matching_type": "inclusive",
+                    "architecture": "arm64"
+                }
+            ]
+        },
+        "os_list": []
+    })JSON");
+}
+
+int roleFor(const QAbstractItemModel &model, const QByteArray &name)
+{
+    const QHash<int, QByteArray> names = model.roleNames();
+    for (auto it = names.cbegin(); it != names.cend(); ++it) {
+        if (it.value() == name)
+            return it.key();
+    }
+    return -1;
+}
+
+} // namespace
+
+TEST_CASE("Every field the chooser shows can be asked for by name",
+          "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(hwListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    REQUIRE(view->rowCount(QModelIndex()) == 2);
+
+    // Everything the view can name has to come back with something. A role
+    // in the map that the switch does not answer is a blank line on screen.
+    const QHash<int, QByteArray> names = view->roleNames();
+    REQUIRE(!names.isEmpty());
+    QStringList unanswered;
+    for (auto it = names.cbegin(); it != names.cend(); ++it) {
+        const QVariant value = view->data(view->index(0, 0), it.key());
+        if (!value.isValid())
+            unanswered << QString::fromUtf8(it.value());
+    }
+    CHECK(unanswered.join(QStringLiteral(", ")).toStdString() == std::string());
+}
+
+TEST_CASE("The chooser shows what the feed said", "[models][hwlist]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(hwListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    const QModelIndex first = view->index(0, 0);
+
+    CHECK(view->data(first, roleFor(*view, "name")).toString()
+          == QStringLiteral("Raspberry Pi 5"));
+    CHECK(view->data(first, roleFor(*view, "description")).toString()
+          == QStringLiteral("The one with the fan header"));
+    CHECK(view->data(first, roleFor(*view, "architecture")).toString()
+          == QStringLiteral("arm64"));
+    CHECK(view->data(first, roleFor(*view, "matching_type")).toString()
+          == QStringLiteral("exclusive"));
+    CHECK(view->data(first, roleFor(*view, "tags")).toJsonArray().size() == 1);
+    CHECK(view->data(first, roleFor(*view, "capabilities")).toJsonArray().size() == 1);
+}
+
+TEST_CASE("A row that is not there is answered with nothing",
+          "[models][hwlist]")
+{
+    // A view can ask past the end while a reload is in flight. Reading the
+    // list out of bounds is worse than an empty cell.
+    //
+    // Not reversion-checked: removing the bounds check does not produce a
+    // wrong answer, it indexes a QList out of range, which is undefined
+    // rather than observable. The case is here for what it pins, not for a
+    // failure it was watched to produce.
+    TestableImageWriter writer;
+    writer.feedOsList(hwListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    const int nameRole = roleFor(*view, "name");
+
+    CHECK_FALSE(view->data(view->index(-1, 0), nameRole).isValid());
+    CHECK_FALSE(view->data(view->index(2, 0), nameRole).isValid());
+    CHECK_FALSE(view->data(view->index(99, 0), nameRole).isValid());
+}
+
+TEST_CASE("A remote board icon is fetched through the image provider",
+          "[models][hwlist]")
+{
+    // Straight to the network the icons come back over HTTP/2 and fail; the
+    // provider is what avoids that. A board with no icon on the chooser is
+    // a row the user cannot tell apart from the next one.
+    TestableImageWriter writer;
+    writer.feedOsList(hwListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    const int iconRole = roleFor(*view, "icon");
+
+    CHECK(view->data(view->index(1, 0), iconRole).toString()
+          == QStringLiteral("image://icons/https://example.invalid/pi4.png"));
+}
+
+TEST_CASE("A bundled board icon is found from where the chooser lives",
+          "[models][hwlist]")
+{
+    // The feed names it relative to the application; the chooser is a
+    // directory further in.
+    TestableImageWriter writer;
+    writer.feedOsList(hwListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+
+    CHECK(view->data(view->index(0, 0), roleFor(*view, "icon")).toString()
+          == QStringLiteral("../icons/pi5.png"));
+}
+
+TEST_CASE("A board is marked attached only when its own chip is",
+          "[models][hwlist]")
+{
+    // The chooser marks the board that is plugged in over USB. Marking the
+    // wrong one sends the user down the rpiboot path for hardware that is
+    // not there, and leaves the board that is there looking unavailable.
+    TestableImageWriter writer;
+    writer.feedOsList(hwListJson());
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    const int attachedRole = roleFor(*view, "isUsbBootConnected");
+    const QModelIndex pi5 = view->index(0, 0);
+    const QModelIndex pi4 = view->index(1, 0);
+
+    SECTION("nothing attached") {
+        CHECK_FALSE(view->data(pi5, attachedRole).toBool());
+        CHECK_FALSE(view->data(pi4, attachedRole).toBool());
+    }
+
+    SECTION("a Pi 5 attached") {
+        model->setConnectedRpibootChips({QStringLiteral("BCM2712")});
+        CHECK(view->data(pi5, attachedRole).toBool());
+        CHECK_FALSE(view->data(pi4, attachedRole).toBool());
+    }
+
+    SECTION("a Pi 4 attached") {
+        model->setConnectedRpibootChips({QStringLiteral("BCM2711")});
+        CHECK_FALSE(view->data(pi5, attachedRole).toBool());
+        CHECK(view->data(pi4, attachedRole).toBool());
+    }
+
+    SECTION("a chip nothing on the list is built on") {
+        model->setConnectedRpibootChips({QStringLiteral("BCM2837B0-not-a-thing")});
+        CHECK_FALSE(view->data(pi5, attachedRole).toBool());
+        CHECK_FALSE(view->data(pi4, attachedRole).toBool());
+    }
+
+    SECTION("unplugged again") {
+        model->setConnectedRpibootChips({QStringLiteral("BCM2712")});
+        REQUIRE(view->data(pi5, attachedRole).toBool());
+
+        model->setConnectedRpibootChips({});
+
+        CHECK_FALSE(view->data(pi5, attachedRole).toBool());
+    }
+}
+
 TEST_CASE("With no default flagged, nothing is preselected", "[models][hwlist]")
 {
     // -1 rather than an arbitrary row: silently landing on the first entry
