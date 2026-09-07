@@ -306,6 +306,152 @@ TestCase {
         compare(wiz.hostnameConfigured, true)
     }
 
+    // -- Which step comes next ---------------------------------------------
+    //
+    // nextStep() does more than add one. It skips the optional steps the
+    // selected OS cannot use, and skips the whole customisation section when
+    // the OS supports none of it. Getting that wrong strands someone on a
+    // step for a feature their board does not have, or walks them past one
+    // they needed.
+    //
+    // The indices are deliberately spelled out rather than derived: the
+    // point is which step the user lands on, and computing the expectation
+    // the same way the code does would assert nothing.
+
+    function startAt(step) {
+        wiz.customizationSupported = true
+        wiz.secureBootAvailable = true
+        wiz.piConnectAvailable = true
+        wiz.ccRpiAvailable = true
+        wiz.ifAndFeaturesAvailable = true
+        wiz.writeAnotherMode = false
+        wiz.currentStep = step
+    }
+
+    function test_the_ordinary_path_goes_one_step_at_a_time() {
+        startAt(wiz.stepDeviceSelection)
+        wiz.nextStep()
+        compare(wiz.currentStep, wiz.stepOSSelection)
+        wiz.nextStep()
+        compare(wiz.currentStep, wiz.stepStorageSelection)
+        wiz.nextStep()
+        compare(wiz.currentStep, wiz.stepHostnameCustomization,
+                "and into customisation")
+    }
+
+    function test_an_os_without_customisation_skips_the_whole_section() {
+        // Otherwise the user is walked through hostname, locale, user, wifi
+        // and the rest for an image that cannot carry any of it.
+        startAt(wiz.stepStorageSelection)
+        wiz.customizationSupported = false
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepWriting)
+    }
+
+    function test_secure_boot_is_skipped_when_the_os_cannot_use_it() {
+        startAt(wiz.stepRemoteAccess)
+        wiz.secureBootAvailable = false
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepPiConnectCustomization,
+                "straight past secure boot")
+    }
+
+    function test_pi_connect_is_skipped_when_the_os_cannot_use_it() {
+        startAt(wiz.stepSecureBootCustomization)
+        wiz.piConnectAvailable = false
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepIfAndFeatures)
+    }
+
+    function test_interfaces_are_skipped_when_the_board_offers_none_data() {
+        // Either reason is enough on its own: the OS not supporting cc-rpi,
+        // or the board advertising no interfaces to enable.
+        return [
+            { tag: "no cc-rpi",     ccRpi: false, ifAvailable: true },
+            { tag: "no interfaces", ccRpi: true,  ifAvailable: false },
+            { tag: "neither",       ccRpi: false, ifAvailable: false }
+        ]
+    }
+
+    function test_interfaces_are_skipped_when_the_board_offers_none(data) {
+        startAt(wiz.stepPiConnectCustomization)
+        wiz.ccRpiAvailable = data.ccRpi
+        wiz.ifAndFeaturesAvailable = data.ifAvailable
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepWriting, data.tag)
+    }
+
+    function test_the_last_step_does_not_advance_past_the_end() {
+        startAt(wiz.stepDone)
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepDone)
+    }
+
+    // -- Writing a second card ---------------------------------------------
+
+    function test_write_another_goes_straight_from_the_card_to_writing() {
+        // The point of the mode: the user has already answered everything,
+        // and is only choosing where the next copy goes.
+        startAt(wiz.stepStorageSelection)
+        wiz.writeAnotherMode = true
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepWriting)
+    }
+
+    function test_write_another_is_a_one_time_shortcut() {
+        // The flag is cleared on use. Left set, the next pass through the
+        // wizard would skip customisation the user had gone back to change.
+        startAt(wiz.stepStorageSelection)
+        wiz.writeAnotherMode = true
+        wiz.nextStep()
+        compare(wiz.currentStep, wiz.stepWriting)
+
+        verify(!wiz.writeAnotherMode, "the shortcut was spent")
+
+        startAt(wiz.stepStorageSelection)
+        wiz.nextStep()
+        compare(wiz.currentStep, wiz.stepHostnameCustomization,
+                "so the next pass walks through customisation again")
+    }
+
+    // -- What the completion screen is told --------------------------------
+
+    function test_the_summary_is_captured_on_the_way_into_writing() {
+        // Taken here because the write itself clears the Connect token and
+        // other session state; the Done screen would otherwise report a
+        // configuration that no longer exists.
+        startAt(wiz.stepRemoteAccess)
+        wiz.hostnameConfigured = true
+        wiz.userConfigured = true
+        wiz.sshEnabled = true
+        wiz.wifiConfigured = false
+        wiz.secureBootAvailable = false
+        wiz.piConnectAvailable = false
+        wiz.ccRpiAvailable = false
+
+        wiz.nextStep()
+        compare(wiz.currentStep, wiz.stepWriting)
+
+        var snap = wiz.completionSnapshot
+        verify(snap, "a snapshot was taken")
+        compare(snap.hostnameConfigured, true)
+        compare(snap.userConfigured, true)
+        compare(snap.sshEnabled, true)
+        compare(snap.wifiConfigured, false)
+    }
+
     // -- The customisation substeps ----------------------------------------
 
     function test_the_base_substeps_are_always_offered() {
