@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include <QPointer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QObject>
@@ -663,7 +664,15 @@ protected:
     // CLI flag to force enable secure boot regardless of OS capabilities
     static bool _forceSecureBootEnabled;
 #ifndef CLI_ONLY_BUILD
-    QWindow *_mainWindow;
+    // QPointer, not a raw pointer: every use of this is guarded by a null
+    // check, and a raw pointer to a destroyed window passes those checks
+    // and then dereferences freed memory. The application's own window
+    // outlives the writer, so this is not reachable today -- but nothing
+    // makes that true, and the same reasoning is already why
+    // PlatformHelper holds its observers through QPointer. A QPointer goes
+    // null when the window is destroyed, which is what the existing checks
+    // were written expecting.
+    QPointer<QWindow> _mainWindow;
 #endif
 
     // Performance statistics capture
