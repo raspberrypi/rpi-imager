@@ -201,4 +201,82 @@ TestCase {
         pill.forceActiveFocus()
         verify(pill.focusItem.activeFocus)
     }
+
+    // -- Activating the help link ------------------------------------------
+    //
+    // Same five routes as the option rows, and the same reasoning about what
+    // shadowing openHelpLink() can and cannot see: tst_option_button.qml has
+    // it written out. The pill carries its own copy of the help link, so it
+    // needs its own cases -- fixing one component's routes says nothing about
+    // the other's.
+
+    Component {
+        id: pillWithHelpComponent
+
+        ImOptionPill {
+            id: helpPill
+            width: 350
+            text: "Enable SSH"
+            helpLabel: "Learn more about SSH"
+            helpUrl: "https://example.invalid/ssh-help"
+
+            property int opened: 0
+            property int toggledCount: 0
+            onToggled: helpPill.toggledCount++
+            function openHelpLink() { helpPill.opened++ }
+        }
+    }
+
+    function createWithHelp() {
+        const p = createTemporaryObject(pillWithHelpComponent, testCase)
+        verify(p, "the pill was created")
+        verify(p.helpLinkItem.visible, "the link is offered")
+        waitForRendering(p)
+        return p
+    }
+
+    function test_every_route_to_the_help_link_data() {
+        return [
+            { tag: "pointer",      how: "click" },
+            { tag: "space",        how: "key", key: Qt.Key_Space },
+            { tag: "return",       how: "key", key: Qt.Key_Return },
+            { tag: "enter",        how: "key", key: Qt.Key_Enter },
+            { tag: "press action", how: "accessible" }
+        ]
+    }
+
+    function test_every_route_to_the_help_link(data) {
+        const p = createWithHelp()
+        const link = p.helpLinkItem
+
+        if (data.how === "click") {
+            mouseClick(link)
+        } else if (data.how === "key") {
+            link.forceActiveFocus()
+            verify(link.activeFocus, "the link takes focus")
+            keyClick(data.key)
+        } else {
+            link.Accessible.pressAction()
+        }
+
+        compare(p.opened, 1,
+                data.tag + " has to open the help link, or a user who reaches "
+                + "it that way has a link that does nothing")
+    }
+
+    function test_opening_the_help_link_does_not_flip_the_switch() {
+        // The label above the link toggles the switch when tapped, and the
+        // link is a separate target sitting right under it. Reading the
+        // documentation for an option is not agreeing to it -- a pill that
+        // came on because the user clicked "learn more" is a setting written
+        // to the card that they never asked for.
+        const p = createWithHelp()
+        compare(p.checked, false, "the option starts off")
+
+        mouseClick(p.helpLinkItem)
+
+        compare(p.opened, 1, "the link opened")
+        compare(p.checked, false, "and the option was left alone")
+        compare(p.toggledCount, 0, "with nothing reported to the step")
+    }
 }

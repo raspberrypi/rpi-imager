@@ -156,4 +156,93 @@ TestCase {
         })
         compare(r.helpLinkItem.text, "Learn more about SSH keys")
     }
+
+    // -- Activating the help link ------------------------------------------
+    //
+    // Five routes reach the same action: the pointer, Enter, Return, Space and
+    // the accessibility press action. Until openHelpLink() collected them they
+    // were five copies of the same four lines, which is how one of them gets
+    // left off a newly added row -- and a keyboard user then has a link they
+    // can focus and cannot open.
+    //
+    // The routes are watched by shadowing the component's own openHelpLink()
+    // in a derived type: a derived QML method wins over the base's, including
+    // for the base's internal calls. Calling the real one would put a browser
+    // on the screen of whoever ran the suite.
+    //
+    // What the shadow can see is which routes arrive. It cannot see what the
+    // real body does with the url, because the shadow replaces that body --
+    // an assertion here on the url would be reading the test's own copy of
+    // helpUrl back, which holds whatever the component does. That the right
+    // url is opened rests on there being one call site rather than five.
+
+    Component {
+        id: rowWithHelpComponent
+
+        ImOptionButton {
+            id: helpRow
+            width: 400
+            text: "SSH keys"
+            btnText: "MANAGE"
+            helpLabel: "Learn more about SSH keys"
+            helpUrl: "https://example.invalid/ssh-help"
+
+            property int opened: 0
+            property int clickCount: 0
+            onClicked: helpRow.clickCount++
+            function openHelpLink() { helpRow.opened++ }
+        }
+    }
+
+    function createWithHelp() {
+        const r = createTemporaryObject(rowWithHelpComponent, testCase)
+        verify(r, "the row was created")
+        verify(r.helpLinkItem.visible, "the link is offered")
+        waitForRendering(r)
+        return r
+    }
+
+    function test_every_route_to_the_help_link_data() {
+        return [
+            { tag: "pointer",      how: "click" },
+            { tag: "space",        how: "key", key: Qt.Key_Space },
+            { tag: "return",       how: "key", key: Qt.Key_Return },
+            { tag: "enter",        how: "key", key: Qt.Key_Enter },
+            { tag: "press action", how: "accessible" }
+        ]
+    }
+
+    function test_every_route_to_the_help_link(data) {
+        const r = createWithHelp()
+        const link = r.helpLinkItem
+
+        if (data.how === "click") {
+            mouseClick(link)
+        } else if (data.how === "key") {
+            link.forceActiveFocus()
+            verify(link.activeFocus, "the link takes focus")
+            keyClick(data.key)
+        } else {
+            // What a screen reader does with the link. Accessible's actions
+            // are signals, so a test raises one the same way.
+            link.Accessible.pressAction()
+        }
+
+        compare(r.opened, 1,
+                data.tag + " has to open the help link, or a user who reaches "
+                + "it that way has a link that does nothing")
+    }
+
+    function test_reading_the_documentation_is_not_pressing_the_button() {
+        // The link sits under the label, the action button to its right. The
+        // row's clicked() is what the step acts on -- selecting a key file,
+        // clearing a registration -- and opening a help page must not be
+        // mistaken for asking for it.
+        const r = createWithHelp()
+
+        mouseClick(r.helpLinkItem)
+
+        compare(r.opened, 1, "the link opened")
+        compare(r.clickCount, 0, "and the row's own action did not fire")
+    }
 }

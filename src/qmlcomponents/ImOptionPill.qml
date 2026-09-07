@@ -27,6 +27,19 @@ Item {
     property alias focusItem: sw
     // Expose the help link for tab navigation (when visible)
     property alias helpLinkItem: helpText
+
+    // Opening the help link, in one place. The pointer, the three keyboard
+    // routes and the accessibility press action all arrive here, so no route
+    // can quietly drift from the others or be left off a new one. A test
+    // shadows this method to see which routes arrive, rather than launching a
+    // browser on the machine running the suite.
+    function openHelpLink() {
+        if (ImageWriterSingleton) {
+            ImageWriterSingleton.openUrl(pill.helpUrl)
+        } else {
+            Qt.openUrlExternally(pill.helpUrl)
+        }
+    }
     
     // Single source of truth for label font (used by both label and TextMetrics)
     readonly property font labelFont: Qt.font({
@@ -103,13 +116,7 @@ Item {
                 
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onTapped: {
-                        if (ImageWriterSingleton) {
-                            ImageWriterSingleton.openUrl(pill.helpUrl)
-                        } else {
-                            Qt.openUrlExternally(pill.helpUrl)
-                        }
-                    }
+                    onTapped: { pill.openHelpLink() }
                 }
                 HoverHandler {
                     id: helpHover
@@ -118,35 +125,11 @@ Item {
                 }
                 
                 // Keyboard activation
-                Keys.onEnterPressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
-                Keys.onReturnPressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
-                Keys.onSpacePressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
+                Keys.onEnterPressed: { pill.openHelpLink() }
+                Keys.onReturnPressed: { pill.openHelpLink() }
+                Keys.onSpacePressed: { pill.openHelpLink() }
                 
-                Accessible.onPressAction: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
+                Accessible.onPressAction: { pill.openHelpLink() }
             }
         }
 
