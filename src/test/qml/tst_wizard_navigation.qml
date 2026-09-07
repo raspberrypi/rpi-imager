@@ -677,6 +677,136 @@ TestCase {
                "so the card chooser leads straight to writing")
     }
 
+    // -- What a deep link is allowed to change -----------------------------
+    //
+    // A link handed to the application can ask to replace the source of
+    // every image on offer. That is not something to do quietly, so it is
+    // put to the user -- and the asking has a guard on it worth keeping:
+    // once the dialog is up for one URL, a second link naming a different
+    // one is ignored rather than swapped in underneath. The comment in the
+    // source calls that a race condition attack, and it is exactly one: open
+    // a dialog for something harmless, then change the answer as the user
+    // reaches for Switch.
+    //
+    // Driven through handleIncomingUrl() rather than by calling the handler,
+    // because the handler lives on a Connections block and is not a method
+    // of the container -- and going in at the front door exercises the
+    // validation, the signal and the QML response together.
+
+    function repoDialog() {
+        var d = findChild(wiz, "repositoryUrlDialog")
+        verify(d, "found the repository dialog")
+        return d
+    }
+
+    function sendRepoLink(url) {
+        ImageWriterSingleton.handleIncomingUrl("rpi-imager://open?repo=" + url)
+    }
+
+    function closeRepoDialog() {
+        repoDialog().close()
+        tryVerify(function () { return !repoDialog().visible }, 3000)
+    }
+
+    function test_a_repository_link_is_put_to_the_user() {
+        sendRepoLink("https://example.invalid/os_list.json")
+
+        tryVerify(function () { return repoDialog().opened }, 3000,
+                  "the dialog was raised")
+        compare(repoDialog().repoUrl, "https://example.invalid/os_list.json")
+
+        closeRepoDialog()
+    }
+
+    function test_a_repository_link_cannot_be_accepted_at_once() {
+        // Same reasoning as the erase confirmation: someone already pressing
+        // Return must not confirm a source change they never read.
+        sendRepoLink("https://example.invalid/os_list.json")
+        tryVerify(function () { return repoDialog().opened }, 3000)
+
+        verify(!repoDialog().allowAccept)
+
+        closeRepoDialog()
+    }
+
+    function test_a_malformed_repository_link_asks_nothing() {
+        // Refused in C++ before any signal is emitted, so the dialog never
+        // appears -- the user is not asked about a URL that could not be
+        // used anyway.
+        sendRepoLink("not-a-url")
+        sendRepoLink("file:///etc/passwd.json")
+
+        wait(300)
+        verify(!repoDialog().opened)
+    }
+
+    function test_a_second_link_cannot_change_the_url_being_asked_about() {
+        // The guard. Without it the dialog goes on saying one thing while
+        // Switch would apply another.
+        sendRepoLink("https://example.invalid/harmless.json")
+        tryVerify(function () { return repoDialog().opened }, 3000)
+
+        sendRepoLink("https://elsewhere.invalid/other.json")
+
+        compare(repoDialog().repoUrl, "https://example.invalid/harmless.json",
+                "still asking about the first one")
+
+        closeRepoDialog()
+    }
+
+    function test_closing_the_dialog_forgets_the_url() {
+        // Otherwise the next link arrives to a dialog that already holds a
+        // URL, and the guard above would treat it as the one on screen.
+        sendRepoLink("https://example.invalid/os_list.json")
+        tryVerify(function () { return repoDialog().opened }, 3000)
+
+        repoDialog().close()
+
+        tryVerify(function () { return repoDialog().repoUrl === "" }, 3000)
+        verify(!repoDialog().allowAccept)
+    }
+
+    // -- The Connect token, when the step that owns it is not loaded --------
+
+    function test_a_token_conflict_is_put_to_the_user() {
+        // A second link carrying a different token must not replace the one
+        // the image was set up with; the container asks instead.
+        var first = "rpuak_abcdefghijkmnpqrstuvwxyz"
+        var second = "rpuak_zyxwvutsrqpnmkjihgfedcba"
+        ImageWriterSingleton.clearConnectToken()
+        ImageWriterSingleton.handleIncomingUrl("rpi-imager://connect?auth_key=" + first)
+
+        ImageWriterSingleton.handleIncomingUrl("rpi-imager://connect?auth_key=" + second)
+
+        var d = findChild(wiz, "tokenConflictDialog")
+        verify(d, "found the conflict dialog")
+        tryVerify(function () { return d.opened }, 3000,
+                  "the user is asked rather than the token being swapped")
+        compare(ImageWriterSingleton.getRuntimeConnectToken(), first,
+                "and the token in use is untouched")
+
+        d.close()
+        tryVerify(function () { return !d.visible }, 3000)
+        ImageWriterSingleton.clearConnectToken()
+    }
+
+    function test_clearing_the_token_resets_connect_here() {
+        // Handled on the container rather than the Pi Connect step, because
+        // the token is cleared when a write finishes and that step may not
+        // be loaded -- on this path nothing else would reset the flag, and
+        // the next image would claim Connect was configured.
+        ImageWriterSingleton.handleIncomingUrl(
+            "rpi-imager://connect?auth_key=rpuak_abcdefghijkmnpqrstuvwxyz")
+        wiz.piConnectEnabled = true
+        wiz.customizationSettings.piConnectEnabled = true
+
+        ImageWriterSingleton.clearConnectToken()
+
+        tryVerify(function () { return wiz.piConnectEnabled === false }, 3000)
+        verify(wiz.customizationSettings.piConnectEnabled === undefined,
+               "and it is gone from what the generator is given")
+    }
+
     // -- The customisation substeps ----------------------------------------
 
     function test_the_base_substeps_are_always_offered() {

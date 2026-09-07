@@ -1164,6 +1164,7 @@ Item {
     // Token conflict dialog — based on your BaseDialog pattern
     BaseDialog {
         id: tokenConflictDialog
+        objectName: "tokenConflictDialog"
         parent: root
         anchors.centerIn: parent
 
@@ -1297,6 +1298,7 @@ Item {
     // Repository URL confirmation dialog — shown when a deep link contains a custom repo URL
     BaseDialog {
         id: repositoryUrlDialog
+        objectName: "repositoryUrlDialog"
         parent: root
         anchors.centerIn: parent
 
