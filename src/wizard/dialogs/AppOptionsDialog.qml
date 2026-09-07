@@ -119,6 +119,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkBeep
+                objectName: "beepToggle"
                 text: qsTr("Play sound when finished")
                 accessibleDescription: ImageWriterSingleton.isBeepAvailable() 
                     ? qsTr("Play an audio notification when the image write process completes")
@@ -132,6 +133,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkEject
+                objectName: "ejectToggle"
                 text: qsTr("Eject media when finished")
                 accessibleDescription: qsTr("Automatically eject the storage device when the write process completes successfully")
                 Layout.fillWidth: true
@@ -227,6 +229,7 @@ BaseDialog {
                 
                 Text {
                     id: rsaKeyPath
+                    objectName: "rsaKeyPathField"
                     text: ""
                     visible: false
                 }
@@ -234,6 +237,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkConnectOrg
+                objectName: "connectOrgToggle"
                 text: qsTr("Raspberry Pi Connect for Organisations")
                 accessibleDescription: qsTr("Enable the organisation-level Raspberry Pi Connect registration flow. When active, the Connect wizard step collects an organisation API key and registers each provisioned device with Connect.")
                 helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("What is this?")
@@ -269,6 +273,7 @@ BaseDialog {
             // commonly-toggled options like Beep / Eject / Disable warnings.
             ImOptionPill {
                 id: chkTelemetry
+                objectName: "telemetryToggle"
                 text: qsTr("Enable anonymous statistics (telemetry)")
                 accessibleDescription: qsTr("Send anonymous usage statistics to help improve Raspberry Pi Imager")
                 helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("What is this?")
@@ -314,6 +319,7 @@ BaseDialog {
 
             ImButton {
                 id: cancelButton
+                objectName: "optionsCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Close the options dialog without saving any changes")
                 Layout.minimumWidth: Style.buttonWidthMinimum
@@ -325,6 +331,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: saveButton
+                objectName: "optionsSaveButton"
                 text: qsTr("Save")
                 accessibleDescription: qsTr("Save the selected options and apply them to Raspberry Pi Imager")
                 Layout.minimumWidth: Style.buttonWidthMinimum
