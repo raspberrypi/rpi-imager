@@ -175,4 +175,95 @@ TestCase {
         removalDialog().close()
         tryVerify(function () { return !removalDialog().visible }, 3000)
     }
+
+    // ── Being asked for the keychain ──────────────────────────────────
+    //
+    // The keychain holds the saved Wi-Fi key and the password hash, so
+    // being read from it is worth a prompt. Two things matter about how
+    // that prompt behaves: nothing is answered until the user answers it,
+    // and dismissing it counts as a refusal. A prompt that reads as consent
+    // when waved away is worse than no prompt at all.
+
+    function keychainDialog() {
+        var d = findChild(win, "keychainPermissionDialog")
+        verify(d, "found the keychain prompt")
+        return d
+    }
+
+    SignalSpy { id: answered; signalName: "keychainPermissionResponseReceived" }
+    SignalSpy { id: granted; signalName: "accepted" }
+    SignalSpy { id: refused; signalName: "rejected" }
+
+    function armKeychainSpies() {
+        answered.target = ImageWriterSingleton
+        answered.clear()
+        granted.target = keychainDialog()
+        granted.clear()
+        refused.target = keychainDialog()
+        refused.clear()
+    }
+
+    function test_being_asked_for_the_keychain_raises_a_prompt() {
+        container().disableWarnings = false
+        armKeychainSpies()
+
+        win.onKeychainPermissionRequested()
+
+        tryVerify(function () { return keychainDialog().opened }, 3000,
+                  "the user was asked")
+        compare(answered.count, 0,
+                "and nothing was answered on their behalf")
+
+        keychainDialog().reject()
+        tryVerify(function () { return !keychainDialog().visible }, 3000)
+    }
+
+    function test_dismissing_the_prompt_is_a_refusal() {
+        // The one that matters. Escape, or clicking away, must not be read
+        // as permission to open the keychain.
+        container().disableWarnings = false
+        armKeychainSpies()
+        win.onKeychainPermissionRequested()
+        tryVerify(function () { return keychainDialog().opened }, 3000)
+
+        keychainDialog().escapePressed()
+
+        tryVerify(function () { return refused.count === 1 }, 3000,
+                  "it was refused")
+        compare(granted.count, 0, "and certainly not granted")
+        verify(!keychainDialog().userAccepted)
+    }
+
+    function test_accepting_the_prompt_grants_it() {
+        // The counterpart, so the case above is not just "nothing is ever
+        // granted".
+        container().disableWarnings = false
+        armKeychainSpies()
+        win.onKeychainPermissionRequested()
+        tryVerify(function () { return keychainDialog().opened }, 3000)
+
+        keychainDialog().accept()
+
+        tryVerify(function () { return granted.count === 1 }, 3000)
+        compare(refused.count, 0)
+        tryVerify(function () { return answered.count === 1 }, 3000,
+                  "and the answer reached the writer")
+    }
+
+    function test_with_warnings_off_the_keychain_is_granted_unasked() {
+        // The documented behaviour of the deployment-wide opt-out. Worth
+        // pinning because it is the one path that answers for the user, so
+        // it must be reached only by that setting and must actually answer
+        // rather than leaving the request hanging.
+        container().disableWarnings = true
+        armKeychainSpies()
+
+        win.onKeychainPermissionRequested()
+
+        tryVerify(function () { return answered.count === 1 }, 3000,
+                  "the request was answered")
+        verify(!keychainDialog().opened, "without asking")
+
+        container().disableWarnings = false
+    }
 }

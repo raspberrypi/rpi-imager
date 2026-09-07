@@ -341,6 +341,7 @@ ApplicationWindow {
 
     KeychainPermissionDialog {
         id: keychainpopup
+        objectName: "keychainPermissionDialog"
         parent: overlayRoot
         onAccepted: {
             ImageWriterSingleton.keychainPermissionResponse(true);
