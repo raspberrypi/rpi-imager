@@ -2327,23 +2327,20 @@ void DownloadThread::_updateBottleneckState()
     
     // Calculate current write throughput for display
     qint64 currentBytes = _bytesWritten.load();
-    static qint64 lastThroughputBytes = 0;
-    static QElapsedTimer throughputTimer;
-    static bool throughputTimerStarted = false;
-    
-    if (!throughputTimerStarted) {
-        throughputTimer.start();
-        throughputTimerStarted = true;
-        lastThroughputBytes = currentBytes;
+
+    if (!_throughputTimerStarted) {
+        _throughputTimer.start();
+        _throughputTimerStarted = true;
+        _lastThroughputBytes = currentBytes;
     } else {
-        qint64 elapsed = throughputTimer.elapsed();
+        qint64 elapsed = _throughputTimer.elapsed();
         if (elapsed >= 500) {  // Update throughput every 500ms
-            qint64 bytesDelta = currentBytes - lastThroughputBytes;
+            qint64 bytesDelta = currentBytes - _lastThroughputBytes;
             if (bytesDelta > 0 && elapsed > 0) {
                 throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
             }
-            lastThroughputBytes = currentBytes;
-            throughputTimer.restart();
+            _lastThroughputBytes = currentBytes;
+            _throughputTimer.restart();
         }
     }
     
@@ -2358,14 +2355,12 @@ void DownloadThread::_updateBottleneckState()
         // Same state, reset timer and emit periodic throughput updates
         _bottleneckTimer.restart();
         // Emit throughput updates even when state hasn't changed (every 500ms)
-        static QElapsedTimer updateTimer;
-        static bool updateTimerStarted = false;
-        if (!updateTimerStarted) {
-            updateTimer.start();
-            updateTimerStarted = true;
-        } else if (updateTimer.elapsed() >= 500) {
+        if (!_throughputUpdateTimerStarted) {
+            _throughputUpdateTimer.start();
+            _throughputUpdateTimerStarted = true;
+        } else if (_throughputUpdateTimer.elapsed() >= 500) {
             emit bottleneckStateChanged(_currentBottleneck, throughputKBps);
-            updateTimer.restart();
+            _throughputUpdateTimer.restart();
         }
     }
 }

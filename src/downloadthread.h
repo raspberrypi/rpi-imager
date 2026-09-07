@@ -362,6 +362,20 @@ protected:
     // Adaptive memory recovery state (instance members, not static, for thread safety)
     QElapsedTimer _memoryCheckTimer;
     bool _memoryCheckStarted = false;
+
+    // Throughput measurement state, for the same reason the memory-recovery
+    // state above is not static: these were function-local statics, so every
+    // DownloadThread in the process shared one timer and one byte count. A
+    // second write -- "write another card" reaches this -- began with the
+    // previous write's final byte count as its baseline, so its first delta
+    // was negative and the throughput it reported was zero. Only the
+    // "delta > 0" guard kept that from being a nonsense figure rather than
+    // an absent one.
+    QElapsedTimer _throughputTimer;
+    bool _throughputTimerStarted = false;
+    qint64 _lastThroughputBytes = 0;
+    QElapsedTimer _throughputUpdateTimer;
+    bool _throughputUpdateTimerStarted = false;
     
     // Write timing breakdown tracking (for performance hypothesis testing)
     struct WriteTimingStats {

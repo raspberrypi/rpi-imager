@@ -24,6 +24,8 @@
 
 #include <algorithm>
 #include "downloadthread.h"
+#include <thread>
+#include <chrono>
 #include <catch2/generators/catch_generators.hpp>
 #include "signal_log.h"
 #include "linux/file_operations_linux.h"
@@ -2112,6 +2114,13 @@ class SyncCountingDevice : public rpi_imager::LinuxFileOperations
 {
 public:
     bool directIo = false;
+    bool asyncSupported = false;
+    int queueDepth = 1;
+    int pendingWrites = 0;
+
+    bool IsAsyncIOSupported() const override { return asyncSupported; }
+    int GetAsyncQueueDepth() const override { return queueDepth; }
+    int GetPendingWriteCount() const override { return pendingWrites; }
     bool flushFails = false;
     bool forceSyncFails = false;
     int flushes = 0;
@@ -2272,4 +2281,115 @@ TEST_CASE("A sync that fails is recorded as having failed",
         CHECK(synced.at(0).at(1).toBool() == false);
         CHECK(thread.device->flushes == 1);
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Throughput belongs to one write, not to the process
+//
+// The figures shown while a card is written -- the rate, and whether
+// storage or the network is holding things up -- were measured through
+// function-local statics, so every DownloadThread in the process shared one
+// timer and one byte count. "Write another card" reaches this: the second
+// write began with the first write's final byte count as its baseline, so
+// its opening delta was negative and the rate it reported was zero.
+//
+// The state is per-instance now. These cases hold it there.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+class ThroughputProbe : public DownloadThread
+{
+public:
+    ThroughputProbe() : DownloadThread("file:///nonexistent", "", "")
+    {
+        device = std::make_shared<SyncCountingDevice>();
+        _file = device;
+    }
+
+    void haveWritten(qint64 bytes) { _bytesWritten = bytes; }
+    bool hasBaseline() const { return _throughputTimerStarted; }
+    qint64 baseline() const { return _lastThroughputBytes; }
+    BottleneckState bottleneck() const { return _currentBottleneck; }
+
+    std::shared_ptr<SyncCountingDevice> device;
+
+    using DownloadThread::_updateBottleneckState;
+};
+
+} // namespace
+
+TEST_CASE("A write measures its own throughput from its own start",
+          "[downloadthread][throughput]")
+{
+    // The first pass takes a baseline rather than reporting a rate, because
+    // there is nothing yet to compare against.
+    ThroughputProbe first;
+    first.haveWritten(64 * 1024 * 1024);
+    first._updateBottleneckState();
+
+    CHECK(first.hasBaseline());
+    CHECK(first.baseline() == 64 * 1024 * 1024);
+}
+
+TEST_CASE("A second write does not inherit the first one's baseline",
+          "[downloadthread][throughput]")
+{
+    // The bug this replaced. With the state shared, the second write found a
+    // baseline already set to the first write's total, and measured its own
+    // opening bytes against it.
+    ThroughputProbe first;
+    first.haveWritten(64 * 1024 * 1024);
+    first._updateBottleneckState();
+    REQUIRE(first.baseline() == 64 * 1024 * 1024);
+
+    ThroughputProbe second;
+    CHECK_FALSE(second.hasBaseline());
+
+    second.haveWritten(1 * 1024 * 1024);
+    second._updateBottleneckState();
+
+    CHECK(second.baseline() == 1 * 1024 * 1024);
+    CHECK(first.baseline() == 64 * 1024 * 1024);
+}
+
+TEST_CASE("Storage is named as the bottleneck, and unnamed again",
+          "[downloadthread][throughput]")
+{
+    // What this tells the user is why their write is slow. Naming the card
+    // when the queue is nearly empty, or staying quiet when it is full,
+    // sends them looking in the wrong place.
+    //
+    // Both directions are asserted, and in that order, because None is also
+    // the state it starts in -- a case that only checked for None would pass
+    // without the detection ever having run.
+    //
+    // The state changes are held behind 500ms of hysteresis, so that it does
+    // not flicker between causes while a write settles. There is no way to
+    // wind that timer forward, so the wait is real. Once, not per section.
+    ThroughputProbe thread;
+    thread.device->asyncSupported = true;
+    thread.device->queueDepth = 16;
+    rpi_test::SignalLog states(&thread, &DownloadThread::bottleneckStateChanged);
+
+    // A queue over three quarters full: the card cannot take writes as fast
+    // as they arrive.
+    thread.device->pendingWrites = 13;
+    thread._updateBottleneckState();
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    thread._updateBottleneckState();
+
+    REQUIRE(thread.bottleneck() == DownloadThread::BottleneckState::Storage);
+    REQUIRE(states.count() >= 1);
+    CHECK(states.at(states.count() - 1).at(0).toInt()
+          == static_cast<int>(DownloadThread::BottleneckState::Storage));
+
+    // Room in the queue again: the card has caught up and is no longer what
+    // is holding the write back.
+    thread.device->pendingWrites = 2;
+    thread._updateBottleneckState();
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    thread._updateBottleneckState();
+
+    CHECK(thread.bottleneck() == DownloadThread::BottleneckState::None);
 }
