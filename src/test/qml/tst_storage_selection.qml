@@ -46,6 +46,14 @@ TestCase {
         signalName: "nextClicked"
     }
 
+    // The step treats a refusal as nothing to do, so "nothing was selected"
+    // holds whether the dialog reported a refusal or simply went quiet. What
+    // the dialog said is watched separately.
+    SignalSpy {
+        id: refused
+        signalName: "cancelled"
+    }
+
     // selectDstItem() reads plain properties off whatever it is handed, so a
     // JS object stands in for the delegate.
     function drive(overrides) {
@@ -202,5 +210,200 @@ TestCase {
         systemDialog().confirmed()
 
         verify(filterBox.checked, "system drives are hidden again")
+    }
+
+    // ── The gate on the confirmation itself ───────────────────────────
+    //
+    // Every case above emits confirmed() or cancelled() straight at the
+    // dialog, which says what the step does with the answer and nothing
+    // about how the dialog decides. The buttons, the escape key and the
+    // Enter key in the name box were all uncovered.
+    //
+    // That is the gap that matters most in this application. The dialog is
+    // what stands between a mis-click and the disk the user's computer
+    // boots from, and the whole of its strength is that CONTINUE stays
+    // disabled until the drive's name has been typed out. If that condition
+    // ever came loose, every case above would still pass -- the dialog
+    // would open, the user would press the only red button in front of
+    // them, and their system disk would be overwritten.
+
+    function systemChild(name) {
+        var c = findChild(systemDialog(), name)
+        verify(c, "found " + name)
+        return c
+    }
+
+    function askAbout(overrides) {
+        var d = drive(overrides)
+        d.isSystem = true
+        step.selectDstItem(d)
+        tryVerify(function () { return systemDialog().opened }, 3000,
+                  "the confirmation was raised")
+        refused.target = systemDialog()
+        refused.clear()
+        return d
+    }
+
+    function test_continue_is_refused_until_the_name_is_typed() {
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+        var go = systemChild("systemDriveContinueButton")
+        verify(!go.enabled, "nothing typed yet")
+
+        systemChild("systemDriveNameInput").text = "The disk this computer"
+        verify(!go.enabled, "half of the name is not the name")
+
+        systemChild("systemDriveNameInput").text = "The disk this computer runs from"
+        verify(go.enabled, "typed out in full, so the user may proceed")
+    }
+
+    function test_what_does_not_count_as_the_name_data() {
+        return [
+            { tag: "nothing at all",   typed: "" },
+            { tag: "something else",   typed: "/dev/sdb" },
+            { tag: "the wrong case",   typed: "SDA SYSTEM DISK" },
+            { tag: "a trailing space", typed: "sda system disk " },
+            { tag: "a leading space",  typed: " sda system disk" },
+            { tag: "only the start",   typed: "sda" },
+            { tag: "a superset",       typed: "sda system disk 2" }
+        ]
+    }
+
+    function test_what_does_not_count_as_the_name(data) {
+        // Exactly, or not at all. A user who cannot be bothered to type it
+        // is a user who has not read what they are agreeing to, and a
+        // near-match is how a drive gets confirmed by autocomplete.
+        askAbout({ description: "sda system disk", device: "/dev/sda" })
+
+        systemChild("systemDriveNameInput").text = data.typed
+
+        verify(!systemChild("systemDriveContinueButton").enabled, data.tag)
+    }
+
+    function test_a_drive_with_no_name_cannot_be_confirmed_by_an_empty_box() {
+        // The name is the drive's description, and nothing guarantees there
+        // is one. With an empty name an empty box matches it, so the second
+        // half of the condition -- that there is a name at all -- is the
+        // only thing between an unnamed system drive and a dialog that
+        // opens with its red button already armed.
+        askAbout({ description: "", device: "/dev/sda" })
+
+        compare(systemChild("systemDriveNameInput").text, "",
+                "the box starts empty")
+        verify(!systemChild("systemDriveContinueButton").enabled,
+               "and an empty box does not match an empty name")
+    }
+
+    function test_pressing_continue_without_the_name_chooses_nothing() {
+        // The button is drawn disabled; it also refuses when asked
+        // directly, which is what the Enter key in the name box goes
+        // through.
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+
+        systemChild("systemDriveContinueButton").clicked()
+
+        compare(containerStub.selectedStorageName, "")
+        verify(!step.nextButtonEnabled)
+        compare(advanced.count, 0)
+        verify(systemDialog().opened, "and the question is still on screen")
+    }
+
+    function test_enter_in_the_name_box_confirms_once_it_matches() {
+        // Typing the name and pressing return is the natural way through.
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+        var box = systemChild("systemDriveNameInput")
+        box.text = "The disk this computer runs from"
+        box.forceActiveFocus()
+
+        keyClick(Qt.Key_Return)
+
+        compare(containerStub.selectedStorageName,
+                "The disk this computer runs from")
+        verify(step.nextButtonEnabled)
+    }
+
+    function test_enter_with_a_partial_name_does_nothing() {
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+        var box = systemChild("systemDriveNameInput")
+        box.text = "The disk"
+        box.forceActiveFocus()
+
+        keyClick(Qt.Key_Return)
+
+        compare(containerStub.selectedStorageName, "")
+        verify(systemDialog().opened, "the dialog stays up")
+    }
+
+    function test_pressing_continue_with_the_name_chooses_the_drive() {
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+        systemChild("systemDriveNameInput").text =
+                "The disk this computer runs from"
+
+        systemChild("systemDriveContinueButton").clicked()
+
+        compare(containerStub.selectedStorageName,
+                "The disk this computer runs from")
+        verify(step.nextButtonEnabled)
+        tryVerify(function () { return advanced.count === 1 }, 3000,
+                  "and it advanced")
+    }
+
+    function test_pressing_cancel_chooses_nothing() {
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+        // Even with the name typed out: the user changed their mind, and
+        // the name in the box is not the decision.
+        systemChild("systemDriveNameInput").text =
+                "The disk this computer runs from"
+
+        systemChild("systemDriveCancelButton").clicked()
+
+        compare(containerStub.selectedStorageName, "")
+        verify(!step.nextButtonEnabled)
+        compare(advanced.count, 0)
+        tryVerify(function () { return !systemDialog().visible }, 3000)
+        compare(refused.count, 1,
+                "and the refusal was reported rather than the dialog just "
+                + "going quiet")
+    }
+
+    function test_escape_chooses_nothing() {
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+        systemChild("systemDriveNameInput").text =
+                "The disk this computer runs from"
+
+        systemDialog().escapePressed()
+
+        compare(containerStub.selectedStorageName, "")
+        verify(!step.nextButtonEnabled)
+        compare(advanced.count, 0)
+        compare(refused.count, 1, "and it was reported as a refusal")
+    }
+
+    function test_asking_again_starts_from_an_empty_box() {
+        // The worst version of not clearing it: the user backs out, thinks
+        // better of it, clicks the same drive again -- and the dialog comes
+        // up with the name already typed and CONTINUE already armed, one
+        // stray click from erasing the disk they just declined.
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+        systemChild("systemDriveNameInput").text =
+                "The disk this computer runs from"
+        verify(systemChild("systemDriveContinueButton").enabled, "armed")
+        systemChild("systemDriveCancelButton").clicked()
+        tryVerify(function () { return !systemDialog().visible }, 3000)
+
+        askAbout({ description: "The disk this computer runs from",
+                   device: "/dev/sda" })
+
+        compare(systemChild("systemDriveNameInput").text, "",
+                "the box was cleared")
+        verify(!systemChild("systemDriveContinueButton").enabled,
+               "so the drive has to be named again")
     }
 }
