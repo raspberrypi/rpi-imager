@@ -218,4 +218,58 @@ TestCase {
     // The 'kept' branch is covered by the reopen case above: item one is
     // still in the ring there, so the landing point is left pointing at it.
 
+
+
+    // -- The escape handler a dialog gets if it does not write one ---------
+    //
+    // Every dialog in the application inherits this one. Most override it to
+    // record a refusal as well; the ones that do not rely on the default,
+    // and a default that did not close would leave a dialog with no keyboard
+    // way out of it -- on a screen the user may have reached by mistake.
+    //
+    // The component above overrides escapePressed, so it cannot exercise the
+    // default. This one deliberately does not.
+
+    Component {
+        id: plainDialogComponent
+
+        BaseDialog {
+            id: plain
+            title: "A dialog with no escape handler of its own"
+            parent: testCase
+            focus: true
+
+            ImButton { id: onlyButton; text: "Only" }
+
+            Component.onCompleted: {
+                registerFocusGroup("buttons", function () { return [onlyButton] }, 0)
+            }
+        }
+    }
+
+    function test_a_dialog_without_its_own_handler_still_closes_on_escape() {
+        const dlg = createTemporaryObject(plainDialogComponent, testCase)
+        verify(dlg, "the dialog was created")
+        dlg.open()
+        tryVerify(function () { return dlg.opened }, 3000, "the dialog opened")
+
+        dlg.escapePressed()
+
+        tryVerify(function () { return !dlg.visible }, 3000,
+                  "the default handler closed it")
+    }
+
+    function test_the_default_handler_does_not_reopen_or_throw() {
+        // Escape arriving twice -- a held key, or a second press while the
+        // close is still running -- has to be harmless.
+        const dlg = createTemporaryObject(plainDialogComponent, testCase)
+        verify(dlg)
+        dlg.open()
+        tryVerify(function () { return dlg.opened }, 3000)
+
+        dlg.escapePressed()
+        dlg.escapePressed()
+
+        tryVerify(function () { return !dlg.visible }, 3000)
+    }
 }

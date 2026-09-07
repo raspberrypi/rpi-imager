@@ -217,4 +217,70 @@ TestCase {
         compare(field.text, "pass word", "scrubbed out of the text itself")
         compare(field.value, "pass word", "and out of what the caller reads")
     }
+
+
+    // -- Pressing the eye, rather than setting the property ----------------
+    //
+    // The cases above set passwordVisible, or use the F2 shortcut. The
+    // button's own handler was uncovered, and it does one thing more than
+    // flip the property: it puts focus back in the text field.
+    //
+    // Without that the caret leaves the password when the user checks what
+    // they typed, and the next character they type goes to the button
+    // instead of the field. They see nothing appear and press it again.
+
+    function revealButton(field) {
+        const b = findChild(field, "passwordRevealButton")
+        verify(b, "found the reveal button")
+        return b
+    }
+
+    function test_pressing_the_eye_reveals_and_hides_again() {
+        const field = create({ text: "hunter2" })
+
+        revealButton(field).clicked()
+        verify(field.passwordVisible, "pressing it reveals")
+        compare(field.textField.echoMode, TextInput.Normal)
+
+        revealButton(field).clicked()
+        verify(!field.passwordVisible, "and pressing it again hides")
+        compare(field.textField.echoMode, TextInput.Password)
+    }
+
+    // Clicked with the mouse, not by raising clicked(): a programmatic press
+    // never moves focus at all, so a case using it could not tell the caret
+    // staying put from it never having moved.
+    //
+    // Even driven this way, the caret is held in place by two things: the
+    // button is Qt.NoFocus, so it cannot take focus, and the handler puts
+    // focus back anyway. Removing either alone fails nothing. Removing both
+    // -- opening the focus policy and dropping the restore -- does fail
+    // these two, which is the property they are here for.
+    function test_pressing_the_eye_leaves_the_caret_in_the_password() {
+        const field = create({ text: "hunter2" })
+        field.textField.forceActiveFocus()
+        waitForRendering(field)
+
+        mouseClick(revealButton(field))
+        waitForRendering(field)
+
+        verify(field.textField.activeFocus,
+               "the field still has the caret, so typing carries on")
+    }
+
+    function test_typing_after_a_reveal_goes_into_the_password() {
+        // The same property, end to end, which is what the user would
+        // notice: press the eye, keep typing, and the characters land.
+        const field = create({ text: "hunter" })
+        field.textField.forceActiveFocus()
+        field.textField.cursorPosition = field.text.length
+        waitForRendering(field)
+
+        mouseClick(revealButton(field))
+        waitForRendering(field)
+        keyClick(Qt.Key_2)
+
+        compare(field.text, "hunter2",
+               "the keystroke went into the field, not the button")
+    }
 }
