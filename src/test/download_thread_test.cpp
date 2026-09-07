@@ -2393,3 +2393,163 @@ TEST_CASE("Storage is named as the bottleneck, and unnamed again",
 
     CHECK(thread.bottleneck() == DownloadThread::BottleneckState::None);
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Verification: reading the card back and not believing the write
+//
+// _verify() reads the image back off the device and compares its hash with
+// what was written. The mismatch branch is the entire reason the feature
+// exists, and it was uncovered -- so the one outcome nothing tested was the
+// one where verification has something to say.
+//
+// A device that takes writes and reads back something else is the
+// counterfeit card, and it is why this is not optional for a lot of people.
+// A real device cannot be made to do that, so the read is faked.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Reads back whatever it is told to, regardless of what was written.
+class ReadbackDevice : public rpi_imager::LinuxFileOperations
+{
+public:
+    QByteArray readsBack;
+    bool readFails = false;
+    std::uint64_t written = 0;
+
+    std::uint64_t Tell() const override { return written; }
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        _pos = position;
+        return rpi_imager::FileError::kSuccess;
+    }
+    void PrepareForSequentialRead(std::uint64_t, std::uint64_t) override {}
+
+    rpi_imager::FileError ReadSequential(std::uint8_t* data, std::size_t size,
+                                         std::size_t& bytes_read) override
+    {
+        if (readFails)
+            return rpi_imager::FileError::kReadError;
+        const std::size_t available =
+            static_cast<std::size_t>(readsBack.size()) > _pos
+                ? static_cast<std::size_t>(readsBack.size()) - _pos : 0;
+        bytes_read = std::min(size, available);
+        memcpy(data, readsBack.constData() + _pos, bytes_read);
+        _pos += bytes_read;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+private:
+    std::size_t _pos = 0;
+};
+
+class Verification : public DownloadThread
+{
+public:
+    Verification() : DownloadThread("file:///nonexistent", "", "")
+    {
+        device = std::make_shared<ReadbackDevice>();
+        _file = device;
+        _verifyEnabled = true;
+    }
+
+    // What the write believed it put down.
+    void wroteThis(const QByteArray &data)
+    {
+        _writehash.addData(data.constData(), data.size());
+        device->written = static_cast<std::uint64_t>(data.size());
+    }
+
+    void cardReadsBack(const QByteArray &data) { device->readsBack = data; }
+
+    std::shared_ptr<ReadbackDevice> device;
+
+    using DownloadThread::_verify;
+};
+
+} // namespace
+
+TEST_CASE("Verification passes when the card holds what was written",
+          "[downloadthread][verify]")
+{
+    const QByteArray image(64 * 1024, '\xA5');
+
+    Verification thread;
+    rpi_test::SignalLog verified(&thread, &DownloadThread::eventVerify);
+    thread.wroteThis(image);
+    thread.cardReadsBack(image);
+
+    CHECK(thread._verify());
+
+    REQUIRE(verified.count() == 1);
+    CHECK(verified.at(0).at(1).toBool() == true);
+}
+
+TEST_CASE("Verification fails when the card holds something else",
+          "[downloadthread][verify]")
+{
+    // The counterfeit card: the write was accepted, the read gives back
+    // something different. Without this the user is told the write
+    // succeeded and finds out when the board will not boot.
+    QByteArray image(64 * 1024, '\xA5');
+    QByteArray whatItActuallyHolds = image;
+    whatItActuallyHolds[40000] = '\x00';   // one byte, past the start
+
+    Verification thread;
+    rpi_test::SignalLog verified(&thread, &DownloadThread::eventVerify);
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.wroteThis(image);
+    thread.cardReadsBack(whatItActuallyHolds);
+
+    CHECK_FALSE(thread._verify());
+
+    REQUIRE(verified.count() == 1);
+    CHECK(verified.at(0).at(1).toBool() == false);
+    REQUIRE(failed.count() == 1);
+    CHECK_THAT(failed.at(0).at(0).toString().toStdString(),
+               Catch::Matchers::ContainsSubstring("different from what was written"));
+}
+
+TEST_CASE("Verification reports both hashes either way",
+          "[downloadthread][verify]")
+{
+    // The event carries the two digests, and a support conversation about a
+    // failed write starts with them. A mismatch reported with equal hashes,
+    // or with one of them empty, ends that conversation early.
+    QByteArray image(32 * 1024, '\x5A');
+    QByteArray different = image;
+    different[1000] = '\xFF';
+
+    Verification thread;
+    rpi_test::SignalLog verified(&thread, &DownloadThread::eventVerify);
+    thread.wroteThis(image);
+    thread.cardReadsBack(different);
+
+    thread._verify();
+
+    REQUIRE(verified.count() == 1);
+    const QString expected = verified.at(0).at(2).toString();
+    const QString found = verified.at(0).at(3).toString();
+    CHECK(expected.length() > 0);
+    CHECK(found.length() > 0);
+    CHECK(expected != found);
+}
+
+TEST_CASE("A card that cannot be read back is called broken",
+          "[downloadthread][verify]")
+{
+    // Distinct from a mismatch: nothing came back at all, so there is
+    // nothing to compare and the device itself is the problem.
+    const QByteArray image(16 * 1024, '\x11');
+
+    Verification thread;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    thread.wroteThis(image);
+    thread.device->readFails = true;
+
+    CHECK_FALSE(thread._verify());
+
+    REQUIRE(failed.count() == 1);
+    CHECK_THAT(failed.at(0).at(0).toString().toStdString(),
+               Catch::Matchers::ContainsSubstring("may be broken"));
+}
