@@ -57,6 +57,7 @@ WizardStepBase {
                 
                 ImTextField {
                     id: fieldHostname
+                    objectName: "hostnameField"
                     Layout.fillWidth: true
                     placeholderText: qsTr("Enter your hostname")
                     font.pointSize: Style.fontSizeInput
