@@ -520,3 +520,138 @@ TEST_CASE("The coordinated config honours its own budget", "[memory]")
         CHECK(share <= 0.60);
     }
 }
+
+// ---------------------------------------------------------------------------
+// How often the writer syncs, for a machine of a given size
+// ---------------------------------------------------------------------------
+//
+// The tiers were uncovered but for whichever one the machine running the
+// tests falls into. They are the whole of the policy: how often the writer
+// syncs decides how much written data is in flight at once. Too much on a
+// small machine and the kernel reclaims during a write, or kills the
+// application outright and leaves a half-written card; too little on a large
+// one and the write is slowed for nothing.
+//
+// syncConfigurationFor() takes the memory figure rather than reading this
+// machine's, so each tier can be asked for directly.
+
+TEST_CASE("A small machine syncs often and in small pieces",
+          "[memory][sync-config]")
+{
+    // Under 2GB. A Pi Zero, or a small virtual machine.
+    const auto config = SystemMemoryManager::syncConfigurationFor(1024);
+
+    CHECK(config.syncIntervalMs == 3000);
+    CHECK(config.syncIntervalBytes <= 32LL * 1024 * 1024);
+    CHECK(config.memoryTier.contains(QStringLiteral("Low memory")));
+}
+
+TEST_CASE("A middling machine takes the standard interval",
+          "[memory][sync-config]")
+{
+    const auto config = SystemMemoryManager::syncConfigurationFor(4096);
+
+    CHECK(config.syncIntervalMs == 5000);
+    CHECK(config.memoryTier.contains(QStringLiteral("Medium memory")));
+}
+
+TEST_CASE("A large machine syncs less often and in larger pieces",
+          "[memory][sync-config]")
+{
+    const auto config = SystemMemoryManager::syncConfigurationFor(16384);
+
+    CHECK(config.syncIntervalMs == 7000);
+    CHECK(config.memoryTier.contains(QStringLiteral("High memory")));
+
+    const auto small = SystemMemoryManager::syncConfigurationFor(1024);
+    CHECK(config.syncIntervalBytes > small.syncIntervalBytes);
+}
+
+TEST_CASE("The tiers are ordered by how much is written between syncs",
+          "[memory][sync-config]")
+{
+    // The property the three cases above describe one at a time: more
+    // memory never means syncing more often, whatever the arithmetic in
+    // each tier works out to.
+    const auto small = SystemMemoryManager::syncConfigurationFor(1024);
+    const auto middling = SystemMemoryManager::syncConfigurationFor(4096);
+    const auto large = SystemMemoryManager::syncConfigurationFor(16384);
+
+    CHECK(small.syncIntervalMs <= middling.syncIntervalMs);
+    CHECK(middling.syncIntervalMs <= large.syncIntervalMs);
+    CHECK(small.syncIntervalBytes <= middling.syncIntervalBytes);
+    CHECK(middling.syncIntervalBytes <= large.syncIntervalBytes);
+}
+
+TEST_CASE("A machine at the tier boundaries lands on one side of them",
+          "[memory][sync-config]")
+{
+    // Exactly 2GB and exactly 8GB. Off-by-one here means a machine gets the
+    // policy meant for the tier below or above it.
+    CHECK(SystemMemoryManager::syncConfigurationFor(2047)
+              .memoryTier.contains(QStringLiteral("Low memory")));
+    CHECK(SystemMemoryManager::syncConfigurationFor(2048)
+              .memoryTier.contains(QStringLiteral("Medium memory")));
+    CHECK(SystemMemoryManager::syncConfigurationFor(8191)
+              .memoryTier.contains(QStringLiteral("Medium memory")));
+    CHECK(SystemMemoryManager::syncConfigurationFor(8192)
+              .memoryTier.contains(QStringLiteral("High memory")));
+}
+
+// The two cases below pin outcomes rather than either guard behind them.
+// The floor is applied twice -- once inside the low tier and once as a
+// bound on the result -- and so is the cap, so removing either alone
+// changes nothing. Removing both floors does fail these, which is the
+// property they are here for.
+TEST_CASE("However little memory is reported, something is written between syncs",
+          "[memory][sync-config]")
+{
+    // A syncing interval of nothing would sync after every write, which on
+    // a card is slow enough to look like a hang. Reported memory can be
+    // absurd -- a container with a tiny limit, or a failed read coming back
+    // as zero.
+    for (const qint64 reported : {0LL, 1LL, 64LL, 256LL}) {
+        const auto config = SystemMemoryManager::syncConfigurationFor(reported);
+        INFO("reported memory: " << reported << "MB");
+        CHECK(config.syncIntervalBytes >= 16LL * 1024 * 1024);
+        CHECK(config.syncIntervalMs > 0);
+    }
+}
+
+TEST_CASE("However much memory is reported, the interval is capped",
+          "[memory][sync-config]")
+{
+    // The other end. Holding a quarter of a gigabyte of written data before
+    // syncing is already as much as is useful; more only widens the window
+    // in which pulling the card loses work.
+    for (const qint64 reported : {65536LL, 1024LL * 1024, 64LL * 1024 * 1024}) {
+        const auto config = SystemMemoryManager::syncConfigurationFor(reported);
+        INFO("reported memory: " << reported << "MB");
+        CHECK(config.syncIntervalBytes <= 256LL * 1024 * 1024);
+    }
+}
+
+TEST_CASE("A negative memory reading does not produce a negative interval",
+          "[memory][sync-config]")
+{
+    // What a failed platform read looks like. A negative interval compares
+    // wrongly against a byte count and would sync either never or always.
+    const auto config = SystemMemoryManager::syncConfigurationFor(-1);
+
+    CHECK(config.syncIntervalBytes >= 16LL * 1024 * 1024);
+    CHECK(config.syncIntervalMs > 0);
+}
+
+TEST_CASE("The machine's own configuration is one of the three",
+          "[memory][sync-config]")
+{
+    // Ties the pure function back to the one that reads this machine, so
+    // the two cannot drift apart.
+    const auto measured = mm().calculateSyncConfiguration();
+    const auto expected =
+        SystemMemoryManager::syncConfigurationFor(mm().getTotalMemoryMB());
+
+    CHECK(measured.syncIntervalBytes == expected.syncIntervalBytes);
+    CHECK(measured.syncIntervalMs == expected.syncIntervalMs);
+    CHECK(measured.memoryTier == expected.memoryTier);
+}
