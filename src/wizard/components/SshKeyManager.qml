@@ -311,6 +311,7 @@ ColumnLayout {
             
             ImTextField {
                 id: addKeyField
+                objectName: "sshAddKeyField"
                 Layout.fillWidth: true
                 placeholderText: qsTr("Paste key or click BROWSE to select file")
                 font.pointSize: Style.fontSizeInput
@@ -327,6 +328,7 @@ ColumnLayout {
             
             ImButton {
                 id: addOrBrowseButton
+                objectName: "sshAddOrBrowseButton"
                 text: addKeyField.value.length > 0 ? qsTr("Add") : CommonStrings.browse
                 Layout.minimumWidth: 80
                 onClicked: {
@@ -360,6 +362,7 @@ ColumnLayout {
     // File dialog for browsing keys
     ImFileDialog {
         id: browseKeyFileDialog
+        objectName: "sshBrowseKeyFileDialog"
         parent: root.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select SSH Public Key")

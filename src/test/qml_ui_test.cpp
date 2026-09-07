@@ -38,6 +38,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFile>
+#include <QTemporaryDir>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -146,6 +147,48 @@ public:
 // is what those probes call. It exists only when RPI_QML_COVERAGE_HITS names
 // somewhere to write the result, so an ordinary run neither instruments nor
 // counts anything.
+// Puts a file on disk for a case that needs one.
+//
+// Several things a user does end at the filesystem -- choosing a custom
+// image, an SSH public key, a repository json -- and the code behind them
+// refuses anything that is not a real file, which is correct and has its
+// own tests. QML cannot write one, so the harness does, into a directory
+// that goes away with the run. Like TestAccessibility, this is here rather
+// than on anything shipped: production code should not carry a file writer
+// whose only caller is a test.
+class TestFiles : public QObject
+{
+    Q_OBJECT
+
+public:
+    // Returns the file:// URL of the written file, or an empty string if it
+    // could not be written -- which a case should treat as a reason to fail
+    // rather than to carry on against a path that is not there.
+    Q_INVOKABLE QString write(const QString &name, const QString &contents)
+    {
+        if (!_dir.isValid())
+            return QString();
+        const QString filePath = _dir.filePath(name);
+        QFile f(filePath);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return QString();
+        const QByteArray bytes = contents.toUtf8();
+        if (f.write(bytes) != bytes.size())
+            return QString();
+        f.close();
+        return QUrl::fromLocalFile(filePath).toString();
+    }
+
+    // The same file as a plain path, for the calls that want one.
+    Q_INVOKABLE QString localPath(const QString &name) const
+    {
+        return _dir.isValid() ? _dir.filePath(name) : QString();
+    }
+
+private:
+    QTemporaryDir _dir;
+};
+
 class QmlCoverage : public QObject
 {
     Q_OBJECT
@@ -246,6 +289,11 @@ public slots:
                                                     [](QQmlEngine *, QJSEngine *) -> QObject * {
                                                         return new TestAccessibility;
                                                     });
+
+        qmlRegisterSingletonType<TestFiles>(kUri, 1, 0, "TestFiles",
+                                            [](QQmlEngine *, QJSEngine *) -> QObject * {
+                                                return new TestFiles;
+                                            });
     }
 
     void qmlEngineAvailable(QQmlEngine *engine)

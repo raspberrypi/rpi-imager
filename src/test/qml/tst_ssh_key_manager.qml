@@ -221,4 +221,134 @@ TestCase {
         compare(mgr.keys.length, 4)
         compare(mgr.keys[3], rsaKey)
     }
+
+
+    // ── Getting a key in there in the first place ─────────────────────
+    //
+    // Everything above drives addKey() and addKeysFromFile() directly. The
+    // three handlers a user actually goes through -- Enter in the paste
+    // field, the Add/Browse button, and the file picker coming back -- had
+    // never run.
+    //
+    // That hop failing is quiet in the worst way. The key is pasted, the
+    // field looks like it was accepted, the card is written, and the board
+    // comes up with an authorized_keys the user is not in. They find out
+    // when SSH refuses them, on a headless machine with no other way in.
+
+    function field() {
+        var f = findChild(mgr, "sshAddKeyField")
+        verify(f, "found the key field")
+        return f
+    }
+
+    function addOrBrowse() {
+        var b = findChild(mgr, "sshAddOrBrowseButton")
+        verify(b, "found the add/browse button")
+        return b
+    }
+
+    function test_pressing_return_in_the_field_adds_the_key() {
+        field().text = rsaKey
+        field().forceActiveFocus()
+
+        keyClick(Qt.Key_Return)
+
+        compare(mgr.keys.length, 1, "the key was added")
+        compare(mgr.keys[0], rsaKey)
+    }
+
+    function test_the_field_is_emptied_so_the_next_key_can_be_pasted() {
+        // Left as it was, the next paste lands on the end of the last key
+        // and produces one long line that is not a key at all.
+        field().text = rsaKey
+        field().forceActiveFocus()
+        keyClick(Qt.Key_Return)
+
+        compare(field().text, "", "the field is ready for the next one")
+
+        field().text = edKey
+        keyClick(Qt.Key_Return)
+
+        compare(mgr.keys.length, 2, "and the second key went in on its own")
+        compare(mgr.keys[1], edKey)
+    }
+
+    function test_return_on_an_empty_field_adds_nothing() {
+        // An empty line in authorized_keys is harmless; an empty entry in
+        // the list the user is looking at is not, because it reads as a key
+        // they have added.
+        field().text = ""
+        field().forceActiveFocus()
+
+        keyClick(Qt.Key_Return)
+
+        compare(mgr.keys.length, 0)
+    }
+
+    function test_the_button_adds_what_is_in_the_field() {
+        field().text = edKey
+
+        addOrBrowse().clicked()
+
+        compare(mgr.keys.length, 1)
+        compare(mgr.keys[0], edKey)
+        compare(field().text, "", "and empties the field behind it")
+    }
+
+    function test_the_button_says_which_of_the_two_things_it_will_do() {
+        // One button, two jobs. Saying "Browse" while it would add, or the
+        // other way round, is how a pasted key gets thrown away by someone
+        // who thought they were opening a file dialog.
+        field().text = ""
+        compare(addOrBrowse().text, CommonStrings.browse)
+
+        field().text = rsaKey
+        compare(addOrBrowse().text, "Add")
+    }
+
+    // ── A key file chosen from the picker ─────────────────────────────
+
+    function test_a_key_file_is_read_and_its_keys_added() {
+        var url = TestFiles.write("authorized_keys",
+                                  rsaKey + "\n" + edKey + "\n")
+        verify(url.length > 0, "the fixture file was written")
+        var picker = findChild(mgr, "sshBrowseKeyFileDialog")
+        verify(picker, "found the key picker")
+
+        picker.selectedFile = url
+        picker.accepted()
+
+        compare(mgr.keys.length, 2, "both keys in the file were added")
+        compare(mgr.keys[0], rsaKey)
+        compare(mgr.keys[1], edKey)
+    }
+
+    function test_a_key_file_that_is_not_there_adds_nothing() {
+        // The picker can hand back a path that has since gone.
+        //
+        // Defended twice: the handler checks the read came back with
+        // something, and splitKeys() would produce no keys from an empty
+        // string anyway. Removing the handler's check fails nothing, so no
+        // claim is made for it -- what this pins is the outcome.
+        var picker = findChild(mgr, "sshBrowseKeyFileDialog")
+        verify(picker, "found the key picker")
+
+        picker.selectedFile = "file:///tmp/rpi-imager-no-such-key.pub"
+        picker.accepted()
+
+        compare(mgr.keys.length, 0)
+    }
+
+    function test_choosing_a_file_twice_does_not_double_the_keys() {
+        // Browsing again after a mis-click is an ordinary thing to do.
+        var url = TestFiles.write("authorized_keys_dup", rsaKey + "\n")
+        verify(url.length > 0)
+        var picker = findChild(mgr, "sshBrowseKeyFileDialog")
+
+        picker.selectedFile = url
+        picker.accepted()
+        picker.accepted()
+
+        compare(mgr.keys.length, 1)
+    }
 }
