@@ -551,6 +551,128 @@ TestCase {
         compare(wiz.currentStep, wiz.stepStorageSelection, data.tag)
     }
 
+    // -- Starting over, and writing another copy ---------------------------
+    //
+    // Two resets with deliberately different reach. Starting over clears
+    // everything, including the writer's own source and destination -- left
+    // set, a later write has a target nobody chose. Writing another copy
+    // keeps the board, the OS and the customisation, because the user
+    // answered all of that already, and clears only what must not be reused:
+    // the card, and the Connect flag whose token has already been discarded.
+
+    function test_starting_over_forgets_every_choice() {
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedDeviceName = "Raspberry Pi 5"
+        wiz.selectedOsName = "Raspberry Pi OS"
+        wiz.selectedStorageName = "Generic SD"
+        wiz.hostnameConfigured = true
+        wiz.userConfigured = true
+        wiz.sshEnabled = true
+        wiz.piConnectEnabled = true
+
+        wiz.resetWizard()
+
+        compare(wiz.selectedDeviceName, "")
+        compare(wiz.selectedOsName, "")
+        compare(wiz.selectedStorageName, "")
+        compare(wiz.hostnameConfigured, false)
+        compare(wiz.userConfigured, false)
+        compare(wiz.sshEnabled, false)
+        compare(wiz.piConnectEnabled, false)
+        verify(!wiz.isStepPermissible(wiz.stepOSSelection),
+               "and nothing past the first step is reachable again")
+    }
+
+    function test_starting_over_leaves_the_writer_with_no_target() {
+        // The wizard's own fields are not the whole story: ImageWriter holds
+        // the source and destination it was given, and a stale destination is
+        // a drive the user did not choose for the next write.
+        ImageWriterSingleton.setSrc("file:///tmp/whatever.img")
+        ImageWriterSingleton.setDst("/dev/null", 1024 * 1024)
+        verify(ImageWriterSingleton.readyToWrite(), "the writer had a target")
+
+        wiz.resetWizard()
+
+        verify(!ImageWriterSingleton.readyToWrite(),
+               "and does not after starting over")
+    }
+
+    function test_starting_over_forgets_what_was_previously_selected() {
+        // previousDeviceName is what decides whether the next selection
+        // counts as a change; left set, the first choice of the new run
+        // would invalidate steps that were never configured.
+        //
+        // This documents the outcome rather than guarding the line that
+        // produces it. resetWizard() assigns these explicitly, but it also
+        // clears selectedDeviceName, and the change handler then sets the
+        // remembered name from it -- so removing the explicit assignments
+        // leaves the behaviour intact and this case green. Both routes would
+        // have to go for it to fail, which is worth knowing before anyone
+        // reads a passing run as proof that either one is load-bearing.
+        selectDeviceFresh("Raspberry Pi 5")
+        compare(wiz.previousDeviceName, "Raspberry Pi 5")
+
+        wiz.resetWizard()
+
+        compare(wiz.previousDeviceName, "")
+        compare(wiz.previousOsName, "")
+    }
+
+    function test_writing_another_copy_keeps_the_answers_and_drops_the_card() {
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.selectedDeviceName = "Raspberry Pi 5"
+        wiz.selectedOsName = "Raspberry Pi OS"
+        wiz.selectedStorageName = "The first card"
+        wiz.hostnameConfigured = true
+        wiz.userConfigured = true
+
+        wiz.resetToWriteStep()
+
+        compare(wiz.selectedStorageName, "", "the card has to be chosen again")
+        compare(wiz.selectedDeviceName, "Raspberry Pi 5", "the board is kept")
+        compare(wiz.selectedOsName, "Raspberry Pi OS", "so is the OS")
+        compare(wiz.hostnameConfigured, true, "and the customisation")
+        compare(wiz.userConfigured, true)
+        compare(wiz.currentStep, wiz.stepStorageSelection,
+                "and it opens on the card chooser")
+    }
+
+    function test_writing_another_copy_does_not_reuse_the_first_card() {
+        // Same point at the writer level: the destination must be cleared, or
+        // pressing on would write a second image over the card just finished.
+        ImageWriterSingleton.setSrc("file:///tmp/whatever.img")
+        ImageWriterSingleton.setDst("/dev/null", 1024 * 1024)
+        verify(ImageWriterSingleton.readyToWrite())
+
+        wiz.resetToWriteStep()
+
+        verify(!ImageWriterSingleton.readyToWrite(),
+               "no destination is carried over")
+    }
+
+    function test_writing_another_copy_drops_the_connect_enrolment() {
+        // The Connect token is session-only and is discarded when the write
+        // finishes. Leaving the flag set would tell the generator to enrol
+        // the second board with a token that no longer exists.
+        wiz.piConnectEnabled = true
+        wiz.customizationSettings.piConnectEnabled = true
+
+        wiz.resetToWriteStep()
+
+        compare(wiz.piConnectEnabled, false)
+        verify(wiz.customizationSettings.piConnectEnabled === undefined,
+               "and it is removed from what the generator is given")
+    }
+
+    function test_writing_another_copy_arms_the_shortcut() {
+        wiz.resetToWriteStep()
+
+        verify(wiz.writeAnotherMode,
+               "so the card chooser leads straight to writing")
+    }
+
     // -- The customisation substeps ----------------------------------------
 
     function test_the_base_substeps_are_always_offered() {
