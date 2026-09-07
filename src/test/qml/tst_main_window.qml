@@ -266,4 +266,207 @@ TestCase {
 
         container().disableWarnings = false
     }
+
+
+    // ── From the writer to the screen ─────────────────────────────────
+    //
+    // C++ invokes these methods on the window by name, and each hands its
+    // value to the wizard, which hands it to the writing step.
+    // tst_write_progress covers the second hop by calling the container
+    // directly, which left the hop from the window -- the only route any of
+    // this takes -- with nothing exercising it.
+    //
+    // A relay lost there is a progress bar that never moves while the card
+    // is being written and no error to explain it: the user is left with a
+    // screen that looks stuck through a ten-minute write, and the usual
+    // response to that is to pull the card out.
+
+    function onWritingStep() {
+        for (var i = container().stepDeviceSelection;
+                 i <= container().stepDone; i++)
+            container().markStepPermissible(i)
+        container().selectedDeviceName = "Raspberry Pi 5"
+        container().selectedOsName = "Raspberry Pi OS (64-bit)"
+        container().selectedStorageName = "Generic Mass-Storage 32 GB"
+        container().jumpToStep(container().stepWriting)
+        compare(container().currentStep, container().stepWriting,
+                "the writing step is showing")
+        // onFinalizing lands in a state the step counts as a write running,
+        // which is what the progress display is gated on.
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () {
+            var s = findChild(win, "writingStep")
+            return s && s.isWriting
+        }, 3000, "the step sees a write running")
+    }
+
+    function progressBar() {
+        var b = findChild(win, "writeProgressBar")
+        verify(b, "the progress bar was found")
+        return b
+    }
+
+    function progressText() {
+        var t = findChild(win, "writeProgressText")
+        verify(t, "the progress text was found")
+        return t
+    }
+
+    function test_progress_reaches_the_screen_data() {
+        return [
+            { tag: "writing",   call: "onWriteProgress",
+              now: 55, total: 100, says: "55%" },
+            { tag: "verifying", call: "onVerifyProgress",
+              now: 70, total: 100, says: "70%" }
+        ]
+    }
+
+    function test_progress_reaches_the_screen(data) {
+        onWritingStep()
+
+        win[data.call](data.now, data.total)
+
+        compare(progressBar().value, data.now,
+                data.tag + " moves the bar")
+        verify(String(progressText().text).indexOf(data.says) !== -1,
+               "and the text says how far: got \"" + progressText().text
+               + "\", wanted " + data.says)
+    }
+
+    function test_download_progress_deliberately_does_not_move_the_bar() {
+        // It relays like the others -- the window is where C++ calls it --
+        // but the writing step drops it on purpose: the bar reports bytes
+        // actually on the card, which is the number the user needs before
+        // pulling it out, and a download that ran ahead of the write would
+        // have the bar go backwards.
+        //
+        // So this pins the intent, not the relay. Emptying the relay leaves
+        // this case passing, because both ends of it do nothing -- measured.
+        // What it would catch is the writing step starting to draw download
+        // progress on the same bar.
+        onWritingStep()
+        win.onWriteProgress(30, 100)
+        compare(progressBar().value, 30, "the bar is showing the write")
+
+        win.onDownloadProgress(90, 100)
+
+        compare(progressBar().value, 30,
+                "the download did not overwrite it")
+    }
+
+    function test_the_status_message_reaches_the_screen() {
+        // What is shown before there is any progress to show -- unmounting,
+        // hashing, waiting on the card. Without it the screen says nothing
+        // at all for the first part of a write.
+        onWritingStep()
+
+        win.onPreparationStatusUpdate("Unmounting drive")
+
+        compare(String(progressText().text), "Unmounting drive")
+    }
+
+    function test_finalising_reaches_the_screen() {
+        // The last phase, where the data is on its way out of the cache and
+        // the card must not be pulled out. The screen has to say so.
+        //
+        // The bar is driven off 100 first: the setup gets the step into a
+        // writing state through the writer's own finalizing signal, which
+        // already puts it at 100, so an assertion made straight after that
+        // would hold whether this relay arrived or not.
+        onWritingStep()
+        win.onWriteProgress(30, 100)
+        compare(progressBar().value, 30, "the bar is somewhere else first")
+
+        win.onFinalizing()
+
+        compare(progressBar().value, 100, "the write is complete")
+        compare(String(progressText().text), "Finalising...",
+                "and the screen says what is still happening")
+    }
+
+    function test_a_cancelled_write_puts_the_user_back_on_the_write_screen() {
+        // Cancelling can arrive while the user is somewhere else -- they
+        // walked back through the sidebar. The summary of what happened is
+        // on the writing step, so that is where they have to be to see it.
+        onWritingStep()
+        container().jumpToStep(container().stepStorageSelection)
+        compare(container().currentStep, container().stepStorageSelection)
+
+        win.onCancelled()
+
+        compare(container().currentStep, container().stepWriting,
+                "back on the screen that says what happened")
+    }
+
+    function test_network_details_are_kept_off_the_desktop_build() {
+        // The network banner exists for the embedded build, where there is
+        // no desktop to show connection state. On a desktop it would be a
+        // second, possibly disagreeing, copy of what the system already
+        // shows.
+        if (ImageWriterSingleton.isEmbeddedMode()) {
+            skip("this is an embedded build, where the banner is wanted")
+            return
+        }
+        container().networkInfoText = "set by something else"
+
+        win.onNetworkInfo("192.168.1.50 -- wlan0")
+
+        compare(container().networkInfoText, "set by something else",
+                "the banner was left alone")
+    }
+
+    // ── Reaching the application options ──────────────────────────────
+    //
+    // The gear button is on the first two steps and is the only way to the
+    // options. The button raises a signal on the wizard; the window is what
+    // creates the dialog and opens it. That hop was uncovered, so the gear
+    // doing nothing at all would not have failed a test.
+
+    function appOptions() {
+        var d = findChild(win, "appOptionsDialog")
+        verify(d, "found the options dialog")
+        return d
+    }
+
+    function test_asking_for_the_options_opens_them() {
+        container().appOptionsRequested()
+
+        tryVerify(function () {
+            var d = findChild(win, "appOptionsDialog")
+            return d && d.opened
+        }, 5000, "the options dialog came up")
+
+        appOptions().close()
+        tryVerify(function () { return !appOptions().visible }, 3000)
+    }
+
+    function test_finishing_the_wizard_returns_to_the_beginning() {
+        // "Write another" comes back through here. Left where it was, the
+        // user would be looking at the completion screen of the card they
+        // just wrote.
+        container().currentStep = container().stepDone
+
+        container().wizardCompleted()
+
+        compare(container().currentStep, 0,
+                "back at the start, ready for the next card")
+    }
+
+    function test_the_debug_shortcut_opens_the_debug_options() {
+        // Ctrl+Alt+S, and deliberately undocumented. Worth a case because
+        // of how it is written: the dialog is behind a Loader that is only
+        // switched on here, and initialize() is called on the item in the
+        // same breath. If that ever stopped being available immediately the
+        // shortcut would throw instead of opening anything.
+        keyClick(Qt.Key_S, Qt.ControlModifier | Qt.AltModifier)
+
+        tryVerify(function () {
+            var d = findChild(win, "debugOptionsDialog")
+            return d && d.opened
+        }, 5000, "the debug options came up")
+
+        var dlg = findChild(win, "debugOptionsDialog")
+        dlg.close()
+        tryVerify(function () { return !dlg.visible }, 3000)
+    }
 }

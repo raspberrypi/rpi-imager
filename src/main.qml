@@ -467,6 +467,7 @@ ApplicationWindow {
         id: appOptionsLoader
         active: false
         sourceComponent: AppOptionsDialog {
+            objectName: "appOptionsDialog"
             parent: overlayRoot
             wizardContainer: wizardContainer
         }
@@ -476,6 +477,7 @@ ApplicationWindow {
         id: debugOptionsLoader
         active: false
         sourceComponent: DebugOptionsDialog {
+            objectName: "debugOptionsDialog"
             parent: overlayRoot
             wizardContainer: wizardContainer
         }
