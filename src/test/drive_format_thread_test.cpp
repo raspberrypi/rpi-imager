@@ -397,8 +397,13 @@ TEST_CASE("Cluster size follows the card's capacity", "[format][geometry]")
     };
 
     // One size inside each band the formatter distinguishes.
+    //
+    // The smallest band used to be sampled at 16 MB, which the formatter now
+    // refuses: a partition that small cannot hold the 65,525 clusters FAT32
+    // requires at any cluster size, so what it wrote there was never a valid
+    // FAT32. 40 MB is the smallest of these bands that can be.
     const Band bands[] = {
-        {"16 MB",  16ull  * 1024 * 1024,        1},
+        {"40 MB",  40ull  * 1024 * 1024,        1},
         {"100 MB", 100ull * 1024 * 1024,        2},
         {"1 GB",   1024ull * 1024 * 1024,       8},
         {"10 GB",  10ull * 1024 * 1024 * 1024, 16},
@@ -473,38 +478,87 @@ TEST_CASE("The FSInfo sector is written and signed", "[format][geometry]")
 
 TEST_CASE("A device too small to hold a filesystem is refused", "[format][geometry]")
 {
+    // FAT32 needs 65,525 clusters before it is FAT32 at all, and below about
+    // 37 MB no cluster size reaches that. Reporting success and leaving a
+    // card carrying something that claims FAT32 and is not one is the worse
+    // of the two failures, so these are refused rather than written.
+    //
+    // This case used to accept either answer and check with fsck if the
+    // format went ahead, because the formatter would happily write a volume
+    // of 1,984 clusters. fsck.fat does not enforce the minimum either, so it
+    // passed.
+    const quint64 sizes[] = {
+        64ull * 1024,               // far below even the partition offset
+        4ull * 1024 * 1024,         // below the 4 MB offset the partition starts at
+        16ull * 1024 * 1024,        // room for a partition, too few clusters
+        36ull * 1024 * 1024,        // just under the smallest valid FAT32
+    };
+
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
-    const QString path = QDir(dir.path()).filePath(QStringLiteral("tiny.img"));
 
-    QFile f(path);
-    REQUIRE(f.open(QIODevice::WriteOnly));
-    REQUIRE(f.resize(64 * 1024));
-    f.close();
+    for (const quint64 bytes : sizes) {
+        INFO("device size: " << bytes << " bytes");
+        const QString path = QDir(dir.path()).filePath(
+            QStringLiteral("tiny-%1.img").arg(bytes));
 
-    rpi_imager::DiskFormatter formatter;
-    const auto result = formatter.FormatDrive(path.toStdString());
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.resize(qint64(bytes)));
+        f.close();
 
-    if (!result.has_value()) {
-        SUCCEED("refused outright, which is one correct answer");
-        return;
+        rpi_imager::DiskFormatter formatter;
+        const auto result = formatter.FormatDrive(path.toStdString());
+
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error() == rpi_imager::FormatError::kInsufficientSpace);
+
+        // And it said so before touching the device, so a card the user
+        // plugged in by mistake comes back the way it went in.
+        QFile after(path);
+        REQUIRE(after.open(QIODevice::ReadOnly));
+        const QByteArray head = after.read(512);
+        after.close();
+        CHECK(head == QByteArray(head.size(), '\0'));
+
+        QFile::remove(path);
     }
+}
 
-    // It did not refuse. Then what it wrote has to be a filesystem, because
-    // reporting success and leaving an unreadable card is the worse of the
-    // two failures. FAT32 has a minimum cluster count and 64 KB is far below
-    // it, so this is the interesting case.
-    if (!haveFsck())
-        SKIP("fsck.vfat is not installed, so the result cannot be checked");
+TEST_CASE("The smallest accepted card still holds a valid FAT32", "[format][geometry]")
+{
+    // The other side of the refusal above: just over the boundary the format
+    // goes ahead, and what it writes has to be a real FAT32 -- enough
+    // clusters, and a FAT long enough to hold an entry for each of them.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("smallest.img"));
 
-    QFile f2(path);
-    REQUIRE(f2.open(QIODevice::ReadOnly));
-    const QByteArray mbr = f2.read(512);
-    f2.close();
-    REQUIRE(mbr.size() == 512);
+    const Formatted f = formatSizedImage(path, 40ull * 1024 * 1024);
+    REQUIRE(f.ok);
 
-    QString fsckOutput;
-    const bool clean = partitionPassesFsck(path, readLe32(mbr, 0x1BE + 8), &fsckOutput);
-    INFO("fsck said: " << fsckOutput.toStdString());
-    CHECK(clean);
+    const quint32 totalSectors = readLe32(f.bootSector, 32);
+    const quint32 sectorsPerFat = readLe32(f.bootSector, 36);
+    const quint8 sectorsPerCluster = quint8(f.bootSector.at(13));
+    const quint8 numFats = quint8(f.bootSector.at(16));
+    const quint16 reserved = readLe16(f.bootSector, 14);
+
+    REQUIRE(sectorsPerCluster > 0);
+    REQUIRE(numFats > 0);
+    const quint64 overhead = reserved + quint64(numFats) * sectorsPerFat;
+    REQUIRE(overhead < totalSectors);
+
+    // The cluster count a driver derives from those fields.
+    const quint64 clusters = (totalSectors - overhead) / sectorsPerCluster;
+    CHECK(clusters >= 65525);
+
+    // And a FAT with an entry for every one of them, plus the two reserved.
+    CHECK(quint64(sectorsPerFat) * 512 / 4 >= clusters + 2);
+
+    if (haveFsck()) {
+        QString fsckOutput;
+        const bool clean = partitionPassesFsck(path, f.partitionStartLba, &fsckOutput);
+        INFO("fsck said: " << fsckOutput.toStdString());
+        CHECK(clean);
+    }
 }

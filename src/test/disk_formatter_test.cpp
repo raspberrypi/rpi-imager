@@ -193,6 +193,7 @@ class DiskFormatterTest {
     all_passed &= TestWriteFailureIsReported();
     all_passed &= TestDeviceErrorsReachTheUser();
     all_passed &= TestPartitionTableAndFilesystemAgree();
+    all_passed &= TestAcceptedDevicesGetAValidFat32();
     
     if (all_passed) {
       std::cout << "All tests passed!\n";
@@ -1004,6 +1005,144 @@ class DiskFormatterTest {
 
     if (all_passed)
       std::cout << "✅ the partition table and the filesystem agree at every size\n";
+    return all_passed;
+  }
+
+  // FAT32 is defined by how many clusters the volume has, not by what its boot
+  // sector claims. Below 65525 the specification says the volume is FAT16, and
+  // a driver that enforces that will reject or misread one labelled FAT32.
+  // Linux's vfat driver does not enforce it -- which is why the 64 MB image the
+  // cases above format mounted cleanly, passed fsck.fat, and still held only
+  // 60,944 clusters. It was not a filesystem Windows would accept.
+  //
+  // So the rule is: every device the formatter accepts must come out a valid
+  // FAT32, and any device it cannot manage that for must be refused. There is
+  // no third outcome. The cluster count is recomputed here from the fields
+  // written to the boot sector, the way a driver would, rather than by asking
+  // the formatter what it meant to do.
+  static bool TestAcceptedDevicesGetAValidFat32() {
+    std::cout << "Testing that an accepted device gets a real FAT32...\n";
+
+    constexpr std::uint32_t kMinimumClusters = 65525;
+    constexpr std::uint32_t kMaximumClusters = 268435444;  // FAT32's ceiling
+    constexpr std::uint64_t kMiB = 1024ULL * 1024;
+    constexpr std::uint64_t kGiB = 1024ULL * kMiB;
+    constexpr std::uint64_t kStartSector = 8192;
+
+    const std::uint64_t kSizes[] = {
+      64 * 1024, 1 * kMiB, 4 * kMiB, 5 * kMiB, 16 * kMiB, 32 * kMiB,
+      36 * kMiB, 37 * kMiB, 40 * kMiB, 48 * kMiB, 64 * kMiB, 96 * kMiB,
+      128 * kMiB, 256 * kMiB, 260 * kMiB, 512 * kMiB,
+      1 * kGiB, 2 * kGiB, 4 * kGiB, 8 * kGiB, 16 * kGiB, 32 * kGiB,
+      64 * kGiB, 128 * kGiB, 256 * kGiB, 1024 * kGiB, 2048 * kGiB,
+    };
+
+    bool all_passed = true;
+    int accepted = 0;
+    int refused = 0;
+
+    for (std::uint64_t size : kSizes) {
+      auto device = std::make_unique<ScriptedDevice>(size);
+      auto* raw = device.get();
+      // Stop after the boot sector: every field read below is in it, and the
+      // FAT copies for a large card run to hundreds of megabytes.
+      device->FailWrite(3, FileError::kWriteError);
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatDrive("/dev/fake");
+
+      const auto* boot = raw->writeAt(kStartSector * 512);
+      if (!result && result.error() == FormatError::kInsufficientSpace) {
+        ++refused;
+        if (boot != nullptr) {
+          std::cout << "❌ " << (size / kMiB)
+                    << " MB was refused but a boot sector was written anyway\n";
+          all_passed = false;
+        }
+        continue;
+      }
+      if (boot == nullptr) {
+        std::cout << "❌ " << (size / kMiB)
+                  << " MB was neither refused nor given a boot sector\n";
+        all_passed = false;
+        continue;
+      }
+      ++accepted;
+
+      // Read the volume back the way a FAT32 driver computes its cluster
+      // count: total sectors, less the reserved region and both FATs, divided
+      // by the cluster size.
+      const std::uint32_t total_sectors =
+          le32(boot->head, offsetof(Fat32BootSector, total_sectors_32));
+      const std::uint32_t sectors_per_fat =
+          le32(boot->head, offsetof(Fat32BootSector, sectors_per_fat_32));
+      const unsigned sectors_per_cluster =
+          boot->head[offsetof(Fat32BootSector, sectors_per_cluster)];
+      const unsigned num_fats = boot->head[offsetof(Fat32BootSector, num_fats)];
+      const unsigned reserved =
+          boot->head[offsetof(Fat32BootSector, reserved_sectors)] |
+          (boot->head[offsetof(Fat32BootSector, reserved_sectors) + 1] << 8);
+
+      if (sectors_per_cluster == 0 || num_fats == 0 || reserved == 0) {
+        std::cout << "❌ " << (size / kMiB) << " MB: boot sector describes "
+                  << sectors_per_cluster << " sectors per cluster, " << num_fats
+                  << " FATs, " << reserved << " reserved sectors\n";
+        all_passed = false;
+        continue;
+      }
+      // A cluster size has to be a power of two for FAT32.
+      if ((sectors_per_cluster & (sectors_per_cluster - 1)) != 0) {
+        std::cout << "❌ " << (size / kMiB) << " MB: " << sectors_per_cluster
+                  << " sectors per cluster is not a power of two\n";
+        all_passed = false;
+      }
+
+      const std::uint64_t overhead =
+          reserved + std::uint64_t{num_fats} * sectors_per_fat;
+      if (overhead >= total_sectors) {
+        std::cout << "❌ " << (size / kMiB) << " MB: the reserved region and "
+                     "FATs (" << overhead << " sectors) fill the whole "
+                  << total_sectors << " sector partition\n";
+        all_passed = false;
+        continue;
+      }
+      const std::uint64_t clusters =
+          (total_sectors - overhead) / sectors_per_cluster;
+
+      if (clusters < kMinimumClusters) {
+        std::cout << "❌ " << (size / kMiB) << " MB was accepted but holds only "
+                  << clusters << " clusters, under the " << kMinimumClusters
+                  << " FAT32 requires -- what was written is not a FAT32\n";
+        all_passed = false;
+      }
+      if (clusters > kMaximumClusters) {
+        std::cout << "❌ " << (size / kMiB) << " MB holds " << clusters
+                  << " clusters, over the " << kMaximumClusters
+                  << " FAT32 can address\n";
+        all_passed = false;
+      }
+      // The FAT has to be long enough to hold an entry for every cluster it
+      // claims, or the last clusters have nowhere to record their chain.
+      const std::uint64_t fat_capacity =
+          std::uint64_t{sectors_per_fat} * 512 / 4;
+      if (fat_capacity < clusters + 2) {
+        std::cout << "❌ " << (size / kMiB) << " MB: each FAT holds "
+                  << fat_capacity << " entries but the volume has " << clusters
+                  << " clusters to track\n";
+        all_passed = false;
+      }
+    }
+
+    // Both outcomes have to actually occur, or this test is only exercising
+    // one of them.
+    if (accepted == 0 || refused == 0) {
+      std::cout << "❌ the sizes tried produced " << accepted << " accepted and "
+                << refused << " refused; both are meant to be covered\n";
+      all_passed = false;
+    }
+
+    if (all_passed)
+      std::cout << "✅ every accepted device gets a valid FAT32 (" << accepted
+                << " accepted, " << refused << " refused)\n";
     return all_passed;
   }
 };

@@ -72,6 +72,14 @@ struct Fat32Config {
   std::uint32_t volume_id = 0x12345678;
 };
 
+// What a partition of a given size works out to at a given cluster size.
+// Both the cluster size chosen for a card and the length of its FATs come out
+// of the same arithmetic, so they are computed together.
+struct Fat32Geometry {
+  std::uint32_t sectors_per_fat;
+  std::uint32_t cluster_count;
+};
+
 // MBR partition entry
 struct __attribute__((packed)) MbrPartitionEntry {
   std::uint8_t status;
@@ -159,6 +167,14 @@ class DiskFormatter {
   static constexpr std::uint32_t kMinimumPartitionSectors = 2048;  // 1MB
   static constexpr std::uint8_t kFat32PartitionType = 0x0C;    // FAT32 LBA
 
+  // FAT32 is defined by its cluster count, not by what the boot sector claims:
+  // the specification reserves volumes with fewer clusters than this for
+  // FAT16, and a driver that enforces the rule -- Windows' does -- will reject
+  // or misread a volume that says FAT32 with fewer. Linux's vfat driver does
+  // not enforce it, which is how the 64 MB image these tests format mounted
+  // cleanly, passed fsck.fat, and still held only 60,944 clusters.
+  static constexpr std::uint32_t kMinimumFat32Clusters = 65525;
+
   std::unique_ptr<FileOperations> file_ops_;
 
   // Convert FileError to FormatError
@@ -209,6 +225,18 @@ class DiskFormatter {
   // Utility functions
   Fat32Config CalculateFat32Config(std::uint32_t partition_size_sectors) const;
   std::uint32_t CalculateSectorsPerFat(const Fat32Config& config) const;
+
+  // The FAT length and data cluster count a partition works out to. One
+  // function so the cluster size chosen in CalculateFat32Config and the FAT
+  // length written into the boot sector cannot be derived differently.
+  static Fat32Geometry ComputeGeometry(std::uint32_t partition_sectors,
+                                       std::uint32_t sectors_per_cluster,
+                                       std::uint16_t reserved_sectors,
+                                       std::uint8_t num_fats);
+
+  // Whether a partition this size can hold a FAT32 at all, at the cluster
+  // size CalculateFat32Config would pick for it.
+  bool CanHoldFat32(std::uint32_t partition_sectors) const;
   
   Result<void> WriteAtOffset(
       int fd,
