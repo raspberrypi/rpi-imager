@@ -199,4 +199,100 @@ TestCase {
         compare(fakeContainer.customizationSettings.capitalCity, aCity)
         verify(!fakeContainer.localeConfigured)
     }
+
+    // ── Using the controls, rather than setting the flags ─────────────
+    //
+    // The cases above set userChangedKeyboard and userChangedTimezone
+    // directly, which says what the step does with them and nothing about
+    // how they come to be set. The three handlers that set them -- one per
+    // combo box -- were uncovered.
+    //
+    // That is the whole hop the user actually performs. Drop the keyboard
+    // combo's handler and every case above still passes, while a real user
+    // who picks their layout by hand has it silently replaced the next time
+    // they touch the city, and finds out at the login prompt of a board
+    // they can no longer reach.
+    //
+    // Picking from a combo box is the `activated` signal, which Qt reserves
+    // for a choice a person made: assigning currentIndex does not raise it,
+    // exactly as assigning `checked` is not a click. So the index is set and
+    // the signal raised, in that order, which is what the control does.
+
+    function pick(comboName, text) {
+        var combo = child(comboName)
+        var idx = combo.find(text)
+        verify(idx !== -1, "the list offers " + text)
+        combo.currentIndex = idx
+        combo.activated(idx)
+        return combo
+    }
+
+    function anotherEntry(comboName, notThis) {
+        // Any entry in the list that is not the one already showing, so the
+        // choice is a change rather than a no-op.
+        var combo = child(comboName)
+        for (var i = 0; i < combo.count; i++) {
+            var t = combo.textAt(i)
+            if (t !== notThis)
+                return t
+        }
+        return ""
+    }
+
+    function test_picking_a_city_from_the_list_fills_the_rest_in() {
+        // The convenience itself, through the control rather than by
+        // calling the handler. Without it the two fields below stay empty
+        // however many cities the user tries.
+        var combo = child("localeCapitalCityCombo")
+        var idx = combo.find(aCity)
+        verify(idx !== -1)
+        combo.currentIndex = idx
+
+        combo.activated(idx)
+
+        // The handler is deferred with Qt.callLater so the combo's text has
+        // settled before it is read.
+        tryVerify(function () {
+            return child("localeTimezoneCombo").editText === itsLocale.timezone
+        }, 3000, "the timezone was filled in")
+        compare(child("localeKeyboardCombo").editText, itsLocale.keyboard)
+    }
+
+    function test_a_keyboard_picked_from_the_list_is_not_overwritten() {
+        // The end-to-end version of the case that matters.
+        var other = anotherEntry("localeKeyboardCombo", itsLocale.keyboard)
+        verify(other.length > 0, "the list has a layout other than the "
+               + "recommended one")
+
+        pick("localeKeyboardCombo", other)
+        chooseCity(aCity)
+
+        compare(child("localeKeyboardCombo").editText, other,
+                "the layout the user picked survived the city choice")
+    }
+
+    function test_a_timezone_picked_from_the_list_is_not_overwritten() {
+        var other = anotherEntry("localeTimezoneCombo", itsLocale.timezone)
+        verify(other.length > 0, "the list has a zone other than the "
+               + "recommended one")
+
+        pick("localeTimezoneCombo", other)
+        chooseCity(aCity)
+
+        compare(child("localeTimezoneCombo").editText, other)
+    }
+
+    function test_picking_the_keyboard_does_not_pin_the_timezone_too() {
+        // The two flags are separate, and a user who fixed one still wants
+        // the other filled in for them.
+        var other = anotherEntry("localeKeyboardCombo", itsLocale.keyboard)
+        verify(other.length > 0)
+
+        pick("localeKeyboardCombo", other)
+        chooseCity(aCity)
+
+        compare(child("localeKeyboardCombo").editText, other)
+        compare(child("localeTimezoneCombo").editText, itsLocale.timezone,
+                "the timezone was still filled in from the city")
+    }
 }
