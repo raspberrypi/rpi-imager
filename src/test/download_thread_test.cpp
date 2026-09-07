@@ -3102,3 +3102,263 @@ TEST_CASE("Secure boot packaging leaves no signature behind when it refuses",
 
     setConfiguredRsaKey(QString());
 }
+
+// ---------------------------------------------------------------------------
+// Resuming an interrupted download
+// ---------------------------------------------------------------------------
+//
+// A connection that drops part-way is the normal case on a poor link, and
+// DownloadThread is built to survive it: it reconnects, sets
+// CURLOPT_RESUME_FROM_LARGE to how far it had got, and adds that offset to
+// everything the progress callback reports afterwards.
+//
+// Get any of that wrong and the failure is quiet. Restarting from nothing
+// wastes the download but at least writes the right bytes; resuming without
+// accounting for the offset writes the remainder over the beginning, so the
+// card ends up with a hole in the middle of the image and the write still
+// reports success. The board then fails to boot for no visible reason.
+//
+// The server here answers the first GET with a full Content-Length and then
+// sends fewer bytes than it promised before hanging up, which is what curl
+// reports as a partial transfer, and honours Range on everything after.
+
+TEST_CASE("An interrupted download resumes and writes the whole image",
+          "[download][http][resume]")
+{
+    ScratchDir scratch;
+    // Big enough that the drop lands well inside it, and a pattern rather than
+    // a constant so bytes written at the wrong offset do not happen to match.
+    const QByteArray payload = patternOfSize(3 * 1024 * 1024, 131);
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("flaky.img")), payload));
+
+    rpi_test::ResumableHttpServer server(scratch.filePath(QStringLiteral(".")),
+                                         1024 * 1024);
+    if (!rpi_test::havePython())
+        SKIP("python3 is not installed, so no local HTTP server can be started");
+    if (!server.isRunning())
+        SKIP("the resumable HTTP server did not start");
+
+    const QString dest = scratch.filePath(QStringLiteral("resume-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(payload.size() + (1024 * 1024), '\0')));
+
+    DownloadThread dt(server.urlFor(QStringLiteral("flaky.img")), dest.toUtf8(),
+                      QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setUserAgent("rpi-imager-test/1.0");
+    rpi_test::SignalLog retried(&dt, &DownloadThread::eventNetworkRetry);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    // The retry actually happened, so this is not the plain path in disguise.
+    CHECK(retried.count() >= 1);
+
+    // And the card carries the image, not the image with its middle
+    // overwritten by its own tail.
+    QFile written(dest);
+    REQUIRE(written.open(QIODevice::ReadOnly));
+    const QByteArray onCard = written.read(payload.size());
+    written.close();
+    REQUIRE(onCard.size() == payload.size());
+    if (onCard != payload) {
+        // Say where it first went wrong rather than dumping three megabytes.
+        int at = 0;
+        while (at < payload.size() && onCard.at(at) == payload.at(at))
+            ++at;
+        INFO("first mismatch at byte " << at << " of " << payload.size());
+        CHECK(onCard == payload);
+    } else {
+        CHECK(onCard == payload);
+    }
+}
+
+TEST_CASE("A download interrupted twice still writes the whole image",
+          "[download][http][resume]")
+{
+    // What a single drop does not reach: the arithmetic behind the resume
+    // offset.
+    //
+    // The progress callback reports _startOffset + what curl reports, and the
+    // next retry sets _startOffset from that same figure. So with one drop the
+    // image comes out right whether or not the offset is added -- curl's own
+    // count is enough. With two, the second resume starts from wherever the
+    // first left off *according to the callback*, and if that is not the true
+    // position the remainder lands at the wrong offset: a hole in the middle of
+    // the image, and a write that still reports success.
+    //
+    // The second failure comes within five seconds of the first, so the retry
+    // loop sleeps before reconnecting. That is the code's own back-off, not
+    // padding, and it makes this case take about five seconds.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(3 * 1024 * 1024, 197);
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("flaky2.img")), payload));
+
+    // Two drops, the second a different distance in, so the offsets differ.
+    rpi_test::ResumableHttpServer server(scratch.filePath(QStringLiteral(".")),
+                                         768 * 1024, 2);
+    if (!rpi_test::havePython())
+        SKIP("python3 is not installed, so no local HTTP server can be started");
+    if (!server.isRunning())
+        SKIP("the resumable HTTP server did not start");
+
+    const QString dest = scratch.filePath(QStringLiteral("resume-twice.img"));
+    REQUIRE(writeFile(dest, QByteArray(payload.size() + (1024 * 1024), '\0')));
+
+    DownloadThread dt(server.urlFor(QStringLiteral("flaky2.img")), dest.toUtf8(),
+                      QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setUserAgent("rpi-imager-test/1.0");
+
+    rpi_test::SignalLog retried(&dt, &DownloadThread::eventNetworkRetry);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    CHECK(retried.count() >= 2);
+
+    QFile written(dest);
+    REQUIRE(written.open(QIODevice::ReadOnly));
+    const QByteArray onCard = written.read(payload.size());
+    written.close();
+    REQUIRE(onCard.size() == payload.size());
+    if (onCard != payload) {
+        int at = 0;
+        while (at < payload.size() && onCard.at(at) == payload.at(at))
+            ++at;
+        INFO("first mismatch at byte " << at << " of " << payload.size());
+    }
+    CHECK(onCard == payload);
+}
+
+// ---------------------------------------------------------------------------
+// An async submission that fails, and the buffer it is not allowed to free
+// ---------------------------------------------------------------------------
+//
+// On the async-with-copy path _writeFile allocates an aligned buffer, copies
+// the incoming block into it, and hands it to AsyncWriteSequential with a
+// callback that frees it. The interface promises that callback runs exactly
+// once on every path the call can return by -- bad descriptor, async
+// unavailable, a previous async error, cancellation, no queue entry, submit
+// failure -- so the caller must not free the buffer when submission fails.
+//
+// It used to. The comment left in its place records what that cost: the double
+// free fires on every async submission failure, which is exactly what a card
+// starting to error mid-write produces, so the process went down with "double
+// free or corruption" instead of reporting the write error. The user lost the
+// one message that would have told them what had happened.
+//
+// Nothing covered the contract. These cases drive a submission failure through
+// that path; re-adding the free makes the process abort, which is a blunt
+// reversion signal but an unambiguous one.
+
+class FailingAsyncDevice : public rpi_imager::LinuxFileOperations
+{
+public:
+    int asyncSubmissions = 0;
+    int callbackInvocations = 0;
+    int syncWrites = 0;
+    bool submissionFails = true;
+
+    bool IsAsyncIOSupported() const override { return true; }
+    int GetAsyncQueueDepth() const override { return 16; }
+    bool SetAsyncQueueDepth(int) override { return true; }
+    int GetPendingWriteCount() const override { return 0; }
+    bool IsOpen() const override { return true; }
+    rpi_imager::FileError Flush() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Close() override { return rpi_imager::FileError::kSuccess; }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t) override
+    {
+        ++syncWrites;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+    // Honours the documented contract: the callback runs once whatever is
+    // returned. A fake that skipped it on failure would leak the buffer and
+    // hide the very thing under test.
+    rpi_imager::FileError AsyncWriteSequential(const std::uint8_t *, std::size_t size,
+                                               AsyncWriteCallback callback) override
+    {
+        ++asyncSubmissions;
+        const rpi_imager::FileError result = submissionFails
+            ? rpi_imager::FileError::kWriteError
+            : rpi_imager::FileError::kSuccess;
+        if (callback) {
+            ++callbackInvocations;
+            callback(result, result == rpi_imager::FileError::kSuccess ? size : 0);
+        }
+        return result;
+    }
+};
+
+class AsyncWriter : public DownloadThread
+{
+public:
+    AsyncWriter() : DownloadThread("file:///nonexistent", "", "")
+    {
+        device = std::make_shared<FailingAsyncDevice>();
+        _file = device;
+        _debugAsyncIO = true;
+        // Past the first block, so _writeFile does the write rather than
+        // holding the partition table back.
+        _firstBlock = static_cast<char *>(qMallocAligned(512, 4096));
+        _firstBlockSize = 512;
+        ::memset(_firstBlock, 0, 512);
+    }
+
+    std::shared_ptr<FailingAsyncDevice> device;
+
+    using DownloadThread::_writeFile;
+};
+
+TEST_CASE("An async submission failure does not take the process with it",
+          "[downloadthread][async]")
+{
+    AsyncWriter thread;
+    const QByteArray block(64 * 1024, '\x33');
+
+    // No completion callback, so this is the async-with-copy path: the buffer
+    // is owned by the callback, not by _writeFile.
+    const size_t written = thread._writeFile(block.constData(), block.size());
+
+    CHECK(thread.device->asyncSubmissions == 1);
+    CHECK(thread.device->callbackInvocations == 1);
+    CHECK(written == 0);
+}
+
+TEST_CASE("Repeated async submission failures stay survivable",
+          "[downloadthread][async]")
+{
+    // The failure mode this guards fires on every submission, so a card that
+    // has started erroring produces a run of them. One was enough to abort
+    // before; a run is what a user would actually hit.
+    AsyncWriter thread;
+    const QByteArray block(64 * 1024, '\x44');
+
+    for (int i = 0; i < 16; ++i)
+        CHECK(thread._writeFile(block.constData(), block.size()) == 0);
+
+    CHECK(thread.device->asyncSubmissions == 16);
+    CHECK(thread.device->callbackInvocations == 16);
+}
+
+TEST_CASE("A successful async submission reports the block as written",
+          "[downloadthread][async]")
+{
+    // The other side, so the cases above are not passing because the async
+    // path is never reached.
+    AsyncWriter thread;
+    thread.device->submissionFails = false;
+    const QByteArray block(64 * 1024, '\x55');
+
+    const size_t written = thread._writeFile(block.constData(), block.size());
+
+    CHECK(thread.device->asyncSubmissions == 1);
+    CHECK(written == static_cast<size_t>(block.size()));
+    CHECK(thread.device->syncWrites == 0);
+}

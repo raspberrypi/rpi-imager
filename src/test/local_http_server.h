@@ -73,6 +73,104 @@ private:
     int _port = 0;
 };
 
+// A server that drops the first transfer part-way and honours Range on the
+// retry, for the resume path.
+//
+// DownloadThread reconnects when curl reports a partial transfer, sets
+// CURLOPT_RESUME_FROM_LARGE to how far it had got, and adds that offset to
+// everything the progress callback reports afterwards. Get any of that wrong
+// and a flaky connection either restarts the download from nothing or, worse,
+// writes the resumed bytes at the wrong offset -- so the card ends up with a
+// hole in it and the write still reports success.
+//
+// Python's SimpleHTTPRequestHandler ignores Range entirely, so this is a
+// handler of its own: it answers the first GET with a full Content-Length and
+// then sends fewer bytes than it promised before closing, which is what curl
+// reports as CURLE_PARTIAL_FILE, and answers every request after that
+// properly, honouring Range with a 206.
+class ResumableHttpServer
+{
+public:
+    // dropAfterBytes: how much of each dropped response's body is sent before
+    // hanging up. dropCount: how many responses to drop before answering in
+    // full (default one).
+    ResumableHttpServer(const QString &directory, int dropAfterBytes,
+                        int dropCount = 1)
+    {
+        static const char *kScript =
+            "import http.server, socketserver, sys, os\n"
+            "root, drop, drops = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])\n"
+            "state = {'dropped': 0}\n"
+            "class H(http.server.BaseHTTPRequestHandler):\n"
+            "    protocol_version = 'HTTP/1.1'\n"
+            "    def log_message(self, *a): pass\n"
+            "    def do_GET(self):\n"
+            "        full = os.path.join(root, self.path.lstrip('/'))\n"
+            "        if not os.path.isfile(full):\n"
+            "            self.send_response(404); self.send_header('Content-Length','0')\n"
+            "            self.end_headers(); return\n"
+            "        size = os.path.getsize(full)\n"
+            "        start = 0\n"
+            "        rng = self.headers.get('Range')\n"
+            "        if rng and rng.startswith('bytes='):\n"
+            "            start = int(rng.split('=')[1].split('-')[0] or 0)\n"
+            "        with open(full, 'rb') as f:\n"
+            "            f.seek(start); body = f.read()\n"
+            "        if start:\n"
+            "            self.send_response(206)\n"
+            "            self.send_header('Content-Range',\n"
+            "                             'bytes %d-%d/%d' % (start, size - 1, size))\n"
+            "        else:\n"
+            "            self.send_response(200)\n"
+            "        self.send_header('Accept-Ranges', 'bytes')\n"
+            "        self.send_header('Content-Length', str(len(body)))\n"
+            "        self.end_headers()\n"
+            "        if state['dropped'] < drops:\n"
+            "            state['dropped'] += 1\n"
+            "            self.wfile.write(body[:drop])\n"
+            "            self.wfile.flush()\n"
+            "            self.close_connection = True\n"
+            "            try: self.connection.close()\n"
+            "            except Exception: pass\n"
+            "            return\n"
+            "        self.wfile.write(body)\n"
+            "socketserver.TCPServer.allow_reuse_address = True\n"
+            "s = socketserver.TCPServer(('127.0.0.1', 0), H)\n"
+            "print(s.server_address[1], flush=True)\n"
+            "s.serve_forever()\n";
+
+        _process.start(QStringLiteral("/usr/bin/python3"),
+                       {QStringLiteral("-c"), QString::fromUtf8(kScript), directory,
+                        QString::number(dropAfterBytes),
+                        QString::number(dropCount)});
+        if (!_process.waitForStarted(10000))
+            return;
+        if (_process.waitForReadyRead(10000))
+            _port = _process.readLine().trimmed().toInt();
+    }
+
+    ~ResumableHttpServer()
+    {
+        _process.kill();
+        _process.waitForFinished(5000);
+    }
+
+    ResumableHttpServer(const ResumableHttpServer &) = delete;
+    ResumableHttpServer &operator=(const ResumableHttpServer &) = delete;
+
+    bool isRunning() const { return _port > 0; }
+
+    QByteArray urlFor(const QString &name) const
+    {
+        return QByteArray("http://127.0.0.1:") + QByteArray::number(_port) + "/" +
+               name.toUtf8();
+    }
+
+private:
+    QProcess _process;
+    int _port = 0;
+};
+
 bool inline havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
 
 } // namespace rpi_test
