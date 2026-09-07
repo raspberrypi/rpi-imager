@@ -1488,3 +1488,199 @@ TEST_CASE("Every role the QML asks for by name resolves", "[models][roles]")
         CHECK(names.key(QByteArray(bound), -1) != -1);
     }
 }
+
+// ══════════════════════════════════════════════════════════════
+// Which images a board is allowed to be offered
+//
+// Choosing a board sets a hardware filter, and the OS list is cut down to the
+// entries that say they support it. Get that wrong and someone with a Pi Zero
+// is offered a 64-bit-only image, writes it, and the board does not boot --
+// with nothing on screen to connect the two.
+//
+// The filter itself is file-local, so these drive it the way the application
+// does: feed a list, set a filter, read back getFilteredOSlist().
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A list with one entry per shape the filter has to deal with: tagged for one
+// board, tagged for another, tagged for both, and untagged.
+QByteArray taggedOsListJson()
+{
+    return QByteArray(R"JSON({
+        "os_list": [
+            {
+                "name": "For the Pi 5 only",
+                "url": "https://example.invalid/pi5.img.xz",
+                "devices": ["pi5-64bit"],
+                "image_download_size": 100,
+                "extract_size": 200,
+                "extract_sha256": "aa"
+            },
+            {
+                "name": "For the Pi Zero only",
+                "url": "https://example.invalid/zero.img.xz",
+                "devices": ["pizero-32bit"],
+                "image_download_size": 100,
+                "extract_size": 200,
+                "extract_sha256": "bb"
+            },
+            {
+                "name": "For either board",
+                "url": "https://example.invalid/both.img.xz",
+                "devices": ["pi5-64bit", "pizero-32bit"],
+                "image_download_size": 100,
+                "extract_size": 200,
+                "extract_sha256": "cc"
+            },
+            {
+                "name": "Says nothing about boards",
+                "url": "https://example.invalid/untagged.img.xz",
+                "image_download_size": 100,
+                "extract_size": 200,
+                "extract_sha256": "dd"
+            }
+        ]
+    })JSON");
+}
+
+// A list where the only entries live inside a category, so the category's own
+// survival can be checked.
+QByteArray categorisedOsListJson()
+{
+    return QByteArray(R"JSON({
+        "os_list": [
+            {
+                "name": "Other general-purpose OS",
+                "subitems": [
+                    {
+                        "name": "Only for the Pi 5",
+                        "url": "https://example.invalid/cat-pi5.img.xz",
+                        "devices": ["pi5-64bit"],
+                        "image_download_size": 100,
+                        "extract_size": 200,
+                        "extract_sha256": "ee"
+                    }
+                ]
+            }
+        ]
+    })JSON");
+}
+
+// Every entry name the chooser would show, categories included, flattened so a
+// case can say what is on offer.
+QStringList offeredNames(const QByteArray &filtered)
+{
+    QStringList out;
+    const QJsonArray list = QJsonDocument::fromJson(filtered)
+                                .object()
+                                .value(QStringLiteral("os_list"))
+                                .toArray();
+    for (const QJsonValue &v : list) {
+        const QJsonObject o = v.toObject();
+        out << o.value(QStringLiteral("name")).toString();
+        for (const QJsonValue &sub : o.value(QStringLiteral("subitems")).toArray())
+            out << sub.toObject().value(QStringLiteral("name")).toString();
+    }
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("A board is offered the images that name it", "[models][oslist][hwfilter]")
+{
+    TestableImageWriter writer;
+    writer.feedOsList(taggedOsListJson());
+    writer.setHWFilterList(QJsonArray{QStringLiteral("pizero-32bit")}, false);
+
+    const QStringList offered = offeredNames(writer.getFilteredOSlist());
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    CHECK(offered.contains(QStringLiteral("For the Pi Zero only")));
+    CHECK(offered.contains(QStringLiteral("For either board")));
+}
+
+TEST_CASE("A board is not offered images that name a different one",
+          "[models][oslist][hwfilter]")
+{
+    // The one that matters: a 64-bit image on a 32-bit board writes fine and
+    // then does not boot.
+    TestableImageWriter writer;
+    writer.feedOsList(taggedOsListJson());
+    writer.setHWFilterList(QJsonArray{QStringLiteral("pizero-32bit")}, false);
+
+    const QStringList offered = offeredNames(writer.getFilteredOSlist());
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    CHECK_FALSE(offered.contains(QStringLiteral("For the Pi 5 only")));
+}
+
+TEST_CASE("An untagged image is offered only when the filter is inclusive",
+          "[models][oslist][hwfilter]")
+{
+    // An entry that says nothing about boards is a judgement call, and the
+    // filter's inclusive flag is where it is made: inclusive keeps it on the
+    // grounds that it probably works anywhere, exclusive drops it on the
+    // grounds that it has not said so.
+    {
+        TestableImageWriter writer;
+        writer.feedOsList(taggedOsListJson());
+        writer.setHWFilterList(QJsonArray{QStringLiteral("pizero-32bit")}, true);
+
+        const QStringList offered = offeredNames(writer.getFilteredOSlist());
+        INFO("inclusive: " << offered.join(QStringLiteral(", ")).toStdString());
+        CHECK(offered.contains(QStringLiteral("Says nothing about boards")));
+    }
+    {
+        TestableImageWriter writer;
+        writer.feedOsList(taggedOsListJson());
+        writer.setHWFilterList(QJsonArray{QStringLiteral("pizero-32bit")}, false);
+
+        const QStringList offered = offeredNames(writer.getFilteredOSlist());
+        INFO("exclusive: " << offered.join(QStringLiteral(", ")).toStdString());
+        CHECK_FALSE(offered.contains(QStringLiteral("Says nothing about boards")));
+    }
+}
+
+TEST_CASE("With no filter set, every image is offered", "[models][oslist][hwfilter]")
+{
+    // Before a board is chosen there is nothing to filter against, and hiding
+    // everything would leave the chooser empty.
+    TestableImageWriter writer;
+    writer.feedOsList(taggedOsListJson());
+    writer.setHWFilterList(QJsonArray{}, false);
+
+    const QStringList offered = offeredNames(writer.getFilteredOSlist());
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    CHECK(offered.contains(QStringLiteral("For the Pi 5 only")));
+    CHECK(offered.contains(QStringLiteral("For the Pi Zero only")));
+    CHECK(offered.contains(QStringLiteral("Says nothing about boards")));
+}
+
+TEST_CASE("A category whose images all belong to another board disappears",
+          "[models][oslist][hwfilter]")
+{
+    // Rather than being shown empty. A category the user can open and find
+    // nothing in reads as a failure to load.
+    TestableImageWriter writer;
+    writer.feedOsList(categorisedOsListJson());
+    writer.setHWFilterList(QJsonArray{QStringLiteral("pizero-32bit")}, false);
+
+    const QStringList offered = offeredNames(writer.getFilteredOSlist());
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    CHECK_FALSE(offered.contains(QStringLiteral("Other general-purpose OS")));
+    CHECK_FALSE(offered.contains(QStringLiteral("Only for the Pi 5")));
+}
+
+TEST_CASE("A category keeps the images that do belong to this board",
+          "[models][oslist][hwfilter]")
+{
+    // The other side, so the case above is not passing because categories are
+    // dropped wholesale.
+    TestableImageWriter writer;
+    writer.feedOsList(categorisedOsListJson());
+    writer.setHWFilterList(QJsonArray{QStringLiteral("pi5-64bit")}, false);
+
+    const QStringList offered = offeredNames(writer.getFilteredOSlist());
+    INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+    CHECK(offered.contains(QStringLiteral("Other general-purpose OS")));
+    CHECK(offered.contains(QStringLiteral("Only for the Pi 5")));
+}
