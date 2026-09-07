@@ -293,6 +293,7 @@ WizardStepBase {
 
                     ImTextField {
                         id: fieldWifiSSID
+                        objectName: "wifiSsidField"
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         trimWhitespace: true
@@ -317,6 +318,7 @@ WizardStepBase {
 
                     ImPasswordField {
                         id: fieldWifiPassword
+                        objectName: "wifiPasswordField"
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         visible: root.showPw
@@ -346,6 +348,7 @@ WizardStepBase {
 
                     ImPasswordField {
                         id: fieldWifiPasswordConfirm
+                        objectName: "wifiPasswordConfirmField"
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         placeholderText: {
@@ -384,6 +387,7 @@ WizardStepBase {
 
                     ImCheckBox {
                         id: chkWifiHidden
+                        objectName: "wifiHiddenToggle"
                         text: qsTr("Hidden SSID")
                         Accessible.description: qsTr("Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.")
 
