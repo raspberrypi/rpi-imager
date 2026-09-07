@@ -28,9 +28,14 @@
 #include <QStringList>
 #include <QUuid>
 
+#include <QFile>
+
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <stdexcept>
+
+#include "devicewrapperstructs.h"
 
 #include "fixture_process.h"
 
@@ -1895,4 +1900,288 @@ TEST_CASE("FAT driver reports the length of a file spanning many clusters",
     image.sync();
 
     CHECK(image.fat().fileSize(QStringLiteral("multi.img")) == contents.size());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Where on the card the customisation is allowed to be written
+//
+// fatPartition() reads the partition table and hands back the region the
+// boot partition occupies. Everything the customisation step writes --
+// cmdline.txt, config.txt, firstrun.sh, the cloud-init files -- goes
+// through that region, so a table it misreads is customisation written
+// over the image that was just verified, or over the table itself.
+//
+// It was uncovered: fat_partition_image_test formats a whole scratch file
+// and constructs the partition directly, so nothing had ever exercised the
+// table parsing. Every refusal below is what stops a card with an
+// unexpected, truncated or hostile table being written to at a computed
+// offset, and each one has its own message so a report says which.
+
+namespace {
+
+// A scratch image holding whatever partition table a case wants, and no
+// filesystem at all. Every case here ends in a refusal, so nothing needs
+// mkfs -- what is under test is the arithmetic that decides an offset, not
+// what is at it.
+class TableImage
+{
+public:
+    explicit TableImage(quint64 sizeBytes = 4 * 1024 * 1024)
+        : _scratch(QStringLiteral("rpi-imager-table"))
+    {
+        _path = _scratch.filePath(QStringLiteral("table.img"));
+        auto sizing = rpi_imager::FileOperations::Create();
+        if (sizing->CreateTestFile(_path.toStdString(), sizeBytes) !=
+            rpi_imager::FileError::kSuccess) {
+            throw std::runtime_error("could not create the scratch image");
+        }
+    }
+
+    ~TableImage()
+    {
+        _dw.reset();
+        _ops.reset();
+    }
+
+    TableImage(const TableImage &) = delete;
+    TableImage &operator=(const TableImage &) = delete;
+
+    void writeAt(quint64 offset, const void *data, std::size_t size)
+    {
+        QFile f(_path);
+        REQUIRE(f.open(QIODevice::ReadWrite));
+        REQUIRE(f.seek(static_cast<qint64>(offset)));
+        REQUIRE(f.write(static_cast<const char *>(data),
+                        static_cast<qint64>(size)) == static_cast<qint64>(size));
+        f.close();
+    }
+
+    // Opened only once every table byte is in place: DeviceWrapper caches
+    // blocks, so a write behind its back afterwards would not be seen.
+    DeviceWrapper &wrapper()
+    {
+        if (!_dw) {
+            _ops = rpi_imager::FileOperations::Create();
+            if (_ops->OpenDevice(_path.toStdString()) != rpi_imager::FileError::kSuccess)
+                throw std::runtime_error("could not open the scratch image");
+            _dw = std::make_unique<DeviceWrapper>(_ops.get());
+        }
+        return *_dw;
+    }
+
+private:
+    ScopedTempDir _scratch;
+    QString _path;
+    std::unique_ptr<rpi_imager::FileOperations> _ops;
+    std::unique_ptr<DeviceWrapper> _dw;
+};
+
+// An MBR with one partition, as a card written by Imager has.
+mbr_table oneParititionMbr(std::uint32_t startSector = 8192,
+                           std::uint32_t sectorCount = 1024)
+{
+    mbr_table mbr{};
+    mbr.part[0].id = 0x0C;  // FAT32 LBA
+    mbr.part[0].starting_sector = startSector;
+    mbr.part[0].nr_of_sectors = sectorCount;
+    mbr.signature[0] = 0x55;
+    mbr.signature[1] = 0xAA;
+    return mbr;
+}
+
+gpt_header gptHeader()
+{
+    gpt_header gpt{};
+    std::memcpy(gpt.Signature, "EFI PART", 8);
+    gpt.MyLBA = 1;
+    gpt.PartitionEntryLBA = 2;
+    gpt.NumberOfPartitionEntries = 128;
+    gpt.SizeOfPartitionEntry = sizeof(gpt_partition);
+    return gpt;
+}
+
+} // namespace
+
+TEST_CASE("Only the four partitions a card can have may be asked for", "[table]")
+{
+    // Nothing in the application asks for anything but the first, but the
+    // index goes straight into a fixed array of four: without the check,
+    // partition 0 reads the sixteen bytes in front of the table and
+    // partition 5 the sixteen after it, and either produces an offset with
+    // no relation to the card.
+    TableImage image;
+    const mbr_table mbr = oneParititionMbr();
+    image.writeAt(0, &mbr, sizeof(mbr));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(0),
+                      ContainsSubstring("partitions 1-4"));
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(5),
+                      ContainsSubstring("partitions 1-4"));
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(-1),
+                      ContainsSubstring("partitions 1-4"));
+}
+
+TEST_CASE("A card with no partition table is refused", "[table]")
+{
+    // A blank or freshly zeroed card, or one holding a bare filesystem with
+    // no table at all. Without the signature check the four bytes where the
+    // first entry would be are read as a sector count, and the
+    // customisation goes wherever that lands.
+    TableImage image;
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("MBR does not have valid signature"));
+}
+
+TEST_CASE("A partition that is not in the table is refused", "[table]")
+{
+    // Asking for the second partition of a single-partition card. The entry
+    // is all zeros, which as an offset is the start of the card -- the
+    // table itself.
+    TableImage image;
+    const mbr_table mbr = oneParititionMbr();
+    image.writeAt(0, &mbr, sizeof(mbr));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(2),
+                      ContainsSubstring("Partition does not exist"));
+}
+
+TEST_CASE("A partition with a start but no length is refused", "[table]")
+{
+    // Half an entry, which is what a truncated or interrupted partitioning
+    // leaves behind. A zero length would be a partition the writer thinks
+    // it can put a file in.
+    TableImage image;
+    mbr_table mbr = oneParititionMbr();
+    mbr.part[0].nr_of_sectors = 0;
+    image.writeAt(0, &mbr, sizeof(mbr));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("Partition does not exist"));
+}
+
+TEST_CASE("A GPT card is read as GPT rather than as its protective MBR", "[table]")
+{
+    // A GPT-partitioned card carries a protective MBR whose single entry
+    // covers the whole disk. Read as an MBR that entry is a perfectly valid
+    // partition starting at sector 1, so the customisation would be written
+    // over the GPT itself. The GPT has to be looked at first.
+    //
+    // Shown by giving the GPT an entry that must be refused while leaving
+    // the protective MBR one that would be accepted: a refusal means the
+    // GPT was what got read.
+    TableImage image;
+    mbr_table protective = oneParititionMbr(/*startSector=*/1,
+                                            /*sectorCount=*/8191);
+    protective.part[0].id = 0xEE;  // GPT protective
+    image.writeAt(0, &protective, sizeof(protective));
+
+    const gpt_header gpt = gptHeader();
+    image.writeAt(512, &gpt, sizeof(gpt));
+    gpt_partition part{};
+    part.StartingLBA = 200;
+    part.EndingLBA = 100;  // refused, and only the GPT path can refuse it
+    image.writeAt(1024, &part, sizeof(part));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("ending LBA before starting LBA"));
+}
+
+TEST_CASE("A GPT header that is not the primary one is not used", "[table]")
+{
+    // The signature also appears in the backup header at the end of the
+    // card, and in any stale copy left behind by a previous partitioning.
+    // Only the one that says it is at LBA 1 is the table for this card.
+    TableImage image;
+    gpt_header gpt = gptHeader();
+    gpt.MyLBA = 2;  // not the primary header
+    image.writeAt(512, &gpt, sizeof(gpt));
+    // No MBR written, so falling through to the MBR path is visible.
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("MBR does not have valid signature"));
+}
+
+TEST_CASE("A GPT partition beyond the number it declares is refused", "[table]")
+{
+    TableImage image;
+    gpt_header gpt = gptHeader();
+    gpt.NumberOfPartitionEntries = 0;
+    image.writeAt(512, &gpt, sizeof(gpt));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("Partition does not exist"));
+}
+
+TEST_CASE("A GPT entry array beyond the end of the arithmetic is refused", "[table]")
+{
+    // The entry offset is a sector number multiplied by 512. A card whose
+    // table claims a sector number near the top of the range makes that
+    // multiplication wrap, and a wrapped offset points back into the start
+    // of the card.
+    TableImage image;
+    gpt_header gpt = gptHeader();
+    gpt.PartitionEntryLBA = UINT64_MAX / 512 + 1;
+    image.writeAt(512, &gpt, sizeof(gpt));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("entry LBA overflow"));
+}
+
+TEST_CASE("A GPT entry index that runs off the end of the range is refused", "[table]")
+{
+    // The entry array base survives the check above, and then the step to
+    // the requested entry is what overflows.
+    TableImage image;
+    gpt_header gpt = gptHeader();
+    gpt.PartitionEntryLBA = UINT64_MAX / 512;
+    gpt.SizeOfPartitionEntry = 512;
+    image.writeAt(512, &gpt, sizeof(gpt));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(2),
+                      ContainsSubstring("entry offset overflow"));
+}
+
+TEST_CASE("A GPT partition that ends before it starts is refused", "[table]")
+{
+    // Subtracting the two would wrap into an enormous length, and a length
+    // is what bounds every write into the partition.
+    TableImage image;
+    const gpt_header gpt = gptHeader();
+    image.writeAt(512, &gpt, sizeof(gpt));
+    gpt_partition part{};
+    part.StartingLBA = 4096;
+    part.EndingLBA = 4095;
+    image.writeAt(1024, &part, sizeof(part));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("ending LBA before starting LBA"));
+}
+
+TEST_CASE("A GPT partition starting past the end of the arithmetic is refused", "[table]")
+{
+    TableImage image;
+    const gpt_header gpt = gptHeader();
+    image.writeAt(512, &gpt, sizeof(gpt));
+    gpt_partition part{};
+    part.StartingLBA = UINT64_MAX / 512 + 1;
+    part.EndingLBA = UINT64_MAX / 512 + 2;
+    image.writeAt(1024, &part, sizeof(part));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("offset/size overflow"));
+}
+
+TEST_CASE("A GPT partition longer than the arithmetic allows is refused", "[table]")
+{
+    TableImage image;
+    const gpt_header gpt = gptHeader();
+    image.writeAt(512, &gpt, sizeof(gpt));
+    gpt_partition part{};
+    part.StartingLBA = 0;
+    part.EndingLBA = UINT64_MAX / 512 + 1;
+    image.writeAt(1024, &part, sizeof(part));
+
+    CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
+                      ContainsSubstring("offset/size overflow"));
 }
