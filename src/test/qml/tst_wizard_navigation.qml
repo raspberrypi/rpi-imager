@@ -1051,4 +1051,68 @@ TestCase {
             return wiz.currentStep !== wiz.stepPiConnectCustomization
         }, 3000, "the wizard moved on")
     }
+
+
+    // -- Where the wizard begins -------------------------------------------
+    //
+    // The language step is a pre-step: it is the stack's initial item when
+    // the application asks for it, and it cannot be jumped to, so its Next
+    // handler had never run.
+    //
+    // What that handler decides is which screen the wizard starts on. Offline
+    // there is no device list to choose from, so the board step is skipped;
+    // landing on it anyway leaves the user on a page with nothing on it and
+    // nothing to explain why. The two cases are the same assertion read
+    // against whichever state this run is in, so the wrong branch fails
+    // either way.
+
+    Component {
+        id: languageFirstComponent
+        WizardContainer { showLanguageSelection: true }
+    }
+
+    function test_the_language_step_leads_to_the_right_first_screen() {
+        const langWiz = createTemporaryObject(languageFirstComponent, testCase)
+        verify(langWiz, "the wizard was created asking for the language step")
+        langWiz.overlayRootRef = testCase
+        wait(150)
+
+        const stack = findStepStack(langWiz)
+        verify(stack !== null, "the container has a step stack")
+        const langStep = stack.currentItem
+        verify(langStep !== null, "the language step is on it")
+
+        langStep.nextClicked()
+        wait(150)
+
+        if (langWiz.hasNetworkConnectivity) {
+            compare(langWiz.currentStep, langWiz.stepDeviceSelection,
+                    "online, so the board is chosen first")
+        } else {
+            compare(langWiz.currentStep, langWiz.stepOSSelection,
+                    "offline, so the board step is skipped -- there is no "
+                    + "device list to choose from")
+        }
+    }
+
+    function test_the_language_step_is_where_the_wizard_starts_when_asked() {
+        // The premise of the case above: asking for it is what puts it in
+        // front of everything else. Without that the language choice is
+        // never offered at all.
+        const langWiz = createTemporaryObject(languageFirstComponent, testCase)
+        verify(langWiz)
+        langWiz.overlayRootRef = testCase
+        wait(150)
+
+        const stack = findStepStack(langWiz)
+        verify(stack !== null)
+        verify(stack.currentItem !== null,
+               "something is on the stack before anything was chosen")
+        // Named, not merely present: a first draft checked only that the
+        // stack had one item, which is true whichever step is on it, so it
+        // held even with the language step taken out of the initial item.
+        verify(findChild(stack.currentItem, "languageCombo") !== null,
+               "and it is the language step, not the one after it")
+        compare(stack.depth, 1, "with nothing behind it")
+    }
 }

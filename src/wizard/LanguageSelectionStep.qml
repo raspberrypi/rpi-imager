@@ -73,6 +73,7 @@ WizardStepBase {
                     }
                     ImComboBox {
                         id: comboLanguage
+                        objectName: "languageCombo"
                         Layout.fillWidth: true
                         editable: false
                         selectTextByMouse: true
