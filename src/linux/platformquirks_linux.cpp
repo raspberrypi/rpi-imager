@@ -1549,17 +1549,22 @@ bool prefersReducedMotion() {
         QFile gtkSettings(gtkSettingsPath);
         if (gtkSettings.open(QIODevice::ReadOnly | QIODevice::Text)) {
             while (!gtkSettings.atEnd()) {
-                QString line = gtkSettings.readLine().trimmed();
-                if (line.startsWith("gtk-enable-animations")) {
-                    int eq = line.indexOf('=');
-                    if (eq >= 0) {
-                        QString value = line.mid(eq + 1).trimmed();
-                        if (value == "0" || value == "false") {
-                            return true;
-                        }
-                    }
-                    break;
+                const QString line = gtkSettings.readLine().trimmed();
+                const int eq = line.indexOf('=');
+                if (eq < 0)
+                    continue;   // section header, comment, or a malformed line
+                // Compared whole rather than by prefix. startsWith() also
+                // matched any longer key beginning the same way, and the stop
+                // below then ended the search -- so such a line placed above
+                // the real one made a user who had asked for reduced motion
+                // read as not having asked.
+                if (line.left(eq).trimmed() != QLatin1String("gtk-enable-animations"))
+                    continue;
+                const QString value = line.mid(eq + 1).trimmed();
+                if (value == "0" || value == "false") {
+                    return true;
                 }
+                break;   // the key is set and says animations are wanted
             }
         }
     }

@@ -1181,3 +1181,171 @@ TEST_CASE("A filename is refused rather than truncated", "[platformquirks][polki
         "/home/pi/rpi-imager.AppImage", nullptr, sizeof(buffer)));
 }
 #endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+// ══════════════════════════════════════════════════════════════
+// Reduced motion, as Raspberry Pi OS expresses it
+//
+// A user who has turned animations off in their desktop settings has asked
+// for something, and every animation duration in the UI is gated on this
+// answer. Getting it wrong is not cosmetic: the setting exists because
+// motion makes some people ill, and ignoring it is ignoring an
+// accessibility preference the user went and set.
+//
+// Three routes are tried in order -- GSettings for GNOME, kreadconfig for
+// Plasma, and then ~/.config/gtk-3.0/settings.ini, which is the one that
+// answers on Raspberry Pi OS, XFCE, MATE, LXDE and LXQt. The first two need
+// a desktop's tooling installed to say anything; the third is a file, and it
+// is the route this product's own desktop takes.
+//
+// HOME is redirected so the file under test is the only one in play, and put
+// back afterwards.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class HomeRedirect
+{
+public:
+    explicit HomeRedirect(const QString& path) : _saved(qgetenv("HOME"))
+    {
+        qputenv("HOME", path.toUtf8());
+    }
+    ~HomeRedirect() { qputenv("HOME", _saved); }
+
+    HomeRedirect(const HomeRedirect&) = delete;
+    HomeRedirect& operator=(const HomeRedirect&) = delete;
+
+private:
+    QByteArray _saved;
+};
+
+// Write ~/.config/gtk-3.0/settings.ini with the given body. Empty body means
+// no file at all.
+bool writeGtkSettings(const QString& home, const QString& body)
+{
+    const QString dir = home + QStringLiteral("/.config/gtk-3.0");
+    if (!QDir().mkpath(dir))
+        return false;
+    const QString path = dir + QStringLiteral("/settings.ini");
+    if (body.isEmpty())
+        return !QFile::exists(path) || QFile::remove(path);
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+        return false;
+    return f.write(body.toUtf8()) == body.toUtf8().size();
+}
+
+} // namespace
+
+TEST_CASE("Animations turned off in the GTK settings are respected",
+          "[platformquirks][motion]")
+{
+    QTemporaryDir home;
+    REQUIRE(home.isValid());
+    HomeRedirect redirect(home.path());
+
+    // With no settings file the answer comes from the two routes ahead of
+    // this one. If the desktop running the suite has already asked for
+    // reduced motion there is nothing this file could add, and no assertion
+    // below could tell the routes apart.
+    REQUIRE(writeGtkSettings(home.path(), QString()));
+    if (PlatformQuirks::prefersReducedMotion())
+        SKIP("this desktop already reports reduced motion through GSettings or "
+             "kreadconfig, so the GTK file cannot be observed");
+
+    struct Row {
+        const char* tag;
+        QString body;
+        bool expected;
+    };
+
+    const Row rows[] = {
+        // The two spellings a user or a settings editor will produce.
+        {"zero", QStringLiteral("[Settings]\ngtk-enable-animations=0\n"), true},
+        {"false", QStringLiteral("[Settings]\ngtk-enable-animations=false\n"), true},
+        // Spaces around the separator are ordinary in these files.
+        {"spaced", QStringLiteral("[Settings]\ngtk-enable-animations = 0\n"), true},
+        // Animations on, said either way: the preference is not set, so the
+        // UI is free to animate.
+        {"one", QStringLiteral("[Settings]\ngtk-enable-animations=1\n"), false},
+        {"true", QStringLiteral("[Settings]\ngtk-enable-animations=true\n"), false},
+        // A file that says nothing about animations.
+        {"unrelated", QStringLiteral("[Settings]\ngtk-theme-name=Adwaita\n"), false},
+        // The key is not the first line, which is the usual shape of a real
+        // settings.ini.
+        {"later line",
+         QStringLiteral("[Settings]\ngtk-theme-name=Adwaita\n"
+                        "gtk-font-name=Sans 11\ngtk-enable-animations=0\n"),
+         true},
+        // Leading whitespace, as an editor may leave it.
+        {"indented", QStringLiteral("[Settings]\n  gtk-enable-animations=0\n"), true},
+        // A longer key beginning the same way is a different key. Read as a
+        // prefix it both answered for the wrong setting and stopped the
+        // search, so the real line underneath was never reached -- a
+        // preference set and silently dropped.
+        {"lookalike key above the real one",
+         QStringLiteral("[Settings]\ngtk-enable-animationsX=1\n"
+                        "gtk-enable-animations=0\n"),
+         true},
+        {"lookalike key alone",
+         QStringLiteral("[Settings]\ngtk-enable-animationsX=0\n"), false},
+    };
+
+    for (const Row& row : rows) {
+        INFO(row.tag);
+        REQUIRE(writeGtkSettings(home.path(), row.body));
+        CHECK(PlatformQuirks::prefersReducedMotion() == row.expected);
+    }
+}
+
+TEST_CASE("A GTK settings file that cannot be parsed leaves animations on",
+          "[platformquirks][motion]")
+{
+    // Nothing here should be read as a request for reduced motion. Guessing
+    // "off" from a malformed file would disable animations for someone who
+    // never asked, which is the same class of mistake in the other
+    // direction.
+    QTemporaryDir home;
+    REQUIRE(home.isValid());
+    HomeRedirect redirect(home.path());
+
+    REQUIRE(writeGtkSettings(home.path(), QString()));
+    if (PlatformQuirks::prefersReducedMotion())
+        SKIP("this desktop already reports reduced motion by another route");
+
+    const QStringList bodies = {
+        QStringLiteral(""),                                   // present but empty
+        QStringLiteral("gtk-enable-animations"),              // no separator at all
+        QStringLiteral("[Settings]\ngtk-enable-animations=\n"),   // nothing after it
+        QStringLiteral("not an ini file at all\n"),
+        QStringLiteral("[Settings]\ngtk-enable-animationsX=0\n"),  // a different key
+    };
+
+    for (const QString& body : bodies) {
+        INFO("body: " << body.toStdString());
+        // An empty body means "no file"; write a single newline instead so
+        // the file exists and is empty.
+        REQUIRE(writeGtkSettings(home.path(),
+                                 body.isEmpty() ? QStringLiteral("\n") : body));
+        CHECK_FALSE(PlatformQuirks::prefersReducedMotion());
+    }
+}
+
+TEST_CASE("No GTK settings file is not a request for reduced motion",
+          "[platformquirks][motion]")
+{
+    // The default on a fresh install: the file does not exist, and the
+    // absence of a preference is not a preference.
+    QTemporaryDir home;
+    REQUIRE(home.isValid());
+    HomeRedirect redirect(home.path());
+    REQUIRE(writeGtkSettings(home.path(), QString()));
+
+    const bool before = PlatformQuirks::prefersReducedMotion();
+    if (before)
+        SKIP("this desktop reports reduced motion by another route");
+
+    CHECK_FALSE(PlatformQuirks::prefersReducedMotion());
+}
+#endif // Q_OS_LINUX
