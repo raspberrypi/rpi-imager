@@ -1095,6 +1095,24 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         NETWORK_PROBE_BINARY="$<TARGET_FILE:platform_quirks_network_probe>")
     add_dependencies(platformquirks_test platform_quirks_network_probe)
 
+    # secureSettingsFile() hands a root-owned settings file back to the user
+    # before narrowing it, and that needs a real root to exercise.
+    # image_writer_test runs this inside `unshare -r --map-auto`, where the
+    # invoking account is uid 0 and a range of further uids is mapped too, so
+    # a file can belong to one account while another secures it.
+    add_executable(settings_permissions_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/settings_permissions_probe.cpp
+    )
+    target_link_libraries(settings_permissions_probe PRIVATE Qt6::Core)
+    target_include_directories(settings_permissions_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(settings_permissions_probe PRIVATE cxx_std_20)
+    target_compile_options(settings_permissions_probe PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+
     # prefersReducedMotion() runs /usr/bin/gsettings and /usr/bin/kreadconfig6
     # by absolute path -- deliberately, since it can run as root after pkexec
     # -- so neither can be redirected with PATH. platformquirks_test binds
@@ -1683,6 +1701,14 @@ if(TARGET keyboard_detect_probe)
     target_compile_definitions(image_writer_test PRIVATE
         KEYBOARD_PROBE_BINARY="$<TARGET_FILE:keyboard_detect_probe>")
     add_dependencies(image_writer_test keyboard_detect_probe)
+endif()
+
+# Likewise the settings-permissions probe, which runs the fix as a real root
+# inside a user namespace.
+if(TARGET settings_permissions_probe)
+    target_compile_definitions(image_writer_test PRIVATE
+        SETTINGS_PERMISSIONS_PROBE_BINARY="$<TARGET_FILE:settings_permissions_probe>")
+    add_dependencies(image_writer_test settings_permissions_probe)
 endif()
 
     # The command line, run as a subprocess.

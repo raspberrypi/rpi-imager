@@ -10,8 +10,12 @@
 #include <QFileInfo>
 
 #ifdef Q_OS_UNIX
+#include <cerrno>
+#include <cstdlib>
 #include <fcntl.h>
+#include <pwd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 
@@ -67,6 +71,61 @@ bool isOwnerOnly(const QString& path)
     return (st.st_mode & (S_IRWXG | S_IRWXO)) == 0;
 }
 
+int effectiveUser() { return static_cast<int>(::geteuid()); }
+
+// -1 when the path is not there. lstat, so a symlink is reported as itself.
+int ownerOf(const QString& path)
+{
+    struct stat st{};
+    if (::lstat(QFile::encodeName(path).constData(), &st) != 0)
+        return -1;
+    return static_cast<int>(st.st_uid);
+}
+
+// AT_SYMLINK_NOFOLLOW, for the same reason the mode is set on a descriptor:
+// the directory this sits in belongs to an unprivileged account, and we may
+// be root.
+bool giveTo(const QString& path, int uid, int gid)
+{
+    return ::fchownat(AT_FDCWD, QFile::encodeName(path).constData(),
+                      static_cast<uid_t>(uid), static_cast<gid_t>(gid),
+                      AT_SYMLINK_NOFOLLOW) == 0;
+}
+
+// The account that invoked an elevated Imager, or -1. The same two variables
+// applyQuirks() reads and in the same order, so the settings file ends up
+// owned by whoever HOME was repointed at.
+void invokingUser(int* uid, int* gid)
+{
+    *uid = -1;
+    *gid = -1;
+    if (::geteuid() != 0)
+        return;
+
+    const char* value = ::getenv("SUDO_UID");
+    if (!value)
+        value = ::getenv("PKEXEC_UID");
+    if (!value)
+        return;
+
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long parsed = std::strtoul(value, &end, 10);
+    if (errno != 0 || end == value || *end != 0 || parsed == 0 ||
+        parsed > static_cast<unsigned long>(static_cast<uid_t>(-1)))
+        return;
+
+    struct passwd pw{};
+    struct passwd* found = nullptr;
+    char buffer[4096];
+    if (::getpwuid_r(static_cast<uid_t>(parsed), &pw, buffer, sizeof(buffer), &found) != 0
+        || !found)
+        return;
+
+    *uid = static_cast<int>(found->pw_uid);
+    *gid = static_cast<int>(found->pw_gid);
+}
+
 #else
 
 // Windows has no umask and no mode bits; Qt maps the owner permissions onto
@@ -99,11 +158,18 @@ bool isOwnerOnly(const QString& path)
                   QFileDevice::ReadOther | QFileDevice::WriteOther));
 }
 
+// Windows has no uid to compare against, and no elevated-run handover of the
+// kind Linux has: the file belongs to whoever created it.
+int effectiveUser() { return 0; }
+int ownerOf(const QString& path) { return QFileInfo::exists(path) ? 0 : -1; }
+bool giveTo(const QString&, int, int) { return false; }
+void invokingUser(int* uid, int* gid) { *uid = -1; *gid = -1; }
+
 #endif
 
 } // namespace
 
-SettingsPermissions secureSettingsFile(const QString& path)
+SettingsPermissions secureSettingsFile(const QString& path, int ownerUid, int ownerGid)
 {
     SettingsPermissions result;
     if (path.isEmpty())
@@ -112,20 +178,57 @@ SettingsPermissions secureSettingsFile(const QString& path)
     const QString directory = QFileInfo(path).absolutePath();
     if (!directory.isEmpty()) {
         QDir().mkpath(directory);
+        const int dirOwner = ownerOf(directory);
+        if (ownerUid >= 0 && dirOwner >= 0 && dirOwner != ownerUid)
+            giveTo(directory, ownerUid, ownerGid);
         result.directorySecured = restrictDirectory(directory);
     }
 
     // QFileInfo::exists() follows symlinks; a broken one would read as absent
     // and then defeat the O_EXCL create. Ask about the link itself.
     const QFileInfo info(path);
-    if (info.exists() || info.isSymLink()) {
-        result.tightened = restrictExisting(path);
-    } else {
+    if (!info.exists() && !info.isSymLink())
         result.created = createRestricted(path);
+
+    // Ownership before permissions.
+    //
+    // Whether we happen to own the file at this moment is the wrong
+    // question. An elevated Imager creates it as root and so does own it --
+    // and would then narrow it to 0600 with root as the owner, leaving the
+    // person using Imager unable to open their own settings at all. What
+    // matters is who *should* own it: the account that invoked us. Hand it
+    // over whenever that is known and it is not already theirs. Only root
+    // can, which is exactly when it is needed.
+    const int owner = ownerOf(path);
+    if (ownerUid >= 0 && owner >= 0 && owner != ownerUid)
+        result.reowned = giveTo(path, ownerUid, ownerGid);
+
+    const int finalOwner = result.reowned ? ownerUid : owner;
+    const int us = effectiveUser();
+
+    // Someone else's file, and not root to change that. Narrowing it anyway
+    // would take the user's own settings away from them -- at 0664 they can
+    // at least read what they saved. Leave it, and let the caller say so.
+    if (finalOwner >= 0 && finalOwner != us && us != 0) {
+        result.foreignOwner = true;
+        return result;
     }
+
+    if (!result.created)
+        result.tightened = restrictExisting(path);
+    else if (result.reowned)
+        restrictExisting(path);   // the chown can clear setuid-ish bits; re-assert
 
     result.secured = isOwnerOnly(path);
     return result;
+}
+
+SettingsPermissions secureSettingsFile(const QString& path)
+{
+    int uid = -1;
+    int gid = -1;
+    invokingUser(&uid, &gid);
+    return secureSettingsFile(path, uid, gid);
 }
 
 } // namespace rpi_imager

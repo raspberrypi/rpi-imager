@@ -268,12 +268,23 @@ int main(int argc, char *argv[])
     // world-readable. Narrows an existing one too, which is what carries the
     // fix onto an installation that already has the file.
     {
+        const QString settingsFile = QSettings().fileName();
         const rpi_imager::SettingsPermissions perms =
-            rpi_imager::secureSettingsFile(QSettings().fileName());
-        if (!perms.secured) {
+            rpi_imager::secureSettingsFile(settingsFile);
+        if (perms.foreignOwner) {
+            // Left readable on purpose: it is not ours to narrow, and
+            // narrowing it would be worse than leaving it -- see
+            // secureSettingsFile.
+            qWarning() << "The settings file" << settingsFile
+                       << "belongs to another account and is left as it is;"
+                       << "run Imager once with the privileges that created it"
+                       << "to have it handed back";
+        } else if (!perms.secured) {
             qWarning() << "Could not restrict permissions on the settings file"
-                       << QSettings().fileName()
+                       << settingsFile
                        << "-- it may be readable by other accounts on this machine";
+        } else if (perms.reowned) {
+            qDebug() << "Handed the settings file back to the invoking user";
         } else if (perms.tightened) {
             qDebug() << "Restricted permissions on the existing settings file";
         }

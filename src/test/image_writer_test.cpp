@@ -10471,3 +10471,150 @@ TEST_CASE("An empty path is refused rather than acted on",
     CHECK_FALSE(result.tightened);
     CHECK_FALSE(result.secured);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Whose settings file it is.
+//
+// On Linux the file is very often not owned by the person using Imager. An
+// elevated run creates it as root in the user's own home -- that is where
+// applyQuirks() repointing HOME leads -- and leaves it root-owned. The file
+// on the machine this was written on is exactly that: root:root, mode 0664.
+//
+// Narrowing such a file to owner-only would be worse than leaving it: at
+// 0664 the user can at least read the settings they saved, and at 0600 owned
+// by root they cannot open it at all. So ownership is settled first.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+bool havePasswordlessSudoForOwnership()
+{
+    QProcess p;
+    p.start(QStringLiteral("sudo"), {QStringLiteral("-n"), QStringLiteral("true")});
+    return p.waitForFinished(10000) && p.exitStatus() == QProcess::NormalExit &&
+           p.exitCode() == 0;
+}
+
+bool sudoRun(const QStringList& args)
+{
+    QProcess p;
+    p.start(QStringLiteral("sudo"), QStringList{QStringLiteral("-n")} + args);
+    return p.waitForFinished(15000) && p.exitCode() == 0;
+}
+
+int ownerUidOf(const QString& path)
+{
+    struct stat st{};
+    if (::lstat(QFile::encodeName(path).constData(), &st) != 0)
+        return -1;
+    return static_cast<int>(st.st_uid);
+}
+} // namespace
+
+TEST_CASE("A settings file belonging to another account is left readable",
+          "[imagewriter][settingsperms][root]")
+{
+    // The safety case. Running unelevated, Imager cannot take ownership, and
+    // must not narrow a file it does not own even if it could -- doing so
+    // would hide the user's own saved customisation from them.
+    if (!havePasswordlessSudoForOwnership())
+        SKIP("passwordless sudo is not available, so no file can be made to "
+             "belong to another account");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+    { QFile f(path); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("[General]\n"); }
+    REQUIRE(::chmod(QFile::encodeName(path).constData(), 0644) == 0);
+    REQUIRE(sudoRun({QStringLiteral("chown"), QStringLiteral("0:0"), path}));
+    REQUIRE(ownerUidOf(path) == 0);
+
+    // -1: not elevated, so there is no invoking user to hand it back to.
+    const auto result = rpi_imager::secureSettingsFile(path, -1, -1);
+
+    CHECK(result.foreignOwner);
+    CHECK_FALSE(result.secured);
+    CHECK_FALSE(result.tightened);
+    // Untouched, so the user can still read what they saved.
+    CHECK(fileMode(path) == 0644);
+
+    sudoRun({QStringLiteral("rm"), QStringLiteral("-f"), path});
+}
+
+#ifdef SETTINGS_PERMISSIONS_PROBE_BINARY
+TEST_CASE("An elevated run hands the settings file back to the user",
+          "[imagewriter][settingsperms]")
+{
+    // The repair, and the case that decides whether this change helps or
+    // hurts. An elevated Imager creates the settings file as root, in the
+    // user's own home -- applyQuirks() having repointed HOME there. Narrowing
+    // that to 0600 with root as the owner would leave the person using
+    // Imager unable to open their own settings at all; at 0664 they could at
+    // least read them.
+    //
+    // Whether we happen to own the file is the wrong question, because in
+    // this case we do. The file has to go to the account that invoked us,
+    // and only then be narrowed.
+    //
+    // Needs a real root, so it runs in a user namespace with a range of uids
+    // mapped: uid 0 inside is this account, and 1000 inside is another.
+    QProcess check;
+    check.start(QStringLiteral("unshare"),
+                {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+                 QStringLiteral("true")});
+    if (!check.waitForFinished(10000) || check.exitCode() != 0)
+        SKIP("unshare -r --map-auto is unavailable, so no second uid can be "
+             "mapped to hand the file to");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+             QStringLiteral(SETTINGS_PERMISSIONS_PROBE_BINARY), path,
+             QStringLiteral("1000"), QStringLiteral("1000")});
+    REQUIRE(p.waitForFinished(30000));
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    INFO("probe said:\n" << out.toStdString());
+
+    // It really was root doing this, or the case proves nothing.
+    REQUIRE(out.contains(QStringLiteral("EUID=0")));
+
+    CHECK(out.contains(QStringLiteral("OWNER=1000")));
+    CHECK(out.contains(QStringLiteral("REOWNED=1")));
+    CHECK(out.contains(QStringLiteral("MODE=600")));
+    CHECK(out.contains(QStringLiteral("SECURED=1")));
+    // Not refused: root can always finish the job.
+    CHECK(out.contains(QStringLiteral("FOREIGN=0")));
+
+    // The namespace leaves the file owned by a subordinate uid this account
+    // cannot touch from outside; the temporary directory goes with the test.
+    QProcess cleanup;
+    cleanup.start(QStringLiteral("unshare"),
+                  {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+                   QStringLiteral("rm"), QStringLiteral("-f"), path});
+    cleanup.waitForFinished(10000);
+}
+#endif // SETTINGS_PERMISSIONS_PROBE_BINARY
+
+TEST_CASE("A file the user already owns is narrowed without ceremony",
+          "[imagewriter][settingsperms]")
+{
+    // The ordinary case, and the one that must not be disturbed by any of
+    // the above: no chown, no refusal, just the permissions.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+    { QFile f(path); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("x"); }
+    REQUIRE(::chmod(QFile::encodeName(path).constData(), 0664) == 0);
+
+    const auto result = rpi_imager::secureSettingsFile(path,
+                                                       static_cast<int>(::getuid()),
+                                                       static_cast<int>(::getgid()));
+    CHECK(result.tightened);
+    CHECK(result.secured);
+    CHECK_FALSE(result.foreignOwner);
+    CHECK_FALSE(result.reowned);
+    CHECK(fileMode(path) == 0600);
+}

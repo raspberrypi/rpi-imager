@@ -21,6 +21,8 @@ struct SettingsPermissions
     bool tightened = false;          // an existing file's permissions were narrowed
     bool secured = false;            // the file is now readable only by its owner
     bool directorySecured = false;   // and its directory likewise
+    bool reowned = false;            // it belonged to another account and was handed back
+    bool foreignOwner = false;       // it belongs to another account and could not be
 };
 
 /*
@@ -51,7 +53,26 @@ struct SettingsPermissions
  * HOME back at the invoking user -- so this walks a directory that an
  * unprivileged account controls. A symlink planted there would otherwise
  * have root change the permissions of whatever it names.
+ *
+ * Ownership is dealt with first, because on Linux the file is very often not
+ * owned by the person using Imager. An elevated run creates it as root in
+ * the user's own home -- that is what applyQuirks() repointing HOME leads to
+ * -- and it is left root-owned afterwards. Narrowing such a file to
+ * owner-only would take the user's own settings away from them entirely: at
+ * 0664 they could at least still read it.
+ *
+ * So when this is running elevated and the invoking user is known, the file
+ * and its directory are handed back to that user before being narrowed,
+ * which repairs an installation already in that state. When it is not
+ * running elevated and the file belongs to somebody else, it is left exactly
+ * as it is and `secured` comes back false for the caller to warn about --
+ * better a readable file than one its owner cannot open.
+ *
+ * `ownerUid` and `ownerGid` are POSIX ids, or -1 for "leave ownership
+ * alone"; they have no meaning on Windows. The single-argument form works
+ * out the invoking user from the environment the elevation wrapper left.
  */
+SettingsPermissions secureSettingsFile(const QString& path, int ownerUid, int ownerGid);
 SettingsPermissions secureSettingsFile(const QString& path);
 
 } // namespace rpi_imager
