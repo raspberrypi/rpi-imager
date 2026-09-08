@@ -1573,6 +1573,21 @@ if(NOT BUILD_CLI_ONLY)
         IMAGER_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
     rpi_discover_tests(image_writer_test)
 
+    # The command line, run as a subprocess.
+    #
+    # Cli::run() builds its own QCoreApplication, so it cannot be called from
+    # a test process that already has one -- which is why the decisions inside
+    # it were split into statics. Reaching run() itself means running the real
+    # binary, so this target needs it built and needs to know where it is.
+    # Every case ends in a refusal that returns before a device is opened.
+    add_executable(cli_process_test cli_process_test.cpp)
+    set_target_properties(cli_process_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(cli_process_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
+    target_compile_definitions(cli_process_test PRIVATE
+        IMAGER_BINARY="$<TARGET_FILE:${PROJECT_NAME}>")
+    add_dependencies(cli_process_test ${PROJECT_NAME})
+    rpi_discover_tests(cli_process_test)
+
     # The picker models: same library, its own cases.
     add_executable(picker_models_test picker_models_test.cpp)
     set_target_properties(picker_models_test PROPERTIES AUTOMOC ON)
