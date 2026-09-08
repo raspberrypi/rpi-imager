@@ -39,6 +39,7 @@
 #include <QProcess>
 #include "fixture_process.h"
 #include <QDir>
+#include <QSettings>
 #include <QFile>
 #include <QEventLoop>
 #include <QTimer>
@@ -519,6 +520,90 @@ TEST_CASE("The hardware and OS list models are reachable", "[imagewriter]")
     ImageWriter writer(nullptr);
     CHECK(writer.getHWList() != nullptr);
     CHECK(writer.getOSList() != nullptr);
+}
+
+// ── A settings file an earlier root run left behind ───────────────────
+//
+// Running the application once with sudo leaves the configuration file owned
+// by root. Every run afterwards, as the user, then finds it unwritable --
+// and QSettings does not complain. Nothing is saved: the last-used
+// repository, the customisation the user staged, the "don't warn me again"
+// they ticked. It all appears to work and none of it survives the restart,
+// with nothing on screen to say why.
+//
+// So the constructor repairs it: read what is there, remove the file, write
+// the contents back into a new one the user owns. That had never been
+// exercised -- every test ran against a settings file it had just created
+// itself.
+
+TEST_CASE("A settings file left unwritable is repaired, keeping what it held",
+          "[imagewriter][settings]")
+{
+    if (::geteuid() == 0)
+        SKIP("root can write a file with no write bit, so the case this is "
+             "about cannot arise");
+
+    QString path;
+    {
+        QSettings seed;
+        path = seed.fileName();
+        REQUIRE_FALSE(path.isEmpty());
+        seed.setValue(QStringLiteral("imager/repository"),
+                      QStringLiteral("https://example.invalid/os_list.json"));
+        seed.sync();
+    }
+    REQUIRE(QFile::exists(path));
+
+    // Read-only, the way it comes back from a root-owned file this user
+    // cannot write. Restored whatever happens below, so a failure here does
+    // not leave the rest of the suite unable to save anything.
+    struct Restore {
+        QString path;
+        ~Restore() {
+            QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                            QFileDevice::ReadGroup | QFileDevice::ReadOther);
+        }
+    } restore{path};
+
+    REQUIRE(QFile::setPermissions(path, QFileDevice::ReadOwner));
+    {
+        QSettings check;
+        REQUIRE_FALSE(check.isWritable());
+    }
+
+    // The repair is part of construction, which is where a user meets it.
+    { ImageWriter writer(nullptr); }
+
+    QSettings after;
+    CHECK(after.isWritable());
+    CHECK(after.value(QStringLiteral("imager/repository")).toString() ==
+          QStringLiteral("https://example.invalid/os_list.json"));
+}
+
+TEST_CASE("A disable_warnings flag found in the settings does not survive startup",
+          "[imagewriter][settings]")
+{
+    // The flag turns off the confirmations that stand between a user and
+    // erasing the wrong disk. It is meant to last one session -- a
+    // deployment sets it for the run it is doing -- and an older version
+    // that wrote it to disk, or a copied configuration file, would otherwise
+    // leave every later run silently unguarded on a machine whose owner
+    // never asked for that.
+    //
+    // Belt and braces, so nothing else observes it: the only way to see it
+    // work is that the flag is gone afterwards.
+    {
+        QSettings seed;
+        seed.setValue(QStringLiteral("disable_warnings"), true);
+        seed.sync();
+        REQUIRE(seed.contains(QStringLiteral("disable_warnings")));
+    }
+
+    { ImageWriter writer(nullptr); }
+
+    QSettings after;
+    after.sync();
+    CHECK_FALSE(after.contains(QStringLiteral("disable_warnings")));
 }
 
 int main(int argc, char *argv[])
