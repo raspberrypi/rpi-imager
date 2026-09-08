@@ -1373,6 +1373,119 @@ TEST_CASE("No keyboard at all picks no layout", "[imagewriter][keyboard]")
 }
 #endif // KEYBOARD_PROBE_BINARY
 
+// ══════════════════════════════════════════════════════════════
+// What the chosen OS says it can do
+//
+// The capability list arrives with each entry in the OS list and decides
+// which customisation the wizard offers: whether the interfaces step appears
+// at all, whether secure boot is on the menu, whether Pi Connect is. A
+// capability that goes missing is an option the user cannot reach with
+// nothing on screen explaining its absence; one that appears wrongly is a
+// setting they configure and which is then silently dropped.
+//
+// Two spellings reach the setter -- a JSON array, and a comma-separated
+// string for repository files written by hand -- and they are meant to mean
+// the same thing.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Capabilities can be written as JSON or as a list", "[imagewriter][caps]")
+{
+    ImageWriter writer(nullptr);
+
+    writer.setSWCapabilitiesList(QStringLiteral("[\"i2c\",\"spi\",\"usb_otg\"]"));
+    CHECK(writer.checkSWCapability(QStringLiteral("i2c")));
+    CHECK(writer.checkSWCapability(QStringLiteral("spi")));
+    CHECK(writer.checkSWCapability(QStringLiteral("usb_otg")));
+    CHECK_FALSE(writer.checkSWCapability(QStringLiteral("onewire")));
+
+    // The same thing, comma separated, which is what a repository file
+    // maintained by hand tends to carry.
+    writer.setSWCapabilitiesList(QStringLiteral("i2c,spi,usb_otg"));
+    CHECK(writer.checkSWCapability(QStringLiteral("i2c")));
+    CHECK(writer.checkSWCapability(QStringLiteral("spi")));
+    CHECK(writer.checkSWCapability(QStringLiteral("usb_otg")));
+    CHECK_FALSE(writer.checkSWCapability(QStringLiteral("onewire")));
+}
+
+TEST_CASE("Choosing another OS forgets the last one's capabilities",
+          "[imagewriter][caps]")
+{
+    // The list is replaced, not added to. Left to accumulate, an OS would
+    // offer whatever the one looked at before it could do -- and the setting
+    // would be written into an image that cannot honour it.
+    ImageWriter writer(nullptr);
+
+    writer.setSWCapabilitiesList(QStringLiteral("[\"i2c\"]"));
+    REQUIRE(writer.checkSWCapability(QStringLiteral("i2c")));
+
+    writer.setSWCapabilitiesList(QStringLiteral("[\"spi\"]"));
+    CHECK(writer.checkSWCapability(QStringLiteral("spi")));
+    CHECK_FALSE(writer.checkSWCapability(QStringLiteral("i2c")));
+
+    // And "[]" is how the OS step clears it when nothing is chosen.
+    writer.setSWCapabilitiesList(QStringLiteral("[]"));
+    CHECK_FALSE(writer.checkSWCapability(QStringLiteral("spi")));
+}
+
+TEST_CASE("Capabilities are matched whatever the case", "[imagewriter][caps]")
+{
+    // Repository files are written by people. The names in the code are
+    // lower case, so a list that shouts has to match anyway rather than
+    // taking the option away.
+    ImageWriter writer(nullptr);
+
+    writer.setSWCapabilitiesList(QStringLiteral("[\"I2C\",\"Usb_Otg\"]"));
+    CHECK(writer.checkSWCapability(QStringLiteral("i2c")));
+    CHECK(writer.checkSWCapability(QStringLiteral("usb_otg")));
+
+    writer.setSWCapabilitiesList(QStringLiteral("I2C,Usb_Otg"));
+    CHECK(writer.checkSWCapability(QStringLiteral("i2c")));
+    CHECK(writer.checkSWCapability(QStringLiteral("usb_otg")));
+}
+
+TEST_CASE("Stray spaces in a capability list do not lose the capability",
+          "[imagewriter][caps]")
+{
+    // A list written with spaces after the commas, or inside the quotes, is
+    // the same list. Dropping one over whitespace takes a customisation
+    // option off the screen with nothing to say why.
+    ImageWriter writer(nullptr);
+
+    writer.setSWCapabilitiesList(QStringLiteral("i2c , spi"));
+    CHECK(writer.checkSWCapability(QStringLiteral("i2c")));
+    CHECK(writer.checkSWCapability(QStringLiteral("spi")));
+
+    writer.setSWCapabilitiesList(QStringLiteral("[\" i2c \",\"spi \"]"));
+    CHECK(writer.checkSWCapability(QStringLiteral("i2c")));
+    CHECK(writer.checkSWCapability(QStringLiteral("spi")));
+
+    // And the hardware list, which arrives the same way and decides which
+    // board features are offered.
+    writer.setHWCapabilitiesList(QJsonArray{QStringLiteral(" nvme"),
+                                            QStringLiteral("USB-Boot ")});
+    CHECK(writer.checkHWCapability(QStringLiteral("nvme")));
+    CHECK(writer.checkHWCapability(QStringLiteral("usb-boot")));
+}
+
+TEST_CASE("A capability list that is neither form offers nothing",
+          "[imagewriter][caps]")
+{
+    // Not a JSON array and not a list: whatever it is, it must not be read
+    // as granting a capability. Offering an option the image cannot honour
+    // is worse than offering none.
+    ImageWriter writer(nullptr);
+
+    for (const QString& junk : {QStringLiteral("{\"i2c\":true}"),
+                                QStringLiteral("<capabilities/>"),
+                                QStringLiteral(""),
+                                QStringLiteral("   ")}) {
+        INFO("list: " << junk.toStdString());
+        writer.setSWCapabilitiesList(junk);
+        CHECK_FALSE(writer.checkSWCapability(QStringLiteral("i2c")));
+        CHECK_FALSE(writer.checkSWCapability(QStringLiteral("spi")));
+    }
+}
+
 int main(int argc, char *argv[])
 {
     // Offscreen: ImageWriter asks QGuiApplication for the platform name, and

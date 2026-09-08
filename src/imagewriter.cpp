@@ -2194,17 +2194,23 @@ bool ImageWriter::checkHWAndSWCapability(const QString &cap, const QString &diff
     return this->checkHWCapability(cap) && this->checkSWCapability(differentSWCap.isEmpty() ? cap : differentSWCap);
 }
 
+// Both sides trimmed, deliberately. The capability lists arrive from a
+// repository file, and the three routes into them did not agree: the
+// comma-separated and QVariantList setters trim each entry, the JSON ones
+// store what they were given. A list written ["i2c ", "spi"] therefore lost
+// i2c, and losing one takes a customisation option off the screen with
+// nothing to say why it is missing.
 bool ImageWriter::checkHWCapability(const QString &cap) {
     const auto needle = cap.trimmed().toLower();
     for (const auto &v : _hwCapabilities)
-        if (v.toString().toLower() == needle) return true;
+        if (v.toString().trimmed().toLower() == needle) return true;
     return false;
 }
 
 bool ImageWriter::checkSWCapability(const QString &cap) {
     const auto needle = cap.trimmed().toLower();
     for (const auto &v : _swCapabilities)
-        if (v.toString().toLower() == needle) return true;
+        if (v.toString().trimmed().toLower() == needle) return true;
     return false;
 }
 
