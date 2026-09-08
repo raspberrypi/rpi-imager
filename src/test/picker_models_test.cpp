@@ -2393,3 +2393,88 @@ TEST_CASE("A category keeps the images that do belong to this board",
     CHECK(offered.contains(QStringLiteral("Other general-purpose OS")));
     CHECK(offered.contains(QStringLiteral("Only for the Pi 5")));
 }
+
+TEST_CASE("A board list that shrinks removes the rows that went",
+          "[models][hwlist]")
+{
+    // The other direction, which nothing exercised. The board chooser is
+    // rebuilt from whatever the repository says it supports, so a feed with
+    // fewer boards in it -- a custom repository, or one that dropped a model
+    // -- has to take rows out. A diff that gets the range wrong leaves a
+    // board on screen that has no images behind it: the user picks it and
+    // the OS list comes back empty, with nothing to say why.
+    //
+    // And it has to be a removal rather than a reset, for the reason the
+    // insert case gives: a reset destroys every delegate and any click in
+    // progress with it.
+    TestableImageWriter writer;
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model != nullptr);
+    QAbstractItemModel *view = model;
+
+    HWListModel::HardwareDevice pi5;
+    pi5.name = QStringLiteral("Raspberry Pi 5");
+    HWListModel::HardwareDevice pi4;
+    pi4.name = QStringLiteral("Raspberry Pi 4");
+    HWListModel::HardwareDevice pi3;
+    pi3.name = QStringLiteral("Raspberry Pi 3");
+    model->applyRows({pi5, pi4, pi3});
+    REQUIRE(view->rowCount(QModelIndex()) == 3);
+
+    rpi_test::SignalLog reset(view, &QAbstractItemModel::modelAboutToBeReset);
+    rpi_test::SignalLog inserted(view, &QAbstractItemModel::rowsInserted);
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+    rpi_test::SignalLog changed(view, &QAbstractItemModel::dataChanged);
+
+    model->applyRows({pi5, pi4});
+
+    CHECK(reset.count() == 0);
+    CHECK(inserted.count() == 0);
+
+    // Nothing else was touched. applyRows reconciles the surviving rows
+    // against the new list afterwards, which quietly repairs a removal that
+    // took the wrong row -- the contents come out right either way. What it
+    // cannot hide is the repainting: a shrink that removed the wrong row
+    // leaves two rows holding the wrong boards, and the reconciliation has
+    // to rewrite both. So this is the assertion that says the range was
+    // right, and it is also worth having on its own, since repainting every
+    // delegate on every refresh is what the diff exists to avoid.
+    CHECK(changed.count() == 0);
+
+    REQUIRE(removed.count() == 1);
+    // The last row, and only it.
+    CHECK(removed.at(0).at(1).toInt() == 2);
+    CHECK(removed.at(0).at(2).toInt() == 2);
+
+    // What is left is what was asked for, in order -- a removal that took the
+    // wrong row would still leave two.
+    REQUIRE(view->rowCount(QModelIndex()) == 2);
+    CHECK(view->data(view->index(0, 0), HWListModel::NameRole).toString()
+          == QStringLiteral("Raspberry Pi 5"));
+    CHECK(view->data(view->index(1, 0), HWListModel::NameRole).toString()
+          == QStringLiteral("Raspberry Pi 4"));
+}
+
+TEST_CASE("Emptying the board list removes every row", "[models][hwlist]")
+{
+    // What a repository with no recognised boards produces. Every row goes,
+    // and the chooser is empty rather than showing the last feed's boards.
+    TestableImageWriter writer;
+    HWListModel *model = writer.getHWList();
+    QAbstractItemModel *view = model;
+
+    HWListModel::HardwareDevice pi5;
+    pi5.name = QStringLiteral("Raspberry Pi 5");
+    HWListModel::HardwareDevice pi4;
+    pi4.name = QStringLiteral("Raspberry Pi 4");
+    model->applyRows({pi5, pi4});
+    REQUIRE(view->rowCount(QModelIndex()) == 2);
+
+    rpi_test::SignalLog removed(view, &QAbstractItemModel::rowsRemoved);
+    model->applyRows({});
+
+    CHECK(view->rowCount(QModelIndex()) == 0);
+    REQUIRE(removed.count() == 1);
+    CHECK(removed.at(0).at(1).toInt() == 0);
+    CHECK(removed.at(0).at(2).toInt() == 1);
+}
