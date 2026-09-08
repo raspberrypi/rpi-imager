@@ -271,6 +271,12 @@ TEST_CASE("Each segment has a valid sparse file header", "[sparse]")
     SparseEncoder enc(MAX_SEG, IMAGE_SIZE);
     auto segments = feedAndCollect(enc, image);
 
+    // The loop is the whole of this case, so without this the encoder
+    // producing nothing at all would satisfy every assertion below by never
+    // reaching one. Every other case in this file checks the count first;
+    // this one did not.
+    REQUIRE_FALSE(segments.empty());
+
     uint32_t expectedBlocks = static_cast<uint32_t>(IMAGE_SIZE / SPARSE_BLK_SZ);
     for (const auto& seg : segments) {
         REQUIRE(seg.size() >= sizeof(SparseFileHeader));
@@ -285,6 +291,11 @@ TEST_CASE("Each segment has a valid sparse file header", "[sparse]")
         // a leading DONT_CARE prefix for previously-written blocks).
         REQUIRE(fhdr.total_blks == expectedBlocks);
     }
+
+    // And the headers describe segments that actually carry the image. Valid
+    // headers over the wrong payload would satisfy everything above, and the
+    // device would be flashed with whatever they framed.
+    REQUIRE(decodeSegments(segments) == image);
 }
 
 TEST_CASE("Empty image produces no segments", "[sparse]")
