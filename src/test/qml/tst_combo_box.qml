@@ -309,4 +309,84 @@ TestCase {
         box.selectFilteredItem(0)
         compare(box.currentIndex, 2, "the previous selection is left alone")
     }
+
+
+    // -- Choosing it with the mouse ----------------------------------------
+    //
+    // The case above calls selectFilteredItem directly. The row's own click
+    // handler was uncovered, and it is the one that decides which number
+    // gets passed: the position in the filtered list, not the position in
+    // the full one.
+    //
+    // Passing the wrong one sets a timezone or a keyboard layout the user
+    // never saw. Nothing on the screen afterwards reveals it -- the field
+    // shows whatever was selected, and they have no reason to doubt it until
+    // the board comes up in the wrong place or the wrong characters appear.
+
+    function dropdown(box) {
+        const list = findChild(box, "comboDropdownList")
+        verify(list, "found the dropdown")
+        return list
+    }
+
+    function test_clicking_a_filtered_row_selects_the_entry_it_names() {
+        const box = create({})
+        box.popup.open()
+        tryVerify(function () { return box.popup.opened }, 3000,
+                  "the dropdown opened")
+        compare(search(box, "auck"), 1, "one entry matches")
+        waitForRendering(testCase)
+
+        const list = dropdown(box)
+        list.positionViewAtIndex(0, ListView.Beginning)
+        waitForRendering(testCase)
+        const row = list.itemAtIndex(0)
+        verify(row, "the row is instantiated")
+
+        mouseClick(row)
+        waitForRendering(testCase)
+
+        compare(box.currentIndex, testCase.zones.indexOf("Pacific/Auckland"),
+                "the entry that was clicked is the entry that was chosen")
+    }
+
+    function test_clicking_the_second_of_several_matches_picks_that_one() {
+        // With more than one match, an off-by-one or a filtered-index
+        // mix-up shows up as the neighbouring entry.
+        const box = create({})
+        box.popup.open()
+        tryVerify(function () { return box.popup.opened }, 3000)
+        const matches = search(box, "europe")
+        verify(matches >= 2, "several entries match; got " + matches)
+        waitForRendering(testCase)
+
+        const list = dropdown(box)
+        list.positionViewAtIndex(1, ListView.Beginning)
+        waitForRendering(testCase)
+        const row = list.itemAtIndex(1)
+        verify(row, "the second row is instantiated")
+        const wanted = list.model.get(1).displayText
+
+        mouseClick(row)
+        waitForRendering(testCase)
+
+        compare(testCase.zones[box.currentIndex], wanted,
+                "the second match is what was chosen")
+    }
+
+    function test_clicking_a_row_puts_the_dropdown_away() {
+        const box = create({})
+        box.popup.open()
+        tryVerify(function () { return box.popup.opened }, 3000)
+        compare(search(box, "auck"), 1)
+        waitForRendering(testCase)
+
+        const list = dropdown(box)
+        list.positionViewAtIndex(0, ListView.Beginning)
+        waitForRendering(testCase)
+        mouseClick(list.itemAtIndex(0))
+
+        tryVerify(function () { return !box.popup.visible }, 3000,
+                  "the list closed behind the choice")
+    }
 }

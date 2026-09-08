@@ -274,6 +274,7 @@ ComboBox {
             
             ListView {
                 id: dropdownList
+                objectName: "comboDropdownList"
                 clip: true
                 anchors.top: searchIndicator.visible ? searchIndicator.bottom : parent.top
                 anchors.left: parent.left
