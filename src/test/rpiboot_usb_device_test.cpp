@@ -136,33 +136,53 @@ std::string hex16(uint16_t v)
     return buf;
 }
 
-// Is this device on the bus? Asked of libusb directly, so that a test which
-// expects the scan to reject a device can first establish that the device is
-// there to be rejected.
-bool waitUntilOnTheBus(uint16_t vid, uint16_t pid)
+// Is this device on the bus right now? Asked of libusb directly, so that a
+// test which expects the scan to reject a device can first establish that the
+// device is there to be rejected.
+bool onTheBus(uint16_t vid, uint16_t pid)
+{
+    libusb_context *ctx = nullptr;
+    if (libusb_init(&ctx) != LIBUSB_SUCCESS)
+        return false;
+    libusb_device **list = nullptr;
+    const ssize_t count = libusb_get_device_list(ctx, &list);
+    bool present = false;
+    for (ssize_t i = 0; i < count && !present; ++i) {
+        libusb_device_descriptor desc{};
+        if (libusb_get_device_descriptor(list[i], &desc) == 0)
+            present = desc.idVendor == vid && desc.idProduct == pid;
+    }
+    if (count >= 0)
+        libusb_free_device_list(list, 1);
+    libusb_exit(ctx);
+    return present;
+}
+
+bool waitForBus(uint16_t vid, uint16_t pid, bool wantPresent, std::chrono::seconds limit)
 {
     using namespace std::chrono;
-    const auto deadline = steady_clock::now() + seconds(15);
+    const auto deadline = steady_clock::now() + limit;
     while (steady_clock::now() < deadline) {
-        libusb_context *ctx = nullptr;
-        if (libusb_init(&ctx) == LIBUSB_SUCCESS) {
-            libusb_device **list = nullptr;
-            const ssize_t count = libusb_get_device_list(ctx, &list);
-            bool present = false;
-            for (ssize_t i = 0; i < count && !present; ++i) {
-                libusb_device_descriptor desc{};
-                if (libusb_get_device_descriptor(list[i], &desc) == 0)
-                    present = desc.idVendor == vid && desc.idProduct == pid;
-            }
-            if (count >= 0)
-                libusb_free_device_list(list, 1);
-            libusb_exit(ctx);
-            if (present)
-                return true;
-        }
+        if (onTheBus(vid, pid) == wantPresent)
+            return true;
         std::this_thread::sleep_for(milliseconds(100));
     }
     return false;
+}
+
+bool waitUntilOnTheBus(uint16_t vid, uint16_t pid)
+{
+    return waitForBus(vid, pid, true, std::chrono::seconds(15));
+}
+
+// The counterpart, and the one that matters between cases. Taking the
+// emulated device down returns as soon as the detach is queued; the kernel
+// retires the device node a moment later. A case that brings the next device
+// up inside that window scans and finds the one before it -- which is how a
+// CM3 case came to be handed a CM4 and report the wrong generation.
+bool waitUntilOffTheBus(uint16_t vid, uint16_t pid)
+{
+    return waitForBus(vid, pid, false, std::chrono::seconds(15));
 }
 
 // An emulated USB device, present for as long as this object is alive.
@@ -183,7 +203,7 @@ public:
     ~EmulatedDevice()
     {
         if (_up)
-            runEmulator({"down"});
+            takeDown();
     }
 
     EmulatedDevice(const EmulatedDevice &) = delete;
@@ -196,7 +216,7 @@ public:
     void unplug()
     {
         if (_up) {
-            runEmulator({"down"});
+            takeDown();
             _up = false;
         }
     }
@@ -227,6 +247,18 @@ public:
 
     uint16_t vid() const { return _vid; }
     uint16_t pid() const { return _pid; }
+
+private:
+    // Take the device down and wait for the bus to agree that it has gone,
+    // so the next case starts from an empty bus rather than racing the
+    // previous one's teardown.
+    void takeDown() const
+    {
+        runEmulator({"down"});
+        waitUntilOffTheBus(_vid, _pid);
+    }
+
+public:
 
 private:
     uint16_t _vid;

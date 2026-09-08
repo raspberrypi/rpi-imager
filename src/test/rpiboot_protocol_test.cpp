@@ -1292,3 +1292,156 @@ TEST_CASE("Numbers that are not numbers read as zero", "[rpiboot][uri]")
     CHECK(parsed.deviceAddress == 0);
     CHECK_FALSE(parsed.chipGeneration.has_value());
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// A board that is there and will not talk
+//
+// The file server retries a few times before giving up. What it says when it
+// does is the whole diagnosis: the board is enumerated -- the imager found
+// it, opened it and started the conversation -- and then answers nothing, or
+// answers noise. On a Compute Module that is a cable that carries power but
+// not data, a port that is not the right one, or a board that is not
+// actually in rpiboot mode. None of those look like anything from the
+// outside, so the message has to carry what happened.
+//
+// These take a few seconds each: the retry loop sleeps a second between
+// attempts, which is the behaviour, not the test being slow.
+// ────────────────────────────────────────────────────────────────────────
+
+namespace {
+
+// A board that answers every read with the same libusb error code. -7 is
+// LIBUSB_ERROR_TIMEOUT: present, enumerated, silent. (-1 and -4 are handled
+// separately as hard disconnects.)
+class SilentBoard : public IUsbTransport
+{
+public:
+    explicit SilentBoard(int code) : _code(code) {}
+
+    bool controlTransfer(uint8_t, uint8_t, uint16_t, uint16_t,
+                         std::span<const uint8_t>, int) override { return true; }
+    int controlTransferIn(uint8_t, uint8_t, uint16_t, uint16_t,
+                          std::span<uint8_t>, int) override
+    {
+        ++reads;
+        return _code;
+    }
+    int bulkWrite(uint8_t, std::span<const uint8_t>, int) override { return 0; }
+    int bulkRead(uint8_t, std::span<uint8_t>, int) override { return _code; }
+    bool isOpen() const override { return true; }
+    std::string interfaceString() const override { return "silent"; }
+    uint8_t outEndpoint() const override { return 0x01; }
+    uint8_t inEndpoint() const override { return 0x81; }
+
+    int reads = 0;
+
+private:
+    int _code;
+};
+
+// A board answering with bytes that are not a message: what a device sends
+// on the way through a reboot. Two shapes matter -- a command word that is
+// not a command, and a real command carrying a filename of bytes no filename
+// has, which is the one that would otherwise reach std::filesystem::path.
+class NoisyBoard : public IUsbTransport
+{
+public:
+    NoisyBoard() = default;
+    explicit NoisyBoard(FileCommand realCommand)
+        : _command(realCommand), _commandIsReal(true) {}
+
+    bool controlTransfer(uint8_t, uint8_t, uint16_t, uint16_t,
+                         std::span<const uint8_t>, int) override { return true; }
+    int controlTransferIn(uint8_t, uint8_t, uint16_t, uint16_t,
+                          std::span<uint8_t> buffer, int) override
+    {
+        ++reads;
+        std::fill(buffer.begin(), buffer.end(), uint8_t(0xA5));
+        if (_commandIsReal && buffer.size() >= sizeof(FileCommand))
+            std::memcpy(buffer.data(), &_command, sizeof(_command));
+        return static_cast<int>(buffer.size());
+    }
+    int bulkWrite(uint8_t, std::span<const uint8_t>, int) override { return 0; }
+    int bulkRead(uint8_t, std::span<uint8_t>, int) override { return -1; }
+    bool isOpen() const override { return true; }
+    std::string interfaceString() const override { return "noisy"; }
+    uint8_t outEndpoint() const override { return 0x01; }
+    uint8_t inEndpoint() const override { return 0x81; }
+
+    int reads = 0;
+
+private:
+    FileCommand _command{};
+    bool _commandIsReal = false;
+};
+
+} // namespace
+
+TEST_CASE("A board that never answers is given up on, and the error says so",
+          "[rpiboot][fileserver][silent]")
+{
+    SilentBoard board(-7);   // LIBUSB_ERROR_TIMEOUT
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    CHECK_FALSE(server.run(board, std::filesystem::temp_directory_path(),
+                           nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    // It gave up rather than looping for ever, and it tried more than once.
+    CHECK(board.reads > 1);
+    // The libusb code is in the message: -7 is a timeout and -4 is an
+    // unplugged cable, and telling them apart is the whole of the diagnosis.
+    CHECK(server.lastError().find("-7") != std::string::npos);
+    CHECK(server.lastError().find("retries") != std::string::npos);
+}
+
+TEST_CASE("A board sending noise is given up on rather than obeyed",
+          "[rpiboot][fileserver][silent]")
+{
+    // Garbage that happens to decode as a command must not be acted on: the
+    // filename in it would be passed to the filesystem, and the reply would
+    // go to a device that is not listening for one.
+    NoisyBoard board;
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    CHECK_FALSE(server.run(board, std::filesystem::temp_directory_path(),
+                           nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    CHECK(board.reads > 1);
+    CHECK_FALSE(server.lastError().empty());
+}
+
+TEST_CASE("A real command with a filename of noise is not acted on",
+          "[rpiboot][fileserver][silent]")
+{
+    // The half that matters most: the command word survives the corruption
+    // and the filename does not. Trusting it would send 256 bytes of
+    // whatever the device happened to be holding to the filesystem as a
+    // path, and reply to a device that is not listening for a reply.
+    NoisyBoard board(FileCommand::ReadFile);
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    CHECK_FALSE(server.run(board, std::filesystem::temp_directory_path(),
+                           nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    CHECK(board.reads > 1);
+    CHECK_FALSE(server.lastError().empty());
+}
+
+TEST_CASE("A cancelled file server stops without blaming the device",
+          "[rpiboot][fileserver][silent]")
+{
+    // Cancelling is the user closing the wizard. The loop has to notice
+    // between reads rather than sitting out its retries.
+    SilentBoard board(-7);
+    std::atomic<bool> cancelled{true};
+    FileServer server;
+
+    server.run(board, std::filesystem::temp_directory_path(), nullptr, cancelled);
+    CHECK(board.reads == 0);
+}

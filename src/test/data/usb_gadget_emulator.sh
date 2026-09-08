@@ -59,6 +59,22 @@ detach_all() {
     usbip port 2>/dev/null | sed -n 's/^Port \([0-9]*\): <Port in Use>.*/\1/p' | while read -r p; do
         usbip detach -p "$p" >/dev/null 2>&1 || true
     done
+    wait_for_ports_free || true
+}
+
+# `usbip detach` returns once the request is queued; the port stays in use
+# until the kernel has finished retiring the device. Attaching the next one
+# inside that window either fails outright -- "attach failed" -- or leaves the
+# previous device on the bus long enough for a scan to find it, which reads as
+# one Compute Module generation being reported as another.
+wait_for_ports_free() {
+    i=0
+    while [ $i -lt 100 ]; do
+        usbip port 2>/dev/null | grep -q "<Port in Use>" || return 0
+        i=$((i + 1))
+        usleep 50000 2>/dev/null || sleep 0.05
+    done
+    return 1
 }
 
 do_down() {
