@@ -1095,6 +1095,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         NETWORK_PROBE_BINARY="$<TARGET_FILE:platform_quirks_network_probe>")
     add_dependencies(platformquirks_test platform_quirks_network_probe)
 
+    # detectPiKeyboard() reads /dev/input/by-id, which does not exist on a
+    # machine with no Raspberry Pi keyboard attached and cannot be redirected
+    # in-process. image_writer_test bind-mounts a synthetic /dev/input over
+    # the real one in an unprivileged mount namespace and runs this probe
+    # inside; the cases skip where unshare -rm is unavailable.
+    add_executable(keyboard_detect_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/keyboard_detect_probe.cpp
+    )
+    set_target_properties(keyboard_detect_probe PROPERTIES AUTOMOC ON)
+    target_link_libraries(keyboard_detect_probe PRIVATE
+        rpi_imager_testable Qt6::Core)
+    target_include_directories(keyboard_detect_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(keyboard_detect_probe PRIVATE cxx_std_20)
+
     add_test(NAME embedded_scaling_matrix
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/embedded_scaling/run.sh
                 $<TARGET_FILE:embedded_scaling_probe>
@@ -1631,6 +1646,14 @@ if(NOT BUILD_CLI_ONLY)
     target_compile_definitions(image_writer_test PRIVATE
         IMAGER_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
     rpi_discover_tests(image_writer_test)
+
+# The keyboard probe is declared with the other Linux-only probes above; the
+# definition has to come after this target exists.
+if(TARGET keyboard_detect_probe)
+    target_compile_definitions(image_writer_test PRIVATE
+        KEYBOARD_PROBE_BINARY="$<TARGET_FILE:keyboard_detect_probe>")
+    add_dependencies(image_writer_test keyboard_detect_probe)
+endif()
 
     # The command line, run as a subprocess.
     #

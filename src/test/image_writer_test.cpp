@@ -1332,14 +1332,28 @@ TEST_CASE("Some other keyboard is not mistaken for a Pi one",
     // layout alone rather than matching on a number found in it.
     REQUIRE_KEYBOARD_HARNESS();
 
-    QTemporaryDir fixture;
-    REQUIRE(fixture.isValid());
-    REQUIRE(buildInputFixture(fixture.path(), {
+    // One fixture per name, so each stands on its own: the scan keeps the
+    // last match it finds, and a name that would match is no use as a row if
+    // some other entry sorts after it.
+    //
+    // The second one carries the weight. Its first run of digits is 2, which
+    // is inside the country table -- so matching digits anywhere in the name,
+    // rather than only after RPI_Wired_Keyboard_, would put a French layout
+    // on somebody's Keychron.
+    const QStringList names = {
         QStringLiteral("usb-Logitech_USB_Keyboard-event-kbd"),
+        QStringLiteral("usb-Keychron_K2-event-kbd"),
         QStringLiteral("usb-Some_Vendor_Model_2000-event-kbd"),
-    }));
+        QStringLiteral("usb-Dell_KB216_Wired_Keyboard-event-kbd"),
+    };
 
-    CHECK(keyboardWith(fixture.path()).isEmpty());
+    for (const QString& name : names) {
+        QTemporaryDir one;
+        REQUIRE(one.isValid());
+        REQUIRE(buildInputFixture(one.path(), {name}));
+        INFO("node: " << name.toStdString());
+        CHECK(keyboardWith(one.path()).isEmpty());
+    }
 }
 
 TEST_CASE("No keyboard at all picks no layout", "[imagewriter][keyboard]")
