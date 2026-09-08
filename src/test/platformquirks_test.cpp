@@ -275,6 +275,111 @@ TEST_CASE("launchDetached reports exec success and failure", "[platformquirks][l
                                          QStringList()) == false);
 }
 
+// Wait for a detached grandchild to produce a file. launchDetached returns as
+// soon as exec has taken, not when the program has finished.
+static bool waitForFile(const QString& path, int ms = 5000)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (QFileInfo::exists(path))
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    }
+    return false;
+}
+
+static bool writeExecutable(const QString& path, const QByteArray& body)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    if (f.write(body) != body.size())
+        return false;
+    f.close();
+    return f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner);
+}
+
+TEST_CASE("A program named without a path is looked for in fixed directories, "
+          "not on PATH", "[platformquirks][linux][launch]")
+{
+    // launchDetached runs xdg-open, xhost and the audio players, and it can be
+    // running as root -- Imager elevates itself to write to a disk. Resolving
+    // a bare program name against PATH there would mean whoever set PATH
+    // before the elevation chooses what runs as root. The code searches
+    // /usr/bin, /bin, /usr/sbin and /sbin instead, and consults PATH nowhere.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+
+    const QString marker = tmp.filePath(QStringLiteral("it-ran"));
+    const QString planted = tmp.filePath(QStringLiteral("rpi-imager-hijack-probe"));
+    REQUIRE(writeExecutable(planted,
+                            "#!/bin/sh\ntouch \"" + marker.toUtf8() + "\"\n"));
+
+    // On PATH, and first.
+    const QByteArray oldPath = qgetenv("PATH");
+    qputenv("PATH", tmp.path().toUtf8() + ":" + oldPath);
+
+    const bool launched = PlatformQuirks::launchDetached(
+        QStringLiteral("rpi-imager-hijack-probe"), QStringList());
+
+    qputenv("PATH", oldPath);
+
+    // Refused, and -- the part that matters -- never actually run.
+    CHECK_FALSE(launched);
+    CHECK_FALSE(waitForFile(marker, 1500));
+}
+
+TEST_CASE("An absolute path is run exactly as given",
+          "[platformquirks][linux][launch]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+
+    const QString marker = tmp.filePath(QStringLiteral("it-ran"));
+    const QString script = tmp.filePath(QStringLiteral("runner.sh"));
+    REQUIRE(writeExecutable(script,
+                            "#!/bin/sh\ntouch \"" + marker.toUtf8() + "\"\n"));
+
+    // Somewhere none of the four search directories would reach. A caller that
+    // knows the full path is trusted with it; the search is only for bare
+    // names.
+    CHECK(PlatformQuirks::launchDetached(script, QStringList()));
+    CHECK(waitForFile(marker));
+}
+
+TEST_CASE("Arguments reach the program one element each",
+          "[platformquirks][linux][launch]")
+{
+    // What this carries in production is a URL or a file path. There is no
+    // shell anywhere in launchDetached -- it is fork, fork, execv -- so an
+    // argument with a space in it has to arrive whole. Joined and re-split,
+    // a documentation link with a space would open two wrong pages, and a
+    // path with one would name a file that does not exist.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+
+    const QString out = tmp.filePath(QStringLiteral("argv.txt"));
+    const QString script = tmp.filePath(QStringLiteral("dump.sh"));
+    REQUIRE(writeExecutable(script,
+                            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$1\"\n"));
+
+    const QStringList args{
+        out,
+        QStringLiteral("https://example.invalid/a b?x=1&y=2"),
+        QStringLiteral("two  spaces"),
+        QStringLiteral("semi;colon"),
+    };
+    REQUIRE(PlatformQuirks::launchDetached(script, args));
+    REQUIRE(waitForFile(out));
+
+    QFile f(out);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    const QStringList got = QString::fromUtf8(f.readAll())
+                                .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    CHECK(got == args);
+}
+
 TEST_CASE("registerUriScheme writes the rpi-imager:// desktop entry", "[platformquirks][linux]") {
     // Redirect the XDG data/config dirs to a temp location so the test neither
     // pollutes nor depends on the real user environment (any update-desktop-
