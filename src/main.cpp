@@ -25,6 +25,7 @@
 #include <QQmlContext>
 #include <QIcon>
 #include "imagewriter.h"
+#include "settings_permissions.h"
 #include "nativefiledialog.h"
 #include <QQuickWindow>
 #include <QScreen>
@@ -260,6 +261,23 @@ int main(int argc, char *argv[])
     app.setApplicationName("Raspberry Pi Imager");
     app.setApplicationVersion(ImageWriter::staticVersion());
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
+
+    // Before anything reads or writes a setting. The file holds the crypt
+    // hash of the Pi's account password, the derived WPA PSK, and in
+    // organisation mode a Connect API key -- and QSettings would create it
+    // world-readable. Narrows an existing one too, which is what carries the
+    // fix onto an installation that already has the file.
+    {
+        const rpi_imager::SettingsPermissions perms =
+            rpi_imager::secureSettingsFile(QSettings().fileName());
+        if (!perms.secured) {
+            qWarning() << "Could not restrict permissions on the settings file"
+                       << QSettings().fileName()
+                       << "-- it may be readable by other accounts on this machine";
+        } else if (perms.tightened) {
+            qDebug() << "Restricted permissions on the existing settings file";
+        }
+    }
 
     // Log text scaling factor for debugging (all modes)
     qDebug() << "Text scale factor:" << PlatformQuirks::detectTextScaleFactor();

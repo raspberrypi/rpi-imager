@@ -10306,3 +10306,168 @@ TEST_CASE("A key with no default of its own reads as off",
     CHECK_FALSE(w.getBoolSetting(QStringLiteral("disable_warnings")));
     CHECK_FALSE(w.getBoolSetting(QStringLiteral("connect_org_enabled")));
 }
+
+// ══════════════════════════════════════════════════════════════
+// Who can read the settings file.
+//
+// It is not a list of preferences. It holds the crypt hash of the account
+// password that will be created on the Pi, the derived WPA PSK for the
+// wireless network -- password-equivalent, since a PSK joins the network on
+// its own -- and, in organisation mode, the Raspberry Pi Connect API key in
+// plain text.
+//
+// QSettings creates its file with 0666 masked by the umask, so on a typical
+// desktop that is 0644 or 0664 and every other account on the machine can
+// read all of it. secureSettingsFile is called before anything writes a
+// setting.
+// ══════════════════════════════════════════════════════════════
+
+#include "settings_permissions.h"
+#include <sys/stat.h>
+
+namespace {
+// The mode bits, which QFile::permissions does not give back in a form that
+// can be compared against an octal literal.
+unsigned fileMode(const QString& path)
+{
+    struct stat st{};
+    if (::stat(QFile::encodeName(path).constData(), &st) != 0)
+        return 0;
+    return st.st_mode & 07777;
+}
+} // namespace
+
+TEST_CASE("A new settings file is readable only by its owner",
+          "[imagewriter][settingsperms]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("nested/Imager.conf"));
+
+    const auto result = rpi_imager::secureSettingsFile(path);
+
+    CHECK(result.created);
+    CHECK(result.secured);
+    CHECK(QFileInfo::exists(path));
+    CHECK(fileMode(path) == 0600);
+
+    // The directory it sits in, too -- otherwise the filenames are still on
+    // show even where the contents are not.
+    CHECK(result.directorySecured);
+    CHECK(fileMode(QFileInfo(path).absolutePath()) == 0700);
+}
+
+TEST_CASE("An installation that already has a readable file is narrowed",
+          "[imagewriter][settingsperms]")
+{
+    // The upgrade path, and the reason this cannot only apply to files it
+    // creates: anyone who has run an earlier version already has the file,
+    // and QSettings will keep whatever permissions it finds for ever --
+    // QSaveFile copies them from the file it replaces on every write.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    const QByteArray existing =
+        "[imagecustomization]\nsshUserPassword=$y$jB5$notarealhash\n";
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.write(existing) == existing.size());
+    }
+    REQUIRE(::chmod(QFile::encodeName(path).constData(), 0644) == 0);
+    REQUIRE(fileMode(path) == 0644);
+
+    const auto result = rpi_imager::secureSettingsFile(path);
+
+    CHECK(result.tightened);
+    CHECK_FALSE(result.created);
+    CHECK(result.secured);
+    CHECK(fileMode(path) == 0600);
+
+    // And the settings themselves are still there. Tightening permissions
+    // must not be a way to lose somebody's saved customisation.
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    CHECK(f.readAll() == existing);
+}
+
+TEST_CASE("A group-readable file is narrowed too", "[imagewriter][settingsperms]")
+{
+    // 0664 rather than 0644: what a umask of 002 produces, which is the
+    // default on Debian and Raspberry Pi OS for a user in their own group.
+    // This is the shape the file actually has in the field.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+    { QFile f(path); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("x"); }
+    REQUIRE(::chmod(QFile::encodeName(path).constData(), 0664) == 0);
+
+    CHECK(rpi_imager::secureSettingsFile(path).secured);
+    CHECK(fileMode(path) == 0600);
+}
+
+TEST_CASE("Settings written afterwards stay owner-only",
+          "[imagewriter][settingsperms]")
+{
+    // The property the whole approach rests on: Qt replaces the file through
+    // QSaveFile, which copies the permissions of what it is replacing. If
+    // that stopped being true, securing the file once at startup would be
+    // undone by the first setting anybody changed.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    REQUIRE(rpi_imager::secureSettingsFile(path).secured);
+
+    QSettings settings(path, QSettings::IniFormat);
+    settings.setValue(QStringLiteral("imagecustomization/sshUserPassword"),
+                      QStringLiteral("$y$jB5$notarealhash"));
+    settings.sync();
+
+    REQUIRE(settings.status() == QSettings::NoError);
+    CHECK(fileMode(path) == 0600);
+
+    // Written and readable back, so this is not passing because nothing was
+    // stored.
+    QSettings reread(path, QSettings::IniFormat);
+    CHECK(reread.value(QStringLiteral("imagecustomization/sshUserPassword")).toString()
+          == QStringLiteral("$y$jB5$notarealhash"));
+}
+
+TEST_CASE("A symlink at the settings path is not followed",
+          "[imagewriter][settingsperms]")
+{
+    // Imager elevates itself to write to a disk, and applyQuirks() then
+    // points HOME back at the invoking user -- so as root it walks a
+    // directory an unprivileged account controls. Following a symlink there
+    // would let that account choose a file for root to change the
+    // permissions of.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString victim = tmp.filePath(QStringLiteral("someone-elses-file"));
+    { QFile f(victim); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("x"); }
+    REQUIRE(::chmod(QFile::encodeName(victim).constData(), 0644) == 0);
+
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+    REQUIRE(QFile::link(victim, path));
+
+    const auto result = rpi_imager::secureSettingsFile(path);
+
+    // The target is left exactly as it was.
+    CHECK(fileMode(victim) == 0644);
+    // And the attempt is reported as having failed rather than claimed as a
+    // success, so the caller warns.
+    CHECK_FALSE(result.created);
+    CHECK_FALSE(result.secured);
+}
+
+TEST_CASE("An empty path is refused rather than acted on",
+          "[imagewriter][settingsperms]")
+{
+    // QSettings::fileName() can be empty where no application name is set.
+    const auto result = rpi_imager::secureSettingsFile(QString());
+    CHECK_FALSE(result.created);
+    CHECK_FALSE(result.tightened);
+    CHECK_FALSE(result.secured);
+}

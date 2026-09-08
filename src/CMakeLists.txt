@@ -321,6 +321,7 @@ set(SOURCES ${SOURCES}
     "fastboot/eeprom_signer.cpp"
     "fastbootflashthread.cpp"
     "connect_device_registrar.cpp"
+    "settings_permissions.cpp"
 )
 
 # Find Qt components - different requirements for CLI-only vs GUI builds
