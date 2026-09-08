@@ -173,4 +173,86 @@ TestCase {
         verify(fakeContainer.customizationSettings.sshAuthorizedKeys === undefined)
         compare(fakeContainer.customizationSettings.sshPasswordAuth, true)
     }
+
+
+    // ── Reaching the authentication choice by keyboard ────────────────
+    //
+    // The password-or-key radios are only in the step's focus group while
+    // SSH is enabled, and the tab order is built once from those groups. So
+    // something has to rebuild it when the switch moves -- a handler on the
+    // pill's toggled signal, which was uncovered.
+    //
+    // Without it a keyboard user turns SSH on, tabs, and never reaches the
+    // choice. That is not an inconvenience on this step: public-key
+    // authentication with no key cannot proceed, so they are left on a
+    // screen whose Next button is disabled and whose only way forward is a
+    // control they cannot get to.
+
+    // Everything the tab order reaches, walked from the step's own ring.
+    function tabRing() {
+        var seen = []
+        var cur = step.getNextFocusableElement(null)
+        for (var i = 0; i < 30 && cur && seen.indexOf(cur) === -1; i++) {
+            seen.push(cur)
+            cur = step.getNextFocusableElement(cur)
+        }
+        return seen
+    }
+
+    function test_turning_ssh_on_puts_the_choice_in_the_tab_order() {
+        var pill = child("sshEnableToggle")
+        verify(!pill.checked, "SSH starts off")
+        var before = tabRing()
+        verify(before.indexOf(child("sshPasswordAuthRadio")) === -1,
+               "the choice is not offered while SSH is off")
+
+        // Clicked, not assigned: Qt reserves toggled() for a person moving
+        // the switch, so setting checked would leave the handler unrun --
+        // which is the whole thing under test.
+        mouseClick(pill.focusItem)
+        tryVerify(function () { return pill.checked }, 3000, "SSH is on")
+        waitForRendering(step)
+
+        var after = tabRing()
+        verify(after.indexOf(child("sshPasswordAuthRadio")) !== -1,
+               "the password option is reachable")
+        verify(after.indexOf(child("sshPublicKeyAuthRadio")) !== -1,
+               "and so is the key option")
+    }
+
+    function test_turning_ssh_back_off_takes_the_choice_out_again() {
+        // The other direction: tabbing onto a control that is no longer on
+        // the screen puts the focus outline nowhere the user can see.
+        //
+        // Kept out by two things -- the group only returns the radios while
+        // SSH is on, and the rebuild skips anything invisible, which they
+        // are when the section is hidden. Making the group unconditional
+        // fails nothing. What the cases here rest on is the rebuild
+        // happening at all, which does fail when removed.
+        var pill = child("sshEnableToggle")
+        mouseClick(pill.focusItem)
+        tryVerify(function () { return pill.checked }, 3000)
+        waitForRendering(step)
+        verify(tabRing().indexOf(child("sshPasswordAuthRadio")) !== -1)
+
+        mouseClick(pill.focusItem)
+        tryVerify(function () { return !pill.checked }, 3000, "SSH is off again")
+        waitForRendering(step)
+
+        compare(tabRing().indexOf(child("sshPasswordAuthRadio")), -1,
+                "the choice is out of the order with the controls")
+    }
+
+    function test_the_switch_itself_stays_reachable_throughout() {
+        // Whatever else moves, the way back has to remain in the order --
+        // otherwise turning SSH on is one way.
+        var pill = child("sshEnableToggle")
+        verify(tabRing().indexOf(pill.focusItem) !== -1, "reachable while off")
+
+        mouseClick(pill.focusItem)
+        tryVerify(function () { return pill.checked }, 3000)
+        waitForRendering(step)
+
+        verify(tabRing().indexOf(pill.focusItem) !== -1, "and while on")
+    }
 }
