@@ -10882,3 +10882,118 @@ TEST_CASE("An image that declares secure boot needs no flag",
     CHECK(w.checkSWCapability(QStringLiteral("secure_boot")));
     CHECK_FALSE(w.isSecureBootForcedByCliFlag());
 }
+
+// ══════════════════════════════════════════════════════════════
+// Which server the OS list actually came from.
+//
+// customRepoHost() is the only place the origin of a third-party OS list is
+// shown, which makes it a security control rather than a label -- covered
+// above for what it displays. This is the other half: keeping it truthful
+// when the server it names is not the one that answered.
+//
+// A custom repository URL can redirect. If the displayed host stayed as the
+// one the user typed, somebody who entered a URL they trusted would go on
+// seeing that name while reading a list served by whatever it redirected
+// to. The code says as much -- "users should see where data actually came
+// from" -- and nothing tested it.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+struct RepoHostSpy
+{
+    int hostChanged = 0;
+    explicit RepoHostSpy(ImageWriter* w)
+    {
+        QObject::connect(w, &ImageWriter::customRepoHostChanged,
+                         [this]() { ++hostChanged; });
+    }
+};
+
+const QByteArray kMinimalOsList =
+    QByteArrayLiteral("{\"os_list\":[{\"name\":\"An OS\",\"description\":\"d\","
+                      "\"url\":\"\",\"icon\":\"\"}]}");
+} // namespace
+
+TEST_CASE("A redirected custom repository shows where the list really came from",
+          "[imagewriter][repo][redirect]")
+{
+    OnlineWriter w;
+    const QUrl asked(QStringLiteral("https://mirror.example.com/os_list.json"));
+    const QUrl answered(QStringLiteral("https://elsewhere.invalid/os_list.json"));
+    w.setCustomRepo(asked);
+    REQUIRE(w.customRepoHost() == QStringLiteral("mirror.example.com"));
+
+    RepoHostSpy spy(&w);
+    w.onOsListFetchComplete(kMinimalOsList, asked, answered);
+
+    CHECK(w.customRepoHost() == QStringLiteral("elsewhere.invalid"));
+    // And the UI is told, so the label on screen is refreshed rather than
+    // staying at the name the user typed.
+    CHECK(spy.hostChanged == 1);
+}
+
+TEST_CASE("A redirect that stays on the same host is not announced",
+          "[imagewriter][repo][redirect]")
+{
+    // http to https, or a path the server rewrote. The origin has not
+    // changed, so there is nothing for the user to re-evaluate and no reason
+    // to redraw the label.
+    OnlineWriter w;
+    const QUrl asked(QStringLiteral("https://mirror.example.com/os_list.json"));
+    const QUrl answered(QStringLiteral("https://mirror.example.com/v2/os_list.json"));
+    w.setCustomRepo(asked);
+
+    RepoHostSpy spy(&w);
+    w.onOsListFetchComplete(kMinimalOsList, asked, answered);
+
+    CHECK(w.customRepoHost() == QStringLiteral("mirror.example.com"));
+    CHECK(spy.hostChanged == 0);
+}
+
+TEST_CASE("The official repository is not rewritten by a redirect",
+          "[imagewriter][repo][redirect]")
+{
+    // downloadsraspberrypi.com sits behind a CDN and may well answer from
+    // somewhere else. That is not a custom repository and must not start
+    // being displayed as one -- the whole point of the label is that it
+    // appears when the list is *not* Raspberry Pi's.
+    OnlineWriter w;
+    REQUIRE_FALSE(w.customRepo());
+    const QUrl official = w.osListUrl();
+
+    RepoHostSpy spy(&w);
+    w.onOsListFetchComplete(kMinimalOsList, official,
+                            QUrl(QStringLiteral("https://cdn.invalid/os_list.json")));
+
+    CHECK_FALSE(w.customRepo());
+    CHECK(w.customRepoHost().isEmpty());
+    CHECK(spy.hostChanged == 0);
+}
+
+TEST_CASE("A redirect with nowhere to redirect to changes nothing",
+          "[imagewriter][repo][redirect]")
+{
+    // No redirect happened: the effective URL is the one asked for. Also the
+    // case where the transport could not report one, which arrives as an
+    // invalid URL and must not blank the label.
+    OnlineWriter w;
+    const QUrl asked(QStringLiteral("https://mirror.example.com/os_list.json"));
+
+    SECTION("the same URL came back")
+    {
+        w.setCustomRepo(asked);
+        RepoHostSpy spy(&w);
+        w.onOsListFetchComplete(kMinimalOsList, asked, asked);
+        CHECK(w.customRepoHost() == QStringLiteral("mirror.example.com"));
+        CHECK(spy.hostChanged == 0);
+    }
+
+    SECTION("no effective URL was reported")
+    {
+        w.setCustomRepo(asked);
+        RepoHostSpy spy(&w);
+        w.onOsListFetchComplete(kMinimalOsList, asked, QUrl());
+        CHECK(w.customRepoHost() == QStringLiteral("mirror.example.com"));
+        CHECK(spy.hostChanged == 0);
+    }
+}
