@@ -6,6 +6,7 @@
 #include "downloadextractthread.h"
 #include "imagewriter.h"
 #include "network_poll_action.h"
+#include "eeprom_repo_override.h"
 #include "imagesizeparser.h"
 #include "imager_version.h"
 #include "writeprogresswatchdog.h"
@@ -260,15 +261,14 @@ ImageWriter::ImageWriter(QObject *parent)
                 if (blconfig_of_dir.cdUp()) {
                     QFile blconfig_file = QFile(blconfig_of_dir.path() + QDir::separator() + "nvmem");
                     if (blconfig_file.exists() && blconfig_file.open(blconfig_file.ReadOnly)) {
-                        const QByteArrayList eepromSettings = blconfig_file.readAll().split('\n');
+                        const QByteArray blconfigBytes = blconfig_file.readAll();
                         blconfig_file.close();
-                        for (const QByteArray &setting : eepromSettings)
+                        const QString fromEeprom =
+                            rpi_eeprom::repoUrlFromBlconfig(blconfigBytes);
+                        if (!fromEeprom.isEmpty())
                         {
-                            if (setting.startsWith("IMAGER_REPO_URL="))
-                            {
-                                _repo = setting.mid(16).trimmed();
-                                qDebug() << "Repository from EEPROM:" << _repo;
-                            }
+                            _repo = fromEeprom;
+                            qDebug() << "Repository from EEPROM:" << _repo;
                         }
                     }
                 }

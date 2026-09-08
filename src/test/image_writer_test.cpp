@@ -11189,3 +11189,111 @@ TEST_CASE("No network but a list already loaded leaves it alone",
     // the list is still perfectly good, only the network is gone.
     CHECK(rpi_net::planPollAction(false, false, true) == rpi_net::PollAction::Nothing);
 }
+
+// ══════════════════════════════════════════════════════════════
+// The repository a Pi carries in its bootloader EEPROM.
+//
+// Imager running on the Pi itself reads the bootloader configuration out of
+// nvmem at startup, and an IMAGER_REPO_URL= there replaces the default OS
+// list. It is how a fleet points every board it images at its own image
+// server without anybody typing a URL, so it is a setting nobody sees
+// working and everybody notices failing.
+//
+// Reaching it needs the device tree, a find across /sys/bus/nvmem and a Pi
+// to run on, so none of the parsing was covered.
+// ══════════════════════════════════════════════════════════════
+
+#include "eeprom_repo_override.h"
+
+TEST_CASE("A repository burned into the EEPROM is used",
+          "[imagewriter][eeprom]")
+{
+    const QByteArray conf =
+        "[all]\n"
+        "BOOT_UART=1\n"
+        "IMAGER_REPO_URL=https://images.example.invalid/os_list.json\n"
+        "BOOT_ORDER=0xf41\n";
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(conf)
+          == QStringLiteral("https://images.example.invalid/os_list.json"));
+}
+
+TEST_CASE("A configuration that does not mention it asks for nothing",
+          "[imagewriter][eeprom]")
+{
+    CHECK(rpi_eeprom::repoUrlFromBlconfig("[all]\nBOOT_UART=1\n").isEmpty());
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(QByteArray()).isEmpty());
+}
+
+TEST_CASE("Only the exact key is honoured", "[imagewriter][eeprom]")
+{
+    // A longer key beginning the same way is a different setting, and a
+    // commented-out line is somebody's note. Taking either would send a whole
+    // fleet at a URL nobody meant to set.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL_BACKUP=https://wrong.invalid/os.json\n").isEmpty());
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "#IMAGER_REPO_URL=https://wrong.invalid/os.json\n").isEmpty());
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              " IMAGER_REPO_URL=https://wrong.invalid/os.json\n").isEmpty());
+}
+
+TEST_CASE("The value survives how the flash region is written",
+          "[imagewriter][eeprom]")
+{
+    const QString expected = QStringLiteral("https://images.example.invalid/os.json");
+
+    SECTION("CRLF line endings")
+    {
+        CHECK(rpi_eeprom::repoUrlFromBlconfig(
+                  "BOOT_UART=1\r\nIMAGER_REPO_URL=https://images.example.invalid/os.json\r\n")
+              == expected);
+    }
+
+    SECTION("no trailing newline at the end of the region")
+    {
+        CHECK(rpi_eeprom::repoUrlFromBlconfig(
+                  "IMAGER_REPO_URL=https://images.example.invalid/os.json")
+              == expected);
+    }
+
+    SECTION("padding after the text, which nvmem leaves behind")
+    {
+        QByteArray conf = "IMAGER_REPO_URL=https://images.example.invalid/os.json\n";
+        conf.append(QByteArray(64, '\0'));
+        CHECK(rpi_eeprom::repoUrlFromBlconfig(conf) == expected);
+    }
+}
+
+TEST_CASE("A key with nothing after it is not an override to nowhere",
+          "[imagewriter][eeprom]")
+{
+    // A half-finished burn. Taking the empty value would replace the default
+    // list with a URL that fetches nothing: the operator gets an empty OS
+    // list and a screen saying the data came from nowhere in particular,
+    // which tells them neither what happened nor what to do. Leaving them on
+    // Raspberry Pi's list is wrong in a way they can see and act on.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig("IMAGER_REPO_URL=\n").isEmpty());
+    CHECK(rpi_eeprom::repoUrlFromBlconfig("IMAGER_REPO_URL=   \n").isEmpty());
+
+    // And it does not wipe out a good one that came before it, which is
+    // what a re-burn that stopped half way leaves behind. On its own an
+    // empty value is indistinguishable from no value -- both return nothing
+    // -- so this pairing is the only case where skipping it can be told
+    // apart from taking it.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=https://images.example.invalid/os.json\n"
+              "IMAGER_REPO_URL=\n")
+          == QStringLiteral("https://images.example.invalid/os.json"));
+}
+
+TEST_CASE("With two of them, the last is taken", "[imagewriter][eeprom]")
+{
+    // Recorded rather than chosen. The original loop kept assigning without
+    // breaking, so the last won; nothing says which one the bootloader
+    // itself would honour, and a configuration carrying two is already
+    // malformed. Pinned so a change of mind is deliberate.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=https://first.invalid/os.json\n"
+              "IMAGER_REPO_URL=https://second.invalid/os.json\n")
+          == QStringLiteral("https://second.invalid/os.json"));
+}
