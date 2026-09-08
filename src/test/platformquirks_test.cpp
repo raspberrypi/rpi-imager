@@ -3406,6 +3406,28 @@ QStringList policyFilesIn(const QString& dir)
 
 // Run one probe mode with `etcRoot` over /etc/polkit-1 and `usrActions` over
 // /usr/share/polkit-1/actions. Returns its stdout, empty on failure.
+// The same, with /etc/polkit-1 made read-only after it is bound. A read-only
+// *mount* is what stops root: file permissions do not, since root ignores
+// them, and root is exactly who installs a policy.
+QString runProbeInReadOnlyPolkitNamespace(const QString& mode, const QString& etcRoot,
+                                          const QString& usrActions)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /etc/polkit-1 "
+                            "&& mount -o remount,bind,ro /etc/polkit-1 "
+                            "&& mount --bind \"$2\" /usr/share/polkit-1/actions "
+                            "&& mount -o remount,bind,ro /usr/share/polkit-1/actions "
+                            "&& exec \"$3\" \"$4\""),
+             QStringLiteral("_"), etcRoot, usrActions,
+             QStringLiteral(ELEVATION_PROBE_BINARY), mode});
+    if (!p.waitForFinished(30000))
+        return {};
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
 QString runProbeInPolkitNamespace(const QString& mode, const QString& etcRoot,
                                   const QString& usrActions)
 {
@@ -3424,6 +3446,59 @@ QString runProbeInPolkitNamespace(const QString& mode, const QString& etcRoot,
 }
 
 } // namespace
+
+TEST_CASE("A policy that cannot be written is reported, not assumed",
+          "[platformquirks][policyinstall]")
+{
+    // Installing the policy is what lets an AppImage elevate itself to write
+    // to a disk. If it cannot be written -- a read-only /etc, an immutable
+    // filesystem, a container -- saying so is the whole of the difference
+    // between the user seeing a failure now and finding out later that
+    // writing a card does not work, with a polkit prompt that never appears.
+    //
+    // Read-only as a *mount*, not as permissions: root ignores permissions,
+    // and root is who installs a policy.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    const QString actions = etc.path() + QStringLiteral("/actions");
+    REQUIRE(QDir().mkpath(actions));
+
+    const QString out = runProbeInReadOnlyPolkitNamespace(QStringLiteral("install"),
+                                                          etc.path(), usr.path());
+    INFO(out.toStdString());
+    REQUIRE_FALSE(out.isEmpty());
+    CHECK(out.contains(QStringLiteral("INSTALLED=0")));
+
+    // And nothing was left behind. A half-written policy in the actions
+    // directory is worse than none: it is a file granting root that nobody
+    // has finished writing.
+    CHECK(policyFilesIn(actions).isEmpty());
+}
+
+TEST_CASE("A refused install does not report a policy that is not there",
+          "[platformquirks][policyinstall]")
+{
+    // The check the application makes before offering to elevate. Having
+    // just failed to install one, it must not then say one exists -- that
+    // combination puts the user on a screen with no Install Authorization
+    // button and no way to write a card either.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    REQUIRE(QDir().mkpath(etc.path() + QStringLiteral("/actions")));
+
+    runProbeInReadOnlyPolkitNamespace(QStringLiteral("install"), etc.path(), usr.path());
+
+    const QString check = runProbeInPolkitNamespace(QStringLiteral("policy"),
+                                                    etc.path(), usr.path());
+    INFO(check.toStdString());
+    CHECK(check.contains(QStringLiteral("POLICY=0")));
+}
 
 TEST_CASE("Installing a policy writes one naming this binary, and it is then found",
           "[platformquirks][policyinstall]")
