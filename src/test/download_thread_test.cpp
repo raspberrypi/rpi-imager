@@ -40,6 +40,8 @@ using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include <unistd.h>
+#include <cerrno>
+#include <cstring>
 
 #include "file_operations.h"
 #include "imageadvancedoptions.h"
@@ -3741,4 +3743,115 @@ TEST_CASE("A successful async submission reports the block as written",
     CHECK(thread.device->asyncSubmissions == 1);
     CHECK(written == static_cast<size_t>(block.size()));
     CHECK(thread.device->syncWrites == 0);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Saying why a write to the card failed
+//
+// _writeFailureReason() is what a local-file write reports when the copy loop
+// comes up short. The interesting case is ENOSPC, and it is interesting for a
+// reason that is not obvious from the errno: the commonest way to meet it is
+// not choosing an image too big for the card, but a card that reports more
+// capacity than it physically has. Those are sold, they pass a casual look at
+// the file manager, and they fail exactly here. "Error writing to device"
+// leaves the reader with nothing to act on and a card they will try again.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// A device that failed for a nameable reason.
+class ErrnoDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    explicit ErrnoDevice(int err) : _err(err) {}
+    int GetLastErrorCode() const override { return _err; }
+
+private:
+    int _err;
+};
+
+class ReasoningWrite : public DownloadThread
+{
+public:
+    ReasoningWrite() : DownloadThread("file:///nonexistent", "", "") {}
+
+    void deviceFailedWith(int err) { _file = std::make_shared<ErrnoDevice>(err); }
+    void haveNoDevice() { _file.reset(); }
+
+    bool openRealDevice(const char *path)
+    {
+        auto ops = rpi_imager::FileOperations::Create();
+        if (!ops || ops->OpenDevice(path) != rpi_imager::FileError::kSuccess)
+            return false;
+        _file = std::move(ops);
+        return true;
+    }
+
+    rpi_imager::FileOperations *device() { return _file.get(); }
+};
+
+} // namespace
+
+TEST_CASE("A card that runs out of room is named, and so is the reason it might have",
+          "[downloadthread][writeerror]")
+{
+    // /dev/full is a character device that fails every write with ENOSPC, so
+    // this is the kernel's own errno rather than one a double was told to
+    // return.
+    if (::access("/dev/full", W_OK) != 0)
+        SKIP("/dev/full is not available on this host");
+
+    ReasoningWrite thread;
+    if (!thread.openRealDevice("/dev/full"))
+        SKIP("/dev/full could not be opened as a device");
+
+    std::vector<std::uint8_t> block(4096, 0x5A);
+    REQUIRE(thread.device()->WriteSequential(block.data(), block.size())
+            != rpi_imager::FileError::kSuccess);
+    REQUIRE(thread.device()->GetLastErrorCode() == ENOSPC);
+
+    const std::string why = thread._writeFailureReason().toStdString();
+    INFO("message: " << why);
+    CHECK_THAT(why, Catch::Matchers::ContainsSubstring("ran out of space"));
+    // The half a reader cannot work out for themselves.
+    CHECK_THAT(why, Catch::Matchers::ContainsSubstring("reports more capacity"));
+    // And not the bare sentence that says nothing.
+    CHECK(why != "Error writing to device.");
+}
+
+TEST_CASE("A write failure the system named is passed on in its own words",
+          "[downloadthread][writeerror]")
+{
+    // Anything that is not a full card: the card pulled out mid-write, a
+    // reader that stopped answering, a device that went read-only. There is
+    // no advice to give for these, but the system's own word for it is worth
+    // more than "error".
+    ReasoningWrite thread;
+    thread.deviceFailedWith(EIO);
+
+    const std::string why = thread._writeFailureReason().toStdString();
+    INFO("message: " << why);
+    CHECK_THAT(why, Catch::Matchers::ContainsSubstring(::strerror(EIO)));
+    // Not misreported as a space problem.
+    CHECK_THAT(why, !Catch::Matchers::ContainsSubstring("ran out of space"));
+}
+
+TEST_CASE("A write that failed for no stated reason still says something",
+          "[downloadthread][writeerror]")
+{
+    // A short write with no errno behind it, and the case where the device is
+    // already gone by the time the reason is asked for -- neither may invent
+    // a cause, and neither may crash on the way to saying so.
+    ReasoningWrite thread;
+
+    thread.deviceFailedWith(0);
+    const std::string silent = thread._writeFailureReason().toStdString();
+    INFO("silent: " << silent);
+    CHECK_FALSE(silent.empty());
+    CHECK_THAT(silent, !Catch::Matchers::ContainsSubstring("ran out of space"));
+
+    thread.haveNoDevice();
+    const std::string gone = thread._writeFailureReason().toStdString();
+    INFO("gone: " << gone);
+    CHECK(gone == silent);
 }
