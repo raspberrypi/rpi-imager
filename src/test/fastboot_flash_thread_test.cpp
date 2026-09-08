@@ -1680,3 +1680,50 @@ TEST_CASE("A refused customisation still releases the boot partition",
     CHECK_FALSE(cmds.filter(QStringLiteral("oem mount ")).isEmpty());
     CHECK_FALSE(cmds.filter(QStringLiteral("oem umount ")).isEmpty());
 }
+
+TEST_CASE("An image file with nothing in it is refused before the board is touched",
+          "[fastboot][flash][pipeline]")
+{
+    // The Compute Module twin of a refusal the SD card path already has. A
+    // download that produced a zero-length file, or a local file the user
+    // picked before it finished copying, decompresses to no entries at all.
+    //
+    // The board is in fastboot mode by this point and about to be erased, so
+    // the answer has to be a refusal and nothing sent -- an image that turned
+    // out to be empty must not leave a Compute Module with its storage wiped
+    // and nothing written back.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("empty.img.xz"));
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));   // and not a byte written
+    }
+
+    // A size is declared, as the catalogue would, so the pipeline starts and
+    // the emptiness is found where a user would find it.
+    FlashingThread t{QUrl::fromLocalFile(path), 2u * 1024 * 1024, QByteArray(),
+                     64u * 1024 * 1024};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(log.success);
+    REQUIRE_FALSE(log.errors.isEmpty());
+    // A sentence about the image, not a diagnostic about the board the user
+    // has just plugged in. Without the check on the first header, libarchive
+    // is asked for data it does not have and the message becomes "INTERNAL
+    // ERROR: Function 'archive_read_data_block' invoked with archive
+    // structure in state 'header'" -- which is still a refusal, so the
+    // outcome checks above pass either way, and this is the row that does
+    // not.
+    const std::string said = log.errors.join(QStringLiteral(" | ")).toStdString();
+    CHECK_THAT(said, ContainsSubstring("No entries"));
+    CHECK_THAT(said, !ContainsSubstring("INTERNAL ERROR"));
+
+    // And nothing reached the device.
+    CHECK(t.device.flashed().empty());
+}
