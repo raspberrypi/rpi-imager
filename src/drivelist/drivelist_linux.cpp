@@ -286,11 +286,18 @@ std::optional<QByteArray> executeLsblk()
 // Public API
 // ============================================================================
 
-std::vector<DeviceDescriptor> ListStorageDevices()
+// Everything ListStorageDevices() does once lsblk has answered -- or failed
+// to. Separate from the call itself so the test API can drive the same code
+// the application runs, including the two failure shapes: nullopt for an
+// lsblk that could not be run, and unparseable output for one that answered
+// with rubbish. Before this the test API had a second copy of the parsing
+// that returned an empty list where this one returns the sentinel, so the
+// behaviour a user actually meets was the one nothing checked.
+std::vector<DeviceDescriptor> devicesFromLsblkOutput(
+    const std::optional<QByteArray>& jsonOutput, bool embeddedMode)
 {
     std::vector<DeviceDescriptor> deviceList;
 
-    auto jsonOutput = executeLsblk();
     if (!jsonOutput) {
         // Return a sentinel device with error message so UI can display failure
         // instead of showing an empty list (which looks like "no drives found")
@@ -314,9 +321,8 @@ std::vector<DeviceDescriptor> ListStorageDevices()
         return deviceList;
     }
 
-    const bool embeddedMode = ::isEmbeddedMode();
     const QJsonArray blockDevices = doc.object().value("blockdevices").toArray();
-    
+
     // Reserve capacity to avoid reallocations during enumeration
     deviceList.reserve(static_cast<size_t>(blockDevices.size()));
 
@@ -330,6 +336,11 @@ std::vector<DeviceDescriptor> ListStorageDevices()
     return deviceList;
 }
 
+std::vector<DeviceDescriptor> ListStorageDevices()
+{
+    return devicesFromLsblkOutput(executeLsblk(), ::isEmbeddedMode());
+}
+
 // ============================================================================
 // Test API
 // ============================================================================
@@ -340,27 +351,12 @@ namespace testing {
 
 std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput, bool embeddedMode)
 {
-    std::vector<DeviceDescriptor> deviceList;
+    return devicesFromLsblkOutput(QByteArray::fromStdString(jsonOutput), embeddedMode);
+}
 
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(jsonOutput), &parseError);
-    if (parseError.error != QJsonParseError::NoError) {
-        return deviceList;
-    }
-
-    const QJsonArray blockDevices = doc.object().value("blockdevices").toArray();
-    
-    // Reserve capacity to avoid reallocations during enumeration
-    deviceList.reserve(static_cast<size_t>(blockDevices.size()));
-    
-    for (const auto& item : blockDevices) {
-        auto device = parseBlockDevice(item.toObject(), embeddedMode);
-        if (device) {
-            deviceList.push_back(std::move(*device));
-        }
-    }
-
-    return deviceList;
+std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode)
+{
+    return devicesFromLsblkOutput(std::nullopt, embeddedMode);
 }
 
 } // namespace testing

@@ -26,6 +26,7 @@ using Catch::Matchers::ContainsSubstring;
 namespace Drivelist::testing {
 #ifdef Q_OS_LINUX
 std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput, bool embeddedMode = false);
+std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode = false);
 #endif
 #ifdef Q_OS_WIN
 std::string windowsBusTypeToString(int busType);
@@ -721,18 +722,60 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[0].isSystem);
     }
 
-    SECTION("Handles malformed lsblk output without crashing")
+    SECTION("Well-formed output with nothing in it offers nothing")
     {
-        // The JSON comes straight from a subprocess; a truncated or garbled
-        // response must yield no devices rather than a crash or a
-        // half-populated list the user could then write to.
-        CHECK(parseLinuxBlockDevices("", false).empty());
-        CHECK(parseLinuxBlockDevices("not json at all", false).empty());
-        CHECK(parseLinuxBlockDevices("{\"blockdevices\":", false).empty());
+        // No drives attached is not a failure, and must not be dressed up as
+        // one: these all parse, and all mean the same thing.
         CHECK(parseLinuxBlockDevices("{}", false).empty());
         CHECK(parseLinuxBlockDevices("{\"blockdevices\":[]}", false).empty());
         CHECK(parseLinuxBlockDevices("{\"blockdevices\":{}}", false).empty());
         CHECK(parseLinuxBlockDevices("[]", false).empty());
+    }
+
+    SECTION("Output that cannot be read at all is reported, not swallowed")
+    {
+        // The JSON comes straight from a subprocess, and a truncated or
+        // garbled response is not the same thing as no drives. An empty list
+        // reaches the storage screen as "no drives found", which sends the
+        // user off to reseat a card that was never the problem -- so
+        // enumeration failing produces a row saying so instead.
+        //
+        // The screen knows what to do with it: DriveListModel picks the
+        // sentinel out by name and shows its message. What had never been
+        // checked was that anything produces one, because the test API used
+        // to carry its own copy of the parsing that returned an empty list
+        // here.
+        for (const char *garbled : {"", "not json at all", "{\"blockdevices\":"}) {
+            INFO("input: " << garbled);
+            const auto devices = parseLinuxBlockDevices(garbled, false);
+            REQUIRE(devices.size() == 1);
+            CHECK(devices[0].device == "__error__");
+            CHECK_FALSE(devices[0].error.empty());
+            CHECK_FALSE(devices[0].description.empty());
+        }
+    }
+
+    SECTION("An lsblk that will not run at all is reported the same way")
+    {
+        // No output rather than bad output: lsblk missing, or killed after
+        // the timeout. Same outcome for the user, who cannot tell the two
+        // apart and does not need to.
+        const auto devices = devicesWhenLsblkCannotBeRun(false);
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].device == "__error__");
+        CHECK_THAT(devices[0].error, ContainsSubstring("enumerate"));
+        CHECK_FALSE(devices[0].description.empty());
+    }
+
+    SECTION("A failure row is not something the user can write to")
+    {
+        // It exists to be read. isDisplayable() is what the storage list
+        // filters on, and a sentinel that passed it would appear as a drive
+        // with no size and no name.
+        const auto devices = devicesWhenLsblkCannotBeRun(false);
+        REQUIRE(devices.size() == 1);
+        CHECK_FALSE(devices[0].isDisplayable());
     }
 
     SECTION("Collects mountpoints from children")
