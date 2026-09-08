@@ -8263,6 +8263,64 @@ TEST_CASE("A partition of a listed drive is not itself a listed drive",
     CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sd")));
 }
 
+// ── The drives the flag is named after ────────────────────────────────
+//
+// The drive list drops what is mounted at "/" and nothing else, so a disk
+// carrying /home, /boot, /usr or /var is on it, flagged isSystem. The storage
+// picker demands such a drive's name be typed before it will touch one. The
+// CLI has --enable-writing-system-drives, and its refusal already tells the
+// operator to reach for it -- so without the flag those drives must not be
+// accepted, or the flag means nothing and a script writes over somebody's
+// home partition without being asked twice.
+
+namespace {
+
+Drivelist::DeviceDescriptor systemDrive(const std::string &device,
+                                        const std::string &description)
+{
+    Drivelist::DeviceDescriptor d = removableDrive(device, description);
+    d.isSystem = true;
+    return d;
+}
+
+} // namespace
+
+TEST_CASE("A drive carrying system files is not a destination on its own",
+          "[cli][destination][system]")
+{
+    PopulatedDriveList drives({systemDrive("/dev/sda", "Disk holding /home")});
+    REQUIRE(drives.model.rowCount(QModelIndex()) == 1);
+
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sda")));
+}
+
+TEST_CASE("A system drive is not offered as somewhere to write instead",
+          "[cli][destination][system]")
+{
+    // The refusal prints the alternatives. Listing a drive it would itself
+    // refuse would send the operator straight back into the same wall -- or
+    // worse, persuade them it was a safe choice.
+    PopulatedDriveList drives({systemDrive("/dev/sda", "Disk holding /home"),
+                               removableDrive("/dev/sdz", "SanDisk Cruzer")});
+
+    const QStringList offered = Cli::removableDestinations(drives.model);
+    INFO("offered: " << offered.join(QStringLiteral(" | ")).toStdString());
+    CHECK(offered.size() == 1);
+    CHECK(offered.first().startsWith(QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("An ordinary card next to a system drive is still accepted",
+          "[cli][destination][system]")
+{
+    // The refusal has to be about the one drive, not about there being a
+    // system drive plugged in at all.
+    PopulatedDriveList drives({systemDrive("/dev/sda", "Disk holding /home"),
+                               removableDrive("/dev/sdz", "SanDisk Cruzer")});
+
+    CHECK(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sdz")));
+    CHECK_FALSE(Cli::destinationIsRemovable(drives.model, QStringLiteral("/dev/sda")));
+}
+
 TEST_CASE("With no drives to write to, every destination is refused",
           "[cli][destination]")
 {

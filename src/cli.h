@@ -31,11 +31,13 @@ public:
     // Empty when the key is usable, otherwise the reason it is not.
     static QString validateSecureBootKey(const QString &path);
 
-    // Whether the destination is one of the removable volumes the system
-    // reports. Unless --enable-writing-system-drives is given, a destination
-    // that is not on that list is refused -- this is the CLI's equivalent of
-    // the storage picker greying out the machine's own disk, and the only
-    // thing standing between a mistyped script and somebody's root volume.
+    // Whether the destination is one the CLI will write to without being told
+    // to. It has to be in the drive list and not flagged as a system drive:
+    // the list drops what is mounted at "/" and nothing else, so a disk
+    // carrying /home or /boot is on it, and the storage picker demands its
+    // name be typed before touching one of those. This is the CLI's
+    // equivalent, and --enable-writing-system-drives is how an operator who
+    // means it says so.
     static bool destinationIsRemovable(class DriveListModel &drives,
                                        const QString &destination);
 

@@ -75,11 +75,32 @@ QString Cli::validateSecureBootKey(const QString &path)
     return {};
 }
 
+namespace {
+
+// A row the CLI will write to without being told to.
+//
+// Being in the drive list is not enough. The model drops what is mounted at
+// "/" and nothing else, so a disk carrying /home, /boot, /usr or /var is
+// listed -- flagged isSystem, which is what the storage picker uses to demand
+// the drive's name be typed before it will touch it. The CLI has no such
+// dialog; what it has is --enable-writing-system-drives, and the refusal
+// already tells the operator to reach for it. So the flag has to actually
+// mean something: without it, a flagged drive is not a destination.
+bool rowIsOrdinaryTarget(DriveListModel &drives, int row)
+{
+    const QModelIndex idx = drives.index(row, 0);
+    return !idx.data(DriveListModel::isSystemRole).toBool();
+}
+
+} // namespace
+
 bool Cli::destinationIsRemovable(DriveListModel &drives, const QString &destination)
 {
     const int numDrives = drives.rowCount(QModelIndex());
     for (int i = 0; i < numDrives; i++)
     {
+        if (!rowIsOrdinaryTarget(drives, i))
+            continue;
         if (drives.index(i, 0).data(DriveListModel::deviceRole).toString() == destination)
             return true;
     }
@@ -93,6 +114,11 @@ QStringList Cli::removableDestinations(DriveListModel &drives)
     out.reserve(numDrives);
     for (int i = 0; i < numDrives; i++)
     {
+        // Same rule as the check above: a drive the refusal would not accept
+        // has no business being offered as one the operator could have
+        // written instead.
+        if (!rowIsOrdinaryTarget(drives, i))
+            continue;
         const QModelIndex idx = drives.index(i, 0);
         out << idx.data(DriveListModel::deviceRole).toString()
                 + QStringLiteral(" (")
