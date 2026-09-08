@@ -2164,6 +2164,91 @@ TEST_CASE("rpi-preseed user without password omits password keys", "[preseed][us
     REQUIRE_THAT(s, ContainsSubstring("groups = [\"sudo\"]"));
 }
 
+// The two characters TOML gives meaning to, in values a user types.
+//
+// rpi-preseed's parser unescapes exactly \\ and \", so a value carrying
+// either has to arrive escaped. Wi-Fi passphrases are where this bites: a
+// quote in one is ordinary, and an unescaped quote ends the string early --
+// the rest of the line becomes syntax the parser rejects, the file is
+// discarded, and the board comes up with no network, no user and no reason
+// given. Neither character had ever been through this serialiser.
+
+TEST_CASE("rpi-preseed escapes a double quote in a value", "[preseed][quoting]") {
+    QVariantMap settings;
+    settings["hostname"] = "the\"pi";
+    settings["sshUserName"] = "jig";
+    settings["sshUserPassword"] = "pa\"ss";
+
+    std::string s = QString::fromUtf8(
+        CustomisationGenerator::generateRpiPreseedToml(settings)).toStdString();
+
+    INFO(s);
+    REQUIRE_THAT(s, ContainsSubstring("hostname = \"the\\\"pi\""));
+    REQUIRE_THAT(s, ContainsSubstring("password = \"pa\\\"ss\""));
+}
+
+TEST_CASE("rpi-preseed escapes a backslash in a value", "[preseed][quoting]") {
+    // A backslash left alone would be read as the start of an escape, so
+    // "pa\ss" becomes an unknown escape or eats the character after it.
+    QVariantMap settings;
+    settings["hostname"] = "the\\pi";
+    settings["sshUserName"] = "jig";
+    settings["sshUserPassword"] = "pa\\ss";
+
+    std::string s = QString::fromUtf8(
+        CustomisationGenerator::generateRpiPreseedToml(settings)).toStdString();
+
+    INFO(s);
+    REQUIRE_THAT(s, ContainsSubstring("hostname = \"the\\\\pi\""));
+    REQUIRE_THAT(s, ContainsSubstring("password = \"pa\\\\ss\""));
+}
+
+TEST_CASE("rpi-preseed escapes a Wi-Fi passphrase carrying both", "[preseed][quoting][wifi]") {
+    // The realistic one. A passphrase is chosen for entropy, not for what a
+    // configuration format finds convenient.
+    QVariantMap settings;
+    settings["wifiSSID"] = "home\"net";
+    settings["wifiPassword"] = "a\"b\\c";
+    settings["wifiCountry"] = "GB";
+
+    std::string s = QString::fromUtf8(
+        CustomisationGenerator::generateRpiPreseedToml(settings)).toStdString();
+
+    INFO(s);
+    REQUIRE_THAT(s, ContainsSubstring("ssid = \"home\\\"net\""));
+    // Escaped, and left as a passphrase rather than mistaken for a raw key.
+    REQUIRE_THAT(s, ContainsSubstring("a\\\"b\\\\c"));
+}
+
+TEST_CASE("rpi-preseed tells a stored key from a passphrase by its digits",
+          "[preseed][quoting][wifi]") {
+    // A legacy setting holds either a 64-character hex PMK or whatever the
+    // user typed. Called wrong in one direction the key is derived a second
+    // time from something that is already a key; in the other a passphrase
+    // is written as if it were one. Both come out as a board that will not
+    // join the network, with nothing to say why.
+    const QString hexKey(64, QLatin1Char('a'));
+    QString notHex(64, QLatin1Char('a'));
+    notHex[40] = QLatin1Char('z');
+    REQUIRE(notHex.length() == 64);
+
+    QVariantMap stored;
+    stored["wifiSSID"] = "net";
+    stored["wifiCountry"] = "GB";
+    stored["wifiPassword"] = hexKey;
+    const std::string withKey = QString::fromUtf8(
+        CustomisationGenerator::generateRpiPreseedToml(stored)).toStdString();
+
+    QVariantMap typed = stored;
+    typed["wifiPassword"] = notHex;
+    const std::string withPassphrase = QString::fromUtf8(
+        CustomisationGenerator::generateRpiPreseedToml(typed)).toStdString();
+
+    INFO("stored key:\n" << withKey << "\ntyped:\n" << withPassphrase);
+    REQUIRE_THAT(withKey, ContainsSubstring("password_encrypted = true"));
+    REQUIRE_THAT(withPassphrase, !ContainsSubstring("password_encrypted = true"));
+}
+
 TEST_CASE("rpi-preseed ssh section is gated on sshEnabled", "[preseed][ssh]") {
     QVariantMap settings;
     settings["sshAuthorizedKeys"] = "ssh-ed25519 AAAAKEY user@host";
