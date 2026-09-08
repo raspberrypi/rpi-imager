@@ -603,6 +603,7 @@ TEST_CASE("Start and stop in a loop leaves nothing behind",
 #include "faulty_block_device.h"
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QProcess>
 #include <QUuid>
@@ -2803,6 +2804,160 @@ TEST_CASE("A synchronised clock on a machine with no network is still not ready"
     CHECK(networkReadyWith(net, lib, var, bin) == 0);
 }
 
+// ══════════════════════════════════════════════════════════════
+// Asking NetworkManager when sysfs says nothing is up.
+//
+// The interface walk above is the fast path. Where it finds nothing -- a
+// machine whose connection is a VPN, a bridge, or anything else that does
+// not report "up" in operstate -- Imager asks nmcli before deciding it is
+// offline. That second question is what stands between such a machine and
+// the offline screen, and the cases above deliberately make nmcli unfindable
+// so it cannot answer for the real network, which left it untested.
+//
+// The probe's PATH is a directory of this test's own making either way; here
+// it has an nmcli in it.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A nmcli that prints `answer` and nothing else, and records that it ran.
+bool plantNmcli(const QString& binDir, const QByteArray& body)
+{
+    const QString path = binDir + QStringLiteral("/nmcli");
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    const QByteArray script = "#!/bin/sh\n" + body;
+    if (f.write(script) != script.size())
+        return false;
+    f.close();
+    return f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner);
+}
+
+// Every interface present but none of them up: the state that sends the
+// question on to nmcli.
+bool buildAllDownFixture(const QString& root)
+{
+    return buildNetFixture(root, {{QStringLiteral("eth0"), QStringLiteral("down")},
+                                  {QStringLiteral("wlan0"), QStringLiteral("down")}});
+}
+
+} // namespace
+
+TEST_CASE("NetworkManager is asked when no interface reports itself up",
+          "[platformquirks][netdetect][nmcli]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(buildAllDownFixture(net));
+
+    SECTION("full connectivity means the OS list can be fetched")
+    {
+        // A VPN or a bridge, where operstate never says "up" for the thing
+        // actually carrying traffic. Without this question the user sits on
+        // the offline screen with a working connection.
+        REQUIRE(plantNmcli(bin, "echo full\n"));
+        CHECK(connectivityWith(net, bin) == 1);
+    }
+
+    SECTION("limited connectivity is still worth trying")
+    {
+        REQUIRE(plantNmcli(bin, "echo limited\n"));
+        CHECK(connectivityWith(net, bin) == 1);
+    }
+
+    SECTION("none means offline")
+    {
+        REQUIRE(plantNmcli(bin, "echo none\n"));
+        CHECK(connectivityWith(net, bin) == 0);
+    }
+
+    SECTION("a captive portal is not connectivity")
+    {
+        // NetworkManager reports "portal" when something is intercepting.
+        // Fetching then returns the portal's login page rather than the OS
+        // list, so the offline screen -- which offers Retry -- is the more
+        // useful answer.
+        REQUIRE(plantNmcli(bin, "echo portal\n"));
+        CHECK(connectivityWith(net, bin) == 0);
+    }
+
+    SECTION("an answer nobody recognises is not taken as yes")
+    {
+        REQUIRE(plantNmcli(bin, "echo something-new\n"));
+        CHECK(connectivityWith(net, bin) == 0);
+    }
+
+    SECTION("and nor is nmcli failing")
+    {
+        REQUIRE(plantNmcli(bin, "echo 'Error: NetworkManager is not running.' >&2\nexit 8\n"));
+        CHECK(connectivityWith(net, bin) == 0);
+    }
+}
+
+TEST_CASE("An nmcli that does not answer does not hold anything up",
+          "[platformquirks][netdetect][nmcli]")
+{
+    // This runs on a one-second poll while the offline screen is showing, and
+    // on the GUI thread's behalf. A NetworkManager wedged on a D-Bus call
+    // would otherwise take the window with it.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(buildAllDownFixture(net));
+    // Absolute: the probe's PATH is the fixture directory alone, so a bare
+    // "sleep" would not be found and the script would fall straight through
+    // to the echo -- answering instantly, which is the opposite of the case.
+    REQUIRE(plantNmcli(bin, "/bin/sleep 30\necho full\n"));
+
+    QElapsedTimer elapsed;
+    elapsed.start();
+    const int answer = connectivityWith(net, bin);
+    const qint64 took = elapsed.elapsed();
+
+    INFO("took " << took << " ms");
+    CHECK(answer == 0);
+    // Well inside the thirty seconds the fixture would take, so this is the
+    // timeout firing rather than the sleep finishing.
+    CHECK(took < 15000);
+}
+
+TEST_CASE("An interface that is up settles it without spawning anything",
+          "[platformquirks][netdetect][nmcli]")
+{
+    // The sysfs walk is first because it is a couple of file reads; nmcli is
+    // a process spawn, and this is called on a timer. If the order ever
+    // flipped, every tick would fork.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(buildNetFixture(net, {{QStringLiteral("eth0"), QStringLiteral("up")}}));
+
+    // Says the opposite of the fixture, and leaves a mark if it is consulted.
+    const QString marker = tmp.filePath(QStringLiteral("nmcli-ran"));
+    REQUIRE(plantNmcli(bin, "touch \"" + marker.toUtf8() + "\"\necho none\n"));
+
+    CHECK(connectivityWith(net, bin) == 1);
+    CHECK_FALSE(QFileInfo::exists(marker));
+}
+
 #endif // NETWORK_PROBE_BINARY
 #endif // Q_OS_LINUX
 
@@ -3605,7 +3760,8 @@ unsigned int resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
                                 unsigned int realUid, unsigned int effectiveUid);
 QStringList buildOpenUrlAsUserArgs(const QString& username,
                                    const QProcessEnvironment& env,
-                                   const QString& url);
+                                   const QString& url,
+                                   const QString& userHome);
 }
 
 TEST_CASE("The user behind an elevated session is recognised",
@@ -3676,7 +3832,8 @@ TEST_CASE("The browser is launched on the user's own session",
     const QString url =
         QStringLiteral("https://www.raspberrypi.com/documentation/computers/getting-started.html");
     const QStringList args = buildOpenUrlAsUserArgs(
-        QStringLiteral("pi"), elevatedRootEnvironment(), url);
+        QStringLiteral("pi"), elevatedRootEnvironment(), url,
+        QStringLiteral("/home/pi"));
 
     // runuser -u pi -- env ... xdg-open <url>
     REQUIRE(args.size() >= 6);
@@ -3699,7 +3856,7 @@ TEST_CASE("Only the session variables cross to the browser",
 
     const QStringList args = buildOpenUrlAsUserArgs(
         QStringLiteral("pi"), elevatedRootEnvironment(),
-        QStringLiteral("https://example.invalid/"));
+        QStringLiteral("https://example.invalid/"), QStringLiteral("/home/pi"));
 
     // The five xdg-open needs to find the session.
     CHECK(args.contains(QStringLiteral("XDG_RUNTIME_DIR=/run/user/1000")));
@@ -3739,7 +3896,8 @@ TEST_CASE("A session variable that is not set is left out",
     wayland.insert(QStringLiteral("DISPLAY"), QString());
 
     const QStringList args = buildOpenUrlAsUserArgs(
-        QStringLiteral("pi"), wayland, QStringLiteral("https://example.invalid/"));
+        QStringLiteral("pi"), wayland, QStringLiteral("https://example.invalid/"),
+        QStringLiteral("/home/pi"));
 
     CHECK(args.contains(QStringLiteral("WAYLAND_DISPLAY=wayland-0")));
     for (const QString& arg : args) {
@@ -3751,13 +3909,121 @@ TEST_CASE("A session variable that is not set is left out",
     // With none of them set at all, the command is still well formed: the
     // browser may not find the session, but runuser is not handed a
     // half-written line.
+    //
+    // XDG_DATA_DIRS is the exception and is always present, because it is
+    // rebuilt rather than carried -- see the cases below.
     const QStringList bare = buildOpenUrlAsUserArgs(
         QStringLiteral("pi"), QProcessEnvironment(),
-        QStringLiteral("https://example.invalid/"));
-    CHECK(bare == QStringList{QStringLiteral("-u"), QStringLiteral("pi"),
-                              QStringLiteral("--"), QStringLiteral("env"),
-                              QStringLiteral("xdg-open"),
-                              QStringLiteral("https://example.invalid/")});
+        QStringLiteral("https://example.invalid/"), QStringLiteral("/home/pi"));
+    QStringList withoutDataDirs;
+    for (const QString& arg : bare) {
+        if (!arg.startsWith(QStringLiteral("XDG_DATA_DIRS=")))
+            withoutDataDirs << arg;
+    }
+    CHECK(withoutDataDirs == QStringList{QStringLiteral("-u"), QStringLiteral("pi"),
+                                         QStringLiteral("--"), QStringLiteral("env"),
+                                         QStringLiteral("xdg-open"),
+                                         QStringLiteral("https://example.invalid/")});
+}
+
+TEST_CASE("The browser is told where to look for itself",
+          "[platformquirks][openurl][datadirs]")
+{
+    using PlatformQuirks::TestAPI::buildOpenUrlAsUserArgs;
+
+    // pkexec replaces the environment with "a minimal known and safe" one and
+    // XDG_DATA_DIRS is not in it, so by the time Imager is elevated the value
+    // is gone; runuser does not put it back either. xdg-open then falls back
+    // to /usr/local/share:/usr/share, which finds a browser installed as a
+    // distribution package and does not find one installed as a Snap or a
+    // Flatpak. Firefox is a Snap on a stock Ubuntu.
+    //
+    // The user's own mimeapps.list is found -- runuser restores HOME -- so
+    // xdg-open knows the right browser by name and then cannot locate the
+    // .desktop file that name refers to. The link does nothing at all.
+
+    auto dataDirsIn = [](const QStringList& args) {
+        for (const QString& arg : args) {
+            if (arg.startsWith(QStringLiteral("XDG_DATA_DIRS=")))
+                return arg.mid(QStringLiteral("XDG_DATA_DIRS=").size());
+        }
+        return QString();
+    };
+
+    SECTION("rebuilt when there is nothing left to carry")
+    {
+        const QStringList args = buildOpenUrlAsUserArgs(
+            QStringLiteral("pi"), QProcessEnvironment(),
+            QStringLiteral("https://example.invalid/"), QStringLiteral("/home/pi"));
+
+        const QString dirs = dataDirsIn(args);
+        INFO("XDG_DATA_DIRS=" << dirs.toStdString());
+        REQUIRE_FALSE(dirs.isEmpty());
+
+        // The specification's own default has to survive the rebuild, or a
+        // distribution-packaged browser stops being found in the course of
+        // making a Snap one findable.
+        CHECK(dirs.split(QLatin1Char(':')).contains(QStringLiteral("/usr/share")));
+    }
+
+    SECTION("only directories that are really there are named")
+    {
+        // A machine with no Flatpak and no Snap should not be handed paths
+        // that do not exist; xdg-open would stat each one for nothing, and a
+        // wrong value is harder to debug than a short one.
+        const QStringList args = buildOpenUrlAsUserArgs(
+            QStringLiteral("pi"), QProcessEnvironment(),
+            QStringLiteral("https://example.invalid/"), QStringLiteral("/home/pi"));
+
+        const QStringList dirs = dataDirsIn(args).split(QLatin1Char(':'),
+                                                        Qt::SkipEmptyParts);
+        REQUIRE_FALSE(dirs.isEmpty());
+        for (const QString& dir : dirs) {
+            INFO(dir.toStdString());
+            CHECK(QFileInfo(dir).isDir());
+        }
+    }
+
+    SECTION("a value that did survive is used as it stands")
+    {
+        // Running under sudo rather than pkexec, or a desktop that exported
+        // it some other way. The session's own answer beats anything guessed
+        // here.
+        QProcessEnvironment env = elevatedRootEnvironment();
+        env.insert(QStringLiteral("XDG_DATA_DIRS"),
+                   QStringLiteral("/opt/thing/share:/usr/share"));
+
+        const QStringList args = buildOpenUrlAsUserArgs(
+            QStringLiteral("pi"), env, QStringLiteral("https://example.invalid/"),
+            QStringLiteral("/home/pi"));
+
+        CHECK(dataDirsIn(args) == QStringLiteral("/opt/thing/share:/usr/share"));
+    }
+
+    SECTION("the desktop's own opener is named when it is known")
+    {
+        // XDG_CURRENT_DESKTOP picks xdg-open's backend -- gio, kde-open,
+        // exo-open. Without it xdg-open takes its generic path and ignores
+        // the desktop's own handler.
+        QProcessEnvironment env = elevatedRootEnvironment();
+        env.insert(QStringLiteral("XDG_CURRENT_DESKTOP"), QStringLiteral("KDE"));
+
+        const QStringList args = buildOpenUrlAsUserArgs(
+            QStringLiteral("pi"), env, QStringLiteral("https://example.invalid/"),
+            QStringLiteral("/home/pi"));
+
+        CHECK(args.contains(QStringLiteral("XDG_CURRENT_DESKTOP=KDE")));
+    }
+
+    SECTION("and not invented when it is not")
+    {
+        const QStringList args = buildOpenUrlAsUserArgs(
+            QStringLiteral("pi"), elevatedRootEnvironment(),
+            QStringLiteral("https://example.invalid/"), QStringLiteral("/home/pi"));
+
+        for (const QString& arg : args)
+            CHECK_FALSE(arg.startsWith(QStringLiteral("XDG_CURRENT_DESKTOP=")));
+    }
 }
 
 TEST_CASE("The URL stays a single argument", "[platformquirks][openurl]")
@@ -3770,7 +4036,8 @@ TEST_CASE("The URL stays a single argument", "[platformquirks][openurl]")
     const QString awkward =
         QStringLiteral("https://example.invalid/a b?x=1&y=2;rm -rf /");
     const QStringList args = buildOpenUrlAsUserArgs(
-        QStringLiteral("pi"), elevatedRootEnvironment(), awkward);
+        QStringLiteral("pi"), elevatedRootEnvironment(), awkward,
+        QStringLiteral("/home/pi"));
 
     CHECK(args.last() == awkward);
     CHECK(args.count(awkward) == 1);
