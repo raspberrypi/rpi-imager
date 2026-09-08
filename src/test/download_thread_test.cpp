@@ -24,6 +24,8 @@
 
 #include <algorithm>
 #include "downloadthread.h"
+
+#include <QSet>
 #include <thread>
 #include <chrono>
 #include <catch2/generators/catch_generators.hpp>
@@ -1832,6 +1834,65 @@ TEST_CASE("An image larger than the device is refused, not half-written",
 // dispatch it -- the loop simply never wakes and the case hangs rather than
 // failing. Catch2's stock main() creates no such object, so this target
 // supplies its own.
+
+// ── What the screen says about why a write is slow ────────────────────
+//
+// While a write runs the pipeline reports which stage it is waiting on, and
+// that becomes a line of text under the progress bar. It is the only thing
+// telling a user whether a slow write is their broadband, their processor or
+// their card -- and each answer sends them to do something different. Two of
+// the cases crossed would send somebody out to buy a card that was never the
+// problem.
+//
+// The whole mapping, so a state added later without a string of its own
+// shows up here rather than as a blank line under a stalled progress bar.
+
+TEST_CASE("Each bottleneck names the thing to look at", "[downloadthread][progress]")
+{
+    using B = DownloadThread::BottleneckState;
+
+    CHECK(DownloadThread::bottleneckStatusText(B::Network)
+              .contains(QStringLiteral("download"), Qt::CaseInsensitive));
+    CHECK(DownloadThread::bottleneckStatusText(B::Decompression)
+              .contains(QStringLiteral("decompression"), Qt::CaseInsensitive));
+    CHECK(DownloadThread::bottleneckStatusText(B::Storage)
+              .contains(QStringLiteral("storage"), Qt::CaseInsensitive));
+    CHECK(DownloadThread::bottleneckStatusText(B::Verifying)
+              .contains(QStringLiteral("Verifying"), Qt::CaseInsensitive));
+}
+
+TEST_CASE("A pipeline that is flowing says nothing at all", "[downloadthread][progress]")
+{
+    // Not "no bottleneck" or "OK": there is no problem to report, and a line
+    // of reassurance under the progress bar is one more thing to read on a
+    // screen that already has a percentage on it.
+    CHECK(DownloadThread::bottleneckStatusText(
+              DownloadThread::BottleneckState::None).isEmpty());
+}
+
+TEST_CASE("No two bottlenecks say the same thing", "[downloadthread][progress]")
+{
+    // The point of the message is to tell them apart. Two states sharing a
+    // string would read as the display being stuck rather than the stage
+    // having changed.
+    const DownloadThread::BottleneckState states[] = {
+        DownloadThread::BottleneckState::Network,
+        DownloadThread::BottleneckState::Decompression,
+        DownloadThread::BottleneckState::Storage,
+        DownloadThread::BottleneckState::Verifying,
+    };
+
+    QSet<QString> seen;
+    for (const auto s : states)
+    {
+        const QString text = DownloadThread::bottleneckStatusText(s);
+        INFO(text.toStdString());
+        CHECK_FALSE(text.isEmpty());
+        CHECK_FALSE(seen.contains(text));
+        seen.insert(text);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);

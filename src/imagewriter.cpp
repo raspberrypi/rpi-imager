@@ -1359,25 +1359,8 @@ void ImageWriter::_configureWriteThread()
     // Forward bottleneck state to QML for UI feedback
     connect(_thread, &DownloadThread::bottleneckStateChanged,
             this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
-                QString statusText;
-                switch (state) {
-                    case DownloadThread::BottleneckState::None:
-                        statusText = "";
-                        break;
-                    case DownloadThread::BottleneckState::Network:
-                        statusText = tr("Limited by download speed");
-                        break;
-                    case DownloadThread::BottleneckState::Decompression:
-                        statusText = tr("Limited by decompression speed");
-                        break;
-                    case DownloadThread::BottleneckState::Storage:
-                        statusText = tr("Limited by storage device speed");
-                        break;
-                    case DownloadThread::BottleneckState::Verifying:
-                        statusText = tr("Verifying written data");
-                        break;
-                }
-                emit bottleneckStatusChanged(statusText, throughputKBps);
+                emit bottleneckStatusChanged(
+                    DownloadThread::bottleneckStatusText(state), throughputKBps);
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);

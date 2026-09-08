@@ -41,6 +41,16 @@ public:
     Q_ENUM(BottleneckState)
 
     /*
+     * The text shown to a user while a write is running, for a given state.
+     *
+     * Kept here, beside the enum, so the mapping can be checked on its own:
+     * "Limited by download speed" and "Limited by storage device speed" send
+     * somebody to replace two different things, and crossed cases would send
+     * them after the wrong one.
+     */
+    static QString bottleneckStatusText(BottleneckState state);
+
+    /*
      * Constructor
      *
      * - url: URL to download

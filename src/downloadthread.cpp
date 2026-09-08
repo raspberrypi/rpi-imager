@@ -4,6 +4,8 @@
  */
 
 #include "downloadthread.h"
+
+#include <QCoreApplication>
 #include "aligned_buffer.h"
 #include "config.h"
 #include "config_txt_merge.h"
@@ -59,6 +61,28 @@ using rpi_imager::TimeoutDefaults::kMemoryCheckIntervalMs;
 using rpi_imager::TimeoutDefaults::kCriticalMemoryMB;
 
 QByteArray DownloadThread::_proxy;
+
+QString DownloadThread::bottleneckStatusText(BottleneckState state)
+{
+    // Translated in the ImageWriter context, deliberately. These four strings
+    // have lived there since they were written and the translations already
+    // in src/i18n/*.ts are keyed on it, so naming any other context here
+    // would drop every one of them back to English.
+    switch (state)
+    {
+    case BottleneckState::None:
+        return {};
+    case BottleneckState::Network:
+        return QCoreApplication::translate("ImageWriter", "Limited by download speed");
+    case BottleneckState::Decompression:
+        return QCoreApplication::translate("ImageWriter", "Limited by decompression speed");
+    case BottleneckState::Storage:
+        return QCoreApplication::translate("ImageWriter", "Limited by storage device speed");
+    case BottleneckState::Verifying:
+        return QCoreApplication::translate("ImageWriter", "Verifying written data");
+    }
+    return {};
+}
 
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _extractTotal(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
