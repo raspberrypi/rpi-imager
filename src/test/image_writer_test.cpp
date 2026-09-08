@@ -10068,3 +10068,137 @@ TEST_CASE("An empty network name encodes to nothing", "[imagewriter][wifi]")
     CHECK(w.wifiSsidOctetsBase64(QString()).isEmpty());
     CHECK(w.wifiSsidOctetsBase64(QStringLiteral("")).isEmpty());
 }
+
+// ══════════════════════════════════════════════════════════════
+// Throwing away a Connect key that was minted for a different device.
+//
+// In organisation mode the wizard mints a single-use Raspberry Pi Connect
+// auth key over the organisation API, for the image and the card the user
+// has chosen. Change either afterwards and that key no longer belongs to
+// what is about to be written -- so the four places in the wizard where the
+// OS or the storage can change all call discardOrgMintedConnectToken.
+//
+// Two failures either side of it. Not discarding writes a key intended for
+// one device into another image, burning a single-use key and enrolling the
+// wrong thing. Discarding too eagerly throws away a key the user typed in
+// themselves, which they would have to go and fetch again -- and the
+// difference between the two is one flag nothing tested.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+class ConnectTokenWriter : public ImageWriter
+{
+public:
+    ConnectTokenWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::_piConnectToken;
+    using ImageWriter::_piConnectTokenIsOrgMinted;
+
+    // What requestOrgAuthKey leaves behind on success, without the network.
+    void pretendOrgKeyWasMinted(const QString& secret)
+    {
+        _piConnectToken = secret;
+        _piConnectTokenIsOrgMinted = true;
+    }
+};
+} // namespace
+
+TEST_CASE("Changing the card throws away a key minted for the old one",
+          "[imagewriter][connecttoken]")
+{
+    ConnectTokenWriter w;
+    int cleared = 0;
+    QObject::connect(&w, &ImageWriter::connectTokenCleared,
+                     [&cleared]() { ++cleared; });
+
+    w.pretendOrgKeyWasMinted(QStringLiteral("rpoak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    REQUIRE_FALSE(w.getRuntimeConnectToken().isEmpty());
+
+    w.discardOrgMintedConnectToken();
+
+    CHECK(w.getRuntimeConnectToken().isEmpty());
+    // The signal is how the wizard knows to take the token off the screen.
+    // Clearing the value without saying so leaves the UI showing a key that
+    // is no longer there.
+    CHECK(cleared == 1);
+}
+
+TEST_CASE("A key the user supplied themselves is left alone",
+          "[imagewriter][connecttoken]")
+{
+    // Typed in, pasted, or arrived through the browser callback. It is not
+    // tied to a particular card, and the user would have to go back to the
+    // Connect site to get another one.
+    ConnectTokenWriter w;
+    int cleared = 0;
+    QObject::connect(&w, &ImageWriter::connectTokenCleared,
+                     [&cleared]() { ++cleared; });
+
+    const QString typed = QStringLiteral("rpuak_2xVQqQ7mR4bT9pLzYnKwCdHf");
+    w.overwriteConnectToken(typed);
+    REQUIRE(w.getRuntimeConnectToken() == typed);
+
+    w.discardOrgMintedConnectToken();
+
+    CHECK(w.getRuntimeConnectToken() == typed);
+    CHECK(cleared == 0);
+
+    // The same again, but arriving after a mint rather than on a fresh
+    // writer: the user asked for an organisation key and then pasted one of
+    // their own over it. Supplying a token has to take the org-minted flag
+    // down with it, or the next change of card silently discards the key
+    // they just typed. Starting from a fresh writer would not show this --
+    // the flag is false there to begin with.
+    ConnectTokenWriter w2;
+    int cleared2 = 0;
+    QObject::connect(&w2, &ImageWriter::connectTokenCleared,
+                     [&cleared2]() { ++cleared2; });
+
+    w2.pretendOrgKeyWasMinted(QStringLiteral("rpoak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w2.overwriteConnectToken(typed);
+    REQUIRE(w2.getRuntimeConnectToken() == typed);
+
+    w2.discardOrgMintedConnectToken();
+    CHECK(w2.getRuntimeConnectToken() == typed);
+    CHECK(cleared2 == 0);
+}
+
+TEST_CASE("Discarding when there is nothing to discard says nothing",
+          "[imagewriter][connecttoken]")
+{
+    // The wizard calls this on every change of OS or storage, most of which
+    // happen with no token at all. A signal each time would have the UI
+    // reacting to a clear that never occurred.
+    ConnectTokenWriter w;
+    int cleared = 0;
+    QObject::connect(&w, &ImageWriter::connectTokenCleared,
+                     [&cleared]() { ++cleared; });
+
+    w.discardOrgMintedConnectToken();
+    CHECK(cleared == 0);
+    CHECK(w.getRuntimeConnectToken().isEmpty());
+
+    // And twice over, once a real one has gone: the second change of storage
+    // in a row must not announce another clear.
+    w.pretendOrgKeyWasMinted(QStringLiteral("rpoak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w.discardOrgMintedConnectToken();
+    REQUIRE(cleared == 1);
+    w.discardOrgMintedConnectToken();
+    CHECK(cleared == 1);
+}
+
+TEST_CASE("Clearing the token clears either kind", "[imagewriter][connecttoken]")
+{
+    // The explicit control, as opposed to the automatic discard. Asked to
+    // remove the key, it removes whichever key is there -- and takes the
+    // org-minted flag with it, so a later discard has nothing to act on.
+    ConnectTokenWriter w;
+
+    w.overwriteConnectToken(QStringLiteral("rpuak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w.clearConnectToken();
+    CHECK(w.getRuntimeConnectToken().isEmpty());
+
+    w.pretendOrgKeyWasMinted(QStringLiteral("rpoak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w.clearConnectToken();
+    CHECK(w.getRuntimeConnectToken().isEmpty());
+    CHECK_FALSE(w._piConnectTokenIsOrgMinted);
+}
