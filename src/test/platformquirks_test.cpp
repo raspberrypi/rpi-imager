@@ -810,6 +810,209 @@ TEST_CASE("Text scaling returns a usable factor without one",
         qputenv("QT_SCALE_FACTOR", saved);
 }
 
+// ══════════════════════════════════════════════════════════════
+// Following the desktop's text size.
+//
+// Somebody who has turned their system text size up has done so because
+// they need it. detectTextScaleFactor asks the desktop three ways in turn
+// and the answer sizes the whole Imager window; returning 1.0 when it should
+// not leaves that person with a window they cannot read, and there is
+// nothing in Imager's own settings to correct it with.
+//
+// Only the QT_SCALE_FACTOR short-circuit was covered. The three strategies
+// shell out to `gsettings` by name, so a fake one earlier on PATH is enough
+// to drive each of them.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Puts a controlled PATH and a clean environment around one case, and gives
+// it back afterwards. Everything here is process-wide, and Catch2 runs the
+// cases in a random order.
+class ScalingEnvironment
+{
+public:
+    ScalingEnvironment()
+        : _path(qgetenv("PATH")),
+          _qtScaleFactor(qgetenv("QT_SCALE_FACTOR")),
+          _gdkDpiScale(qgetenv("GDK_DPI_SCALE"))
+    {
+        REQUIRE(_dir.isValid());
+        qunsetenv("QT_SCALE_FACTOR");
+        qunsetenv("GDK_DPI_SCALE");
+        // Only what this case plants is findable, so the machine's own
+        // gsettings cannot answer for the fixture.
+        qputenv("PATH", _dir.path().toUtf8());
+    }
+
+    ~ScalingEnvironment()
+    {
+        qputenv("PATH", _path);
+        restore("QT_SCALE_FACTOR", _qtScaleFactor);
+        restore("GDK_DPI_SCALE", _gdkDpiScale);
+    }
+
+    // A gsettings that answers with the two values this case wants. An empty
+    // string means the key reads back as nothing, which is what an unset key
+    // or a missing schema looks like.
+    void plantGsettings(const QString& textScalingFactor, const QString& fontName)
+    {
+        const QByteArray script =
+            "#!/bin/sh\n"
+            "case \"$3\" in\n"
+            "  text-scaling-factor) printf '%s\\n' \"" + textScalingFactor.toUtf8() + "\" ;;\n"
+            "  font-name) printf '%s\\n' \"" + fontName.toUtf8() + "\" ;;\n"
+            "esac\n";
+        const QString path = _dir.filePath(QStringLiteral("gsettings"));
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        REQUIRE(f.write(script) == script.size());
+        f.close();
+        REQUIRE(f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                 QFileDevice::ExeOwner));
+    }
+
+private:
+    static void restore(const char* name, const QByteArray& value)
+    {
+        if (value.isEmpty())
+            qunsetenv(name);
+        else
+            qputenv(name, value);
+    }
+
+    QTemporaryDir _dir;
+    QByteArray _path;
+    QByteArray _qtScaleFactor;
+    QByteArray _gdkDpiScale;
+};
+
+} // namespace
+
+TEST_CASE("A text-scaling factor set in the desktop is followed",
+          "[platformquirks][scaling]")
+{
+    ScalingEnvironment env;
+
+    SECTION("a plain enlargement")
+    {
+        env.plantGsettings(QStringLiteral("1.5"), QString());
+        CHECK(std::abs(PlatformQuirks::detectTextScaleFactor() - 1.5) < 1e-9);
+    }
+
+    SECTION("and a reduction, which is just as deliberate")
+    {
+        env.plantGsettings(QStringLiteral("0.75"), QString());
+        CHECK(std::abs(PlatformQuirks::detectTextScaleFactor() - 0.75) < 1e-9);
+    }
+}
+
+TEST_CASE("An implausible scaling factor is not applied",
+          "[platformquirks][scaling]")
+{
+    // The value comes back from a subprocess as text. Something far outside
+    // the range is a misread, not a request -- and applying it would leave a
+    // window either unreadable or off the screen entirely.
+    ScalingEnvironment env;
+
+    SECTION("far too large")
+    {
+        env.plantGsettings(QStringLiteral("40"), QString());
+        CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+    }
+
+    SECTION("far too small")
+    {
+        env.plantGsettings(QStringLiteral("0.05"), QString());
+        CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+    }
+
+    SECTION("not a number at all")
+    {
+        env.plantGsettings(QStringLiteral("no schema for this key"), QString());
+        CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+    }
+}
+
+TEST_CASE("A factor that rounds to no change is treated as none",
+          "[platformquirks][scaling]")
+{
+    // Within five per cent of 1.0 is left alone rather than resizing the
+    // whole window by an amount nobody asked for and nobody would notice
+    // except as blurry text.
+    ScalingEnvironment env;
+    env.plantGsettings(QStringLiteral("1.02"), QString());
+    CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+}
+
+TEST_CASE("A larger desktop font is followed when no scaling factor is set",
+          "[platformquirks][scaling]")
+{
+    // Raspberry Pi OS's own accessibility setting changes the font size
+    // rather than the scaling factor, so this is the strategy that fires on
+    // the hardware Imager most often runs on.
+    ScalingEnvironment env;
+
+    SECTION("the size is taken from the end of the font name")
+    {
+        // gsettings quotes its answers; the quotes have to come off or the
+        // size never parses and a Pi user's larger text is ignored.
+        env.plantGsettings(QStringLiteral("1.0"), QStringLiteral("'PibotoLt 14'"));
+        CHECK(std::abs(PlatformQuirks::detectTextScaleFactor() - 1.4) < 1e-9);
+    }
+
+    SECTION("a font family with a space in it still parses")
+    {
+        env.plantGsettings(QStringLiteral("1.0"), QStringLiteral("'DejaVu Sans 15'"));
+        CHECK(std::abs(PlatformQuirks::detectTextScaleFactor() - 1.5) < 1e-9);
+    }
+
+    SECTION("the default size means no scaling")
+    {
+        env.plantGsettings(QStringLiteral("1.0"), QStringLiteral("'PibotoLt 10'"));
+        CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+    }
+
+    SECTION("a font name with no size is not read as one")
+    {
+        env.plantGsettings(QStringLiteral("1.0"), QStringLiteral("'PibotoLt'"));
+        CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+    }
+}
+
+TEST_CASE("GDK_DPI_SCALE is the last thing asked", "[platformquirks][scaling]")
+{
+    // No gsettings on the machine at all -- a minimal desktop, or a
+    // non-GNOME one. The environment variable is what is left.
+    ScalingEnvironment env;
+
+    SECTION("and it is followed")
+    {
+        qputenv("GDK_DPI_SCALE", "1.25");
+        CHECK(std::abs(PlatformQuirks::detectTextScaleFactor() - 1.25) < 1e-9);
+    }
+
+    SECTION("but only within the same range as the others")
+    {
+        qputenv("GDK_DPI_SCALE", "12");
+        CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+    }
+
+    SECTION("and gsettings is preferred over it where both are set")
+    {
+        env.plantGsettings(QStringLiteral("1.5"), QString());
+        qputenv("GDK_DPI_SCALE", "2.0");
+        CHECK(std::abs(PlatformQuirks::detectTextScaleFactor() - 1.5) < 1e-9);
+    }
+}
+
+TEST_CASE("A desktop that says nothing leaves the window as it is",
+          "[platformquirks][scaling]")
+{
+    ScalingEnvironment env;
+    CHECK(PlatformQuirks::detectTextScaleFactor() == 1.0);
+}
+
 TEST_CASE("The font DPI correction is the ratio it claims to be",
           "[platformquirks][scaling]") {
     // 72/96: points to pixels. Wrong here and every font in the window is
