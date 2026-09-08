@@ -278,6 +278,79 @@ if(_duplicate_count GREATER 0)
     file(REMOVE ${_duplicate_gcno})
 endif()
 
+# The rule above only reaches copies that never ran, and there is now a copy
+# that does. cli_process_test drives the shipping binary as a subprocess --
+# the only way to reach Cli::run(), which builds its own QCoreApplication --
+# so the app target's objects come back with counters on them for every
+# source that binary touches while starting up. Seventy of them, which is
+# most of the core.
+#
+# Two copies with counters is worse than two copies where one is empty. gcov
+# writes its .gcov next to the object it was given but names it after the
+# *source*, so for a source built twice the second run overwrites the first,
+# and which one the report ends up describing depends on the order gcovr got
+# through them. It is not a small difference either: the app target is built
+# with the shipping optimisation flags and the test library is not, so the
+# two copies do not even have the same number of branches. One run put
+# imagewriter.cpp at 2033 of 3386 and the next at 425 of 3386, from the same
+# suite and the same counters -- eleven points off the total, in whichever
+# direction the walk happened to go.
+#
+# So one copy per source, chosen rather than raced for. The library copy is
+# the one to keep: every test binary links it, so it carries the whole
+# suite's counters, where the app target's carries ten CLI invocations that
+# exit before doing anything. The exception is the file those invocations
+# exist to cover -- run() is compiled into both, but only ever executed in
+# the app target's copy, so for that one the app copy is the measurement and
+# the library's is the near-empty duplicate.
+set(_subprocess_measured_sources "cli.cpp")
+
+set(_app_object_dir "${COVERAGE_BINARY_DIR}/CMakeFiles/rpi-imager.dir")
+file(GLOB_RECURSE _app_gcda "${_app_object_dir}/*.gcda")
+set(_raced_copies)
+foreach(_gcda IN LISTS _app_gcda)
+    string(REGEX REPLACE "\\.gcda$" "" _stem "${_gcda}")
+    string(REGEX REPLACE "^.*\\.dir/" "" _key "${_gcda}")
+    string(REGEX REPLACE "(__/)+" "" _key "${_key}")
+    string(REGEX REPLACE "\\.gcda$" "" _key "${_key}")
+
+    list(FIND _subprocess_measured_sources "${_key}" _keep_app_copy)
+    if(NOT _keep_app_copy EQUAL -1)
+        # Drop the library's copy instead, for the same reason in reverse.
+        get_filename_component(_leaf "${_key}" NAME)
+        file(GLOB_RECURSE _other_copies "${COVERAGE_BINARY_DIR}/*/${_leaf}.gcda")
+        foreach(_other IN LISTS _other_copies)
+            if(NOT _other MATCHES "^${_app_object_dir}/")
+                string(REGEX REPLACE "\\.gcda$" "" _other_stem "${_other}")
+                list(APPEND _raced_copies "${_other_stem}.gcda" "${_other_stem}.gcno")
+            endif()
+        endforeach()
+        continue()
+    endif()
+
+    # Only a duplicate if the same source is measured somewhere else.
+    get_filename_component(_leaf "${_key}" NAME)
+    file(GLOB_RECURSE _other_copies "${COVERAGE_BINARY_DIR}/*/${_leaf}.gcda")
+    set(_has_other FALSE)
+    foreach(_other IN LISTS _other_copies)
+        if(NOT _other MATCHES "^${_app_object_dir}/")
+            set(_has_other TRUE)
+        endif()
+    endforeach()
+    if(_has_other)
+        list(APPEND _raced_copies "${_stem}.gcda" "${_stem}.gcno")
+    endif()
+endforeach()
+
+list(REMOVE_DUPLICATES _raced_copies)
+list(LENGTH _raced_copies _raced_count)
+if(_raced_count GREATER 0)
+    message(STATUS
+        "Coverage: dropping ${_raced_count} object file(s) for sources measured "
+        "in two places, so the report does not depend on which gcov ran last")
+    file(REMOVE ${_raced_copies})
+endif()
+
 # ---------------------------------------------------------------------------
 # 3. Render
 # ---------------------------------------------------------------------------
