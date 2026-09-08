@@ -363,6 +363,14 @@ int main(int argc, char *argv[])
     // Run twice: now, which repairs what earlier runs left behind, and again
     // on the way out, which covers what this run has just created. Both are
     // no-ops unless running as root with a known invoking user.
+    //
+    // The one on the way out does not survive a kill: aboutToQuit is not
+    // reached on SIGTERM or a crash, so an elevated run that is killed leaves
+    // its files root-owned until the next elevated run sweeps them at
+    // startup. Observed rather than assumed -- a test harness timing one out
+    // left the settings file root:root and unreadable to its owner. An
+    // unelevated run in between cannot repair it and says so instead; see
+    // secureSettingsFile.
     const auto handBackUserFiles = []() {
         const QString applications =
             QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
