@@ -613,3 +613,85 @@ TEST_CASE("Signed recovery rejects a corrupt original image", "[secureboot-otp]"
         ChipGeneration::BCM2711, recovery, key, false, err));
     CHECK_FALSE(err.empty());
 }
+
+// ══════════════════════════════════════════════════════════════
+// The boot configuration written into a re-provisioned board.
+//
+// prepareSignedRecovery replaces bootconf.txt inside pieeprom.bin with one
+// of these two, signs it, and the result goes into the EEPROM of a Compute
+// Module whose customer key hash is already fused. Whatever is in here is
+// what that board will obey afterwards, and there is no second attempt: the
+// OTP is written once.
+//
+// SIGNED_BOOT=1 is the whole operation. Without it the bootloader goes on
+// accepting unsigned boot images, and the person who ran the provisioning
+// step has a board they believe is secured and is not -- the one failure
+// here that leaves no trace at all, because everything appears to succeed.
+// ══════════════════════════════════════════════════════════════
+
+namespace rpiboot::TestAPI {
+QByteArray defaultBootConf2712();
+QByteArray defaultBootConf2711();
+}
+
+namespace {
+// bootconf.txt is read as key=value lines under a section header.
+bool bootConfHas(const QByteArray& conf, const char* line)
+{
+    for (const QByteArray& l : conf.split('\n')) {
+        if (l.trimmed() == QByteArray(line))
+            return true;
+    }
+    return false;
+}
+} // namespace
+
+TEST_CASE("Both generations are configured to demand signed boot",
+          "[secureboot][bootconf]")
+{
+    const QByteArray cm5 = rpiboot::TestAPI::defaultBootConf2712();
+    const QByteArray cm4 = rpiboot::TestAPI::defaultBootConf2711();
+
+    INFO("2712:\n" << cm5.toStdString() << "\n2711:\n" << cm4.toStdString());
+
+    // The point of the exercise. A board provisioned without this accepts
+    // unsigned images for ever and nothing says so.
+    CHECK(bootConfHas(cm5, "SIGNED_BOOT=1"));
+    CHECK(bootConfHas(cm4, "SIGNED_BOOT=1"));
+
+    // And cannot quietly replace its own bootloader with one that does not.
+    CHECK(bootConfHas(cm5, "ENABLE_SELF_UPDATE=0"));
+    CHECK(bootConfHas(cm4, "ENABLE_SELF_UPDATE=0"));
+
+    // Under a section header, or the bootloader does not apply any of it.
+    CHECK(cm5.startsWith("[all]\n"));
+    CHECK(cm4.startsWith("[all]\n"));
+}
+
+TEST_CASE("Each generation gets the settings that belong to it",
+          "[secureboot][bootconf]")
+{
+    const QByteArray cm5 = rpiboot::TestAPI::defaultBootConf2712();
+    const QByteArray cm4 = rpiboot::TestAPI::defaultBootConf2711();
+
+    // Not the same file with a different name. Handing one generation the
+    // other's configuration is a misconfigured board that has already had
+    // its key fused.
+    CHECK(cm5 != cm4);
+
+    // BCM2712: the boot order and halt behaviour from
+    // usbboot/secure-boot-recovery5/boot.conf.
+    CHECK(bootConfHas(cm5, "BOOT_ORDER=0xf2461"));
+    CHECK(bootConfHas(cm5, "POWER_OFF_ON_HALT=1"));
+
+    // BCM2711 has its own, and does not carry the 2712 boot order.
+    CHECK(bootConfHas(cm4, "WAKE_ON_GPIO=1"));
+    CHECK(bootConfHas(cm4, "POWER_OFF_ON_HALT=0"));
+    CHECK(bootConfHas(cm4, "HDMI_DELAY=0"));
+    CHECK_FALSE(bootConfHas(cm4, "BOOT_ORDER=0xf2461"));
+
+    // Both keep the UART on, which is the only way to see why a board that
+    // will now only take signed images is not booting.
+    CHECK(bootConfHas(cm5, "BOOT_UART=1"));
+    CHECK(bootConfHas(cm4, "BOOT_UART=1"));
+}

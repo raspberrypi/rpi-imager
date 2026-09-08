@@ -2165,6 +2165,7 @@ add_executable(secure_boot_provisioner_test
 )
 
 set_target_properties(secure_boot_provisioner_test PROPERTIES AUTOMOC ON)
+target_compile_definitions(secure_boot_provisioner_test PRIVATE SECUREBOOT_ENABLE_TEST_API)
 
 target_include_directories(secure_boot_provisioner_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
