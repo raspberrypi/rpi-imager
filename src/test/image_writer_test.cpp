@@ -10759,3 +10759,126 @@ TEST_CASE("An elevated run hands the whole cache tree back",
     cleanup.waitForFinished(15000);
 }
 #endif // SETTINGS_PERMISSIONS_PROBE_BINARY
+
+// ══════════════════════════════════════════════════════════════
+// Whether the secure-boot step is offered.
+//
+// Three separate things can put it there, and the wizard ORs them together:
+//
+//   secureBootAvailable = checkSWCapability("secure_boot")
+//                      || isSecureBootForcedByCliFlag()
+//                      || getDebugForceSecureBoot()
+//
+// The middle one is --enable-secure-boot, which exists so an operator
+// provisioning a fleet can sign images whose metadata does not declare the
+// capability. If it stopped working the option would simply not be there,
+// with nothing on screen to say why and a command-line flag that appeared
+// to be accepted.
+//
+// It is a static, set once from main() before the ImageWriter the QML sees
+// necessarily exists, so being class-wide is the mechanism rather than an
+// implementation detail.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+// The flag is process-wide and nothing resets it; Catch2 runs cases in a
+// random order, so each of these puts it back.
+struct ForceSecureBootGuard
+{
+    explicit ForceSecureBootGuard(const ImageWriter& w)
+        : _was(w.isSecureBootForcedByCliFlag()) {}
+    ~ForceSecureBootGuard() { ImageWriter::setForceSecureBootEnabled(_was); }
+    bool _was;
+};
+} // namespace
+
+TEST_CASE("Secure boot is not offered unless something asks for it",
+          "[imagewriter][secureboot]")
+{
+    ImageWriter w(nullptr);
+    ForceSecureBootGuard guard(w);
+    ImageWriter::setForceSecureBootEnabled(false);
+
+    // An ordinary launch, and an image that does not declare the capability.
+    w.setSWCapabilitiesList(QStringLiteral("[\"rpi_connect\"]"));
+
+    CHECK_FALSE(w.isSecureBootForcedByCliFlag());
+    CHECK_FALSE(w.getDebugForceSecureBoot());
+    CHECK_FALSE(w.checkSWCapability(QStringLiteral("secure_boot")));
+}
+
+TEST_CASE("The command-line flag offers secure boot whatever the image says",
+          "[imagewriter][secureboot]")
+{
+    ImageWriter w(nullptr);
+    ForceSecureBootGuard guard(w);
+
+    // An image whose metadata says nothing about secure boot -- a plain
+    // Raspberry Pi OS release, or anything built before the capability
+    // existed. The operator passing --enable-secure-boot has said they know
+    // what they are doing.
+    w.setSWCapabilitiesList(QStringLiteral("[]"));
+    REQUIRE_FALSE(w.checkSWCapability(QStringLiteral("secure_boot")));
+
+    ImageWriter::setForceSecureBootEnabled(true);
+    CHECK(w.isSecureBootForcedByCliFlag());
+
+    // The two are independent inputs to the same OR: forcing it must not
+    // quietly rewrite what the image claims, which other steps also read.
+    CHECK_FALSE(w.checkSWCapability(QStringLiteral("secure_boot")));
+}
+
+TEST_CASE("The flag reaches the ImageWriter the wizard is actually using",
+          "[imagewriter][secureboot]")
+{
+    // main() sets this from the command line early, and the instance QML
+    // binds to is created separately. Class-wide is what makes that work; a
+    // per-instance flag would be set on one object and read from another,
+    // and the option would never appear.
+    ImageWriter first(nullptr);
+    ForceSecureBootGuard guard(first);
+
+    ImageWriter::setForceSecureBootEnabled(true);
+
+    ImageWriter later(nullptr);
+    CHECK(later.isSecureBootForcedByCliFlag());
+}
+
+TEST_CASE("The debug toggle is separate from the command-line flag",
+          "[imagewriter][secureboot]")
+{
+    // The secret debug menu can turn the step on for one session without a
+    // restart. It is per-instance and must not be confused with the CLI
+    // flag: turning it off again should not switch off an operator's
+    // --enable-secure-boot.
+    ImageWriter w(nullptr);
+    ForceSecureBootGuard guard(w);
+    ImageWriter::setForceSecureBootEnabled(true);
+
+    REQUIRE_FALSE(w.getDebugForceSecureBoot());
+    w.setDebugForceSecureBoot(true);
+    CHECK(w.getDebugForceSecureBoot());
+    CHECK(w.isSecureBootForcedByCliFlag());
+
+    w.setDebugForceSecureBoot(false);
+    CHECK_FALSE(w.getDebugForceSecureBoot());
+    CHECK(w.isSecureBootForcedByCliFlag());
+
+    // And the other way round: clearing the CLI flag leaves the debug one.
+    w.setDebugForceSecureBoot(true);
+    ImageWriter::setForceSecureBootEnabled(false);
+    CHECK(w.getDebugForceSecureBoot());
+    CHECK_FALSE(w.isSecureBootForcedByCliFlag());
+}
+
+TEST_CASE("An image that declares secure boot needs no flag",
+          "[imagewriter][secureboot]")
+{
+    ImageWriter w(nullptr);
+    ForceSecureBootGuard guard(w);
+    ImageWriter::setForceSecureBootEnabled(false);
+
+    w.setSWCapabilitiesList(QStringLiteral("[\"secure_boot\"]"));
+    CHECK(w.checkSWCapability(QStringLiteral("secure_boot")));
+    CHECK_FALSE(w.isSecureBootForcedByCliFlag());
+}
