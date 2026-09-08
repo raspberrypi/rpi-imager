@@ -1652,10 +1652,23 @@ if(NOT BUILD_CLI_ONLY)
                         "RPI_QML_COVERAGE_HITS=${CMAKE_BINARY_DIR}/qmlcov/hits.json"
                         "QT_QUICK_BACKEND=software"
                         $<TARGET_FILE:qml_ui_test> -platform offscreen
+                # And again on the one file CTest also runs on its own. Every
+                # file in a QtQuickTest run shares one ImageWriter, so the
+                # cases about the screen a user meets with no OS list only run
+                # when nothing has fetched one -- measuring the whole-suite run
+                # alone reports the sites they cover as never reached, which
+                # is how a tested Retry button reads as untested.
+                COMMAND "${CMAKE_COMMAND}" -E env
+                        "RPI_QML_MODULE_OVERRIDE=${CMAKE_BINARY_DIR}/qmlcov/RpiImager"
+                        "RPI_QML_COVERAGE_HITS=${CMAKE_BINARY_DIR}/qmlcov/hits-offline.json"
+                        "QT_QUICK_BACKEND=software"
+                        $<TARGET_FILE:qml_ui_test> -platform offscreen
+                        -input "${CMAKE_CURRENT_SOURCE_DIR}/qml/tst_device_selection_step.qml"
                 COMMAND "${Python3_EXECUTABLE}"
                         "${CMAKE_CURRENT_SOURCE_DIR}/tools/qml_coverage_report.py"
                         "${CMAKE_BINARY_DIR}/qmlcov/inventory.json"
                         "${CMAKE_BINARY_DIR}/qmlcov/hits.json"
+                        "${CMAKE_BINARY_DIR}/qmlcov/hits-offline.json"
                         --out "${CMAKE_BINARY_DIR}/qmlcov/summary.txt"
                 DEPENDS qml_ui_test ${PROJECT_NAME}
                 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"

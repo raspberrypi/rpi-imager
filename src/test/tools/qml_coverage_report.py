@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2025 Raspberry Pi Ltd
-"""Turn an instrumentation inventory and a run's hits into a report."""
+"""Turn an instrumentation inventory and one or more runs' hits into a report.
+
+More than one hits file because the suite is run more than once. A QtQuickTest
+run shares one ImageWriter across every file in it, so a couple of files cover
+one half of their subject in the whole-suite run and the other half only when
+run on their own -- which is why CTest has a second entry for
+tst_device_selection_step. Reporting the whole-suite run alone counts the
+cases in that second entry as never having run, and the sites they cover as
+never reached.
+"""
 
 import argparse
 import json
@@ -11,16 +20,21 @@ import sys
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('inventory')
-    ap.add_argument('hits')
+    ap.add_argument('hits', nargs='+')
     ap.add_argument('--out')
     ap.add_argument('--min-width', type=int, default=44)
     args = ap.parse_args()
 
     probes = json.load(open(args.inventory))['probes']
-    try:
-        hits = {int(k): v for k, v in json.load(open(args.hits)).items()}
-    except FileNotFoundError:
-        hits = {}
+    hits = {}
+    for path in args.hits:
+        try:
+            counts = json.load(open(path))
+        except FileNotFoundError:
+            continue
+        for k, v in counts.items():
+            key = int(k)
+            hits[key] = hits.get(key, 0) + v
 
     per_file = {}
     for p in probes:
