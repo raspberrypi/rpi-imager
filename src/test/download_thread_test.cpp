@@ -1173,6 +1173,36 @@ TEST_CASE("DownloadThread reports a hash mismatch over HTTP", "[download][http]"
     CHECK_FALSE(outcome.succeeded);
 }
 
+TEST_CASE("A device node that has gone is reported, not waited on",
+          "[download][device]")
+{
+    // The race the drive poller cannot close: the card is pulled out between
+    // the write being set up and the device being opened. Everything under
+    // /dev/ is unmounted first, and unmounting something that is not there
+    // fails -- which has to come back as an error naming the device rather
+    // than as a write that never starts.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(64 * 1024, 91);
+    const QString source = scratch.filePath(QStringLiteral("gone-source.img"));
+    REQUIRE(writeFile(source, payload));
+
+    const QByteArray target = "/dev/nonexistent-rpi-imager-target";
+    REQUIRE_FALSE(QFileInfo::exists(QString::fromUtf8(target)));
+
+    DownloadThread dt(QByteArray("file://") + source.toUtf8(), target, QByteArray());
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, 60000);
+    REQUIRE(outcome.finished);
+    REQUIRE_FALSE(outcome.succeeded);
+
+    const std::string message = outcome.errorMessage.toStdString();
+    INFO("message: " << message);
+    // Named, because a user with several drives plugged in needs to know
+    // which one the writer went looking for.
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring(std::string(target.constData())));
+}
+
 TEST_CASE("A corrupt download is blamed on the network, not on the user",
           "[download][http][hash]")
 {
