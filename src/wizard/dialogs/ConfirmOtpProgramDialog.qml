@@ -155,6 +155,7 @@ BaseDialog {
 
     TextField {
         id: confirmInput
+        objectName: "otpConfirmInput"
         Layout.fillWidth: true
         font.family: Style.fontFamily
         font.pointSize: Style.fontSizeInput
@@ -187,6 +188,7 @@ BaseDialog {
 
         ImButton {
             id: cancelButton
+            objectName: "otpCancelButton"
             text: qsTr("CANCEL")
             accessibleDescription: qsTr("Cancel OTP programming and return to previous screen")
             activeFocusOnTab: true
@@ -198,6 +200,7 @@ BaseDialog {
 
         ImButtonRed {
             id: programButton
+            objectName: "otpProgramButton"
             text: qsTr("PROGRAM OTP")
             accessibleDescription: qsTr("Permanently program the secure boot key into device OTP memory")
             enabled: confirmInput.text === root.deviceSerial && root.deviceSerial !== ""
