@@ -1036,6 +1036,35 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         $<$<CONFIG:Debug>:-g -O0>
     )
 
+    # The other half of platformquirks that cannot be reached in-process: the
+    # sudo/pkexec identity handover in applyQuirks(), which only runs when euid
+    # is 0. platformquirks_test drives this probe under sudo and reads the
+    # environment back off its stdout; without sudo those cases skip.
+    add_executable(platform_quirks_elevation_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../platformquirks.h
+        ${PLATFORMQUIRKS_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/platform_quirks_elevation_probe.cpp
+    )
+
+    target_link_libraries(platform_quirks_elevation_probe PRIVATE
+        Qt6::Core
+        ${PLATFORMQUIRKS_LIBS}
+    )
+
+    target_include_directories(platform_quirks_elevation_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_compile_features(platform_quirks_elevation_probe PRIVATE cxx_std_20)
+    target_compile_options(platform_quirks_elevation_probe PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+
+    target_compile_definitions(platformquirks_test PRIVATE
+        ELEVATION_PROBE_BINARY="$<TARGET_FILE:platform_quirks_elevation_probe>")
+    add_dependencies(platformquirks_test platform_quirks_elevation_probe)
+
     add_test(NAME embedded_scaling_matrix
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/embedded_scaling/run.sh
                 $<TARGET_FILE:embedded_scaling_probe>

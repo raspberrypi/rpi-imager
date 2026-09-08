@@ -1519,3 +1519,218 @@ TEST_CASE("A successful registration leaves no half-written files behind",
     }
 }
 #endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+#ifdef ELEVATION_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// Running as root on somebody else's behalf
+//
+// Elevated through sudo or pkexec, Imager is root but is acting for the user
+// who started it. applyQuirks() is what repoints HOME and the XDG
+// directories back at them. Without it every setting, the OS list cache and
+// the downloaded image land under /root: the user's preferences are gone on
+// the next launch, and the cache is rewritten as files they cannot read --
+// which is also how the configuration file ends up owned by root, the
+// condition image_writer_test has a case for repairing.
+//
+// None of it runs unless euid is 0, so it cannot be reached from this
+// binary. A probe calls applyQuirks() and prints the environment before and
+// after; these cases run it under sudo and read that back. Without
+// passwordless sudo they skip.
+//
+// DISPLAY is removed and WAYLAND_DISPLAY set for every run. With neither,
+// applyQuirks() looks for an X11 socket and, finding one, calls xhost to
+// grant root access to the user's display -- a change to the session of
+// whoever is running the suite, which no test should be making.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+struct ProbeRun
+{
+    bool finished = false;
+    int exitCode = -1;
+    QString out;
+    QString err;
+
+    QString value(const QString& key) const
+    {
+        for (const QString& line : out.split(QLatin1Char('\n'))) {
+            if (line.startsWith(key + QLatin1Char('=')))
+                return line.mid(key.size() + 1);
+        }
+        return {};
+    }
+};
+
+// Run the probe as root, with `unset` removed from its environment and
+// `assign` set in it. Applied inside the elevated process with env(1), so they
+// win over what sudo itself sets -- and every -u has to precede the
+// assignments, or env takes the next one for the command name.
+ProbeRun runProbeAsRoot(const QStringList& unset, const QStringList& assign)
+{
+    ProbeRun r;
+    QStringList args{QStringLiteral("-n"), QStringLiteral("env")};
+    for (const QString& name : QStringList{QStringLiteral("DISPLAY")} + unset)
+        args << QStringLiteral("-u") << name;
+    args << QStringLiteral("WAYLAND_DISPLAY=wayland-test");
+    args += assign;
+    args << QStringLiteral(ELEVATION_PROBE_BINARY);
+
+    QProcess p;
+    p.start(QStringLiteral("sudo"), args);
+    if (!p.waitForFinished(30000))
+        return r;
+    r.finished = true;
+    r.exitCode = p.exitCode();
+    r.out = QString::fromUtf8(p.readAllStandardOutput());
+    r.err = QString::fromUtf8(p.readAllStandardError());
+    return r;
+}
+
+bool havePasswordlessSudo()
+{
+    QProcess probe;
+    probe.start(QStringLiteral("sudo"),
+                {QStringLiteral("-n"), QStringLiteral("true")});
+    probe.waitForFinished(10000);
+    return probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
+}
+
+} // namespace
+
+TEST_CASE("Elevated through sudo, the user's own directories are used",
+          "[platformquirks][elevation][root]")
+{
+    if (!havePasswordlessSudo())
+        SKIP("passwordless sudo is not available, so the elevated path cannot "
+             "be reached");
+
+    const QString home = QDir::homePath();
+    const unsigned long uid = static_cast<unsigned long>(::getuid());
+
+    // sudo sets SUDO_UID to the invoking user, which is the real scenario.
+    const ProbeRun r = runProbeAsRoot({}, {});
+    INFO("stdout:\n" << r.out.toStdString() << "\nstderr:\n" << r.err.toStdString());
+    REQUIRE(r.finished);
+    REQUIRE(r.exitCode == 0);
+    REQUIRE(r.value(QStringLiteral("EUID")) == QStringLiteral("0"));
+
+    // Root's home on the way in, the user's on the way out. This is the whole
+    // point: QSettings and QStandardPaths read HOME.
+    CHECK(r.value(QStringLiteral("AFTER_HOME")) == home);
+    CHECK(r.value(QStringLiteral("AFTER_XDG_CACHE_HOME")) == home + QStringLiteral("/.cache"));
+    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME")) == home + QStringLiteral("/.config"));
+    CHECK(r.value(QStringLiteral("AFTER_XDG_DATA_HOME")) == home + QStringLiteral("/.local/share"));
+
+    // The runtime directory and the bus address derived from it: without
+    // these the portal file dialogs and the suspend inhibitor have nothing
+    // to talk to, so a write can be interrupted by the machine sleeping.
+    const QString runtime = QStringLiteral("/run/user/%1").arg(uid);
+    CHECK(r.value(QStringLiteral("AFTER_XDG_RUNTIME_DIR")) == runtime);
+    CHECK(r.value(QStringLiteral("AFTER_DBUS_SESSION_BUS_ADDRESS"))
+          == QStringLiteral("unix:path=%1/bus").arg(runtime));
+}
+
+TEST_CASE("Elevated through pkexec, the same handover happens",
+          "[platformquirks][elevation][root]")
+{
+    // The AppImage route. pkexec sets PKEXEC_UID instead, and sudo is not in
+    // the picture -- so SUDO_UID is removed to make sure it is PKEXEC_UID
+    // being read and not the other one still lying around.
+    if (!havePasswordlessSudo())
+        SKIP("passwordless sudo is not available");
+
+    const QString home = QDir::homePath();
+    const ProbeRun r = runProbeAsRoot(
+        {QStringLiteral("SUDO_UID")},
+        {QStringLiteral("PKEXEC_UID=%1").arg(::getuid())});
+
+    INFO("stdout:\n" << r.out.toStdString() << "\nstderr:\n" << r.err.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.value(QStringLiteral("AFTER_HOME")) == home);
+    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME")) == home + QStringLiteral("/.config"));
+    CHECK_THAT(r.err.toStdString(), ContainsSubstring("pkexec"));
+}
+
+TEST_CASE("A UID that is not a number is refused, not guessed at",
+          "[platformquirks][elevation][root]")
+{
+    // The value comes from the environment, which on this path is attacker
+    // influenced -- it is the one thing a caller controls while the process
+    // is root. Anything but a clean number has to be refused: the comments
+    // in the code single out an overflow of uid_t, and trailing garbage is
+    // what atoi() would have silently accepted.
+    if (!havePasswordlessSudo())
+        SKIP("passwordless sudo is not available");
+
+    struct Row { const char* tag; QString value; };
+    const Row rows[] = {
+        {"trailing garbage", QStringLiteral("1000x")},
+        {"leading text", QStringLiteral("x1000")},
+        {"empty", QStringLiteral("")},
+        {"not a number", QStringLiteral("root")},
+        {"overflows uid_t", QStringLiteral("4294967296")},
+        {"far past any uid", QStringLiteral("99999999999999999999")},
+        {"negative", QStringLiteral("-1000")},
+    };
+
+    for (const Row& row : rows) {
+        INFO(row.tag);
+        const ProbeRun r = runProbeAsRoot(
+            {QStringLiteral("PKEXEC_UID")},
+            {QStringLiteral("SUDO_UID=%1").arg(row.value)});
+        REQUIRE(r.finished);
+        INFO("stdout:\n" << r.out.toStdString() << "\nstderr:\n" << r.err.toStdString());
+
+        // HOME is left exactly as it was rather than pointed at whichever
+        // user that value happened to land on.
+        CHECK(r.value(QStringLiteral("AFTER_HOME"))
+              == r.value(QStringLiteral("BEFORE_HOME")));
+        // And it is not silently ignored: something in the log says why.
+        CHECK_THAT(r.err.toStdString(), ContainsSubstring("WARNING"));
+    }
+}
+
+TEST_CASE("A UID with no account behind it is refused",
+          "[platformquirks][elevation][root]")
+{
+    // A well-formed number that no longer names a user -- an account deleted
+    // between login and launch, or a container without the passwd entry.
+    // Guessing a home directory for it would put the settings somewhere
+    // nobody owns.
+    if (!havePasswordlessSudo())
+        SKIP("passwordless sudo is not available");
+
+    const ProbeRun r = runProbeAsRoot(
+        {QStringLiteral("PKEXEC_UID")},
+        {QStringLiteral("SUDO_UID=4294967000")});
+
+    REQUIRE(r.finished);
+    INFO("stdout:\n" << r.out.toStdString() << "\nstderr:\n" << r.err.toStdString());
+    CHECK(r.value(QStringLiteral("AFTER_HOME"))
+          == r.value(QStringLiteral("BEFORE_HOME")));
+    CHECK_THAT(r.err.toStdString(), ContainsSubstring("UID"));
+}
+
+TEST_CASE("Run without elevation, nothing is repointed",
+          "[platformquirks][elevation]")
+{
+    // The ordinary case, and the one that needs no sudo: not root, so there
+    // is no other user to act for and the environment is left alone.
+    if (::geteuid() == 0)
+        SKIP("running as root, so this is the elevated path instead");
+
+    QProcess p;
+    p.start(QStringLiteral(ELEVATION_PROBE_BINARY), {});
+    REQUIRE(p.waitForFinished(30000));
+
+    ProbeRun r;
+    r.out = QString::fromUtf8(p.readAllStandardOutput());
+    INFO(r.out.toStdString());
+    CHECK(r.value(QStringLiteral("AFTER_HOME"))
+          == r.value(QStringLiteral("BEFORE_HOME")));
+    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME")).isEmpty());
+}
+#endif // ELEVATION_PROBE_BINARY
+#endif // Q_OS_LINUX
