@@ -359,6 +359,18 @@ std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode)
     return devicesFromLsblkOutput(std::nullopt, embeddedMode);
 }
 
+// lsblk itself, run for real against whatever PATH the caller has arranged.
+//
+// The bounded wait inside it is the interesting part. Enumerating block
+// devices goes out to the kernel and, through it, to whatever is plugged in;
+// a stuck USB bridge or a slow hub can wedge lsblk for as long as it likes.
+// The drive list is refreshed on a timer, so a wait without a limit does not
+// just delay the list -- it takes the window with it.
+std::optional<QByteArray> runLsblk()
+{
+    return executeLsblk();
+}
+
 } // namespace testing
 
 #endif // DRIVELIST_ENABLE_TEST_API

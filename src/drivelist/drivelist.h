@@ -330,6 +330,7 @@ std::vector<DeviceDescriptor> ListStorageDevices();
 // These are declared in the platform implementation files when
 // DRIVELIST_ENABLE_TEST_API is defined. See:
 // - drivelist_linux.cpp: Drivelist::testing::parseLinuxBlockDevices()
+// - drivelist_linux.cpp: Drivelist::testing::runLsblk()
 // - drivelist_windows.cpp: Drivelist::testing::windowsBusTypeToString()
 // - drivelist_windows.cpp: Drivelist::testing::isWindowsSystemDevice()
 

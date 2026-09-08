@@ -14,6 +14,11 @@
 // Include Qt first to get platform macros
 #include <QtGlobal>
 
+#include <QElapsedTimer>
+#include <QTemporaryDir>
+#include <QFile>
+#include <QDir>
+#include <optional>
 #include "drivelist.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -27,6 +32,7 @@ namespace Drivelist::testing {
 #ifdef Q_OS_LINUX
 std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput, bool embeddedMode = false);
 std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode = false);
+std::optional<QByteArray> runLsblk();
 #endif
 #ifdef Q_OS_WIN
 std::string windowsBusTypeToString(int busType);
@@ -1016,3 +1022,103 @@ TEST_CASE("A hostname with lookalike characters is flagged", "[drivelist][saniti
     // fonts, which is the whole point of an IDN homograph.
     CHECK(hasNonAsciiChars("r\xD0\xB0" "spberrypi.org"));
 }
+
+
+#ifdef Q_OS_LINUX
+// ══════════════════════════════════════════════════════════════
+// An lsblk that does not come back.
+//
+// Enumerating block devices goes out to the kernel and, through it, to
+// whatever is plugged in. A stuck USB bridge or a slow hub can wedge lsblk
+// for as long as it likes, and the drive list is refreshed on a timer -- so
+// a wait without a limit does not merely delay the list, it takes the
+// window with it. The user sees Imager stop responding, with no clue that
+// the cause is the reader they just plugged in.
+//
+// The limit is five seconds, after which the list comes back empty and the
+// screen says there are no drives. That is a far better answer than a
+// frozen window, and it had no test: every other case here feeds
+// pre-captured JSON to the parser and never runs lsblk at all.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+// A stand-in lsblk on a PATH of the test's own making, restored afterwards.
+class FakeLsblk
+{
+public:
+    explicit FakeLsblk(const QByteArray& body)
+        : _savedPath(qgetenv("PATH"))
+    {
+        REQUIRE(_dir.isValid());
+        const QString path = _dir.filePath(QStringLiteral("lsblk"));
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        const QByteArray script = "#!/bin/sh\n" + body;
+        REQUIRE(f.write(script) == script.size());
+        f.close();
+        REQUIRE(f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                 QFileDevice::ExeOwner));
+        // The fixture directory alone: QStandardPaths would otherwise fall
+        // back to a built-in default and find the real lsblk.
+        qputenv("PATH", _dir.path().toUtf8());
+    }
+
+    ~FakeLsblk() { qputenv("PATH", _savedPath); }
+
+private:
+    QTemporaryDir _dir;
+    QByteArray _savedPath;
+};
+} // namespace
+
+TEST_CASE("An lsblk that hangs does not take the drive list with it",
+          "[drivelist][linux][timeout]")
+{
+    // Absolute /bin/sleep: PATH is the fixture directory alone, so a bare
+    // "sleep" would not be found and the script would fall straight through
+    // and answer instantly -- the opposite of the case.
+    FakeLsblk fake("/bin/sleep 120\n");
+
+    QElapsedTimer elapsed;
+    elapsed.start();
+    const std::optional<QByteArray> out = Drivelist::testing::runLsblk();
+    const qint64 took = elapsed.elapsed();
+
+    INFO("took " << took << "ms");
+    // Gave up rather than waiting on it.
+    CHECK_FALSE(out.has_value());
+    // Bounded by the five-second limit, not by the two minutes the fixture
+    // would otherwise take.
+    CHECK(took < 30000);
+}
+
+TEST_CASE("An lsblk that fails is not read as an empty machine",
+          "[drivelist][linux][timeout]")
+{
+    // lsblk can print part of an answer and then fail -- a device that goes
+    // away mid-enumeration does exactly that. The half-answer must not be
+    // parsed as the whole truth, or a drive that is really there disappears
+    // from the list while the rest of it looks normal.
+    //
+    // The fixture prints before failing on purpose. Failing silently is
+    // caught further down by the empty-output check, so a fixture that
+    // printed nothing would pass with the exit-code check removed and prove
+    // nothing about it.
+    FakeLsblk fake("echo '{\"blockdevices\":[{\"kname\":\"/dev/sda\"}]}'\n"
+                   "echo 'lsblk: /dev/sdb: not a block device' >&2\n"
+                   "exit 1\n");
+
+    CHECK_FALSE(Drivelist::testing::runLsblk().has_value());
+}
+
+TEST_CASE("An lsblk that answers is believed", "[drivelist][linux][timeout]")
+{
+    // The other side, so the two refusals above are not simply "runLsblk
+    // always gives up".
+    FakeLsblk fake("echo '{\"blockdevices\":[]}'\n");
+
+    const std::optional<QByteArray> out = Drivelist::testing::runLsblk();
+    REQUIRE(out.has_value());
+    CHECK_THAT(out->toStdString(), ContainsSubstring("blockdevices"));
+}
+#endif // Q_OS_LINUX
