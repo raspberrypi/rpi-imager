@@ -28,6 +28,9 @@
 
 #include <QByteArray>
 #include <QCryptographicHash>
+#include <QSet>
+#include <QThread>
+#include <chrono>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -443,13 +446,28 @@ TEST_CASE("A completed write leaves no inhibitor behind",
     // few cards should not be one that can no longer go to sleep.
     if (!haveSudo())
         SKIP("passwordless sudo is not available");
+#ifndef Q_OS_LINUX
+    // The FIFO under /run and the systemd-inhibit holding it are the Linux
+    // inhibitor's own arrangement; other platforms inhibit sleep through
+    // their own APIs and leave nothing on disk to count.
+    SKIP("the inhibitor this counts is the Linux one");
+#endif
 
-    const auto fifosNow = []() {
+    // /run is shared and ctest runs these cases in parallel, so a sibling
+    // case's write can have a FIFO open while this one looks. Comparing a
+    // count would then fail on somebody else's work in progress -- it did,
+    // once, in a -j4 run. So: name what was there before, and afterwards
+    // wait for everything that is new to go away. A sibling's FIFO is new
+    // too, and disappears when its run finishes; only a genuine leak stays.
+    const auto fifoNames = []() {
         return QDir(QStringLiteral("/run"))
-            .entryList({QStringLiteral("rpi-imager-suspend_*")}, QDir::System | QDir::Files)
-            .size();
+            .entryList({QStringLiteral("rpi-imager-suspend_*")},
+                       QDir::System | QDir::Files);
     };
-    const int before = fifosNow();
+    // One call, held in a named list: taking begin() from one temporary and
+    // end() from another is two different containers and a crash.
+    const QStringList existing = fifoNames();
+    const QSet<QString> before(existing.begin(), existing.end());
 
     Scratch scratch;
     const QString target = scratch.notADevice();
@@ -463,16 +481,22 @@ TEST_CASE("A completed write leaves no inhibitor behind",
     REQUIRE(r.finished);
     REQUIRE(r.exitCode == 0);
 
-    CHECK(fifosNow() == before);
-}
+    QStringList stillNew;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    for (;;) {
+        stillNew.clear();
+        for (const QString &name : fifoNames()) {
+            if (!before.contains(name))
+                stillNew << name;
+        }
+        if (stillNew.isEmpty() || std::chrono::steady_clock::now() >= deadline)
+            break;
+        QThread::msleep(200);
+    }
 
-// ══════════════════════════════════════════════════════════════
-// What a script's user is told when the write goes wrong, and what they
-// see when it goes right.
-//
-// These need a write that actually starts, which only became reachable once
-// the inhibitor teardown stopped hanging -- so none of it had a test.
-// ══════════════════════════════════════════════════════════════
+    INFO("left behind: " << stillNew.join(QStringLiteral(", ")).toStdString());
+    CHECK(stillNew.isEmpty());
+}
 
 namespace {
 // Big enough to clear the progress throttle, which suppresses any output at
@@ -598,6 +622,12 @@ TEST_CASE("Running as root, a failed open does not advise sudo",
     // with nothing to change.
     if (!haveSudo())
         SKIP("passwordless sudo is not available");
+#ifndef Q_OS_LINUX
+    // The message this is about is the Linux branch of the open failure.
+    // macOS has its own, which also opens a System Settings pane on the way
+    // past -- not something a test run should do to somebody's desktop.
+    SKIP("this message is the Linux one");
+#endif
 
     Scratch scratch;
     const QString unreachable =

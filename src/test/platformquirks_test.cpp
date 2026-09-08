@@ -543,6 +543,24 @@ static int countEntries(const char* dir)
                                                     QDir::System).size();
 }
 
+// Both counts are process-wide, and the process is more than this test: Qt
+// starts and retires threads of its own, and a descriptor opened elsewhere
+// lands in the same directory. Sampling once, immediately after a stop,
+// makes the case fail on somebody else's timing -- it did, in a loaded -j4
+// run. Wait for the count to come back instead, and only then insist.
+static bool settlesTo(const char* dir, int target, int milliseconds = 5000)
+{
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(milliseconds);
+    for (;;) {
+        if (countEntries(dir) <= target)
+            return true;
+        if (std::chrono::steady_clock::now() >= deadline)
+            return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    }
+}
+
 TEST_CASE("Watching for the network back does not accumulate",
           "[platformquirks][network]") {
     // isOnline() calls startNetworkMonitoring on every poll while there is no
@@ -577,8 +595,8 @@ TEST_CASE("Watching for the network back does not accumulate",
     // left running, but not a thread that has exited without being joined --
     // that one is gone from /proc/self/task while still holding its stack.
     // Dropping the pthread_join fails neither assertion here.
-    CHECK(countEntries("/proc/self/fd") == fdsBefore);
-    CHECK(countEntries("/proc/self/task") == threadsBefore);
+    CHECK(settlesTo("/proc/self/fd", fdsBefore));
+    CHECK(settlesTo("/proc/self/task", threadsBefore));
 }
 
 TEST_CASE("Start and stop in a loop leaves nothing behind",
@@ -594,12 +612,12 @@ TEST_CASE("Start and stop in a loop leaves nothing behind",
         PlatformQuirks::stopNetworkMonitoring();
     }
 
-    CHECK(countEntries("/proc/self/fd") == fdsBefore);
-    CHECK(countEntries("/proc/self/task") == threadsBefore);
+    CHECK(settlesTo("/proc/self/fd", fdsBefore));
+    CHECK(settlesTo("/proc/self/task", threadsBefore));
 
     // A stop with nothing running is not a way to lose a descriptor either.
     PlatformQuirks::stopNetworkMonitoring();
-    CHECK(countEntries("/proc/self/fd") == fdsBefore);
+    CHECK(settlesTo("/proc/self/fd", fdsBefore));
 }
 
 #ifdef Q_OS_LINUX
