@@ -138,6 +138,23 @@ public:
     static QString pbkdf2(const QByteArray& password, const QByteArray& ssid);
 
     /**
+     * @brief Shell-quote a value for use as one argument in firstrun.sh
+     *
+     * Every value the user supplies ends up here on its way into a script
+     * that runs as root on first boot, so this is the whole of what stands
+     * between a password containing a semicolon and a command running on
+     * somebody's Pi.
+     *
+     * Public alongside the other pure helpers on this class -- the yaml and
+     * crypt ones next to it -- so it can be held down by a test directly
+     * rather than only through whatever script happens to embed it.
+     *
+     * @param value String to quote
+     * @return A single shell word the shell will read back unchanged
+     */
+    static QString shellQuote(const QString& value);
+
+    /**
      * @brief Whether the OS image's release date selects yescrypt over sha256crypt.
      *
      * yescrypt is used for images released on/after 2023-01-01; older (or
@@ -159,13 +176,6 @@ public:
     static bool isYescryptHash(const QString& cryptHash);
 
 private:
-    /**
-     * @brief Shell-quote a string for safe use in bash scripts
-     * 
-     * @param value String to quote
-     * @return Quoted string safe for shell use
-     */
-    static QString shellQuote(const QString& value);
 
     /**
      * @brief Resolve the crypted account password from settings.

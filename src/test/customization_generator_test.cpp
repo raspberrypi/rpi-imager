@@ -25,6 +25,86 @@
 using namespace rpi_imager;
 using Catch::Matchers::ContainsSubstring;
 
+// ---------------------------------------------------------------------------
+// Quoting what the user typed, for a script that runs as root
+// ---------------------------------------------------------------------------
+//
+// Every value the user supplies -- username, password, network name,
+// passphrase, country, keymap, timezone, SSH keys -- is pasted into
+// firstrun.sh as a command argument, and firstrun.sh runs as root on the
+// first boot. shellQuote() is the only thing between a password containing a
+// semicolon and a command running on somebody's Pi. It had no test of its own.
+//
+// Checked by running the shell rather than by reading the string. "It
+// contains the right characters" is a weaker claim than "sh reads it back as
+// exactly what went in", and the second is the one that matters.
+
+namespace {
+
+// What /bin/sh makes of a quoted value: printf writes it back verbatim, so
+// anything the shell interpreted shows up as a difference.
+QString throughTheShell(const QString &value, bool *ran)
+{
+    QProcess sh;
+    sh.start(QStringLiteral("/bin/sh"),
+             {QStringLiteral("-c"),
+              QStringLiteral("printf %s ") + CustomisationGenerator::shellQuote(value)});
+    *ran = sh.waitForFinished(10000) && sh.exitStatus() == QProcess::NormalExit;
+    return QString::fromUtf8(sh.readAllStandardOutput());
+}
+
+} // namespace
+
+TEST_CASE("A quoted value reaches the shell exactly as it was typed",
+          "[customization][shellquoting]") {
+    struct Case { const char *what; const char *value; };
+    const Case cases[] = {
+        {"an ordinary hostname",          "raspberrypi"},
+        {"a password with a space",       "correct horse battery"},
+        {"an apostrophe",                 "o'brien"},
+        {"nothing but apostrophes",       "\'\'\'"},
+        {"a semicolon and a command",     "x'; touch /tmp/rpi-imager-pwned; '"},
+        {"command substitution",          "$(id)"},
+        {"backticks",                     "`id`"},
+        {"a variable",                    "$HOME and ${PATH}"},
+        {"a pipe and a redirect",         "a | b > c < d"},
+        {"an ampersand",                  "a && b & c"},
+        {"a newline",                     "first\nsecond"},
+        {"a backslash",                   "back\\slash"},
+        {"double quotes",                 "say \"hello\""},
+        {"a glob",                        "*.img ?x [a-z]"},
+        {"a network name with all of it", "My Wi-Fi's $network `here`"},
+    };
+
+    for (const Case &c : cases) {
+        const QString value = QString::fromUtf8(c.value);
+        bool ran = false;
+        const QString seen = throughTheShell(value, &ran);
+        INFO(c.what << ": quoted as "
+             << CustomisationGenerator::shellQuote(value).toStdString());
+        REQUIRE(ran);
+        CHECK(seen == value);
+    }
+
+    // Nothing above was allowed to actually run.
+    CHECK_FALSE(QFile::exists(QStringLiteral("/tmp/rpi-imager-pwned")));
+}
+
+TEST_CASE("A quoted value is a single shell word", "[customization][shellquoting]") {
+    // Splitting matters as much as interpreting: a passphrase with a space
+    // that arrives as two arguments configures the wrong network and drops
+    // the rest on the floor, with nothing to say so.
+    QProcess sh;
+    sh.start(QStringLiteral("/bin/sh"),
+             {QStringLiteral("-c"),
+              QStringLiteral("set -- ")
+                  + CustomisationGenerator::shellQuote(
+                        QStringLiteral("two words $and 'more'"))
+                  + QStringLiteral("; printf %s $#")});
+    REQUIRE(sh.waitForFinished(10000));
+    CHECK(QString::fromUtf8(sh.readAllStandardOutput()) == QStringLiteral("1"));
+}
+
 TEST_CASE("CustomisationGenerator generates valid sh script header", "[customization]") {
     QVariantMap settings;
     settings["hostname"] = "testpi";
