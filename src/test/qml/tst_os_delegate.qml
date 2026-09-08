@@ -124,7 +124,11 @@ TestCase {
         ]
     })
 
+    property url previousRepo: ""
+
     function initTestCase() {
+        testCase.previousRepo = ImageWriterSingleton.osListUrl()
+
         // The OS list belongs to the singleton writer and is shared by every
         // file in the run, so it is fetched once here rather than per case.
         // No hardware filtering, which is a real state -- it is what the
@@ -153,11 +157,14 @@ TestCase {
     }
 
     function cleanupTestCase() {
-        // Put the writer back on the list it would otherwise have had. This
-        // starts a real fetch, which is what the application does at startup
-        // anyway -- what must not be left behind is a repository pointing at
-        // a temporary file that goes away with the run.
-        ImageWriterSingleton.refreshOsListFromDefaultUrl()
+        // The repository URL goes back to whatever it was, with setCustomRepo
+        // rather than a refetch: refetching the shipped URL empties the list
+        // first and only refills it if the machine has network, and several
+        // files later in the run fail rather than skip without a list. The
+        // entries fetched here are harmless to leave -- what must not be left
+        // is a repository pointing at a temporary file that goes away with
+        // the run.
+        ImageWriterSingleton.setCustomRepo(testCase.previousRepo)
     }
 
     function restoreRepository() {

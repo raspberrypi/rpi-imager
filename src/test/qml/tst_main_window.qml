@@ -682,6 +682,7 @@ TestCase {
     // consideration rather than a nicety.
 
     function test_the_title_says_which_repository_the_list_came_from() {
+        const before = ImageWriterSingleton.osListUrl()
         const repo = TestFiles.write("main_window_repo.json",
                                      JSON.stringify({ "os_list": [] }))
         verify(repo !== "", "wrote a repository file")
@@ -706,9 +707,12 @@ TestCase {
                   "the notice went away with the repository")
         verify(win.title.indexOf("Using data from") < 0,
                "and the title is back to plain: " + win.title)
+
+        leaveAnOsListBehind(before)
     }
 
     function test_the_title_follows_the_repository_moving() {
+        const before = ImageWriterSingleton.osListUrl()
         // A custom repository that answers with a redirect is served by a
         // host the user never typed, and the title has to name the one that
         // actually answered. The writer does that by replacing the stored
@@ -734,5 +738,35 @@ TestCase {
 
         ImageWriterSingleton.refreshOsListFromDefaultUrl()
         tryVerify(function() { return win.customRepoHost.length === 0 }, 10000)
+
+        leaveAnOsListBehind(before)
+    }
+
+    // Leave a populated OS list behind.
+    //
+    // Several files later in the run assume there is one -- their cases fail
+    // rather than skip without it -- and a case here that switched
+    // repositories has just emptied it. Going back to the shipped URL starts
+    // a real fetch whose success depends on the machine, so the list comes
+    // back from a local file and only the repository URL is restored, with
+    // setCustomRepo, which does not start a fetch that could empty it again.
+    function leaveAnOsListBehind(previousRepo) {
+        const restore = TestFiles.write("restored_os_list.json", JSON.stringify({
+            "os_list": [{
+                "name": "Restored entry",
+                "description": "So the files after this one have a list",
+                "url": "https://example.invalid/restored.img.xz",
+                "icon": "",
+                "release_date": "2026-01-01",
+                "extract_size": 1048576,
+                "image_download_size": 524288,
+                "extract_sha256": "ee55"
+            }]
+        }))
+        ImageWriterSingleton.refreshOsListFrom(restore)
+        tryVerify(function () {
+            return !ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "a list is in place for whatever runs next")
+        ImageWriterSingleton.setCustomRepo(previousRepo)
     }
 }
