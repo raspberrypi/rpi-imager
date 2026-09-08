@@ -1727,3 +1727,34 @@ TEST_CASE("An image file with nothing in it is refused before the board is touch
     // And nothing reached the device.
     CHECK(t.device.flashed().empty());
 }
+
+TEST_CASE("An image that cannot be fetched is reported as the download failing",
+          "[fastboot][flash][pipeline]")
+{
+    // The catalogue image is fetched while the board waits in fastboot mode.
+    // A connection that never opens -- a proxy in the way, the mirror down,
+    // no route from the provisioning machine -- has to come back as the
+    // download failing and nothing sent to the board.
+    //
+    // It is worth naming as a download rather than reporting whatever the
+    // pipeline noticed second: the decompressor sees an empty stream and the
+    // encoder sees no segments, and either of those described to the user
+    // would send them looking at the image or the board instead of at the
+    // network.
+    //
+    // Nothing listens on port 1.
+    FlashingThread t{QUrl(QStringLiteral("http://127.0.0.1:1/os.img.xz")),
+                     2u * 1024 * 1024, QByteArray(), 64u * 1024 * 1024};
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    const std::string said = log.errors.join(QStringLiteral(" | ")).toStdString();
+    INFO("errors: " << said);
+    CHECK_FALSE(log.success);
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK_THAT(said, ContainsSubstring("Download failed"));
+    // And the board is as it was.
+    CHECK(t.device.flashed().empty());
+}
