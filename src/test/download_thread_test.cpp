@@ -1312,6 +1312,49 @@ void setConfiguredRsaKey(const QString &path)
 
 } // namespace
 
+TEST_CASE("A signing key that is not a key stops the write", "[download][secureboot]")
+{
+    // Secure boot means the Pi will only run an image it can check the
+    // signature of. If the signing step fails and the write finishes anyway,
+    // the card is written, looks finished, and the board refuses to boot from
+    // it -- with nothing anywhere to say why. So the failure has to come back
+    // as a failure, naming the step that could not be done.
+    //
+    // A key the user picked with the file chooser is whatever they picked.
+    if (!haveMkfsVfat())
+        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("not-a-key.pem"));
+    REQUIRE(writeFile(key, QByteArray("-----BEGIN NOTHING-----\nnope\n")));
+    setConfiguredRsaKey(key);
+
+    const QString source = scratch.filePath(QStringLiteral("sb-bad-src.img"));
+    REQUIRE(buildPartitionedImage(source, 48));
+    const QString dest = scratch.filePath(QStringLiteral("sb-bad-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
+
+    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
+                             QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    setConfiguredRsaKey(QString());
+
+    REQUIRE(outcome.finished);
+    INFO("message: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.succeeded);
+    // Named, so somebody who chose the wrong file knows which step objected.
+    CHECK_THAT(outcome.errorMessage.toStdString(),
+               Catch::Matchers::ContainsSubstring("boot.sig"));
+
+    // What the card holds afterwards is deliberately not asserted. Reading
+    // boot.sig back and finding it absent would pass just as readily because
+    // the boot partition never got far enough to be readable, and what a
+    // half-written card should contain is not a contract anything states.
+}
+
 TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secureboot]")
 {
     if (!haveMkfsVfat())
