@@ -671,4 +671,68 @@ TestCase {
         verify(!performanceSave().visible,
                "no save dialog was raised for data that is not there")
     }
+
+    // ── Where the images came from ────────────────────────────────────
+    //
+    // Pointing Imager at a custom repository changes what it will offer to
+    // write, and the window title is the only place that is said. The OS
+    // list itself looks identical whoever served it, so a user handed a
+    // machine already pointed somewhere else has nothing else to go on --
+    // which is why the code that follows a redirect calls this a security
+    // consideration rather than a nicety.
+
+    function test_the_title_says_which_repository_the_list_came_from() {
+        const repo = TestFiles.write("main_window_repo.json",
+                                     JSON.stringify({ "os_list": [] }))
+        verify(repo !== "", "wrote a repository file")
+
+        ImageWriterSingleton.refreshOsListFrom(repo)
+
+        tryVerify(function() { return win.customRepoHost.length > 0 }, 5000,
+                  "the window noticed the repository changed")
+        // A local file is named by its filename rather than a host, because
+        // "file" would tell the user nothing.
+        compare(win.customRepoHost, "main_window_repo.json")
+        verify(win.title.indexOf("Using data from") >= 0,
+               "the title says the list is not the usual one: " + win.title)
+        verify(win.title.indexOf("main_window_repo.json") >= 0,
+               "and names it: " + win.title)
+
+        // Back to the shipped list, which also has to clear the notice --
+        // a title still claiming a custom repository is worse than never
+        // having shown one.
+        ImageWriterSingleton.refreshOsListFromDefaultUrl()
+        tryVerify(function() { return win.customRepoHost.length === 0 }, 10000,
+                  "the notice went away with the repository")
+        verify(win.title.indexOf("Using data from") < 0,
+               "and the title is back to plain: " + win.title)
+    }
+
+    function test_the_title_follows_the_repository_moving() {
+        // A custom repository that answers with a redirect is served by a
+        // host the user never typed, and the title has to name the one that
+        // actually answered. The writer does that by replacing the stored
+        // repository with the final URL and saying the host changed; there
+        // is no seam here to redirect a real fetch through -- a redirect
+        // needs a server, and the harness has none -- so the two halves are
+        // done directly, in the same order.
+        const first = TestFiles.write("moved_from.json",
+                                      JSON.stringify({ "os_list": [] }))
+        ImageWriterSingleton.refreshOsListFrom(first)
+        tryVerify(function() {
+            return win.customRepoHost === "moved_from.json"
+        }, 5000, "the first repository is in the title")
+
+        const second = TestFiles.write("moved_to.json",
+                                       JSON.stringify({ "os_list": [] }))
+        ImageWriterSingleton.setCustomRepo(second)
+        ImageWriterSingleton.customRepoHostChanged()
+
+        compare(win.customRepoHost, "moved_to.json",
+                "the title names the repository that answered")
+        verify(win.title.indexOf("moved_to.json") >= 0, win.title)
+
+        ImageWriterSingleton.refreshOsListFromDefaultUrl()
+        tryVerify(function() { return win.customRepoHost.length === 0 }, 10000)
+    }
 }
