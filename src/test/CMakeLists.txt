@@ -1065,6 +1065,36 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ELEVATION_PROBE_BINARY="$<TARGET_FILE:platform_quirks_elevation_probe>")
     add_dependencies(platformquirks_test platform_quirks_elevation_probe)
 
+    # hasNetworkConnectivity() walks /sys/class/net, which is hardcoded, so
+    # platformquirks_test bind-mounts a synthetic one over it in an
+    # unprivileged mount namespace and runs this probe inside. Same technique
+    # as embedded_scaling/run.sh; the cases skip where unshare -rm is not
+    # available.
+    add_executable(platform_quirks_network_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../platformquirks.h
+        ${PLATFORMQUIRKS_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/platform_quirks_network_probe.cpp
+    )
+
+    target_link_libraries(platform_quirks_network_probe PRIVATE
+        Qt6::Core
+        ${PLATFORMQUIRKS_LIBS}
+    )
+
+    target_include_directories(platform_quirks_network_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_compile_features(platform_quirks_network_probe PRIVATE cxx_std_20)
+    target_compile_options(platform_quirks_network_probe PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+
+    target_compile_definitions(platformquirks_test PRIVATE
+        NETWORK_PROBE_BINARY="$<TARGET_FILE:platform_quirks_network_probe>")
+    add_dependencies(platformquirks_test platform_quirks_network_probe)
+
     add_test(NAME embedded_scaling_matrix
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/embedded_scaling/run.sh
                 $<TARGET_FILE:embedded_scaling_probe>

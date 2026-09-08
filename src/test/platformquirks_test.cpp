@@ -1734,3 +1734,229 @@ TEST_CASE("Run without elevation, nothing is repointed",
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+#ifdef NETWORK_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// Whether Imager thinks you are online
+//
+// The answer gates the whole first half of the wizard: online it fetches the
+// device and OS lists, offline it shows the placeholder that tells the user
+// to check their connection and offers Retry. Getting it wrong in either
+// direction is visible immediately -- a machine that is connected sitting on
+// the offline screen, or one that is not spending the fetch timeout before
+// saying so.
+//
+// It is decided by walking /sys/class/net and reading each interface's
+// operstate. That path is hardcoded, so these cases bind-mount a synthetic
+// one over it inside an unprivileged mount namespace and run a probe inside,
+// which is the technique embedded_scaling/run.sh already uses for
+// /sys/class/drm.
+//
+// PATH is emptied for the probe as well. With every interface down the code
+// falls through to `nmcli networking connectivity check`, and on a machine
+// where NetworkManager says "full" that would answer for the real network
+// rather than the fixture -- so nmcli is made unfindable and the fixture is
+// the only thing speaking.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+bool haveMountNamespaces()
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("true")});
+    if (!p.waitForFinished(10000))
+        return false;
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+// One directory per interface, each holding an operstate file.
+bool buildNetFixture(const QString& root,
+                     const QList<QPair<QString, QString>>& interfaces)
+{
+    for (const auto& iface : interfaces) {
+        const QString dir = root + QLatin1Char('/') + iface.first;
+        if (!QDir().mkpath(dir))
+            return false;
+        QFile f(dir + QStringLiteral("/operstate"));
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+        const QByteArray body = (iface.second + QLatin1Char('\n')).toUtf8();
+        if (f.write(body) != body.size())
+            return false;
+    }
+    return true;
+}
+
+// Answer from the probe with `fixture` mounted over /sys/class/net. -1 if the
+// probe could not be run at all.
+//
+// The probe's PATH is pointed at an empty directory, which is what keeps
+// nmcli out of the picture. Unsetting PATH does not: QStandardPaths::
+// findExecutable falls back to a built-in default and finds the real
+// /usr/bin/nmcli, which then answers for the machine's actual network -- with
+// every "online" case here passing whatever the fixture said. The outer PATH
+// is left alone so unshare and sh can still be found; the substitution
+// happens inside the namespace, on the probe only.
+int connectivityWith(const QString& fixture, const QString& emptyBin)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /sys/class/net "
+                            "&& exec env PATH=\"$3\" \"$2\""),
+             QStringLiteral("_"), fixture,
+             QStringLiteral(NETWORK_PROBE_BINARY), emptyBin});
+    if (!p.waitForFinished(30000))
+        return -1;
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    if (out.contains(QStringLiteral("CONNECTIVITY=1")))
+        return 1;
+    if (out.contains(QStringLiteral("CONNECTIVITY=0")))
+        return 0;
+    return -1;
+}
+
+} // namespace
+
+TEST_CASE("An interface that is up means the OS list can be fetched",
+          "[platformquirks][netdetect]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable, so /sys/class/net "
+             "cannot be replaced");
+
+    QTemporaryDir fixture, emptyBin;
+    REQUIRE(fixture.isValid());
+    REQUIRE(emptyBin.isValid());
+    REQUIRE(buildNetFixture(fixture.path(), {
+        {QStringLiteral("lo"), QStringLiteral("unknown")},
+        {QStringLiteral("eth0"), QStringLiteral("up")},
+    }));
+
+    CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 1);
+}
+
+TEST_CASE("Every interface down means the offline screen", "[platformquirks][netdetect]")
+{
+    // A cable out and Wi-Fi off. The wizard has to say so rather than
+    // spending the fetch timeout first.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir fixture, emptyBin;
+    REQUIRE(fixture.isValid());
+    REQUIRE(emptyBin.isValid());
+    REQUIRE(buildNetFixture(fixture.path(), {
+        {QStringLiteral("lo"), QStringLiteral("unknown")},
+        {QStringLiteral("eth0"), QStringLiteral("down")},
+        {QStringLiteral("wlan0"), QStringLiteral("down")},
+    }));
+
+    CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 0);
+}
+
+TEST_CASE("Loopback on its own is not a network", "[platformquirks][netdetect]")
+{
+    // lo is up on every machine ever booted. Counting it would report every
+    // user as online, and the offline screen -- and the Retry button on it --
+    // would never appear at all.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir fixture, emptyBin;
+    REQUIRE(fixture.isValid());
+    REQUIRE(emptyBin.isValid());
+    REQUIRE(buildNetFixture(fixture.path(), {
+        {QStringLiteral("lo"), QStringLiteral("up")},
+    }));
+
+    CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 0);
+}
+
+TEST_CASE("A VLAN interface counts like any other", "[platformquirks][netdetect]")
+{
+    // eth0.100 is how a VLAN sub-interface is named, and the dot is why the
+    // name check allows one. Rejected, a machine whose only route is over a
+    // VLAN would be told it has no network.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir fixture, emptyBin;
+    REQUIRE(fixture.isValid());
+    REQUIRE(emptyBin.isValid());
+    REQUIRE(buildNetFixture(fixture.path(), {
+        {QStringLiteral("lo"), QStringLiteral("unknown")},
+        {QStringLiteral("eth0.100"), QStringLiteral("up")},
+    }));
+
+    CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 1);
+}
+
+TEST_CASE("An interface name that is not one is skipped", "[platformquirks][netdetect]")
+{
+    // The name is interpolated into /sys/class/net/%1/operstate, so it is
+    // checked before use, and refusing means the entry does not count -- a
+    // fixture holding nothing else reads as offline.
+    //
+    // Worth being exact about which row tests what. Only the over-long name
+    // reaches the check: entryList() is called without QDir::Hidden, so a
+    // directory whose name starts with a dot is filtered out before the check
+    // sees it -- run against a fixture holding one, the code prints no
+    // "skipping" warning at all. Those rows still say something worth
+    // pinning, that a hidden directory does not count as an interface, but it
+    // is entryList() making that true and not the guard. The guard's
+    // leading-dot arm is unreachable from this call site, and a name
+    // containing a separator cannot be a directory in the first place.
+    //
+    // Removing the check fails this case on the long-name row.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    const QList<QPair<QString, QString>> hostile = {
+        {QStringLiteral(".hidden"), QStringLiteral("up")},
+        {QStringLiteral("..sneaky"), QStringLiteral("up")},
+        {QStringLiteral("aninterfacenamewaytoolongforifnamsiz"), QStringLiteral("up")},
+    };
+
+    QTemporaryDir emptyBin;
+    REQUIRE(emptyBin.isValid());
+    for (const auto& iface : hostile) {
+        INFO("interface: " << iface.first.toStdString());
+        QTemporaryDir fixture;
+        REQUIRE(fixture.isValid());
+        REQUIRE(buildNetFixture(fixture.path(), {
+            {QStringLiteral("lo"), QStringLiteral("unknown")},
+            iface,
+        }));
+
+        CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 0);
+    }
+}
+
+TEST_CASE("A legitimate name alongside a rejected one still counts",
+          "[platformquirks][netdetect]")
+{
+    // The rejection skips one entry rather than abandoning the walk, so a
+    // real interface listed after a bad name is still found. Giving up on the
+    // first oddity would report a connected machine as offline.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir fixture, emptyBin;
+    REQUIRE(fixture.isValid());
+    REQUIRE(emptyBin.isValid());
+    REQUIRE(buildNetFixture(fixture.path(), {
+        {QStringLiteral(".hidden"), QStringLiteral("up")},
+        {QStringLiteral("lo"), QStringLiteral("unknown")},
+        {QStringLiteral("wlan0"), QStringLiteral("up")},
+    }));
+
+    CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 1);
+}
+#endif // NETWORK_PROBE_BINARY
+#endif // Q_OS_LINUX
