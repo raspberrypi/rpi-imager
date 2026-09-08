@@ -271,12 +271,19 @@ TestCase {
     // tst_wizard_navigation; what is left is the hold expiring and the two
     // ways of saying no.
     //
-    // Accepting is not exercised. The Switch handler has the same ordering as
-    // the token one -- close, then read the URL the close handler clears --
-    // but pressing it starts a real network fetch and resets the wizard. The
-    // shared assumption underneath both, that a Popup's closed signal waits
-    // for the exit transition rather than firing inside close(), is what the
-    // token case above pins.
+    // Accepting is exercised too, against a repository written to disk. It
+    // used not to be: the handler starts a fetch, and against the https URLs
+    // the other cases use that means the network. A file:// repository is a
+    // supported thing to point Imager at -- it is what --repo takes -- so the
+    // fetch is real and answers locally.
+    //
+    // That matters because the Switch handler has the same ordering trap as
+    // the token one: it closes the dialog and then reads the URL, while the
+    // close handler clears that same URL. It works because a Popup's closed
+    // signal waits for the exit transition rather than firing inside close().
+    // The token case pins that by reading back what the writer was given;
+    // this one pins it by reading back which repository the writer ended up
+    // on, so both halves of the shared assumption are held down.
 
     function repoDialog() {
         const d = findChild(wiz, "repositoryUrlDialog")
@@ -376,5 +383,89 @@ TestCase {
                 "and it is asking about the new one")
 
         closeRepoDialog()
+    }
+
+    function test_switching_to_a_repository_link_switches_and_starts_over() {
+        const before = ImageWriterSingleton.osListUrl()
+        // Accepting a repository link replaces the source of every image on
+        // offer, so anything already chosen against the old list has to go.
+        // A wizard left holding an OS from the previous repository would
+        // carry it into a write whose image no longer comes from anywhere
+        // the user can see.
+        const json = JSON.stringify({ "os_list": [] })
+        const repo = TestFiles.write("switched_repo.json", json)
+        verify(repo !== "", "wrote a repository to switch to")
+
+        // State for the reset to clear, so "it was reset" is not true by
+        // default.
+        wiz.selectedOsName = "Something from the old list"
+        wiz.selectedStorageName = "Some card"
+        wiz.markStepPermissible(wiz.stepStorageSelection)
+        verify(wiz.permissibleStepsBitmap !== 1, "there is state to lose")
+
+        const d = raiseRepoLink(repo)
+        tryVerify(function () { return d.allowAccept }, 5000,
+                  "the hold is released")
+        verify(d.isLocalFile, "a file:// link is recognised as a local one")
+
+        // Labelled for what it does to a local file rather than "Switch
+        // repository", which is the remote wording.
+        const open = repoButton("Open")
+        verify(open !== null, "there is a button to accept with")
+        verify(open.enabled)
+
+        mouseClick(open)
+
+        tryVerify(function () { return !d.opened }, 3000, "the dialog closed")
+
+        // The URL survived the close. If closed() fired inside close() this
+        // would be the default repository, because the close handler clears
+        // repoUrl before the handler reads it.
+        tryVerify(function () {
+            return ImageWriterSingleton.customRepoHost() === "switched_repo.json"
+        }, 5000, "the writer is on the repository from the link; it is on '"
+                 + ImageWriterSingleton.customRepoHost() + "'")
+
+        // And the wizard started over rather than keeping choices made
+        // against a list that is no longer on offer.
+        compare(wiz.selectedOsName, "", "the chosen OS was cleared")
+        compare(wiz.selectedStorageName, "", "and the chosen card")
+        compare(wiz.permissibleStepsBitmap, 1,
+                "and every step past the first is closed again")
+
+        ImageWriterSingleton.refreshOsListFromDefaultUrl()
+        tryVerify(function () {
+            return ImageWriterSingleton.customRepoHost() === ""
+        }, 10000, "put back for whatever runs next")
+
+        leaveAnOsListBehind(before)
+    }
+
+    // Leave a populated OS list behind.
+    //
+    // Several files later in the run assume there is one -- their cases fail
+    // rather than skip without it -- and a case here that switched
+    // repositories has just emptied it. Going back to the shipped URL starts
+    // a real fetch whose success depends on the machine, so the list comes
+    // back from a local file and only the repository URL is restored, with
+    // setCustomRepo, which does not start a fetch that could empty it again.
+    function leaveAnOsListBehind(previousRepo) {
+        const restore = TestFiles.write("restored_os_list.json", JSON.stringify({
+            "os_list": [{
+                "name": "Restored entry",
+                "description": "So the files after this one have a list",
+                "url": "https://example.invalid/restored.img.xz",
+                "icon": "",
+                "release_date": "2026-01-01",
+                "extract_size": 1048576,
+                "image_download_size": 524288,
+                "extract_sha256": "ee55"
+            }]
+        }))
+        ImageWriterSingleton.refreshOsListFrom(restore)
+        tryVerify(function () {
+            return !ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "a list is in place for whatever runs next")
+        ImageWriterSingleton.setCustomRepo(previousRepo)
     }
 }
