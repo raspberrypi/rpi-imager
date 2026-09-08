@@ -1606,6 +1606,245 @@ bool writeGtkSettings(const QString& home, const QString& body)
 
 } // namespace
 
+#ifdef MOTION_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// Asking the desktop whether to animate.
+//
+// prefersReducedMotion consults three sources in turn: GNOME's
+// enable-animations, KDE's AnimationDurationFactor, and the GTK settings
+// file. Only the last had tests -- the first two run their tools by absolute
+// path, deliberately, because this function can run as root after pkexec
+// where a relative name would search a PATH the user controls.
+//
+// So these cases bind substitutes over /usr/bin/gsettings and over /usr/bin
+// itself inside an unprivileged mount namespace. HOME is pointed at an empty
+// directory throughout, so the GTK fallback cannot answer for a case about
+// one of the other two.
+//
+// Getting this wrong in the "no" direction animates the window for somebody
+// who asked it not to, and for some vestibular conditions that request is
+// not a preference.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Defined further down, with the other namespace-based fixtures.
+bool haveMountNamespaces();
+
+// The directory planted over /usr/bin also has to carry a shell: /bin is a
+// symlink into /usr/bin on Debian and Raspberry Pi OS, so the bind hides
+// /bin/sh along with everything else, and a #!/bin/sh script then has no
+// interpreter. Without this the planted tools do not run and every case
+// reads as "the desktop said nothing" -- which several of them expect, so
+// they would pass for the wrong reason.
+bool plantShell(const QString& binDir)
+{
+    const QString real = QFileInfo(QStringLiteral("/bin/sh")).canonicalFilePath();
+    if (real.isEmpty())
+        return false;
+    const QString dest = binDir + QStringLiteral("/sh");
+    QFile::remove(dest);
+    if (!QFile::copy(real, dest))
+        return false;
+    return QFile(dest).setPermissions(
+        QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner |
+        QFileDevice::ReadGroup | QFileDevice::ExeGroup |
+        QFileDevice::ReadOther | QFileDevice::ExeOther);
+}
+
+// A shell script that answers on stdout and nothing else.
+bool plantTool(const QString& path, const QByteArray& output)
+{
+    const QByteArray script = "#!/bin/sh\nprintf '%s\\n' \"" + output + "\"\n";
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    if (f.write(script) != script.size())
+        return false;
+    f.close();
+    return f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                            QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                            QFileDevice::ExeOther);
+}
+
+// Run the probe with `binDir` bound over /usr/bin and `home` as HOME. -1 if
+// the probe could not be run at all.
+//
+// Binding the whole directory rather than a file over each tool is what lets
+// a case supply kreadconfig6, which is not installed on most machines and so
+// has nothing to bind onto. Nothing in /usr/bin is needed after the exec.
+int reducedMotionWith(const QString& binDir, const QString& home)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             // export rather than `env`: /usr/bin/env is one of the things
+             // the bind has just hidden.
+             QStringLiteral("mount --bind \"$1\" /usr/bin "
+                            "&& export HOME=\"$3\" && exec \"$2\""),
+             QStringLiteral("_"), binDir,
+             QStringLiteral(MOTION_PROBE_BINARY), home});
+    if (!p.waitForFinished(30000))
+        return -1;
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    if (out.contains(QStringLiteral("REDUCED=1")))
+        return 1;
+    if (out.contains(QStringLiteral("REDUCED=0")))
+        return 0;
+    return -1;
+}
+
+} // namespace
+
+TEST_CASE("Animations turned off in GNOME are respected",
+          "[platformquirks][a11y][motion]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable, so /usr/bin "
+             "cannot be substituted");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    const QString home = tmp.filePath(QStringLiteral("home"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(QDir().mkpath(home));
+    REQUIRE(plantShell(bin));
+
+    SECTION("enable-animations false")
+    {
+        REQUIRE(plantTool(bin + QStringLiteral("/gsettings"), "false"));
+        CHECK(reducedMotionWith(bin, home) == 1);
+    }
+
+    SECTION("enable-animations true")
+    {
+        REQUIRE(plantTool(bin + QStringLiteral("/gsettings"), "true"));
+        CHECK(reducedMotionWith(bin, home) == 0);
+    }
+
+    SECTION("a schema that is not installed answers nothing")
+    {
+        // gsettings prints its complaint to stderr and nothing to stdout.
+        // Not an instruction either way, so the search moves on.
+        REQUIRE(plantTool(bin + QStringLiteral("/gsettings"), ""));
+        CHECK(reducedMotionWith(bin, home) == 0);
+    }
+}
+
+TEST_CASE("Animations turned off in KDE Plasma are respected",
+          "[platformquirks][a11y][motion]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    const QString home = tmp.filePath(QStringLiteral("home"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(QDir().mkpath(home));
+    REQUIRE(plantShell(bin));
+
+    SECTION("AnimationDurationFactor of zero")
+    {
+        // How Plasma records "disable animations" -- there is no boolean.
+        REQUIRE(plantTool(bin + QStringLiteral("/kreadconfig6"), "0"));
+        CHECK(reducedMotionWith(bin, home) == 1);
+    }
+
+    SECTION("the default factor of one")
+    {
+        REQUIRE(plantTool(bin + QStringLiteral("/kreadconfig6"), "1"));
+        CHECK(reducedMotionWith(bin, home) == 0);
+    }
+
+    SECTION("a slowed-down but not disabled factor")
+    {
+        // Only exactly zero means off. A user who has slowed animations down
+        // still wants to see them.
+        REQUIRE(plantTool(bin + QStringLiteral("/kreadconfig6"), "0.5"));
+        CHECK(reducedMotionWith(bin, home) == 0);
+    }
+
+    SECTION("Plasma 5, where the tool is called kreadconfig5")
+    {
+        // Still shipping on Debian bookworm, which Raspberry Pi OS is built
+        // from. Falling back to it is the difference between honouring the
+        // setting and ignoring it on that whole generation of desktop.
+        REQUIRE(plantTool(bin + QStringLiteral("/kreadconfig5"), "0"));
+        CHECK(reducedMotionWith(bin, home) == 1);
+    }
+
+    SECTION("Plasma 6 is asked first where both are installed")
+    {
+        REQUIRE(plantTool(bin + QStringLiteral("/kreadconfig6"), "0"));
+        REQUIRE(plantTool(bin + QStringLiteral("/kreadconfig5"), "1"));
+        CHECK(reducedMotionWith(bin, home) == 1);
+    }
+}
+
+TEST_CASE("A desktop with none of the three says nothing",
+          "[platformquirks][a11y][motion]")
+{
+    // No gsettings, no kreadconfig, no GTK settings file. Animations stay on,
+    // which is the right default: nobody has asked for them to be off.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    const QString home = tmp.filePath(QStringLiteral("home"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(QDir().mkpath(home));
+    REQUIRE(plantShell(bin));
+
+    CHECK(reducedMotionWith(bin, home) == 0);
+}
+
+TEST_CASE("A tool planted on PATH is not the one consulted",
+          "[platformquirks][a11y][motion]")
+{
+    // The absolute paths are there because this can run as root after
+    // pkexec. A gsettings on PATH saying "false" must not be reached: at that
+    // point whoever set PATH before the elevation is choosing what runs as
+    // root, and the answer to this question is the least of it.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));       // becomes /usr/bin
+    const QString onPath = tmp.filePath(QStringLiteral("onpath")); // just on PATH
+    const QString home = tmp.filePath(QStringLiteral("home"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(QDir().mkpath(onPath));
+    REQUIRE(QDir().mkpath(home));
+    REQUIRE(plantShell(bin));
+    REQUIRE(plantShell(onPath));
+
+    // Nothing at the absolute paths, and a liar on PATH.
+    REQUIRE(plantTool(onPath + QStringLiteral("/gsettings"), "false"));
+    REQUIRE(plantTool(onPath + QStringLiteral("/kreadconfig6"), "0"));
+
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /usr/bin "
+                            "&& export HOME=\"$3\" PATH=\"$4\" && exec \"$2\""),
+             QStringLiteral("_"), bin, QStringLiteral(MOTION_PROBE_BINARY),
+             home, onPath});
+    REQUIRE(p.waitForFinished(30000));
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    INFO(out.toStdString());
+    CHECK(out.contains(QStringLiteral("REDUCED=0")));
+}
+#endif // MOTION_PROBE_BINARY
+
 TEST_CASE("Animations turned off in the GTK settings are respected",
           "[platformquirks][motion]")
 {

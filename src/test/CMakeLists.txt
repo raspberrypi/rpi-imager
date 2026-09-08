@@ -1095,6 +1095,36 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         NETWORK_PROBE_BINARY="$<TARGET_FILE:platform_quirks_network_probe>")
     add_dependencies(platformquirks_test platform_quirks_network_probe)
 
+    # prefersReducedMotion() runs /usr/bin/gsettings and /usr/bin/kreadconfig6
+    # by absolute path -- deliberately, since it can run as root after pkexec
+    # -- so neither can be redirected with PATH. platformquirks_test binds
+    # substitutes over them in an unprivileged mount namespace and runs this
+    # probe inside.
+    add_executable(platform_quirks_motion_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../platformquirks.h
+        ${PLATFORMQUIRKS_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/platform_quirks_motion_probe.cpp
+    )
+
+    target_link_libraries(platform_quirks_motion_probe PRIVATE
+        Qt6::Core
+        ${PLATFORMQUIRKS_LIBS}
+    )
+
+    target_include_directories(platform_quirks_motion_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_compile_features(platform_quirks_motion_probe PRIVATE cxx_std_20)
+    target_compile_options(platform_quirks_motion_probe PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+
+    target_compile_definitions(platformquirks_test PRIVATE
+        MOTION_PROBE_BINARY="$<TARGET_FILE:platform_quirks_motion_probe>")
+    add_dependencies(platformquirks_test platform_quirks_motion_probe)
+
     # detectPiKeyboard() reads /dev/input/by-id, which does not exist on a
     # machine with no Raspberry Pi keyboard attached and cannot be redirected
     # in-process. image_writer_test bind-mounts a synthetic /dev/input over
