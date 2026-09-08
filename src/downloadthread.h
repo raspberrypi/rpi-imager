@@ -195,6 +195,11 @@ public:
     size_t _writeFileZeroSkip(const char *buf, size_t len);
     size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr);
 
+    // Why a write to the device failed, in terms the reader can act on.
+    // The system knows -- ENOSPC, EIO, ENXIO -- and a bare "Error writing to
+    // device" throws that away.
+    QString _writeFailureReason() const;
+
 signals:
     void success();
     void error(QString msg);

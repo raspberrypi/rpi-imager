@@ -215,6 +215,12 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
                 if (first_async_error_ == FileError::kSuccess) {
                     first_async_error_ = error;
                 }
+                // io_uring hands the error back as -errno in the completion
+                // rather than through errno itself. Keep it: it is the only
+                // record of *why* a write failed, and the message the user
+                // reads is built from it. Without this an out-of-space card
+                // reads as "Error writing to device." and nothing more.
+                last_error_code_ = -result;
                 std::ostringstream oss;
                 oss << "io_uring write failed: " << strerror(-result);
                 Log(oss.str());
@@ -356,6 +362,7 @@ FileError LinuxFileOperations::WriteAtOffset(
     ssize_t result = pwrite(fd_, data + bytes_written, size - bytes_written,
                             static_cast<off_t>(offset + bytes_written));
     if (result <= 0) {
+      last_error_code_ = errno;
       return FileError::kWriteError;
     }
     bytes_written += static_cast<std::size_t>(result);
@@ -540,6 +547,7 @@ FileError LinuxFileOperations::ReadSequential(std::uint8_t* data, std::size_t si
 
   ssize_t result = read(fd_, data, size);
   if (result < 0) {
+    last_error_code_ = errno;
     bytes_read = 0;
     return FileError::kReadError;
   }
@@ -557,6 +565,7 @@ FileError LinuxFileOperations::Seek(std::uint64_t position) {
   WaitForPendingWrites();
 
   if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
+    last_error_code_ = errno;
     return FileError::kSeekError;
   }
 
@@ -590,6 +599,7 @@ FileError LinuxFileOperations::ForceSync() {
   WaitForPendingWrites();
   
   if (fsync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kSyncError;
   }
 
@@ -605,6 +615,7 @@ FileError LinuxFileOperations::Flush() {
   WaitForPendingWrites();
   
   if (fdatasync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kFlushError;
   }
 
@@ -744,6 +755,9 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
     std::ostringstream oss;
     oss << "io_uring_submit failed: " << strerror(-ret);
     Log(oss.str());
+    // io_uring reports -errno in the return value rather than through errno
+    // itself, so take it from there.
+    last_error_code_ = -ret;
     if (callback) callback(FileError::kWriteError, 0);
     return FileError::kWriteError;
   }

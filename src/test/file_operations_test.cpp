@@ -1134,3 +1134,36 @@ TEST_CASE("A device something else is holding is still written", "[file-ops][loo
 
   ops->Close();
 }
+
+TEST_CASE("A random-access write that fails records why", "[fileops][writeerror]") {
+  // WriteAtOffset is a separate implementation from WriteSequential -- pwrite
+  // rather than write, so that the sequential cursor is left alone -- and it
+  // returned kWriteError without keeping errno. The classification and the
+  // message the user reads are both built from that number, so a failure on
+  // this path arrived with no reason attached: "Error writing to device." and
+  // nothing more, where the sequential path could say the card was full.
+  //
+  // /dev/full fails every write with ENOSPC, which is the one way to reach a
+  // genuine full-device error without root and without a real card.
+  if (::access("/dev/full", W_OK) != 0) {
+    SKIP("/dev/full is not available on this host");
+  }
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops != nullptr);
+  REQUIRE(ops->OpenDevice("/dev/full") == FileError::kSuccess);
+
+  AlignedBuffer buffer(4096);
+  std::memset(buffer.data(), 0x5A, buffer.size());
+
+  const FileError result = ops->WriteAtOffset(0, buffer.data(), buffer.size());
+  INFO("errno was " << ops->GetLastErrorCode());
+  CHECK(result != FileError::kSuccess);
+  CHECK(ops->GetLastErrorCode() == ENOSPC);
+
+  // And the same classification the sequential path produces, so whichever
+  // one the write happened to take, the user is told the same thing.
+  CHECK(ops->ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kDiskFull);
+
+  ops->Close();
+}

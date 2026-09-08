@@ -1121,6 +1121,31 @@ size_t DownloadThread::_writeFileZeroSkip(const char *buf, size_t len)
     return totalProcessed;
 }
 
+QString DownloadThread::_writeFailureReason() const
+{
+    const int err = _file ? _file->GetLastErrorCode() : 0;
+
+    if (err == ENOSPC) {
+        // Writing past the end of the device. Either the image is bigger
+        // than the card, or the card is not the size it says it is -- the
+        // second is worth naming, because a card that reports more capacity
+        // than it has is a common thing to be sold and an unlikely thing to
+        // suspect.
+        return tr("The storage device ran out of space before the image was "
+                  "fully written.\n\n"
+                  "There is less room on it than the image needs. A card that "
+                  "reports more capacity than it really has will fail this "
+                  "way; try a different one.");
+    }
+
+    if (err != 0) {
+        return tr("Error writing to device.\n\nThe system reported: %1.")
+                   .arg(QString::fromLocal8Bit(::strerror(err)));
+    }
+
+    return tr("Error writing to device.");
+}
+
 size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete)
 {
     if (_cancelled) {

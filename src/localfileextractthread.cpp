@@ -160,7 +160,7 @@ void LocalFileExtractThread::extractRawImageRun()
         size_t written = _writeFile(_inputBuf, len);
         if (written != (size_t)len)
         {
-            _onDownloadError(tr("Error writing to device"));
+            _onDownloadError(_writeFailureReason());
             break;
         }
         
