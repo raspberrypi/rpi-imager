@@ -118,6 +118,46 @@ TEST_CASE("Formatting an empty device path is refused", "[format]")
     CHECK_FALSE(outcome.errors.isEmpty());
 }
 
+TEST_CASE("A device too small to format says so, through the thread", "[format]")
+{
+    // The mapping from failure to message is checked directly above; this is
+    // the path a user takes to it. Everything else that reaches the thread is
+    // refused before the formatter runs -- a missing device, an unwritable
+    // one -- so the one line that turns a formatter failure into something on
+    // screen had never been reached.
+    //
+    // Writable and far too small: opening it works and the size query falls
+    // back to an ioctl answer that means nothing for a regular file, so the
+    // formatter gets as far as writing and runs off the end.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("tiny.img"));
+
+    const QByteArray before(64 * 1024, '\0');
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.write(before) == before.size());
+    }
+
+    TestableFormatThread t(path.toUtf8());
+    const Outcome outcome = runToCompletion(t);
+
+    CHECK_FALSE(outcome.succeeded);
+    REQUIRE(outcome.errors.size() == 1);
+    INFO("said: " << outcome.errors[0].toStdString());
+    // The formatter's own reason, carried through rather than collapsed into
+    // "Unknown formatting error" -- running out of room and being refused
+    // permission call for different things from the person holding the card.
+    CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("Insufficient space"));
+
+    // And it was left as it was. A refusal that had already written part of a
+    // filesystem would be worse than not trying.
+    QFile check(path);
+    REQUIRE(check.open(QIODevice::ReadOnly));
+    CHECK(check.readAll() == before);
+}
+
 // ══════════════════════════════════════════════════════════════
 // What the user is told when it fails
 // ══════════════════════════════════════════════════════════════
