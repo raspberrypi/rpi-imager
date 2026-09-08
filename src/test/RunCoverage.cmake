@@ -12,9 +12,18 @@
 # not abort the run -- a report of what a failing suite covered is still worth
 # having, and it is usually the thing you want to look at.
 
+if(NOT DEFINED COVERAGE_FLAVOUR)
+    set(COVERAGE_FLAVOUR "gcov")
+endif()
+if(COVERAGE_FLAVOUR STREQUAL "llvm")
+    set(_tool_required LLVM_PROFDATA_EXECUTABLE LLVM_COV_EXECUTABLE)
+else()
+    set(_tool_required GCOVR_EXECUTABLE)
+endif()
+
 foreach(_required
         COVERAGE_BINARY_DIR COVERAGE_SOURCE_DIR COVERAGE_OUTPUT_DIR
-        COVERAGE_GENERATOR GCOVR_EXECUTABLE CTEST_EXECUTABLE)
+        COVERAGE_GENERATOR ${_tool_required} CTEST_EXECUTABLE)
     if(NOT DEFINED ${_required})
         message(FATAL_ERROR "RunCoverage.cmake: -D${_required} is required")
     endif()
@@ -191,14 +200,22 @@ endif()
 # ---------------------------------------------------------------------------
 # 1. Clear counters from any previous run
 # ---------------------------------------------------------------------------
-# .gcda files accumulate across runs, so without this the report describes
-# every run since the build directory was created rather than this one.
-file(GLOB_RECURSE _stale "${COVERAGE_BINARY_DIR}/*.gcda")
+# Counters accumulate across runs, so without this the report describes every
+# run since the build directory was created rather than this one. Under clang
+# it is worse than stale: %m in LLVM_PROFILE_FILE means the runtime merges into
+# whatever is already there.
+set(_profraw_dir "${COVERAGE_BINARY_DIR}/profraw")
+if(COVERAGE_FLAVOUR STREQUAL "llvm")
+    file(GLOB _stale "${_profraw_dir}/*.profraw" "${COVERAGE_BINARY_DIR}/*.profdata")
+else()
+    file(GLOB_RECURSE _stale "${COVERAGE_BINARY_DIR}/*.gcda")
+endif()
 list(LENGTH _stale _stale_count)
 if(_stale_count GREATER 0)
     message(STATUS "Coverage: clearing ${_stale_count} counter file(s) from a previous run")
     file(REMOVE ${_stale})
 endif()
+file(MAKE_DIRECTORY "${_profraw_dir}")
 
 # ---------------------------------------------------------------------------
 # 2. Run the suite
@@ -207,8 +224,19 @@ message(STATUS "Coverage: running the CTest suite")
 # --timeout, because a deadlocked case must not cost the whole report. CTest's
 # own default is 1500s per test; a suite whose slowest legitimate case is a few
 # seconds does not need to wait 25 minutes to learn that one has wedged.
+# %m rather than %p: it names the file after the binary rather than the
+# process, and the runtime merges into it. One file per test binary instead of
+# one per case, which for a suite of 1,697 cases is the difference between
+# sixty files and several thousand.
+if(COVERAGE_FLAVOUR STREQUAL "llvm")
+    set(_ctest_launcher "${CMAKE_COMMAND}" -E env
+        "LLVM_PROFILE_FILE=${_profraw_dir}/%m.profraw")
+else()
+    set(_ctest_launcher)
+endif()
+
 execute_process(
-    COMMAND "${CTEST_EXECUTABLE}" --output-on-failure --timeout 300
+    COMMAND ${_ctest_launcher} "${CTEST_EXECUTABLE}" --output-on-failure --timeout 300
     WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
     RESULT_VARIABLE _ctest_result
 )
@@ -218,6 +246,8 @@ if(NOT _ctest_result EQUAL 0)
         "numbers knowing some cases did not finish.")
 endif()
 
+if(NOT COVERAGE_FLAVOUR STREQUAL "llvm")
+# (gcov only: clang writes one profile per binary, not one per object.)
 # ---------------------------------------------------------------------------
 # 2a. Drop duplicate copies of sources the suite never executed
 # ---------------------------------------------------------------------------
@@ -360,92 +390,245 @@ if(_raced_count GREATER 0)
         "in two places, so the report does not depend on which gcov ran last")
     file(REMOVE ${_raced_copies})
 endif()
+endif()
 
 # ---------------------------------------------------------------------------
 # 3. Render
 # ---------------------------------------------------------------------------
 file(MAKE_DIRECTORY "${COVERAGE_OUTPUT_DIR}")
 
-message(STATUS "Coverage: rendering report")
-execute_process(
-    COMMAND "${GCOVR_EXECUTABLE}"
-            --root "${COVERAGE_SOURCE_DIR}"
-            "${COVERAGE_BINARY_DIR}"
-            ${_exclude_args}
-            # Branch coverage is the reason for doing this at all: line
-            # coverage would have called runWithTimeout's timeout path
-            # "reached" as soon as anything entered the loop.
-            --txt-metric branch
-            --decisions
-            # Without these two a branch-metric report on C++ is unreadable.
-            # Every call that might throw carries a branch pair for the unwind
-            # edge, and the unwind arm is never taken in a passing run, so
-            # gcov reports it half-covered forever. It is not a gap anyone can
-            # close -- you would have to make the allocation fail.
-            #
-            # Not a small correction, either: they were 10,598 of the 28,284
-            # branches here, and removing them takes the headline from 13.8%
-            # to 21.5% without a line of test code changing. What they cost in
-            # legibility is worse than what they cost in percentage points --
-            # lines like `out += ":";` were being painted as partially
-            # covered, and those lines contain no branch at all.
-            --exclude-throw-branches
-            --exclude-unreachable-branches
-            # Sort by uncovered *branches*, not uncovered lines: without
-            # --sort-branches the table is ordered by a metric it does not
-            # display. --sort-reverse because gcovr sorts ascending, which for
-            # a gap report is exactly backwards -- it opened on 27 rows of
-            # header files with no branches at all ("--%"), and put
-            # downloadthread.cpp, the single biggest gap in the tree at 1,958
-            # uncovered branches, last in an 89-row table.
-            --sort uncovered-number
-            --sort-branches
-            --sort-reverse
-            # Left on gcovr's default theme deliberately. The `github.*` themes
-            # look considerably more modern, but all four of them render a
-            # partially covered line in near enough the same colour as a fully
-            # covered one -- and a partially covered line is the single thing
-            # this report exists to show. The default theme's green/yellow/red
-            # are ugly and unambiguous, in that order of importance.
-            --html-details "${COVERAGE_OUTPUT_DIR}/index.html"
-            --html-title "rpi-imager core coverage"
-            --txt "${COVERAGE_OUTPUT_DIR}/summary.txt"
-            --print-summary
-            # The --exclude patterns above decide what reaches the report, but
-            # gcovr processes every .gcda it finds before applying them, and
-            # instrumentation is global -- so it walked into every FetchContent
-            # dependency, 492 of the 508 .gcno files here. gcov cannot resolve
-            # their sources from our build tree, and each failure printed: it
-            # was 10,461 lines of stderr on a run whose real output is four
-            # numbers. Pruning the walk removes the noise and the work both.
-            #
-            # The pattern is matched against the directory name rather than
-            # the full path, so it takes no leading slash -- ".*/_deps.*"
-            # matches nothing at all, silently.
-            # Only _deps. Pruning ".*dependencies.*" as well looks tempting --
-            # the vendored crypto built in-tree still emits a couple of dozen
-            # gcov warnings -- but the pattern is matched against the path
-            # relative to the search root, and the test binaries compile that
-            # crypto through object directories of their own. It took 1,192
-            # covered branches of customization_generator.cpp out of the
-            # report along with the warnings. Twenty-two lines of noise is the
-            # cheaper of the two.
-            --gcov-exclude-directories ".*_deps.*"
-            # Kept as a backstop only. This suppresses the "could not infer a
-            # working directory" failure, which before the pruning above was
-            # not an edge case but the single loudest thing in the run -- and
-            # fatal without it. Nothing in our own tree provokes it now.
-            --gcov-ignore-errors no_working_dir_found
-    WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
-    RESULT_VARIABLE _gcovr_result
-)
-if(NOT _gcovr_result EQUAL 0)
-    message(FATAL_ERROR "Coverage: gcovr failed (${_gcovr_result})")
+if(COVERAGE_FLAVOUR STREQUAL "llvm")
+    # ---------------------------------------------------------------------
+    # llvm-profdata + llvm-cov
+    # ---------------------------------------------------------------------
+    # Every binary that ran has to be named: llvm-cov reads the counters out
+    # of the profile and the mapping out of the executables, so a binary left
+    # off the list takes its sources out of the report entirely. Whatever is
+    # executable under test/ qualifies, plus the app -- which is never run by
+    # the suite, and is named for exactly that reason. Its QML-facing sources
+    # then appear at 0% instead of not appearing at all, which is the whole
+    # point of a gap report.
+    file(GLOB _profraw "${_profraw_dir}/*.profraw")
+    list(LENGTH _profraw _profraw_count)
+    if(_profraw_count EQUAL 0)
+        message(FATAL_ERROR
+            "Coverage: no .profraw files were written. The suite either did not run "
+            "or was not built with -fprofile-instr-generate.")
+    endif()
+
+    set(_profdata "${COVERAGE_BINARY_DIR}/coverage.profdata")
+    message(STATUS "Coverage: merging ${_profraw_count} profile(s)")
+    execute_process(
+        COMMAND "${LLVM_PROFDATA_EXECUTABLE}" merge -sparse ${_profraw} -o "${_profdata}"
+        RESULT_VARIABLE _merge_result
+    )
+    if(NOT _merge_result EQUAL 0)
+        message(FATAL_ERROR "Coverage: llvm-profdata merge failed (${_merge_result})")
+    endif()
+
+    file(GLOB _candidates "${COVERAGE_BINARY_DIR}/test/*")
+    set(_objects)
+    foreach(_candidate IN LISTS _candidates)
+        if(IS_DIRECTORY "${_candidate}")
+            continue()
+        endif()
+        if(_candidate MATCHES "\\.(cmake|json|txt|a|dylib|so|log)$")
+            continue()
+        endif()
+        file(READ "${_candidate}" _magic LIMIT 4 HEX)
+        # Mach-O (feedface / cffaedfe and friends) or ELF (7f454c46).
+        if(_magic MATCHES "^(cffaedfe|cefaedfe|feedfacf|feedface|7f454c46)$")
+            list(APPEND _objects "${_candidate}")
+        endif()
+    endforeach()
+
+    foreach(_app_candidate
+            "${COVERAGE_BINARY_DIR}/${COVERAGE_APP_NAME}.app/Contents/MacOS/${COVERAGE_APP_NAME}"
+            "${COVERAGE_BINARY_DIR}/${COVERAGE_APP_NAME}")
+        if(EXISTS "${_app_candidate}" AND NOT IS_DIRECTORY "${_app_candidate}")
+            list(APPEND _objects "${_app_candidate}")
+            break()
+        endif()
+    endforeach()
+
+    list(LENGTH _objects _object_count)
+    if(_object_count EQUAL 0)
+        message(FATAL_ERROR "Coverage: no instrumented binaries found to report on")
+    endif()
+    message(STATUS "Coverage: reading ${_object_count} binaries")
+
+    # llvm-cov takes the first binary as a positional argument and the rest
+    # behind -object; a list of nothing but -object leaves it reading the
+    # first source file as an executable and giving up.
+    list(POP_FRONT _objects _first_object)
+    set(_object_args)
+    foreach(_object IN LISTS _objects)
+        list(APPEND _object_args "-object" "${_object}")
+    endforeach()
+
+    # The same scope as the gcovr path, in the form llvm-cov takes: one
+    # -ignore-filename-regex per pattern, matched against the whole path.
+    # Anything outside the source tree -- system headers, Qt, the vendored
+    # dependencies -- is dropped by the source root filter that follows.
+    set(_ignore_args)
+    foreach(_pattern IN LISTS _exclude)
+        list(APPEND _ignore_args "-ignore-filename-regex=${_pattern}")
+    endforeach()
+    # Everything outside the source tree -- Qt, the SDK headers, Catch2, the
+    # vendored dependencies -- is dropped by naming our own files as the only
+    # sources to report on. llvm-cov's regex engine has no negative lookahead,
+    # so a whitelist is the way to say "only ours"; an ignore list would have
+    # to name every foreign root correctly and silently inflates the report
+    # the day it misses one. The exclusions above still apply on top, and are
+    # what takes the test tree and the UI layer back out again.
+    get_filename_component(_source_root "${COVERAGE_SOURCE_DIR}" ABSOLUTE)
+    file(GLOB_RECURSE _project_sources
+        "${_source_root}/*.c" "${_source_root}/*.cpp" "${_source_root}/*.cc"
+        "${_source_root}/*.mm" "${_source_root}/*.h" "${_source_root}/*.hpp")
+    list(LENGTH _project_sources _project_source_count)
+    if(_project_source_count EQUAL 0)
+        message(FATAL_ERROR "Coverage: no sources found under ${_source_root}")
+    endif()
+
+    message(STATUS "Coverage: rendering report")
+    execute_process(
+        COMMAND "${LLVM_COV_EXECUTABLE}" report
+                "${_first_object}"
+                ${_object_args}
+                "-instr-profile=${_profdata}"
+                ${_ignore_args}
+                "-show-branch-summary"
+                ${_project_sources}
+        OUTPUT_VARIABLE _llvm_summary
+        RESULT_VARIABLE _report_result
+        ERROR_VARIABLE _llvm_report_error
+    )
+    if(NOT _report_result EQUAL 0)
+        message(FATAL_ERROR
+            "Coverage: llvm-cov report failed (${_report_result}): ${_llvm_report_error}")
+    endif()
+    file(WRITE "${COVERAGE_OUTPUT_DIR}/summary.txt" "${_llvm_summary}")
+
+    execute_process(
+        COMMAND "${LLVM_COV_EXECUTABLE}" show
+                "${_first_object}"
+                ${_object_args}
+                "-instr-profile=${_profdata}"
+                ${_ignore_args}
+                "-format=html"
+                "-show-branches=count"
+                "-show-line-counts-or-regions"
+                "-output-dir=${COVERAGE_OUTPUT_DIR}"
+                "-project-title=rpi-imager core coverage"
+                ${_project_sources}
+        RESULT_VARIABLE _show_result
+        ERROR_VARIABLE _llvm_show_error
+    )
+    if(NOT _show_result EQUAL 0)
+        message(WARNING
+            "Coverage: llvm-cov show failed (${_show_result}), so there is a text "
+            "summary but no HTML: ${_llvm_show_error}")
+    endif()
+
+    # The last row of `llvm-cov report` is the tree total. Echo it, so a run
+    # says the same kind of thing whichever toolchain produced it.
+    string(REGEX MATCH "\nTOTAL[^\n]*" _total_line "${_llvm_summary}")
+    if(_total_line)
+        string(STRIP "${_total_line}" _total_line)
+        message(STATUS "Coverage: ${_total_line}")
+    endif()
+    message(STATUS "Coverage: HTML   ${COVERAGE_OUTPUT_DIR}/index.html")
+    message(STATUS "Coverage: text   ${COVERAGE_OUTPUT_DIR}/summary.txt")
+else()
+    file(MAKE_DIRECTORY "${COVERAGE_OUTPUT_DIR}")
+
+    message(STATUS "Coverage: rendering report")
+    execute_process(
+        COMMAND "${GCOVR_EXECUTABLE}"
+                --root "${COVERAGE_SOURCE_DIR}"
+                "${COVERAGE_BINARY_DIR}"
+                ${_exclude_args}
+                # Branch coverage is the reason for doing this at all: line
+                # coverage would have called runWithTimeout's timeout path
+                # "reached" as soon as anything entered the loop.
+                --txt-metric branch
+                --decisions
+                # Without these two a branch-metric report on C++ is unreadable.
+                # Every call that might throw carries a branch pair for the unwind
+                # edge, and the unwind arm is never taken in a passing run, so
+                # gcov reports it half-covered forever. It is not a gap anyone can
+                # close -- you would have to make the allocation fail.
+                #
+                # Not a small correction, either: they were 10,598 of the 28,284
+                # branches here, and removing them takes the headline from 13.8%
+                # to 21.5% without a line of test code changing. What they cost in
+                # legibility is worse than what they cost in percentage points --
+                # lines like `out += ":";` were being painted as partially
+                # covered, and those lines contain no branch at all.
+                --exclude-throw-branches
+                --exclude-unreachable-branches
+                # Sort by uncovered *branches*, not uncovered lines: without
+                # --sort-branches the table is ordered by a metric it does not
+                # display. --sort-reverse because gcovr sorts ascending, which for
+                # a gap report is exactly backwards -- it opened on 27 rows of
+                # header files with no branches at all ("--%"), and put
+                # downloadthread.cpp, the single biggest gap in the tree at 1,958
+                # uncovered branches, last in an 89-row table.
+                --sort uncovered-number
+                --sort-branches
+                --sort-reverse
+                # Left on gcovr's default theme deliberately. The `github.*` themes
+                # look considerably more modern, but all four of them render a
+                # partially covered line in near enough the same colour as a fully
+                # covered one -- and a partially covered line is the single thing
+                # this report exists to show. The default theme's green/yellow/red
+                # are ugly and unambiguous, in that order of importance.
+                --html-details "${COVERAGE_OUTPUT_DIR}/index.html"
+                --html-title "rpi-imager core coverage"
+                --txt "${COVERAGE_OUTPUT_DIR}/summary.txt"
+                --print-summary
+                # The --exclude patterns above decide what reaches the report, but
+                # gcovr processes every .gcda it finds before applying them, and
+                # instrumentation is global -- so it walked into every FetchContent
+                # dependency, 492 of the 508 .gcno files here. gcov cannot resolve
+                # their sources from our build tree, and each failure printed: it
+                # was 10,461 lines of stderr on a run whose real output is four
+                # numbers. Pruning the walk removes the noise and the work both.
+                #
+                # The pattern is matched against the directory name rather than
+                # the full path, so it takes no leading slash -- ".*/_deps.*"
+                # matches nothing at all, silently.
+                # Only _deps. Pruning ".*dependencies.*" as well looks tempting --
+                # the vendored crypto built in-tree still emits a couple of dozen
+                # gcov warnings -- but the pattern is matched against the path
+                # relative to the search root, and the test binaries compile that
+                # crypto through object directories of their own. It took 1,192
+                # covered branches of customization_generator.cpp out of the
+                # report along with the warnings. Twenty-two lines of noise is the
+                # cheaper of the two.
+                --gcov-exclude-directories ".*_deps.*"
+                # Kept as a backstop only. This suppresses the "could not infer a
+                # working directory" failure, which before the pruning above was
+                # not an edge case but the single loudest thing in the run -- and
+                # fatal without it. Nothing in our own tree provokes it now.
+                --gcov-ignore-errors no_working_dir_found
+        WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
+        RESULT_VARIABLE _gcovr_result
+    )
+    if(NOT _gcovr_result EQUAL 0)
+        message(FATAL_ERROR "Coverage: gcovr failed (${_gcovr_result})")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
 # 4. Make summary.txt fit on a screen
 # ---------------------------------------------------------------------------
+# gcov only. llvm-cov's own table is already one line per file with no trailing
+# list of line numbers, so there is nothing here to trim.
+if(COVERAGE_FLAVOUR STREQUAL "llvm")
+    return()
+endif()
+
 # gcovr's text report ends each row with every uncovered line number, and has
 # no option to shorten it. For a file at 0% that is the whole file: the
 # downloadthread.cpp row alone was 3,902 characters, 33 rows ran past 200, and

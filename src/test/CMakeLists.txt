@@ -1325,13 +1325,61 @@ add_custom_target(test_file_operations
 # loop, when in fact neither detach() had ever executed.
 
 if(RPI_IMAGER_COVERAGE)
-    find_program(GCOVR_EXECUTABLE gcovr)
-    if(NOT GCOVR_EXECUTABLE)
-        message(WARNING
-            "RPI_IMAGER_COVERAGE is on but gcovr was not found, so no `coverage` target "
-            "was created. Install it (apt install gcovr / pip install gcovr) and "
-            "re-run CMake.")
+    # Two toolchains, because the instrumentation differs (see ../CMakeLists.txt).
+    # GCC writes gcov data, read by gcovr. Clang writes its own profiles, read by
+    # llvm-profdata and llvm-cov -- which gcovr can also drive, but only through
+    # an export format two major versions behind the one Apple's llvm-cov emits,
+    # so it is asked directly.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(RPI_COVERAGE_FLAVOUR "llvm")
     else()
+        set(RPI_COVERAGE_FLAVOUR "gcov")
+    endif()
+
+    set(_coverage_tools_found TRUE)
+    if(RPI_COVERAGE_FLAVOUR STREQUAL "llvm")
+        # These ship inside the toolchain rather than on PATH, which is where
+        # find_program looks; on macOS xcrun is how you ask for them.
+        find_program(LLVM_PROFDATA_EXECUTABLE llvm-profdata)
+        find_program(LLVM_COV_EXECUTABLE llvm-cov)
+        if(APPLE AND (NOT LLVM_PROFDATA_EXECUTABLE OR NOT LLVM_COV_EXECUTABLE))
+            execute_process(COMMAND xcrun --find llvm-profdata
+                            OUTPUT_VARIABLE _xcrun_profdata
+                            OUTPUT_STRIP_TRAILING_WHITESPACE
+                            ERROR_QUIET)
+            execute_process(COMMAND xcrun --find llvm-cov
+                            OUTPUT_VARIABLE _xcrun_cov
+                            OUTPUT_STRIP_TRAILING_WHITESPACE
+                            ERROR_QUIET)
+            if(_xcrun_profdata)
+                set(LLVM_PROFDATA_EXECUTABLE "${_xcrun_profdata}" CACHE FILEPATH "" FORCE)
+            endif()
+            if(_xcrun_cov)
+                set(LLVM_COV_EXECUTABLE "${_xcrun_cov}" CACHE FILEPATH "" FORCE)
+            endif()
+        endif()
+        if(NOT LLVM_PROFDATA_EXECUTABLE OR NOT LLVM_COV_EXECUTABLE)
+            set(_coverage_tools_found FALSE)
+            message(WARNING
+                "RPI_IMAGER_COVERAGE is on and this is a clang build, but llvm-profdata "
+                "or llvm-cov was not found, so no `coverage` target was created. They "
+                "come with the toolchain (xcode-select --install, or your llvm package).")
+        endif()
+        # Not used by the llvm path, but the report target below passes one
+        # value for both, and an empty one reads as "not required here".
+        set(GCOVR_EXECUTABLE "")
+    else()
+        find_program(GCOVR_EXECUTABLE gcovr)
+        if(NOT GCOVR_EXECUTABLE)
+            set(_coverage_tools_found FALSE)
+            message(WARNING
+                "RPI_IMAGER_COVERAGE is on but gcovr was not found, so no `coverage` target "
+                "was created. Install it (apt install gcovr / pip install gcovr) and "
+                "re-run CMake.")
+        endif()
+    endif()
+
+    if(_coverage_tools_found)
         # No DEPENDS on the test binaries: RunCoverage.cmake builds them
         # itself, best-effort, so one unbuildable target (rpiboot_integration_test
         # does not currently link) degrades the report rather than blocking it.
@@ -1342,11 +1390,15 @@ if(RPI_IMAGER_COVERAGE)
                     -DCOVERAGE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/..
                     -DCOVERAGE_OUTPUT_DIR=${CMAKE_BINARY_DIR}/coverage
                     -DCOVERAGE_GENERATOR=${CMAKE_GENERATOR}
+                    -DCOVERAGE_FLAVOUR=${RPI_COVERAGE_FLAVOUR}
                     -DGCOVR_EXECUTABLE=${GCOVR_EXECUTABLE}
+                    -DLLVM_PROFDATA_EXECUTABLE=${LLVM_PROFDATA_EXECUTABLE}
+                    -DLLVM_COV_EXECUTABLE=${LLVM_COV_EXECUTABLE}
+                    -DCOVERAGE_APP_NAME=${PROJECT_NAME}
                     -DCTEST_EXECUTABLE=${CMAKE_CTEST_COMMAND}
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/RunCoverage.cmake
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            COMMENT "Running the suite under gcov and rendering a coverage report"
+            COMMENT "Running the suite under coverage and rendering a report"
             USES_TERMINAL
             VERBATIM
         )
