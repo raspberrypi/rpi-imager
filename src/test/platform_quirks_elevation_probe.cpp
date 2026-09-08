@@ -2,7 +2,10 @@
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2026 Raspberry Pi Ltd
  *
- * Probe for the sudo/pkexec identity handover in PlatformQuirks::applyQuirks().
+ * Probe for two things in PlatformQuirks that cannot be reached in-process:
+ * the sudo/pkexec identity handover in applyQuirks(), and -- with "policy" as
+ * its argument -- whether a polkit policy authorising this binary is
+ * installed.
  *
  * Run as root, applyQuirks() reads SUDO_UID or PKEXEC_UID and repoints HOME
  * and the XDG directories at the user who invoked it. Without that, every
@@ -23,6 +26,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <string_view>
 
 #include <unistd.h>
 
@@ -36,8 +40,19 @@ void report(const char *label, const char *name)
 
 } // namespace
 
-int main()
+int main(int argc, char *argv[])
 {
+    // Second mode: whether a polkit policy authorising this binary is
+    // installed. The directories it scans are absolute, so the caller
+    // bind-mounts synthetic ones over them and runs this inside.
+    if (argc > 1 && std::string_view(argv[1]) == "policy") {
+        std::printf("BUNDLE=%s\n", PlatformQuirks::getBundlePath());
+        std::printf("POLICY=%d\n",
+                    PlatformQuirks::hasElevationPolicyInstalled() ? 1 : 0);
+        std::fflush(stdout);
+        return 0;
+    }
+
     std::printf("EUID=%lu\n", static_cast<unsigned long>(::geteuid()));
     report("BEFORE_", "HOME");
 

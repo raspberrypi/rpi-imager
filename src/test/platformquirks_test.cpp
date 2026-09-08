@@ -1960,3 +1960,205 @@ TEST_CASE("A legitimate name alongside a rejected one still counts",
 }
 #endif // NETWORK_PROBE_BINARY
 #endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+#ifdef ELEVATION_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// Whether Imager believes it can already elevate
+//
+// An AppImage needs a polkit policy authorising pkexec to run it as root
+// before it can write to a disk. hasElevationPolicyInstalled() is what
+// decides whether the application offers to install one -- so a wrong answer
+// either way is visible: believing a policy is there when it is not sends
+// the user to a pkexec prompt that refuses, and believing it is missing when
+// it is there asks for a root password to install something that already
+// exists.
+//
+// The scan reads every .policy file in /etc/polkit-1/actions and
+// /usr/share/polkit-1/actions looking for one whose exec.path annotation
+// names this binary. Both are absolute, so synthetic ones are bind-mounted
+// over them and the probe run inside. Both are masked in every case, the
+// real /usr/share/polkit-1/actions included, so the fixture is the only
+// thing being read.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A policy file granting pkexec the right to run `execPath`, in the shape the
+// installer writes.
+QByteArray policyGranting(const QString& execPath)
+{
+    return QStringLiteral(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<policyconfig>\n"
+        "  <action id=\"com.raspberrypi.rpi-imager.pkexec.run\">\n"
+        "    <message>Authentication is required to write to a disk</message>\n"
+        "    <defaults><allow_any>auth_admin</allow_any></defaults>\n"
+        "    <annotate key=\"org.freedesktop.policykit.exec.path\">%1</annotate>\n"
+        "    <annotate key=\"org.freedesktop.policykit.exec.allow_gui\">true</annotate>\n"
+        "  </action>\n"
+        "</policyconfig>\n").arg(execPath).toUtf8();
+}
+
+bool writePolicyFile(const QString& dir, const QString& name, const QByteArray& body)
+{
+    if (!QDir().mkpath(dir))
+        return false;
+    QFile f(QDir(dir).filePath(name));
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    return f.write(body) == body.size();
+}
+
+// The probe's own path, which is what the scan looks for.
+QString probeBundlePath()
+{
+    QProcess p;
+    p.start(QStringLiteral(ELEVATION_PROBE_BINARY), {QStringLiteral("policy")});
+    if (!p.waitForFinished(30000))
+        return {};
+    for (const QString& line :
+         QString::fromUtf8(p.readAllStandardOutput()).split(QLatin1Char('\n'))) {
+        if (line.startsWith(QStringLiteral("BUNDLE=")))
+            return line.mid(QStringLiteral("BUNDLE=").size());
+    }
+    return {};
+}
+
+// Whether the probe reports a policy, with `etcRoot` over /etc/polkit-1 and
+// `usrActions` over /usr/share/polkit-1/actions. -1 if it could not be run.
+int policyInstalledWith(const QString& etcRoot, const QString& usrActions)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /etc/polkit-1 "
+                            "&& mount --bind \"$2\" /usr/share/polkit-1/actions "
+                            "&& exec \"$3\" policy"),
+             QStringLiteral("_"), etcRoot, usrActions,
+             QStringLiteral(ELEVATION_PROBE_BINARY)});
+    if (!p.waitForFinished(30000))
+        return -1;
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    if (out.contains(QStringLiteral("POLICY=1"))) return 1;
+    if (out.contains(QStringLiteral("POLICY=0"))) return 0;
+    return -1;
+}
+
+#define REQUIRE_POLICY_HARNESS()                                                    \
+    if (!haveMountNamespacesForPolicy())                                            \
+        SKIP("unprivileged mount namespaces are unavailable, so the polkit "        \
+             "directories cannot be replaced")
+
+bool haveMountNamespacesForPolicy()
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("true")});
+    if (!p.waitForFinished(10000))
+        return false;
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+} // namespace
+
+TEST_CASE("A policy naming this binary is found", "[platformquirks][policy]")
+{
+    REQUIRE_POLICY_HARNESS();
+
+    const QString bundle = probeBundlePath();
+    REQUIRE_FALSE(bundle.isEmpty());
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    REQUIRE(writePolicyFile(etc.path() + QStringLiteral("/actions"),
+                            QStringLiteral("com.raspberrypi.rpi-imager.appimage-abc.policy"),
+                            policyGranting(bundle)));
+
+    CHECK(policyInstalledWith(etc.path(), usr.path()) == 1);
+}
+
+TEST_CASE("The vendor directory is searched too", "[platformquirks][policy]")
+{
+    // /usr/share/polkit-1/actions is where a packaged install puts it, and
+    // /etc is the override location for distributions where /usr is
+    // read-only. Missing either would have Imager offer to install a policy
+    // that is already there.
+    REQUIRE_POLICY_HARNESS();
+
+    const QString bundle = probeBundlePath();
+    REQUIRE_FALSE(bundle.isEmpty());
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    REQUIRE(QDir().mkpath(etc.path() + QStringLiteral("/actions")));
+    REQUIRE(writePolicyFile(usr.path(),
+                            QStringLiteral("com.raspberrypi.rpi-imager.appimage-def.policy"),
+                            policyGranting(bundle)));
+
+    CHECK(policyInstalledWith(etc.path(), usr.path()) == 1);
+}
+
+TEST_CASE("Another AppImage's policy is not taken for ours",
+          "[platformquirks][policy]")
+{
+    // The case the per-path hash exists for. A policy authorising a copy at
+    // some other location grants this one nothing, so reading it as ours
+    // would send the user to a pkexec prompt that refuses -- with the
+    // application insisting it is already authorised.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    REQUIRE(writePolicyFile(etc.path() + QStringLiteral("/actions"),
+                            QStringLiteral("com.raspberrypi.rpi-imager.appimage-old.policy"),
+                            policyGranting(QStringLiteral("/opt/elsewhere/rpi-imager.AppImage"))));
+
+    CHECK(policyInstalledWith(etc.path(), usr.path()) == 0);
+}
+
+TEST_CASE("No policy anywhere is reported as none", "[platformquirks][policy]")
+{
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    REQUIRE(QDir().mkpath(etc.path() + QStringLiteral("/actions")));
+
+    CHECK(policyInstalledWith(etc.path(), usr.path()) == 0);
+}
+
+TEST_CASE("A file that is not a policy is not read as one",
+          "[platformquirks][policy]")
+{
+    // Whatever else lives in those directories -- an editor's backup, a
+    // half-written file, another project's policy -- must not be mistaken
+    // for authorisation.
+    REQUIRE_POLICY_HARNESS();
+
+    const QString bundle = probeBundlePath();
+    REQUIRE_FALSE(bundle.isEmpty());
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    const QString actions = etc.path() + QStringLiteral("/actions");
+
+    // The path is in the file, but not as an exec.path annotation.
+    REQUIRE(writePolicyFile(actions, QStringLiteral("notes.policy"),
+                            QStringLiteral("<!-- reminder: authorise %1 one day -->\n")
+                                .arg(bundle).toUtf8()));
+    // And a file that is not scanned at all, whatever it says.
+    REQUIRE(writePolicyFile(actions, QStringLiteral("stashed.policy.bak"),
+                            policyGranting(bundle)));
+
+    CHECK(policyInstalledWith(etc.path(), usr.path()) == 0);
+}
+#endif // ELEVATION_PROBE_BINARY
+#endif // Q_OS_LINUX
