@@ -6,6 +6,7 @@
 #include "settings_permissions.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 
@@ -229,6 +230,46 @@ SettingsPermissions secureSettingsFile(const QString& path)
     int gid = -1;
     invokingUser(&uid, &gid);
     return secureSettingsFile(path, uid, gid);
+}
+
+int restoreUserOwnership(const QString& path, int ownerUid, int ownerGid)
+{
+    if (path.isEmpty() || ownerUid < 0)
+        return 0;
+
+    const QFileInfo info(path);
+    if (!info.exists() && !info.isSymLink())
+        return 0;
+
+    int changed = 0;
+
+    // The entry itself first, so a directory we are about to walk is already
+    // the user's even if the walk is cut short.
+    if (ownerOf(path) != ownerUid && giveTo(path, ownerUid, ownerGid))
+        ++changed;
+
+    // isSymLink before isDir: a symlink to a directory must not be walked.
+    // We changed the link itself above and that is as far as it goes.
+    if (info.isSymLink() || !info.isDir())
+        return changed;
+
+    QDirIterator it(path, QDir::AllEntries | QDir::Hidden | QDir::System |
+                          QDir::NoDotAndDotDot,
+                    QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString entry = it.next();
+        if (ownerOf(entry) != ownerUid && giveTo(entry, ownerUid, ownerGid))
+            ++changed;
+    }
+    return changed;
+}
+
+int restoreUserOwnership(const QString& path)
+{
+    int uid = -1;
+    int gid = -1;
+    invokingUser(&uid, &gid);
+    return restoreUserOwnership(path, uid, gid);
 }
 
 } // namespace rpi_imager

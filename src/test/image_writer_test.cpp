@@ -10618,3 +10618,144 @@ TEST_CASE("A file the user already owns is narrowed without ceremony",
     CHECK_FALSE(result.reowned);
     CHECK(fileMode(path) == 0600);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Handing back everything else an elevated run leaves behind.
+//
+// The settings file is not the only thing. An elevated Imager writes the
+// rpi-imager:// handler into ~/.local/share/applications, has
+// update-desktop-database rewrite mimeinfo.cache and xdg-mime rewrite
+// mimeapps.list, and fills a cache tree under ~/.cache -- all as root, all
+// in a directory belonging to somebody else. On the machine this was written
+// on, every one of those was root:root.
+//
+// The two MIME files are the ones that reach past Imager: they are shared
+// with every application on the desktop, so once root owns them nothing else
+// can register a file association either.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Nothing is handed over when there is no invoking user to hand to",
+          "[imagewriter][ownership]")
+{
+    // An ordinary unelevated run, which is most of them. -1 means "not
+    // elevated, or nobody identifiable" and the whole thing has to be inert:
+    // this walks directories in the user's home on every launch.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("thing"));
+    { QFile f(path); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("x"); }
+
+    CHECK(rpi_imager::restoreUserOwnership(path, -1, -1) == 0);
+    CHECK(rpi_imager::restoreUserOwnership(QString(), 1000, 1000) == 0);
+
+    // And a path that is not there is not an error to report.
+    CHECK(rpi_imager::restoreUserOwnership(tmp.filePath(QStringLiteral("absent")),
+                                           1000, 1000) == 0);
+}
+
+TEST_CASE("A file already belonging to the user is left alone",
+          "[imagewriter][ownership]")
+{
+    // Counted as unchanged rather than chowned again, so the log line at
+    // startup stays quiet on the overwhelmingly common case.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("mimeinfo.cache"));
+    { QFile f(path); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("x"); }
+
+    CHECK(rpi_imager::restoreUserOwnership(path, static_cast<int>(::getuid()),
+                                           static_cast<int>(::getgid())) == 0);
+    CHECK(ownerUidOf(path) == static_cast<int>(::getuid()));
+}
+
+TEST_CASE("A symlink is handed over as itself and not followed",
+          "[imagewriter][ownership]")
+{
+    // Same reasoning as the settings file: root is walking a directory an
+    // unprivileged account controls. A symlink pointing out of it must not
+    // become a way to change the ownership of whatever it names.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString target = tmp.filePath(QStringLiteral("target"));
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("x"); }
+    const QString link = tmp.filePath(QStringLiteral("link"));
+    REQUIRE(QFile::link(target, link));
+
+    // Nothing can be chowned here without privileges; what matters is that
+    // the walk does not descend through a link, which is visible in the
+    // count even when every chown fails.
+    const QString dirTarget = tmp.filePath(QStringLiteral("realdir"));
+    REQUIRE(QDir().mkpath(dirTarget + QStringLiteral("/deep")));
+    { QFile f(dirTarget + QStringLiteral("/deep/file"));
+      REQUIRE(f.open(QIODevice::WriteOnly)); f.write("x"); }
+    const QString dirLink = tmp.filePath(QStringLiteral("dirlink"));
+    REQUIRE(QFile::link(dirTarget, dirLink));
+
+    // Handing to ourselves: every entry is already ours, so nothing changes
+    // and the count is zero either way. The assertion that bites is below.
+    CHECK(rpi_imager::restoreUserOwnership(dirLink, static_cast<int>(::getuid()),
+                                           static_cast<int>(::getgid())) == 0);
+    CHECK(QFileInfo(dirTarget + QStringLiteral("/deep/file")).exists());
+}
+
+#ifdef SETTINGS_PERMISSIONS_PROBE_BINARY
+TEST_CASE("An elevated run hands the whole cache tree back",
+          "[imagewriter][ownership]")
+{
+    // The cache is a tree, not a file: QNetworkDiskCache spreads it over
+    // per-hex-digit subdirectories, and every one of them is created by root
+    // on an elevated run. Handing back only the top of it would leave the
+    // contents unreadable to the person the cache is for.
+    //
+    // Needs a real root with a second uid mapped, so it runs in a user
+    // namespace as the settings-file case does.
+    QProcess check;
+    check.start(QStringLiteral("unshare"),
+                {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+                 QStringLiteral("true")});
+    if (!check.waitForFinished(10000) || check.exitCode() != 0)
+        SKIP("unshare -r --map-auto is unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString root = tmp.filePath(QStringLiteral("oslistcache0"));
+
+    // Build the tree and hand it over, all as root inside the namespace,
+    // then report what the ownership looks like afterwards.
+    const QString script = tmp.filePath(QStringLiteral("run.sh"));
+    {
+        QFile f(script);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("#!/bin/sh\n"
+                "mkdir -p \"$1/data8/a\" \"$1/data8/b\"\n"
+                "touch \"$1/data8/a/entry\" \"$1/data8/b/entry\"\n"
+                "\"$2\" \"$1\" 1000 1000 own >/dev/null 2>&1\n"
+                "echo \"TOTAL=$(find \"$1\" | wc -l)\"\n"
+                "echo \"FOREIGN=$(find \"$1\" ! -user 1000 | wc -l)\"\n");
+        f.close();
+        REQUIRE(f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                 QFileDevice::ExeOwner));
+    }
+
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+             QStringLiteral("sh"), script, root,
+             QStringLiteral(SETTINGS_PERMISSIONS_PROBE_BINARY)});
+    REQUIRE(p.waitForFinished(30000));
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    INFO(out.toStdString());
+
+    // The tree really was built, so a count of zero foreign entries below
+    // means something: root, data8, a, b and the two entries.
+    CHECK(out.contains(QStringLiteral("TOTAL=6")));
+    // Every one of them, to the bottom.
+    CHECK(out.contains(QStringLiteral("FOREIGN=0")));
+
+    QProcess cleanup;
+    cleanup.start(QStringLiteral("unshare"),
+                  {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+                   QStringLiteral("rm"), QStringLiteral("-rf"), root});
+    cleanup.waitForFinished(15000);
+}
+#endif // SETTINGS_PERMISSIONS_PROBE_BINARY

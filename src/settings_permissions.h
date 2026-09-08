@@ -75,6 +75,35 @@ struct SettingsPermissions
 SettingsPermissions secureSettingsFile(const QString& path, int ownerUid, int ownerGid);
 SettingsPermissions secureSettingsFile(const QString& path);
 
+/*
+ * Hand a path an elevated run created in the user's home back to that user,
+ * recursing into a directory.
+ *
+ * The settings file is not the only thing this happens to. An elevated
+ * Imager writes the rpi-imager:// handler into the user's
+ * ~/.local/share/applications, has update-desktop-database rewrite
+ * mimeinfo.cache and xdg-mime rewrite mimeapps.list, and fills a cache tree
+ * under ~/.cache -- all as root, all in a directory that belongs to somebody
+ * else. On the machine this was written on, every one of those was root:root.
+ *
+ * mimeinfo.cache and mimeapps.list are the ones that reach past Imager: they
+ * are shared with every application on the desktop, so once root owns them
+ * nothing else can register a file association either. The handler file
+ * matters for a nearer reason -- an unprivileged run cannot rewrite a stale
+ * Exec= line, so after the AppImage moves, the Connect callback keeps
+ * launching the old path.
+ *
+ * Only ever call this on paths Imager itself writes. Returns how many entries
+ * were handed over, and does nothing at all unless running as root with a
+ * known invoking user -- the single-argument form works that out from the
+ * environment the elevation wrapper left, and is a no-op otherwise.
+ *
+ * Symlinks are changed as themselves and never followed, for the same reason
+ * secureSettingsFile does not follow them.
+ */
+int restoreUserOwnership(const QString& path, int ownerUid, int ownerGid);
+int restoreUserOwnership(const QString& path);
+
 } // namespace rpi_imager
 
 #endif // SETTINGS_PERMISSIONS_H

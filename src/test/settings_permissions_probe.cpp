@@ -14,7 +14,13 @@
  * Makes the file as root at 0664, then secures it on behalf of the uid/gid
  * given, and prints what happened.
  *
- * Usage: settings_permissions_probe <path> <ownerUid> <ownerGid>
+ * With "own" as a fourth argument it instead hands an existing path back
+ * with restoreUserOwnership -- the sweep that repairs everything else an
+ * elevated run leaves in the user's home -- and prints how many entries
+ * changed. Used for the cache tree, which is a directory the walk has to
+ * descend.
+ *
+ * Usage: settings_permissions_probe <path> <ownerUid> <ownerGid> [own]
  */
 
 #include "settings_permissions.h"
@@ -24,6 +30,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -38,6 +45,14 @@ int main(int argc, char* argv[])
     const QString path = QString::fromLocal8Bit(argv[1]);
     const int ownerUid = std::atoi(argv[2]);
     const int ownerGid = std::atoi(argv[3]);
+
+    if (argc > 4 && std::strcmp(argv[4], "own") == 0) {
+        const int changed = rpi_imager::restoreUserOwnership(path, ownerUid, ownerGid);
+        std::printf("EUID=%u\n", (unsigned)::geteuid());
+        std::printf("CHANGED=%d\n", changed);
+        std::fflush(stdout);
+        return 0;
+    }
 
     {
         QFile f(path);
