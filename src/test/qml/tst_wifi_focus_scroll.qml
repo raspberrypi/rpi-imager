@@ -21,12 +21,12 @@
  * not move, because a view that jumps on every tab is its own problem.
  *
  * Worth knowing which rows carry weight. With every scrollToItem call removed,
- * the network-name and hidden-network rows fail and the password and
- * confirmation rows still pass -- so for those two controls something other
- * than these handlers is also bringing them into view, presumably the
- * framework's own handling of a focused text field. Those rows document the
- * property; the other two guard the handlers. Both are worth having, but only
- * the second pair would catch the calls being dropped.
+ * the network-name, hidden-network and both security-tab rows fail, and the
+ * password and confirmation rows still pass -- so for those two controls
+ * something other than these handlers is also bringing them into view,
+ * presumably the framework's own handling of a focused text field. Those rows
+ * document the property; the other four guard the handlers. Both are worth
+ * having, but only the second group would catch the calls being dropped.
  */
 
 import QtQuick
@@ -246,5 +246,40 @@ TestCase {
         verify(f.contentY <= f.contentHeight - f.height + 1,
                "the view does not scroll past the end of the form; contentY is "
                + f.contentY + ", limit " + (f.contentHeight - f.height))
+    }
+    // -- Coming back up to the security tabs -------------------------------
+    //
+    // The two tabs at the top of the form decide whether a password is asked
+    // for at all. Shift-tabbing back up to them from the bottom has to bring
+    // them into view, or the user cannot see which of the two is selected --
+    // and so cannot tell whether the passphrase they just typed is going to
+    // be used or thrown away.
+
+    function test_focusing_a_security_tab_brings_the_top_of_the_form_back_data() {
+        return [
+            { tag: "the secured-network tab", name: "wifiSecureTab" },
+            { tag: "the open-network tab",    name: "wifiOpenTab" }
+        ]
+    }
+
+    function test_focusing_a_security_tab_brings_the_top_of_the_form_back(data) {
+        const f = flick()
+        const tab = child(data.name)
+        verify(tab.visible, data.tag + " is part of the form")
+
+        f.contentY = f.contentHeight - f.height
+        waitForRendering(step)
+        if (isInView(f, tab)) {
+            skip(data.tag + " is on screen even at the bottom of the form, so "
+                 + "this row cannot tell the handler being there from it "
+                 + "being gone")
+            return
+        }
+
+        tab.forceActiveFocus()
+        waitForRendering(step)
+
+        verify(isInView(f, tab),
+               "focusing " + data.tag + " has to bring it back on screen")
     }
 }
