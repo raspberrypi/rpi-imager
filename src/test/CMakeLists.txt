@@ -1642,6 +1642,12 @@ if(NOT BUILD_CLI_ONLY)
         find_package(Python3 COMPONENTS Interpreter QUIET)
         if(Python3_Interpreter_FOUND)
             add_custom_target(qml_coverage
+                # Last run's counts first, or a run that fails part-way is
+                # reported on top of the one before it -- the same reason the
+                # C++ coverage target clears its .gcda files.
+                COMMAND "${CMAKE_COMMAND}" -E rm -f
+                        "${CMAKE_BINARY_DIR}/qmlcov/hits.json"
+                        "${CMAKE_BINARY_DIR}/qmlcov/hits-offline.json"
                 COMMAND "${Python3_EXECUTABLE}"
                         "${CMAKE_CURRENT_SOURCE_DIR}/tools/qml_coverage_instrument.py"
                         "${CMAKE_BINARY_DIR}/RpiImager"
