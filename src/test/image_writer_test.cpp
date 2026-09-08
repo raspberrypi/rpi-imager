@@ -1040,6 +1040,325 @@ TEST_CASE("An error about some other address is not the list failing",
     CHECK(spy.osListUnavailable == 0);
 }
 
+// ══════════════════════════════════════════════════════════════
+// The signing key's fingerprint
+//
+// Shown on the secure-boot step as "Public Key Fingerprint", and it is the
+// only way a user can check that the key they have picked is the one already
+// fused into the board in front of them. Getting that wrong is not
+// recoverable: the OTP fuses are burned once, and a board fused to a
+// different key will not boot again.
+//
+// So what matters is that it is derived from the key and nothing else, that
+// two keys never look alike, that the same key always reads the same, and
+// that an unusable key produces nothing rather than a plausible-looking
+// string -- the screen turns an empty answer into "(unable to compute)",
+// which is a prompt to go and look, where a wrong fingerprint is not.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+bool haveOpensslBinary()
+{
+    QProcess p;
+    p.start(QStringLiteral("openssl"), {QStringLiteral("version")});
+    p.waitForFinished(10000);
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+// A real 2048-bit RSA private key, since the fingerprint is taken over the
+// public modulus and exponent the boot ROM would see.
+bool generateRsaKeyAt(const QString& path)
+{
+    QProcess p;
+    p.start(QStringLiteral("openssl"),
+            {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
+             QStringLiteral("2048")});
+    if (!p.waitForFinished(60000))
+        return false;
+    return p.exitCode() == 0 && QFileInfo(path).size() > 0;
+}
+
+} // namespace
+
+TEST_CASE("A signing key's fingerprint is readable and stable",
+          "[imagewriter][fingerprint]")
+{
+    if (!haveOpensslBinary())
+        SKIP("openssl is not installed, so no signing key can be generated");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString key = QDir(dir.path()).filePath(QStringLiteral("secureboot.pem"));
+    REQUIRE(generateRsaKeyAt(key));
+
+    ImageWriter writer(nullptr);
+    const QString fingerprint = writer.getRsaKeyFingerprint(key);
+    INFO("fingerprint: " << fingerprint.toStdString());
+
+    // The shape a user reads off the screen and compares by eye against what
+    // the board reports: two groups of sixteen hex digits, upper case.
+    REQUIRE(fingerprint.size() == 33);
+    CHECK(fingerprint[16] == QLatin1Char(':'));
+    const QString hex = fingerprint.left(16) + fingerprint.mid(17);
+    CHECK(hex.size() == 32);
+    for (const QChar& c : hex) {
+        INFO("character: " << QString(c).toStdString());
+        CHECK((c.isDigit() || (c >= QLatin1Char('A') && c <= QLatin1Char('F'))));
+    }
+
+    // Reading it twice has to give the same answer, or it is no use for
+    // comparing against anything.
+    CHECK(writer.getRsaKeyFingerprint(key) == fingerprint);
+}
+
+TEST_CASE("Two signing keys never look alike", "[imagewriter][fingerprint]")
+{
+    // The whole point. Two keys sharing a fingerprint would let somebody
+    // confirm a key that is not the one the board is fused to, and they would
+    // find out after the fuses were burned.
+    if (!haveOpensslBinary())
+        SKIP("openssl is not installed");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString first = QDir(dir.path()).filePath(QStringLiteral("a.pem"));
+    const QString second = QDir(dir.path()).filePath(QStringLiteral("b.pem"));
+    REQUIRE(generateRsaKeyAt(first));
+    REQUIRE(generateRsaKeyAt(second));
+
+    ImageWriter writer(nullptr);
+    const QString a = writer.getRsaKeyFingerprint(first);
+    const QString b = writer.getRsaKeyFingerprint(second);
+
+    INFO("a: " << a.toStdString() << "  b: " << b.toStdString());
+    REQUIRE_FALSE(a.isEmpty());
+    REQUIRE_FALSE(b.isEmpty());
+    CHECK(a != b);
+}
+
+TEST_CASE("A copy of the same key reads the same", "[imagewriter][fingerprint]")
+{
+    // Moving the key, or keeping a second copy of it, must not change what
+    // it is called. The fingerprint follows the key, not the path.
+    if (!haveOpensslBinary())
+        SKIP("openssl is not installed");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString original = QDir(dir.path()).filePath(QStringLiteral("orig.pem"));
+    const QString copy = QDir(dir.path()).filePath(QStringLiteral("elsewhere.pem"));
+    REQUIRE(generateRsaKeyAt(original));
+    REQUIRE(QFile::copy(original, copy));
+
+    ImageWriter writer(nullptr);
+    const QString a = writer.getRsaKeyFingerprint(original);
+    REQUIRE_FALSE(a.isEmpty());
+    CHECK(writer.getRsaKeyFingerprint(copy) == a);
+}
+
+TEST_CASE("Something that is not a key produces no fingerprint at all",
+          "[imagewriter][fingerprint]")
+{
+    // The screen shows "(unable to compute)" for an empty answer, which sends
+    // the user back to the file picker. A string derived from whatever the
+    // file happened to contain would instead be compared against the board
+    // and disagree, with nothing saying why.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    ImageWriter writer(nullptr);
+
+    // Nothing chosen.
+    CHECK(writer.getRsaKeyFingerprint(QString()).isEmpty());
+    // A path that is not there.
+    CHECK(writer.getRsaKeyFingerprint(
+              QDir(dir.path()).filePath(QStringLiteral("absent.pem"))).isEmpty());
+
+    // A file that exists and is not a key.
+    const QString notAKey = QDir(dir.path()).filePath(QStringLiteral("notes.txt"));
+    {
+        QFile f(notAKey);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("this is not a key, it is a shopping list\n");
+    }
+    CHECK(writer.getRsaKeyFingerprint(notAKey).isEmpty());
+
+    // A directory, which is what a user picks by accident.
+    CHECK(writer.getRsaKeyFingerprint(dir.path()).isEmpty());
+
+    // A public key where a private one is needed: the signer cannot use it,
+    // so offering a fingerprint for it would be confirming a key that cannot
+    // sign.
+    if (haveOpensslBinary()) {
+        const QString priv = QDir(dir.path()).filePath(QStringLiteral("p.pem"));
+        const QString pub = QDir(dir.path()).filePath(QStringLiteral("p.pub"));
+        REQUIRE(generateRsaKeyAt(priv));
+        QProcess p;
+        p.start(QStringLiteral("openssl"),
+                {QStringLiteral("rsa"), QStringLiteral("-in"), priv,
+                 QStringLiteral("-pubout"), QStringLiteral("-out"), pub});
+        REQUIRE(p.waitForFinished(30000));
+        REQUIRE(p.exitCode() == 0);
+        INFO("public-key fingerprint: "
+             << writer.getRsaKeyFingerprint(pub).toStdString());
+        CHECK(writer.getRsaKeyFingerprint(pub).isEmpty());
+    }
+}
+
+#ifdef KEYBOARD_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// Which keyboard the Pi-booted Imager thinks it has
+//
+// On the embedded build there is a keyboard plugged into the Pi and no
+// desktop to have configured it, so Imager picks the layout itself: from the
+// country code in the device tree, or failing that from the name of the node
+// the kernel made in /dev/input/by-id.
+//
+// The first thing anybody types on that keyboard is a Wi-Fi password. A
+// wrong layout means a password that looks right on screen and is not, a
+// board that never joins the network, and nothing connecting the two -- so
+// the mapping from the number in that filename to a country is worth
+// pinning, being exactly the sort of table that survives being reordered.
+//
+// /dev/input/by-id does not exist on a machine with no such keyboard, so a
+// synthetic /dev/input is bind-mounted over the real one inside an
+// unprivileged mount namespace and a probe run inside.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+bool haveMountNamespacesForKeyboard()
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("true")});
+    if (!p.waitForFinished(10000))
+        return false;
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+// A /dev/input containing a by-id directory with the given node names.
+bool buildInputFixture(const QString& root, const QStringList& byIdNames)
+{
+    const QString byId = root + QStringLiteral("/by-id");
+    if (!QDir().mkpath(byId))
+        return false;
+    for (const QString& name : byIdNames) {
+        QFile f(QDir(byId).filePath(name));
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+        f.write("not really a device node, but named like one\n");
+    }
+    return true;
+}
+
+// The layout the probe chose, or a null QString if it could not be run.
+QString keyboardWith(const QString& fixture)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /dev/input && exec \"$2\""),
+             QStringLiteral("_"), fixture,
+             QStringLiteral(KEYBOARD_PROBE_BINARY)});
+    if (!p.waitForFinished(60000))
+        return {};
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    for (const QString& line : out.split(QLatin1Char('\n'))) {
+        if (line.startsWith(QStringLiteral("KEYBOARD=")))
+            return line.mid(QStringLiteral("KEYBOARD=").size());
+    }
+    return {};
+}
+
+#define REQUIRE_KEYBOARD_HARNESS()                                                        \
+    if (QFile::exists(QStringLiteral("/proc/device-tree/chosen/rpi-country-code")))        \
+        SKIP("this machine reports a country code in the device tree, which is "           \
+             "consulted first, so the node name cannot be observed");                      \
+    if (!haveMountNamespacesForKeyboard())                                                 \
+        SKIP("unprivileged mount namespaces are unavailable, so /dev/input cannot "        \
+             "be replaced")
+
+} // namespace
+
+TEST_CASE("The keyboard's number chooses its country", "[imagewriter][keyboard]")
+{
+    REQUIRE_KEYBOARD_HARNESS();
+
+    struct Row { int number; const char* country; };
+    // The order of the table in detectPiKeyboard(), stated independently so
+    // that reordering it fails here rather than shipping.
+    const Row rows[] = {
+        {1, "gb"}, {2, "fr"}, {3, "es"}, {4, "us"}, {5, "de"}, {6, "it"},
+        {7, "jp"}, {8, "pt"}, {9, "no"}, {10, "se"}, {11, "dk"}, {12, "ru"},
+        {13, "tr"}, {14, "il"},
+    };
+
+    for (const Row& row : rows) {
+        QTemporaryDir fixture;
+        REQUIRE(fixture.isValid());
+        const QString node =
+            QStringLiteral("RPI_Wired_Keyboard_%1").arg(row.number);
+        REQUIRE(buildInputFixture(fixture.path(), {node}));
+
+        INFO("node: " << node.toStdString());
+        CHECK(keyboardWith(fixture.path()) == QString::fromUtf8(row.country));
+    }
+}
+
+TEST_CASE("A keyboard number nobody knows picks no layout at all",
+          "[imagewriter][keyboard]")
+{
+    // Past the end of the table. Nothing is better than something wrong: an
+    // unset layout leaves the default in place, where an index off the end
+    // would be whichever country happened to sit there.
+    REQUIRE_KEYBOARD_HARNESS();
+
+    QTemporaryDir fixture;
+    REQUIRE(fixture.isValid());
+    REQUIRE(buildInputFixture(fixture.path(),
+                              {QStringLiteral("RPI_Wired_Keyboard_99")}));
+
+    CHECK(keyboardWith(fixture.path()).isEmpty());
+}
+
+TEST_CASE("Some other keyboard is not mistaken for a Pi one",
+          "[imagewriter][keyboard]")
+{
+    // Anybody's USB keyboard shows up here. Only Raspberry Pi's own has a
+    // country baked into its name, so everything else has to leave the
+    // layout alone rather than matching on a number found in it.
+    REQUIRE_KEYBOARD_HARNESS();
+
+    QTemporaryDir fixture;
+    REQUIRE(fixture.isValid());
+    REQUIRE(buildInputFixture(fixture.path(), {
+        QStringLiteral("usb-Logitech_USB_Keyboard-event-kbd"),
+        QStringLiteral("usb-Some_Vendor_Model_2000-event-kbd"),
+    }));
+
+    CHECK(keyboardWith(fixture.path()).isEmpty());
+}
+
+TEST_CASE("No keyboard at all picks no layout", "[imagewriter][keyboard]")
+{
+    // Headless, or nothing plugged in yet. The by-id directory may not even
+    // exist, which is the case on any machine without one.
+    REQUIRE_KEYBOARD_HARNESS();
+
+    QTemporaryDir empty;
+    REQUIRE(empty.isValid());
+    CHECK(keyboardWith(empty.path()).isEmpty());
+
+    QTemporaryDir emptyByeId;
+    REQUIRE(emptyByeId.isValid());
+    REQUIRE(buildInputFixture(emptyByeId.path(), {}));
+    CHECK(keyboardWith(emptyByeId.path()).isEmpty());
+}
+#endif // KEYBOARD_PROBE_BINARY
+
 int main(int argc, char *argv[])
 {
     // Offscreen: ImageWriter asks QGuiApplication for the platform name, and
