@@ -1893,6 +1893,96 @@ TEST_CASE("No two bottlenecks say the same thing", "[downloadthread][progress]")
     }
 }
 
+// ── What a storage failure is reported as ─────────────────────────────
+//
+// Every way the card can fail during a write comes through one table, and
+// what it produces is the whole of what the user is told: whether to close
+// the application holding the device, whether the card is write-protected,
+// whether to unplug and reconnect it. The messages carry the advice, so they
+// are the part that has to be right.
+//
+// Reached through the thread only when the corresponding failure happens on
+// a real device, which is why most of the table had never produced a string.
+// Asked directly here instead.
+
+namespace {
+
+class ErrorPhrasing : public DownloadThread
+{
+public:
+    ErrorPhrasing() : DownloadThread("file:///nonexistent", "", "") {}
+    using DownloadThread::_fileErrorToString;
+};
+
+const rpi_imager::FileError kEveryFailure[] = {
+    rpi_imager::FileError::kOpenError,
+    rpi_imager::FileError::kWriteError,
+    rpi_imager::FileError::kReadError,
+    rpi_imager::FileError::kSeekError,
+    rpi_imager::FileError::kSizeError,
+    rpi_imager::FileError::kCloseError,
+    rpi_imager::FileError::kLockError,
+    rpi_imager::FileError::kSyncError,
+    rpi_imager::FileError::kFlushError,
+    rpi_imager::FileError::kTimeout,
+};
+
+} // namespace
+
+TEST_CASE("Every storage failure has advice of its own", "[download][messages]")
+{
+    ErrorPhrasing p;
+    QSet<QString> seen;
+
+    for (const auto e : kEveryFailure)
+    {
+        const QString said = p._fileErrorToString(e, QStringLiteral("the final sync"));
+        INFO(said.toStdString());
+
+        CHECK_FALSE(said.isEmpty());
+        // Not the fallback. A failure that fell through to "Unknown storage
+        // error" would leave the user with nothing to do about it, and the
+        // switch has no -Wswitch protection because of the default arm.
+        CHECK_THAT(said.toStdString(), !Catch::Matchers::ContainsSubstring("Unknown storage error"));
+        // And not a duplicate: two failures sharing a message means one of
+        // them is being described as something it is not.
+        CHECK_FALSE(seen.contains(said));
+        seen.insert(said);
+    }
+}
+
+TEST_CASE("A cancelled write is not reported as a fault", "[download][messages]")
+{
+    // The user pressed Cancel. Raising an error afterwards would tell them
+    // something went wrong with a card that is simply unfinished -- and the
+    // writing path calls this on the way out of a cancellation, so an empty
+    // string here is what keeps the screen quiet.
+    ErrorPhrasing p;
+
+    CHECK(p._fileErrorToString(rpi_imager::FileError::kCancelled,
+                               QStringLiteral("the write")).isEmpty());
+    CHECK(p._fileErrorToString(rpi_imager::FileError::kSuccess,
+                               QStringLiteral("the write")).isEmpty());
+}
+
+TEST_CASE("A failure names the step it happened during", "[download][messages]")
+{
+    // "during the final sync" and "during zeroing the partition table" are
+    // the difference between a card that is nearly written and one that was
+    // never touched. Where the caller supplies the step, it has to appear.
+    ErrorPhrasing p;
+
+    const QString named = p._fileErrorToString(rpi_imager::FileError::kWriteError,
+                                               QStringLiteral("the final sync"));
+    CHECK_THAT(named.toStdString(), Catch::Matchers::ContainsSubstring("the final sync"));
+
+    // And where it does not, the sentence still reads: no dangling "during ."
+    const QString unnamed = p._fileErrorToString(rpi_imager::FileError::kWriteError);
+    INFO(unnamed.toStdString());
+    CHECK_FALSE(unnamed.contains(QStringLiteral("during .")));
+    CHECK_THAT(unnamed.toStdString(), Catch::Matchers::ContainsSubstring("storage operation"));
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
