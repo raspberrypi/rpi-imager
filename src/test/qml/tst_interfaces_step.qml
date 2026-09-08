@@ -328,4 +328,39 @@ TestCase {
                "and the hold started over rather than carrying on from "
                + "where the first showing left it")
     }
+
+    // ── Going back and choosing a different board ─────────────────────
+    //
+    // The step is reached by picking a board, and which interfaces exist
+    // depends on which board it is. Somebody who goes back and picks a
+    // different one has to be offered what the new board has -- otherwise
+    // the sidebar keeps offering an Interfaces step for hardware that is not
+    // there, and the toggles inside it write settings the board cannot
+    // honour.
+
+    function test_choosing_a_different_board_re_derives_what_is_offered() {
+        // The step re-reads its capabilities once when it is shown, on a
+        // deferred call. That has to be allowed to happen before the ones
+        // this case cares about are set, or it clears them afterwards and
+        // the case passes whether the board change did anything or not --
+        // which is how the first draft of this passed with the handler
+        // under test removed entirely.
+        wait(200)
+        step.supportsUsbOtg = true
+        step.supportsI2c = true
+        fakeContainer.ifAndFeaturesAvailable = true
+        verify(step.supportsUsbOtg, "the step starts with something supported")
+        verify(step.supportsI2c, "and something else")
+
+        // No OS is chosen in this harness, so the capabilities the singleton
+        // reports for the new board are none. That is the point: the step has
+        // to ask again rather than keep the answer it already had.
+        fakeContainer.selectedDeviceName = "Raspberry Pi Zero 2 W"
+
+        tryVerify(function () { return !step.supportsUsbOtg }, 3000,
+                  "the step asked again rather than keeping the old answer")
+        tryVerify(function () { return !fakeContainer.ifAndFeaturesAvailable }, 3000,
+                  "and a board with nothing to offer leaves the step off the "
+                  + "sidebar rather than offering an empty screen")
+    }
 }
