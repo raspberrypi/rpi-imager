@@ -458,3 +458,160 @@ TEST_CASE("A completed write leaves no inhibitor behind",
 
     CHECK(fifosNow() == before);
 }
+
+// ══════════════════════════════════════════════════════════════
+// What a script's user is told when the write goes wrong, and what they
+// see when it goes right.
+//
+// These need a write that actually starts, which only became reachable once
+// the inhibitor teardown stopped hanging -- so none of it had a test.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+// Big enough to clear the progress throttle, which suppresses any output at
+// all for a write that finishes in a couple of chunks. 16 MB is not enough;
+// 48 MB is.
+QString sizedImage(const QString &dir, int megabytes)
+{
+    const QString path = QDir(dir).filePath(QStringLiteral("sized.img"));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    QByteArray chunk(1024 * 1024, '\0');
+    for (int i = 0; i < chunk.size(); ++i)
+        chunk[i] = static_cast<char>((i * 7 + 13) & 0xFF);
+    for (int i = 0; i < megabytes; ++i)
+        REQUIRE(f.write(chunk) == chunk.size());
+    f.close();
+    return path;
+}
+} // namespace
+
+TEST_CASE("A verified write says that it verified", "[cli][process][root]")
+{
+    // Verification is on unless it is turned off, and it is the only reason
+    // to believe the card holds what the image held. Somebody watching a
+    // scripted run needs to see it happen -- a run that only ever says
+    // "Writing" has not told them whether it was checked.
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available, and writing needs root");
+
+    Scratch scratch;
+    const QString source = sizedImage(scratch.dir(), 48);
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             source, target}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 0);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Verifying"));
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
+}
+
+TEST_CASE("Asking not to verify means it does not", "[cli][process][root]")
+{
+    // The flag exists because verification doubles the time. One that
+    // silently verified anyway would waste that time; one that silently
+    // skipped when not asked would be worse.
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const QString source = sizedImage(scratch.dir(), 48);
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--disable-verify"),
+                             source, target}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 0);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("Verifying"));
+}
+
+TEST_CASE("Quiet means quiet, right up until something fails",
+          "[cli][process][root]")
+{
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+
+    SECTION("a successful quiet run says nothing at all")
+    {
+        const QString target = scratch.notADevice();
+        { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+        const Run r = runImager({QStringLiteral("--cli"), QStringLiteral("--quiet"),
+                                 QStringLiteral("--enable-writing-system-drives"),
+                                 QStringLiteral("--disable-verify"),
+                                 scratch.source(), target}, true);
+
+        INFO(r.output.toStdString());
+        REQUIRE(r.finished);
+        CHECK(r.exitCode == 0);
+        CHECK_THAT(r.output.toStdString(), !ContainsSubstring("Writing:"));
+        CHECK_THAT(r.output.toStdString(), !ContainsSubstring("Write successful."));
+    }
+
+    SECTION("a failure is reported even so")
+    {
+        // The one thing quiet must not swallow. A script whose write failed
+        // and printed nothing leaves whoever runs it with an exit code and
+        // no idea which of a dozen things went wrong.
+        const QString unreachable =
+            QDir(scratch.dir()).filePath(QStringLiteral("no-such-dir/target.img"));
+
+        const Run r = runImager({QStringLiteral("--cli"), QStringLiteral("--quiet"),
+                                 QStringLiteral("--enable-writing-system-drives"),
+                                 QStringLiteral("--disable-verify"),
+                                 scratch.source(), unreachable}, true);
+
+        INFO(r.output.toStdString());
+        REQUIRE(r.finished);
+        CHECK(r.exitCode == 1);
+        CHECK_THAT(r.output.toStdString(), ContainsSubstring("Error:"));
+    }
+}
+
+TEST_CASE("Running as root, a failed open does not advise sudo",
+          "[cli][process][root]")
+{
+    // Every open failure on Linux used to end with "Please run with elevated
+    // privileges (sudo)", whatever had actually gone wrong. Somebody already
+    // running under sudo -- which the CLI requires, so all of them -- was
+    // told to do the thing they had just done, and sent round the same loop
+    // with nothing to change.
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const QString unreachable =
+        QDir(scratch.dir()).filePath(QStringLiteral("no-such-dir/target.img"));
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--disable-verify"),
+                             scratch.source(), unreachable}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+
+    // Named, so the reader knows which path failed.
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Cannot open storage device"));
+    // And told what actually happened, rather than advice they cannot act on.
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("No such file or directory"));
+    // Not the advice itself. Matching on "sudo" alone would catch
+    // applyQuirks logging "Running as root via sudo", which is a different
+    // statement entirely and a true one.
+    CHECK_THAT(r.output.toStdString(),
+               !ContainsSubstring("Please run with elevated privileges"));
+}

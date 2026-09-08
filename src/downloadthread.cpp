@@ -409,7 +409,27 @@ bool DownloadThread::_openAndPrepareDevice()
         QProcess::execute("open", args);
         emit error(msg);
 #elif defined(Q_OS_LINUX)
-        emit error(tr("Cannot open storage device '%1'. Please run with elevated privileges (sudo).").arg(QString(_filename)));
+        // Say what actually went wrong, and only advise sudo where sudo is
+        // the answer. Telling somebody who is already root to run with sudo
+        // sends them round the same loop again with nothing to change -- and
+        // "permission denied" is not why an open fails when the path is not
+        // there or the device is in use.
+        {
+            const int openErrno = _file->GetLastErrorCode();
+            const bool permissionProblem =
+                (openErrno == EACCES || openErrno == EPERM);
+            QString msg = tr("Cannot open storage device '%1'.").arg(QString(_filename));
+
+            if (permissionProblem && ::geteuid() != 0) {
+                msg += QLatin1Char(' ');
+                msg += tr("Please run with elevated privileges (sudo).");
+            } else if (openErrno != 0) {
+                msg += QLatin1Char(' ');
+                msg += tr("The system reported: %1.")
+                           .arg(QString::fromLocal8Bit(::strerror(openErrno)));
+            }
+            emit error(msg);
+        }
 #else
         emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
 #endif
