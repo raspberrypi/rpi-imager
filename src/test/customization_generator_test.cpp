@@ -2660,3 +2660,127 @@ TEST_CASE("A value that looks like TOML cannot restructure the document",
     INFO("parser said: " << error.toStdString());
     CHECK(parsed);
 }
+
+// ---------------------------------------------------------------------------
+// An SSID that is not UTF-8 at all
+// ---------------------------------------------------------------------------
+//
+// An SSID is arbitrary octets. Access points are perfectly entitled to name
+// themselves in Latin-1, in Shift-JIS, or in nothing in particular, and a
+// user who lives on such a network has to be able to join it.
+//
+// The branches that notice were uncovered: the existing cases reach the hex
+// path through a quote or a backslash, which are caught by the character
+// scan rather than by the UTF-8 check. Bytes that are simply not valid UTF-8
+// take the other route.
+//
+// Written out as if they were a quoted string, wpa_supplicant gets a name
+// that is not the one the access point broadcasts, and the board silently
+// never joins. Written into cloud-init's YAML unescaped, the file does not
+// parse and every setting in it is dropped, not just the network.
+
+namespace {
+
+// A lone continuation byte, then a truncated two-byte sequence: neither is
+// decodable, and both are legal in an SSID.
+QByteArray notUtf8Ssid()
+{
+    QByteArray octets("Caf");
+    octets.append(char(0xE9));      // Latin-1 e-acute, invalid on its own
+    octets.append("-net");
+    octets.append(char(0xC3));      // starts a two-byte sequence and stops
+    return octets;
+}
+
+} // namespace
+
+TEST_CASE("An SSID that is not UTF-8 goes in as hex", "[customization][wifi]")
+{
+    const QByteArray octets = notUtf8Ssid();
+    const QByteArray script = CustomisationGenerator::generateSystemdScript(
+        exoticWifiSettingsFromOctets(octets));
+    const std::string text = QString::fromUtf8(script).toStdString();
+
+    REQUIRE_THAT(text, ContainsSubstring("ssid=hex:" + octets.toHex().toStdString()));
+    // And not as a quoted string, which is what it would be if the UTF-8
+    // check reported these bytes as fine.
+    REQUIRE_THAT(text, !ContainsSubstring("ssid=\"Caf"));
+}
+
+TEST_CASE("A valid UTF-8 SSID with no awkward characters stays quoted",
+          "[customization][wifi]")
+{
+    // The counterpart: hex for everything would work but is unreadable in a
+    // file users are told they can edit, so the plain case has to stay plain.
+    const QByteArray octets = QString::fromUtf8("Café-📶").toUtf8();
+    const QByteArray script = CustomisationGenerator::generateSystemdScript(
+        exoticWifiSettingsFromOctets(octets));
+    const std::string text = QString::fromUtf8(script).toStdString();
+
+    REQUIRE_THAT(text, ContainsSubstring("ssid=\"Caf"));
+    REQUIRE_THAT(text, !ContainsSubstring("ssid=hex:"));
+}
+
+TEST_CASE("An empty SSID is treated as valid rather than hex-encoded",
+          "[customization][wifi]")
+{
+    // Nothing to decode is not a decoding failure. A hidden network with no
+    // name is a real configuration.
+    const QByteArray script = CustomisationGenerator::generateSystemdScript(
+        exoticWifiSettingsFromOctets(QByteArray(), QStringLiteral("hash"), true));
+    const std::string text = QString::fromUtf8(script).toStdString();
+
+    REQUIRE_THAT(text, !ContainsSubstring("ssid=hex:"));
+}
+
+TEST_CASE("Bytes that are not UTF-8 are escaped for cloud-init, not passed through",
+          "[customization][wifi]")
+{
+    // YAML has no way to carry a raw undecodable byte. Passed through, the
+    // file does not parse and cloud-init drops every setting in it -- the
+    // user account and the SSH keys along with the network.
+    const QByteArray escaped =
+        CustomisationGenerator::yamlEscapeSsidOctets(notUtf8Ssid());
+
+    CHECK(escaped.contains("\\xe9"));
+    CHECK(escaped.contains("\\xc3"));
+    for (const char c : escaped) {
+        INFO("escaped output: " << escaped.toStdString());
+        CHECK(static_cast<unsigned char>(c) < 0x80);
+    }
+}
+
+TEST_CASE("A control character in an SSID is escaped for cloud-init",
+          "[customization][wifi]")
+{
+    QByteArray octets("tab");
+    octets.append(char(0x09));
+    octets.append("newline");
+    octets.append(char(0x0A));
+    octets.append("bell");
+    octets.append(char(0x07));
+
+    const QByteArray escaped =
+        CustomisationGenerator::yamlEscapeSsidOctets(octets);
+
+    CHECK(escaped.contains("\\t"));
+    CHECK(escaped.contains("\\n"));
+    CHECK(escaped.contains("\\x07"));
+    CHECK(!escaped.contains(char(0x0A)));
+}
+
+TEST_CASE("A null byte in an SSID is escaped rather than truncating the name",
+          "[customization][wifi]")
+{
+    // A QByteArray carries it happily; anything that treats the buffer as a
+    // C string stops there and configures half a network name.
+    QByteArray octets("before");
+    octets.append(char(0));
+    octets.append("after");
+
+    const QByteArray escaped =
+        CustomisationGenerator::yamlEscapeSsidOctets(octets);
+
+    CHECK(escaped.contains("\\0"));
+    CHECK(escaped.contains("after"));
+}
