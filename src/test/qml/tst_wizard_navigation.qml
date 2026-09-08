@@ -1236,4 +1236,216 @@ TestCase {
         compare(wiz.currentStep, startedOn,
                 "clicking ahead did not skip the choices in between")
     }
+
+    // ── The customisation sublist ─────────────────────────────────────
+    //
+    // The customisation row in the sidebar expands into one line per
+    // customisation step, and each is clickable. That is how somebody who
+    // has filled in Wi-Fi and then noticed a typo in the hostname gets back
+    // to it -- the alternative is pressing Back through every step between.
+    //
+    // The handler is not simply "go there". A step further on than the user
+    // has reached is not permissible and must not be jumped to, because the
+    // steps in between set the values it depends on. A step behind them is
+    // allowed whether or not it was marked, which is the whole point of the
+    // list.
+
+    // The sublist rows, taken from the customisation sidebar row only.
+    //
+    // Every sidebar row carries its own copy of the sublist -- the container
+    // is what is hidden, not the delegates -- so searching the whole sidebar
+    // finds five or six rows labelled "Hostname", of which one is on screen.
+    // The first draft did that and clicked an invisible one, which reached
+    // nothing and left the assertions true for the wrong reason.
+    function substepRows() {
+        const holder = sidebar().itemAt(
+            wiz.getSidebarIndex(wiz.firstCustomizationStep))
+        verify(holder, "the customisation sidebar row is instantiated")
+        return substepsIn(holder)
+    }
+
+    function substepRow(label) {
+        const rows = substepRows()
+        for (let i = 0; i < rows.length; i++) {
+            if (String(rows[i].modelData) === label)
+                return rows[i]
+        }
+        fail("no sidebar substep labelled '" + label + "' among "
+             + rows.length + " rows")
+        return null
+    }
+
+    // The step index the sidebar's own mapping gives a label, so a case does
+    // not have to repeat that mapping and cannot disagree with it.
+    function substepIndexOf(label) {
+        const labels = wiz.getCustomizationSubstepLabels()
+        for (let i = 0; i < labels.length; i++) {
+            if (labels[i] === label)
+                return i
+        }
+        return -1
+    }
+
+    // The sublist is only shown when the chosen OS can be customised at all,
+    // which goToStep() does not decide.
+    function showTheSublist(step) {
+        giveTheWizardASize()
+        wiz.customizationSupported = true
+        goToStep(step)
+        waitForRendering(testCase)
+        verify(wiz.getCustomizationSubstepLabels().length > 0,
+               "the sublist has rows")
+    }
+
+    function test_clicking_a_customisation_substep_goes_to_that_step() {
+        showTheSublist(wiz.stepWifiCustomization)
+        wiz.markStepPermissible(wiz.stepHostnameCustomization)
+        waitForRendering(testCase)
+
+        const hostname = wiz.getCustomizationSubstepLabels()[0]
+
+        const row = substepRow(hostname)
+        verify(row.visible && row.height > 0,
+               "'" + hostname + "' is on screen to be clicked")
+        verify(row.isClickable, "and it is offered as clickable")
+
+        mouseClick(row)
+        waitForRendering(testCase)
+
+        compare(wiz.currentStep, wiz.stepHostnameCustomization,
+                "clicking '" + hostname + "' went to the hostname step")
+    }
+
+    function test_going_back_to_an_earlier_substep_does_not_need_marking() {
+        // Someone part-way through customisation correcting something they
+        // already passed. Nothing further on depends on it, so the step does
+        // not have to have been marked reachable.
+        showTheSublist(wiz.stepWifiCustomization)
+        // Deliberately not permissible: only backward navigation should be
+        // carrying this.
+        wiz.permissibleStepsBitmap = 1
+        wiz.markStepPermissible(wiz.stepWifiCustomization)
+        verify(!wiz.isStepPermissible(wiz.stepHostnameCustomization),
+               "the earlier step is not marked reachable")
+        waitForRendering(testCase)
+
+        const hostname = wiz.getCustomizationSubstepLabels()[0]
+        mouseClick(substepRow(hostname))
+        waitForRendering(testCase)
+
+        compare(wiz.currentStep, wiz.stepHostnameCustomization,
+                "going back was allowed anyway")
+    }
+
+    function test_clicking_a_substep_further_on_goes_nowhere() {
+        // The steps in between set what a later one shows, so jumping over
+        // them would land the user on a step configured from nothing.
+        showTheSublist(wiz.stepHostnameCustomization)
+        wiz.permissibleStepsBitmap = 1
+        wiz.markStepPermissible(wiz.stepHostnameCustomization)
+        waitForRendering(testCase)
+
+        const labels = wiz.getCustomizationSubstepLabels()
+        // The last label in the list is the furthest on, so it is behind the
+        // most steps the user has not reached.
+        const furthest = labels[labels.length - 1]
+        verify(substepIndexOf(furthest) > 0, "there is a later step to try")
+
+        const startedOn = wiz.currentStep
+        mouseClick(substepRow(furthest))
+        waitForRendering(testCase)
+
+        compare(wiz.currentStep, startedOn,
+                "clicking '" + furthest + "' did not skip what comes before it")
+    }
+
+    // Every substep row inside one sidebar row.
+    function substepsIn(row) {
+        const found = []
+        function walk(item) {
+            if (!item)
+                return
+            if (item.objectName === "sidebarSubstep")
+                found.push(item)
+            const kids = item.children || []
+            for (let i = 0; i < kids.length; i++)
+                walk(kids[i])
+        }
+        walk(row)
+        return found
+    }
+
+    // Which sidebar row the substeps are drawn under, or -1.
+    function rowHoldingTheSubsteps() {
+        const rows = sidebar()
+        for (let i = 0; i < rows.count; i++) {
+            const subs = substepsIn(rows.itemAt(i))
+            for (let j = 0; j < subs.length; j++) {
+                if (subs[j].visible)
+                    return i
+            }
+        }
+        return -1
+    }
+
+    function test_the_substeps_hang_off_the_customisation_row() {
+        showTheSublist(wiz.stepWifiCustomization)
+
+        const holding = rowHoldingTheSubsteps()
+        verify(holding >= 0, "the substeps are drawn somewhere")
+        compare(holding, wiz.getSidebarIndex(wiz.firstCustomizationStep),
+                "and it is the customisation row, not row "
+                + holding + " which is step "
+                + wiz.getWizardStepFromSidebarIndex(holding))
+    }
+
+    function test_the_substeps_still_hang_off_it_with_no_os_list() {
+        // The layout this went wrong in. With no OS list there are no boards
+        // to choose from, so the board row is not listed and every row below
+        // it moves up one -- and four places in the sidebar said the
+        // customisation group was row 3 regardless. Offline that is Writing,
+        // so the hostname and Wi-Fi lines appeared under it while the
+        // Customisation heading had none.
+        const previousRepo = ImageWriterSingleton.osListUrl()
+
+        // A repository with no os_list in it: the fetch succeeds, nothing is
+        // stored, and the wizard is in the state it is in when the list never
+        // arrived.
+        const empty = TestFiles.write("no_os_list.json", JSON.stringify({}))
+        verify(empty !== "", "wrote an empty repository")
+        ImageWriterSingleton.refreshOsListFrom(empty)
+        tryVerify(function () { return !wiz.hasNetworkConnectivity }, 10000,
+                  "the wizard is in its offline layout")
+
+        showTheSublist(wiz.stepWifiCustomization)
+
+        const holding = rowHoldingTheSubsteps()
+        verify(holding >= 0, "the substeps are drawn somewhere")
+        compare(holding, wiz.getSidebarIndex(wiz.firstCustomizationStep),
+                "the substeps are under the customisation row; they are under "
+                + "row " + holding + ", which is step "
+                + wiz.getWizardStepFromSidebarIndex(holding))
+
+        // Put a list back. Several files later in the run assume one, and
+        // whether the shipped URL answers depends on the machine this runs
+        // on, so the list comes back from a local file and only the
+        // repository URL is restored -- with setCustomRepo, which does not
+        // start a fetch that could empty it again.
+        const restore = TestFiles.write("restored_os_list.json", JSON.stringify({
+            "os_list": [{
+                "name": "Restored entry",
+                "description": "Puts the wizard back in its online layout",
+                "url": "https://example.invalid/restored.img.xz",
+                "icon": "",
+                "release_date": "2026-01-01",
+                "extract_size": 1048576,
+                "image_download_size": 524288,
+                "extract_sha256": "ee55"
+            }]
+        }))
+        ImageWriterSingleton.refreshOsListFrom(restore)
+        tryVerify(function () { return wiz.hasNetworkConnectivity }, 10000,
+                  "the list is back")
+        ImageWriterSingleton.setCustomRepo(previousRepo)
+    }
 }

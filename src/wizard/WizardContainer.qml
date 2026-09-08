@@ -239,6 +239,17 @@ Item {
     
     readonly property int firstCustomizationStep: stepHostnameCustomization
 
+    // The sidebar row the customisation group occupies.
+    //
+    // Not a constant, which is what four places used to assume by writing 3.
+    // The board row is absent when there is no OS list to have boards for,
+    // and every row below it moves up one -- so with no network the
+    // customisation substeps were drawn under "Writing", the Customisation
+    // heading had none, and an OS that cannot be customised greyed out the
+    // Writing row instead. Offline is exactly when that happens, because an
+    // OS list that never arrived is what removes the board row.
+    readonly property int customizationSidebarIndex: getSidebarIndex(firstCustomizationStep)
+
     function clampSidebarWidth(width) {
         // Anything that is not a finite number goes through Math.min/max
         // untouched and lands in sidebarWidthValue -- an int property, where
@@ -504,7 +515,7 @@ Item {
                         property bool isClickable: {
                             if (root.isWriting) return false
                             // If customization not supported, do not allow navigating back to customization group
-                            if (!root.customizationSupported && stepItem.index === 3) return false
+                            if (!root.customizationSupported && stepItem.index === root.customizationSidebarIndex) return false
 
                             // Read permissibleStepsBitmap directly to create a reactive dependency
                             var bit = 1 << _targetStep
@@ -535,7 +546,7 @@ Item {
                                 onClicked: {
                                     var targetStep = root.getWizardStepFromSidebarIndex(stepItem.index)
                                     // Guard: skip customization group when unsupported
-                                    if (!root.customizationSupported && stepItem.index === 3) {
+                                    if (!root.customizationSupported && stepItem.index === root.customizationSidebarIndex) {
                                         return
                                     }
                                     // Allow navigation to any permissible step or backward navigation
@@ -554,7 +565,7 @@ Item {
                                     text: stepItem.modelData
                                     font.pointSize: Style.fontSizeSidebarItem
                                     font.family: Style.fontFamily
-                                    color: (stepItem.index > root.getSidebarIndex(root.currentStep) || (stepItem.index === 3 && !root.customizationSupported))
+                                    color: (stepItem.index > root.getSidebarIndex(root.currentStep) || (stepItem.index === root.customizationSidebarIndex && !root.customizationSupported))
                                                ? Style.formLabelDisabledColor
                                                : (stepItem.index === root.getSidebarIndex(root.currentStep)
                                                    ? Style.sidebarTextOnActiveColor
@@ -573,12 +584,16 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep > root.stepOSSelection
+                            visible: stepItem.index === root.customizationSidebarIndex && root.customizationSupported && root.currentStep > root.stepOSSelection
 
                             Repeater {
                                 model: root.getCustomizationSubstepLabels()
                                 Rectangle {
                                     id: subItem
+                                    // Named so a test can find one row of the
+                                    // customisation sublist. There is one per
+                                    // label, so callers match on modelData.
+                                    objectName: "sidebarSubstep"
                                     required property int index
                                     required property var modelData
                                     width: sublistContainer ? sublistContainer.width : 0
