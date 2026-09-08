@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "network_poll_action.h"
 #include "imagesizeparser.h"
 #include "imager_version.h"
 #include "writeprogresswatchdog.h"
@@ -2991,22 +2992,30 @@ bool ImageWriter::isOnline()
     // unavailable, and we never successfully fetched the OS list, trigger a retry.
     // This handles the case where the initial fetch failed due to a firewall blocking
     // access, and the user later grants permission (fixes GitHub issue #1212).
-    if (hasBasicConnectivity && !_online && _completeOsList.isEmpty()) {
+    switch (rpi_net::planPollAction(hasBasicConnectivity, _online,
+                                    !_completeOsList.isEmpty())) {
+    case rpi_net::PollAction::ComeOnlineAndFetch:
         qDebug() << "Network now available and OS list empty - retrying fetch";
         _online = true;
         beginOSListFetch();
         emit networkOnline();
-    } else if (hasBasicConnectivity && !_online) {
+        break;
+
+    case rpi_net::PollAction::ComeOnline:
         // Network came online but we already have OS list data
         _online = true;
-    } else if (!hasBasicConnectivity && _online) {
+        break;
+
+    case rpi_net::PollAction::GoOffline:
         // Network went offline
         _online = false;
-    } else if (!hasBasicConnectivity && _completeOsList.isEmpty()) {
+        break;
+
+    case rpi_net::PollAction::ReportUnavailable:
         // No network and no OS list - notify UI so it can show offline state
         // This handles startup without network (fixes GitHub issue #809)
         emit osListUnavailableChanged();
-        
+
         // Start monitoring for network availability so we can auto-retry
         PlatformQuirks::startNetworkMonitoring([this](bool available) {
             if (available && _completeOsList.isEmpty()) {
@@ -3015,6 +3024,10 @@ bool ImageWriter::isOnline()
                 QMetaObject::invokeMethod(this, "beginOSListFetch", Qt::QueuedConnection);
             }
         });
+        break;
+
+    case rpi_net::PollAction::Nothing:
+        break;
     }
     
     return hasBasicConnectivity;

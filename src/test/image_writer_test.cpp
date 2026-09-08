@@ -11115,3 +11115,77 @@ TEST_CASE("A fastboot flash reads the cache only once it has been checked",
     // already happened.
     CHECK(w.resolveFlashSource() == QUrl::fromLocalFile(fx.cachePath()));
 }
+
+// ══════════════════════════════════════════════════════════════
+// What each tick of the network poll decides.
+//
+// isOnline() runs every second for as long as Imager is open, and the four
+// branches it chooses between were only ever reachable by arranging a real
+// network to change under the test. Two of them exist because they were
+// missing: a user whose first fetch was blocked never got a list at all
+// (#1212), and a user who started with no network saw an empty screen with
+// no explanation (#809).
+//
+// The arithmetic is now separable, so every combination can be stated.
+// ══════════════════════════════════════════════════════════════
+
+#include "network_poll_action.h"
+
+TEST_CASE("Connectivity arriving with no list fetches one",
+          "[imagewriter][netpoll]")
+{
+    // GitHub #1212: the first attempt was refused by a firewall, the user
+    // allowed it, and nothing ever tried again. The retry is this branch.
+    CHECK(rpi_net::planPollAction(true, false, false)
+          == rpi_net::PollAction::ComeOnlineAndFetch);
+}
+
+TEST_CASE("Connectivity arriving with a list already here fetches nothing",
+          "[imagewriter][netpoll]")
+{
+    // Coming back from sleep, or a cable in after the list already loaded.
+    // Worth recording; not worth downloading the list again.
+    CHECK(rpi_net::planPollAction(true, false, true)
+          == rpi_net::PollAction::ComeOnline);
+}
+
+TEST_CASE("A poll while already online and connected does nothing",
+          "[imagewriter][netpoll]")
+{
+    // The overwhelmingly common tick, and the one with the sharpest
+    // consequence if it decided anything: this runs once a second, so a
+    // branch that fetched here would re-download the OS list every second
+    // for as long as the window was open.
+    CHECK(rpi_net::planPollAction(true, true, true) == rpi_net::PollAction::Nothing);
+    CHECK(rpi_net::planPollAction(true, true, false) == rpi_net::PollAction::Nothing);
+}
+
+TEST_CASE("Losing the network is noticed once", "[imagewriter][netpoll]")
+{
+    CHECK(rpi_net::planPollAction(false, true, true) == rpi_net::PollAction::GoOffline);
+
+    // With no list either, going offline still takes precedence on this tick.
+    // The screen learns there is nothing to show on the *next* one, once
+    // wasOnline has become false -- recorded because it is a real one-tick
+    // delay, and a second of it is not worth reordering the branches for.
+    CHECK(rpi_net::planPollAction(false, true, false) == rpi_net::PollAction::GoOffline);
+    CHECK(rpi_net::planPollAction(false, false, false)
+          == rpi_net::PollAction::ReportUnavailable);
+}
+
+TEST_CASE("No network and nothing to show says so", "[imagewriter][netpoll]")
+{
+    // GitHub #809: started with no network, and the screen sat empty with no
+    // explanation and no Retry.
+    CHECK(rpi_net::planPollAction(false, false, false)
+          == rpi_net::PollAction::ReportUnavailable);
+}
+
+TEST_CASE("No network but a list already loaded leaves it alone",
+          "[imagewriter][netpoll]")
+{
+    // The user is browsing a list that was fetched before the network went.
+    // Announcing "unavailable" here would blank a screen they are using --
+    // the list is still perfectly good, only the network is gone.
+    CHECK(rpi_net::planPollAction(false, false, true) == rpi_net::PollAction::Nothing);
+}
