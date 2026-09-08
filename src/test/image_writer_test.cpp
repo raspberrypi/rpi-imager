@@ -9986,3 +9986,85 @@ TEST_CASE("An empty software list offers nothing", "[imagewriter][capability]")
     CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("i2c")));
     CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("spi")));
 }
+
+// ══════════════════════════════════════════════════════════════
+// Carrying a Wi-Fi network name through to the image.
+//
+// The wizard hands the SSID to wifiSsidOctetsBase64 and stores the result;
+// CustomisationGenerator decodes it back and writes those octets into the
+// image's network configuration. The consumer side has a test. The producer
+// -- the only thing that puts the value there -- did not.
+//
+// An SSID is a sequence of octets, not text: the standard does not say what
+// encoding a network name is in, and routers ship with accented and CJK
+// names out of the box. Base64 is used precisely so the exact bytes survive
+// QSettings and the QML boundary. Get the encoding wrong and the Pi looks
+// for a network with a different name, finds nothing, and boots with no
+// connection and nothing on screen to say why.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A network name survives the trip to the image byte for byte",
+          "[imagewriter][wifi]")
+{
+    ImageWriter w(nullptr);
+
+    auto roundTrip = [&w](const QString& ssid) {
+        return QByteArray::fromBase64(w.wifiSsidOctetsBase64(ssid).toLatin1());
+    };
+
+    SECTION("plain ASCII")
+    {
+        CHECK(roundTrip(QStringLiteral("HomeNetwork")) == QByteArray("HomeNetwork"));
+    }
+
+    SECTION("accented characters, which are encoded as UTF-8 and not Latin-1")
+    {
+        // Latin-1 would give one byte for the e-acute rather than two, and
+        // the router would never answer to it.
+        const QString ssid = QString::fromUtf8("Café");
+        CHECK(roundTrip(ssid) == QByteArray("Caf\xC3\xA9"));
+        CHECK(roundTrip(ssid) == ssid.toUtf8());
+    }
+
+    SECTION("characters Latin-1 cannot represent at all")
+    {
+        // A default SSID from a router sold in Japan. toLatin1() turns each
+        // of these into '?', which is not a recovery -- it is a different
+        // network name that happens to be the same length.
+        const QString ssid = QString::fromUtf8("無線LAN");
+        CHECK(roundTrip(ssid) == ssid.toUtf8());
+        CHECK_FALSE(roundTrip(ssid).contains('?'));
+    }
+
+    SECTION("an emoji, which needs a surrogate pair")
+    {
+        const QString ssid = QString::fromUtf8("Pi \xF0\x9F\x93\xB6");
+        CHECK(roundTrip(ssid) == ssid.toUtf8());
+    }
+}
+
+TEST_CASE("Spacing in a network name is part of the name",
+          "[imagewriter][wifi]")
+{
+    // SSIDs with a trailing space exist, and are a well-known way to get
+    // caught out. Trimming here would produce a name that looks right in the
+    // wizard and matches nothing on the air.
+    ImageWriter w(nullptr);
+
+    const QString padded = QStringLiteral("  Guest Wi-Fi  ");
+    const QByteArray decoded =
+        QByteArray::fromBase64(w.wifiSsidOctetsBase64(padded).toLatin1());
+
+    CHECK(decoded == QByteArray("  Guest Wi-Fi  "));
+    CHECK(decoded.size() == padded.toUtf8().size());
+}
+
+TEST_CASE("An empty network name encodes to nothing", "[imagewriter][wifi]")
+{
+    // Reached when the user clears the field. An empty result is what tells
+    // the generator there is no SSID, rather than the base64 of an empty
+    // string being written into the config as a name.
+    ImageWriter w(nullptr);
+    CHECK(w.wifiSsidOctetsBase64(QString()).isEmpty());
+    CHECK(w.wifiSsidOctetsBase64(QStringLiteral("")).isEmpty());
+}
