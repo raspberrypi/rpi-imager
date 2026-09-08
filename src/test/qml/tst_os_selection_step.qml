@@ -224,4 +224,50 @@ TestCase {
         compare(advanced.count, 0)
         compare(step.categorySelected, "", "and nothing was descended into")
     }
+    // ── Changing your mind about a custom image ───────────────────────
+    //
+    // "Use custom" opens a file picker, and the way out of it is Cancel.
+    // Nothing is supposed to happen: the OS already chosen stays chosen, and
+    // the customisation that OS supports stays available.
+    //
+    // Worth stating, because accepting is destructive here by design -- a
+    // custom image cannot carry customisation, so choosing one throws the
+    // staged Wi-Fi, user account and SSH settings away. A cancel that fell
+    // through to the same handler would do all of that for a user who
+    // pressed Cancel, and nothing would say so.
+
+    function test_cancelling_the_image_picker_changes_nothing() {
+        fakeContainer.selectedOsName = "Raspberry Pi OS (64-bit)"
+        fakeContainer.customizationSupported = true
+        fakeContainer.wifiConfigured = true
+
+        const picker = step.customImageFileDialog
+        verify(picker, "the step carries the image picker")
+        picker.open()
+        tryVerify(function () { return picker.opened }, 3000,
+                  "the picker came up")
+
+        // Browsed to a file and then thought better of it, which is the
+        // case that matters: with nothing highlighted there is nothing a
+        // fall-through could pick up.
+        const decoy = TestFiles.write("cancelled-choice.img", "not an image")
+        verify(decoy !== "", "wrote a file for the picker to be pointing at")
+        picker.selectedFile = decoy
+
+        const cancel = findChild(picker, "fileDialogCancelButton")
+        verify(cancel, "the picker offers a way out")
+        // Emitted rather than clicked: the picker is a Popup, and the
+        // offscreen harness does not deliver synthesised presses into one.
+        cancel.clicked()
+
+        tryVerify(function () { return !picker.visible }, 3000,
+                  "the picker closed")
+
+        compare(fakeContainer.selectedOsName, "Raspberry Pi OS (64-bit)",
+                "the OS already chosen is still chosen")
+        verify(fakeContainer.customizationSupported,
+               "and it still advertises customisation")
+        verify(fakeContainer.wifiConfigured,
+               "so the staged settings are still there")
+    }
 }
