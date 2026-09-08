@@ -137,7 +137,8 @@ bool Cli::readCustomisationFile(const QString &path, const QString &what,
 
     if (!f.exists())
     {
-        error = QStringLiteral("Error: ") + what + QStringLiteral(" does not exists");
+        error = QStringLiteral("Error: ") + what
+              + QStringLiteral(" does not exist: ") + path;
         return false;
     }
     if (!f.open(QIODevice::ReadOnly))
@@ -283,7 +284,11 @@ int Cli::run()
         break;
     }
     case SourceKind::Missing:
-        std::cerr << "Error: source file does not exists" << std::endl;
+        // Named, because the usual reason for landing here is a typo in a
+        // long path, and a message that does not echo it leaves the reader
+        // comparing what they meant to type against nothing.
+        std::cerr << "Error: source file does not exist: "
+                  << args[0].toStdString() << std::endl;
         return 1;
     case SourceKind::NotRegular:
         std::cerr << "Error: source is not a regular file" << std::endl;

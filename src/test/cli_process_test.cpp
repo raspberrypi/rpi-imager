@@ -154,6 +154,8 @@ TEST_CASE("A source that is not there is refused by name", "[cli][process][root]
     REQUIRE(r.finished);
     CHECK(r.exitCode == 1);
     CHECK_THAT(r.output.toStdString(), ContainsSubstring("source file does not exist"));
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring(scratch.missing().toStdString()));
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("does not exists"));
     CHECK_FALSE(QFile::exists(scratch.notADevice()));
 }
 
@@ -277,6 +279,11 @@ TEST_CASE("A first-run script that is not there is named as the problem", "[cli]
     REQUIRE(r.finished);
     CHECK(r.exitCode == 1);
     CHECK_THAT(r.output.toStdString(), ContainsSubstring("firstrun script does not exist"));
+    // Named, so a typo in a long path can be compared against what was meant.
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring(scratch.missing().toStdString()));
+    // And the grammar is right: "does not exists" was there for years, and
+    // every case here asserted the prefix, so nothing objected.
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("does not exists"));
     CHECK_FALSE(QFile::exists(scratch.notADevice()));
 }
 
@@ -519,54 +526,56 @@ QString sizedImage(const QString &dir, int megabytes)
 }
 } // namespace
 
-TEST_CASE("A verified write says that it verified", "[cli][process][root]")
+TEST_CASE("A write verifies unless told not to", "[cli][process][root]")
 {
-    // Verification is on unless it is turned off, and it is the only reason
-    // to believe the card holds what the image held. Somebody watching a
-    // scripted run needs to see it happen -- a run that only ever says
-    // "Writing" has not told them whether it was checked.
+    // Verification is on by default and is the only reason to believe the
+    // card holds what the image held. Both spellings of the run have to
+    // succeed: the flag exists because verification doubles the time, and one
+    // that broke the write would be worse than one that wasted it.
+    //
+    // What is deliberately *not* asserted here is the "Verifying" progress
+    // line. It is emitted from a periodic poll, so it appears only if
+    // verification is still running when a poll comes round; for any image
+    // small enough to be a test fixture it finishes in between and nothing
+    // is printed. Asserting its presence was flaky two runs in three, and
+    // asserting its absence in the --disable-verify case was worse -- it
+    // passed whether or not verification had run at all. Covering that label
+    // honestly needs an image large enough to span a poll, which is not a
+    // fixture worth carrying.
     if (!haveSudo())
         SKIP("passwordless sudo is not available, and writing needs root");
 
     Scratch scratch;
     const QString source = sizedImage(scratch.dir(), 48);
-    const QString target = scratch.notADevice();
-    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
 
-    const Run r = runImager({QStringLiteral("--cli"),
-                             QStringLiteral("--enable-writing-system-drives"),
-                             source, target}, true);
+    SECTION("with verification")
+    {
+        const QString target = scratch.notADevice();
+        { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
 
-    INFO(r.output.toStdString());
-    REQUIRE(r.finished);
-    CHECK(r.exitCode == 0);
-    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Verifying"));
-    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
-}
+        const Run r = runImager({QStringLiteral("--cli"),
+                                 QStringLiteral("--enable-writing-system-drives"),
+                                 source, target}, true);
+        INFO(r.output.toStdString());
+        REQUIRE(r.finished);
+        CHECK(r.exitCode == 0);
+        CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
+    }
 
-TEST_CASE("Asking not to verify means it does not", "[cli][process][root]")
-{
-    // The flag exists because verification doubles the time. One that
-    // silently verified anyway would waste that time; one that silently
-    // skipped when not asked would be worse.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    SECTION("and without")
+    {
+        const QString target = scratch.notADevice();
+        { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
 
-    Scratch scratch;
-    const QString source = sizedImage(scratch.dir(), 48);
-    const QString target = scratch.notADevice();
-    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
-
-    const Run r = runImager({QStringLiteral("--cli"),
-                             QStringLiteral("--enable-writing-system-drives"),
-                             QStringLiteral("--disable-verify"),
-                             source, target}, true);
-
-    INFO(r.output.toStdString());
-    REQUIRE(r.finished);
-    CHECK(r.exitCode == 0);
-    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
-    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("Verifying"));
+        const Run r = runImager({QStringLiteral("--cli"),
+                                 QStringLiteral("--enable-writing-system-drives"),
+                                 QStringLiteral("--disable-verify"),
+                                 source, target}, true);
+        INFO(r.output.toStdString());
+        REQUIRE(r.finished);
+        CHECK(r.exitCode == 0);
+        CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
+    }
 }
 
 TEST_CASE("Quiet means quiet, right up until something fails",
