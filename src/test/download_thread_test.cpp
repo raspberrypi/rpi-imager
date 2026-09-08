@@ -30,7 +30,7 @@
 #include <chrono>
 #include <catch2/generators/catch_generators.hpp>
 #include "signal_log.h"
-#include "linux/file_operations_linux.h"
+#include "platform_file_operations.h"
 #include "timeout_utils.h"
 
 using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
@@ -2337,7 +2337,7 @@ namespace {
 
 // The real Linux implementation with one answer replaced, so the other
 // twenty-nine members of the interface behave as they always do.
-class ClassifyingDevice : public rpi_imager::LinuxFileOperations
+class ClassifyingDevice : public rpi_imager::PlatformFileOperations
 {
 public:
     explicit ClassifyingDevice(rpi_imager::WriteErrorClass klass) : _klass(klass) {}
@@ -2507,7 +2507,7 @@ TEST_CASE("A cancelled write is not reported as a failure",
 
 namespace {
 
-class SyncCountingDevice : public rpi_imager::LinuxFileOperations
+class SyncCountingDevice : public rpi_imager::PlatformFileOperations
 {
 public:
     bool directIo = false;
@@ -2807,7 +2807,7 @@ TEST_CASE("Storage is named as the bottleneck, and unnamed again",
 namespace {
 
 // Reads back whatever it is told to, regardless of what was written.
-class ReadbackDevice : public rpi_imager::LinuxFileOperations
+class ReadbackDevice : public rpi_imager::PlatformFileOperations
 {
 public:
     QByteArray readsBack;
@@ -3229,7 +3229,7 @@ TEST_CASE("A large file is still size-checked when verification is off",
 // with no partition table and a successful write behind it. It looks blank, and
 // nothing said anything went wrong.
 
-class SeekingDevice : public rpi_imager::LinuxFileOperations
+class SeekingDevice : public rpi_imager::PlatformFileOperations
 {
 public:
     bool seekFails = false;
@@ -3655,7 +3655,7 @@ TEST_CASE("A download interrupted twice still writes the whole image",
 // hanging instead of failing. Blunt, but unambiguous -- and a reminder that a
 // double free is not reliably a crash you can see.
 
-class FailingAsyncDevice : public rpi_imager::LinuxFileOperations
+class FailingAsyncDevice : public rpi_imager::PlatformFileOperations
 {
 public:
     int asyncSubmissions = 0;

@@ -1818,8 +1818,13 @@ endif()
             QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
         add_test(NAME qml_ui_test
                  COMMAND qml_ui_test -platform offscreen)
+        # One CTest entry, but a whole QtQuickTest suite behind it: over a
+        # thousand cases, seven minutes on a laptop. The suite-wide --timeout
+        # that stops a deadlocked case from costing the whole run is far below
+        # that, so this one says how long it honestly needs.
         set_tests_properties(qml_ui_test PROPERTIES
-            ENVIRONMENT "QT_QUICK_BACKEND=software")
+            ENVIRONMENT "QT_QUICK_BACKEND=software"
+            TIMEOUT 1800)
 
         # The same binary again, on one file, on its own.
         #

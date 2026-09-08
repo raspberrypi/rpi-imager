@@ -189,7 +189,15 @@ TEST_CASE("A device too small to format says so, through the thread", "[format]"
     // The formatter's own reason, carried through rather than collapsed into
     // "Unknown formatting error" -- running out of room and being refused
     // permission call for different things from the person holding the card.
+#ifdef Q_OS_MACOS
+    // As in the read-only case above: on macOS the format begins by
+    // unmounting, and DiskArbitration refuses on something that is not a
+    // disk, so the refusal is the unmount one and the formatter's own reason
+    // is never reached.
+    CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("unmount"));
+#else
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("Insufficient space"));
+#endif
 
     // And it was left as it was. A refusal that had already written part of a
     // filesystem would be worse than not trying.

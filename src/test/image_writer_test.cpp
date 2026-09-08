@@ -571,6 +571,14 @@ TEST_CASE("A settings file left unwritable is repaired, keeping what it held",
     REQUIRE(QFile::setPermissions(path, QFileDevice::ReadOwner));
     {
         QSettings check;
+#ifdef Q_OS_MACOS
+        // QSettings is CFPreferences here, and it reports on the preferences
+        // store rather than on the file backing it: clearing the write bit
+        // leaves isWritable() true, so the state this case repairs cannot be
+        // set up in the first place.
+        if (check.isWritable())
+            SKIP("QSettings on macOS does not report a read-only file as unwritable");
+#endif
         REQUIRE_FALSE(check.isWritable());
     }
 
@@ -9651,8 +9659,16 @@ TEST_CASE("A writable loop device is offered, but as a system drive",
 
     const QStringList offered = devicesOffered(model);
     INFO("offered: " << offered.join(QStringLiteral(", ")).toStdString());
+#ifdef Q_OS_LINUX
     REQUIRE(offered.contains(QStringLiteral("/dev/loop7")));
     CHECK(offeredAsSystemDrive(model, QStringLiteral("/dev/loop7")));
+#else
+    // Off Linux the model requires a virtual device to be removable, because
+    // isSystem alone misses APFS volumes on non-ejectable enclosures and
+    // Storage Spaces pools. So this one is hidden rather than offered, which
+    // is the safe half of the same decision.
+    CHECK_FALSE(offered.contains(QStringLiteral("/dev/loop7")));
+#endif
 }
 
 TEST_CASE("An ordinary card is not flagged as a system drive",

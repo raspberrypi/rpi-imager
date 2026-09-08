@@ -5,7 +5,7 @@
 
 #include "disk_formatter.h"
 
-#include "linux/file_operations_linux.h"
+#include "platform_file_operations.h"
 
 #include <iostream>
 #include <filesystem>
@@ -78,7 +78,7 @@ ScratchDir& scratch() {
 // implementing the other two dozen pure virtuals; DiskFormatter only ever
 // calls these four, and each is overridden, so the base's file descriptor is
 // never opened.
-class ScriptedDevice : public LinuxFileOperations {
+class ScriptedDevice : public rpi_imager::PlatformFileOperations {
  public:
   explicit ScriptedDevice(std::uint64_t size_bytes) : size_bytes_(size_bytes) {}
 

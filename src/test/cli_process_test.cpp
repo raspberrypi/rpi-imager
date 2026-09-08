@@ -112,6 +112,12 @@ TEST_CASE("Run without privileges, and it says how to get them", "[cli][process]
     // problem and the command that fixes it.
     if (::geteuid() == 0)
         SKIP("already root, so the check this is about does not fire");
+#ifdef Q_OS_MACOS
+    // PlatformQuirks::hasElevatedPrivileges() answers true unconditionally on
+    // macOS -- the comment there says the permissions model makes the check
+    // unnecessary -- so the CLI never reaches the message this case is about.
+    SKIP("the CLI does not ask for root on macOS");
+#endif
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"), scratch.source(),
