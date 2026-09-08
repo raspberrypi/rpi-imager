@@ -70,6 +70,49 @@ struct Outcome
 
 } // namespace
 
+TEST_CASE("A cache that runs out of room says so rather than going quiet",
+          "[cachewriter]")
+{
+    // The cache is written alongside the card, from the same stream. When
+    // the disk holding it fills up -- a 4 GB image and a nearly full home
+    // partition is the ordinary way -- the writer has to say so.
+    //
+    // Silence here is the bad outcome, and it is the plausible one: the
+    // write to the card carries on and succeeds, so the user is told the
+    // whole operation worked. Next launch finds a cache file that is short,
+    // fails verification, and downloads the image again -- with nothing
+    // anywhere having mentioned a full disk.
+    //
+    // /dev/full is a real ENOSPC without needing a filesystem set up to
+    // fail: it accepts an open and refuses every write.
+    if (!QFile::exists(QStringLiteral("/dev/full")))
+        SKIP("/dev/full is not present, so a full disk cannot be simulated");
+
+    const QByteArray payload = payloadOfSize(64 * 1024, 7);
+
+    AsyncCacheWriter writer;
+    Outcome out;
+    QObject::connect(&writer, &AsyncCacheWriter::finished, &writer,
+                     [&](const QByteArray &h) { out.finished = true; out.hash = h; });
+    QObject::connect(&writer, &AsyncCacheWriter::error, &writer,
+                     [&](const QString &m) { out.errors << m; });
+
+    REQUIRE(writer.open(QStringLiteral("/dev/full"), payload.size()));
+    // Accepted into the queue: the failure is the write, one thread along,
+    // not the handoff.
+    REQUIRE(writer.write(payload.constData(), size_t(payload.size())));
+    writer.finish();
+
+    REQUIRE(waitFor([&] { return !out.errors.isEmpty() || out.finished; }));
+
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.errors.isEmpty());
+    // Names the cache, so it is not mistaken for the card failing, and
+    // passes on the system's reason rather than "an error occurred".
+    CHECK(out.errors.first().contains(QStringLiteral("Cache"), Qt::CaseInsensitive));
+    CHECK(out.errors.first().contains(QStringLiteral("space"), Qt::CaseInsensitive));
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
