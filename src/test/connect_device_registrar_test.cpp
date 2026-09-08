@@ -555,6 +555,82 @@ TEST_CASE("A signing answer with no signature in it is not registered", "[connec
     CHECK(result.errorMessage.contains(QStringLiteral("signature")));
 }
 
+// ── Configured for Connect, but with no key ───────────────────────────
+//
+// isEnabled() is checked above, and callers are meant to consult it. Both
+// entry points guard themselves as well, and neither guard had been reached.
+// It matters because the two are reached by different routes -- the wizard
+// asks isEnabled() first, the fastboot flash path does not always -- so a
+// deployment that turned Connect on and left the organisation key blank has
+// to be told which of the several things it configured is missing, rather
+// than watching a registration fail somewhere inside the API.
+
+TEST_CASE("Minting a key with no key configured says which is missing", "[connect]")
+{
+    ConnectDeviceRegistrar registrar(QString(), QStringLiteral("imager"),
+                                     QStringLiteral("http://127.0.0.1:1"));
+
+    const auto result = registrar.requestAuthKey(QStringLiteral("no credential"), 1);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.secret.isEmpty());
+    INFO(result.errorMessage.toStdString());
+    CHECK(result.errorMessage.contains(QStringLiteral("API key")));
+    // And nothing was attempted: the base URL points at a closed port, so a
+    // message about the network would mean the guard had not fired.
+    CHECK_FALSE(result.errorMessage.contains(QStringLiteral("Network")));
+}
+
+TEST_CASE("Registering a device with no key configured says the same", "[connect]")
+{
+    MockUsbTransport mock;
+    mock.setOpen(true);
+    queueHappyDevice(mock);
+
+    fastboot::FastbootProtocol fb;
+    ConnectDeviceRegistrar registrar(QString(), QStringLiteral("imager"),
+                                     QStringLiteral("http://127.0.0.1:1"));
+
+    const auto result = registrar.registerDevice(fb, mock, QStringLiteral("Raspberry Pi 5"),
+                                                 QStringLiteral("10000000abcdef03"));
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.deviceId.isEmpty());
+    INFO(result.errorMessage.toStdString());
+    CHECK(result.errorMessage.contains(QStringLiteral("API key")));
+    // The board was not interrogated either. Reading its key and having it
+    // sign a challenge is pointless with nowhere to send the result, and on
+    // a provisioning line it is time spent per board.
+    CHECK(mock.capturedBulkWrites().empty());
+}
+
+TEST_CASE("A registration that cannot reach the API says it was the network",
+          "[connect]")
+{
+    // The counterpart with a key present: nothing listens on port 1. The
+    // distinction is the whole point -- a missing key is fixed in App
+    // Options, an unreachable API is fixed by the person who runs the
+    // network, and telling them apart is what stops a provisioning line
+    // stalling on the wrong one.
+    MockUsbTransport mock;
+    mock.setOpen(true);
+    queueHappyDevice(mock);
+
+    fastboot::FastbootProtocol fb;
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"),
+                                     QStringLiteral("http://127.0.0.1:1"));
+
+    const auto result = registrar.registerDevice(fb, mock, QStringLiteral("Raspberry Pi 5"),
+                                                 QStringLiteral("10000000abcdef04"));
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.deviceId.isEmpty());
+    INFO(result.errorMessage.toStdString());
+    CHECK(result.errorMessage.contains(QStringLiteral("Network")));
+    CHECK_FALSE(result.errorMessage.contains(QStringLiteral("API key")));
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
