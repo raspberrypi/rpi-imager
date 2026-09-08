@@ -344,3 +344,82 @@ TEST_CASE("Cancelling every request for an icon is not an error for anyone",
     CHECK(again.finished);
     CHECK(again.error.isEmpty());
 }
+
+// ══════════════════════════════════════════════════════════════
+// The cache does not grow for ever.
+//
+// Every icon fetched is kept in memory so scrolling the OS list back and
+// forth does not refetch. Nothing evicts it except the limits at the top of
+// the header -- 32 MB, or 500 entries -- and those had no test.
+//
+// It matters most on the machine least able to absorb it. Imager runs on the
+// Pi itself in embedded mode, where a 512 MB board browsing a long list with
+// large icons is exactly the case that fills a cache. Unbounded, the
+// application is killed part-way through choosing an image, which reaches the
+// user as the window vanishing.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("The icon cache evicts the oldest once it is full", "[icons][cache]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+
+    // A megabyte apiece, so the 32 MB byte limit is reached in a few dozen
+    // fetches rather than the 500 the entry limit would need. Incompressible
+    // and distinct, so nothing can be shared or deduplicated behind the
+    // scenes.
+    // Real PNGs, because the response decodes what it is given and a blob of
+    // bytes is refused before it ever reaches the cache. Noise rather than a
+    // fill, so each one is close to a megabyte instead of compressing to
+    // nothing, and each is distinct.
+    constexpr int kCount = 40;
+    constexpr int kSide = 700;
+    QStringList names;
+    qsizetype produced = 0;
+    for (int i = 0; i < kCount; ++i) {
+        QImage img(kSide, kSide, QImage::Format_ARGB32);
+        quint32 seed = 2166136261u + static_cast<quint32>(i) * 16777619u;
+        for (int y = 0; y < kSide; ++y) {
+            for (int x = 0; x < kSide; ++x) {
+                seed = seed * 1664525u + 1013904223u;
+                img.setPixel(x, y, 0xFF000000u | (seed >> 8));
+            }
+        }
+        const QString name = QStringLiteral("icon-%1.png").arg(i, 3, 10, QLatin1Char('0'));
+        const QString path = QDir(served.path()).filePath(name);
+        REQUIRE(img.save(path, "PNG", 0));
+        produced += QFileInfo(path).size();
+        names << name;
+    }
+
+    // Comfortably past the 32 MB limit, or nothing is evicted and the case
+    // proves nothing.
+    INFO("produced " << produced << " bytes across " << kCount << " icons");
+    REQUIRE(produced > IconMultiFetcher::MaxCacheBytes);
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    IconMultiFetcher::instance().clearCache();
+
+    QStringList urls;
+    for (const QString &name : names) {
+        const QUrl url(QString::fromUtf8(server.urlFor(name)));
+        urls << url.toString();
+        const FetchResult r = fetchIcon(url, 30000);
+        INFO("fetching " << name.toStdString() << ": " << r.error.toStdString());
+        REQUIRE(r.finished);
+        REQUIRE(r.error.isEmpty());
+    }
+
+    // 40 MB fetched into a 32 MB cache, so something has to have gone -- and
+    // it is the oldest, because the eviction walks the insertion order.
+    CHECK(IconMultiFetcher::instance().getCachedData(urls.first()).isEmpty());
+
+    // While the most recent is still there: an eviction that cleared
+    // everything would satisfy the line above and defeat the point of having
+    // a cache at all.
+    CHECK_FALSE(IconMultiFetcher::instance().getCachedData(urls.last()).isEmpty());
+
+    IconMultiFetcher::instance().clearCache();
+}
