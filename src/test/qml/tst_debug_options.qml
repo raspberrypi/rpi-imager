@@ -270,4 +270,104 @@ TestCase {
 
         ImageWriterSingleton.setDebugAsyncQueueDepth(original)
     }
+
+    // ── The custom fastboot gadget ────────────────────────────────────
+    //
+    // The one setting here that is a file rather than a switch. It is chosen
+    // with a file dialog, which hands back a url, and it ends up in a
+    // std::filesystem copy in the rpiboot thread -- so what reaches the
+    // writer has to be a path, not "file:///home/...".
+    //
+    // It is: setDebugCustomFastbootGadget() converts one. That was worth
+    // finding out rather than assuming. A first draft of these cases came
+    // with a QML change to strip the scheme and a claim that the gadget was
+    // never used; reverting the change left every case passing, which is the
+    // only reason the claim was checked. What the QML change is actually
+    // worth is the label, which reads the value back directly and so showed
+    // a url until the dialog was reopened.
+    //
+    // The assertion below is on what the writer ends up holding, which is
+    // the thing that has to be openable, and it would hold with or without
+    // the QML change. That is the honest scope of it.
+
+    // The gadget row is only shown when rpiboot is enabled, which is what it
+    // belongs to. Turning it on is part of reaching the row at all.
+    function showGadgetRow() {
+        const rpiboot = findChild(dialog, "debugRpiboot")
+        verify(rpiboot, "found the rpiboot switch")
+        rpiboot.checked = true
+        waitForRendering(testCase)
+    }
+
+    function gadgetDialog() {
+        const d = findChild(dialog, "debugGadgetFileDialog")
+        verify(d, "found the gadget file dialog")
+        return d
+    }
+
+    function test_browse_opens_the_gadget_chooser() {
+        showGadgetRow()
+        const browse = findChild(dialog, "debugBrowseGadgetButton")
+        verify(browse, "there is a way to choose a gadget image")
+        tryVerify(function () { return browse.visible && browse.height > 0 },
+                  3000, "which is on screen once rpiboot is on")
+
+        // Raised through the button's own signal, as everything else in this
+        // file does: these controls live inside a Popup, and a synthesised
+        // pointer press does not reach one in the offscreen harness.
+        browse.clicked()
+
+        tryVerify(function () { return gadgetDialog().opened }, 3000,
+                  "pressing Browse opens the chooser")
+        gadgetDialog().close()
+    }
+
+    function test_choosing_a_gadget_stores_a_path_rather_than_a_url() {
+        showGadgetRow()
+        // Written to disk so the assertion is about a file that is really
+        // there: the value has to be openable, not merely scheme-free.
+        const url = TestFiles.write("gadget.img", "not a real boot image")
+        verify(url !== "", "wrote a stand-in gadget image")
+        const path = TestFiles.localPath("gadget.img")
+
+        const d = gadgetDialog()
+        d.selectedFile = url
+        d.accepted()
+
+        findChild(dialog, "debugApplyButton").clicked()
+
+        const stored = ImageWriterSingleton.getDebugCustomFastbootGadget()
+        compare(stored, path,
+                "what was stored is the path the copy will be given")
+        verify(stored.indexOf("file://") < 0,
+               "and carries no url scheme: " + stored)
+        // And the label agrees with it, rather than showing the url the
+        // dialog handed over.
+        verify(String(findChild(dialog, "debugGadgetFileDialog").selectedFile)
+                   .indexOf("file://") === 0,
+               "the dialog did hand over a url, so this is not vacuous")
+
+        ImageWriterSingleton.setDebugCustomFastbootGadget("")
+    }
+
+    function test_clearing_the_gadget_goes_back_to_the_default() {
+        showGadgetRow()
+        // Leaving a stale custom gadget behind would keep overriding the one
+        // fetched for the board, silently, on every later write.
+        const url = TestFiles.write("gadget2.img", "not a real boot image")
+        const d = gadgetDialog()
+        d.selectedFile = url
+        d.accepted()
+
+        const clear = findChild(dialog, "debugClearGadgetButton")
+        verify(clear, "there is a way to go back to the default")
+        tryVerify(function () { return clear.visible }, 3000,
+                  "which is offered once a gadget has been chosen")
+        clear.clicked()
+
+        findChild(dialog, "debugApplyButton").clicked()
+
+        compare(ImageWriterSingleton.getDebugCustomFastbootGadget(), "",
+                "nothing overrides the gadget fetched for the board")
+    }
 }

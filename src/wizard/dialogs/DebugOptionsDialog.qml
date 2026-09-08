@@ -353,6 +353,7 @@ BaseDialog {
 
                 ImButton {
                     id: browseGadgetButton
+                    objectName: "debugBrowseGadgetButton"
                     text: qsTr("Browse...")
                     accessibleDescription: qsTr("Select a local fastboot gadget boot.img file")
                     Layout.minimumWidth: 80
@@ -363,6 +364,7 @@ BaseDialog {
                 }
 
                 ImButton {
+                    objectName: "debugClearGadgetButton"
                     text: qsTr("Clear")
                     accessibleDescription: qsTr("Revert to the default fastboot gadget from GitHub")
                     Layout.minimumWidth: 60
@@ -376,11 +378,21 @@ BaseDialog {
 
             ImFileDialog {
                 id: gadgetFileDialog
+                objectName: "debugGadgetFileDialog"
                 parent: popup.parent
                 dialogTitle: qsTr("Select Fastboot Gadget Image")
                 nameFilters: [qsTr("Boot images (*.img *.bin)"), qsTr("All files (*)")]
                 onAccepted: {
-                    gadgetPathText.gadgetPath = selectedFile
+                    // Shown as a path rather than a url. What reaches the
+                    // writer is a path either way -- setDebugCustomFastbootGadget()
+                    // converts one -- but the label reads back
+                    // gadgetPathText.gadgetPath directly, so without this it
+                    // showed "file:///home/..." until the dialog was closed
+                    // and reopened, and a plain path after. The same setting
+                    // rendered two ways depending on how recently it was
+                    // chosen.
+                    gadgetPathText.gadgetPath =
+                        selectedFile.toString().replace(/^file:\/\//, "")
                 }
             }
 
