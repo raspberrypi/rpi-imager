@@ -1539,3 +1539,144 @@ TEST_CASE("Whatever the device reports, the encoder accepts the result",
     fastboot::SparseEncoder enc(size, 1024 * 1024);
     CHECK(enc.maxSegmentSize() == size);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Which customisation file failed
+//
+// On the Compute Module path the settings cannot be edited on disk before
+// the write: the image goes down first, then the files are pushed over the
+// wire one at a time. Any of them can be refused by the device, and when one
+// is the flash stops -- correctly, because a board that comes up without the
+// network configuration the user typed in is worse than one that was never
+// written.
+//
+// What the user has to go on is the message. "Failed to write" on its own
+// says the customisation was lost but not which part, and the parts are not
+// interchangeable: user-data is the account they will log in with,
+// network-config is how the board reaches the network, cmdline.txt is
+// whether the first-boot script runs at all. Each refusal names its file.
+//
+// Only the mount failure had ever been tested. These are the nine that
+// follow it.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+struct CustomisationFailure
+{
+    const char *tag;
+    QByteArray config;
+    QByteArray cmdline;
+    QByteArray firstrun;
+    QByteArray cloudinit;
+    QByteArray cloudinitNetwork;
+    QByteArray initFormat;
+    bool seedConfig;
+    bool seedCmdline;
+    const char *failPrefix;   // empty when the failure is a missing file
+    const char *mustSay;
+};
+
+} // namespace
+
+TEST_CASE("A refused customisation file is named in the message",
+          "[fastboot][customise]")
+{
+    const QByteArray script = "#!/bin/bash\nexit 0\n";
+    const QByteArray cloud = "users:\n  - name: pi\n";
+    const QByteArray netcfg = "version: 2\n";
+
+    const std::vector<CustomisationFailure> cases = {
+        // config.txt is read before it is merged, so a device that cannot
+        // produce it stops there rather than replacing what it could not see.
+        {"config.txt cannot be read", "dtparam=audio=on", {}, {}, {}, {},
+         "systemd", /*seedConfig=*/false, /*seedCmdline=*/true, "", "config.txt"},
+        {"config.txt cannot be written", "dtparam=audio=on", {}, {}, {}, {},
+         "systemd", true, true, "oem download-file /mnt/bootfs/config.txt",
+         "config.txt"},
+        {"firstrun.sh cannot be written", {}, {}, script, {}, {},
+         "systemd", true, true, "oem download-file /mnt/bootfs/firstrun.sh",
+         "firstrun.sh"},
+        {"rpi-preseed.toml cannot be written", {}, {}, script, {}, {},
+         "rpi-preseed", true, true,
+         "oem download-file /mnt/bootfs/rpi-preseed.toml", "rpi-preseed.toml"},
+        {"meta-data cannot be written", {}, {}, {}, cloud, {},
+         "cloudinit", true, true, "oem download-file /mnt/bootfs/meta-data",
+         "meta-data"},
+        {"user-data cannot be written", {}, {}, {}, cloud, {},
+         "cloudinit", true, true, "oem download-file /mnt/bootfs/user-data",
+         "user-data"},
+        {"network-config cannot be written", {}, {}, {}, {}, netcfg,
+         "cloudinit", true, true,
+         "oem download-file /mnt/bootfs/network-config", "network-config"},
+        // The first-run script is reached through the kernel command line, so
+        // a cmdline.txt that cannot be read or written loses the script even
+        // though the script itself arrived.
+        {"cmdline.txt cannot be read", {}, {}, script, {}, {},
+         "systemd", true, /*seedCmdline=*/false, "", "cmdline.txt"},
+        {"cmdline.txt cannot be written", {}, {}, script, {}, {},
+         "systemd", true, true, "oem download-file /mnt/bootfs/cmdline.txt",
+         "cmdline.txt"},
+    };
+
+    for (const auto &c : cases)
+    {
+        INFO(c.tag);
+
+        TestableFlashThread t{QUrl(QStringLiteral("https://example.com/os.img.xz")),
+                              QStringLiteral("mmcblk0")};
+        SignalLog log;
+        log.attach(&t);
+        t.setImageCustomisation(c.config, c.cmdline, c.firstrun, c.cloudinit,
+                                c.cloudinitNetwork, c.initFormat);
+
+        FakeFastbootDevice device{64u * 1024 * 1024};
+        if (c.seedConfig)
+            device.seedFile("/mnt/bootfs/config.txt", "[all]\narm_boost=1\n");
+        if (c.seedCmdline)
+            device.seedFile("/mnt/bootfs/cmdline.txt", "console=serial0,115200 rootwait\n");
+        if (*c.failPrefix)
+            device.failCommand(c.failPrefix);
+
+        fastboot::FastbootProtocol fb;
+        CHECK_FALSE(t.applyCustomisation(fb, device));
+
+        REQUIRE(log.errors.size() == 1);
+        const QString said = log.errors[0];
+        INFO("said: " << said.toStdString());
+
+        // Checked against the part Imager wrote, before the colon that
+        // introduces the device's own words. The protocol's error string
+        // happens to name the path too, so asserting on the whole message
+        // would pass even with every filename taken out of the text above --
+        // which is exactly the regression worth catching.
+        const int colon = said.indexOf(QStringLiteral(": "));
+        REQUIRE(colon > 0);
+        CHECK_THAT(said.left(colon).toStdString(), ContainsSubstring(c.mustSay));
+    }
+}
+
+TEST_CASE("A refused customisation still releases the boot partition",
+          "[fastboot][customise]")
+{
+    // The device is rebooted after this whether the customisation worked or
+    // not. Leaving its own boot partition mounted across that is how a board
+    // comes back with a filesystem it never finished writing.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.com/os.img.xz")),
+                          QStringLiteral("mmcblk0")};
+    SignalLog log;
+    log.attach(&t);
+    t.setImageCustomisation({}, {}, "#!/bin/bash\nexit 0\n", {}, {}, "systemd");
+
+    FakeFastbootDevice device{64u * 1024 * 1024};
+    device.seedFile("/mnt/bootfs/cmdline.txt", "console=serial0,115200 rootwait\n");
+    device.failCommand("oem download-file /mnt/bootfs/firstrun.sh");
+
+    fastboot::FastbootProtocol fb;
+    CHECK_FALSE(t.applyCustomisation(fb, device));
+
+    const QStringList cmds = commandsSent(device);
+    INFO(cmds.join(QStringLiteral(" | ")).toStdString());
+    CHECK_FALSE(cmds.filter(QStringLiteral("oem mount ")).isEmpty());
+    CHECK_FALSE(cmds.filter(QStringLiteral("oem umount ")).isEmpty());
+}
