@@ -192,6 +192,26 @@ TEST_CASE("Every format failure has its own message", "[format]")
     CHECK(unique.size() == seen.size());
 }
 
+TEST_CASE("A failure with no message of its own still says something", "[format]")
+{
+    // The switch deliberately has no `default:` arm so -Wswitch flags a new
+    // FormatError nobody has written a message for. The fallback after it is
+    // the other half of that promise: a value the switch does not recognise
+    // must still produce a sentence, because the alternative is an empty
+    // error dialog on a card that was not formatted.
+    //
+    // Reached the only way it can be, with a value from outside the enum --
+    // which is what a stale library or a mismatched build would hand over.
+    TestableFormatThread t("/dev/null");
+
+    const QString said =
+        t.formatErrorToString(static_cast<rpi_imager::FormatError>(9999));
+
+    INFO(said.toStdString());
+    CHECK_FALSE(said.isEmpty());
+    CHECK_THAT(said.toStdString(), ContainsSubstring("formatting"));
+}
+
 TEST_CASE("Running out of space says so", "[format]")
 {
     using rpi_imager::FormatError;
