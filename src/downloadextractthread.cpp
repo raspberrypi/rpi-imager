@@ -617,8 +617,13 @@ inline bool isMountPoint(const QString &folder)
 {
     struct stat statFolder, statParent;
     QFileInfo fi(folder);
-    QByteArray folderAscii = folder.toLatin1();
-    QByteArray parentDir   = fi.dir().path().toLatin1();
+    // encodeName() rather than toLatin1(), for the same reason as in the
+    // archive size parser: these are filesystem paths, and a mount point
+    // under a username in any script outside Latin-1 becomes question marks.
+    // stat() then fails and a partition that did mount is reported as not
+    // mounted.
+    QByteArray folderAscii = QFile::encodeName(folder);
+    QByteArray parentDir   = QFile::encodeName(fi.dir().path());
 
     if ( ::stat(folderAscii.constData(), &statFolder) == -1
          || ::stat(parentDir.constData(), &statParent) == -1)

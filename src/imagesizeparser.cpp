@@ -177,7 +177,13 @@ ArchiveInfo parseArchive(const QString &path)
 {
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
-    QByteArray fn = path.toLatin1();
+    // encodeName(), not toLatin1(): this is a filesystem path, and toLatin1()
+    // turns every character outside Latin-1 into a question mark. A perfectly
+    // good zip under a folder or a username written in any other script then
+    // could not be opened, and the caller reads that as an archive holding
+    // nothing -- which loses the "image too big for this card" refusal, and
+    // makes a multi-file archive look like a single image.
+    QByteArray fn = QFile::encodeName(path);
     ArchiveInfo info;
 
     archive_read_support_filter_all(a);

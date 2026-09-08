@@ -232,6 +232,59 @@ TEST_CASE("A zip holding one image reports one file and its size", "[imagesize]"
     CHECK(info.uncompressedSize == quint64(kRawSize));
 }
 
+TEST_CASE("A zip under a name outside Latin-1 still reports its contents",
+          "[imagesize][encoding]")
+{
+    // The path is a filesystem path, and a great many people's are not
+    // Latin-1: a username, or a folder named in the language they speak.
+    // Converting it with toLatin1() turned every such character into a
+    // question mark, so the archive could not be opened and came back as
+    // holding nothing.
+    //
+    // Nothing said so. The caller reads an empty answer as "size unknown",
+    // which loses the "image too big for this card" refusal before the write
+    // starts, and as "one file", which makes a multi-file archive look like a
+    // single image and puts only part of it on the card.
+    if (!haveTool("zip"))
+        SKIP("zip is not installed");
+
+    Scratch scratch;
+    const QString dir = scratch.path(QString::fromUtf8("\xe3\x82\xa4\xe3\x83\xa1\xe3\x83\xbc\xe3\x82\xb8"));
+    REQUIRE(QDir().mkpath(dir));
+    const QString raw = QDir(dir).filePath(QStringLiteral("image.img"));
+    const QString zipPath = QDir(dir).filePath(QStringLiteral("image.zip"));
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q image.zip image.img").arg(dir)));
+    REQUIRE(QFileInfo::exists(zipPath));
+
+    const auto info = imagesize::parseArchive(zipPath);
+    INFO("path: " << zipPath.toStdString());
+    CHECK(info.fileCount == 1);
+    CHECK(info.uncompressedSize == quint64(kRawSize));
+}
+
+TEST_CASE("A zip whose own filename is outside Latin-1 reports its contents",
+          "[imagesize][encoding]")
+{
+    // The other half: the folder may be plain and the file itself not.
+    if (!haveTool("zip"))
+        SKIP("zip is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path(QStringLiteral("image.img"));
+    const QString name = QString::fromUtf8("\xd0\xbe\xd0\xb1\xd1\x80\xd0\xb0\xd0\xb7.zip");
+    const QString zipPath = scratch.path(name);
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q '%2' image.img")
+                         .arg(QFileInfo(raw).path(), name)));
+    REQUIRE(QFileInfo::exists(zipPath));
+
+    const auto info = imagesize::parseArchive(zipPath);
+    INFO("path: " << zipPath.toStdString());
+    CHECK(info.fileCount == 1);
+    CHECK(info.uncompressedSize == quint64(kRawSize));
+}
+
 TEST_CASE("A zip holding several files reports all of them", "[imagesize]")
 {
     if (!haveTool("zip"))
