@@ -960,15 +960,9 @@ void ImageWriter::_configureAndStartFastbootFlash()
     // QML; read it directly here and forward to the flash thread.
     // Only applies when "Raspberry Pi Connect for Organisations" is
     // enabled in App Options.
-    if (_settings.value(QStringLiteral("connect_org_enabled")).toBool()) {
-        const QString orgKey =
-            _settings.value(QStringLiteral("connect_org_api_key")).toString();
-        if (!orgKey.isEmpty()) {
-            const QString orgDesc =
-                _settings.value(QStringLiteral("connect_org_description")).toString();
-            _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
-        }
-    }
+    QString orgKey, orgDesc;
+    if (_connectOrgRegistrationForWrite(orgKey, orgDesc))
+        _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
     connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
     connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
     connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
@@ -4823,6 +4817,38 @@ bool ImageWriter::exportPerformanceDataToFile(const QString &filePath)
     qDebug() << "Performance data export not available in CLI build";
     return false;
 #endif
+}
+
+// The Raspberry Pi Connect organisation credentials this write should
+// register the device under, or false when it should register none.
+//
+// Both conditions have to hold. The key alone is not enough: someone who
+// turned "Raspberry Pi Connect for Organisations" off in App Options has
+// said they do not want devices registered, and the stored key is still
+// there because turning the feature off does not erase it. Registering
+// anyway would enrol a device with an organisation the person holding the
+// card did not choose.
+//
+// The setting is read here rather than through getStringSetting, which
+// deliberately refuses to hand the key back -- it is a persisted secret the
+// UI is never allowed to see.
+bool ImageWriter::_connectOrgRegistrationForWrite(QString &apiKey,
+                                                  QString &description) const
+{
+    apiKey.clear();
+    description.clear();
+
+    if (!_settings.value(QStringLiteral("connect_org_enabled")).toBool())
+        return false;
+
+    const QString storedKey =
+        _settings.value(QStringLiteral("connect_org_api_key")).toString();
+    if (storedKey.isEmpty())
+        return false;
+
+    apiKey = storedKey;
+    description = _settings.value(QStringLiteral("connect_org_description")).toString();
+    return true;
 }
 
 void ImageWriter::_handleMemoryAllocationFailure(const char* what)

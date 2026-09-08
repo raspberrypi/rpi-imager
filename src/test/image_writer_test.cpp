@@ -9655,3 +9655,119 @@ TEST_CASE("A drive reported as a system drive is offered and flagged",
     REQUIRE(devicesOffered(model).contains(QStringLiteral("/dev/sdb")));
     CHECK(offeredAsSystemDrive(model, QStringLiteral("/dev/sdb")));
 }
+
+// ══════════════════════════════════════════════════════════════
+// Registering a written device with a Raspberry Pi Connect organisation.
+//
+// _configureAndStartFastbootFlash decides, from settings alone, whether the
+// device about to be written should be enrolled with an organisation and
+// under which credentials. The whole function starts a thread, so none of it
+// had a test; the decision is now separable.
+//
+// The interesting case is the one nobody thinks about: turning the feature
+// off in App Options does not erase the stored key.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+class OrgRegistrationWriter : public ImageWriter
+{
+public:
+    OrgRegistrationWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::_connectOrgRegistrationForWrite;
+};
+} // namespace
+
+TEST_CASE("An organisation write carries the key and the description",
+          "[imagewriter][connectorg]")
+{
+    OrgRegistrationWriter w;
+    w.clearConnectOrgRegistration();
+    w.setSetting(QStringLiteral("connect_org_enabled"), true);
+    w.setConnectOrgRegistration(QStringLiteral("rpi-org-key-123"),
+                                QStringLiteral("Bench 4"));
+    REQUIRE(w.hasConnectOrgRegistration());
+
+    QString key, desc;
+    CHECK(w._connectOrgRegistrationForWrite(key, desc));
+    CHECK(key == QStringLiteral("rpi-org-key-123"));
+    CHECK(desc == QStringLiteral("Bench 4"));
+
+    // The same key read the way the UI reads settings comes back empty: it is
+    // a persisted secret getStringSetting refuses to hand out. The write path
+    // has to go to the setting directly, and this is what says so -- routing
+    // it through getStringSetting would send an empty key and every device
+    // would fail to register.
+    CHECK(w.getStringSetting(QStringLiteral("connect_org_api_key")).isEmpty());
+
+    w.clearConnectOrgRegistration();
+    w.setSetting(QStringLiteral("connect_org_enabled"), false);
+}
+
+TEST_CASE("Turning organisation mode off stops devices being enrolled",
+          "[imagewriter][connectorg]")
+{
+    OrgRegistrationWriter w;
+    w.clearConnectOrgRegistration();
+
+    // Someone sets up organisation mode, writes some cards, then turns the
+    // feature off in App Options. The key stays in settings -- switching the
+    // checkbox off does not clear it, and clearing it is a separate button.
+    w.setSetting(QStringLiteral("connect_org_enabled"), true);
+    w.setConnectOrgRegistration(QStringLiteral("rpi-org-key-123"),
+                                QStringLiteral("Bench 4"));
+    REQUIRE(w.hasConnectOrgRegistration());
+
+    w.setSetting(QStringLiteral("connect_org_enabled"), false);
+
+    // The next card must not be enrolled with that organisation. Whoever is
+    // writing it did not ask for it, may not be the same person, and would
+    // have no way of knowing it had happened.
+    QString key, desc;
+    CHECK_FALSE(w._connectOrgRegistrationForWrite(key, desc));
+    CHECK(key.isEmpty());
+    CHECK(desc.isEmpty());
+
+    // Still stored, so turning the feature back on works without re-entering
+    // it -- the point is that it is not used meanwhile.
+    CHECK(w.hasConnectOrgRegistration());
+
+    w.clearConnectOrgRegistration();
+}
+
+TEST_CASE("Organisation mode with nothing to register under registers nothing",
+          "[imagewriter][connectorg]")
+{
+    OrgRegistrationWriter w;
+    w.clearConnectOrgRegistration();
+    w.setSetting(QStringLiteral("connect_org_enabled"), true);
+    REQUIRE_FALSE(w.hasConnectOrgRegistration());
+
+    // The feature is on but no key was ever entered, or it was cleared. The
+    // write goes ahead unregistered rather than handing the flash thread an
+    // empty key to fail on partway through.
+    QString key, desc;
+    CHECK_FALSE(w._connectOrgRegistrationForWrite(key, desc));
+    CHECK(key.isEmpty());
+
+    w.setSetting(QStringLiteral("connect_org_enabled"), false);
+}
+
+TEST_CASE("A registration with no description prefix still goes ahead",
+          "[imagewriter][connectorg]")
+{
+    OrgRegistrationWriter w;
+    w.clearConnectOrgRegistration();
+    w.setSetting(QStringLiteral("connect_org_enabled"), true);
+    w.setConnectOrgRegistration(QStringLiteral("rpi-org-key-123"), QString());
+    REQUIRE(w.hasConnectOrgRegistration());
+
+    // The prefix names the device on the Connect dashboard and is optional.
+    // An empty one is not a reason to skip registration.
+    QString key, desc;
+    CHECK(w._connectOrgRegistrationForWrite(key, desc));
+    CHECK(key == QStringLiteral("rpi-org-key-123"));
+    CHECK(desc.isEmpty());
+
+    w.clearConnectOrgRegistration();
+    w.setSetting(QStringLiteral("connect_org_enabled"), false);
+}

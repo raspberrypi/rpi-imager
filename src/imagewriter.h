@@ -745,6 +745,7 @@ protected:
     void _applyRpiPreseedCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
+    bool _connectOrgRegistrationForWrite(QString &apiKey, QString &description) const;
     void _handleMemoryAllocationFailure(const char* what);
     void _handleSetupException(const char* what);
 };
