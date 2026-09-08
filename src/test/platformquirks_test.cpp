@@ -142,49 +142,96 @@ TEST_CASE("Windows parseDeviceNumber parses PhysicalDrive paths", "[platformquir
 // Basic sanity tests (should not crash, return reasonable values)
 // ============================================================================
 
-TEST_CASE("isBeepAvailable returns without crashing", "[platformquirks][sanity]") {
-    // Should return a boolean without crashing
-    bool available = PlatformQuirks::isBeepAvailable();
-    // We can't assert the value since it depends on system configuration,
-    // but we can check it's a valid boolean (always true in C++)
-    CHECK((available == true || available == false));
-    
+// Five cases here asserted `CHECK((x == true || x == false))` on a bool.
+// That is a tautology: it cannot fail, for any implementation, on any
+// machine. What they were reaching for -- "this returns without crashing" --
+// is worth having, but the assertion said nothing, and five green ticks
+// implied five checks that were not there.
+//
+// Each now asserts something that can actually be wrong. The answers
+// themselves depend on the machine, so what is pinned is the relationships
+// between them and the promises the callers rely on. The values are covered
+// properly elsewhere in this file, against fixtures.
+
+TEST_CASE("Whether a chime can be played is settled once",
+          "[platformquirks][sanity]") {
+    // The answer is cached with std::call_once precisely so the UI does not
+    // have to keep asking. A second answer that disagreed with the first
+    // would show as the "beep when finished" option appearing or vanishing
+    // while the window is open.
+    const bool first = PlatformQuirks::isBeepAvailable();
+    CHECK(PlatformQuirks::isBeepAvailable() == first);
+    CHECK(PlatformQuirks::isBeepAvailable() == first);
+
 #ifdef Q_OS_MACOS
     // macOS NSBeep is always available
-    CHECK(available == true);
+    CHECK(first == true);
 #endif
 
 #ifdef Q_OS_WIN
     // Windows MessageBeep is always available
-    CHECK(available == true);
+    CHECK(first == true);
 #endif
 }
 
-TEST_CASE("hasElevatedPrivileges returns without crashing", "[platformquirks][sanity]") {
-    bool elevated = PlatformQuirks::hasElevatedPrivileges();
-    CHECK((elevated == true || elevated == false));
-    
-    // In a normal test environment, we're usually NOT elevated
-    // But we can't assert this since CI might run as root
+TEST_CASE("Elevation is reported from the effective user, not guessed",
+          "[platformquirks][sanity]") {
+    const bool elevated = PlatformQuirks::hasElevatedPrivileges();
     INFO("Running with elevated privileges: " << elevated);
+
+#ifdef Q_OS_UNIX
+    // The whole of the Linux implementation, and the one thing the answer
+    // has to agree with: the write path refuses without it, so an answer
+    // that drifted from the real euid would either block a run that would
+    // have worked or start one that cannot.
+    CHECK(elevated == (::geteuid() == 0));
+#else
+    CHECK((elevated == true || elevated == false));   // no euid to compare to
+#endif
 }
 
-TEST_CASE("prefersReducedMotion returns without crashing", "[platformquirks][sanity]") {
-    bool reduced = PlatformQuirks::prefersReducedMotion();
-    CHECK((reduced == true || reduced == false));
+TEST_CASE("Whether to animate is answered the same way twice",
+          "[platformquirks][sanity]") {
+    // Asked once per transition. An answer that changed under a user who had
+    // turned animations off would give them the occasional one anyway.
+    const bool reduced = PlatformQuirks::prefersReducedMotion();
     INFO("Prefers reduced motion: " << reduced);
+    CHECK(PlatformQuirks::prefersReducedMotion() == reduced);
 }
 
-TEST_CASE("hasNetworkConnectivity returns without crashing", "[platformquirks][sanity]") {
-    bool connected = PlatformQuirks::hasNetworkConnectivity();
-    CHECK((connected == true || connected == false));
-    INFO("Network connectivity: " << connected);
+TEST_CASE("Connectivity is answered from a cache, consistently",
+          "[platformquirks][sanity]") {
+    // Cached deliberately -- the sysfs walk and the nmcli spawn are too
+    // expensive for the poll that calls this. The cache is invalidated by
+    // the netlink monitor on a real change, so without one the answer must
+    // not move.
+    // Three calls, not two: the first is what populates the cache, so a
+    // cache that answered differently from the uncached path would slip past
+    // a comparison of the first two.
+    const bool first = PlatformQuirks::hasNetworkConnectivity();
+    INFO("Network connectivity: " << first);
+    const bool second = PlatformQuirks::hasNetworkConnectivity();
+    const bool third = PlatformQuirks::hasNetworkConnectivity();
+    CHECK(second == first);
+    CHECK(third == first);
 }
 
-TEST_CASE("isNetworkReady returns without crashing", "[platformquirks][sanity]") {
-    bool ready = PlatformQuirks::isNetworkReady();
-    CHECK((ready == true || ready == false));
+TEST_CASE("Being ready for the network implies being on it",
+          "[platformquirks][sanity]") {
+    // isNetworkReady() is connectivity plus a synchronised clock, and
+    // embedded mode will not fetch the OS list until it says yes. Ready
+    // without connectivity would send it into a fetch with nothing to fetch
+    // over; the implementation checks connectivity first, and this is the
+    // invariant that says so.
+    // Written as one implication rather than a conditional assertion, so the
+    // case contributes the same count whatever this machine's network is
+    // doing -- a count that moves with the weather is hard to read.
+    //
+    // It only bites on a machine with no connectivity, which this one has;
+    // the fixture-driven version in [netready] covers it either way.
+    const bool ready = PlatformQuirks::isNetworkReady();
     INFO("Network ready: " << ready);
+    CHECK((!ready || PlatformQuirks::hasNetworkConnectivity()));
 }
 
 // ============================================================================
