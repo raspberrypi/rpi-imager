@@ -772,6 +772,48 @@ TEST_CASE("A bundled board icon is found from where the chooser lives",
           == QStringLiteral("../icons/pi5.png"));
 }
 
+TEST_CASE("A board icon naming a host is dropped", "[models][hwlist][icon]")
+{
+    // The board list is filled from the same repository json as the OS list,
+    // and a repository is not necessarily trusted -- it can arrive from
+    // --repo, from the repository dialog, or from an rpi-imager:// link.
+    // file://host/share/icon.png resolves to the UNC path
+    // //host/share/icon.png, and an Image pointed at that on Windows reaches
+    // out to the host over SMB.
+    //
+    // The OS list had been sanitising icons for exactly this reason and the
+    // board list had not, so the same entry was checked in one list and
+    // waved through in the other.
+    TestableImageWriter writer;
+    writer.feedOsList(QByteArray(R"JSON({
+        "imager": {
+            "devices": [
+                {
+                    "name": "Raspberry Pi 5",
+                    "tags": ["pi5-64bit"],
+                    "capabilities": [],
+                    "icon": "file://evil.example/share/pi5.png",
+                    "description": "With an icon from somewhere else",
+                    "matching_type": "exclusive",
+                    "architecture": "arm64",
+                    "default": true
+                }
+            ]
+        },
+        "os_list": []
+    })JSON"));
+    HWListModel *model = writer.getHWList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+
+    // No icon rather than a fetch of somewhere else. The board is still
+    // listed: a row without a picture is worth having, a row that phones
+    // home is not.
+    CHECK(view->data(view->index(0, 0), roleFor(*view, "icon")).toString().isEmpty());
+    CHECK(view->data(view->index(0, 0), roleFor(*view, "name")).toString()
+          == QStringLiteral("Raspberry Pi 5"));
+}
+
 TEST_CASE("The board list arriving does not throw the view away",
           "[models][hwlist]")
 {

@@ -6,6 +6,7 @@
 #include "model_row_diff.h"
 #include "hwlistmodel.h"
 #include "imagewriter.h"
+#include "oslistparser.h"
 
 #include <QJsonObject>
 #include <QJsonDocument>
@@ -52,11 +53,17 @@ bool HWListModel::reload()
             deviceObj["tags"].toArray(),
             deviceObj["capabilities"].toArray(),
             [&]() {
-                QString iconPath = deviceObj["icon"].toString();
-                // Adjust icon path for wizard directory structure
-                if (iconPath.startsWith("icons/")) {
-                    iconPath = "../" + iconPath;
-                }
+                // Through the same sanitiser the OS list icons go through,
+                // which rebases a repository-relative "icons/..." for the
+                // wizard directory and drops the forms that would turn a
+                // board icon into a fetch of somewhere else -- a file URL
+                // naming a host being the one that matters, since its local
+                // path is a UNC path. This list is filled from the same
+                // repository json as the OS list and was not going through
+                // it, so the same entry was checked in one list and not the
+                // other.
+                QString iconPath =
+                    oslist::sanitizeIconSource(deviceObj["icon"].toString());
                 // Route remote icons via image provider to avoid HTTP/2 errors
                 if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
                     iconPath = QStringLiteral("image://icons/") + iconPath;

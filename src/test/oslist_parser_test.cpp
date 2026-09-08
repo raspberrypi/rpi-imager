@@ -271,6 +271,53 @@ TEST_CASE("A remote icon with no host is dropped", "[oslist][icon]")
     CHECK(oslist::sanitizeIconSource("https:///icon.png").isEmpty());
 }
 
+TEST_CASE("A local file icon is allowed", "[oslist][icon]")
+{
+    // What --repo takes when it is pointed at a directory on disk: the icons
+    // beside it are named as file URLs.
+    CHECK(oslist::sanitizeIconSource("file:///home/user/icons/raspios.png")
+          == "file:///home/user/icons/raspios.png");
+    // The single-slash form, which carries no host either.
+    CHECK(oslist::sanitizeIconSource("file:/home/user/icons/raspios.png")
+          == "file:/home/user/icons/raspios.png");
+}
+
+TEST_CASE("A file icon naming a host is dropped", "[oslist][icon]")
+{
+    // The one this function exists for. A repository is not necessarily
+    // trusted -- it can arrive from --repo, from the repository dialog, or
+    // from an rpi-imager:// link somebody was persuaded to accept -- and
+    // file://host/share/icon.png becomes the UNC path //host/share/icon.png.
+    // On Windows an Image pointed at that reaches out to the host over SMB,
+    // handing it an authentication attempt, for no reason the user could see
+    // or refuse.
+    //
+    // Not caught by QUrl::isLocalFile(), which tests the scheme and nothing
+    // else and answers true for all of these.
+    CHECK(oslist::sanitizeIconSource("file://server/share/icon.png").isEmpty());
+    CHECK(oslist::sanitizeIconSource("file://evil.example/x.png").isEmpty());
+    // Qt gives "localhost" no special meaning here -- toLocalFile() leaves it
+    // in the path -- so neither does this.
+    CHECK(oslist::sanitizeIconSource("file://localhost/home/user/i.png").isEmpty());
+}
+
+TEST_CASE("A bundled icon is allowed", "[oslist][icon]")
+{
+    CHECK(oslist::sanitizeIconSource("qrc:/icons/raspios.png")
+          == "qrc:/icons/raspios.png");
+    CHECK(oslist::sanitizeIconSource("qrc://icons/raspios.png")
+          == "qrc://icons/raspios.png");
+}
+
+TEST_CASE("An icon with an unrecognised scheme is passed through", "[oslist][icon]")
+{
+    // Deliberate rather than an oversight: QML may know a scheme this does
+    // not, and the alternative is dropping icons that would have worked. It
+    // is pinned so the choice is visible to whoever reads the coverage.
+    CHECK(oslist::sanitizeIconSource("image://icons/https://example.com/i.png")
+          == "image://icons/https://example.com/i.png");
+}
+
 TEST_CASE("An empty icon stays empty", "[oslist][icon]")
 {
     CHECK(oslist::sanitizeIconSource(QString()).isEmpty());

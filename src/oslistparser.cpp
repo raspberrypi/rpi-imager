@@ -251,15 +251,23 @@ QString sanitizeIconSource(const QString &raw)
                 return QString();
             }
         } else if (scheme == QLatin1String("file")) {
-            // Allow local file URLs without filesystem validation - exists()/isFile()
-            // calls can be slow on iCloud-synced directories or network volumes,
-            // and this function is called for every icon during model population.
-            // QML's Image component handles missing files gracefully.
-            if (url.isLocalFile()) {
+            // Allowed without touching the filesystem: exists()/isFile() can
+            // be slow on iCloud-synced directories and network volumes, and
+            // this runs for every icon as the model is populated. QML's Image
+            // handles a missing file gracefully.
+            //
+            // The host is what has to be checked, and isLocalFile() does not
+            // check it. Qt's isLocalFile() is a test of the scheme and
+            // nothing else, so it says yes to file://host/share/icon.png --
+            // whose toLocalFile() is //host/share/icon.png, a UNC path. On
+            // Windows, handing that to an Image is an SMB fetch to a host the
+            // repository named, which is the whole of what this function
+            // exists to prevent. Qt does not treat "localhost" as a special
+            // case either, so no exception is made for it.
+            if (url.host().isEmpty()) {
                 return raw;
             }
-            // Non-local file URL; drop
-            qWarning() << "OSListModel: dropping non-local file URL icon:" << raw;
+            qWarning() << "OSListModel: dropping file URL icon naming a host:" << raw;
             return QString();
         } else {
             // Unknown scheme; pass through (QML may support it) but log once
