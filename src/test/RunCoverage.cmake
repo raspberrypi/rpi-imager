@@ -70,9 +70,18 @@ set(_exclude
     ".*/qrc_.*"
     ".*/ui_.*"
     ".*/build[^/]*/.*"
-    # Entry point and the command-line front end.
+    # Entry point. main.cpp is argument dispatch and Qt setup with nothing
+    # to decide.
+    #
+    # cli.cpp is not excluded with it, though it was. It is the front end a
+    # script drives, and it has decisions in it -- which source it was given,
+    # whether the destination is removable, whether a customisation file can
+    # be read, whether the cache options make sense. Those were split into
+    # statics precisely so they could be tested, and they are; excluding the
+    # file meant none of that showed, and whatever is left in run() showed
+    # even less. A report that hides a surface is worth less than one whose
+    # number is lower.
     ".*/src/main\\.cpp"
-    ".*/src/cli\\.(cpp|h)"
     # Presentation helpers.
     ".*/src/clipboardhelper.*"
     ".*/src/nativefiledialog.*"
