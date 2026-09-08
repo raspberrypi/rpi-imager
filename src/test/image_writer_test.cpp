@@ -5154,6 +5154,29 @@ void checkTruncatedIsRefused(const QString &fixture)
 
 } // namespace
 
+// The family had gz, zip and zstd and not xz -- the format every Raspberry
+// Pi image actually ships in. The fixture was already here, used by the
+// case that writes a whole one; the missing member was a single line.
+//
+// What this reaches, and what it does not. Cut to half, the container will
+// not open at all, and the guard that fires is the one for a file whose
+// name claims compression and which libarchive cannot read -- the same
+// guard its three siblings meet. That is worth having and is not the bug
+// that was found here.
+//
+// The bug needed an archive that opens cleanly and then runs out: libarchive
+// words that "No progress is possible", the extractor matched the string and
+// read it as the end of the data, and half an image was written and called a
+// success. It cannot be reached from this fixture, which is 316 bytes -- a
+// megabyte of repeating pattern compresses to almost nothing, so there is no
+// tail to remove without taking the header with it. Reproducing it needs
+// incompressible data, which cli_process_test builds at runtime with xz;
+// that case fails without the fix and this one does not.
+TEST_CASE("A truncated xz is refused", "[imagewriter][extract]")
+{
+    checkTruncatedIsRefused(QStringLiteral("pattern-1MiB.img.xz"));
+}
+
 TEST_CASE("A truncated gzip is refused", "[imagewriter][extract]")
 {
     checkTruncatedIsRefused(QStringLiteral("pattern-1MiB.img.gz"));
