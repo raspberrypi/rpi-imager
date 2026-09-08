@@ -483,6 +483,7 @@ Item {
                 // Step list
                 Repeater {
                     id: stepRepeater
+                    objectName: "sidebarStepRepeater"
                     model: root.stepNames
 
                     Rectangle {
@@ -514,6 +515,7 @@ Item {
                         // Header band with active background/border
                         Rectangle {
                             id: headerRect
+                            objectName: "sidebarStepHeader"
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.top: parent.top

@@ -930,12 +930,16 @@ TestCase {
         return null
     }
 
+    // The choices go in before the steps are marked, not after. Naming a
+    // board invalidates every step after it -- an OS and a card chosen for a
+    // different one must not stay reachable -- so marking first and choosing
+    // afterwards silently undoes the marking.
     function goToStep(step) {
-        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
-            wiz.markStepPermissible(i)
         wiz.selectedDeviceName = "Raspberry Pi 5"
         wiz.selectedOsName = "Raspberry Pi OS (64-bit)"
         wiz.selectedStorageName = "Generic Mass-Storage 32 GB"
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
         wiz.jumpToStep(step)
         compare(wiz.currentStep, step, "the wizard is on the step")
         const stack = findStepStack(wiz)
@@ -1114,5 +1118,122 @@ TestCase {
         verify(findChild(stack.currentItem, "languageCombo") !== null,
                "and it is the language step, not the one after it")
         compare(stack.depth, 1, "with nothing behind it")
+    }
+
+
+    // -- Clicking a step in the sidebar ------------------------------------
+    //
+    // The sidebar is the only way back to a step already visited, and its
+    // click handler was uncovered. Three things it refuses matter.
+    //
+    // Not while a write is running: the writing screen is the only place
+    // that shows how far a card has got, and the steps behind it can change
+    // the destination. Navigating away mid-write leaves the user watching
+    // nothing and able to alter what the write is aiming at.
+    //
+    // Not forward to a step that has not been reached: the sidebar shows
+    // every step, including the ones ahead, and letting a click skip
+    // straight to writing would start from a card and an image that were
+    // never chosen.
+    //
+    // Backwards, though, always: a user revisiting an earlier choice must
+    // not have to walk forward through the ones after it.
+    //
+    // Both refusals are implemented twice -- in the row's isClickable, which
+    // disables the mouse area, and again in the handler -- so removing
+    // either layer alone changes nothing. Removing both layers of each does
+    // fail the case it belongs to, which is what these pin. Emptying the
+    // handler fails the accepting case on its own.
+
+    // The container is created without a size, which is enough for the
+    // property-level cases above but not for clicking: at zero by zero the
+    // sidebar is laid out off the top of the window and no mouse event can
+    // reach it. The first draft of the cases below passed for exactly that
+    // reason -- the clicks landed nowhere, so "nothing happened" held
+    // whatever the handler did.
+    function giveTheWizardASize() {
+        wiz.width = 900
+        wiz.height = 700
+        waitForRendering(testCase)
+    }
+
+    function sidebar() {
+        const r = findChild(wiz, "sidebarStepRepeater")
+        verify(r, "found the sidebar")
+        return r
+    }
+
+    // The clickable part of a sidebar row. The delegate is taller than it --
+    // it also carries the customisation substeps -- so a click at the
+    // delegate's centre can land between them and reach nothing.
+    function sidebarRow(index) {
+        const row = sidebar().itemAt(index)
+        verify(row, "the sidebar row is instantiated: " + index)
+        const header = findChild(row, "sidebarStepHeader")
+        verify(header, "the row has a clickable header")
+        return header
+    }
+
+    // The sidebar index of the writing step, which differs between the
+    // online and offline layouts because the board step is not listed
+    // offline.
+    function writingRowIndex() {
+        const rows = sidebar().count
+        for (let i = 0; i < rows; i++) {
+            if (wiz.getWizardStepFromSidebarIndex(i) === wiz.stepWriting)
+                return i
+        }
+        return -1
+    }
+
+    function test_clicking_a_step_already_reached_goes_back_to_it() {
+        giveTheWizardASize()
+        goToStep(wiz.stepWriting)
+        waitForRendering(testCase)
+
+        // Row 0 is the first step in whichever layout is showing.
+        const target = wiz.getWizardStepFromSidebarIndex(0)
+        verify(wiz.isStepPermissible(target), "the step has been reached")
+
+        mouseClick(sidebarRow(0))
+        waitForRendering(testCase)
+
+        compare(wiz.currentStep, target,
+                "the sidebar took the user back to the step they clicked")
+    }
+
+    function test_clicking_the_sidebar_during_a_write_goes_nowhere() {
+        giveTheWizardASize()
+        goToStep(wiz.stepWriting)
+        ImageWriterSingleton.onFinalizing()
+        tryVerify(function () { return wiz.isWriting }, 3000,
+                  "the container sees a write running")
+        waitForRendering(testCase)
+
+        mouseClick(sidebarRow(0))
+        waitForRendering(testCase)
+
+        compare(wiz.currentStep, wiz.stepWriting,
+                "the user is still watching the write")
+
+        ImageWriterSingleton.onCancelled()
+        tryVerify(function () { return !wiz.isWriting }, 3000)
+    }
+
+    function test_clicking_a_step_not_yet_reached_goes_nowhere() {
+        giveTheWizardASize()
+        // Only the first step is permissible, as it is on a fresh run.
+        wiz.permissibleStepsBitmap = 1
+        wiz.jumpToStep(wiz.getWizardStepFromSidebarIndex(0))
+        const startedOn = wiz.currentStep
+        waitForRendering(testCase)
+
+        const writingRow = writingRowIndex()
+        verify(writingRow > 0, "the writing step is in the sidebar")
+        mouseClick(sidebarRow(writingRow))
+        waitForRendering(testCase)
+
+        compare(wiz.currentStep, startedOn,
+                "clicking ahead did not skip the choices in between")
     }
 }
