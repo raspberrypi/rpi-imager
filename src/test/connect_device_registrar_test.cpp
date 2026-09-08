@@ -487,6 +487,74 @@ TEST_CASE("A refusal with nothing to say still names the code and the body",
     CHECK(result.errorMessage.contains(QStringLiteral("something unrecognised")));
 }
 
+// ── The device answers, but not with a signature ──────────────────────
+//
+// Between reading the board's public key and posting it, the registrar has
+// the board sign a challenge -- that signature is what proves the key came
+// from this device and not from whoever is running the provisioning. Two
+// ways it does not arrive: the board refuses outright, or it answers with
+// something that is not a signature.
+//
+// Both have to stop the enrolment. A device the operator believes is
+// enrolled and is not will never appear in Connect, and nothing about the
+// provisioning run will have suggested a problem.
+
+TEST_CASE("A device that will not sign is not registered anyway", "[connect]")
+{
+    FakeApiServer server(201, R"({"id":"should-not-be-reached"})");
+    REQUIRE_SERVER(server);
+
+    MockUsbTransport mock;
+    mock.setOpen(true);
+    mock.queueBulkReadResponse(okResponse(kDevicePublicKeyPem));
+    // Firmware that has the key but cannot sign with it -- a board that was
+    // never provisioned for secure boot answers this way.
+    mock.queueBulkReadResponse(failResponse("no signing key programmed"));
+
+    fastboot::FastbootProtocol fb;
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.registerDevice(fb, mock, QStringLiteral("Raspberry Pi 5"),
+                                                 QStringLiteral("10000000abcdef01"));
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.deviceId.isEmpty());
+    INFO(result.errorMessage.toStdString());
+    // Says it was the signing, and passes on what the board said -- the two
+    // together are what distinguishes unprovisioned firmware from a board
+    // that is not answering at all.
+    CHECK(result.errorMessage.contains(QStringLiteral("sign"), Qt::CaseInsensitive));
+    CHECK(result.errorMessage.contains(QStringLiteral("no signing key programmed")));
+}
+
+TEST_CASE("A signing answer with no signature in it is not registered", "[connect]")
+{
+    FakeApiServer server(201, R"({"id":"should-not-be-reached"})");
+    REQUIRE_SERVER(server);
+
+    MockUsbTransport mock;
+    mock.setOpen(true);
+    mock.queueBulkReadResponse(okResponse(kDevicePublicKeyPem));
+    // OKAY, so the command succeeded, but the payload is not a signature.
+    // Posting it would enrol the board against something the API cannot
+    // verify, and the failure would surface later as a device that never
+    // connects.
+    mock.queueBulkReadResponse(okResponse(std::string(512, 'a')));
+
+    fastboot::FastbootProtocol fb;
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.registerDevice(fb, mock, QStringLiteral("Raspberry Pi 5"),
+                                                 QStringLiteral("10000000abcdef02"));
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.deviceId.isEmpty());
+    INFO(result.errorMessage.toStdString());
+    CHECK(result.errorMessage.contains(QStringLiteral("signature")));
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
