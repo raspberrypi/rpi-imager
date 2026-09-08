@@ -9771,3 +9771,89 @@ TEST_CASE("A registration with no description prefix still goes ahead",
     w.clearConnectOrgRegistration();
     w.setSetting(QStringLiteral("connect_org_enabled"), false);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Restarting a write that has stalled.
+//
+// WriteProgressWatchdog watches for a write making no progress. Async I/O on
+// some card readers and USB bridges stops returning completions altogether;
+// the watchdog notices, and restartWrite() abandons the attempt and starts
+// again with synchronous I/O, which those devices do handle.
+//
+// It is a protected slot reached only from a watchdog signal, so it had no
+// test. Two things have to happen or the recovery makes things worse: the
+// retry has to actually be in sync mode, and the user has to be told, because
+// from the outside a restart looks like the progress bar jumping back to zero
+// for no reason.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+class RestartableWriter : public ImageWriter
+{
+public:
+    RestartableWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::restartWrite;
+    using ImageWriter::_forceSyncMode;
+};
+} // namespace
+
+TEST_CASE("A stalled write is restarted in synchronous mode",
+          "[imagewriter][restart]")
+{
+    RestartableWriter w;
+    REQUIRE_FALSE(w._forceSyncMode);
+
+    QStringList warnings;
+    QObject::connect(&w, &ImageWriter::operationWarning,
+                     [&warnings](QVariant m) { warnings << m.toString(); });
+    UiLog log(&w);
+
+    const QString reason =
+        QStringLiteral("The storage device stopped responding to asynchronous writes.");
+    w.restartWrite(reason);
+
+    // Without this the retry uses the same async path that just stalled, and
+    // stalls again -- a loop the user cannot get out of except by cancelling.
+    CHECK(w._forceSyncMode);
+
+    // And they are told, in the watchdog's own words rather than a generic
+    // "restarting": a write that silently begins again looks like a fault.
+    REQUIRE(warnings.size() == 1);
+    CHECK(warnings.first() == reason);
+}
+
+TEST_CASE("The restart goes on to start a write", "[imagewriter][restart]")
+{
+    // With no thread running there is nothing to wait for, so the new write
+    // starts immediately. Nothing is selected here, so what comes back is the
+    // ordinary refusal -- which is the evidence that startWrite() was reached
+    // rather than the restart quietly ending after setting a flag.
+    RestartableWriter w;
+    UiLog log(&w);
+
+    w.restartWrite(QStringLiteral("stalled"));
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("Cannot start write"));
+}
+
+TEST_CASE("Sync mode stays on for the rest of the session",
+          "[imagewriter][restart]")
+{
+    // _forceSyncMode is never cleared: once a device has shown it cannot keep
+    // up with async I/O, every later write in the same session uses sync too,
+    // including a write of a different image to a different card.
+    //
+    // Recording the behaviour rather than judging it. The cost is throughput
+    // on a device that was fine; the alternative is stalling again on the one
+    // that was not, and the flag is gone the next time Imager is launched.
+    RestartableWriter w;
+    UiLog log(&w);
+
+    w.restartWrite(QStringLiteral("first stall"));
+    REQUIRE(w._forceSyncMode);
+
+    w.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    CHECK(w._forceSyncMode);
+}
