@@ -443,6 +443,7 @@ TEST_CASE("Multiple start/stop cycles work correctly", "[platformquirks][network
 #include "faulty_block_device.h"
 
 #include <QDir>
+#include <QFileInfo>
 #include <QProcess>
 #include <QUuid>
 
@@ -1347,5 +1348,174 @@ TEST_CASE("No GTK settings file is not a request for reduced motion",
         SKIP("this desktop reports reduced motion by another route");
 
     CHECK_FALSE(PlatformQuirks::prefersReducedMotion());
+}
+#endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+// ══════════════════════════════════════════════════════════════
+// The rpi-imager:// handler, after the first time
+//
+// The desktop entry is what makes a rpi-imager:// link open Imager with the
+// link as an argument. Writing it fresh is covered above. What was not is
+// everything after that: an entry left by an older install at a path the
+// executable has moved away from, and a re-registration that cannot be
+// written at all.
+//
+// Both matter to somebody following a link. A stale entry names an
+// executable that is no longer there, so the link opens nothing; and a
+// failed rewrite that took the working entry with it turns a link that works
+// into one that does not.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// XDG_DATA_HOME and XDG_CONFIG_HOME pointed at temporary directories, put
+// back on the way out, so nothing here touches the real desktop database.
+class XdgRedirect
+{
+public:
+    XdgRedirect(const QString& data, const QString& config)
+        : _data(qgetenv("XDG_DATA_HOME")), _config(qgetenv("XDG_CONFIG_HOME"))
+    {
+        qputenv("XDG_DATA_HOME", data.toUtf8());
+        qputenv("XDG_CONFIG_HOME", config.toUtf8());
+    }
+    ~XdgRedirect()
+    {
+        if (_data.isNull()) qunsetenv("XDG_DATA_HOME"); else qputenv("XDG_DATA_HOME", _data);
+        if (_config.isNull()) qunsetenv("XDG_CONFIG_HOME"); else qputenv("XDG_CONFIG_HOME", _config);
+    }
+
+    XdgRedirect(const XdgRedirect&) = delete;
+    XdgRedirect& operator=(const XdgRedirect&) = delete;
+
+private:
+    QByteArray _data, _config;
+};
+
+QString uriHandlerPath(const QString& dataHome)
+{
+    return dataHome
+        + QStringLiteral("/applications/com.raspberrypi.rpi-imager-uri-handler.desktop");
+}
+
+QByteArray readAll(const QString& path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    return f.readAll();
+}
+
+} // namespace
+
+TEST_CASE("A handler left by an older install is replaced", "[platformquirks][uri]")
+{
+    // What an upgrade or a moved AppImage leaves behind: an entry whose Exec
+    // names a path this executable is no longer at. Following a link then
+    // launches nothing at all, and nothing about the failure points here.
+    QTemporaryDir dataHome, configHome;
+    REQUIRE(dataHome.isValid());
+    REQUIRE(configHome.isValid());
+    XdgRedirect redirect(dataHome.path(), configHome.path());
+
+    const QString path = uriHandlerPath(dataHome.path());
+    REQUIRE(QDir().mkpath(QFileInfo(path).path()));
+    {
+        QFile stale(path);
+        REQUIRE(stale.open(QIODevice::WriteOnly));
+        stale.write(
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=Raspberry Pi Imager\n"
+            "Exec=/opt/some-old-location/rpi-imager.AppImage %u\n"
+            "MimeType=x-scheme-handler/rpi-imager;\n");
+    }
+
+    CHECK(PlatformQuirks::registerUriScheme() == true);
+
+    const QString written = QString::fromUtf8(readAll(path));
+    INFO(written.toStdString());
+    CHECK_FALSE(written.contains(QStringLiteral("/opt/some-old-location/")));
+    // Naming this executable, and still passing the URL on.
+    CHECK(written.contains(QString::fromUtf8(PlatformQuirks::getBundlePath())));
+    CHECK(written.contains(QStringLiteral("%u")));
+    CHECK(written.contains(QStringLiteral("MimeType=x-scheme-handler/rpi-imager;")));
+}
+
+TEST_CASE("A registration that cannot be written keeps the entry that worked",
+          "[platformquirks][uri]")
+{
+    // The rewrite fails -- an immutable home, a full disk, a directory the
+    // user no longer owns. Losing the entry already there would turn a link
+    // that works into one that does nothing, which is worse than leaving the
+    // old one in place.
+    if (::geteuid() == 0)
+        SKIP("root ignores the directory permissions this relies on");
+
+    QTemporaryDir dataHome, configHome;
+    REQUIRE(dataHome.isValid());
+    REQUIRE(configHome.isValid());
+    XdgRedirect redirect(dataHome.path(), configHome.path());
+
+    // A working entry, written by the code itself.
+    REQUIRE(PlatformQuirks::registerUriScheme() == true);
+    const QString path = uriHandlerPath(dataHome.path());
+    const QByteArray working = readAll(path);
+    REQUIRE_FALSE(working.isEmpty());
+
+    // Now make it stale *and* the directory unwritable, so the rewrite is
+    // attempted and cannot succeed.
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("[Desktop Entry]\nExec=/gone %u\n");
+    }
+    const QString appsDir = QFileInfo(path).path();
+    struct Restore {
+        QString dir;
+        ~Restore() { QFile::setPermissions(dir, QFileDevice::ReadOwner
+                                                | QFileDevice::WriteOwner
+                                                | QFileDevice::ExeOwner); }
+    } restore{appsDir};
+    REQUIRE(QFile::setPermissions(appsDir,
+                                  QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+
+    CHECK(PlatformQuirks::registerUriScheme() == false);
+
+    // The file that was there is still there and still whole -- not truncated
+    // by a write that could not finish.
+    const QByteArray after = readAll(path);
+    CHECK(after == QByteArray("[Desktop Entry]\nExec=/gone %u\n"));
+}
+
+TEST_CASE("A successful registration leaves no half-written files behind",
+          "[platformquirks][uri]")
+{
+    // The write goes through QSaveFile, which works via a temporary beside
+    // the target. One left behind would be picked up by a desktop database
+    // scan as another handler for the same scheme.
+    QTemporaryDir dataHome, configHome;
+    REQUIRE(dataHome.isValid());
+    REQUIRE(configHome.isValid());
+    XdgRedirect redirect(dataHome.path(), configHome.path());
+
+    REQUIRE(PlatformQuirks::registerUriScheme() == true);
+
+    const QString entry =
+        QStringLiteral("com.raspberrypi.rpi-imager-uri-handler.desktop");
+    const QString appsDir = QFileInfo(uriHandlerPath(dataHome.path())).path();
+    const QStringList left = QDir(appsDir).entryList(QDir::Files | QDir::Hidden);
+    INFO(left.join(QStringLiteral(", ")).toStdString());
+
+    CHECK(left.contains(entry));
+    for (const QString& name : left) {
+        INFO("file: " << name.toStdString());
+        // update-desktop-database writes mimeinfo.cache here and is welcome
+        // to; what must not survive is a QSaveFile temporary, which is the
+        // target name with a suffix, or a hidden file beside it.
+        CHECK_FALSE((name.startsWith(entry) && name != entry));
+        CHECK_FALSE(name.startsWith(QLatin1Char('.')));
+    }
 }
 #endif // Q_OS_LINUX
