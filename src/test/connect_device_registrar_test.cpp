@@ -415,6 +415,78 @@ TEST_CASE("Registrar reports a closed transport", "[connect]")
     CHECK_FALSE(result.ok);
 }
 
+// ── What the operator is told when the API says no ────────────────────
+//
+// These run during a fleet provisioning, often unattended, and the message
+// is the whole of the diagnosis. The cases above check that a rejection is
+// not mistaken for success, which is the safety property; these check that
+// the rejection says something the operator can act on, which is what
+// decides whether the next board works.
+
+TEST_CASE("A rejected organisation key says which key and where to change it",
+          "[connect]")
+{
+    // 401 is the one an operator will actually hit: a key that was revoked,
+    // or pasted with a character missing. Dumping the API's own body here
+    // would tell them "unauthorized" and nothing about which of the several
+    // credentials in this application it meant.
+    FakeApiServer server(401, R"({"error":"unauthorized"})");
+    REQUIRE_SERVER(server);
+
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.requestAuthKey(QStringLiteral("bad key"), 1);
+
+    CHECK_FALSE(result.ok);
+    INFO(result.errorMessage.toStdString());
+    CHECK(result.errorMessage.contains(QStringLiteral("API key")));
+    // Named so it can be found: it is in App Options, not on the screen the
+    // provisioning was started from.
+    CHECK(result.errorMessage.contains(QStringLiteral("App Options")));
+}
+
+TEST_CASE("A validation failure is passed on in the API's own words", "[connect]")
+{
+    // 422 means the request was understood and refused for a reason the
+    // server can state exactly -- "Description can't be blank" and the like.
+    // Wrapping that in a status code would bury the one sentence worth
+    // reading.
+    FakeApiServer server(422,
+        R"({"message":"Validation failed: Description can't be blank"})");
+    REQUIRE_SERVER(server);
+
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.requestAuthKey(QString(), 1);
+
+    CHECK_FALSE(result.ok);
+    INFO(result.errorMessage.toStdString());
+    CHECK(result.errorMessage ==
+          QStringLiteral("Validation failed: Description can't be blank"));
+}
+
+TEST_CASE("A refusal with nothing to say still names the code and the body",
+          "[connect]")
+{
+    // The fallback. An unrecognised refusal is not a reason to say nothing:
+    // the status and whatever came back are what someone reading a
+    // provisioning log has to go on.
+    FakeApiServer server(422, R"({"errors":["something unrecognised"]})");
+    REQUIRE_SERVER(server);
+
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.requestAuthKey(QStringLiteral("odd"), 1);
+
+    CHECK_FALSE(result.ok);
+    INFO(result.errorMessage.toStdString());
+    CHECK(result.errorMessage.contains(QStringLiteral("422")));
+    CHECK(result.errorMessage.contains(QStringLiteral("something unrecognised")));
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
