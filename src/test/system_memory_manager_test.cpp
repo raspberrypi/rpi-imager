@@ -655,3 +655,83 @@ TEST_CASE("The machine's own configuration is one of the three",
     CHECK(measured.syncIntervalMs == expected.syncIntervalMs);
     CHECK(measured.memoryTier == expected.memoryTier);
 }
+
+// ── How often the card is synced, per machine ─────────────────────────
+//
+// The sync interval decides how much written data is allowed to sit in the
+// page cache before it is forced to the card. It is chosen from how much RAM
+// the machine has, and getting the tier wrong is the kind of failure nobody
+// diagnoses: too generous on a 512 MB Zero and the OOM killer takes the
+// write partway through, too aggressive on a desktop and a 4 GB image crawls.
+//
+// The case above checks the configuration for *this* machine, which only
+// ever exercises one tier. syncConfigurationFor() takes the figure, so all
+// three can be asked for directly. The thresholds are written out here
+// rather than read from the header on purpose: they are private, and a test
+// that restated them independently is one that fails when somebody moves a
+// boundary, which is a decision worth stopping on.
+
+TEST_CASE("Each memory tier gets its own sync interval", "[memory]")
+{
+    using Cfg = SystemMemoryManager::SyncConfiguration;
+
+    const Cfg zero    = SystemMemoryManager::syncConfigurationFor(512);    // Pi Zero
+    const Cfg pi4     = SystemMemoryManager::syncConfigurationFor(4096);   // 4 GB Pi 4
+    const Cfg desktop = SystemMemoryManager::syncConfigurationFor(16384);  // 16 GB desktop
+
+    INFO("low: " << zero.memoryTier.toStdString()
+         << " / medium: " << pi4.memoryTier.toStdString()
+         << " / high: " << desktop.memoryTier.toStdString());
+
+    // A small machine syncs more often than the default, a large one less.
+    CHECK(zero.syncIntervalMs < 5000);
+    CHECK(pi4.syncIntervalMs == 5000);
+    CHECK(desktop.syncIntervalMs > 5000);
+
+    // And the tier is named, because it is the one line in a support log
+    // that says which of these three a user's machine landed in.
+    CHECK(zero.memoryTier.contains(QStringLiteral("Low"), Qt::CaseInsensitive));
+    CHECK(pi4.memoryTier.contains(QStringLiteral("Medium"), Qt::CaseInsensitive));
+    CHECK(desktop.memoryTier.contains(QStringLiteral("High"), Qt::CaseInsensitive));
+    CHECK(zero.memoryTier.contains(QStringLiteral("512")));
+}
+
+TEST_CASE("More memory never means syncing sooner", "[memory]")
+{
+    // Monotonic across the whole range, boundaries included. A tier whose
+    // formula crossed under the one below it would make a bigger machine
+    // behave like a smaller one, which is the sort of thing that only shows
+    // up as "the write is slower on the better computer".
+    const qint64 sizes[] = {64, 256, 512, 1024, 2047, 2048, 4096,
+                            8191, 8192, 16384, 65536};
+
+    qint64 previous = 0;
+    for (const qint64 mb : sizes)
+    {
+        const auto cfg = SystemMemoryManager::syncConfigurationFor(mb);
+        INFO(mb << "MB -> " << (cfg.syncIntervalBytes / (1024 * 1024)) << "MB");
+
+        CHECK(cfg.syncIntervalBytes >= previous);
+        // Always inside the clamps, whatever the formula produced.
+        CHECK(cfg.syncIntervalBytes >= 16LL * 1024 * 1024);
+        CHECK(cfg.syncIntervalBytes <= 256LL * 1024 * 1024);
+        previous = cfg.syncIntervalBytes;
+    }
+}
+
+TEST_CASE("A machine reporting no memory still gets a usable interval", "[memory]")
+{
+    // Detection can fail, and callers pass on what they were given. Zero or
+    // a negative figure must not produce a zero interval -- that would mean
+    // syncing after every block, which on a card is slow enough to look like
+    // a hang.
+    for (const qint64 mb : {0LL, -1LL})
+    {
+        const auto cfg = SystemMemoryManager::syncConfigurationFor(mb);
+        INFO(mb << "MB");
+        CHECK(cfg.syncIntervalBytes >= 16LL * 1024 * 1024);
+        CHECK(cfg.syncIntervalMs > 0);
+        CHECK_FALSE(cfg.memoryTier.isEmpty());
+    }
+}
+
