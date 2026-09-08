@@ -255,6 +255,7 @@ WizardStepBase {
         // Offline banner (shown when OS list fetch failed)
         Rectangle {
             id: offlineBanner
+            objectName: "osListOfflineBanner"
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? bannerContent.implicitHeight + Style.spacingMedium * 2 : 0
             visible: root.osListUnavailable
@@ -289,6 +290,7 @@ WizardStepBase {
                 
                 ImButton {
                     id: retryButton
+                    objectName: "osListRetryButton"
                     text: qsTr("Retry")
                     accessibleDescription: qsTr("Retry downloading the OS list")
                     onClicked: {

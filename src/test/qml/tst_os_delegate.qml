@@ -378,4 +378,170 @@ TestCase {
         tryVerify(function() { return advanced.count === 1 }, 3000,
                   "and advanced to the next step")
     }
+
+    // ── Keeping your place ────────────────────────────────────────────
+    //
+    // The OS list re-evaluates every delegate when an image finishes caching,
+    // and the handler saves and restores the scroll position around that.
+    // Somebody scrolled half way down looking for an entry should not lose
+    // their place while they are reading, for a reason nothing on screen
+    // explains.
+    //
+    // Worth saying what this row does not do. Removing the save and restore
+    // leaves it passing: none of these entries is cached, so no delegate
+    // changes height when the version bumps and the view does not move
+    // either way. Reproducing the move would need real cache state, which
+    // the harness has no way to set. So this documents the property and
+    // exercises the handler; it would not catch the handler being dropped.
+
+    function longRepository(count) {
+        const entries = []
+        for (let i = 0; i < count; i++) {
+            entries.push({
+                "name": "Entry " + (i < 10 ? "0" + i : i),
+                "description": "One of many, so the list is longer than the window",
+                "url": "https://example.invalid/entry" + i + ".img.xz",
+                "icon": "",
+                "release_date": "2026-01-01",
+                "extract_size": 1048576,
+                "image_download_size": 524288,
+                "extract_sha256": "aa" + i
+            })
+        }
+        return { "os_list": entries }
+    }
+
+    function test_the_list_keeps_its_place_when_an_image_finishes_caching() {
+        const url = TestFiles.write("os_delegate_long.json",
+                                    JSON.stringify(longRepository(40)))
+        ImageWriterSingleton.refreshOsListFrom(url)
+        tryVerify(function () {
+            return String(ImageWriterSingleton.getFilteredOSlist())
+                       .indexOf("Entry 39") >= 0
+        }, 10000, "the long repository was fetched")
+
+        const l = osList()
+        tryVerify(function () { return l.contentHeight > l.height }, 5000,
+                  "the list is longer than the window: " + l.contentHeight
+                  + " into " + l.height)
+
+        // Somewhere in the middle, as a user reading down the list would be.
+        l.contentY = Math.floor((l.contentHeight - l.height) / 2)
+        waitForRendering(step)
+        const readingAt = l.contentY
+        verify(readingAt > 0, "the view is part-way down")
+
+        // What the writer emits when a download finishes and the entry's
+        // "cached" badge changes.
+        ImageWriterSingleton.cacheStatusChanged()
+
+        tryVerify(function () { return l.contentY === readingAt }, 3000,
+                  "the view stayed where the user left it; it is at "
+                  + l.contentY + " rather than " + readingAt)
+
+        restoreRepository()
+    }
+
+    // ── Coming back out of a category ─────────────────────────────────
+    //
+    // Descending into a category replaces the whole list, so the way back is
+    // the only way back. There is a "Go back" row for the pointer; Left is
+    // the keyboard's, and it is the one that is easy to leave off.
+
+    function test_left_comes_back_out_of_a_category() {
+        const url = TestFiles.write("os_delegate_category.json",
+                                    JSON.stringify({ "os_list": [{
+                                        "name": "Test category",
+                                        "description": "Has entries underneath it",
+                                        "icon": "",
+                                        "subitems": [{
+                                            "name": "Inside the category",
+                                            "description": "Only reachable by descending",
+                                            "url": "https://example.invalid/inside.img.xz",
+                                            "icon": "",
+                                            "release_date": "2026-01-01",
+                                            "extract_size": 1048576,
+                                            "image_download_size": 524288,
+                                            "extract_sha256": "cc77"
+                                        }]
+                                    }]}))
+        ImageWriterSingleton.refreshOsListFrom(url)
+        tryVerify(function () {
+            return String(ImageWriterSingleton.getFilteredOSlist())
+                       .indexOf("Test category") >= 0
+        }, 10000, "the repository with a category was fetched")
+
+        const swipe = findChild(step, "osCategorySwipeView")
+        verify(swipe, "found the category view")
+        compare(swipe.currentIndex, 0, "starting on the top-level list")
+
+        const l = osList()
+        mouseClick(rowNamed(l, "Test category"))
+
+        tryVerify(function () { return swipe.currentIndex === 1 }, 3000,
+                  "clicking a category descends into it")
+
+        const sub = findChild(step, "osSublistView")
+        verify(sub, "found the sublist")
+        sub.forceActiveFocus()
+        waitForRendering(step)
+        keyClick(Qt.Key_Left)
+
+        tryVerify(function () { return swipe.currentIndex === 0 }, 3000,
+                  "Left came back out to the list underneath")
+
+        restoreRepository()
+    }
+
+    // ── When the OS list did not load either ──────────────────────────
+    //
+    // The OS step has its own offline banner and its own Retry, on the screen
+    // a user is dropped onto when the list never arrived. Unlike the device
+    // screen's, this one is shown on the state of the list alone, so it can
+    // be reached whatever else has run.
+
+    function test_the_os_list_offline_banner_has_a_retry_that_works() {
+        const name = "os_delegate_offline.json"
+        const url = TestFiles.write(name, JSON.stringify({}))
+        verify(url !== "", "wrote a repository holding nothing")
+        ImageWriterSingleton.refreshOsListFrom(url)
+        tryVerify(function () {
+            return ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "the list is unavailable, as it is with no connection")
+
+        const banner = findChild(step, "osListOfflineBanner")
+        verify(banner, "found the offline banner")
+        tryVerify(function () { return banner.visible }, 3000,
+                  "the banner explains why the list is empty")
+
+        const retry = findChild(step, "osListRetryButton")
+        verify(retry, "and offers a way to try again")
+        tryVerify(function () { return retry.visible && retry.height > 0 },
+                  3000, "which is on screen to be pressed")
+
+        // The banner appearing pushes the rest of the step down, and the
+        // layout is still settling for a frame or two afterwards. A click
+        // aimed at where the button was lands on nothing and the case reports
+        // that Retry did not work, which is not what went wrong.
+        waitForRendering(step)
+        const settled = retry.mapToItem(testCase, retry.width / 2, retry.height / 2)
+
+        // The connection comes back: the same URL, answering properly.
+        verify(TestFiles.write(name, JSON.stringify(testCase.repoPayload)) !== "",
+               "rewrote the repository with entries in it")
+
+        mouseClick(testCase, settled.x, settled.y)
+
+        tryVerify(function () {
+            return !ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "pressing Retry fetched the list again")
+        tryVerify(function () { return !banner.visible }, 5000,
+                  "and the banner went away with it")
+
+        const l = osList()
+        tryVerify(function () { return hasRow(l, "Test OS Alpha") }, 5000,
+                  "with the entries in the list to choose from")
+
+        restoreRepository()
+    }
 }
