@@ -1173,6 +1173,45 @@ TEST_CASE("DownloadThread reports a hash mismatch over HTTP", "[download][http]"
     CHECK_FALSE(outcome.succeeded);
 }
 
+TEST_CASE("A corrupt download is blamed on the network, not on the user",
+          "[download][http][hash]")
+{
+    // The third of the three hash-mismatch messages, and the only one that
+    // needs a server to reach. A download that arrives damaged is worth
+    // retrying, and the message says so. The other two -- a corrupt cache and
+    // a corrupt file the user chose themselves -- send them somewhere else
+    // entirely, so which one arrives matters more than that one does.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(512 * 1024, 98);
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("served.img")), payload));
+
+    LocalHttpServer server(scratch.filePath(QStringLiteral(".")));
+    REQUIRE_HTTP_SERVER(server);
+
+    const QString dest = scratch.filePath(QStringLiteral("corrupt-download-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(payload.size() + (1024 * 1024), '\0')));
+
+    const QByteArray wrong =
+        QCryptographicHash::hash(QByteArray("a different image"), QCryptographicHash::Sha256)
+            .toHex();
+    DownloadThread dt(server.urlFor(QStringLiteral("served.img")), dest.toUtf8(), wrong);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    REQUIRE(outcome.finished);
+    REQUIRE_FALSE(outcome.succeeded);
+
+    const std::string message = outcome.errorMessage.toStdString();
+    INFO("message: " << message);
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("Download appears to be corrupt"));
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("network"));
+    // Both hashes, so somebody reporting it has something to quote.
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring(std::string(wrong.constData())));
+    // And not either of the other two, which would send them to look at a
+    // cache file or at a file of their own that is not involved.
+    CHECK_THAT(message, !Catch::Matchers::ContainsSubstring("Cached file"));
+    CHECK_THAT(message, !Catch::Matchers::ContainsSubstring("Local file"));
+}
+
 TEST_CASE("DownloadThread caches an image fetched over HTTP", "[download][http][cache]")
 {
     ScratchDir scratch;

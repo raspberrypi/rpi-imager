@@ -16,6 +16,7 @@
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "downloadextractthread.h"
 #include "localfileextractthread.h"
@@ -807,6 +808,86 @@ TEST_CASE("What libarchive recognised decides how the file is written",
         INFO(c.what);
         CHECK(archivekind::bytesAreTheDiskImage(c.format, c.filter) == c.isTheImage);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Which corruption it was
+// ---------------------------------------------------------------------------
+//
+// A hash that does not match ends the write, and the message decides where
+// the user goes next. There are three, and they are not interchangeable: a
+// corrupt cache is removed and refetched with nothing for the user to do, a
+// corrupt file of their own has to be replaced by them, and a corrupt
+// download is worth another try. Telling somebody whose own file is bad that
+// the download will restart sends them to wait for something that is not
+// going to happen.
+//
+// Until now only the refusal was checked, not what it said.
+
+TEST_CASE("A corrupt cache says it will be replaced by itself", "[extract][hash]")
+{
+    // The cache is Imager's own file in Imager's own directory. The user did
+    // not put it there and cannot fix it, so the message has to say that it
+    // is being dealt with.
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(256 * 1024, 221);
+    const QString cached = scratch.filePath(QStringLiteral("lastdownload.cache"));
+    REQUIRE(writeFile(cached, image));
+
+    const QString dest = scratch.filePath(QStringLiteral("cache-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
+
+    const QByteArray wrong =
+        QCryptographicHash::hash(QByteArray("not this image"), QCryptographicHash::Sha256).toHex();
+
+    LocalFileExtractThread dt(QByteArray("file://") + cached.toUtf8(), dest.toUtf8(), wrong);
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    REQUIRE(outcome.finished);
+    REQUIRE_FALSE(outcome.succeeded);
+
+    const std::string message = outcome.errorMessage.toStdString();
+    INFO("message: " << message);
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("Cached file"));
+    // The half that matters: it fixes itself.
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("will be removed"));
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("restart"));
+}
+
+TEST_CASE("A corrupt file of the user's own is named as theirs", "[extract][hash]")
+{
+    // Chosen with "Use custom". Nothing will replace it, so the message says
+    // it is the file that is wrong and gives both hashes -- which is how
+    // somebody with several downloads of the same image works out which one
+    // they picked.
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(256 * 1024, 222);
+    const QString own = scratch.filePath(QStringLiteral("my-own.img"));
+    REQUIRE(writeFile(own, image));
+
+    const QString dest = scratch.filePath(QStringLiteral("own-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
+
+    const QByteArray wrong =
+        QCryptographicHash::hash(QByteArray("not this image"), QCryptographicHash::Sha256).toHex();
+
+    LocalFileExtractThread dt(QByteArray("file://") + own.toUtf8(), dest.toUtf8(), wrong);
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    REQUIRE(outcome.finished);
+    REQUIRE_FALSE(outcome.succeeded);
+
+    const std::string message = outcome.errorMessage.toStdString();
+    INFO("message: " << message);
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring("Local file"));
+    CHECK_THAT(message, Catch::Matchers::ContainsSubstring(std::string(wrong.constData())));
+    // And not the cache wording, which would have them waiting for a
+    // download that is never going to start.
+    CHECK_THAT(message, !Catch::Matchers::ContainsSubstring("will be removed"));
 }
 
 TEST_CASE("LocalFileExtractThread can be cancelled before it starts", "[extract][local]")
