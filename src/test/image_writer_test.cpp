@@ -1812,7 +1812,14 @@ private:
 class LargeWriteFixture
 {
 public:
-    LargeWriteFixture()
+    // Sized by the caller, because one case needs the write and the read-back
+    // to last long enough for the 100 ms progress throttle to let a verify
+    // tick through. The default is what every other case wants.
+    static constexpr int kSizeMB = 64;
+    static constexpr quint64 kSize = quint64(kSizeMB) * 1024 * 1024;
+
+    explicit LargeWriteFixture(int sizeMB = kSizeMB)
+        : _sizeMB(sizeMB)
     {
         REQUIRE(_dir.isValid());
         _source = QDir(_dir.path()).filePath(QStringLiteral("source.img"));
@@ -1824,23 +1831,23 @@ public:
 
         QFile s(_source);
         REQUIRE(s.open(QIODevice::WriteOnly));
-        for (int i = 0; i < kSizeMB; ++i)
+        for (int i = 0; i < _sizeMB; ++i)
             REQUIRE(s.write(chunk) == chunk.size());
         s.close();
 
         QFile t(_target);
         REQUIRE(t.open(QIODevice::WriteOnly));
-        for (int i = 0; i < kSizeMB; ++i)
+        for (int i = 0; i < _sizeMB; ++i)
             REQUIRE(t.write(QByteArray(1024 * 1024, '\0')) == 1024 * 1024);
         t.close();
     }
 
-    static constexpr int kSizeMB = 64;
-    static constexpr quint64 kSize = quint64(kSizeMB) * 1024 * 1024;
+    quint64 size() const { return quint64(_sizeMB) * 1024 * 1024; }
     QUrl sourceUrl() const { return QUrl::fromLocalFile(_source); }
     QString target() const { return _target; }
 
 private:
+    int _sizeMB;
     QTemporaryDir _dir;
     QString _source, _target;
 };
@@ -1936,13 +1943,19 @@ TEST_CASE("Verifying is reported as a stage of its own", "[imagewriter][write][v
     // minutes with nothing to say why -- indistinguishable from a hang, and
     // the point at which people pull the card out.
     //
-    // Big enough that the read-back reports progress at all: the 4 MB case
-    // above verifies too, and finishes inside a single tick.
-    LargeWriteFixture fx;
+    // Big enough that the read-back cannot finish inside the progress
+    // throttle. Progress is emitted at most every 100 ms, and the exemption
+    // for the first update belongs to the write, not to the verify -- so a
+    // read-back that completes in less than 100 ms reports nothing at all
+    // and the state never leaves Writing. At 64 MB that is a coin toss
+    // depending on what else the machine is doing: this case passed for a
+    // day and then failed once under load, on a run where the read-back was
+    // quicker than the throttle rather than slower.
+    LargeWriteFixture fx(256);
     ImageWriter w(nullptr);
     w.setVerifyEnabled(true);
-    w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
-    w.setDst(fx.target(), LargeWriteFixture::kSize);
+    w.setSrc(fx.sourceUrl(), 0, fx.size());
+    w.setDst(fx.target(), fx.size());
 
     QStringList states;
     QObject::connect(&w, &ImageWriter::writeStateChanged, &w, [&] {
