@@ -28,6 +28,7 @@
 
 #include <QByteArray>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QProcess>
 #include <QString>
@@ -370,4 +371,90 @@ TEST_CASE("The refusal never offers a choice from an empty list", "[cli][process
     CHECK_THAT(r.output.toStdString(),
                ContainsSubstring("--enable-writing-system-drives"));
     CHECK_FALSE(QFile::exists(scratch.notADevice()));
+}
+
+// ══════════════════════════════════════════════════════════════
+// A write that finishes, and a process that then exits.
+//
+// Every other case here ends in a refusal, which is deliberate -- a refusal
+// returns before a device is opened. But it left the whole success path
+// untested: the progress line, "Write successful.", the exit code a script
+// reads, and, as it turned out, whether the process comes back at all.
+//
+// It did not. The suspend inhibitor holds its lock by running `cat` on a
+// FIFO and releases it by closing the write end. Where the write finishes
+// before that `cat` reaches its open(), the open blocks for a writer that
+// has already gone, and the unbounded wait in the inhibitor's teardown waits
+// on it for ever. A small image, or a fast target, loses that race. The user
+// sees "Write successful." and a prompt that never returns.
+//
+// The target here is a regular file in a temporary directory, never a
+// device, so a guard that failed to fire cannot damage anything.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A write that succeeds says so and gives the shell back",
+          "[cli][process][root]")
+{
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available, and writing needs root");
+
+    Scratch scratch;
+    const QString target = scratch.notADevice();
+    {
+        QFile f(target);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+    }
+
+    QElapsedTimer elapsed;
+    elapsed.start();
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--disable-verify"),
+                             scratch.source(), target}, true);
+    const qint64 took = elapsed.elapsed();
+
+    INFO("took " << took << "ms\n" << r.output.toStdString());
+
+    // The regression this exists for. runImager waits two minutes before
+    // giving up; the hang used every second of it.
+    REQUIRE(r.finished);
+    CHECK(took < 60000);
+
+    CHECK(r.exitCode == 0);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
+    // The progress line a script's user watches, which nothing reached
+    // before either.
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Writing:"));
+}
+
+TEST_CASE("A completed write leaves no inhibitor behind",
+          "[cli][process][root]")
+{
+    // The other half of the same fault. The inhibitor is a `systemd-inhibit`
+    // process holding an idle:sleep lock and a FIFO under /run; a run that
+    // hangs leaves both, and they accumulate. A machine that has written a
+    // few cards should not be one that can no longer go to sleep.
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    const auto fifosNow = []() {
+        return QDir(QStringLiteral("/run"))
+            .entryList({QStringLiteral("rpi-imager-suspend_*")}, QDir::System | QDir::Files)
+            .size();
+    };
+    const int before = fifosNow();
+
+    Scratch scratch;
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--disable-verify"),
+                             scratch.source(), target}, true);
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    REQUIRE(r.exitCode == 0);
+
+    CHECK(fifosNow() == before);
 }
