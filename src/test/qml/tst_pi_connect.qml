@@ -298,4 +298,109 @@ TestCase {
         compare(held.countdownSeconds, 5,
                 "and the hold carried on from where it was")
     }
+
+    // ── Being told the token is wrong ─────────────────────────────────
+    //
+    // The complaint is only half of it. A user who is told their token is
+    // invalid and finds the same token still in the field has no signal that
+    // Imager rejected the one they can see, and pressing Next again gets the
+    // same dialog. So dismissing the notice clears the field.
+
+    function test_dismissing_the_invalid_token_notice_clears_the_field() {
+        useToken("not-a-real-token")
+        step.nextClicked()
+        tryVerify(function() { return invalidDialog().opened }, 3000,
+                  "the complaint was raised")
+
+        mouseClick(child("connectInvalidTokenOkButton"))
+
+        tryVerify(function() { return !invalidDialog().opened }, 3000,
+                  "the notice closed")
+        compare(child("connectTokenField").text, "",
+                "the rejected token was cleared out of the field")
+        compare(step.connectToken, "", "and out of the step")
+        verify(!step.connectTokenReceived,
+               "so nothing downstream thinks a token was accepted")
+    }
+
+    function test_escape_closes_the_invalid_token_notice() {
+        // Closed with the keyboard as well as the button, because the dialog
+        // takes focus and there is nothing else to press.
+        useToken("not-a-real-token")
+        step.nextClicked()
+        tryVerify(function() { return invalidDialog().opened }, 3000)
+
+        invalidDialog().escapePressed()
+
+        tryVerify(function() { return !invalidDialog().opened }, 3000,
+                  "escape closed the notice")
+    }
+
+    // ── Organisation mode with nothing to mint from ───────────────────
+    //
+    // Organisation mode writes a single-use auth key into the image, minted
+    // from the organisation's API key when Next is pressed. With no key
+    // stored there is nothing to mint from, and the refusal has to reach the
+    // screen -- the alternative is a Next button that appears to do nothing.
+    //
+    // The refusal itself is C++ and has its own cases. What is checked here
+    // is that it arrives: the dialog opens, and it carries the message the
+    // writer gave rather than a blank panel.
+
+    function orgStep() {
+        // orgModeEnabled is a binding on a settings read with no notify
+        // signal, so the setting has to be in place before the step is built.
+        ImageWriterSingleton.clearConnectOrgRegistration()
+        ImageWriterSingleton.setSetting("connect_org_enabled", true)
+        if (step) {
+            step.destroy()
+            step = null
+        }
+        step = stepComponent.createObject(testCase)
+        verify(step, "the organisation-mode step was created")
+        verify(step.orgModeEnabled, "the step is in organisation mode")
+        return step
+    }
+
+    function endOrgMode() {
+        // Session-wide, and every file in the run shares these settings.
+        ImageWriterSingleton.setSetting("connect_org_enabled", false)
+        ImageWriterSingleton.clearConnectOrgRegistration()
+    }
+
+    function authKeyDialog() {
+        var d = findChild(step, "connectAuthKeyErrorDialog")
+        verify(d, "found the auth-key failure dialog")
+        return d
+    }
+
+    function test_org_mode_with_no_api_key_says_why_it_cannot_continue() {
+        orgStep()
+        verify(!ImageWriterSingleton.hasConnectOrgRegistration(),
+               "there is no organisation key to mint from")
+
+        step.nextClicked()
+
+        tryVerify(function() { return authKeyDialog().opened }, 5000,
+                  "the failure was put on screen")
+        verify(authKeyDialog().detail.length > 0,
+               "and it carries the reason, not an empty panel")
+        verify(!step.isValid,
+               "the step is not treated as configured")
+
+        endOrgMode()
+    }
+
+    function test_escape_closes_the_minting_failure_notice() {
+        orgStep()
+        step.nextClicked()
+        tryVerify(function() { return authKeyDialog().opened }, 5000)
+
+        authKeyDialog().escapePressed()
+
+        tryVerify(function() { return !authKeyDialog().opened }, 3000,
+                  "escape closed the failure notice")
+
+        endOrgMode()
+    }
 }

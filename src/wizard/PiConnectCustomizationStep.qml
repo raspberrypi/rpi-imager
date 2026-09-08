@@ -563,6 +563,7 @@ WizardStepBase {
             
             ImButton {
                 id: okBtn
+                objectName: "connectInvalidTokenOkButton"
                 text: qsTr("OK")
                 accessibleDescription: qsTr("Close this dialog and return to the token field")
                 activeFocusOnTab: true
@@ -580,6 +581,7 @@ WizardStepBase {
     // Auth-key minting failure dialog (non-fastboot org mode).
     BaseDialog {
         id: authKeyErrorDialog
+        objectName: "connectAuthKeyErrorDialog"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
