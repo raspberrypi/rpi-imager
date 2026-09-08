@@ -32,6 +32,8 @@
 #include <QThread>
 #include <chrono>
 #include <QDir>
+
+#include "platform_tools.h"
 #include <QElapsedTimer>
 #include <QFile>
 #include <QProcess>
@@ -726,4 +728,195 @@ TEST_CASE("An image whose hash matches is written", "[cli][process][root]")
     REQUIRE(r.finished);
     CHECK(r.exitCode == 0);
     CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
+}
+
+// ══════════════════════════════════════════════════════════════
+// A compressed image, which is what people actually write.
+//
+// Every image Raspberry Pi ships is .img.xz, and nothing here had ever
+// handed the CLI one. The extraction itself is covered thoroughly at the
+// thread level; what was not covered is the whole path -- the CLI deciding
+// what kind of source it has been given, the extractor running, and the
+// decompressed bytes reaching the card.
+//
+// That last part is the assertion worth having. "It said Write successful"
+// would pass on an empty target; comparing the bytes says the image came
+// out the other end.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+// A random plain image and its .xz, or an empty pair where xz is not
+// installed. Random rather than patterned, so a target that merely happens
+// to contain the right length of something cannot match.
+struct CompressedImage
+{
+    QString plain;
+    QString compressed;
+    QByteArray plainBytes;
+
+    explicit CompressedImage(const QString &dir, int bytes = 4 * 1024 * 1024)
+    {
+        const QString xz = rpi_test::toolPath(QStringLiteral("xz"));
+        if (xz.isEmpty())
+            return;
+
+        plainBytes.resize(bytes);
+        for (int i = 0; i < bytes; ++i)
+            plainBytes[i] = static_cast<char>((i * 2654435761u) >> 13);
+
+        plain = QDir(dir).filePath(QStringLiteral("os.img"));
+        QFile f(plain);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.write(plainBytes) == plainBytes.size());
+        f.close();
+
+        QProcess p;
+        p.start(xz, {QStringLiteral("-k"), QStringLiteral("-0"),
+                     QStringLiteral("-q"), plain});
+        if (!p.waitForFinished(60000) || p.exitCode() != 0)
+            return;
+
+        const QString made = plain + QStringLiteral(".xz");
+        if (QFileInfo::exists(made))
+            compressed = made;
+    }
+
+    bool usable() const { return !compressed.isEmpty(); }
+};
+} // namespace
+
+TEST_CASE("A compressed image is decompressed on its way to the card",
+          "[cli][process][root]")
+{
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available, and writing needs root");
+
+    Scratch scratch;
+    const CompressedImage image(scratch.dir());
+    if (!image.usable())
+        SKIP("xz is not installed, so no compressed image can be built");
+
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--disable-verify"),
+                             image.compressed, target}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    REQUIRE(r.exitCode == 0);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
+
+    // The bytes, not the claim. What is on the target is the image as it was
+    // before compression -- so the extractor ran, and what it produced is
+    // what was written.
+    QFile written(target);
+    REQUIRE(written.open(QIODevice::ReadOnly));
+    const QByteArray head = written.read(image.plainBytes.size());
+    CHECK(head.size() == image.plainBytes.size());
+    CHECK(head == image.plainBytes);
+}
+
+TEST_CASE("A truncated compressed image is refused, not half-written",
+          "[cli][process][root]")
+{
+    // A download that stopped early. The archive is well-formed until it
+    // stops, so an extractor that trusts what it has been given writes the
+    // part that decompressed and reports success -- and the user gets a card
+    // that boots part-way, or not at all, with nothing to say why.
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const CompressedImage image(scratch.dir());
+    if (!image.usable())
+        SKIP("xz is not installed");
+
+    // Two thirds of the archive, so the header and some data survive.
+    QFile whole(image.compressed);
+    REQUIRE(whole.open(QIODevice::ReadOnly));
+    const QByteArray all = whole.readAll();
+    whole.close();
+    REQUIRE(all.size() > 1024);
+
+    const QString truncated = QDir(scratch.dir()).filePath(QStringLiteral("cut.img.xz"));
+    {
+        QFile f(truncated);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.write(all.left(all.size() * 2 / 3)) > 0);
+    }
+
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--disable-verify"),
+                             truncated, target}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("Write successful."));
+
+    // And says something the reader can act on. libarchive's own words for
+    // this are "Lzma library error: No progress is possible", which is true
+    // and useless; what they need to know is that the file is short.
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("incomplete"));
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("No progress is possible"));
+}
+
+TEST_CASE("A truncated gzip image is refused too", "[cli][process][root]")
+{
+    // The format that was always refused correctly, kept honest. libarchive
+    // words gzip truncation differently, which is the only reason it never
+    // fell into the shortcut that swallowed the xz one -- so it is worth a
+    // case of its own rather than an assumption.
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available");
+    if (!rpi_test::haveTool(QStringLiteral("gzip")))
+        SKIP("gzip is not installed");
+
+    Scratch scratch;
+    const CompressedImage image(scratch.dir());
+    if (!image.usable())
+        SKIP("xz is not installed, and the plain image comes from that fixture");
+
+    const QString gz = QDir(scratch.dir()).filePath(QStringLiteral("os.img.gz"));
+    {
+        QProcess p;
+        p.setStandardOutputFile(gz);
+        p.start(rpi_test::toolPath(QStringLiteral("gzip")),
+                {QStringLiteral("-1"), QStringLiteral("-c"), image.plain});
+        REQUIRE(p.waitForFinished(60000));
+        REQUIRE(p.exitCode() == 0);
+    }
+
+    QFile whole(gz);
+    REQUIRE(whole.open(QIODevice::ReadOnly));
+    const QByteArray all = whole.readAll();
+    whole.close();
+    REQUIRE(all.size() > 1024);
+
+    const QString truncated = QDir(scratch.dir()).filePath(QStringLiteral("cut.img.gz"));
+    {
+        QFile f(truncated);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        REQUIRE(f.write(all.left(all.size() * 2 / 3)) > 0);
+    }
+
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--disable-verify"),
+                             truncated, target}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("Write successful."));
 }

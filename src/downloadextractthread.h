@@ -84,6 +84,12 @@ protected:
 
     void _pushQueue(const char *data, size_t len);
     void _cancelExtract();
+    // Whether the whole compressed input was on hand before extraction
+    // started. False for a download, which arrives as it arrives; true for a
+    // file already on disk. It decides how to read libarchive running out of
+    // input -- see the "No progress is possible" case in extractImageRun().
+    virtual bool inputWasCompleteBeforeExtracting() const { return false; }
+
     virtual void _onDevicePrepared() override;
     virtual size_t _writeData(const char *buf, size_t len) override;
     virtual void _onDownloadSuccess() override;

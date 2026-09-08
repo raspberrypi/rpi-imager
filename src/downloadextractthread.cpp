@@ -493,9 +493,38 @@ void DownloadExtractThread::extractImageRun()
                 // Release the slot we acquired but won't use
                 _writeRingBuffer->releaseReadSlot(slot);
                 
-                // Check if this is the expected "No progress is possible" error after download completion
-                if (size == ARCHIVE_FATAL && errorStr && strstr(errorStr, "No progress is possible")) {
-                    break;
+                // libarchive says "No progress is possible" when it wants
+                // more input and the callback has none left. For a download
+                // that has just finished, that is the tail of a race between
+                // the producer signalling completion and the last bytes
+                // being consumed, and treating it as the end of the stream
+                // is what stops every download failing at 100%.
+                //
+                // For a file already on disk it means something else
+                // entirely: the archive needs more bytes than the file
+                // contains, so the file is truncated. Reading that as a
+                // clean finish wrote part of the image and called it a
+                // success -- a truncated .img.xz, which is the format every
+                // Raspberry Pi image ships in, produced a card the user was
+                // told was good. A truncated .gz was refused correctly the
+                // whole time, because libarchive words that one differently
+                // and it never matched here.
+                if (size == ARCHIVE_FATAL && errorStr
+                    && strstr(errorStr, "No progress is possible")) {
+                    if (!inputWasCompleteBeforeExtracting())
+                        break;
+
+                    // Say what happened rather than passing libarchive's
+                    // words on. "Lzma library error: No progress is
+                    // possible" is true and tells the reader nothing they
+                    // can act on; what they need to know is that the file is
+                    // short, so they can fetch it again.
+                    throw runtime_error(
+                        tr("The image file is incomplete.\n\n"
+                           "It ended before the compressed data did, which "
+                           "usually means the download or the copy did not "
+                           "finish. Fetch the image again and retry.")
+                            .toStdString());
                 }
                 
                 throw runtime_error(errorStr);
