@@ -43,6 +43,7 @@
 
 #include "aligned_buffer.h"
 #include "file_operations.h"
+#include "posix_write_error.h"
 #include "faulty_block_device.h"
 
 namespace fs = std::filesystem;
@@ -985,4 +986,97 @@ TEST_CASE("Async statistics are recorded and can be reset", "[fileops][async]") 
   fx.ops->ResetAsyncIOStats();
   fx.ops->GetAsyncIOStats(wallMs, writes, minUs, maxUs, avgUs);
   CHECK(writes == 0);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// What went wrong, in the user's terms
+//
+// A failed write ends on one screen with one sentence on it. Which sentence
+// is decided by classifying the platform's error code, and until now only
+// Windows did that: every write failure on Linux and macOS came out as
+// kUnknown, and the message behind kUnknown asks the user to check whether
+// the device is writable, has room, and is not write-protected -- three
+// questions, when the kernel has already answered one of them.
+//
+// The mapping is checked twice over: once as a table, because most of these
+// error codes cannot be produced to order, and once against a real device
+// that really does fail.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A write error is classified from its errno", "[fileops][writeerror]") {
+  using rpi_imager::WriteErrorClass;
+  using rpi_imager::ClassifyPosixWriteErrno;
+
+  struct Case {
+    int err;
+    WriteErrorClass expected;
+    const char *what;
+  };
+
+  const Case cases[] = {
+      {ENOSPC, WriteErrorClass::kDiskFull, "the card is full"},
+      {EFBIG, WriteErrorClass::kDiskFull, "a size limit was reached"},
+      {EROFS, WriteErrorClass::kWriteProtected, "the write-protect switch"},
+      {EACCES, WriteErrorClass::kAccessDenied, "no permission"},
+      {EPERM, WriteErrorClass::kAccessDenied, "not permitted"},
+      {EIO, WriteErrorClass::kIoDeviceError, "an I/O fault"},
+      {ENODEV, WriteErrorClass::kIoDeviceError, "the device went away"},
+      {ENXIO, WriteErrorClass::kIoDeviceError, "no such device"},
+      {EINVAL, WriteErrorClass::kInvalidParameter, "a bad argument"},
+      {EBADF, WriteErrorClass::kInvalidParameter, "a closed handle"},
+      // Nothing about the card, so nothing is claimed about it. A message
+      // naming a cause that is not the cause sends the user after the wrong
+      // thing, which the generic one at least does not do.
+      {0, WriteErrorClass::kUnknown, "no error at all"},
+      {EAGAIN, WriteErrorClass::kUnknown, "a transient stall"},
+      {ENOMEM, WriteErrorClass::kUnknown, "the host out of memory"},
+      {EINTR, WriteErrorClass::kUnknown, "an interrupted call"},
+  };
+
+  for (const Case &c : cases) {
+    INFO(c.what << " (errno " << c.err << ")");
+    CHECK(ClassifyPosixWriteErrno(c.err) == c.expected);
+  }
+}
+
+TEST_CASE("A device that is really out of space says so", "[fileops][writeerror]") {
+  // /dev/full is a character device whose whole purpose is to fail every
+  // write with ENOSPC. It is the one way to get a genuine full-device error
+  // without root and without a real card, and it exercises the whole chain:
+  // the write fails, the errno is recorded, and the classification comes back
+  // as the one the user is shown a message for.
+  if (::access("/dev/full", W_OK) != 0) {
+    SKIP("/dev/full is not available on this host");
+  }
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops != nullptr);
+  REQUIRE(ops->OpenDevice("/dev/full") == FileError::kSuccess);
+
+  AlignedBuffer buffer(4096);
+  std::memset(buffer.data(), 0x5A, buffer.size());
+
+  const FileError result = ops->WriteSequential(buffer.data(), buffer.size());
+  INFO("errno was " << ops->GetLastErrorCode());
+  CHECK(result != FileError::kSuccess);
+  CHECK(ops->GetLastErrorCode() == ENOSPC);
+  CHECK(ops->ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kDiskFull);
+
+  ops->Close();
+}
+
+TEST_CASE("A device with room left is not reported as full", "[fileops][writeerror]") {
+  // The other half: a write that worked must not leave a diagnosis behind
+  // for something later to pick up and show.
+  const std::string path = makeImage("room-left.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  AlignedBuffer buffer(4096);
+  std::memset(buffer.data(), 0x11, buffer.size());
+  REQUIRE(ops->WriteSequential(buffer.data(), buffer.size()) == FileError::kSuccess);
+
+  CHECK(ops->ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kUnknown);
+  ops->Close();
 }

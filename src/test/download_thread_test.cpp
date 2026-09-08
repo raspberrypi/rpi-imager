@@ -35,6 +35,8 @@ using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
 #include "faulty_block_device.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
+#include <unistd.h>
+
 #include "file_operations.h"
 #include "imageadvancedoptions.h"
 
@@ -2018,6 +2020,18 @@ public:
 
     void beCancelled() { _cancelled = true; }
 
+    // A real device, for the one failure that can be produced to order.
+    bool openRealDevice(const char *path)
+    {
+        auto ops = rpi_imager::FileOperations::Create();
+        if (!ops || ops->OpenDevice(path) != rpi_imager::FileError::kSuccess)
+            return false;
+        _file = std::move(ops);
+        return true;
+    }
+
+    rpi_imager::FileOperations *device() { return _file.get(); }
+
     using DownloadThread::_onWriteError;
 };
 
@@ -2058,6 +2072,46 @@ TEST_CASE("Each kind of write failure is explained in its own terms",
     const QString message = failed.at(0).at(0).toString();
     INFO(c.tag << " -> " << message.toStdString());
     CHECK_THAT(message.toStdString(), Catch::Matchers::ContainsSubstring(c.mustMention));
+}
+
+TEST_CASE("A card that really fills up is described as full, end to end",
+          "[downloadthread][writeerror]")
+{
+    // The cases above hand the classification over directly, because most of
+    // these failures cannot be produced on demand. One can: /dev/full is a
+    // character device that fails every write with ENOSPC. So this drives the
+    // whole chain -- a real write to a real device that really fails, the
+    // errno the kernel set, the platform classifying it, and the sentence the
+    // user ends up reading.
+    //
+    // Worth doing because that chain was broken until recently on everything
+    // but Windows: the POSIX layer never classified anything, so a full card
+    // produced the generic message asking the user to check three things.
+    if (::access("/dev/full", W_OK) != 0)
+        SKIP("/dev/full is not available on this host");
+
+    FailingWrite thread;
+    if (!thread.openRealDevice("/dev/full"))
+        SKIP("/dev/full could not be opened as a device");
+
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+
+    std::vector<std::uint8_t> block(4096, 0x5A);
+    const rpi_imager::FileError wrote =
+        thread.device()->WriteSequential(block.data(), block.size());
+    REQUIRE(wrote != rpi_imager::FileError::kSuccess);
+
+    thread._onWriteError();
+
+    REQUIRE(failed.count() == 1);
+    const QString message = failed.at(0).at(0).toString();
+    INFO("message: " << message.toStdString());
+    // Named for what it is, and pointing at the one thing that helps.
+    CHECK_THAT(message.toStdString(), Catch::Matchers::ContainsSubstring("full"));
+    CHECK_THAT(message.toStdString(), Catch::Matchers::ContainsSubstring("larger"));
+    // And not the three-questions fallback.
+    CHECK_THAT(message.toStdString(),
+               !Catch::Matchers::ContainsSubstring("sufficient space"));
 }
 
 TEST_CASE("An unrecognised write failure still says something useful",

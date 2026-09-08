@@ -7,6 +7,7 @@
 #define FILE_OPERATIONS_LINUX_H_
 
 #include "../file_operations.h"
+#include "../posix_write_error.h"
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
@@ -62,6 +63,13 @@ class LinuxFileOperations : public FileOperations {
 
   // Get the last errno error code
   int GetLastErrorCode() const override;
+
+  // Turn that errno into something the user can act on. Shared with the
+  // other POSIX platform, because the mapping is the kernel's rather than
+  // either system's.
+  WriteErrorClass ClassifyLastWriteError() const override {
+    return ClassifyPosixWriteErrno(last_error_code_);
+  }
 
   // Check if direct I/O is enabled
   bool IsDirectIOEnabled() const override { return using_direct_io_; }
