@@ -36,10 +36,14 @@
  * and the Next button -- always run.
  *
  * The signals the screen listens for are emitted from here directly, which
- * the metaobject allows. Retry calls ImageWriterSingleton.beginOSListFetch(),
- * which starts a real network fetch, so it is not clicked: what is checked is
- * that it is there, labelled and described, since a user with no list and no
- * visible way to try again has nothing to do but restart the application.
+ * the metaobject allows.
+ *
+ * Retry used not to be clicked, because it calls beginOSListFetch() and that
+ * meant the network. It is clicked now: a file:// repository is a supported
+ * thing to point Imager at -- it is what --repo takes -- so the fetch is real
+ * and answers locally. The same trick chooses the state the step comes up in,
+ * since a repository holding no list is how the singleton is emptied without
+ * waiting on a connection to fail.
  */
 
 import QtQuick
@@ -420,5 +424,128 @@ TestCase {
         tryVerify(function () { return spy.count === 1 }, 3000,
                   "and the wizard was asked to move on")
         spy.destroy()
+    }
+
+    // ── Trying again ──────────────────────────────────────────────────
+    //
+    // Retry is the only thing on the offline screen a user can do. If it did
+    // nothing, somebody whose connection came back would have no way to find
+    // that out short of restarting the application -- which is the one
+    // instruction nobody should have to be given.
+    //
+    // Driven against a repository on disk, so the fetch is the real one and
+    // what it answers is under the test's control. The URL never changes;
+    // only what is behind it, which is what a connection coming back looks
+    // like from here.
+
+    readonly property var aDeviceList: ({
+        "imager": {
+            "devices": [{
+                "name": "Test Pi 5",
+                "description": "A board that turned up when the fetch worked",
+                "tags": ["test-board"],
+                "capabilities": [],
+                "icon": "",
+                "matching_type": "exclusive",
+                "architecture": "arm64",
+                "default": true
+            }]
+        },
+        "os_list": [{
+            "name": "Test OS",
+            "description": "Something to write",
+            "url": "https://example.invalid/test.img.xz",
+            "icon": "",
+            "release_date": "2026-01-01",
+            "extract_size": 1048576,
+            "image_download_size": 524288,
+            "extract_sha256": "ff66"
+        }]
+    })
+
+    function test_retry_fetches_the_list_again_and_the_screen_comes_back() {
+        // The offline configuration only, like the other cases about this
+        // screen. The board chooser is what decides whether the offline
+        // placeholder is shown, and once it has boards in it there is no
+        // supported way to empty it: HWListModel::reload() gives up early on
+        // a document with no "imager" section and keeps the rows it had. So
+        // in a run where an earlier file fetched a device list, the offline
+        // screen cannot be reached at all, and this skips with the rest.
+        if (!requireNoList())
+            return
+
+        const previousRepo = ImageWriterSingleton.osListUrl()
+
+        // A repository that answers with nothing, so the fetch is real and
+        // the screen stays in the state this file is here to cover.
+        const name = "device_retry_repo.json"
+        const url = TestFiles.write(name, JSON.stringify({}))
+        verify(url !== "", "wrote the repository")
+        ImageWriterSingleton.refreshOsListFrom(url)
+        tryVerify(function () {
+            return ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "the list is unavailable, as it is with no connection")
+
+        const step = stepComponent.createObject(testCase)
+        verify(step, "the step was created")
+        waitForRendering(step)
+
+        const retry = findChild(step, "deviceListRetryButton")
+        verify(retry, "the offline screen offers a way to try again")
+        tryVerify(function () { return retry.visible && retry.height > 0 },
+                  3000, "and it is on screen to be pressed")
+
+        // The connection comes back: the same URL, answering properly.
+        TestFiles.write(name, JSON.stringify(testCase.aDeviceList))
+
+        mouseClick(retry)
+
+        tryVerify(function () {
+            return !ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "pressing Retry fetched the list again")
+
+        // And the screen notices, rather than leaving the user looking at a
+        // warning about a connection that is now working.
+        const placeholder = findChild(step, "deviceListOfflinePlaceholder")
+        verify(placeholder, "found the offline warning")
+        tryVerify(function () { return !placeholder.visible }, 5000,
+                  "the offline warning went away")
+
+        step.destroy()
+
+        // Back to no list, or the offline cases after this one skip and the
+        // state this file exists to cover goes untested.
+        //
+        // Two steps, because clearing the document does not empty the board
+        // chooser, for the reason at the top of this case. A repository that
+        // names an empty device list is fetched first -- an empty array is
+        // something reload() will apply -- and the document is only emptied
+        // afterwards.
+        TestFiles.write(name, JSON.stringify({
+            "imager": { "devices": [] },
+            "os_list": [{
+                "name": "Placeholder",
+                "description": "Only here to carry an empty device list",
+                "url": "https://example.invalid/placeholder.img.xz",
+                "icon": "",
+                "release_date": "2026-01-01",
+                "extract_size": 1048576,
+                "image_download_size": 524288,
+                "extract_sha256": "0011"
+            }]
+        }))
+        ImageWriterSingleton.refreshOsListFrom(url)
+        tryVerify(function () {
+            return !ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "the emptying repository was fetched")
+        ImageWriterSingleton.getHWList().reload()
+
+        TestFiles.write(name, JSON.stringify({}))
+        ImageWriterSingleton.refreshOsListFrom(url)
+        tryVerify(function () {
+            return ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "the empty state is back for the cases that need it")
+
+        ImageWriterSingleton.setCustomRepo(previousRepo)
     }
 }

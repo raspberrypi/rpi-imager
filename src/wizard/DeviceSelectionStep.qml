@@ -92,6 +92,7 @@ WizardStepBase {
         // Offline/fetch failed placeholder (shown when list is empty due to network failure)
         Item {
             id: offlinePlaceholder
+            objectName: "deviceListOfflinePlaceholder"
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: hwlist.count === 0 && root.osListUnavailable
@@ -140,6 +141,7 @@ WizardStepBase {
                 
                 ImButton {
                     id: retryButton
+                    objectName: "deviceListRetryButton"
                     text: qsTr("Retry")
                     Layout.alignment: Qt.AlignHCenter
                     accessibleDescription: qsTr("Retry downloading the device list")
