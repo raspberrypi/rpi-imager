@@ -505,6 +505,7 @@ TEST_CASE("Start and stop in a loop leaves nothing behind",
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <cstring>
+#include <pwd.h>
 #include <unistd.h>
 
 namespace {
@@ -1748,6 +1749,48 @@ TEST_CASE("A UID that is not a number is refused, not guessed at",
         // And it is not silently ignored: something in the log says why.
         CHECK_THAT(r.err.toStdString(), ContainsSubstring("WARNING"));
     }
+}
+
+TEST_CASE("With both elevation variables set, sudo's is the one used",
+          "[platformquirks][elevation][root]")
+{
+    // Rare, but reachable: `sudo -E` into a shell that then launches an
+    // AppImage which self-elevates through pkexec, or any wrapper that
+    // exports both. applyQuirks() reads SUDO_UID first and PKEXEC_UID only
+    // if that is absent.
+    //
+    // Worth pinning because the other half of this file disagrees.
+    // resolveOriginalUid, which decides whose desktop session a link opens
+    // on, reads PKEXEC_UID first -- see "The user behind an elevated session
+    // is recognised". So with both set, the settings would be written to one
+    // user's home while the browser opened on another's session. Neither
+    // order is obviously wrong and changing either would move where settings
+    // land for whoever does have both set, so this records the behaviour
+    // rather than choosing between them.
+    if (!havePasswordlessSudo())
+        SKIP("passwordless sudo is not available");
+
+    // A second account with a home directory that is neither root's nor the
+    // invoking user's, so which variable won is visible in the answer.
+    struct passwd* other = ::getpwnam("daemon");
+    if (!other || !other->pw_dir)
+        SKIP("no second account to distinguish the two variables with");
+    const QString otherHome = QString::fromUtf8(other->pw_dir);
+    if (otherHome == QDir::homePath())
+        SKIP("the second account shares the invoking user's home directory");
+
+    const ProbeRun r = runProbeAsRoot(
+        {},
+        {QStringLiteral("SUDO_UID=%1").arg(other->pw_uid),
+         QStringLiteral("PKEXEC_UID=%1").arg(::getuid())});
+
+    REQUIRE(r.finished);
+    INFO("stdout:\n" << r.out.toStdString() << "\nstderr:\n" << r.err.toStdString());
+
+    CHECK(r.value(QStringLiteral("AFTER_HOME")) == otherHome);
+    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME"))
+          == otherHome + QStringLiteral("/.config"));
+    CHECK_THAT(r.err.toStdString(), ContainsSubstring("sudo"));
 }
 
 TEST_CASE("A UID with no account behind it is refused",
