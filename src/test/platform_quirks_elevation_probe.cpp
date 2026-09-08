@@ -45,6 +45,16 @@ int main(int argc, char *argv[])
     // Second mode: whether a polkit policy authorising this binary is
     // installed. The directories it scans are absolute, so the caller
     // bind-mounts synthetic ones over them and runs this inside.
+    // Third mode: install a policy for this binary. Only does anything when
+    // euid is 0, which inside unshare -r it is.
+    if (argc > 1 && std::string_view(argv[1]) == "install") {
+        std::printf("BUNDLE=%s\n", PlatformQuirks::getBundlePath());
+        std::printf("INSTALLED=%d\n",
+                    PlatformQuirks::installElevationPolicy() ? 1 : 0);
+        std::fflush(stdout);
+        return 0;
+    }
+
     if (argc > 1 && std::string_view(argv[1]) == "policy") {
         std::printf("BUNDLE=%s\n", PlatformQuirks::getBundlePath());
         std::printf("POLICY=%d\n",

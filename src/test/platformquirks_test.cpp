@@ -2162,3 +2162,181 @@ TEST_CASE("A file that is not a policy is not read as one",
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+#ifdef ELEVATION_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// Installing the policy that grants root
+//
+// Writing the polkit policy is what makes an AppImage able to write to a
+// disk at all, and it runs as root. Two properties matter more than whether
+// it works: that it refuses when it is not root, and that clearing out old
+// policies does not clear out anybody else's.
+//
+// A policy left behind for a binary that has since been deleted is a
+// standing grant of root to whatever is put at that path next, which is why
+// the installer sweeps them. But a policy for a binary that is still there
+// belongs to a working install, and removing it would silently revoke that
+// install's rights.
+//
+// unshare -r maps this user to root inside the namespace, so the installer
+// runs for real against a synthetic /etc/polkit-1 -- and because a bind
+// mount shares the filesystem underneath, what it wrote can be read back
+// from the fixture afterwards.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+QStringList policyFilesIn(const QString& dir)
+{
+    return QDir(dir).entryList(QStringList() << QStringLiteral("*.policy"),
+                               QDir::Files, QDir::Name);
+}
+
+// Run one probe mode with `etcRoot` over /etc/polkit-1 and `usrActions` over
+// /usr/share/polkit-1/actions. Returns its stdout, empty on failure.
+QString runProbeInPolkitNamespace(const QString& mode, const QString& etcRoot,
+                                  const QString& usrActions)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /etc/polkit-1 "
+                            "&& mount --bind \"$2\" /usr/share/polkit-1/actions "
+                            "&& exec \"$3\" \"$4\""),
+             QStringLiteral("_"), etcRoot, usrActions,
+             QStringLiteral(ELEVATION_PROBE_BINARY), mode});
+    if (!p.waitForFinished(30000))
+        return {};
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
+} // namespace
+
+TEST_CASE("Installing a policy writes one naming this binary, and it is then found",
+          "[platformquirks][policyinstall]")
+{
+    REQUIRE_POLICY_HARNESS();
+
+    const QString bundle = probeBundlePath();
+    REQUIRE_FALSE(bundle.isEmpty());
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    const QString actions = etc.path() + QStringLiteral("/actions");
+    REQUIRE(QDir().mkpath(actions));
+    REQUIRE(policyFilesIn(actions).isEmpty());
+
+    const QString out = runProbeInPolkitNamespace(QStringLiteral("install"),
+                                                  etc.path(), usr.path());
+    INFO(out.toStdString());
+    CHECK(out.contains(QStringLiteral("INSTALLED=1")));
+
+    // One file, named the way the cleanup sweep recognises.
+    const QStringList written = policyFilesIn(actions);
+    REQUIRE(written.size() == 1);
+    CHECK(written.first().startsWith(
+        QStringLiteral("com.raspberrypi.rpi-imager.appimage-")));
+
+    // And the round trip: what was written is what the check reads back.
+    const QString check = runProbeInPolkitNamespace(QStringLiteral("policy"),
+                                                    etc.path(), usr.path());
+    INFO(check.toStdString());
+    CHECK(check.contains(QStringLiteral("POLICY=1")));
+}
+
+TEST_CASE("Installing sweeps away a policy for a binary that is gone",
+          "[platformquirks][policyinstall]")
+{
+    // A grant of root left pointing at a path with nothing at it. Whatever
+    // is put there next inherits the right to run as root, so the sweep is
+    // the point rather than tidiness.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    const QString actions = etc.path() + QStringLiteral("/actions");
+    REQUIRE(writePolicyFile(actions,
+                            QStringLiteral("com.raspberrypi.rpi-imager.appimage-gone.policy"),
+                            policyGranting(QStringLiteral("/opt/deleted-appimage/rpi-imager.AppImage"))));
+
+    runProbeInPolkitNamespace(QStringLiteral("install"), etc.path(), usr.path());
+
+    const QStringList left = policyFilesIn(actions);
+    INFO(left.join(QStringLiteral(", ")).toStdString());
+    CHECK_FALSE(left.contains(
+        QStringLiteral("com.raspberrypi.rpi-imager.appimage-gone.policy")));
+}
+
+TEST_CASE("Installing leaves alone a policy for a binary that is still there",
+          "[platformquirks][policyinstall]")
+{
+    // Another copy of Imager, installed elsewhere and still present.
+    // Removing its policy would revoke its rights the next time this one was
+    // launched, and nothing would say why it had stopped being able to write.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    const QString actions = etc.path() + QStringLiteral("/actions");
+    // /bin/sh stands in for the other copy: a path that certainly exists.
+    REQUIRE(writePolicyFile(actions,
+                            QStringLiteral("com.raspberrypi.rpi-imager.appimage-other.policy"),
+                            policyGranting(QStringLiteral("/bin/sh"))));
+
+    runProbeInPolkitNamespace(QStringLiteral("install"), etc.path(), usr.path());
+
+    const QStringList left = policyFilesIn(actions);
+    INFO(left.join(QStringLiteral(", ")).toStdString());
+    CHECK(left.contains(
+        QStringLiteral("com.raspberrypi.rpi-imager.appimage-other.policy")));
+}
+
+TEST_CASE("Installing does not touch somebody else's policy",
+          "[platformquirks][policyinstall]")
+{
+    // The sweep is limited to files named the way this application names
+    // them. Everything else in that directory belongs to another package,
+    // and deleting one -- as root, on the way to writing an image -- would
+    // take away rights that have nothing to do with Imager.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    const QString actions = etc.path() + QStringLiteral("/actions");
+    // Names another project's policy, for a path that does not exist -- so
+    // it would be swept if the glob were any wider.
+    REQUIRE(writePolicyFile(actions, QStringLiteral("org.example.tool.policy"),
+                            policyGranting(QStringLiteral("/opt/gone/other-tool"))));
+
+    runProbeInPolkitNamespace(QStringLiteral("install"), etc.path(), usr.path());
+
+    const QStringList left = policyFilesIn(actions);
+    INFO(left.join(QStringLiteral(", ")).toStdString());
+    CHECK(left.contains(QStringLiteral("org.example.tool.policy")));
+}
+
+TEST_CASE("Nothing is installed when we are not root",
+          "[platformquirks][policyinstall]")
+{
+    // The check that keeps this from being a way to write into
+    // /etc/polkit-1/actions without permission. Run as an ordinary user it
+    // has to refuse before touching anything.
+    if (::geteuid() == 0)
+        SKIP("running as root, so the refusal under test does not apply");
+
+    QProcess p;
+    p.start(QStringLiteral(ELEVATION_PROBE_BINARY), {QStringLiteral("install")});
+    REQUIRE(p.waitForFinished(30000));
+
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    INFO(out.toStdString());
+    CHECK(out.contains(QStringLiteral("INSTALLED=0")));
+}
+#endif // ELEVATION_PROBE_BINARY
+#endif // Q_OS_LINUX
