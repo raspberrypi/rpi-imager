@@ -299,13 +299,25 @@ int Cli::run()
 
         if (!destinationIsRemovable(dlm, args[1]))
         {
-            std::cerr << "Destination drive is not in list of removable volumes. Choose one of the following:" << std::endl << std::endl;
-
             const QStringList choices = removableDestinations(dlm);
-            for (const QString &line : choices)
-                std::cerr << line.toStdString() << std::endl;
+            if (choices.isEmpty())
+            {
+                // Inviting a choice from a list that is then empty reads as a
+                // fault in the message rather than a fact about the machine.
+                // With no drive plugged in -- the common way to arrive here --
+                // the operator needs to be told that, not shown a blank.
+                std::cerr << "Destination drive is not in list of removable volumes, and no removable volume was found." << std::endl;
+                std::cerr << "Attach one, or use --enable-writing-system-drives to overrule." << std::endl;
+            }
+            else
+            {
+                std::cerr << "Destination drive is not in list of removable volumes. Choose one of the following:" << std::endl << std::endl;
 
-            std::cerr << std::endl << "Or use --enable-writing-system-drives to overrule." << std::endl;
+                for (const QString &line : choices)
+                    std::cerr << line.toStdString() << std::endl;
+
+                std::cerr << std::endl << "Or use --enable-writing-system-drives to overrule." << std::endl;
+            }
             return 1;
         }
     }

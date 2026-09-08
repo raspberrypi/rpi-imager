@@ -14,7 +14,10 @@
 // refusal that returns before any device is opened, and every destination is
 // a path inside a temporary directory rather than anything under /dev, so a
 // refusal that failed to fire would write to a scratch file and nothing else.
-// --enable-writing-system-drives is never passed.
+// Three cases do pass --enable-writing-system-drives, because the checks
+// they are about sit behind the destination check and that flag is what
+// skips it. Their destination is still a scratch file rather than a device,
+// so the promise above is unchanged.
 //
 // Most of the checks sit behind the elevated-privileges test, so those cases
 // need sudo and skip without it. The one that does not is the privileges
@@ -32,6 +35,7 @@
 #include <QTemporaryDir>
 
 #include <unistd.h>
+
 
 using Catch::Matchers::ContainsSubstring;
 
@@ -214,5 +218,156 @@ TEST_CASE("A secure boot key that is not there is refused", "[cli][process][root
     REQUIRE(r.finished);
     CHECK(r.exitCode == 1);
     CHECK_THAT(r.output.toStdString(), ContainsSubstring("secure boot key file does not exist"));
+    CHECK_FALSE(QFile::exists(scratch.notADevice()));
+}
+
+// ── Past the destination check ────────────────────────────────────────
+//
+// The customisation-file refusals sit after the destination check, so
+// reaching them means getting past it. --enable-writing-system-drives is
+// what does that: it skips the check outright. The destination stays a plain
+// file in a temporary directory -- there is no device involved at all -- so
+// the promise the top of this file makes is unchanged. If one of these
+// refusals failed to fire, the write would land on a scratch file.
+//
+// Worth reaching, because the message is the whole of the help a script
+// author gets: there is no dialog to work out what went wrong from. The code
+// tells "not there" apart from "cannot be opened" deliberately, and the two
+// need different fixes -- a typo against a permissions or path-kind problem
+// -- so they must not collapse into one message.
+
+namespace {
+
+// A directory passed where a file was meant: it exists, so the first check
+// passes, and it cannot be opened, so the second one fires. Fails that way
+// for root too, which a file with no permissions would not.
+QString directoryInPlaceOfFile(const Scratch &scratch)
+{
+    const QString path = QDir(scratch.dir()).filePath(QStringLiteral("not-a-file"));
+    return QDir().mkpath(path) ? path : QString();
+}
+
+} // namespace
+
+TEST_CASE("A first-run script that is not there is named as the problem", "[cli][process][root]")
+{
+    if (::geteuid() != 0 && !haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--first-run-script"), scratch.missing(),
+                             scratch.source(), scratch.notADevice()}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("firstrun script does not exist"));
+    CHECK_FALSE(QFile::exists(scratch.notADevice()));
+}
+
+TEST_CASE("A user-data file that cannot be opened is told apart from one that is absent",
+          "[cli][process][root]")
+{
+    if (::geteuid() != 0 && !haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const QString unopenable = directoryInPlaceOfFile(scratch);
+    REQUIRE_FALSE(unopenable.isEmpty());
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--cloudinit-userdata"), unopenable,
+                             scratch.source(), scratch.notADevice()}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("opening user-data file"));
+    // Not the message for a file that is not there: the author would go
+    // looking for a path that is perfectly correct.
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("does not exist"));
+    CHECK_FALSE(QFile::exists(scratch.notADevice()));
+}
+
+TEST_CASE("A network-config file that cannot be opened says which of the two it was",
+          "[cli][process][root]")
+{
+    // The two cloud-init files are read one after the other by the same
+    // helper, and a run can name both. Saying only "opening the file" would
+    // leave the author to guess which.
+    if (::geteuid() != 0 && !haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const QString unopenable = directoryInPlaceOfFile(scratch);
+    REQUIRE_FALSE(unopenable.isEmpty());
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--cloudinit-networkconfig"), unopenable,
+                             scratch.source(), scratch.notADevice()}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("opening network-config file"));
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("user-data"));
+    CHECK_FALSE(QFile::exists(scratch.notADevice()));
+}
+
+TEST_CASE("The refusal never offers a choice from an empty list", "[cli][process][root]")
+{
+    // With no removable drive attached -- the ordinary way to arrive here --
+    // the refusal used to print "Choose one of the following:" and then
+    // nothing at all, which reads as the message having broken rather than
+    // as a fact about the machine.
+    //
+    // This holds whatever is plugged in: either there are candidates and they
+    // are listed, or there are none and the message says so.
+    if (::geteuid() != 0 && !haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const Run r = runImager({QStringLiteral("--cli"), scratch.source(),
+                             scratch.notADevice()}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+
+    const bool invited = r.output.contains(QStringLiteral("Choose one of the following"));
+    if (invited)
+    {
+        // Something has to follow the invitation, and it has to look like a
+        // device rather than a blank line.
+        const QStringList lines = r.output.split(QLatin1Char('\n'));
+        int at = -1;
+        for (int i = 0; i < lines.size() && at < 0; ++i)
+            if (lines[i].contains(QStringLiteral("Choose one of the following")))
+                at = i;
+        REQUIRE(at >= 0);
+
+        bool sawCandidate = false;
+        for (int i = at + 1; i < lines.size(); ++i)
+        {
+            if (lines[i].contains(QStringLiteral("--enable-writing-system-drives")))
+                break;
+            if (!lines[i].trimmed().isEmpty())
+                sawCandidate = true;
+        }
+        CHECK(sawCandidate);
+    }
+    else
+    {
+        CHECK_THAT(r.output.toStdString(),
+                   ContainsSubstring("no removable volume was found"));
+    }
+
+    // Either way, the way out is still named.
+    CHECK_THAT(r.output.toStdString(),
+               ContainsSubstring("--enable-writing-system-drives"));
     CHECK_FALSE(QFile::exists(scratch.notADevice()));
 }
