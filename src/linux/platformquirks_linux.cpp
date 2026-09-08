@@ -868,6 +868,13 @@ static bool mountIsOnDevice(const char* devicePath, const char* mountSource);
 static QStringList buildElevationCommand(const QString& bundlePath,
                                          const QStringList& userArgs);
 
+// Defined beside openUrlAsOriginalUser, their only caller.
+static uid_t resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
+                                uid_t realUid, uid_t effectiveUid);
+static QStringList buildOpenUrlAsUserArgs(const QString& username,
+                                          const QProcessEnvironment& env,
+                                          const QString& url);
+
 #ifdef PLATFORMQUIRKS_ENABLE_TEST_API
 namespace TestAPI {
     QString xmlEscape(const QString& input) { return ::PlatformQuirks::xmlEscape(input); }
@@ -886,6 +893,19 @@ namespace TestAPI {
                                       const QStringList& userArgs)
     {
         return ::PlatformQuirks::buildElevationCommand(bundlePath, userArgs);
+    }
+
+    unsigned int resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
+                                    unsigned int realUid, unsigned int effectiveUid)
+    {
+        return ::PlatformQuirks::resolveOriginalUid(pkexecUid, sudoUid, realUid, effectiveUid);
+    }
+
+    QStringList buildOpenUrlAsUserArgs(const QString& username,
+                                       const QProcessEnvironment& env,
+                                       const QString& url)
+    {
+        return ::PlatformQuirks::buildOpenUrlAsUserArgs(username, env, url);
     }
 }
 #endif
@@ -1301,20 +1321,72 @@ static bool openUriViaPortal(const QString& uri) {
 // Run xdg-open as the original (non-root) user when the GUI is itself elevated,
 // so it can reach that user's desktop session. Returns true if a launcher
 // process started.
+// Whose desktop session a link should be opened on, given that this process
+// is running as root.
+//
+// pkexec and sudo each record the invoking user in the environment, and a
+// setuid launch shows as a real uid differing from the effective one. Zero
+// means nobody was found: root asked for this directly, and there is no
+// other session to hand the link to.
+//
+// Note that a PKEXEC_UID which is present but not a number reads as 0 and
+// stops the search there rather than falling through to SUDO_UID. That is
+// deliberate: an unparseable PKEXEC_UID means the environment is not what we
+// think it is, and guessing at a different variable would open the link on
+// whichever session that one happens to name.
+static uid_t resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
+                                uid_t realUid, uid_t effectiveUid) {
+    if (pkexecUid)
+        return static_cast<uid_t>(::atoi(pkexecUid));
+    if (sudoUid)
+        return static_cast<uid_t>(::atoi(sudoUid));
+    if (realUid != effectiveUid)
+        return realUid;
+    return 0;
+}
+
+// The arguments for: runuser -u <user> -- env VAR=value ... xdg-open <url>
+//
+// runuser preserves more of the environment than `pkexec --user` and needs no
+// authentication when already root. Only the handful of variables xdg-open
+// needs to find the user's session are named; the rest of root's environment
+// is not something to hand to a browser. A variable that is not set is left
+// out entirely rather than passed as an empty assignment, which would tell
+// xdg-open a display exists when it does not.
+static QStringList buildOpenUrlAsUserArgs(const QString& username,
+                                          const QProcessEnvironment& env,
+                                          const QString& url) {
+    static const char* const sessionVars[] = {
+        "DBUS_SESSION_BUS_ADDRESS",
+        "XDG_RUNTIME_DIR",
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "XAUTHORITY",
+    };
+
+    QStringList envArgs;
+    envArgs << QStringLiteral("env");
+    for (const char* name : sessionVars) {
+        const QString key = QString::fromLatin1(name);
+        const QString value = env.value(key);
+        if (!value.isEmpty())
+            envArgs << QStringLiteral("%1=%2").arg(key, value);
+    }
+    envArgs << QStringLiteral("xdg-open") << url;
+
+    // The -- keeps a username or a URL beginning with a dash from being read
+    // as an option to runuser.
+    QStringList runuserArgs;
+    runuserArgs << QStringLiteral("-u") << username << QStringLiteral("--") << envArgs;
+    return runuserArgs;
+}
+
 static bool openUrlAsOriginalUser(const QString& url) {
-    uid_t targetUid = 0;
     QString targetUsername;
 
-    // Recover the invoking user from the elevation wrapper's environment.
-    const char* pkexecUid = ::getenv("PKEXEC_UID");
-    const char* sudoUid = ::getenv("SUDO_UID");
-    if (pkexecUid) {
-        targetUid = static_cast<uid_t>(::atoi(pkexecUid));
-    } else if (sudoUid) {
-        targetUid = static_cast<uid_t>(::atoi(sudoUid));
-    } else if (::getuid() != ::geteuid()) {
-        targetUid = ::getuid();
-    }
+    const uid_t targetUid = resolveOriginalUid(::getenv("PKEXEC_UID"),
+                                               ::getenv("SUDO_UID"),
+                                               ::getuid(), ::geteuid());
 
     if (targetUid != 0) {
         struct passwd* pw = ::getpwuid(targetUid);
@@ -1328,32 +1400,8 @@ static bool openUrlAsOriginalUser(const QString& url) {
         return false;
     }
 
-    // Carry the env vars xdg-open needs to reach the user's desktop session.
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    const QString dbusSessionAddress = env.value(QStringLiteral("DBUS_SESSION_BUS_ADDRESS"));
-    const QString xdgRuntimeDir = env.value(QStringLiteral("XDG_RUNTIME_DIR"));
-    const QString display = env.value(QStringLiteral("DISPLAY"));
-    const QString waylandDisplay = env.value(QStringLiteral("WAYLAND_DISPLAY"));
-    const QString xauthority = env.value(QStringLiteral("XAUTHORITY"));
-
-    // runuser -u <user> -- env VAR=value ... xdg-open <url>
-    // runuser preserves more than `pkexec --user` and needs no auth when root.
-    QStringList envArgs;
-    envArgs << QStringLiteral("env");
-    if (!dbusSessionAddress.isEmpty())
-        envArgs << QStringLiteral("DBUS_SESSION_BUS_ADDRESS=%1").arg(dbusSessionAddress);
-    if (!xdgRuntimeDir.isEmpty())
-        envArgs << QStringLiteral("XDG_RUNTIME_DIR=%1").arg(xdgRuntimeDir);
-    if (!display.isEmpty())
-        envArgs << QStringLiteral("DISPLAY=%1").arg(display);
-    if (!waylandDisplay.isEmpty())
-        envArgs << QStringLiteral("WAYLAND_DISPLAY=%1").arg(waylandDisplay);
-    if (!xauthority.isEmpty())
-        envArgs << QStringLiteral("XAUTHORITY=%1").arg(xauthority);
-    envArgs << QStringLiteral("xdg-open") << url;
-
-    QStringList runuserArgs;
-    runuserArgs << QStringLiteral("-u") << targetUsername << QStringLiteral("--") << envArgs;
+    const QStringList runuserArgs = buildOpenUrlAsUserArgs(
+        targetUsername, QProcessEnvironment::systemEnvironment(), url);
 
     if (launchDetached(QStringLiteral("runuser"), runuserArgs)) {
         qDebug() << "Started runuser xdg-open";

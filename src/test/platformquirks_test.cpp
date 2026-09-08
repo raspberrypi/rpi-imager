@@ -2744,3 +2744,192 @@ TEST_CASE("An unusual install location is passed through as it is",
     REQUIRE(cmd.size() == 3);
     CHECK(cmd[2] == bundle);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Opening a link while the application is running as root.
+//
+// Every "read more" and licence link in the wizard goes through here. When
+// the GUI is elevated, root's session bus has no portal and root's DISPLAY
+// belongs to nobody, so the browser has to be launched as the user who
+// started us. Get it wrong and the link silently does nothing -- the user
+// clicks, and no window appears.
+//
+// Both halves were inside a function that forks a detached process, so
+// neither had a test. Extracted: which user, and what command line.
+// ══════════════════════════════════════════════════════════════
+
+namespace PlatformQuirks::TestAPI {
+unsigned int resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
+                                unsigned int realUid, unsigned int effectiveUid);
+QStringList buildOpenUrlAsUserArgs(const QString& username,
+                                   const QProcessEnvironment& env,
+                                   const QString& url);
+}
+
+TEST_CASE("The user behind an elevated session is recognised",
+          "[platformquirks][openurl]")
+{
+    using PlatformQuirks::TestAPI::resolveOriginalUid;
+
+    // Elevated through the application's own pkexec path.
+    CHECK(resolveOriginalUid("1000", nullptr, 0, 0) == 1000u);
+
+    // Started with sudo from a terminal.
+    CHECK(resolveOriginalUid(nullptr, "1000", 0, 0) == 1000u);
+
+    // pkexec wins where both are set, which happens when a sudo shell
+    // launches something that elevates again: PKEXEC_UID names the user of
+    // the session actually in front of the machine.
+    CHECK(resolveOriginalUid("1000", "1001", 0, 0) == 1000u);
+
+    // A setuid-root binary: the real uid is still the user's.
+    CHECK(resolveOriginalUid(nullptr, nullptr, 1000, 0) == 1000u);
+}
+
+TEST_CASE("With no invoking user to find, no link is opened on a guess",
+          "[platformquirks][openurl]")
+{
+    using PlatformQuirks::TestAPI::resolveOriginalUid;
+
+    // A root login. There is no other session; the caller warns and gives up
+    // rather than picking a user.
+    CHECK(resolveOriginalUid(nullptr, nullptr, 0, 0) == 0u);
+
+    // Running as an ordinary user with no elevation at all -- reached only if
+    // the euid check upstream let it through, and still not a reason to
+    // launch a browser as somebody else.
+    CHECK(resolveOriginalUid(nullptr, nullptr, 1000, 1000) == 0u);
+
+    // PKEXEC_UID present but not a number. This stops the search rather than
+    // falling through to SUDO_UID: an environment that is not what we think
+    // it is should not have a second variable consulted, which could name a
+    // different user's session.
+    CHECK(resolveOriginalUid("", "1000", 0, 0) == 0u);
+    CHECK(resolveOriginalUid("not-a-uid", "1000", 0, 0) == 0u);
+}
+
+// A plausible root environment for an elevated GUI: the session variables
+// that matter, alongside plenty that must not be carried across.
+static QProcessEnvironment elevatedRootEnvironment()
+{
+    QProcessEnvironment env;
+    env.insert(QStringLiteral("DBUS_SESSION_BUS_ADDRESS"),
+               QStringLiteral("unix:path=/run/user/1000/bus"));
+    env.insert(QStringLiteral("XDG_RUNTIME_DIR"), QStringLiteral("/run/user/1000"));
+    env.insert(QStringLiteral("DISPLAY"), QStringLiteral(":0"));
+    env.insert(QStringLiteral("WAYLAND_DISPLAY"), QStringLiteral("wayland-0"));
+    env.insert(QStringLiteral("XAUTHORITY"), QStringLiteral("/home/pi/.Xauthority"));
+    env.insert(QStringLiteral("HOME"), QStringLiteral("/root"));
+    env.insert(QStringLiteral("USER"), QStringLiteral("root"));
+    env.insert(QStringLiteral("PATH"), QStringLiteral("/usr/sbin:/usr/bin"));
+    env.insert(QStringLiteral("SSH_AUTH_SOCK"), QStringLiteral("/run/root-agent.sock"));
+    return env;
+}
+
+TEST_CASE("The browser is launched on the user's own session",
+          "[platformquirks][openurl]")
+{
+    using PlatformQuirks::TestAPI::buildOpenUrlAsUserArgs;
+
+    const QString url =
+        QStringLiteral("https://www.raspberrypi.com/documentation/computers/getting-started.html");
+    const QStringList args = buildOpenUrlAsUserArgs(
+        QStringLiteral("pi"), elevatedRootEnvironment(), url);
+
+    // runuser -u pi -- env ... xdg-open <url>
+    REQUIRE(args.size() >= 6);
+    CHECK(args[0] == QStringLiteral("-u"));
+    CHECK(args[1] == QStringLiteral("pi"));
+
+    // The -- keeps a username beginning with a dash, or anything later in the
+    // list, from being read as an option to runuser.
+    CHECK(args[2] == QStringLiteral("--"));
+    CHECK(args[3] == QStringLiteral("env"));
+
+    CHECK(args[args.size() - 2] == QStringLiteral("xdg-open"));
+    CHECK(args.last() == url);
+}
+
+TEST_CASE("Only the session variables cross to the browser",
+          "[platformquirks][openurl]")
+{
+    using PlatformQuirks::TestAPI::buildOpenUrlAsUserArgs;
+
+    const QStringList args = buildOpenUrlAsUserArgs(
+        QStringLiteral("pi"), elevatedRootEnvironment(),
+        QStringLiteral("https://example.invalid/"));
+
+    // The five xdg-open needs to find the session.
+    CHECK(args.contains(QStringLiteral("XDG_RUNTIME_DIR=/run/user/1000")));
+    CHECK(args.contains(QStringLiteral("DISPLAY=:0")));
+    CHECK(args.contains(QStringLiteral("WAYLAND_DISPLAY=wayland-0")));
+    CHECK(args.contains(QStringLiteral("XAUTHORITY=/home/pi/.Xauthority")));
+
+    // The bus address itself contains an '=' -- it is always of the form
+    // unix:path=/run/user/N/bus. Splitting the assignment on the first '='
+    // is what env does, so the value has to arrive whole.
+    CHECK(args.contains(
+        QStringLiteral("DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus")));
+
+    // Root's own environment is not handed to a browser: HOME=/root would
+    // have it read and write root's profile, and the rest is nobody's
+    // business.
+    for (const QString& unwanted : {QStringLiteral("HOME"), QStringLiteral("USER"),
+                                    QStringLiteral("PATH"), QStringLiteral("SSH_AUTH_SOCK")}) {
+        const QString prefix = unwanted + QLatin1Char('=');
+        for (const QString& arg : args)
+            CHECK_FALSE(arg.startsWith(prefix));
+    }
+}
+
+TEST_CASE("A session variable that is not set is left out",
+          "[platformquirks][openurl]")
+{
+    using PlatformQuirks::TestAPI::buildOpenUrlAsUserArgs;
+
+    // A Wayland session has no DISPLAY or XAUTHORITY; an X11 one has no
+    // WAYLAND_DISPLAY. Passing the missing ones as empty assignments would
+    // tell xdg-open a display exists when it does not, and it would try to
+    // reach it instead of the one that works.
+    QProcessEnvironment wayland;
+    wayland.insert(QStringLiteral("XDG_RUNTIME_DIR"), QStringLiteral("/run/user/1000"));
+    wayland.insert(QStringLiteral("WAYLAND_DISPLAY"), QStringLiteral("wayland-0"));
+    wayland.insert(QStringLiteral("DISPLAY"), QString());
+
+    const QStringList args = buildOpenUrlAsUserArgs(
+        QStringLiteral("pi"), wayland, QStringLiteral("https://example.invalid/"));
+
+    CHECK(args.contains(QStringLiteral("WAYLAND_DISPLAY=wayland-0")));
+    for (const QString& arg : args) {
+        CHECK_FALSE(arg.startsWith(QStringLiteral("DISPLAY=")));
+        CHECK_FALSE(arg.startsWith(QStringLiteral("XAUTHORITY=")));
+        CHECK_FALSE(arg.startsWith(QStringLiteral("DBUS_SESSION_BUS_ADDRESS=")));
+    }
+
+    // With none of them set at all, the command is still well formed: the
+    // browser may not find the session, but runuser is not handed a
+    // half-written line.
+    const QStringList bare = buildOpenUrlAsUserArgs(
+        QStringLiteral("pi"), QProcessEnvironment(),
+        QStringLiteral("https://example.invalid/"));
+    CHECK(bare == QStringList{QStringLiteral("-u"), QStringLiteral("pi"),
+                              QStringLiteral("--"), QStringLiteral("env"),
+                              QStringLiteral("xdg-open"),
+                              QStringLiteral("https://example.invalid/")});
+}
+
+TEST_CASE("The URL stays a single argument", "[platformquirks][openurl]")
+{
+    using PlatformQuirks::TestAPI::buildOpenUrlAsUserArgs;
+
+    // There is no shell in this chain -- runuser, env and xdg-open are each
+    // handed a list -- so a URL with a space, an ampersand or a semicolon in
+    // it arrives as one argument and is not interpreted by anything.
+    const QString awkward =
+        QStringLiteral("https://example.invalid/a b?x=1&y=2;rm -rf /");
+    const QStringList args = buildOpenUrlAsUserArgs(
+        QStringLiteral("pi"), elevatedRootEnvironment(), awkward);
+
+    CHECK(args.last() == awkward);
+    CHECK(args.count(awkward) == 1);
+}
