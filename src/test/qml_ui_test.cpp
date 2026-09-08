@@ -30,6 +30,7 @@
 #include "clipboardhelper.h"
 #include "platformhelper.h"
 #include "app_resources.h"
+#include "nativefiledialog.h"
 #include "drivelist/drivelist.h"
 
 #include <QAccessible>
@@ -346,6 +347,16 @@ public slots:
         QCoreApplication::setApplicationName(
             QStringLiteral("qml_ui_test-%1").arg(QCoreApplication::applicationPid()));
         QStandardPaths::setTestModeEnabled(true);
+
+        // The same thing --qml-file-dialogs does when a user passes it.
+        //
+        // Where a desktop portal is running, the file-picker buttons open a
+        // native modal and wait for a person to answer it. Offscreen there is
+        // nobody, so the run stops on the first one -- which is why the
+        // handlers behind those buttons had no tests at all. Forced onto the
+        // in-app dialogs they are ordinary QML and can be driven, and the
+        // suite behaves the same on a machine with a portal and one without.
+        NativeFileDialog::setForceQmlDialogs(true);
 
         // The types the components reference. Registered by hand for the same
         // reason qml_load_test does it: the generated registration function

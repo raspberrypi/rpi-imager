@@ -655,13 +655,13 @@ TestCase {
         // Ctrl+Shift+P. With no write behind it there is nothing to write
         // out, and the shortcut has to say so rather than producing an empty
         // file the user then has to make sense of.
-        // Skipped rather than pressed when there is data, and deliberately:
-        // the other branch asks the platform for a save dialog, and where
-        // there is a native one that is a modal window with nobody to close
-        // it. The run stops there.
+        // Nothing recorded is a state only the earliest files in a run are
+        // in: parsing an OS list records an event, so by the time anything
+        // has fetched one there is data and the other case below applies.
         if (ImageWriterSingleton.hasPerformanceData()) {
-            skip("this session has performance data, so pressing the "
-                 + "shortcut would open a native save dialog and hang")
+            skip("this session has already recorded something, so the branch "
+                 + "this case is about cannot be reached; the case below "
+                 + "covers the other one")
             return
         }
 
@@ -812,5 +812,35 @@ TestCase {
         wait(150)
         compare(TestFiles.sizeOf("perf-export-cancelled.json"), -1,
                 "no file was created for a save that named nothing")
+    }
+    function test_the_shortcut_offers_to_save_what_was_recorded() {
+        // The other half of the same key. With something recorded, Ctrl+Shift+P
+        // has to reach a save dialog: a user chasing a slow write is told to
+        // press it and send the file, and a shortcut that quietly did nothing
+        // would leave them with nothing to send and no sign anything was
+        // wrong.
+        //
+        // The fallback dialog, not a native one: with a native save dialog
+        // the export blocks inside it waiting for a person and the run stops
+        // there. The harness forces the in-app dialogs, the way
+        // --qml-file-dialogs does, so this is what a user on a machine
+        // without a desktop portal meets.
+
+        // Parsing an OS list records an event, so the session has something
+        // to export whatever ran before this.
+        const repo = TestFiles.write("main_window_perf_repo.json",
+                                     JSON.stringify({ "os_list": [] }))
+        verify(repo !== "", "wrote a repository file")
+        ImageWriterSingleton.refreshOsListFrom(repo)
+        tryVerify(function () { return ImageWriterSingleton.hasPerformanceData() },
+                  5000, "the session has something recorded to export")
+
+        keyClick(Qt.Key_P, Qt.ControlModifier | Qt.ShiftModifier)
+
+        tryVerify(function () { return performanceSave().opened }, 3000,
+                  "the shortcut asked where to save the report")
+
+        performanceSave().close()
+        tryVerify(function () { return !performanceSave().visible }, 3000)
     }
 }

@@ -222,4 +222,25 @@ TestCase {
             return child("repoCustomFilePathField").activeFocus
         }, 3000, "the path field took focus")
     }
+    function test_browse_opens_the_picker() {
+        // The link between the button and the picker the cases above drive
+        // directly. Typing an address is the other way in, so a Browse that
+        // did nothing would not stop the dialog working -- it would just
+        // leave anyone with a list on disk, and no URL for it, with no way
+        // through at all.
+        child("repoCustomFileRadio").checked = true
+
+        const browse = child("repoBrowseButton")
+        verify(browse.visible, "Browse is on the dialog")
+
+        // Emitted rather than clicked: this sits inside a Popup, and the
+        // offscreen harness does not deliver synthesised presses into one.
+        browse.clicked()
+
+        tryVerify(function () { return dialog.repoFileDialog.opened }, 3000,
+                  "Browse opened the picker")
+
+        dialog.repoFileDialog.close()
+        tryVerify(function () { return !dialog.repoFileDialog.visible }, 3000)
+    }
 }

@@ -180,12 +180,14 @@ TestCase {
                 "/home/pi/keep.pem")
     }
 
-    function test_the_key_button_opens_a_picker_where_there_is_no_native_one() {
-        if (ImageWriterSingleton.nativeFileDialogAvailable()) {
-            skip("this machine has a native file dialog, so the button goes "
-                 + "to that instead and there is nothing in-process to see")
-            return
-        }
+    function test_the_key_button_opens_a_picker() {
+        // Nothing else on this step can be used until a key is chosen -- the
+        // enable pill stays disabled without one -- so a button that opened
+        // nothing would leave secure boot unreachable with no error saying
+        // why.
+        //
+        // The harness forces the in-app picker, the way --qml-file-dialogs
+        // does, so this runs whether or not the machine has a native one.
         child("secureBootKeyButton").clicked()
 
         tryVerify(function () {

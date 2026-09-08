@@ -341,4 +341,26 @@ TestCase {
 
         compare(child("rsaKeyPathField").text, "/home/pi/.ssh/secureboot.pem")
     }
+    function test_the_key_button_opens_the_picker() {
+        // How a user reaches the picker the case above drives directly.
+        // There is no other way to a signing key from this dialog, so a
+        // button that opened nothing would leave the secure-boot option
+        // permanently unusable with nothing said about why.
+        //
+        // Emitted rather than clicked: this sits inside a Popup, and the
+        // offscreen harness does not deliver synthesised presses into one.
+        // The harness also forces the in-app picker, the way
+        // --qml-file-dialogs does, so this runs on a machine with a native
+        // dialog as well as one without.
+        var picker = findChild(dialog, "rsaKeyFileDialog")
+        verify(picker, "found the key picker")
+
+        child("secureBootKeyButton").clicked()
+
+        tryVerify(function () { return picker.opened }, 3000,
+                  "the key button opened the picker")
+
+        picker.close()
+        tryVerify(function () { return !picker.visible }, 3000)
+    }
 }
