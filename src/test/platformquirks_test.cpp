@@ -419,11 +419,66 @@ TEST_CASE("Network monitoring handles null callback gracefully", "[platformquirk
     PlatformQuirks::stopNetworkMonitoring();
 }
 
-TEST_CASE("Multiple start/stop cycles work correctly", "[platformquirks][network]") {
-    for (int i = 0; i < 3; i++) {
+// How many descriptors and threads this process is holding. The monitor takes
+// one netlink socket, one eventfd and one thread each time it starts.
+static int countEntries(const char* dir)
+{
+    return QDir(QString::fromLatin1(dir)).entryList(QDir::Files | QDir::Dirs |
+                                                    QDir::NoDotAndDotDot |
+                                                    QDir::System).size();
+}
+
+TEST_CASE("Watching for the network back does not accumulate",
+          "[platformquirks][network]") {
+    // isOnline() calls startNetworkMonitoring on every poll while there is no
+    // network and no OS list -- once a second, for as long as the machine
+    // stays offline. Nothing stops the previous watcher first; start is
+    // expected to do that itself.
+    //
+    // If it does not, the application leaks a netlink socket, an eventfd and
+    // a joinable thread every second that the offline screen is up. What the
+    // user then sees is not a network problem: it is the write failing to
+    // open the storage device, hours later, because the process has run out
+    // of descriptors.
+    const int fdsBefore = countEntries("/proc/self/fd");
+    const int threadsBefore = countEntries("/proc/self/task");
+    REQUIRE(fdsBefore > 0);
+
+    for (int i = 0; i < 8; i++)
+        PlatformQuirks::startNetworkMonitoring([](bool) {});
+
+    // One watcher's worth, however many times it was asked for.
+    CHECK(countEntries("/proc/self/fd") - fdsBefore <= 2);
+    CHECK(countEntries("/proc/self/task") - threadsBefore <= 1);
+
+    PlatformQuirks::stopNetworkMonitoring();
+
+    // And stopping gives all of it back.
+    //
+    // Note what the thread count can and cannot see: it catches a watcher
+    // left running, but not a thread that has exited without being joined --
+    // that one is gone from /proc/self/task while still holding its stack.
+    // Dropping the pthread_join fails neither assertion here.
+    CHECK(countEntries("/proc/self/fd") == fdsBefore);
+    CHECK(countEntries("/proc/self/task") == threadsBefore);
+}
+
+TEST_CASE("Start and stop in a loop leaves nothing behind",
+          "[platformquirks][network]") {
+    const int fdsBefore = countEntries("/proc/self/fd");
+    const int threadsBefore = countEntries("/proc/self/task");
+
+    for (int i = 0; i < 5; i++) {
         PlatformQuirks::startNetworkMonitoring([](bool) {});
         PlatformQuirks::stopNetworkMonitoring();
     }
+
+    CHECK(countEntries("/proc/self/fd") == fdsBefore);
+    CHECK(countEntries("/proc/self/task") == threadsBefore);
+
+    // A stop with nothing running is not a way to lose a descriptor either.
+    PlatformQuirks::stopNetworkMonitoring();
+    CHECK(countEntries("/proc/self/fd") == fdsBefore);
 }
 
 #ifdef Q_OS_LINUX
