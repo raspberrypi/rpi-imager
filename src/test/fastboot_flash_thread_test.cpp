@@ -42,7 +42,11 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
+#include "fixture_process.h"
+#include "platform_tools.h"
 #include <QCoreApplication>
+#include <QProcess>
+#include <QSettings>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
@@ -500,7 +504,8 @@ namespace {
 
 // A minimal EEPROM image in the container format BootloaderImage parses,
 // carrying a bootconf.txt with the given BOOT_ORDER.
-std::vector<uint8_t> eepromWithBootOrder(const std::string &bootOrderLine)
+std::vector<uint8_t> eepromWithBootOrder(const std::string &bootOrderLine,
+                                        bool withSigSection = false)
 {
     constexpr uint32_t kMagic = 0x55aaf00f, kPad = 0x55aafeef, kFile = 0x55aaf11f;
     constexpr size_t kSize = 512 * 1024, kReadOnly = 64 * 1024;
@@ -522,21 +527,53 @@ std::vector<uint8_t> eepromWithBootOrder(const std::string &bootOrderLine)
     be32(off + 4, uint32_t(kReadOnly - (off + 8)));
     off = kReadOnly;
 
-    // bootconf.txt, with room to grow when BOOT_ORDER is rewritten.
+    // bootconf.txt, with room to grow when BOOT_ORDER is rewritten. The
+    // reserve has to stay under the editor's 4076-byte payload limit: the
+    // text read back out is the whole reserve, NUL padding included, and
+    // writing it again is refused if that is bigger than a section may be.
     const std::string conf = bootOrderLine + "\n";
-    const size_t reserve = 4096;
-    const uint32_t length = uint32_t(reserve + 12 + 4);
-    be32(off, kFile);
-    be32(off + 4, length);
-    std::memset(&img[off + 8], 0, 16);
-    std::memcpy(&img[off + 8], "bootconf.txt", 12);
-    std::memset(&img[off + 24], 0, reserve);
-    std::memcpy(&img[off + 24], conf.data(), conf.size());
+    const size_t reserve = 2048;
+    auto section = [&](const char *name, const std::string &body) {
+        const uint32_t length = uint32_t(reserve + 12 + 4);
+        be32(off, kFile);
+        be32(off + 4, length);
+        std::memset(&img[off + 8], 0, 16);
+        std::memcpy(&img[off + 8], name, std::strlen(name));
+        std::memset(&img[off + 24], 0, reserve);
+        if (!body.empty())
+            std::memcpy(&img[off + 24], body.data(), body.size());
+        off += 8 + length;
+        while (off % 8) img[off++] = 0xff;
+    };
+    section("bootconf.txt", conf);
+    if (withSigSection) {
+        // Filler between the two, so rewriting BOOT_ORDER -- which makes the
+        // text one character longer -- has somewhere to go. Without it the
+        // edit is refused for overlapping the section that follows, and a
+        // real EEPROM does carry this slack.
+        be32(off, kPad);
+        be32(off + 4, 1024);
+        off += 8 + 1024;
+        section("bootconf.sig", "sha256=0\nts=0\nrsa2048=0\n");
+    }
     return img;
 }
 
+std::vector<uint8_t> dataHeader(size_t size)
+{
+    char header[16];
+    std::snprintf(header, sizeof(header), "DATA%08zx", size);
+    return std::vector<uint8_t>(header, header + 12);
+}
+
 // Queue the exchanges applyBootOrderUpdate() performs: two getvars, the
-// eeprom-read, then the upload DATA phase and its payload.
+// eeprom-read, then the upload DATA phase, its payload, and the OKAY that
+// closes it.
+//
+// That closing OKAY is load-bearing. Without it the upload fails, the update
+// stops at "oem eeprom-read failed", and every case below passes on the
+// strength of a read that never happened -- including the one whose name
+// says the flashed device is put first.
 void queueEepromRead(MockUsbTransport &mock, const std::vector<uint8_t> &image,
                      const std::string &spidev = "spidev0.0",
                      const std::string &signedEeprom = "0")
@@ -544,10 +581,7 @@ void queueEepromRead(MockUsbTransport &mock, const std::vector<uint8_t> &image,
     mock.queueBulkReadResponse(okay(spidev));        // getvar eeprom-device
     mock.queueBulkReadResponse(okay(signedEeprom));  // getvar signed-eeprom
     mock.queueBulkReadResponse(okay());              // oem eeprom-read
-
-    char header[16];
-    std::snprintf(header, sizeof(header), "DATA%08zx", image.size());
-    mock.queueBulkReadResponse(std::vector<uint8_t>(header, header + 12));
+    mock.queueBulkReadResponse(dataHeader(image.size()));
 
     constexpr size_t kChunk = 16 * 1024;
     for (size_t off = 0; off < image.size(); off += kChunk) {
@@ -555,6 +589,52 @@ void queueEepromRead(MockUsbTransport &mock, const std::vector<uint8_t> &image,
         mock.queueBulkReadResponse(
             std::vector<uint8_t>(image.begin() + off, image.begin() + off + n));
     }
+    mock.queueBulkReadResponse(okay());              // end of upload
+}
+
+// And the write-back: a download of the edited image then "oem
+// eeprom-update", and the same again for "oem eeprom-verify".
+void queueEepromWriteBack(MockUsbTransport &mock, size_t imageSize)
+{
+    for (int pass = 0; pass < 2; ++pass) {
+        mock.queueBulkReadResponse(dataHeader(imageSize));  // download:<size>
+        mock.queueBulkReadResponse(okay());                 // download complete
+        mock.queueBulkReadResponse(okay());                 // oem eeprom-update/-verify
+    }
+}
+
+// The commands, without the payload chunks that follow a download.
+QStringList shortCommandsSent(const MockUsbTransport &mock)
+{
+    QStringList out;
+    for (const auto &w : mock.capturedBulkWrites())
+        if (w.size() < 256)
+            out << QString::fromUtf8(reinterpret_cast<const char *>(w.data()),
+                                     static_cast<int>(w.size()));
+    return out;
+}
+
+// The bytes streamed to the device, which is where the edited EEPROM goes.
+// Commands are short; the payload arrives in full-sized bulk chunks.
+std::vector<uint8_t> payloadSentTo(const MockUsbTransport &mock)
+{
+    std::vector<uint8_t> out;
+    for (const auto &w : mock.capturedBulkWrites())
+        if (w.size() == 16 * 1024)
+            out.insert(out.end(), w.begin(), w.end());
+    return out;
+}
+
+// The BOOT_ORDER line inside whatever was written back, or empty if none.
+std::string bootOrderWrittenBack(const MockUsbTransport &mock)
+{
+    const auto sent = payloadSentTo(mock);
+    const std::string hay(sent.begin(), sent.end());
+    const auto at = hay.find("BOOT_ORDER=");
+    if (at == std::string::npos)
+        return {};
+    const auto end = hay.find_first_of("\r\n", at);
+    return hay.substr(at, end == std::string::npos ? std::string::npos : end - at);
 }
 
 } // namespace
@@ -599,15 +679,156 @@ TEST_CASE("The flashed device is put first in BOOT_ORDER",
     TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
                           QStringLiteral("nvme0n1")};
     MockUsbTransport mock;
-    queueEepromRead(mock, eepromWithBootOrder("BOOT_ORDER=0xf41"));
+    const auto image = eepromWithBootOrder("BOOT_ORDER=0xf41");
+    queueEepromRead(mock, image);
+    queueEepromWriteBack(mock, image.size());
 
     fastboot::FastbootProtocol fb;
     CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
 
     const QStringList cmds = commandsSent(mock);
     INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
-    // It got as far as asking the device for its EEPROM.
     CHECK(cmds.filter(QStringLiteral("eeprom-read")).size() == 1);
+    // Written back, and checked afterwards -- an EEPROM write that silently
+    // did not take is the worst of the outcomes here.
+    CHECK(cmds.filter(QStringLiteral("eeprom-update")).size() == 1);
+    CHECK(cmds.filter(QStringLiteral("eeprom-verify")).size() == 1);
+
+    // What actually went to the device. NVMe is 0x6 and the order is read
+    // from the least significant nibble up, so the flashed device is first
+    // and the SD card and USB entries it had before are still behind it.
+    const std::string line = bootOrderWrittenBack(mock);
+    INFO("written back: " << line);
+    REQUIRE_FALSE(line.empty());
+    CHECK(line != "BOOT_ORDER=0xf41");
+    CHECK(line == "BOOT_ORDER=0xf416");
+}
+
+TEST_CASE("A BOOT_ORDER that already leads with the target is left alone",
+          "[fastboot][bootorder]")
+{
+    // Re-flashing the same device. Rewriting an EEPROM to the value it
+    // already holds spends a flash erase cycle and a few seconds of the
+    // user's time for nothing, and every write is a chance to fail.
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+    const auto image = eepromWithBootOrder("BOOT_ORDER=0xf416");
+    queueEepromRead(mock, image);
+    // Queued so that a write, if one were attempted, would succeed and be
+    // visible. Without them the write fails at its first read and "no update
+    // command was sent" holds whether the no-op guard is there or not.
+    queueEepromWriteBack(mock, image.size());
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    const QStringList cmds = shortCommandsSent(mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    CHECK(cmds.filter(QStringLiteral("eeprom-read")).size() == 1);
+    // Nothing was even offered to the device, let alone committed.
+    CHECK(cmds.filter(QStringLiteral("download:")).isEmpty());
+    CHECK(cmds.filter(QStringLiteral("eeprom-update")).isEmpty());
+}
+
+TEST_CASE("A signed EEPROM with no key to re-sign it is left alone",
+          "[fastboot][bootorder]")
+{
+    // A device whose EEPROM is signed will not accept a bootconf.txt whose
+    // signature no longer matches. Editing BOOT_ORDER without re-signing
+    // produces exactly that, and the board stops booting -- so with no key
+    // configured the only safe thing is to leave the EEPROM as it is.
+    QSettings settings;
+    const QString saved = settings.value(QStringLiteral("secureboot_rsa_key")).toString();
+    settings.setValue(QStringLiteral("secureboot_rsa_key"), QString());
+    settings.sync();
+
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+    const auto image = eepromWithBootOrder("BOOT_ORDER=0xf41", /*withSigSection=*/true);
+    queueEepromRead(mock, image, "spidev0.0", /*signedEeprom=*/"yes");
+    // As above: the write has to be able to succeed, or "nothing was written"
+    // is true for the wrong reason.
+    queueEepromWriteBack(mock, image.size());
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    settings.setValue(QStringLiteral("secureboot_rsa_key"), saved);
+    settings.sync();
+
+    const QStringList cmds = shortCommandsSent(mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    // It read the EEPROM and then stopped: nothing was offered to the device.
+    CHECK(cmds.filter(QStringLiteral("eeprom-read")).size() == 1);
+    CHECK(cmds.filter(QStringLiteral("download:")).isEmpty());
+    CHECK(cmds.filter(QStringLiteral("eeprom-update")).isEmpty());
+    CHECK(cmds.filter(QStringLiteral("eeprom-verify")).isEmpty());
+    CHECK(bootOrderWrittenBack(mock).empty());
+}
+
+TEST_CASE("A signed EEPROM is re-signed after its boot order changes",
+          "[fastboot][bootorder]")
+{
+    // The other half. With a key configured the edit goes ahead, but the
+    // signature has to be rebuilt from the new bootconf.txt and put back --
+    // a signed EEPROM whose signature covers the old text is rejected by the
+    // bootloader just as firmly as a corrupt one.
+    if (!rpi_test::haveTool(QStringLiteral("openssl")))
+        SKIP("openssl is not installed, so no key can be made to sign with");
+
+    QTemporaryDir keyDir;
+    REQUIRE(keyDir.isValid());
+    const QString keyPath = keyDir.filePath(QStringLiteral("customer.pem"));
+    {
+        QProcess openssl;
+        openssl.start(rpi_test::toolPath(QStringLiteral("openssl")),
+                      {QStringLiteral("genrsa"), QStringLiteral("-out"), keyPath,
+                       QStringLiteral("2048")});
+        REQUIRE(openssl.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
+        REQUIRE(openssl.exitCode() == 0);
+    }
+
+    QSettings settings;
+    const QString saved = settings.value(QStringLiteral("secureboot_rsa_key")).toString();
+    settings.setValue(QStringLiteral("secureboot_rsa_key"), keyPath);
+    settings.sync();
+
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                          QStringLiteral("nvme0n1")};
+    MockUsbTransport mock;
+    const auto image = eepromWithBootOrder("BOOT_ORDER=0xf41", /*withSigSection=*/true);
+    queueEepromRead(mock, image, "spidev0.0", /*signedEeprom=*/"yes");
+    queueEepromWriteBack(mock, image.size());
+
+    fastboot::FastbootProtocol fb;
+    CHECK_NOTHROW(t.applyBootOrderUpdate(fb, mock));
+
+    settings.setValue(QStringLiteral("secureboot_rsa_key"), saved);
+    settings.sync();
+
+    // Only the short writes: the two 512 KiB payloads are also captured, and
+    // rendering them into a failure message is a megabyte of binary.
+    const QStringList cmds = shortCommandsSent(mock);
+    INFO("commands: " << cmds.join(QStringLiteral(" | ")).toStdString());
+    CHECK(cmds.filter(QStringLiteral("eeprom-update")).size() == 1);
+    CHECK(bootOrderWrittenBack(mock) == "BOOT_ORDER=0xf416");
+
+    // The signature that went back is a real one over the new text, not the
+    // placeholder that was in the image to begin with.
+    const auto sent = payloadSentTo(mock);
+    const std::string blob(sent.begin(), sent.end());
+    const auto at = blob.find("rsa2048: ");
+    REQUIRE(at != std::string::npos);
+    const auto eol = blob.find('\n', at);
+    const std::string sig = blob.substr(at, eol - at);
+    INFO("signature line: " << sig.substr(0, 40) << "...");
+    // The placeholder the fixture put there said "rsa2048=0"; what went back
+    // is a real RSA-2048 signature, 512 hex characters of it.
+    CHECK(sig.size() == std::string("rsa2048: ").size() + 512);
+    CHECK(sig.find_first_not_of("0123456789abcdef",
+                                std::string("rsa2048: ").size()) == std::string::npos);
 }
 
 TEST_CASE("An EEPROM the device will not hand over is not written back",
