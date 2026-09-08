@@ -1203,6 +1203,75 @@ TEST_CASE("A device node that has gone is reported, not waited on",
     CHECK_THAT(message, Catch::Matchers::ContainsSubstring(std::string(target.constData())));
 }
 
+// ---------------------------------------------------------------------------
+// Where a redirect is allowed to lead
+// ---------------------------------------------------------------------------
+//
+// Image URLs are followed through redirects, up to ten of them. The OS list
+// fetcher restricts what a redirect may switch to; the image download leaves
+// it to libcurl's default, which excludes file, scp and smb. That difference
+// is easy to lose sight of, and what it protects is worth stating: a
+// repository, or an rpi-imager:// link somebody accepted, chooses the image
+// URL, and a redirect from it into file:// would have the writer read a local
+// file and put it on the card.
+//
+// The first case exists so the second one means something. Without it, "the
+// redirect was not followed" would hold just as well on a build where
+// redirects were not followed at all.
+
+TEST_CASE("An image download follows a redirect to another http URL",
+          "[download][http][redirect]")
+{
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(256 * 1024, 71);
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("moved.img")), payload));
+
+    LocalHttpServer server(scratch.filePath(QStringLiteral(".")));
+    REQUIRE_HTTP_SERVER(server);
+
+    const QString dest = scratch.filePath(QStringLiteral("redirect-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(payload.size() + (1024 * 1024), '\0')));
+
+    DownloadThread dt(server.redirectTo(server.urlFor(QStringLiteral("moved.img"))),
+                      dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+    CHECK(readFile(dest).left(payload.size()) == payload);
+}
+
+TEST_CASE("An image download will not be redirected into a local file",
+          "[download][http][redirect]")
+{
+    ScratchDir scratch;
+    const QByteArray secret = patternOfSize(64 * 1024, 72);
+    const QString local = scratch.filePath(QStringLiteral("local-secret.bin"));
+    REQUIRE(writeFile(local, secret));
+
+    LocalHttpServer server(scratch.filePath(QStringLiteral(".")));
+    REQUIRE_HTTP_SERVER(server);
+
+    const QString dest = scratch.filePath(QStringLiteral("no-file-dest.img"));
+    const QByteArray blank(secret.size() + (1024 * 1024), '\0');
+    REQUIRE(writeFile(dest, blank));
+
+    const QByteArray target = QByteArray("file://") + local.toUtf8();
+    DownloadThread dt(server.redirectTo(target), dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, 60000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK_FALSE(outcome.succeeded);
+
+    // The card is what matters: nothing of the local file reached it.
+    const QByteArray written = readFile(dest);
+    CHECK_FALSE(written.contains(secret.left(4096)));
+}
+
 TEST_CASE("A corrupt download is blamed on the network, not on the user",
           "[download][http][hash]")
 {

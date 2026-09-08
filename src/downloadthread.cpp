@@ -660,6 +660,17 @@ void DownloadThread::run()
     curl_easy_setopt(_c, CURLOPT_URL, _url.constData());
     curl_easy_setopt(_c, CURLOPT_FOLLOWLOCATION, 1);
     curl_easy_setopt(_c, CURLOPT_MAXREDIRS, 10);
+    // Said out loud rather than left to libcurl.
+    //
+    // The image URL comes from the repository, which can arrive from --repo,
+    // from the repository dialog, or from an rpi-imager:// link somebody
+    // accepted -- and it is followed through up to ten redirects. A redirect
+    // into file:// would have this read a local file and write it to the
+    // card. libcurl's default already excludes file, scp and smb, so that
+    // particular hole is not open; what this adds is ftp and ftps, and
+    // independence from a default that is libcurl's to change. The OS list
+    // fetcher has always said it explicitly; this is the same list.
+    curl_easy_setopt(_c, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
     curl_easy_setopt(_c, CURLOPT_ERRORBUFFER, errorBuf);
     curl_easy_setopt(_c, CURLOPT_FAILONERROR, 1);
     curl_easy_setopt(_c, CURLOPT_HEADERFUNCTION, &DownloadThread::_curl_header_callback);

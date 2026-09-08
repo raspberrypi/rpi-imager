@@ -18,6 +18,7 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QString>
+#include <QUrl>
 
 namespace rpi_test {
 
@@ -30,9 +31,23 @@ public:
         // Bind port 0 and print the port it was given, so nothing has to
         // guess a free one.
         static const char *kScript =
-            "import http.server, socketserver, sys, threading\n"
+            "import http.server, socketserver, sys, threading, urllib.parse\n"
             "class H(http.server.SimpleHTTPRequestHandler):\n"
             "    def log_message(self, *a): pass\n"
+            // /redirect?to=<url> answers 302 to whatever is asked for,
+            // including schemes this server does not speak. Following a
+            // redirect is otherwise untestable, and where it is allowed to
+            // lead is a property worth holding down.
+            "    def do_GET(self):\n"
+            "        p = urllib.parse.urlparse(self.path)\n"
+            "        if p.path == '/redirect':\n"
+            "            q = urllib.parse.parse_qs(p.query)\n"
+            "            self.send_response(302)\n"
+            "            self.send_header('Location', q.get('to', [''])[0])\n"
+            "            self.send_header('Content-Length', '0')\n"
+            "            self.end_headers()\n"
+            "            return\n"
+            "        super().do_GET()\n"
             "socketserver.TCPServer.allow_reuse_address = True\n"
             "h = lambda *a, **k: H(*a, directory=sys.argv[1], **k)\n"
             "s = socketserver.TCPServer(('127.0.0.1', 0), h)\n"
@@ -66,6 +81,13 @@ public:
     {
         return QByteArray("http://127.0.0.1:") + QByteArray::number(_port) + "/" +
                name.toUtf8();
+    }
+
+    // A URL on this server that answers 302 pointing at `target`.
+    QByteArray redirectTo(const QByteArray &target) const
+    {
+        return QByteArray("http://127.0.0.1:") + QByteArray::number(_port)
+               + "/redirect?to=" + QUrl::toPercentEncoding(QString::fromUtf8(target));
     }
 
 private:
