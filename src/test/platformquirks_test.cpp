@@ -2016,6 +2016,203 @@ TEST_CASE("A legitimate name alongside a rejected one still counts",
 
     CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 1);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Whether the clock is trustworthy enough to fetch the OS list.
+//
+// In embedded mode -- Imager booted on the Pi itself -- isOnline() will not
+// fetch anything until isNetworkReady() says yes, and it keeps polling until
+// it does. A Pi has no battery-backed clock, so it boots in 1970; TLS to
+// downloads.raspberrypi.com fails with a certificate that is not yet valid,
+// which surfaces as a fetch error rather than anything a user could act on.
+// Hence the wait for systemd-timesyncd.
+//
+// The failure this guards against is the opposite one: an answer of "not
+// ready" that never becomes "ready" leaves the user looking at an empty list
+// of operating systems for as long as they care to wait, with no error and
+// no Retry.
+//
+// The three paths it consults are hardcoded, so each case bind-mounts its
+// own over them inside an unprivileged mount namespace.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A /sys/class/net fixture with one interface that is up, so the connectivity
+// check ahead of the clock check passes and the clock is what is being
+// measured.
+bool buildOnlineNetFixture(const QString& root)
+{
+    return buildNetFixture(root, {{QStringLiteral("eth0"), QStringLiteral("up")}});
+}
+
+// -1 if the probe could not be run at all.
+int networkReadyWith(const QString& netFixture, const QString& libSystemd,
+                     const QString& varLibSystemd, const QString& emptyBin)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /sys/class/net "
+                            "&& mount --bind \"$2\" /lib/systemd "
+                            "&& mount --bind \"$3\" /var/lib/systemd "
+                            "&& exec env PATH=\"$5\" \"$4\" ready"),
+             QStringLiteral("_"), netFixture, libSystemd, varLibSystemd,
+             QStringLiteral(NETWORK_PROBE_BINARY), emptyBin});
+    if (!p.waitForFinished(30000))
+        return -1;
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    if (out.contains(QStringLiteral("READY=1")))
+        return 1;
+    if (out.contains(QStringLiteral("READY=0")))
+        return 0;
+    return -1;
+}
+
+// Fixed timestamps rather than sleeps: the comparison is between two
+// mtimes, and asking for them a second apart is the whole point.
+bool writeStamped(const QString& path, const QString& date)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    f.write("x");
+    f.close();
+    QProcess touch;
+    touch.start(QStringLiteral("touch"),
+                {QStringLiteral("-d"), date, path});
+    return touch.waitForFinished(10000) && touch.exitCode() == 0;
+}
+
+} // namespace
+
+TEST_CASE("A machine with no time synchronisation service is trusted",
+          "[platformquirks][netready]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString lib = tmp.filePath(QStringLiteral("lib-systemd"));
+    const QString var = tmp.filePath(QStringLiteral("var-lib-systemd"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(lib));
+    REQUIRE(QDir().mkpath(var + QStringLiteral("/timesync")));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(buildOnlineNetFixture(net));
+
+    // A clock file that would read as stale if anything looked at it. It is
+    // here so this case cannot pass by accident: were the /lib/systemd bind
+    // to fail, the probe would find the host's real systemd-timesyncd, look
+    // at this file, and answer 0.
+    REQUIRE(writeStamped(var + QStringLiteral("/timesync/clock"),
+                         QStringLiteral("2001-01-01 00:00:00")));
+
+    // No systemd-timesyncd installed at all. Waiting for a service that will
+    // never run would leave the OS list empty for good, so its absence means
+    // the clock is whatever the machine says it is and the fetch goes ahead.
+    CHECK(networkReadyWith(net, lib, var, bin) == 1);
+}
+
+TEST_CASE("Time not yet synchronised holds the fetch back",
+          "[platformquirks][netready]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString lib = tmp.filePath(QStringLiteral("lib-systemd"));
+    const QString var = tmp.filePath(QStringLiteral("var-lib-systemd"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(lib));
+    REQUIRE(QDir().mkpath(var + QStringLiteral("/timesync")));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(buildOnlineNetFixture(net));
+    REQUIRE(writeStamped(lib + QStringLiteral("/systemd-timesyncd"),
+                         QStringLiteral("2025-01-01 00:00:00")));
+
+    SECTION("because the service has not written its clock file yet")
+    {
+        // First boot with no network yet: timesyncd is installed but has
+        // never had an answer. Fetching now would hit a certificate that is
+        // not valid until years from the clock's point of view.
+        //
+        // The explicit "clock file does not exist" guard is defended twice:
+        // removing it leaves the mtime comparison reading a missing file,
+        // whose lastModified() is an invalid QDateTime and loses to any real
+        // one. So this assertion holds with the guard gone. It is here for
+        // the behaviour, not as a check on that line.
+        CHECK(networkReadyWith(net, lib, var, bin) == 0);
+    }
+
+    SECTION("because the clock file predates the service that writes it")
+    {
+        // A clock file left over from before the package was updated says
+        // nothing about this boot.
+        REQUIRE(writeStamped(var + QStringLiteral("/timesync/clock"),
+                             QStringLiteral("2024-06-01 00:00:00")));
+        CHECK(networkReadyWith(net, lib, var, bin) == 0);
+    }
+}
+
+TEST_CASE("Once the clock has been set the OS list is fetched",
+          "[platformquirks][netready]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString lib = tmp.filePath(QStringLiteral("lib-systemd"));
+    const QString var = tmp.filePath(QStringLiteral("var-lib-systemd"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(lib));
+    REQUIRE(QDir().mkpath(var + QStringLiteral("/timesync")));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(buildOnlineNetFixture(net));
+    REQUIRE(writeStamped(lib + QStringLiteral("/systemd-timesyncd"),
+                         QStringLiteral("2025-01-01 00:00:00")));
+    REQUIRE(writeStamped(var + QStringLiteral("/timesync/clock"),
+                         QStringLiteral("2026-09-08 12:00:00")));
+
+    CHECK(networkReadyWith(net, lib, var, bin) == 1);
+}
+
+TEST_CASE("A synchronised clock on a machine with no network is still not ready",
+          "[platformquirks][netready]")
+{
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString lib = tmp.filePath(QStringLiteral("lib-systemd"));
+    const QString var = tmp.filePath(QStringLiteral("var-lib-systemd"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(lib));
+    REQUIRE(QDir().mkpath(var + QStringLiteral("/timesync")));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(writeStamped(lib + QStringLiteral("/systemd-timesyncd"),
+                         QStringLiteral("2025-01-01 00:00:00")));
+    REQUIRE(writeStamped(var + QStringLiteral("/timesync/clock"),
+                         QStringLiteral("2026-09-08 12:00:00")));
+
+    // Every interface down. The clock is fine, but there is nothing to fetch
+    // over -- the connectivity check comes first for a reason, and a "ready"
+    // here would send the embedded UI into a fetch that cannot succeed.
+    REQUIRE(buildNetFixture(net, {{QStringLiteral("eth0"), QStringLiteral("down")},
+                                  {QStringLiteral("wlan0"), QStringLiteral("down")}}));
+
+    CHECK(networkReadyWith(net, lib, var, bin) == 0);
+}
+
 #endif // NETWORK_PROBE_BINARY
 #endif // Q_OS_LINUX
 

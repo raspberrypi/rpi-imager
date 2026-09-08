@@ -13,6 +13,12 @@
  * Prints CONNECTIVITY=1 or CONNECTIVITY=0 on stdout. The function caches its
  * answer in process-wide state, so each case gets a fresh process.
  *
+ * With "ready" as argv[1] it answers PlatformQuirks::isNetworkReady()
+ * instead, printing READY=1 or READY=0. That one adds a check that
+ * systemd-timesyncd has set the clock, from two more hardcoded paths
+ * (/lib/systemd/systemd-timesyncd and /var/lib/systemd/timesync/clock) which
+ * the caller binds over in the same namespace.
+ *
  * Deliberately constructs no QCoreApplication: this runs from a background
  * thread in production and must not depend on one.
  */
@@ -20,11 +26,17 @@
 #include "platformquirks.h"
 
 #include <cstdio>
+#include <cstring>
 
-int main()
+int main(int argc, char** argv)
 {
-    const bool online = PlatformQuirks::hasNetworkConnectivity();
-    std::printf("CONNECTIVITY=%d\n", online ? 1 : 0);
+    if (argc > 1 && std::strcmp(argv[1], "ready") == 0) {
+        const bool ready = PlatformQuirks::isNetworkReady();
+        std::printf("READY=%d\n", ready ? 1 : 0);
+    } else {
+        const bool online = PlatformQuirks::hasNetworkConnectivity();
+        std::printf("CONNECTIVITY=%d\n", online ? 1 : 0);
+    }
     std::fflush(stdout);
     return 0;
 }
