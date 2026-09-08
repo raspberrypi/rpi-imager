@@ -769,4 +769,48 @@ TestCase {
         }, 10000, "a list is in place for whatever runs next")
         ImageWriterSingleton.setCustomRepo(previousRepo)
     }
+
+    // ── Saving the performance data ───────────────────────────────────
+    //
+    // What somebody is asked for when a write went wrong and support wants
+    // to know why. The native save dialog is not always there -- it is not on
+    // a plain X session, and it is not in this harness -- so the application
+    // carries a QML one, and the handler behind it is what turns the file the
+    // user picked into the path the writer is given.
+    //
+    // The url has to lose its scheme on the way. Left on, the export is
+    // handed "file:///home/..." as a path: nothing is written where the user
+    // pointed, and they go back to support with no file.
+
+    function test_saving_performance_data_writes_the_file_that_was_chosen() {
+        const name = "perf-export.json"
+        // Written and removed again, so the export is what creates it and the
+        // assertion cannot pass on a file that was already there.
+        verify(TestFiles.write(name, "placeholder") !== "", "the scratch file works")
+
+        const d = performanceSave()
+        d.selectedFile = "file://" + TestFiles.localPath(name)
+        d.accepted()
+
+        tryVerify(function () { return TestFiles.sizeOf(name) > 0 }, 5000,
+                  "the export landed where the user pointed; size is "
+                  + TestFiles.sizeOf(name))
+        // Not the placeholder: the export replaced it rather than the
+        // assertion reading back what the test itself wrote.
+        verify(TestFiles.sizeOf(name) > 20,
+               "and holds a report rather than the placeholder: "
+               + TestFiles.sizeOf(name) + " bytes")
+    }
+
+    function test_a_cancelled_save_writes_nothing() {
+        // Nothing chosen means nothing written, rather than an empty file
+        // appearing somewhere the user has to find and delete.
+        const d = performanceSave()
+        d.selectedFile = ""
+        d.accepted()
+
+        wait(150)
+        compare(TestFiles.sizeOf("perf-export-cancelled.json"), -1,
+                "no file was created for a save that named nothing")
+    }
 }

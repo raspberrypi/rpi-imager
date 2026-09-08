@@ -186,6 +186,20 @@ public:
         return _dir.isValid() ? _dir.filePath(name) : QString();
     }
 
+    // How big a file in the scratch directory is, or -1 if it is not there.
+    //
+    // For the other direction: a case that asks the application to write a
+    // file has to be able to look at what landed, and "no error was raised"
+    // is not the same as "the file the user named exists". -1 rather than 0
+    // so an empty file and a missing one can be told apart.
+    Q_INVOKABLE qint64 sizeOf(const QString &name) const
+    {
+        if (!_dir.isValid())
+            return -1;
+        const QFileInfo fi(_dir.filePath(name));
+        return fi.exists() ? fi.size() : -1;
+    }
+
 private:
     QTemporaryDir _dir;
 };
