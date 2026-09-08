@@ -264,6 +264,123 @@ TEST_CASE("A card of unknown size does not trigger the capacity check",
 }
 
 // ══════════════════════════════════════════════════════════════
+// What the user picked with "Use custom"
+//
+// startWrite() looks at a local source before it looks at anything else,
+// because every later stage assumes there are bytes to read. Each refusal
+// here is a file chooser dialog away from any user: the wrong entry
+// double-clicked, a download that stopped part-way, a file on a volume
+// mounted read-only for somebody else.
+//
+// The refusal has to name the file. There is no other way for someone who
+// picked the wrong thing out of a folder of images to tell which one Imager
+// objected to.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A folder picked instead of an image is refused", "[imagewriter]")
+{
+    // One entry above the file they meant, in a chooser that shows both.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    writer.setSrc(QUrl::fromLocalFile(dir.path()), 0, 1024 * 1024);
+    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("not a regular file"));
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring(dir.path().toStdString()));
+}
+
+TEST_CASE("An image that cannot be read is refused", "[imagewriter]")
+{
+    if (geteuid() == 0)
+        SKIP("running as root, which can read a file with no permissions at all");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("locked.img"));
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray(1024, '\0'));
+    }
+    REQUIRE(QFile::setPermissions(path, QFileDevice::Permissions()));
+
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    writer.setSrc(QUrl::fromLocalFile(path), 0, 1024 * 1024);
+    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.startWrite();
+
+    // Restored before the assertions, so a failing case still leaves a
+    // directory that can be removed.
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("not readable"));
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring(path.toStdString()));
+}
+
+TEST_CASE("An empty image file is refused rather than written as a blank card",
+          "[imagewriter]")
+{
+    // A download that stopped, or a copy off a card that failed: the file is
+    // there, the name is right, and it holds nothing. Nothing downstream
+    // objects to it -- it passes the capacity check comfortably, extracts to
+    // no bytes, and the write reports success. The user is left with a card
+    // they believe is imaged and nothing on screen suggesting otherwise, so
+    // this is the only place it can be caught.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("truncated.img"));
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+    }
+    REQUIRE(QFileInfo(path).size() == 0);
+
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    writer.setSrc(QUrl::fromLocalFile(path), 0, 1024 * 1024);
+    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("empty"));
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring(path.toStdString()));
+}
+
+TEST_CASE("A source that is not there is named before the card is measured",
+          "[imagewriter]")
+{
+    // Both refusals apply at once: no such file, and an image far too big for
+    // the card. The one the user is told about has to be the one they can do
+    // something about -- being told the card is too small for a file that
+    // does not exist sends them looking for a bigger card.
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    const QString missing = QStringLiteral("/nonexistent-rpi-imager/gone.img");
+    writer.setSrc(QUrl::fromLocalFile(missing), 0, 64ull * 1024 * 1024 * 1024);
+    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("not found"));
+    CHECK_THAT(log.errors[0].toStdString(), !ContainsSubstring("capacity"));
+}
+
+// ══════════════════════════════════════════════════════════════
 // Update prompts
 // ══════════════════════════════════════════════════════════════
 
