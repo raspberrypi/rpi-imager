@@ -4,6 +4,8 @@
  */
 
 #include "cli.h"
+
+#include <QRegularExpression>
 #include "imagewriter.h"
 #include <iostream>
 #include <QCoreApplication>
@@ -393,9 +395,27 @@ void Cli::_clearLine()
     std::cerr << "\e[0K";
 }
 
+// Messages come from the writer, which is written for the GUI: its dialogs
+// render rich text, so anything with more than one line separates them with
+// <br>. A terminal prints that literally, in the middle of the sentence
+// somebody reads when their image has turned out to be corrupt:
+//
+//   Error: Local file is corrupt or has incorrect SHA256 hash.<br>Expected: ...
+//
+// Render it for the medium actually being printed to. Only <br> occurs in
+// these strings today -- checked -- and handling just that keeps the
+// substitution honest rather than pretending to be an HTML renderer.
+static QByteArray forTerminal(QString msg)
+{
+    static const QRegularExpression lineBreak(
+        QStringLiteral("<br\\s*/?>"), QRegularExpression::CaseInsensitiveOption);
+    msg.replace(lineBreak, QStringLiteral("\n"));
+    return msg.toUtf8();
+}
+
 void Cli::onError(QVariant msg)
 {
-    QByteArray m = msg.toByteArray();
+    const QByteArray m = forTerminal(msg.toString());
 
     if (!_quiet)
     {

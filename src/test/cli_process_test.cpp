@@ -27,6 +27,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <QByteArray>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -620,4 +621,79 @@ TEST_CASE("Running as root, a failed open does not advise sudo",
     // statement entirely and a true one.
     CHECK_THAT(r.output.toStdString(),
                !ContainsSubstring("Please run with elevated privileges"));
+}
+
+// ══════════════════════════════════════════════════════════════
+// --sha256, and what a corrupt image looks like on a terminal.
+//
+// The hash is the user's only protection against writing an image that
+// arrived damaged. Only its interaction with --cache-file was covered; that
+// it is actually checked, and what it says when the check fails, was not.
+//
+// What it said was written for the GUI, whose dialogs render rich text. On
+// a terminal the <br> separating the two hashes printed literally, in the
+// middle of the one message where the reader needs to compare two long hex
+// strings.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("An image whose hash does not match is refused, legibly",
+          "[cli][process][root]")
+{
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available, and writing needs root");
+
+    Scratch scratch;
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    // A hash of something else entirely.
+    const QByteArray wrong =
+        QCryptographicHash::hash(QByteArrayLiteral("not this image"),
+                                 QCryptographicHash::Sha256).toHex();
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--sha256"), QString::fromUtf8(wrong),
+                             scratch.source(), target}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 1);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("incorrect SHA256 hash"));
+
+    // Both hashes, so the reader can see which one they got.
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring(wrong.toStdString()));
+
+    // And no markup. This message carries <br> for the GUI's benefit; a
+    // terminal shows that literally, right where two long hex strings have
+    // to be compared by eye.
+    CHECK_THAT(r.output.toStdString(), !ContainsSubstring("<br"));
+}
+
+TEST_CASE("An image whose hash matches is written", "[cli][process][root]")
+{
+    // The other side, so the refusal above is not simply "--sha256 always
+    // fails".
+    if (!haveSudo())
+        SKIP("passwordless sudo is not available");
+
+    Scratch scratch;
+    const QString target = scratch.notADevice();
+    { QFile f(target); REQUIRE(f.open(QIODevice::WriteOnly)); }
+
+    QFile src(scratch.source());
+    REQUIRE(src.open(QIODevice::ReadOnly));
+    const QByteArray correct =
+        QCryptographicHash::hash(src.readAll(), QCryptographicHash::Sha256).toHex();
+    src.close();
+
+    const Run r = runImager({QStringLiteral("--cli"),
+                             QStringLiteral("--enable-writing-system-drives"),
+                             QStringLiteral("--sha256"), QString::fromUtf8(correct),
+                             scratch.source(), target}, true);
+
+    INFO(r.output.toStdString());
+    REQUIRE(r.finished);
+    CHECK(r.exitCode == 0);
+    CHECK_THAT(r.output.toStdString(), ContainsSubstring("Write successful."));
 }
