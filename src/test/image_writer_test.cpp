@@ -10202,3 +10202,107 @@ TEST_CASE("Clearing the token clears either kind", "[imagewriter][connecttoken]"
     CHECK(w.getRuntimeConnectToken().isEmpty());
     CHECK_FALSE(w._piConnectTokenIsOrgMinted);
 }
+
+// ══════════════════════════════════════════════════════════════
+// The settings that have a default other than false.
+//
+// getBoolSetting reads QSettings, and an unset key would ordinarily come
+// back false. Three keys are given a real default instead, and each of them
+// controls something the user notices: whether the card is ejected when the
+// write finishes, whether Imager looks for a new version, and whether it
+// reports anything back.
+//
+// Both directions matter. Losing the default turns the behaviour off for
+// everybody who has never touched the setting -- which is nearly everybody,
+// since the point of a default is that it is not configured. Letting the
+// default win over a stored value ignores the person who did go and change
+// it, and for telemetry that is a privacy question rather than a
+// convenience one.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+// getBoolSetting's defaults only apply to a key that has never been written,
+// and the settings file outlives the test binary. Clear it first.
+void forgetSetting(const QString& key)
+{
+    QSettings settings;
+    settings.remove(key);
+    settings.sync();
+}
+} // namespace
+
+TEST_CASE("A card is ejected after writing unless told otherwise",
+          "[imagewriter][settings][defaults]")
+{
+    // Nobody sets this; it has to be on by default. A user who pulls a card
+    // that was never ejected can lose the write they just waited for.
+    forgetSetting(QStringLiteral("eject"));
+    ImageWriter w(nullptr);
+    CHECK(w.getBoolSetting(QStringLiteral("eject")));
+
+    SECTION("and turning it off is respected")
+    {
+        // The stored value wins over the default. Somebody who writes many
+        // cards in a row turns this off deliberately.
+        w.setSetting(QStringLiteral("eject"), false);
+        CHECK_FALSE(w.getBoolSetting(QStringLiteral("eject")));
+    }
+
+    SECTION("and turning it back on is too")
+    {
+        w.setSetting(QStringLiteral("eject"), false);
+        REQUIRE_FALSE(w.getBoolSetting(QStringLiteral("eject")));
+        w.setSetting(QStringLiteral("eject"), true);
+        CHECK(w.getBoolSetting(QStringLiteral("eject")));
+    }
+
+    forgetSetting(QStringLiteral("eject"));
+}
+
+TEST_CASE("The build's telemetry and update-check defaults are what is used",
+          "[imagewriter][settings][defaults]")
+{
+    // Both are decided at build time -- ENABLE_TELEMETRY and
+    // ENABLE_CHECK_VERSION -- and a distribution packaging Imager may turn
+    // either off. Reading the key without its default would answer false
+    // whatever the build said.
+    //
+    // These assertions distinguish the two only in a build where the default
+    // is true, which is the default configuration and this one.
+    forgetSetting(QStringLiteral("telemetry"));
+    forgetSetting(QStringLiteral("check_version"));
+    ImageWriter w(nullptr);
+
+    CHECK(w.getBoolSetting(QStringLiteral("telemetry")) == TELEMETRY_ENABLED_DEFAULT);
+    CHECK(w.getBoolSetting(QStringLiteral("check_version")) == CHECK_VERSION_DEFAULT);
+}
+
+TEST_CASE("Turning telemetry off keeps it off", "[imagewriter][settings][defaults]")
+{
+    // The direction that matters. A default of true that overrode the stored
+    // value would keep reporting for somebody who had explicitly said not to.
+    forgetSetting(QStringLiteral("telemetry"));
+    ImageWriter w(nullptr);
+    REQUIRE(w.getBoolSetting(QStringLiteral("telemetry")) == TELEMETRY_ENABLED_DEFAULT);
+
+    w.setSetting(QStringLiteral("telemetry"), false);
+    CHECK_FALSE(w.getBoolSetting(QStringLiteral("telemetry")));
+
+    w.setSetting(QStringLiteral("check_version"), false);
+    CHECK_FALSE(w.getBoolSetting(QStringLiteral("check_version")));
+
+    forgetSetting(QStringLiteral("telemetry"));
+    forgetSetting(QStringLiteral("check_version"));
+}
+
+TEST_CASE("A key with no default of its own reads as off",
+          "[imagewriter][settings][defaults]")
+{
+    // Everything else. QML asks for settings that were never written, and
+    // the answer has to be a definite no rather than whatever the last key
+    // with a default happened to return.
+    forgetSetting(QStringLiteral("disable_warnings"));
+    ImageWriter w(nullptr);
+    CHECK_FALSE(w.getBoolSetting(QStringLiteral("disable_warnings")));
+    CHECK_FALSE(w.getBoolSetting(QStringLiteral("connect_org_enabled")));
+}
