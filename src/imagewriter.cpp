@@ -1524,29 +1524,16 @@ void ImageWriter::startWrite()
         // Parse the rpiboot device ID to extract USB bus/address/port info
         RpibootThread::DeviceInfo devInfo;
 
-        // Parse "rpiboot://bus:addr:port1.port2..."
-        QString devPath = _rpibootDeviceId;
-        if (devPath.startsWith("rpiboot://"))
-            devPath = devPath.mid(10);
-        QStringList parts = devPath.split(':');
-        if (parts.size() >= 2) {
-            devInfo.busNumber = static_cast<uint8_t>(parts[0].toUInt());
-            devInfo.deviceAddress = static_cast<uint8_t>(parts[1].toUInt());
-        }
-        if (parts.size() >= 3) {
-            for (const auto& p : parts[2].split('.'))
-                if (!p.isEmpty())
-                    devInfo.portPath.push_back(static_cast<uint8_t>(p.toUInt()));
-        }
-
-        // Part 4 is the USB PID, which encodes the chip generation.
-        // Format added in rpiboot_scanner.cpp: rpiboot://bus:addr:portpath:pid
-        devInfo.chipGeneration = rpiboot::ChipGeneration::BCM2711;  // safe default
-        if (parts.size() >= 4) {
-            auto pid = static_cast<uint16_t>(parts[3].toUInt());
-            if (auto gen = rpiboot::chipGenerationFromPid(pid))
-                devInfo.chipGeneration = *gen;
-        }
+        // rpiboot://bus:addr:port.path:pid -- see rpiboot_types.h
+        const rpiboot::DeviceUri parsed =
+            rpiboot::parseDeviceUri(_rpibootDeviceId.toStdString());
+        devInfo.busNumber = parsed.busNumber;
+        devInfo.deviceAddress = parsed.deviceAddress;
+        devInfo.portPath = parsed.portPath;
+        // Absent or unrecognised, the generation stays at DeviceInfo's own
+        // default of BCM2711, which is what this did before.
+        if (parsed.chipGeneration)
+            devInfo.chipGeneration = *parsed.chipGeneration;
 
         _rpibootThread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
         if (!_debugCustomFastbootGadget.isEmpty())

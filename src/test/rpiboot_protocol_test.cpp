@@ -1141,3 +1141,154 @@ TEST_CASE("A device confirmed as re-enumerated is a success",
     CHECK(ok);
     CHECK_THAT(lastStatus, Catch::Matchers::ContainsSubstring("rebooted"));
 }
+
+// ══════════════════════════════════════════════════════════════
+// The rpiboot device URI
+//
+// A Compute Module sitting in USB boot mode is not a block device yet, so
+// the scanner invents an address for it and the rest of the application
+// passes that string around: rpiboot://bus:address:port.path:pid.
+//
+// It was written in one file and taken apart in two others, each with its
+// own copy of the splitting. What the last field means is the part that
+// matters -- it is the chip generation, whose value is also the USB product
+// ID, written in decimal -- because it chooses which bootcode is uploaded.
+// A reader disagreeing with the writer about the base would send CM4
+// firmware to a CM5, and the board would simply never come back in fastboot
+// mode, with nothing to say why.
+//
+// So the first case here is a round trip: format it, parse it, and the
+// generation has to survive. The rest is what the parser does with input it
+// did not write itself.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A device URI survives being written and read back", "[rpiboot][uri]")
+{
+    const rpiboot::ChipGeneration generations[] = {
+        rpiboot::ChipGeneration::BCM2836_7,
+        rpiboot::ChipGeneration::BCM2711,
+        rpiboot::ChipGeneration::BCM2712,
+    };
+
+    for (const auto gen : generations) {
+        const std::vector<uint8_t> portPath{1, 4, 2};
+        const std::string uri = rpiboot::formatDeviceUri(3, 17, portPath, gen);
+        INFO("uri: " << uri);
+
+        const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri(uri);
+        REQUIRE(parsed.valid);
+        CHECK(parsed.busNumber == 3);
+        CHECK(parsed.deviceAddress == 17);
+        CHECK(parsed.portPath == portPath);
+        REQUIRE(parsed.chipGeneration.has_value());
+        CHECK(*parsed.chipGeneration == gen);
+    }
+}
+
+TEST_CASE("A URI without the scheme parses the same way", "[rpiboot][uri]")
+{
+    // DriveListModel is handed the string with the scheme on it and
+    // ImageWriter sometimes without, so both have to work.
+    const rpiboot::DeviceUri withScheme =
+        rpiboot::parseDeviceUri("rpiboot://1:5:2.3:10001");
+    const rpiboot::DeviceUri without = rpiboot::parseDeviceUri("1:5:2.3:10001");
+
+    REQUIRE(withScheme.valid);
+    REQUIRE(without.valid);
+    CHECK(withScheme.busNumber == without.busNumber);
+    CHECK(withScheme.deviceAddress == without.deviceAddress);
+    CHECK(withScheme.portPath == without.portPath);
+    CHECK(withScheme.chipGeneration == without.chipGeneration);
+}
+
+TEST_CASE("A URI with only a bus and an address is still usable", "[rpiboot][uri]")
+{
+    // The shortest form anything produces. No port path and no generation,
+    // so the caller keeps its own default for the latter -- which is what
+    // selects CM4 firmware, and is why the generation is reported as absent
+    // rather than guessed.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("rpiboot://2:9");
+
+    REQUIRE(parsed.valid);
+    CHECK(parsed.busNumber == 2);
+    CHECK(parsed.deviceAddress == 9);
+    CHECK(parsed.portPath.empty());
+    CHECK_FALSE(parsed.chipGeneration.has_value());
+}
+
+TEST_CASE("A URI with no address at all is refused", "[rpiboot][uri]")
+{
+    // Fewer than two fields means there is nothing to talk to.
+    for (const char *uri : {"", "rpiboot://", "rpiboot://1", "1"}) {
+        INFO("uri: " << uri);
+        CHECK_FALSE(rpiboot::parseDeviceUri(uri).valid);
+    }
+}
+
+TEST_CASE("Separators with nothing between them read as zeros", "[rpiboot][uri]")
+{
+    // Deliberately the same as the QString::split() and toUInt() this
+    // replaced, so the extraction changed no behaviour: two empty fields are
+    // two fields, and empty parses as zero.
+    //
+    // Harmless in practice rather than by design -- libusb has no bus 0
+    // address 0, so the open fails and says so, instead of reaching some
+    // other device. Worth pinning either way, since it is the kind of thing
+    // a later tightening should be a deliberate decision about.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("::::");
+    CHECK(parsed.valid);
+    CHECK(parsed.busNumber == 0);
+    CHECK(parsed.deviceAddress == 0);
+}
+
+TEST_CASE("A generation nobody knows is reported as unknown", "[rpiboot][uri]")
+{
+    // Rather than a wrong one. A PID this build does not recognise means a
+    // newer chip, and the caller's fallback is a deliberate choice; silently
+    // presenting it as a known generation would not be.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("rpiboot://1:5:2:9999");
+
+    REQUIRE(parsed.valid);
+    CHECK_FALSE(parsed.chipGeneration.has_value());
+}
+
+TEST_CASE("A hexadecimal generation is not read as a decimal one", "[rpiboot][uri]")
+{
+    // The field is decimal, and 0x2711 written as "2711" is 2711 -- not a
+    // generation at all. Reporting it as unknown is what stops the wrong
+    // bootcode going up; the round-trip case above is what stops the writer
+    // and the reader drifting apart in the first place.
+    CHECK_FALSE(rpiboot::parseDeviceUri("rpiboot://1:5:2:2711")
+                    .chipGeneration.has_value());
+    // And the decimal form of the same value is recognised.
+    REQUIRE(rpiboot::parseDeviceUri("rpiboot://1:5:2:10001")
+                .chipGeneration.has_value());
+    CHECK(*rpiboot::parseDeviceUri("rpiboot://1:5:2:10001").chipGeneration
+          == rpiboot::ChipGeneration::BCM2711);
+}
+
+TEST_CASE("An odd port path is taken apart without complaint", "[rpiboot][uri]")
+{
+    // The path is however many hops the device is from the root hub. Empty
+    // segments are skipped rather than becoming port 0, which would be a
+    // real port on a real hub.
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:").portPath.empty());
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:4").portPath
+          == std::vector<uint8_t>{4});
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:1..2").portPath
+          == std::vector<uint8_t>{1, 2});
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:1.2.3.4.5.6").portPath
+          == std::vector<uint8_t>{1, 2, 3, 4, 5, 6});
+}
+
+TEST_CASE("Numbers that are not numbers read as zero", "[rpiboot][uri]")
+{
+    // What the QString::toUInt() calls this replaced did, kept deliberately:
+    // the alternative is refusing a device over a malformed field the caller
+    // has no way to repair.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("rpiboot://x:y:z:w");
+    REQUIRE(parsed.valid);
+    CHECK(parsed.busNumber == 0);
+    CHECK(parsed.deviceAddress == 0);
+    CHECK_FALSE(parsed.chipGeneration.has_value());
+}
