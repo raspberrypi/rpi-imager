@@ -1833,6 +1833,21 @@ void ImageWriter::startWrite()
 // Cache file update methods removed - now handled by connecting DownloadThread directly to CacheManager
 
 /* Cancel write - for user-initiated cancellation only */
+void ImageWriter::_emitCancelled()
+{
+    // Which of the two the UI hears decides what the user is told: that they
+    // cancelled, or that the card was taken out from under the write. The
+    // reason is cleared either way -- left set, the next write the user
+    // cancels themselves would be reported as a card removal, on a card
+    // sitting right there.
+    if (_cancelledDueToDeviceRemoval) {
+        _cancelledDueToDeviceRemoval = false;
+        emit writeCancelledDueToDeviceRemoval();
+    } else {
+        emit cancelled();
+    }
+}
+
 void ImageWriter::cancelWrite()
 {
     setWriteState(WriteState::Cancelling);
@@ -1852,7 +1867,7 @@ void ImageWriter::cancelWrite()
                 _rpibootThread = nullptr;
             }
             setWriteState(WriteState::Cancelled);
-            emit cancelled();
+            _emitCancelled();
         });
         return;
     }
@@ -1866,7 +1881,7 @@ void ImageWriter::cancelWrite()
                 _fastbootFlashThread = nullptr;
             }
             setWriteState(WriteState::Cancelled);
-            emit cancelled();
+            _emitCancelled();
         });
         return;
     }
@@ -1886,7 +1901,7 @@ void ImageWriter::cancelWrite()
         // on: no error, no progress, nothing on screen. Reached whenever
         // Cancel lands after the write has already finished.
         setWriteState(WriteState::Cancelled);
-        emit cancelled();
+        _emitCancelled();
     }
 }
 
@@ -1947,13 +1962,7 @@ void ImageWriter::onCancelled()
     // End performance stats session
     _performanceStats->endSession(false, _cancelledDueToDeviceRemoval ? "Device removed" : "Cancelled by user");
 
-    // If cancellation was due to device removal, emit a dedicated signal
-    if (_cancelledDueToDeviceRemoval) {
-        _cancelledDueToDeviceRemoval = false;
-        emit writeCancelledDueToDeviceRemoval();
-    } else {
-        emit cancelled();
-    }
+    _emitCancelled();
 }
 
 /* Return true if url is in our local disk cache */

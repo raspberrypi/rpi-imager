@@ -306,6 +306,10 @@ public:
     /// post-sideload path and the directly-selected fastboot device path.
     void _configureAndStartFastbootFlash();
 
+    // Emits cancelled() or writeCancelledDueToDeviceRemoval(), whichever the
+    // reason calls for, and clears the reason.
+    void _emitCancelled();
+
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
 

@@ -606,6 +606,167 @@ TEST_CASE("A disable_warnings flag found in the settings does not survive startu
     CHECK_FALSE(after.contains(QStringLiteral("disable_warnings")));
 }
 
+// ══════════════════════════════════════════════════════════════
+// The card being pulled out
+//
+// A user unplugging the card is not an exotic case: it is what happens when
+// somebody grabs the wrong drive, or a hub loses power, or they simply think
+// better of it. What Imager does about it depends on when: idle, the
+// selection has to stop being usable; mid-write, the write has to stop and
+// say the card went away rather than reporting whatever I/O error the driver
+// produced; and after a successful write, removing the card is just ejecting
+// it and must raise nothing at all.
+//
+// Each of those is a different signal to the UI, and none of them had a
+// test.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// onSelectedDeviceRemoved() and onSuccess() are protected; everything else
+// here is the writer as it ships.
+class WriterWithRemoval : public ImageWriter
+{
+public:
+    WriterWithRemoval() : ImageWriter(nullptr) {}
+    using ImageWriter::onSelectedDeviceRemoved;
+    using ImageWriter::onSuccess;
+    using ImageWriter::onFinalizing;
+    using ImageWriter::onCancelled;
+};
+
+// Which of the mutually exclusive outcomes the writer reported.
+struct RemovalOutcome
+{
+    int selectedDeviceRemoved = 0;
+    int cancelledPlain = 0;
+    int cancelledByRemoval = 0;
+
+    explicit RemovalOutcome(ImageWriter *w)
+    {
+        QObject::connect(w, &ImageWriter::selectedDeviceRemoved,
+                         [this]() { ++selectedDeviceRemoved; });
+        QObject::connect(w, &ImageWriter::cancelled,
+                         [this]() { ++cancelledPlain; });
+        QObject::connect(w, &ImageWriter::writeCancelledDueToDeviceRemoval,
+                         [this]() { ++cancelledByRemoval; });
+    }
+};
+
+} // namespace
+
+TEST_CASE("Another drive being unplugged leaves the choice alone",
+          "[imagewriter][removal]")
+{
+    // Pulling an unrelated stick out of the same hub must not disturb a
+    // selection that is still there -- the Write button going dead for no
+    // visible reason is worse than most errors, because nothing says why.
+    WriterWithRemoval writer;
+    RemovalOutcome outcome(&writer);
+    writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
+    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    REQUIRE(writer.readyToWrite());
+
+    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/somethingelse"));
+
+    CHECK(writer.readyToWrite());
+    CHECK(outcome.selectedDeviceRemoved == 0);
+}
+
+TEST_CASE("The chosen drive being unplugged makes the write impossible and says so",
+          "[imagewriter][removal]")
+{
+    WriterWithRemoval writer;
+    RemovalOutcome outcome(&writer);
+    UiLog log(&writer);
+    writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
+    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    REQUIRE(writer.readyToWrite());
+
+    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    // The screen is told, so it can drop the selection rather than leaving a
+    // drive listed that is not there.
+    CHECK(outcome.selectedDeviceRemoved == 1);
+    CHECK_FALSE(writer.readyToWrite());
+
+    // And pressing Write anyway names the drive as the thing that is wrong,
+    // rather than saying nothing was selected -- the user did select one.
+    writer.startWrite();
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("no longer available"));
+}
+
+TEST_CASE("Unplugging after a successful write is just ejecting",
+          "[imagewriter][removal]")
+{
+    // The card comes out because the write finished. An error here would
+    // undo the one screen in the whole application that says everything
+    // worked.
+    WriterWithRemoval writer;
+    writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
+    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.onSuccess();
+    RemovalOutcome outcome(&writer);
+    UiLog log(&writer);
+
+    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    CHECK(outcome.selectedDeviceRemoved == 0);
+    CHECK(outcome.cancelledPlain == 0);
+    CHECK(outcome.cancelledByRemoval == 0);
+    CHECK(log.errors.isEmpty());
+}
+
+TEST_CASE("Unplugging during preparation says the card went away",
+          "[imagewriter][removal]")
+{
+    // The window between pressing Write and the writing thread existing:
+    // preparation, which includes verifying a cached image and can run for
+    // seconds. Pull the card here and the write has to stop -- and say which
+    // of the two things happened, because "cancelled" reads as something the
+    // user did.
+    WriterWithRemoval writer;
+    writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
+    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.onFinalizing();   // a state the writer counts as in-progress
+    RemovalOutcome outcome(&writer);
+
+    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    CHECK(outcome.cancelledByRemoval == 1);
+    CHECK(outcome.cancelledPlain == 0);
+}
+
+TEST_CASE("A later cancellation is not still blamed on the card",
+          "[imagewriter][removal]")
+{
+    // The other half of the case above. The reason must not stay set: the
+    // next write the user cancels themselves would be reported as the card
+    // having been removed, on a card sitting right there.
+    //
+    // The second cancellation is delivered through onCancelled(), which is
+    // what the writing thread's completion calls -- and the only route that
+    // consults the reason. Cancelling again the way the case above does
+    // would take the no-thread path and not consult it, so nothing could be
+    // observed.
+    WriterWithRemoval writer;
+    writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
+    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.onFinalizing();
+    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+
+    // A second write, cancelled by the user this time.
+    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.onFinalizing();
+    RemovalOutcome outcome(&writer);
+    writer.onCancelled();
+
+    CHECK(outcome.cancelledPlain == 1);
+    CHECK(outcome.cancelledByRemoval == 0);
+}
+
 int main(int argc, char *argv[])
 {
     // Offscreen: ImageWriter asks QGuiApplication for the platform name, and
@@ -7777,7 +7938,7 @@ TEST_CASE("The fallback image picker reports a custom image", "[imagewriter][fil
 TEST_CASE("Minting an organisation key without one configured says so",
           "[imagewriter][connect]")
 {
-    ImageWriter writer(nullptr);
+    WriterWithRemoval writer;
     writer.clearConnectOrgRegistration();
     REQUIRE_FALSE(writer.hasConnectOrgRegistration());
 
@@ -7795,7 +7956,7 @@ TEST_CASE("A refusal to mint reports no key of its own", "[imagewriter][connect]
     // Whatever comes back must not look like a token. The step writes what
     // it is given into the image, and "ok" being false is the only thing
     // between a failed mint and a board configured with a rejected key.
-    ImageWriter writer(nullptr);
+    WriterWithRemoval writer;
     writer.clearConnectOrgRegistration();
 
     const QVariantMap result =
