@@ -17,6 +17,13 @@
 
 #include <cmath>
 
+#include <QProcess>
+#include <QStringList>
+
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 using Catch::Matchers::ContainsSubstring;
 
 // ============================================================================
@@ -821,3 +828,154 @@ TEST_CASE("A policy filename refuses what it cannot write", "[platformquirks][po
 }
 
 #endif // Q_OS_LINUX && PLATFORMQUIRKS_ENABLE_TEST_API
+
+#ifdef Q_OS_LINUX
+// ============================================================================
+// The monitor with something to notice
+//
+// The three cases above start the watcher and stop it again, which is worth
+// knowing but leaves the thread with nothing to read: no link changes state
+// inside the moment they run, so the loop polls once and exits. Everything
+// past the poll -- reading the netlink message, walking the headers, deciding
+// a link went up, dropping the cached answer and telling the caller -- had
+// never run.
+//
+// It is the part that matters. The wizard asks whether there is a network to
+// decide whether the device list can be fetched at all, and caches the
+// answer. A user who plugs in a cable after starting Imager depends entirely
+// on this thread noticing: without it they stay on the offline screen, with a
+// working connection, and nothing tells them to restart the application.
+//
+// So a link is actually changed. A dummy interface, created for the test and
+// removed after: it carries no traffic, gets no address and no route, and
+// touches nothing of the host's. Named distinctively so a leftover is
+// obviously the test's own.
+// ============================================================================
+
+namespace {
+
+bool runAsRoot(const QStringList &args)
+{
+    QProcess p;
+    p.start(QStringLiteral("sudo"),
+            QStringList{QStringLiteral("-n")} + args);
+    if (!p.waitForFinished(15000))
+        return false;
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+bool haveRoot()
+{
+    return runAsRoot({QStringLiteral("true")});
+}
+
+// A dummy interface that removes itself.
+class DummyLink
+{
+public:
+    explicit DummyLink(const QString &name) : _name(name)
+    {
+        // Any leftover from a previous run, so the add below does not fail on
+        // a name that is already taken.
+        runAsRoot({QStringLiteral("ip"), QStringLiteral("link"),
+                   QStringLiteral("del"), _name});
+        _created = runAsRoot({QStringLiteral("ip"), QStringLiteral("link"),
+                              QStringLiteral("add"), _name,
+                              QStringLiteral("type"), QStringLiteral("dummy")});
+    }
+
+    ~DummyLink()
+    {
+        if (_created)
+            runAsRoot({QStringLiteral("ip"), QStringLiteral("link"),
+                       QStringLiteral("del"), _name});
+    }
+
+    DummyLink(const DummyLink &) = delete;
+    DummyLink &operator=(const DummyLink &) = delete;
+
+    bool created() const { return _created; }
+
+    bool bringUp() const
+    {
+        return runAsRoot({QStringLiteral("ip"), QStringLiteral("link"),
+                          QStringLiteral("set"), _name, QStringLiteral("up")});
+    }
+
+    bool takeDown() const
+    {
+        return runAsRoot({QStringLiteral("ip"), QStringLiteral("link"),
+                          QStringLiteral("set"), _name, QStringLiteral("down")});
+    }
+
+private:
+    QString _name;
+    bool _created = false;
+};
+
+} // namespace
+
+TEST_CASE("A link changing state reaches the callback", "[platformquirks][network][root]")
+{
+    if (!haveRoot())
+        SKIP("passwordless sudo is not available, so no interface can be "
+             "brought up for the monitor to notice");
+
+    DummyLink link(QStringLiteral("rpiimgtest0"));
+    if (!link.created())
+        SKIP("no dummy interface could be created on this host");
+
+    std::atomic<int> calls{0};
+    std::atomic<bool> sawAnswer{false};
+    PlatformQuirks::startNetworkMonitoring([&](bool available) {
+        sawAnswer.store(available || true);
+        calls.fetch_add(1);
+    });
+
+    // Up, then down: two changes, so a run that happened to miss the first
+    // still has one to catch, and the loop goes round more than once.
+    CHECK(link.bringUp());
+    CHECK(link.takeDown());
+
+    // Generous, because the callback asks the system whether there is a
+    // network before answering and that can take a moment.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (calls.load() == 0 && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    PlatformQuirks::stopNetworkMonitoring();
+
+    CHECK(calls.load() > 0);
+    CHECK(sawAnswer.load());
+}
+
+TEST_CASE("Stopping the monitor stops the callbacks", "[platformquirks][network][root]")
+{
+    // The other half. The watcher outlives the screen that asked for it, and
+    // a callback arriving after the caller has gone is a use-after-free
+    // rather than a missed notification.
+    if (!haveRoot())
+        SKIP("passwordless sudo is not available");
+
+    DummyLink link(QStringLiteral("rpiimgtest1"));
+    if (!link.created())
+        SKIP("no dummy interface could be created on this host");
+
+    std::atomic<int> calls{0};
+    PlatformQuirks::startNetworkMonitoring([&](bool) { calls.fetch_add(1); });
+
+    CHECK(link.bringUp());
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (calls.load() == 0 && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    REQUIRE(calls.load() > 0);
+
+    PlatformQuirks::stopNetworkMonitoring();
+    const int after = calls.load();
+
+    CHECK(link.takeDown());
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    CHECK(calls.load() == after);
+}
+#endif // Q_OS_LINUX
