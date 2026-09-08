@@ -1767,38 +1767,14 @@ void ImageWriter::startWrite()
         // Memory allocation failed during thread/buffer creation
         qDebug() << "Memory allocation failed during write setup:" << e.what();
         
-        // Log the failure to performance stats
-        _performanceStats->recordEvent(
-            PerformanceStats::EventType::MemoryAllocationFailure,
-            0,  // No duration - immediate failure
-            false,
-            QString("Failed to allocate memory for write operation: %1").arg(e.what())
-        );
-        
-        // Provide a clear, actionable error message to the user
-        QString errorMsg = tr("Failed to start write operation: insufficient memory.\n\n"
-                              "The system does not have enough available memory to perform this operation. "
-                              "Try closing other applications to free up memory, then try again.\n\n"
-                              "Technical details: %1").arg(e.what());
-        
-        setWriteState(WriteState::Failed);
-        _performanceStats->endSession(false, "Memory allocation failure");
-        emit error(errorMsg);
+        // Both of these were written out again here, identically to the
+        // handlers below. _localSourceError has the same note: two copies of
+        // a message drift, and the one that gets the next fix is whichever
+        // the author happened to be looking at.
+        _handleMemoryAllocationFailure(e.what());
         return;
     } catch (const std::exception& e) {
-        // Other exception during thread creation
-        qDebug() << "Exception during write setup:" << e.what();
-        
-        _performanceStats->recordEvent(
-            PerformanceStats::EventType::MemoryAllocationFailure,
-            0,
-            false,
-            QString("Exception during write setup: %1").arg(e.what())
-        );
-        
-        setWriteState(WriteState::Failed);
-        _performanceStats->endSession(false, QString("Setup exception: %1").arg(e.what()));
-        emit error(tr("Failed to start write operation: %1").arg(e.what()));
+        _handleSetupException(e.what());
         return;
     }
 

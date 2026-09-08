@@ -1558,6 +1558,96 @@ TEST_CASE("A bootstrap that fails does not leave the drive list frozen",
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
 
+// ══════════════════════════════════════════════════════════════
+// When the write cannot even be set up
+//
+// Building the writing thread allocates the ring buffers, and on a small
+// machine with a large image that allocation can fail. Two handlers turn
+// that into something on screen, and neither had ever run.
+//
+// Both have to do the same two things: say something the user can act on,
+// and leave the writer able to try again. A failure that left the state at
+// Preparing would have startWrite()'s re-entry guard reject every attempt
+// afterwards -- the Write button would stop doing anything at all, with no
+// error and no progress, and only restarting the application would clear it.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class SetupFailureWriter : public ImageWriter
+{
+public:
+    SetupFailureWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::_handleMemoryAllocationFailure;
+    using ImageWriter::_handleSetupException;
+};
+
+} // namespace
+
+TEST_CASE("Running out of memory says so, and says what to do about it",
+          "[imagewriter][setupfail]")
+{
+    SetupFailureWriter writer;
+    UiLog log(&writer);
+
+    writer._handleMemoryAllocationFailure("std::bad_alloc");
+
+    REQUIRE(log.errors.size() == 1);
+    const std::string said = log.errors[0].toStdString();
+    INFO(said);
+
+    // Named as memory rather than as a generic failure: on a Pi writing a
+    // large image this is the likeliest way setup fails, and it is the one
+    // the user can actually do something about.
+    CHECK_THAT(said, ContainsSubstring("memory"));
+    CHECK_THAT(said, ContainsSubstring("closing other applications"));
+    // The exception's own text is carried, since it is the only clue to
+    // which allocation it was.
+    CHECK_THAT(said, ContainsSubstring("std::bad_alloc"));
+}
+
+TEST_CASE("A failed setup leaves the Write button usable",
+          "[imagewriter][setupfail]")
+{
+    // The state machine half. startWrite() refuses to re-enter while a write
+    // is in progress, and Preparing counts as in progress -- so a setup
+    // failure that did not move the state on would wedge the application
+    // until it was restarted.
+    SetupFailureWriter writer;
+
+    // Read through the property, which is the same route QML takes -- the
+    // getter itself is private.
+    const auto reportedState = [](ImageWriter &w) {
+        return w.property("writeState").value<ImageWriter::WriteState>();
+    };
+
+    writer._handleMemoryAllocationFailure("std::bad_alloc");
+    CHECK(reportedState(writer) == ImageWriter::WriteState::Failed);
+
+    SetupFailureWriter other;
+    other._handleSetupException("something else went wrong");
+    CHECK(reportedState(other) == ImageWriter::WriteState::Failed);
+}
+
+TEST_CASE("Any other setup failure is still reported", "[imagewriter][setupfail]")
+{
+    // Not every failure building the thread is an allocation. Whatever it
+    // was, the user has to be told rather than left watching a screen that
+    // never moves.
+    SetupFailureWriter writer;
+    UiLog log(&writer);
+
+    writer._handleSetupException("could not open device");
+
+    REQUIRE(log.errors.size() == 1);
+    const std::string said = log.errors[0].toStdString();
+    INFO(said);
+    CHECK_THAT(said, ContainsSubstring("could not open device"));
+    // And not mislabelled as the memory case, which would send the user off
+    // closing applications for no reason.
+    CHECK_THAT(said, !ContainsSubstring("insufficient memory"));
+}
+
 int main(int argc, char *argv[])
 {
     // Offscreen: ImageWriter asks QGuiApplication for the platform name, and
