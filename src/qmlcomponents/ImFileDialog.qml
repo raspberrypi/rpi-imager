@@ -582,41 +582,24 @@ BaseDialog {
                 anchors.fill: parent
                 activeFocusOnTab: false  // Don't focus the ScrollView itself, only its children
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
-                
-                property int currentFileIndex: -1
-                
-                Keys.onUpPressed: {
-                    if (currentFileIndex > 0) {
-                        currentFileIndex--
-                        // Update selection
-                        var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                        if (fileItem && fileItem.fileUrl) {
-                            dialog.selectedFile = fileItem.fileUrl
-                        }
-                    }
-                }
-                Keys.onDownPressed: {
-                    if (currentFileIndex < filesOnlyModel.count - 1) {
-                        currentFileIndex++
-                        // Update selection
-                        var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                        if (fileItem && fileItem.fileUrl) {
-                            dialog.selectedFile = fileItem.fileUrl
-                        }
-                    }
-                }
-                Keys.onEnterPressed: {
-                    if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
-                        dialog.close()
-                        dialog.accepted()
-                    }
-                }
-                Keys.onReturnPressed: {
-                    if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
-                        dialog.close()
-                        dialog.accepted()
-                    }
-                }
+
+                // This used to carry its own Up/Down/Enter/Return handlers
+                // and a currentFileIndex to go with them. They could not
+                // work, and were removed rather than covered.
+                //
+                // Two reasons. The view is activeFocusOnTab: false and
+                // nothing focuses it, so the keys never arrived. And the
+                // handlers picked a file out of fileColumn.children by
+                // position -- "+1 because of up entry" -- from a Column
+                // whose three children are the up button, the file list and
+                // the empty-folder message. The files are delegates inside
+                // that list, not siblings of it, so none of the children has
+                // a fileUrl and nothing could be selected. Forcing focus and
+                // pressing Down twice advanced the counter to 1 and left
+                // selectedFile empty.
+                //
+                // The working versions of all four are on filesList below,
+                // which does take focus and does address its own model.
 
                 Column {
                     id: fileColumn
