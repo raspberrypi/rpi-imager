@@ -1167,3 +1167,63 @@ TEST_CASE("A random-access write that fails records why", "[fileops][writeerror]
 
   ops->Close();
 }
+
+TEST_CASE("An async write that fails at completion is reported",
+          "[fileops][writeerror]") {
+  // The path a card takes when it stops accepting data part-way through a
+  // write: the submission is fine, and the failure arrives later in the
+  // completion queue. It is the commonest real hardware failure there is,
+  // and the branch that handles it was never reached.
+  //
+  // The faulty-device case above accepts either outcome -- "submission
+  // refused" or "the completions carried it" -- and on this machine takes
+  // the first, so the completion branch stayed uncovered behind a test that
+  // looked like it covered it.
+  //
+  // /dev/full reaches it directly and needs no privileges: every write to it
+  // fails with ENOSPC, and io_uring accepts the submission and reports the
+  // failure in the completion.
+  if (::access("/dev/full", W_OK) != 0) {
+    SKIP("/dev/full is not available on this host");
+  }
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops != nullptr);
+  REQUIRE(ops->OpenDevice("/dev/full") == FileError::kSuccess);
+
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no completion path to fail");
+
+  REQUIRE(ops->SetAsyncQueueDepth(4));
+
+  const std::size_t kChunk = 1u << 20;
+  AlignedBuffer buffer(kChunk);
+  std::memset(buffer.data(), 0x5A, buffer.size());
+
+  // Enough to get past submission and into completions.
+  bool submissionRefused = false;
+  for (int i = 0; i < 8; ++i) {
+    if (ops->AsyncWriteSequential(buffer.data(), buffer.size(), nullptr)
+        != FileError::kSuccess) {
+      submissionRefused = true;
+      break;
+    }
+  }
+
+  const FileError drained = ops->WaitForPendingWrites();
+
+  INFO("submission refused: " << submissionRefused
+       << ", drain said " << static_cast<int>(drained)
+       << ", errno " << ops->GetLastErrorCode());
+
+  // However it surfaced, it must not come back as success against a device
+  // that took none of it.
+  CHECK((submissionRefused || drained != FileError::kSuccess));
+
+  // And the reason survives to whoever builds the message. io_uring hands
+  // the error back as -errno in the completion rather than through errno,
+  // so it has to be taken from there or it is lost.
+  CHECK(ops->GetLastErrorCode() == ENOSPC);
+
+  ops->Close();
+}
