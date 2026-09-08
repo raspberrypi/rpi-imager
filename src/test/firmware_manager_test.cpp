@@ -31,6 +31,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <optional>
 #include <string>
 
@@ -1414,4 +1415,451 @@ TEST_CASE("A new EEPROM version whose payload cannot be fetched fails rather tha
     CHECK_FALSE(std::filesystem::exists(payload));
 
     fm.clearCache();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// The boards that were never exercised, and the network going away
+//
+// Everything above drives a CM5 (BCM2712). The manifest, though, is a table
+// of URLs keyed on chip *and* mode, and three of its arms had never been
+// read: secure boot on a CM4, fastboot on a CM3, and secure boot on a chip
+// that has no secure-boot firmware at all. A wrong URL in any of them is not
+// a compile error and not a crash -- it is a 404, and what the user sees is
+// provisioning that stops with nothing to say why.
+//
+// The rest is what happens when the source cannot be reached, which for this
+// class is the normal case rather than the exceptional one: firmware is
+// fetched once and then used offline for as long as the cache survives.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+std::string manifestUrlFor(const std::vector<TestableFirmwareManager::ManifestEntry> &m,
+                           const std::string &localPath)
+{
+    for (const auto &e : m)
+        if (e.localPath == localPath)
+            return e.url;
+    return {};
+}
+
+bool manifestHas(const std::vector<TestableFirmwareManager::ManifestEntry> &m,
+                 const std::string &localPath)
+{
+    for (const auto &e : m)
+        if (e.localPath == localPath)
+            return true;
+    return false;
+}
+
+std::string manifestJoined(const std::vector<TestableFirmwareManager::ManifestEntry> &m)
+{
+    std::string all;
+    for (const auto &e : m)
+        all += e.url + " -> " + e.localPath + "\n";
+    return all;
+}
+
+} // namespace
+
+TEST_CASE("A CM4 recovery manifest asks only for CM4 firmware", "[firmware][sbr]")
+{
+    // A CM4's EEPROM and a CM5's are different silicon with different
+    // images. Fetching one for the other does not fail at download time --
+    // both files exist upstream -- so the first thing that notices is the
+    // board, after the write.
+    TestableFirmwareManager fm;
+    const auto m = fm.buildManifest(SideloadMode::SecureBootRecovery,
+                                    ChipGeneration::BCM2711,
+                                    std::optional<std::string>("2024-09-23"));
+    INFO(manifestJoined(m));
+    REQUIRE_FALSE(m.empty());
+
+    // The USB-mode bootcode a CM4 runs to write its EEPROM is rpi-eeprom's
+    // 2711 recovery.bin, landing as bootcode4.bin.
+    CHECK(manifestUrlFor(m, "bootcode4.bin").find("firmware-2711/latest/recovery.bin")
+          != std::string::npos);
+
+    // The recovery subdirectory is the unsuffixed one; secure-boot-recovery5
+    // is the CM5 spelling and nothing here may use it.
+    CHECK(manifestHas(m, "secure-boot-recovery/boot.conf"));
+    CHECK(manifestHas(m, "secure-boot-recovery/config.txt"));
+
+    const std::string pieeprom = manifestUrlFor(m, "secure-boot-recovery/pieeprom.original.bin");
+    CHECK(pieeprom.find("firmware-2711/latest/pieeprom-2024-09-23.bin") != std::string::npos);
+
+    // Nothing 2712-shaped anywhere in the list.
+    const std::string all = manifestJoined(m);
+    CHECK(all.find("2712") == std::string::npos);
+    CHECK(all.find("bootcode5") == std::string::npos);
+    CHECK(all.find("recovery5") == std::string::npos);
+
+    for (const auto &e : m) {
+        INFO("entry: " << e.url << " -> " << e.localPath);
+        CHECK_FALSE(e.url.empty());
+        CHECK_FALSE(fs::path(e.localPath).is_absolute());
+        CHECK(e.localPath.find("..") == std::string::npos);
+    }
+}
+
+TEST_CASE("A CM3 fastboot manifest uses the self-contained bundle", "[firmware]")
+{
+    // BCM2836/7 bootstraps differently from the later chips: bootcode.bin
+    // comes from usbboot's mass-storage directory, and the fastboot payload
+    // is one bundle rather than a gadget kernel plus a config plus a TAR.
+    // Handing it the CM4/CM5 file list would leave the board with a
+    // bootcode it cannot run.
+    TestableFirmwareManager fm;
+    const auto m = fm.buildManifest(SideloadMode::Fastboot, ChipGeneration::BCM2836_7);
+    INFO(manifestJoined(m));
+    REQUIRE_FALSE(m.empty());
+
+    CHECK(manifestUrlFor(m, "bootcode.bin").find("msd/bootcode.bin") != std::string::npos);
+    CHECK(manifestUrlFor(m, "fastboot/bootfiles.bin").find("2710-bootfiles-bin")
+          != std::string::npos);
+
+    // No separate gadget kernel and no separate config: the bundle carries
+    // both, and asking for them would 404.
+    CHECK_FALSE(manifestHas(m, "fastboot/fastboot-gadget.img"));
+    CHECK_FALSE(manifestHas(m, "fastboot/config.txt"));
+
+    // And it is genuinely a different list from the later chips'.
+    const auto later = fm.buildManifest(SideloadMode::Fastboot, ChipGeneration::BCM2712);
+    CHECK(manifestJoined(m) != manifestJoined(later));
+}
+
+TEST_CASE("Secure boot on a board that has no secure-boot firmware is refused",
+          "[firmware][sbr]")
+{
+    // There is no secure-boot recovery for BCM2836/7. The manifest for it is
+    // empty, and an empty manifest must stop the run: the alternative is a
+    // cache directory with nothing in it, reported as ready.
+    TestableFirmwareManager fm;
+    CHECK(fm.buildManifest(SideloadMode::SecureBootRecovery,
+                           ChipGeneration::BCM2836_7,
+                           std::optional<std::string>("2024-09-23")).empty());
+
+    // Port 1 is nothing: the version lookup fails immediately, so this
+    // exercises the empty manifest rather than the network.
+    ServedFirmwareManager served("http://127.0.0.1:1/");
+    served.clearCache();
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = served.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                            rpiboot::ChipGeneration::BCM2836_7,
+                                            nullptr, cancelled);
+    INFO("error: " << served.lastError());
+    CHECK(dir.empty());
+    CHECK(served.lastError().find("No firmware files defined") != std::string::npos);
+
+    served.clearCache();
+}
+
+namespace {
+
+// A manager whose source and cache are both given from outside, so two runs
+// can share a cache while the source between them changes -- which is how
+// "the network went away" is expressed here.
+class PinnedFirmwareManager : public FirmwareManager
+{
+public:
+    PinnedFirmwareManager(std::string base, fs::path cache)
+        : _base(std::move(base)), _cache(std::move(cache)) {}
+
+    std::filesystem::path cacheRoot() const override { return _cache; }
+
+protected:
+    std::string usbbootBase() const override { return _base; }
+    std::string eepromBase() const override { return _base; }
+    std::string provisionerBase() const override { return _base; }
+
+private:
+    std::string _base;
+    fs::path    _cache;
+};
+
+// What a CM4 secure-boot-recovery run asks for. The unsuffixed
+// secure-boot-recovery directory and firmware-2711 throughout -- deliberately
+// not shared with the CM5 helper above, so that a manifest that reached for
+// the wrong chip's paths would find nothing here.
+void layOutSecureBootRecovery2711(const QString &root, const QString &eepromVersion)
+{
+    struct Entry { QString path; QByteArray body; };
+    const Entry entries[] = {
+        {QStringLiteral("secure-boot-recovery/boot.conf"),  QByteArrayLiteral("BOOT_ORDER=0xf1")},
+        {QStringLiteral("secure-boot-recovery/config.txt"), QByteArrayLiteral("# cm4 recovery")},
+        {QStringLiteral("firmware-2711/latest/pieeprom-") + eepromVersion + QStringLiteral(".bin"),
+         QByteArrayLiteral("cm4 pieeprom")},
+        {QStringLiteral("firmware-2711/latest/recovery.bin"), QByteArrayLiteral("cm4 recovery")},
+        {QStringLiteral("firmware-2711/versions.txt"),
+         (eepromVersion + QStringLiteral("  1727086800  abc  latest\n")).toLatin1()},
+    };
+    for (const Entry &e : entries) {
+        const QString full = QDir(root).filePath(e.path);
+        QDir().mkpath(QFileInfo(full).absolutePath());
+        QFile f(full);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(e.body);
+        f.close();
+    }
+}
+
+} // namespace
+
+TEST_CASE("A CM4 secure-boot fetch caches the CM4 firmware", "[firmware][fetch][sbr]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutSecureBootRecovery2711(served.path(), QStringLiteral("2024-09-23"));
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir cache;
+    REQUIRE(cache.isValid());
+    PinnedFirmwareManager fm(server.base(),
+                             fs::path(cache.path().toStdString()) / "rpiboot-firmware");
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                        rpiboot::ChipGeneration::BCM2711,
+                                        nullptr, cancelled);
+    INFO("error: " << fm.lastError());
+    REQUIRE_FALSE(dir.empty());
+
+    // The bootcode a fused CM4 runs is the 2711 recovery binary, under the
+    // 2711 name. A CM5-shaped cache would carry bootcode5.bin instead.
+    CHECK(readFileContents(dir / "bootcode4.bin") == "cm4 recovery");
+    CHECK_FALSE(fs::exists(dir / "bootcode5.bin"));
+
+    const auto sub = dir / "secure-boot-recovery";
+    CHECK(readFileContents(sub / "pieeprom.original.bin") == "cm4 pieeprom");
+    CHECK(fs::exists(sub / "boot.conf"));
+    CHECK(readFileContents(sub / ".eeprom-version") == "2024-09-23\n");
+    CHECK_FALSE(fs::exists(dir / "secure-boot-recovery5"));
+}
+
+TEST_CASE("Offline with nothing cached names the file it cannot resolve",
+          "[firmware][fetch][sbr]")
+{
+    // A first run with no network: the version lookup fails, no previous run
+    // left a version behind, and so there is no name for the dated EEPROM
+    // binary to fetch. The manifest carries an empty URL for it rather than a
+    // wrong one, and the run has to stop and say which file is missing --
+    // otherwise the cache validates on the files that *did* arrive and the
+    // board is provisioned without its bootloader.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    // Everything except versions.txt, so the two config files download and
+    // only the EEPROM payload is unresolvable.
+    const struct { const char *path; const char *body; } entries[] = {
+        {"secure-boot-recovery5/boot.conf",  "BOOT_ORDER=0xf1"},
+        {"secure-boot-recovery5/config.txt", "# recovery config"},
+        {"firmware-2712/latest/recovery.bin", "cm5 recovery"},
+    };
+    for (const auto &e : entries) {
+        const QString full = QDir(served.path()).filePath(QString::fromLatin1(e.path));
+        QDir().mkpath(QFileInfo(full).absolutePath());
+        QFile f(full);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(e.body);
+        f.close();
+    }
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir cache;
+    REQUIRE(cache.isValid());
+    PinnedFirmwareManager fm(server.base(),
+                             fs::path(cache.path().toStdString()) / "rpiboot-firmware");
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    CHECK(dir.empty());
+    CHECK(fm.lastError().find("pieeprom.original.bin") != std::string::npos);
+    CHECK(fm.lastError().find("nothing cached") != std::string::npos);
+}
+
+TEST_CASE("A remembered EEPROM version carries a run whose version lookup fails",
+          "[firmware][fetch][sbr]")
+{
+    // The version metadata is a separate small file with its own cached copy,
+    // and the version a run settled on is also recorded beside the payload.
+    // When the metadata is gone and cannot be re-fetched -- a partially
+    // cleared cache, or macOS purging part of the app's cache directory --
+    // the recorded version is what is left to go on. Without it the run has
+    // no name for the EEPROM binary and stops, even though the binary it
+    // needs is already sitting in the cache.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutSecureBootRecovery2711(served.path(), QStringLiteral("2024-09-23"));
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir cacheDir;
+    REQUIRE(cacheDir.isValid());
+    const fs::path cache = fs::path(cacheDir.path().toStdString()) / "rpiboot-firmware";
+
+    std::atomic<bool> cancelled{false};
+    fs::path dir;
+    {
+        PinnedFirmwareManager fm(server.base(), cache);
+        dir = fm.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                 rpiboot::ChipGeneration::BCM2711, nullptr, cancelled);
+        INFO("first run error: " << fm.lastError());
+        REQUIRE_FALSE(dir.empty());
+    }
+
+    // A purge takes whole files, and it does not get to choose which. Here it
+    // has taken the cached metadata and the EEPROM payload and left the
+    // recorded version, which is the only case that costs anything: with the
+    // payload still on disk the run would carry on regardless of whether the
+    // version were remembered.
+    const auto versionsCache = cache / "master" / "firmware-2711-versions.txt";
+    const auto payload = dir / "secure-boot-recovery" / "pieeprom.original.bin";
+    REQUIRE(fs::exists(versionsCache));
+    REQUIRE(fs::exists(payload));
+    fs::remove(versionsCache);
+    fs::remove(payload);
+    REQUIRE(readFileContents(dir / "secure-boot-recovery" / ".eeprom-version")
+            == "2024-09-23\n");
+
+    // The source is still up -- the metadata is simply not where it was, which
+    // is what an upstream move looks like from here. The remembered version is
+    // what names the file to fetch; without it the URL is empty and the run
+    // stops on a payload it could have had.
+    QFile::remove(QDir(served.path()).filePath(QStringLiteral("firmware-2711/versions.txt")));
+
+    PinnedFirmwareManager second(server.base(), cache);
+    const auto again = second.ensureAvailable(rpiboot::SideloadMode::SecureBootRecovery,
+                                              rpiboot::ChipGeneration::BCM2711,
+                                              nullptr, cancelled);
+    INFO("second run error: " << second.lastError());
+    CHECK_FALSE(again.empty());
+    CHECK(again == dir);
+    CHECK(fs::exists(payload));
+    CHECK(readFileContents(payload) == "cm4 pieeprom");
+}
+
+TEST_CASE("Fetching firmware reports progress the whole way", "[firmware][fetch]")
+{
+    // "Checking rpiboot firmware..." is the only thing on screen while this
+    // runs, and on a slow connection it is there for a while. A percentage
+    // that never moves, or that runs past the end, is what the user reads as
+    // a hang.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+
+    // The gadget kernel is the one large file in a real fetch (tens of MB),
+    // and it is the only one that produces progress *within* a file rather
+    // than a single tick at completion. The fixture's placeholder is a
+    // handful of bytes, which arrives in one go and so cannot show whether
+    // the within-file fraction is computed the right way round.
+    {
+        QFile big(QDir(served.path()).filePath(
+            QStringLiteral("host-support/fastboot-gadget.img")));
+        REQUIRE(big.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        const QByteArray chunk(1 << 20, 'g');
+        for (int i = 0; i < 24; ++i)
+            REQUIRE(big.write(chunk) == chunk.size());
+        big.close();
+    }
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir cache;
+    REQUIRE(cache.isValid());
+    PinnedFirmwareManager fm(server.base(),
+                             fs::path(cache.path().toStdString()) / "rpiboot-firmware");
+
+    struct Tick { uint64_t current, total; std::string status; };
+    std::vector<Tick> ticks;
+    auto onProgress = [&ticks](uint64_t c, uint64_t t, const std::string &s) {
+        ticks.push_back({c, t, s});
+    };
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        onProgress, cancelled);
+    INFO("error: " << fm.lastError());
+    REQUIRE_FALSE(dir.empty());
+
+    REQUIRE(ticks.size() > 1);
+    std::string trace;
+    for (const Tick &t : ticks)
+        trace += std::to_string(t.current) + " ";
+    INFO("ticks: " << trace);
+
+    uint64_t previous = 0;
+    for (const Tick &t : ticks) {
+        CHECK(t.total == 100);
+        CHECK(t.current <= t.total);
+        // A bar that goes backwards reads as the download restarting.
+        CHECK(t.current >= previous);
+        previous = t.current;
+        // The status is what is on screen; an empty one blanks the label.
+        CHECK_FALSE(t.status.empty());
+    }
+
+    // It has to actually move, and it has to arrive: a percentage stuck at
+    // its opening value for the whole fetch is the thing users report as a
+    // hang, and one that stops short of the end leaves the step looking
+    // unfinished after it has finished.
+    CHECK(ticks.front().current == 0);
+    CHECK(ticks.back().current == 100);
+    CHECK(ticks.front().status.find("firmware") != std::string::npos);
+
+    // And it has to move *per file*, not merely open at 0 and close at 100:
+    // the fastboot manifest is three files, so a fetch that reports only its
+    // two endpoints is a bar that sits still for the whole download.
+    std::set<uint64_t> distinct;
+    for (const Tick &t : ticks)
+        distinct.insert(t.current);
+    INFO("distinct: " << distinct.size());
+    CHECK(distinct.size() >= 4);
+}
+
+TEST_CASE("A custom fastboot gadget that is not there is reported",
+          "[firmware][fetch]")
+{
+    // The custom-gadget field is a path the user typed or picked, and it can
+    // have been moved or unmounted since. Copying it is the last step before
+    // the board is told to boot it, so a silent failure here means a device
+    // that sits waiting for a gadget that was never written.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir cache;
+    REQUIRE(cache.isValid());
+    PinnedFirmwareManager fm(server.base(),
+                             fs::path(cache.path().toStdString()) / "rpiboot-firmware");
+    fm.setCustomFastbootGadget((fs::path(cache.path().toStdString())
+                                / "gadget-that-was-moved.img").string());
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    CHECK(dir.empty());
+    CHECK(fm.lastError().find("boot.img") != std::string::npos);
 }
