@@ -695,3 +695,242 @@ TEST_CASE("Each generation gets the settings that belong to it",
     CHECK(bootConfHas(cm5, "BOOT_UART=1"));
     CHECK(bootConfHas(cm4, "BOOT_UART=1"));
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Counter-signing the firmware inside the EEPROM
+//
+// On a BCM2712 whose customer key is already fused, the boot ROM verifies
+// not only the EEPROM's configuration but the bootcode inside it, against
+// the same key. An AB-capable image carries a second such blob -- "bootsys",
+// the bulk bootloader in the first partition -- and the ROM checks that one
+// too.
+//
+// Leaving either unsigned produces an image that passes everything the
+// imager can see and is then rejected by the ROM. The board does not come
+// back, there is no message anywhere saying why, and the OTP is already
+// fused so there is no second attempt with a different key. That is
+// upstream rpi-sb-provisioner #306, and none of this branch had been run.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+size_t writePad(std::vector<uint8_t> &img, size_t off, size_t bytes)
+{
+    putBe32(img, off + 0, kPadMagic);
+    putBe32(img, off + 4, uint32_t(bytes));
+    return off + 8 + bytes;
+}
+
+// As makeSyntheticEeprom(), but laid out so counter-signing can succeed:
+//
+//  - the named sections start past 128 KiB, which is the reservation the
+//    editor enforces for a non-AB image's bootcode, so a bootcode that has
+//    grown by a signature still fits;
+//  - a "bootsys" section can be included, which is what makes an image
+//    AB-capable, followed by slack so its own signed form fits too.
+//
+// bootsysReserve < 0 leaves bootsys out entirely (a non-AB image); 0 writes
+// the section header with no payload behind it. bootcodeBytes == 0 produces
+// an image whose first section is empty, which is what a truncated or
+// wrongly-built original looks like.
+std::vector<uint8_t> makeCounterSignableEeprom(int bootsysReserve = -1,
+                                               size_t bootcodeBytes = 4096)
+{
+    constexpr size_t kSectionsAt = 192 * 1024;
+    std::vector<uint8_t> img(kImageSize, 0xff);
+
+    const std::vector<uint8_t> bootcode(bootcodeBytes, 0xAA);
+    putBe32(img, 0, kMagic);
+    putBe32(img, 4, uint32_t(bootcode.size()));
+    if (!bootcode.empty())
+        std::memcpy(&img[8], bootcode.data(), bootcode.size());
+    size_t off = 8 + bootcode.size();
+    while (off % 8 != 0)
+        img[off++] = 0xff;
+
+    off = writePad(img, off, kSectionsAt - (off + 8));
+
+    if (bootsysReserve >= 0) {
+        off = writeSection(img, off, "bootsys", size_t(bootsysReserve));
+        // Room for the 532 bytes counter-signing adds, and then some.
+        off = writePad(img, off, 4096);
+    }
+    off = writeSection(img, off, "bootconf.txt", 4096);
+    off = writeSection(img, off, "bootconf.sig", 4096);
+    off = writeSection(img, off, "pubkey.bin",   1024);
+    return img;
+}
+
+void seedRecoveryDirWith(const fs::path &dir, const std::vector<uint8_t> &img)
+{
+    fs::create_directories(dir);
+    QFile f(QString::fromStdString((dir / "pieeprom.original.bin").string()));
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(reinterpret_cast<const char *>(img.data()), qint64(img.size()));
+    f.close();
+}
+
+} // namespace
+
+TEST_CASE("Counter-signing appends a signature to the bootcode in the EEPROM",
+          "[secureboot-otp][countersign]")
+{
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom());
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err));
+    INFO("error: " << err);
+
+    const QByteArray before = sectionOf(recovery / "pieeprom.original.bin",
+                                        QStringLiteral("bootcode.bin"));
+    const QByteArray after  = sectionOf(recovery / "pieeprom.bin",
+                                        QStringLiteral("bootcode.bin"));
+    REQUIRE_FALSE(before.isEmpty());
+
+    // The signature goes on the end; the firmware itself is untouched.
+    CHECK(after.size() > before.size());
+    CHECK(after.left(before.size()) == before);
+    // len(4) + keynum(4) + version(4) + 256-byte RSA-2048 signature +
+    // 264-byte pubkey.
+    CHECK(after.size() - before.size() == 532);
+}
+
+TEST_CASE("Counter-signing without it asked for leaves the bootcode alone",
+          "[secureboot-otp][countersign]")
+{
+    // The counterpart: a CM4, or a CM5 whose OTP is not fused, must not have
+    // its firmware rewritten. Signing unconditionally would change what gets
+    // written to every board, not just the ones that need it.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom());
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/false, err));
+    INFO("error: " << err);
+
+    CHECK(sectionOf(recovery / "pieeprom.bin", QStringLiteral("bootcode.bin"))
+          == sectionOf(recovery / "pieeprom.original.bin", QStringLiteral("bootcode.bin")));
+}
+
+TEST_CASE("An AB image has its bootsys counter-signed as well",
+          "[secureboot-otp][countersign]")
+{
+    // bootsys is the second blob the ROM checks. Signing bootcode.bin and
+    // stopping there produces an image the imager considers finished and the
+    // board refuses, with nothing to say which of the two was wrong.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom(/*bootsysReserve=*/1024));
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    // The fixture is genuinely AB-capable, or the branch under test is not
+    // the one being reached.
+    {
+        rpiboot::BootloaderImage probe;
+        REQUIRE(probe.load(QString::fromStdString(
+            (recovery / "pieeprom.original.bin").string())));
+        REQUIRE(probe.isABImage());
+    }
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err));
+    INFO("error: " << err);
+
+    const QByteArray before = sectionOf(recovery / "pieeprom.original.bin",
+                                        QStringLiteral("bootsys"));
+    const QByteArray after  = sectionOf(recovery / "pieeprom.bin",
+                                        QStringLiteral("bootsys"));
+    REQUIRE_FALSE(before.isEmpty());
+    CHECK(after.left(before.size()) == before);
+    CHECK(after.size() - before.size() == 532);
+
+    // And bootcode.bin is still signed too -- one is not done instead of
+    // the other.
+    const QByteArray bcBefore = sectionOf(recovery / "pieeprom.original.bin",
+                                          QStringLiteral("bootcode.bin"));
+    const QByteArray bcAfter  = sectionOf(recovery / "pieeprom.bin",
+                                          QStringLiteral("bootcode.bin"));
+    CHECK(bcAfter.size() - bcBefore.size() == 532);
+}
+
+TEST_CASE("An AB image with an empty bootsys is refused rather than half-signed",
+          "[secureboot-otp][countersign]")
+{
+    // A bootsys section that is there but carries nothing. Signing what is
+    // not there and writing the result would produce an image the board
+    // rejects; refusing leaves the original where it can be looked at.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    // The section header and name are present, so the image is AB-capable,
+    // but there is no payload behind them.
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom(/*bootsysReserve=*/0));
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    // Only meaningful if the fixture really has an empty bootsys.
+    {
+        rpiboot::BootloaderImage probe;
+        REQUIRE(probe.load(QString::fromStdString(
+            (recovery / "pieeprom.original.bin").string())));
+        REQUIRE(probe.isABImage());
+    }
+
+    std::string err;
+    const bool ok = SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err);
+    INFO("error: " << err);
+    REQUIRE_FALSE(ok);
+    // The wording is the whole of it. Signing an empty blob fails too, and
+    // reports the signature as the problem -- which sends the operator to
+    // their key and their openssl when what is wrong is the image they
+    // downloaded. Naming the content says where to look.
+    CHECK(err.find("no bootsys content") != std::string::npos);
+    // Nothing half-written left behind for the next run to pick up.
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.bin"));
+}
+
+TEST_CASE("An original with no bootcode is refused before anything is signed",
+          "[secureboot-otp][countersign]")
+{
+    // A truncated download, or an image built for a different chip. There is
+    // nothing to counter-sign, and proceeding would write an EEPROM with an
+    // empty first stage.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery,
+                        makeCounterSignableEeprom(/*bootsysReserve=*/-1,
+                                                  /*bootcodeBytes=*/0));
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err));
+    INFO("error: " << err);
+    // As with bootsys: signing nothing fails anyway, but blames the
+    // signature. This names the original image instead.
+    CHECK(err.find("Failed to extract bootcode.bin") != std::string::npos);
+    CHECK(err.find("pieeprom.original.bin") != std::string::npos);
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.bin"));
+}

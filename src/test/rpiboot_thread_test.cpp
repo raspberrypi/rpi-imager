@@ -71,6 +71,12 @@ struct FakeBus {
     int fastbootScans = 0;
     int bootScans = 0;
     bool throwOnScan = false;
+    // Opening the board throws rather than returning nothing: a cable pulled
+    // between the scan and the open, which libusb reports as an exception.
+    bool throwOnOpen = false;
+    // Runs the first time the file server reads from the board, so a test can
+    // act at a point the phase has definitely reached.
+    std::function<void()> onFirstRead;
     // Runs at the top of every scan, so a test can end the poll rather than
     // waiting out the sixty seconds the real one is willing to spend.
     std::function<void(int)> onScan;
@@ -82,14 +88,23 @@ struct FakeBus {
 class TransportView : public rpiboot::IUsbTransport
 {
 public:
-    explicit TransportView(rpiboot::testing::MockUsbTransport &t) : _t(t) {}
+    explicit TransportView(rpiboot::testing::MockUsbTransport &t,
+                           std::function<void()> *onFirstRead = nullptr)
+        : _t(t), _onFirstRead(onFirstRead) {}
 
     bool controlTransfer(uint8_t rt, uint8_t r, uint16_t v, uint16_t i,
                          std::span<const uint8_t> d, int ms) override
     { return _t.controlTransfer(rt, r, v, i, d, ms); }
     int controlTransferIn(uint8_t rt, uint8_t r, uint16_t v, uint16_t i,
                           std::span<uint8_t> b, int ms) override
-    { return _t.controlTransferIn(rt, r, v, i, b, ms); }
+    {
+        if (_onFirstRead && *_onFirstRead) {
+            auto fire = *_onFirstRead;
+            *_onFirstRead = nullptr;
+            fire();
+        }
+        return _t.controlTransferIn(rt, r, v, i, b, ms);
+    }
     int bulkWrite(uint8_t ep, std::span<const uint8_t> d, int ms) override
     { return _t.bulkWrite(ep, d, ms); }
     int bulkRead(uint8_t ep, std::span<uint8_t> b, int ms) override
@@ -102,6 +117,7 @@ public:
 
 private:
     rpiboot::testing::MockUsbTransport &_t;
+    std::function<void()> *_onFirstRead = nullptr;
 };
 
 // Handed to the thread; the bus itself is owned by the test and outlives it.
@@ -135,9 +151,11 @@ public:
     std::unique_ptr<rpiboot::IUsbTransport> openDevice(const UsbDeviceInfo &) const override
     {
         ++_bus.opens;
+        if (_bus.throwOnOpen)
+            throw std::runtime_error("the cable was pulled");
         if (!_bus.transport)
             return nullptr;
-        return std::make_unique<TransportView>(*_bus.transport);
+        return std::make_unique<TransportView>(*_bus.transport, &_bus.onFirstRead);
     }
 
 private:
@@ -1132,5 +1150,135 @@ TEST_CASE("The scanner-thread polls stay quiet when the bus will not open",
     QString id;
     CHECK_FALSE(t.pollForFastbootDevice(found, id));
     CHECK_FALSE(t.pollForRpibootReturn(found, 4));
+    CHECK(log.errors.isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// The file-server phase, after the board has come back
+//
+// Everything above stops at the bootcode upload. What follows it is the
+// half of the sequence a user is most likely to meet a failure in: the
+// board has restarted, and the imager has to open it again and serve it the
+// firmware it asks for. A board that is already past the bootcode -- a
+// serial index other than 0 or 3 -- goes straight there, which is what
+// these use to get at it.
+//
+// Every exit from here matters more than usual because the device is
+// headless and mid-provisioning: a phase that returns without saying
+// anything leaves the wizard waiting on a board that is not coming.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A board that has already had its bootcode: serial index 1, so the phase
+// skips the upload and the re-enumeration wait and goes to the file server.
+UsbDeviceInfo bootedBoard()
+{
+    return device(1, 4, {1, 2}, 1);
+}
+
+} // namespace
+
+TEST_CASE("A board that will not open for the file server is reported",
+          "[rpiboot][phase][fileserver]")
+{
+    // The board answered a scan and then would not open -- claimed by
+    // another process, or gone between the two. Silence here is the worst
+    // outcome: the board is sitting in rpiboot waiting to be fed.
+    FirmwareDir fw;
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    t.bus.bootDevices = { bootedBoard() };
+    t.bus.transport = nullptr;   // scans find it; opening it does not work
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(" | ").toStdString());
+    CHECK(log.errors.last().contains(QStringLiteral("re-enumeration")));
+}
+
+TEST_CASE("A board that vanishes as it is opened is reported as a USB error",
+          "[rpiboot][phase][fileserver]")
+{
+    // The cable pulled between the scan and the open. libusb throws; the
+    // phase has to turn that into a sentence rather than let it out of the
+    // thread.
+    FirmwareDir fw;
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    t.bus.bootDevices = { bootedBoard() };
+    t.bus.throwOnOpen = true;
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(" | ").toStdString());
+    CHECK(log.errors.last().contains(QStringLiteral("USB error")));
+    // The reason libusb gave, not just that there was one.
+    CHECK(log.errors.last().contains(QStringLiteral("cable was pulled")));
+}
+
+TEST_CASE("A file server the board will not talk to is reported with what went wrong",
+          "[rpiboot][phase][fileserver]")
+{
+    // The board opens and then does not answer. The protocol's own account
+    // of it is the only diagnostic there is -- a bare "rpiboot failed" gives
+    // nobody anything to go on.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;   // answers nothing
+
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    t.bus.bootDevices = { bootedBoard() };
+    t.bus.transport = &mock;
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(" | ").toStdString());
+    CHECK(log.errors.last().contains(QStringLiteral("rpiboot protocol failed")));
+    CHECK(log.errors.last().contains(QStringLiteral("File server")));
+
+    // And the phase recorded which USB configuration it was talking over,
+    // which is the first thing anyone reading a failed provisioning asks.
+    CHECK_FALSE(fsDiag.isEmpty());
+}
+
+TEST_CASE("Cancelling during the file server says nothing to the user",
+          "[rpiboot][phase][fileserver][cancel]")
+{
+    // A cancel is the user's own doing. Reporting it back as a failure puts
+    // an error on screen for something they asked for.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    t.bus.bootDevices = { bootedBoard() };
+    t.bus.transport = &mock;
+    // Cancel once the file server has actually started talking to the board,
+    // so the phase is inside the step rather than short-circuiting before it.
+    t.bus.onFirstRead = [&t] { t.cancel(); };
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    INFO("errors: " << log.errors.join(" | ").toStdString());
     CHECK(log.errors.isEmpty());
 }
