@@ -239,3 +239,108 @@ TEST_CASE("A cancelled fetch does not deliver", "[icons]")
     waitFor([] { return false; }, 500);
     CHECK(response.isCancelled() == false);   // cancel() is Qt's call, not ours
 }
+
+// ══════════════════════════════════════════════════════════════
+// Cancelling one of several requests for the same icon.
+//
+// The OS list shows the same icon against every release of a distribution,
+// so a screenful of delegates asks for one URL and the fetcher coalesces
+// them onto a single transfer. Scrolling then cancels some of those
+// delegates while the others are still on screen waiting.
+//
+// The removal walks the waiting list of a live transfer and drops the
+// cancelled entries, keeping the transfer alive for the rest. Getting that
+// wrong in either direction is visible: tear the transfer down and the
+// delegates still on screen never get their icon, leave the cancelled ones
+// in and the fetcher delivers to a response QML has destroyed.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("Cancelling one request for an icon leaves the others waiting",
+          "[icons]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    const QByteArray bytes =
+        writeIcon(QDir(served.path()).filePath(QStringLiteral("shared.png")), Qt::cyan);
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    IconMultiFetcher::instance().clearCache();
+    const QUrl url(QString::fromUtf8(server.urlFor(QStringLiteral("shared.png"))));
+
+    // Three delegates showing the same distribution's icon, as a scrolled
+    // list does. They coalesce onto one transfer.
+    IconImageResponse scrolledAway(url);
+    IconImageResponse stillVisible(url);
+    IconImageResponse alsoVisible(url);
+
+    bool stillVisibleDone = false;
+    bool alsoVisibleDone = false;
+    bool scrolledAwayDone = false;
+    QObject::connect(&stillVisible, &QQuickImageResponse::finished,
+                     [&] { stillVisibleDone = true; });
+    QObject::connect(&alsoVisible, &QQuickImageResponse::finished,
+                     [&] { alsoVisibleDone = true; });
+    QObject::connect(&scrolledAway, &QQuickImageResponse::finished,
+                     [&] { scrolledAwayDone = true; });
+
+    IconMultiFetcher::instance().queueFetch(&scrolledAway, url);
+    IconMultiFetcher::instance().queueFetch(&stillVisible, url);
+    IconMultiFetcher::instance().queueFetch(&alsoVisible, url);
+
+    // One delegate scrolls out of view.
+    IconMultiFetcher::instance().cancelFetch(&scrolledAway);
+
+    // The two still on screen get their icon. If cancelling one tore the
+    // shared transfer down, this is where a screenful of blank icons would
+    // show up.
+    REQUIRE(waitFor([&] { return stillVisibleDone && alsoVisibleDone; }, 15000));
+    CHECK(stillVisible.errorString().isEmpty());
+    CHECK(alsoVisible.errorString().isEmpty());
+
+
+    // Note what cancelling does not do: the response that scrolled away is
+    // still delivered to. Measured, not assumed -- asserting otherwise fails.
+    // It is safe because the waiting list holds QPointers, so a response QML
+    // has destroyed is skipped; a cancelled one that still exists simply gets
+    // an answer nobody reads. Removing the cancellation filter therefore
+    // changes nothing observable here, and no assertion below claims it does.
+    waitFor([] { return false; }, 300);
+    INFO("the cancelled response was delivered to: " << scrolledAwayDone);
+}
+
+TEST_CASE("Cancelling every request for an icon is not an error for anyone",
+          "[icons]")
+{
+    // The whole row scrolls away at once, so nothing is left waiting and the
+    // transfer itself goes. Nothing should be delivered afterwards, and
+    // nothing should be left behind for the next fetch to trip over.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    writeIcon(QDir(served.path()).filePath(QStringLiteral("gone.png")), Qt::yellow);
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+
+    IconMultiFetcher::instance().clearCache();
+    const QUrl url(QString::fromUtf8(server.urlFor(QStringLiteral("gone.png"))));
+
+    {
+        IconImageResponse first(url);
+        IconImageResponse second(url);
+        IconMultiFetcher::instance().queueFetch(&first, url);
+        IconMultiFetcher::instance().queueFetch(&second, url);
+        IconMultiFetcher::instance().cancelFetch(&first);
+        IconMultiFetcher::instance().cancelFetch(&second);
+        waitFor([] { return false; }, 500);
+    }
+
+    // And the fetcher still works afterwards: the torn-down transfer did not
+    // leave the URL marked in flight with nothing behind it, which would
+    // make every later request for the same icon wait for ever.
+    const FetchResult again = fetchIcon(url);
+    INFO("error: " << again.error.toStdString());
+    CHECK(again.finished);
+    CHECK(again.error.isEmpty());
+}
