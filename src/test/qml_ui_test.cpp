@@ -30,6 +30,7 @@
 #include "clipboardhelper.h"
 #include "platformhelper.h"
 #include "app_resources.h"
+#include "drivelist/drivelist.h"
 
 #include <QAccessible>
 #include <QUrl>
@@ -189,6 +190,94 @@ private:
     QTemporaryDir _dir;
 };
 
+// The writer the QML singleton hands out. Kept here so the harness can reach
+// the same drive list the steps bind to, rather than a second one.
+ImageWriter *g_qmlWriter = nullptr;
+
+// Puts drives in the list a case needs to choose from.
+//
+// StorageSelectionStep binds its list to ImageWriterSingleton.getDriveList(),
+// a DriveListModel filled by a thread that polls the machine's actual disks.
+// A test cannot plug a card in, and must not go near the disks that are
+// already there.
+//
+// processDriveList() is the slot that poller calls, so handing it a device
+// list puts rows into the real model, through the real insertion path, with
+// the real roles. The alternative -- standing a look-alike model in front of
+// the delegate -- would answer whatever the delegate asked for and keep
+// answering it after a role was renamed, which is the drift these tests
+// exist to catch.
+//
+// Only the fields the chooser reads are settable. Anything else keeps
+// DeviceDescriptor's own default, so a case says what it is about.
+class TestDrives : public QObject
+{
+    Q_OBJECT
+
+public:
+    // Each entry is an object: device, description, size, and the flags that
+    // decide whether a row can be chosen at all.
+    Q_INVOKABLE void set(const QVariantList &drives)
+    {
+        DriveListModel *model = driveList();
+        if (!model)
+            return;
+
+        // Stop the poller first, or the next tick replaces these rows with
+        // whatever disks are actually in the machine running the suite --
+        // which is also what the list holds before this is called, and the
+        // reason a case cannot simply assume it starts empty.
+        model->stopPolling();
+
+        std::vector<Drivelist::DeviceDescriptor> list;
+        list.reserve(static_cast<size_t>(drives.size()));
+        for (const QVariant &v : drives) {
+            const QVariantMap m = v.toMap();
+            Drivelist::DeviceDescriptor d;
+            d.device = m.value(QStringLiteral("device"),
+                               QStringLiteral("/dev/sdz")).toString().toStdString();
+            d.description = m.value(QStringLiteral("description"),
+                                    QStringLiteral("Test device")).toString().toStdString();
+            d.size = m.value(QStringLiteral("size"), 32000000000ULL).toULongLong();
+            // A row the chooser will show at all: the list drops anything
+            // that is neither removable nor a system disk.
+            d.isUSB = m.value(QStringLiteral("isUsb"), true).toBool();
+            d.isRemovable = m.value(QStringLiteral("isRemovable"), true).toBool();
+            d.isSCSI = m.value(QStringLiteral("isScsi"), false).toBool();
+            d.isSystem = m.value(QStringLiteral("isSystem"), false).toBool();
+            d.isReadOnly = m.value(QStringLiteral("isReadOnly"), false).toBool();
+            d.isVirtual = m.value(QStringLiteral("isVirtual"), false).toBool();
+            for (const QString &mp : m.value(QStringLiteral("mountpoints")).toStringList())
+                d.mountpoints.push_back(mp.toStdString());
+            list.push_back(d);
+        }
+        model->processDriveList(list);
+    }
+
+    // Back to an empty list. Polling stays stopped: restarting it would let
+    // the machine's own disks back in, and every file in the run shares this
+    // model, so an empty frozen list is the tidiest thing to leave behind.
+    Q_INVOKABLE void clear()
+    {
+        if (DriveListModel *model = driveList()) {
+            model->stopPolling();
+            model->processDriveList({});
+        }
+    }
+
+    Q_INVOKABLE int count()
+    {
+        DriveListModel *model = driveList();
+        return model ? model->rowCount(QModelIndex()) : -1;
+    }
+
+private:
+    static DriveListModel *driveList()
+    {
+        return g_qmlWriter ? g_qmlWriter->getDriveList() : nullptr;
+    }
+};
+
 class QmlCoverage : public QObject
 {
     Q_OBJECT
@@ -280,6 +369,7 @@ public slots:
         // instance the same way main() does.
         static ImageWriter writer(nullptr);
         ImageWriter::setQmlInstance(&writer);
+        g_qmlWriter = &writer;
         qmlRegisterSingletonType<ImageWriter>(kUri, 1, 0, "ImageWriterSingleton",
                                               [](QQmlEngine *e, QJSEngine *j) -> QObject * {
                                                   return ImageWriter::create(e, j);
@@ -294,6 +384,11 @@ public slots:
                                             [](QQmlEngine *, QJSEngine *) -> QObject * {
                                                 return new TestFiles;
                                             });
+
+        qmlRegisterSingletonType<TestDrives>(kUri, 1, 0, "TestDrives",
+                                             [](QQmlEngine *, QJSEngine *) -> QObject * {
+                                                 return new TestDrives;
+                                             });
     }
 
     void qmlEngineAvailable(QQmlEngine *engine)

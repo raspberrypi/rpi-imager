@@ -152,6 +152,7 @@ WizardStepBase {
         // Storage device list fills available space
         SelectionListView {
             id: dstlist
+            objectName: "storageDeviceList"
             // Backed by drive polling rather than a one-off fetch, so the
             // first card appearing is an event and not a page loading.
             announceFirstPopulation: true
