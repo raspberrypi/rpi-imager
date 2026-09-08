@@ -264,7 +264,65 @@ TEST_CASE("A card of unknown size does not trigger the capacity check",
 }
 
 // ══════════════════════════════════════════════════════════════
-// What the user picked with "Use custom"
+// The card leaving between choosing it and pressing Write
+//
+// A card can be pulled out, or a reader can drop off the bus, at any point
+// after it has been chosen. readyToWrite() goes false, and what the user is
+// told then decides whether they understand what happened: "No storage
+// device selected" sends them back to a list where the drive they picked is
+// not there, with no hint that it ever was.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A drive that has gone is named as gone, not as never chosen",
+          "[imagewriter][removal]")
+{
+    SourceFile source;
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    writer.setSrc(source.url(), 0, 1024 * 1024);
+    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    REQUIRE(writer.readyToWrite());
+
+    // The signal the drive poller raises when the device it was watching
+    // stops being listed.
+    REQUIRE(QMetaObject::invokeMethod(&writer, "onSelectedDeviceRemoved",
+                                      Q_ARG(QString, QStringLiteral("/dev/null"))));
+    CHECK_FALSE(writer.readyToWrite());
+
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(),
+               ContainsSubstring("no longer available"));
+}
+
+TEST_CASE("Unplugging some other drive leaves the chosen one alone",
+          "[imagewriter][removal]")
+{
+    // Removals arrive for every device on the machine. Acting on one that is
+    // not the target would cancel a write, or refuse to start one, because
+    // somebody took out an unrelated USB stick.
+    SourceFile source;
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    writer.setSrc(source.url(), 0, 1024 * 1024);
+    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    REQUIRE(writer.readyToWrite());
+
+    REQUIRE(QMetaObject::invokeMethod(&writer, "onSelectedDeviceRemoved",
+                                      Q_ARG(QString, QStringLiteral("/dev/sdz"))));
+
+    CHECK(writer.readyToWrite());
+    for (const QString &e : log.errors) {
+        INFO("reported: " << e.toStdString());
+        CHECK_THAT(e.toStdString(), !ContainsSubstring("no longer available"));
+    }
+}
+
+
 //
 // startWrite() looks at a local source before it looks at anything else,
 // because every later stage assumes there are bytes to read. Each refusal
