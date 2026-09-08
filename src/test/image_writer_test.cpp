@@ -5875,6 +5875,175 @@ Drivelist::DeviceDescriptor removable(const std::string &device,
 
 } // namespace
 
+// ══════════════════════════════════════════════════════════════
+// What the drive list reports about a drive
+//
+// Two things read out of it decide what happens to hardware.
+//
+// The child devices are the partitions unmounted before a write. Looked up
+// against the wrong drive they are the wrong partitions -- either the user's
+// own filesystems get unmounted, or the ones on the card do not and the
+// write fails on a busy device.
+//
+// The rpiboot chip list is what marks a board as attached in the chooser.
+// Reported on every poll it makes the chooser churn; not de-duplicated, one
+// board attached twice looks like two.
+
+namespace {
+
+Drivelist::DeviceDescriptor removableWithChildren(
+    const std::string &device, const std::vector<std::string> &children)
+{
+    Drivelist::DeviceDescriptor d = removable(device, "A card reader");
+    d.childDevices = children;
+    return d;
+}
+
+Drivelist::DeviceDescriptor rpibootDevice(const std::string &device,
+                                          const std::string &chip)
+{
+    Drivelist::DeviceDescriptor d = removable(device, "A board in USB boot");
+    d.isRpiboot = true;
+    d.rpibootChipName = chip;
+    return d;
+}
+
+} // namespace
+
+TEST_CASE("A drive's partitions are the ones reported for it",
+          "[drivelist]")
+{
+    DriveListModel drives;
+    drives.processDriveList({
+        removableWithChildren("/dev/sdb", {"/dev/sdb1", "/dev/sdb2"}),
+        removableWithChildren("/dev/sdc", {"/dev/sdc1"}),
+    });
+
+    CHECK(drives.getChildDevices(QStringLiteral("/dev/sdb"))
+          == QStringList{QStringLiteral("/dev/sdb1"), QStringLiteral("/dev/sdb2")});
+    CHECK(drives.getChildDevices(QStringLiteral("/dev/sdc"))
+          == QStringList{QStringLiteral("/dev/sdc1")});
+}
+
+TEST_CASE("A drive that is not in the list has no partitions", "[drivelist]")
+{
+    // Rather than the first drive's, or whatever the loop happened to leave
+    // behind. The caller unmounts what comes back from here.
+    DriveListModel drives;
+    drives.processDriveList({
+        removableWithChildren("/dev/sdb", {"/dev/sdb1"}),
+    });
+
+    CHECK(drives.getChildDevices(QStringLiteral("/dev/sdz")).isEmpty());
+    CHECK(drives.getChildDevices(QString()).isEmpty());
+    CHECK(drives.getChildDevices(QStringLiteral("/dev/sdb1")).isEmpty());
+}
+
+TEST_CASE("A drive with no partitions reports none", "[drivelist]")
+{
+    // A blank card. Not an error, and not somebody else's partitions.
+    DriveListModel drives;
+    drives.processDriveList({ removableWithChildren("/dev/sdb", {}) });
+
+    CHECK(drives.getChildDevices(QStringLiteral("/dev/sdb")).isEmpty());
+}
+
+TEST_CASE("An attached board's chip is reported once", "[drivelist]")
+{
+    DriveListModel drives;
+    rpi_test::SignalLog chips(&drives,
+                              &DriveListModel::connectedRpibootChipsChanged);
+
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712") });
+
+    REQUIRE(chips.count() == 1);
+    CHECK(chips.at(0).at(0).toStringList()
+          == QStringList{QStringLiteral("BCM2712")});
+}
+
+TEST_CASE("The same board seen twice is still one chip", "[drivelist]")
+{
+    // A board can appear under more than one node. Two entries for one chip
+    // would mark two boards as attached in the chooser.
+    DriveListModel drives;
+    rpi_test::SignalLog chips(&drives,
+                              &DriveListModel::connectedRpibootChipsChanged);
+
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712"),
+                              rpibootDevice("/dev/sdc", "BCM2712") });
+
+    REQUIRE(chips.count() == 1);
+    CHECK(chips.at(0).at(0).toStringList().size() == 1);
+}
+
+TEST_CASE("A poll that changes nothing reports nothing", "[drivelist]")
+{
+    // The poller runs on a timer. Reporting on every pass would have the
+    // chooser rebuild its attached markers several times a second.
+    DriveListModel drives;
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712") });
+
+    rpi_test::SignalLog chips(&drives,
+                              &DriveListModel::connectedRpibootChipsChanged);
+
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712") });
+
+    CHECK(chips.count() == 0);
+}
+
+TEST_CASE("A board being unplugged is reported", "[drivelist]")
+{
+    DriveListModel drives;
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712") });
+
+    rpi_test::SignalLog chips(&drives,
+                              &DriveListModel::connectedRpibootChipsChanged);
+
+    drives.processDriveList({ removable("/dev/sdb", "An ordinary card") });
+
+    REQUIRE(chips.count() == 1);
+    CHECK(chips.at(0).at(0).toStringList().isEmpty());
+}
+
+TEST_CASE("Two different boards are both reported, in a settled order",
+          "[drivelist]")
+{
+    // Sorted, so the same two boards do not look like a change depending on
+    // the order the poller happened to enumerate them.
+    DriveListModel drives;
+    rpi_test::SignalLog chips(&drives,
+                              &DriveListModel::connectedRpibootChipsChanged);
+
+    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712"),
+                              rpibootDevice("/dev/sdb", "BCM2711") });
+
+    REQUIRE(chips.count() == 1);
+    CHECK(chips.at(0).at(0).toStringList()
+          == QStringList{QStringLiteral("BCM2711"), QStringLiteral("BCM2712")});
+
+    // The same pair the other way round is not a change.
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711"),
+                              rpibootDevice("/dev/sdc", "BCM2712") });
+    CHECK(chips.count() == 1);
+}
+
+TEST_CASE("A role the view does not know is answered with nothing",
+          "[drivelist]")
+{
+    // Defended twice: the role-name lookup returns nothing and is checked,
+    // and asking a QObject for a property with an empty name returns an
+    // invalid value anyway. Removing the check fails nothing, so what is
+    // pinned here is the outcome.
+    DriveListModel drives;
+    drives.processDriveList({ removable("/dev/sdb", "A card reader") });
+    QAbstractItemModel *view = &drives;
+
+    CHECK_FALSE(view->data(view->index(0, 0), Qt::UserRole + 999).isValid());
+    CHECK_FALSE(view->data(view->index(-1, 0), Qt::UserRole + 1).isValid());
+    CHECK_FALSE(view->data(view->index(5, 0), Qt::UserRole + 1).isValid());
+}
+
 TEST_CASE("A destination among the removable volumes is allowed",
           "[cli][destination]")
 {
