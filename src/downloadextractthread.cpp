@@ -405,7 +405,34 @@ void DownloadExtractThread::extractImageRun()
     {
         r = archive_read_next_header(a, &entry);
         _checkResult(r, a);
-        
+
+        // Walk past entries that are known to hold nothing, to reach the one
+        // that holds the image.
+        //
+        // An archive built by zipping a folder -- which is how a folder
+        // normally gets zipped, from Finder, Explorer or the command line --
+        // begins with an entry for the folder itself, and a directory entry
+        // has no contents. Reading straight from the first entry therefore
+        // read nothing, and the write finished reporting success having put
+        // not one byte on the card.
+        //
+        // "Known to hold nothing" rather than "size is zero": the raw reader,
+        // which is what handles .img.xz and .img.gz, reports no size at all
+        // for its single pseudo-entry, and treating an unknown size as empty
+        // would skip past the image itself.
+        while (r == ARCHIVE_OK && archive_entry_size_is_set(entry)
+               && archive_entry_size(entry) == 0)
+        {
+            r = archive_read_next_header(a, &entry);
+            _checkResult(r, a);
+        }
+
+        // Nothing in the archive holds anything. Writing an empty card and
+        // calling it a success is the one outcome the user cannot recover
+        // from, because nothing tells them to try again.
+        if (r != ARCHIVE_OK)
+            throw runtime_error(tr("This archive does not contain an image to write.").toStdString());
+
         // Log the compression filter(s) being used for diagnostics
         _logCompressionFilters(a);
         

@@ -19,6 +19,7 @@
 
 #include "downloadextractthread.h"
 #include "localfileextractthread.h"
+#include "archive_kind.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -55,6 +56,7 @@ public:
     ScratchDir &operator=(const ScratchDir &) = delete;
 
     QString filePath(const QString &name) const { return QDir(_path).filePath(name); }
+    QString path() const { return _path; }
 
 private:
     QString _path;
@@ -588,6 +590,223 @@ TEST_CASE("A .cache file is still written raw when it is a plain image",
     REQUIRE(outcome.finished);
     REQUIRE(outcome.succeeded);
     CHECK(readFile(dest).left(image.size()) == image);
+}
+
+// ---------------------------------------------------------------------------
+// Container or disk image
+// ---------------------------------------------------------------------------
+//
+// Everything above turns on _testArchiveFormat() getting one question right:
+// are these bytes the disk image, or a container holding one? Unpack a plain
+// .img and libarchive hands the same bytes back, slower. Copy a container
+// verbatim and the card gets the zip instead of what is inside it.
+//
+// The test that used to answer it read the first entry and treated an empty
+// read as "raw disk image". The first entry of an archive built by zipping a
+// folder is the folder, and a directory entry has no data -- so a valid .zip
+// or .tar.gz holding an image was called a raw image, and run() then refused
+// it outright because its name says it is a container. The user was told
+// their own file was corrupt and to download it again.
+//
+// It is worth being clear about who reaches this. ImageWriter picks image
+// mode when the archive holds one file, counting only entries with a size,
+// so the folder entry does not count and a zipped folder arrives here in
+// image mode. The first two cases assert that end to end.
+
+TEST_CASE("An image inside a zipped folder is extracted, not called corrupt",
+          "[extract][local]")
+{
+    if (!haveTool(QStringLiteral("zip")))
+        SKIP("zip is not installed, so no folder archive can be built");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(256 * 1024, 211);
+    REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("holder"))));
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("holder/os.img")), image));
+
+    // -r, so the archive begins with a "holder/" directory entry -- what any
+    // zip of a folder looks like, from Finder, Explorer or the command line.
+    REQUIRE(runTool(QStringLiteral("zip"),
+                    {QStringLiteral("-q"), QStringLiteral("-r"),
+                     QStringLiteral("folder.zip"), QStringLiteral("holder")},
+                    scratch.path()));
+
+    const QString archive = scratch.filePath(QStringLiteral("folder.zip"));
+    const QString dest = scratch.filePath(QStringLiteral("folder-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
+
+    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    // Not just "no error": the card has to hold the image, not the zip.
+    CHECK(readFile(dest).left(image.size()) == image);
+}
+
+TEST_CASE("An image inside a tarred folder is extracted, not called corrupt",
+          "[extract][local]")
+{
+    if (!haveTool(QStringLiteral("tar")))
+        SKIP("tar is not installed, so no folder archive can be built");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(256 * 1024, 212);
+    REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("holder"))));
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("holder/os.img")), image));
+
+    // The same shape behind a decompression filter, which is the case the old
+    // test got most obviously wrong: gzip is unambiguous about there being
+    // something to unpack, and it was still classified as a raw image.
+    REQUIRE(runTool(QStringLiteral("tar"),
+                    {QStringLiteral("-czf"), QStringLiteral("folder.tar.gz"),
+                     QStringLiteral("holder")},
+                    scratch.path()));
+
+    const QString archive = scratch.filePath(QStringLiteral("folder.tar.gz"));
+    const QString dest = scratch.filePath(QStringLiteral("tar-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
+
+    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    CHECK(readFile(dest).left(image.size()) == image);
+}
+
+TEST_CASE("An archive with nothing in it is refused, not written as an empty card",
+          "[extract][local]")
+{
+    if (!haveTool(QStringLiteral("zip")))
+        SKIP("zip is not installed, so no folder archive can be built");
+
+    // Walking past empty entries has to stop somewhere. If the walk runs off
+    // the end of the archive the old behaviour is back: nothing to read, so
+    // nothing written, and the write reports success. That is the outcome the
+    // user cannot recover from on their own -- an unbootable card, and nothing
+    // on screen suggesting a retry.
+    ScratchDir scratch;
+    REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("empty-holder"))));
+    REQUIRE(runTool(QStringLiteral("zip"),
+                    {QStringLiteral("-q"), QStringLiteral("-r"),
+                     QStringLiteral("nothing.zip"), QStringLiteral("empty-holder")},
+                    scratch.path()));
+
+    const QString archive = scratch.filePath(QStringLiteral("nothing.zip"));
+    const QString dest = scratch.filePath(QStringLiteral("nothing-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(2 * 1024 * 1024, '\0')));
+
+    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    REQUIRE(outcome.finished);
+    CHECK_FALSE(outcome.succeeded);
+
+    // What the user is told, not merely that they are told something.
+    //
+    // Worth recording why this row is about the wording. Removing the guard
+    // that produces this message does not make the write succeed: reading
+    // data past the end of an archive puts libarchive in a state it refuses,
+    // so the write still fails. What it fails with is
+    // "Error extracting archive: INTERNAL ERROR: Function called in wrong
+    // state", which tells someone who picked a zip with nothing in it
+    // nothing at all. So the assertion is on the message: no libarchive
+    // internals, and a mention of the thing that is missing.
+    INFO("message: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.errorMessage.contains(QStringLiteral("INTERNAL ERROR")));
+    CHECK(outcome.errorMessage.contains(QStringLiteral("image"), Qt::CaseInsensitive));
+}
+
+TEST_CASE("An ISO is copied to the card, not unpacked onto it", "[extract][local]")
+{
+    if (!haveTool(QStringLiteral("xorriso")))
+        SKIP("xorriso is not installed, so no ISO can be built");
+
+    // The other half of the same decision, and the reason it cannot simply be
+    // "libarchive recognised a format, so unpack it". An ISO is a filesystem
+    // libarchive is perfectly happy to read the files out of -- and doing so
+    // would put those files on the card in place of the bootable image.
+    ScratchDir scratch;
+    REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("iso-root"))));
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("iso-root/payload.bin")),
+                      imageOfSize(64 * 1024, 213)));
+
+    REQUIRE(runTool(QStringLiteral("xorriso"),
+                    {QStringLiteral("-as"), QStringLiteral("mkisofs"),
+                     QStringLiteral("-quiet"), QStringLiteral("-o"),
+                     QStringLiteral("disc.iso"), QStringLiteral("iso-root")},
+                    scratch.path()));
+
+    const QString iso = scratch.filePath(QStringLiteral("disc.iso"));
+    const QByteArray isoBytes = readFile(iso);
+    REQUIRE(isoBytes.size() > 0);
+
+    const QString dest = scratch.filePath(QStringLiteral("iso-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(isoBytes.size() + (2 * 1024 * 1024), '\0')));
+
+    LocalFileExtractThread dt(QByteArray("file://") + iso.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(isoBytes.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    CHECK(readFile(dest).left(isoBytes.size()) == isoBytes);
+}
+
+TEST_CASE("What libarchive recognised decides how the file is written",
+          "[extract][local]")
+{
+    // The decision itself, against the constants libarchive actually reports.
+    // The end-to-end cases above cover the four containers that can be built
+    // from tools on the machine; this covers the ones that cannot, and pins
+    // the shape of the rule rather than four instances of it.
+    //
+    // The filter half matters most: a compressed image reports RAW exactly as
+    // a plain one does, and the decompression filter is the only thing telling
+    // them apart. Miss it and .img.xz goes to the card still compressed.
+    struct Case {
+        const char *what;
+        int format;
+        int filter;
+        bool isTheImage;
+    };
+
+    const Case cases[] = {
+        {".img",            ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_NONE,  true},
+        {".iso",            ARCHIVE_FORMAT_ISO9660,           ARCHIVE_FILTER_NONE,  true},
+        {".iso, Rock Ridge", ARCHIVE_FORMAT_ISO9660_ROCKRIDGE, ARCHIVE_FILTER_NONE,  true},
+        {".img.xz",         ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_XZ,    false},
+        {".img.gz",         ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_GZIP,  false},
+        {".img.zst",        ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_ZSTD,  false},
+        {".zip",            ARCHIVE_FORMAT_ZIP,               ARCHIVE_FILTER_NONE,  false},
+        {".tar",            ARCHIVE_FORMAT_TAR_GNUTAR,        ARCHIVE_FILTER_NONE,  false},
+        {".tar.gz",         ARCHIVE_FORMAT_TAR_GNUTAR,        ARCHIVE_FILTER_GZIP,  false},
+        {".7z",             ARCHIVE_FORMAT_7ZIP,              ARCHIVE_FILTER_NONE,  false},
+        // A compressed ISO is still something to decompress first.
+        {".iso.xz",         ARCHIVE_FORMAT_ISO9660,           ARCHIVE_FILTER_XZ,    false},
+    };
+
+    for (const Case &c : cases) {
+        INFO(c.what);
+        CHECK(archivekind::bytesAreTheDiskImage(c.format, c.filter) == c.isTheImage);
+    }
 }
 
 TEST_CASE("LocalFileExtractThread can be cancelled before it starts", "[extract][local]")

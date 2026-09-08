@@ -6,6 +6,7 @@
 #include "localfileextractthread.h"
 #include "config.h"
 #include "systemmemorymanager.h"
+#include "archive_kind.h"
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -202,7 +203,8 @@ bool LocalFileExtractThread::_nameClaimsCompression() const
 
 bool LocalFileExtractThread::_testArchiveFormat()
 {
-    // Test if libarchive can handle this file format AND actually extract data from it
+    // What has the user handed us: the disk image itself, or a container
+    // holding one?
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
     bool canUseArchive = false;
@@ -222,40 +224,26 @@ bool LocalFileExtractThread::_testArchiveFormat()
         int r = archive_read_next_header(a, &entry);
         if (r == ARCHIVE_OK)
         {
-            // Header can be read, but now test if we can actually read meaningful data
-            // Try to read some data from the first entry
-            char testBuf[1024];
-            ssize_t dataSize = archive_read_data(a, testBuf, sizeof(testBuf));
-            
-            if (dataSize > 0)
-            {
-                // Getting bytes back is not the question -- libarchive is
-                // configured with format_raw, which matches any file at all
-                // and hands its contents straight back. Asking only "did I
-                // get data" therefore said yes to a plain uncompressed
-                // image, and every "Use custom" write of one went through
-                // libarchive rather than the direct copy written for it.
-                //
-                // What matters is whether libarchive actually recognised
-                // something. A real container (zip, tar, iso) reports its
-                // own format; a compressed image reports RAW with a
-                // decompression filter -- .img.xz is RAW + XZ, which must
-                // still go through libarchive or the card gets the
-                // compressed bytes. Only RAW with no filter at all is a
-                // plain image, and that is the direct copy's case.
-                const int format = archive_format(a);
-                const int filter = archive_filter_code(a, 0);
-                const bool plainImage = (format == ARCHIVE_FORMAT_RAW)
-                                        && (filter == ARCHIVE_FILTER_NONE);
-                canUseArchive = !plainImage;
-                qDebug() << "libarchive probe: format" << format << "filter" << filter
-                         << (canUseArchive ? "-> extract" : "-> direct copy");
-            }
-            else
-            {
-                // libarchive can read the header but can't extract data (likely ISO/raw disk image)
-                qDebug() << "File recognized by libarchive but no extractable data found, treating as raw disk image";
-            }
+            // Decided on what libarchive recognised, not on whether the
+            // first entry yielded any bytes.
+            //
+            // The bytes-read test that used to be here read the first entry
+            // and called an empty read "no extractable data, so a raw disk
+            // image". The first entry of an archive made by zipping a folder
+            // -- which is how a folder normally gets zipped -- is the folder,
+            // and a directory entry has no data. So a valid .zip or .tar.gz
+            // holding an image was classified as a raw image, and run() then
+            // refused it as corrupt because its name says it is a container.
+            // The user was told to download their own file again.
+            //
+            // format and filter are both settled by the time the first
+            // header is out, with nothing read, so the empty entry is no
+            // longer in the way.
+            canUseArchive = !archivekind::bytesAreTheDiskImage(
+                archive_format(a), archive_filter_code(a, 0));
+            qDebug() << "libarchive probe: format" << archive_format(a)
+                     << "filter" << archive_filter_code(a, 0)
+                     << (canUseArchive ? "-> extract" : "-> direct copy");
         }
         else
         {
