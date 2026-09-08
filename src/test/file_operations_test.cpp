@@ -1080,3 +1080,57 @@ TEST_CASE("A device with room left is not reported as full", "[fileops][writeerr
   CHECK(ops->ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kUnknown);
   ops->Close();
 }
+
+TEST_CASE("A device something else is holding is still written", "[file-ops][loop]") {
+  // Imager unmounts the card before opening it, and then asks for exclusive
+  // access so nothing can mount a partition out from under a write in
+  // progress. Sometimes it cannot have it: udisks, a file manager, or another
+  // copy of Imager may still have the device open.
+  //
+  // Giving up there would be the wrong answer. The user has chosen a card and
+  // agreed to erase it; the write is what they asked for, and "device busy"
+  // from somewhere inside the writer names nothing they can act on. So the
+  // exclusive open is a preference and the shared one is the fallback.
+  //
+  // The hold is taken here, on a loop device this test created, so nothing of
+  // the user's is involved -- and it is released as soon as the open under
+  // test has been answered.
+  const std::string backing = makeImage("busy-loop.img", 16u * 1024 * 1024);
+  LoopDevice loop(backing);
+  if (!loop.valid()) {
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+  }
+
+  const int held = ::open(loop.path().c_str(), O_RDWR | O_EXCL | O_CLOEXEC);
+  if (held < 0) {
+    SKIP(std::string("could not take an exclusive hold on the loop device: ") +
+         std::strerror(errno));
+  }
+
+  auto ops = FileOperations::Create();
+  const FileError opened = ops->OpenDevice(loop.path());
+  ::close(held);
+
+  REQUIRE(opened == FileError::kSuccess);
+
+  // And it is a working handle, not merely a successful return: the fallback
+  // has to give back something that can be written through.
+  constexpr std::size_t kChunk = 1u * 1024 * 1024;
+  AlignedBuffer buffer(kChunk);
+  REQUIRE(buffer.valid());
+  const auto expected = pattern(kChunk, 0x3C);
+  std::memcpy(buffer.data(), expected.data(), kChunk);
+
+  REQUIRE(ops->WriteSequential(buffer.data(), kChunk) == FileError::kSuccess);
+  REQUIRE(ops->ForceSync() == FileError::kSuccess);
+
+  REQUIRE(ops->Seek(0) == FileError::kSuccess);
+  AlignedBuffer readBack(kChunk);
+  REQUIRE(readBack.valid());
+  std::size_t got = 0;
+  REQUIRE(ops->ReadSequential(readBack.data(), kChunk, got) == FileError::kSuccess);
+  CHECK(got == kChunk);
+  CHECK(std::memcmp(readBack.data(), expected.data(), kChunk) == 0);
+
+  ops->Close();
+}
