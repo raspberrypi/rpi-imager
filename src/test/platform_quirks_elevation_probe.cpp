@@ -74,6 +74,8 @@ int main(int argc, char *argv[])
     report("AFTER_", "XDG_DATA_HOME");
     report("AFTER_", "XDG_RUNTIME_DIR");
     report("AFTER_", "DBUS_SESSION_BUS_ADDRESS");
+    report("AFTER_", "DISPLAY");
+    report("AFTER_", "WAYLAND_DISPLAY");
     std::fflush(stdout);
     return 0;
 }

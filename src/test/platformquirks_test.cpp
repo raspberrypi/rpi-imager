@@ -447,6 +447,9 @@ TEST_CASE("Multiple start/stop cycles work correctly", "[platformquirks][network
 #include <QProcess>
 #include <QUuid>
 
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <cstring>
 #include <unistd.h>
 
 namespace {
@@ -2447,4 +2450,158 @@ TEST_CASE("Nothing at all matches nothing", "[platformquirks][unmount]")
     CHECK_FALSE(mountIsOnDevice("/dev/sda", nullptr));
     CHECK_FALSE(mountIsOnDevice("", "/dev/sda1"));
 }
+#endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+#ifdef ELEVATION_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// Finding the compositor when elevated under Wayland
+//
+// Running as root for somebody else, Imager has to be told where their
+// display is or it cannot draw at all. Under Wayland that means finding the
+// compositor's socket in the user's runtime directory, and the scan is not
+// simply "the first thing called wayland-something": a lock file sits beside
+// the socket with almost the same name, and the number is not always zero on
+// a machine with a nested compositor or more than one seat.
+//
+// Pick the wrong one and the elevated process has a WAYLAND_DISPLAY pointing
+// at nothing, which is a window that never appears.
+//
+// unshare -r is enough to reach this: it maps this user to root, which is
+// the only thing the handover is gated on, so no sudo is needed. The runtime
+// directory is bind-mounted, and /tmp/.X11-unix is masked empty -- with an
+// X11 socket present the scan never runs, and Imager would go on to call
+// xhost against the display of whoever is running the suite.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A real AF_UNIX socket, since the scan checks the file type rather than the
+// name alone.
+bool makeUnixSocket(const QString& path)
+{
+    const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0)
+        return false;
+    struct sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    const QByteArray p = path.toUtf8();
+    if (static_cast<size_t>(p.size()) >= sizeof(addr.sun_path)) {
+        ::close(fd);
+        return false;
+    }
+    std::memcpy(addr.sun_path, p.constData(), p.size());
+    const bool ok = ::bind(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) == 0;
+    ::close(fd);
+    return ok;
+}
+
+bool makePlainFile(const QString& path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    f.write("not a socket\n");
+    return true;
+}
+
+// Run the probe as namespace-root with `runtimeDir` over the invoking user's
+// /run/user/<uid> and an empty directory over /tmp/.X11-unix.
+QString runProbeUnderWayland(const QString& runtimeDir, const QString& emptyX11)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral(
+                 "mount --bind \"$1\" \"/run/user/$4\" "
+                 "&& mount --bind \"$2\" /tmp/.X11-unix "
+                 "&& exec env -u DISPLAY -u WAYLAND_DISPLAY -u PKEXEC_UID "
+                 "SUDO_UID=\"$4\" \"$3\""),
+             QStringLiteral("_"), runtimeDir, emptyX11,
+             QStringLiteral(ELEVATION_PROBE_BINARY),
+             QString::number(::getuid())});
+    if (!p.waitForFinished(30000))
+        return {};
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
+QString reportedValue(const QString& out, const QString& key)
+{
+    for (const QString& line : out.split(QLatin1Char('\n'))) {
+        if (line.startsWith(key + QLatin1Char('=')))
+            return line.mid(key.size() + 1);
+    }
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("The compositor socket is found, whatever it is numbered",
+          "[platformquirks][wayland]")
+{
+    if (!haveMountNamespacesForPolicy())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir runtime, x11;
+    REQUIRE(runtime.isValid());
+    REQUIRE(x11.isValid());
+
+    // Not wayland-0: a nested compositor or a second seat numbers them
+    // higher, and the scan is meant to find whichever is there.
+    REQUIRE(makeUnixSocket(QDir(runtime.path()).filePath(QStringLiteral("wayland-3"))));
+    // The lock file that sits beside every one of them.
+    REQUIRE(makePlainFile(QDir(runtime.path()).filePath(QStringLiteral("wayland-3.lock"))));
+    // Something named like a socket that is not one.
+    REQUIRE(makePlainFile(QDir(runtime.path()).filePath(QStringLiteral("wayland-9"))));
+
+    const QString out = runProbeUnderWayland(runtime.path(), x11.path());
+    INFO(out.toStdString());
+
+    CHECK(reportedValue(out, QStringLiteral("AFTER_WAYLAND_DISPLAY"))
+          == QStringLiteral("wayland-3"));
+    // And no X11 display was invented, which is what keeps xhost out of it.
+    CHECK(reportedValue(out, QStringLiteral("AFTER_DISPLAY")).isEmpty());
+}
+
+TEST_CASE("A lock file on its own is not a compositor",
+          "[platformquirks][wayland]")
+{
+    // What is left behind when a compositor exits badly. Pointing
+    // WAYLAND_DISPLAY at it gives a window that never appears, which is
+    // worse than leaving it unset and letting Qt say so.
+    if (!haveMountNamespacesForPolicy())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir runtime, x11;
+    REQUIRE(runtime.isValid());
+    REQUIRE(x11.isValid());
+    REQUIRE(makePlainFile(QDir(runtime.path()).filePath(QStringLiteral("wayland-0.lock"))));
+
+    const QString out = runProbeUnderWayland(runtime.path(), x11.path());
+    INFO(out.toStdString());
+
+    CHECK(reportedValue(out, QStringLiteral("AFTER_WAYLAND_DISPLAY")).isEmpty());
+}
+
+TEST_CASE("An empty runtime directory leaves the display alone",
+          "[platformquirks][wayland]")
+{
+    // Nothing to find. The variable stays unset rather than being given a
+    // guess, and the handover still does the rest of its work.
+    if (!haveMountNamespacesForPolicy())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir runtime, x11;
+    REQUIRE(runtime.isValid());
+    REQUIRE(x11.isValid());
+
+    const QString out = runProbeUnderWayland(runtime.path(), x11.path());
+    INFO(out.toStdString());
+
+    CHECK(reportedValue(out, QStringLiteral("AFTER_WAYLAND_DISPLAY")).isEmpty());
+    // The handover itself still happened.
+    CHECK(reportedValue(out, QStringLiteral("AFTER_HOME")) == QDir::homePath());
+}
+#endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
