@@ -424,6 +424,65 @@ int main(int argc, char *argv[])
 // Disk space and readiness
 // ---------------------------------------------------------------------------
 
+TEST_CASE("A cache directory that cannot be written to reports no space",
+          "[cache][diskspace]")
+{
+    // The cache lives under the user's home. It can stop being writable
+    // between runs -- a full disk, a home directory remounted read-only, a
+    // permissions change -- and what the caller needs then is to be told
+    // there is nowhere to cache, so the next write downloads instead of
+    // trying to cache into a directory it cannot use.
+    //
+    // Reported as no space and no directory. Reporting the real free space
+    // with the directory named would have the caller cache into somewhere
+    // that will refuse every file.
+    if (::geteuid() == 0)
+        SKIP("root can write to a directory with no write bit");
+
+    const QString cacheDir =
+        QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    REQUIRE_FALSE(cacheDir.isEmpty());
+    REQUIRE(QDir().mkpath(cacheDir));
+    REQUIRE(QFile::setPermissions(cacheDir,
+                                  QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+
+    qint64 bytes = -1;
+    QString reported = QStringLiteral("unset");
+    CacheVerificationWorker worker;
+    QObject::connect(&worker, &CacheVerificationWorker::diskSpaceCheckComplete,
+                     [&](qint64 b, const QString &d) { bytes = b; reported = d; });
+
+    worker.checkDiskSpace();
+
+    // Put it back before asserting, so a failing case still leaves a
+    // directory the run can clean up after itself.
+    QFile::setPermissions(cacheDir, QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                        | QFileDevice::ExeOwner);
+
+    CHECK(bytes == 0);
+    CHECK(reported.isEmpty());
+}
+
+TEST_CASE("A usable cache directory reports the space it has", "[cache][diskspace]")
+{
+    // The other half, and the reason the case above is not simply "it
+    // reports zero": zero has to mean something.
+    const QString cacheDir =
+        QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    REQUIRE(QDir().mkpath(cacheDir));
+
+    qint64 bytes = -1;
+    QString reported;
+    CacheVerificationWorker worker;
+    QObject::connect(&worker, &CacheVerificationWorker::diskSpaceCheckComplete,
+                     [&](qint64 b, const QString &d) { bytes = b; reported = d; });
+
+    worker.checkDiskSpace();
+
+    CHECK(bytes > 0);
+    CHECK(reported == cacheDir);
+}
+
 TEST_CASE("CacheManager reports disk space once ready", "[cache-manager]")
 {
     clearCacheDir();
