@@ -10997,3 +10997,52 @@ TEST_CASE("A redirect with nowhere to redirect to changes nothing",
         CHECK(spy.hostChanged == 0);
     }
 }
+
+// ══════════════════════════════════════════════════════════════
+// Whether a fastboot write reads the cache or the network.
+//
+// The three easy answers are covered above. These are the two that decide
+// what actually gets written to a compute module, and the comment on
+// resolveFlashSource is explicit about why they differ: "Verified is the
+// condition, not merely present -- an unverified cache file may be a partial
+// download, and writing that to a board is worse than fetching it again."
+//
+// The failure on one side is a board flashed from a truncated image. On the
+// other it is what the comment was written to fix: a fastboot write going to
+// the network with the image already fully cached, which surfaced to the
+// user as "Recv failure: Connection reset by peer" on a download they could
+// see had already happened.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A fastboot flash reads the cache only once it has been checked",
+          "[imagewriter][rpiboot-handoff][cache]")
+{
+    // Both halves in one case, on one cache file, so the difference between
+    // them is verification and nothing else. Asserting the unverified answer
+    // on its own could not tell "present but unchecked" from "no cache at
+    // all", which is already covered above.
+    CacheFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(false);
+    const QByteArray hash = sha256HexOf(fx.cacheBytes());
+
+    w.setSrc(fx.sourceUrl(), 0, CacheFixture::kSize, hash);
+    w.setCustomCacheFile(fx.cachePath(), hash);
+    w.setDst(fx.target(), CacheFixture::kSize);
+
+    // Nothing has checked the file yet. It might be half a download, and
+    // writing that to a compute module is worse than fetching it again.
+    CHECK(w.resolveFlashSource() == fx.sourceUrl());
+
+    // A write verifies it on the way past.
+    const WriteOutcome out = runWrite(w);
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(out.succeeded);
+
+    // Now the local file. Without this a fastboot write goes to the network
+    // with the image already fully cached, which is what the comment on
+    // resolveFlashSource was written to fix -- it reached the user as "Recv
+    // failure: Connection reset by peer" on a download they could see had
+    // already happened.
+    CHECK(w.resolveFlashSource() == QUrl::fromLocalFile(fx.cachePath()));
+}
