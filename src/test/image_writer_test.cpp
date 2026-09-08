@@ -9857,3 +9857,132 @@ TEST_CASE("Sync mode stays on for the rest of the session",
     w.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
     CHECK(w._forceSyncMode);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Whether a toggle in Interfaces & Features is offered at all.
+//
+// checkHWAndSWCapability is called ten times from the wizard. Five of those
+// decide, between them, whether the Interfaces & Features step appears; the
+// rest decide which individual toggles are enabled on it. Both halves have
+// to agree: the board has to have the interface, and the operating system
+// has to be able to switch it on.
+//
+// Answering false wrongly loses the user a customisation option with no
+// explanation -- the step is simply not there. Answering true wrongly offers
+// a toggle that cannot take effect, which is worse: the setting appears to
+// have been applied and silently is not.
+//
+// It had no test of its own, despite being the only caller of the two
+// single-sided checks that anything in the wizard actually uses.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("An interface needs both the board and the image to support it",
+          "[imagewriter][capability]")
+{
+    ImageWriter w(nullptr);
+
+    // A Pi 5 offering i2c and spi in hardware.
+    w.setHWCapabilitiesList(QJsonArray{QStringLiteral("i2c"), QStringLiteral("spi")});
+
+    SECTION("both sides agree, so the toggle is offered")
+    {
+        w.setSWCapabilitiesList(QStringLiteral("[\"i2c\",\"spi\"]"));
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("i2c")));
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("spi")));
+    }
+
+    SECTION("the board has it but this image cannot switch it on")
+    {
+        // A minimal or third-party image without raspi-config's handling.
+        // Offering the toggle would write a setting nothing acts on.
+        w.setSWCapabilitiesList(QStringLiteral("[\"spi\"]"));
+        CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("i2c")));
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("spi")));
+    }
+
+    SECTION("the image supports it but this board has no such interface")
+    {
+        w.setSWCapabilitiesList(QStringLiteral("[\"i2c\",\"onewire\"]"));
+        CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("onewire")));
+    }
+
+    SECTION("neither side has it")
+    {
+        w.setSWCapabilitiesList(QStringLiteral("[\"spi\"]"));
+        CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("usb_otg")));
+    }
+}
+
+TEST_CASE("A capability named differently on each side is matched on both",
+          "[imagewriter][capability]")
+{
+    // The second argument exists for the case where the hardware tag and the
+    // software tag are not the same word. Given one, the hardware list is
+    // searched for the first and the software list for the second -- not the
+    // first for both, which would refuse every such pair.
+    ImageWriter w(nullptr);
+    w.setHWCapabilitiesList(QJsonArray{QStringLiteral("usb_otg")});
+    w.setSWCapabilitiesList(QStringLiteral("[\"usb_gadget\"]"));
+
+    CHECK(w.checkHWAndSWCapability(QStringLiteral("usb_otg"),
+                                   QStringLiteral("usb_gadget")));
+
+    // And it is genuinely two different lookups: neither name works for both.
+    CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("usb_otg")));
+    CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("usb_gadget")));
+
+    // An empty second argument means "the same on both sides", which is how
+    // all ten calls in the wizard use it.
+    w.setSWCapabilitiesList(QStringLiteral("[\"usb_otg\"]"));
+    CHECK(w.checkHWAndSWCapability(QStringLiteral("usb_otg"), QString()));
+}
+
+TEST_CASE("Capability lists are read whichever way the repository writes them",
+          "[imagewriter][capability]")
+{
+    // The software list arrives as whatever the OS list JSON put in the
+    // image's "capabilities" field, and both shapes are in use.
+    ImageWriter w(nullptr);
+    w.setHWCapabilitiesList(QJsonArray{QStringLiteral("i2c"), QStringLiteral("spi")});
+
+    SECTION("a JSON array")
+    {
+        w.setSWCapabilitiesList(QStringLiteral("[\"i2c\", \"spi\"]"));
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("i2c")));
+    }
+
+    SECTION("a comma-separated string, which is not JSON at all")
+    {
+        w.setSWCapabilitiesList(QStringLiteral("i2c,spi"));
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("i2c")));
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("spi")));
+    }
+
+    SECTION("a list handed straight over from QML")
+    {
+        w.setSWCapabilitiesList(QVariantList{QStringLiteral("i2c"), QStringLiteral("spi")});
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("i2c")));
+    }
+
+    SECTION("with stray spacing and capitals in either list")
+    {
+        // The three setters do not agree on normalising, which is why the
+        // comparison does it. A single stray space in a repository file used
+        // to remove the option from the wizard.
+        w.setHWCapabilitiesList(QJsonArray{QStringLiteral(" I2C ")});
+        w.setSWCapabilitiesList(QStringLiteral("[\" i2c \"]"));
+        CHECK(w.checkHWAndSWCapability(QStringLiteral("i2c")));
+    }
+}
+
+TEST_CASE("An empty software list offers nothing", "[imagewriter][capability]")
+{
+    // What the wizard sets when the selection is cleared. Every toggle has to
+    // go with it, or the previous image's capabilities stay on screen.
+    ImageWriter w(nullptr);
+    w.setHWCapabilitiesList(QJsonArray{QStringLiteral("i2c"), QStringLiteral("spi")});
+    w.setSWCapabilitiesList(QStringLiteral("[]"));
+
+    CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("i2c")));
+    CHECK_FALSE(w.checkHWAndSWCapability(QStringLiteral("spi")));
+}
