@@ -873,7 +873,8 @@ static uid_t resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
                                 uid_t realUid, uid_t effectiveUid);
 static QStringList buildOpenUrlAsUserArgs(const QString& username,
                                           const QProcessEnvironment& env,
-                                          const QString& url);
+                                          const QString& url,
+                                          const QString& userHome);
 
 #ifdef PLATFORMQUIRKS_ENABLE_TEST_API
 namespace TestAPI {
@@ -903,9 +904,10 @@ namespace TestAPI {
 
     QStringList buildOpenUrlAsUserArgs(const QString& username,
                                        const QProcessEnvironment& env,
-                                       const QString& url)
+                                       const QString& url,
+                                       const QString& userHome)
     {
-        return ::PlatformQuirks::buildOpenUrlAsUserArgs(username, env, url);
+        return ::PlatformQuirks::buildOpenUrlAsUserArgs(username, env, url, userHome);
     }
 }
 #endif
@@ -1345,6 +1347,44 @@ static uid_t resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
     return 0;
 }
 
+// Where xdg-open looks for the .desktop files that say which browser to run.
+//
+// pkexec replaces the environment with "a minimal known and safe" one, and
+// XDG_DATA_DIRS is not in it -- so by the time Imager is elevated the value
+// is simply gone, and runuser does not put it back either. xdg-open then
+// falls back to the specification's default of /usr/local/share:/usr/share.
+//
+// That is enough for a browser installed as a distribution package, and not
+// enough for one installed as a Snap or a Flatpak, whose .desktop files live
+// elsewhere. Firefox is a Snap on a stock Ubuntu. The user's mimeapps.list
+// names it correctly -- runuser restores HOME, so that much is found -- and
+// xdg-open then cannot locate the .desktop the name refers to, and the link
+// does nothing at all.
+//
+// Rebuilt rather than carried, because there is nothing left to carry. Only
+// directories that exist are named, so the value stays honest on a machine
+// with no Flatpak or Snap.
+static QString sessionDataDirs(const QString& userHome, const QProcessEnvironment& env) {
+    const QString inherited = env.value(QStringLiteral("XDG_DATA_DIRS"));
+    if (!inherited.isEmpty())
+        return inherited;
+
+    QStringList candidates;
+    if (!userHome.isEmpty())
+        candidates << userHome + QStringLiteral("/.local/share/flatpak/exports/share");
+    candidates << QStringLiteral("/var/lib/flatpak/exports/share")
+               << QStringLiteral("/var/lib/snapd/desktop")
+               << QStringLiteral("/usr/local/share")
+               << QStringLiteral("/usr/share");
+
+    QStringList present;
+    for (const QString& dir : candidates) {
+        if (QFileInfo(dir).isDir())
+            present << dir;
+    }
+    return present.join(QLatin1Char(':'));
+}
+
 // The arguments for: runuser -u <user> -- env VAR=value ... xdg-open <url>
 //
 // runuser preserves more of the environment than `pkexec --user` and needs no
@@ -1355,13 +1395,18 @@ static uid_t resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
 // xdg-open a display exists when it does not.
 static QStringList buildOpenUrlAsUserArgs(const QString& username,
                                           const QProcessEnvironment& env,
-                                          const QString& url) {
+                                          const QString& url,
+                                          const QString& userHome) {
     static const char* const sessionVars[] = {
         "DBUS_SESSION_BUS_ADDRESS",
         "XDG_RUNTIME_DIR",
         "DISPLAY",
         "WAYLAND_DISPLAY",
         "XAUTHORITY",
+        // Which xdg-open backend to use -- gio, kde-open, exo-open. Without
+        // it xdg-open takes its generic path, which ignores the desktop's own
+        // opener. Carried when pkexec happened to leave it.
+        "XDG_CURRENT_DESKTOP",
     };
 
     QStringList envArgs;
@@ -1372,6 +1417,11 @@ static QStringList buildOpenUrlAsUserArgs(const QString& username,
         if (!value.isEmpty())
             envArgs << QStringLiteral("%1=%2").arg(key, value);
     }
+
+    const QString dataDirs = sessionDataDirs(userHome, env);
+    if (!dataDirs.isEmpty())
+        envArgs << QStringLiteral("XDG_DATA_DIRS=%1").arg(dataDirs);
+
     envArgs << QStringLiteral("xdg-open") << url;
 
     // The -- keeps a username or a URL beginning with a dash from being read
@@ -1383,6 +1433,7 @@ static QStringList buildOpenUrlAsUserArgs(const QString& username,
 
 static bool openUrlAsOriginalUser(const QString& url) {
     QString targetUsername;
+    QString targetHome;
 
     const uid_t targetUid = resolveOriginalUid(::getenv("PKEXEC_UID"),
                                                ::getenv("SUDO_UID"),
@@ -1392,6 +1443,10 @@ static bool openUrlAsOriginalUser(const QString& url) {
         struct passwd* pw = ::getpwuid(targetUid);
         if (pw && pw->pw_name) {
             targetUsername = QString::fromUtf8(pw->pw_name);
+            // For the per-user Flatpak export directory. runuser sets HOME
+            // for the browser itself; this is only used to name that path.
+            if (pw->pw_dir)
+                targetHome = QString::fromUtf8(pw->pw_dir);
         }
     }
 
@@ -1401,7 +1456,7 @@ static bool openUrlAsOriginalUser(const QString& url) {
     }
 
     const QStringList runuserArgs = buildOpenUrlAsUserArgs(
-        targetUsername, QProcessEnvironment::systemEnvironment(), url);
+        targetUsername, QProcessEnvironment::systemEnvironment(), url, targetHome);
 
     if (launchDetached(QStringLiteral("runuser"), runuserArgs)) {
         qDebug() << "Started runuser xdg-open";
