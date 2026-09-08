@@ -62,6 +62,14 @@ public:
      * @return Current mode
      */
     ScanMode scanMode() const;
+
+    /**
+     * @brief Whether fastboot storage devices are being scanned for
+     *
+     * Turned on once a board has been bootstrapped into fastboot mode, so
+     * the poll finds the storage it now exposes.
+     */
+    bool fastbootScanEnabled() const { return _fastbootScanEnabled.load(); }
     
     /**
      * @brief Convenience method to pause scanning

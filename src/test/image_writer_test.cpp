@@ -31,6 +31,7 @@
 #include "file_operations.h"
 #include "app_resources.h"
 #include "drivelistmodel.h"
+#include "drivelistmodelpollthread.h"
 
 #include <QCryptographicHash>
 #include <QTimeZone>
@@ -1484,6 +1485,77 @@ TEST_CASE("A capability list that is neither form offers nothing",
         CHECK_FALSE(writer.checkSWCapability(QStringLiteral("i2c")));
         CHECK_FALSE(writer.checkSWCapability(QStringLiteral("spi")));
     }
+}
+
+// ══════════════════════════════════════════════════════════════
+// After a Compute Module has been bootstrapped
+//
+// A CM plugged in over USB comes up in rpiboot mode, and Imager sideloads
+// firmware to get it into fastboot mode where it exposes its storage. Drive
+// scanning is paused for the duration, because the scan and the sideload
+// both talk to the same device over libusb.
+//
+// What happens when the bootstrap ends is bookkeeping, and it is the part
+// that shows: scanning has to come back on, and the poll has to start
+// looking for fastboot storage, or the board the user just watched get
+// bootstrapped never appears in the list. Failure has to do the same --
+// otherwise a bootstrap that went wrong leaves the drive list frozen and
+// empty, and the user cannot even choose a different card.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class BootstrapWriter : public ImageWriter
+{
+public:
+    BootstrapWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::onBootstrapComplete;
+    using ImageWriter::onBootstrapError;
+};
+
+} // namespace
+
+TEST_CASE("A finished bootstrap starts the drive scan looking for fastboot storage",
+          "[imagewriter][bootstrap]")
+{
+    BootstrapWriter writer;
+    DriveListModel *drives = writer.getDriveList();
+    REQUIRE(drives != nullptr);
+
+    // As the kickoff leaves things: paused, and not yet looking for fastboot
+    // devices.
+    drives->pausePolling();
+    drives->setFastbootScanEnabled(false);
+    REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+    // Driven away from the expected answer first: the debug settings can
+    // leave fastboot scanning already on, in which case the check below
+    // would hold whether or not the handler did anything.
+    REQUIRE_FALSE(drives->fastbootScanEnabled());
+
+    writer.onBootstrapComplete(QStringLiteral("1.4"), QStringLiteral("fastboot-1"));
+
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
+    // And it is now looking for what the board has just become.
+    CHECK(drives->fastbootScanEnabled());
+}
+
+TEST_CASE("A bootstrap that fails does not leave the drive list frozen",
+          "[imagewriter][bootstrap]")
+{
+    // The sticky one. Scanning stays paused, the list stays empty, and there
+    // is nothing on screen to connect that to the bootstrap having failed --
+    // the user cannot even fall back to writing an SD card.
+    BootstrapWriter writer;
+    DriveListModel *drives = writer.getDriveList();
+    REQUIRE(drives != nullptr);
+
+    drives->pausePolling();
+    REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    writer.onBootstrapError(QStringLiteral("1.4"),
+                            QStringLiteral("device went away mid-sideload"));
+
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
 
 int main(int argc, char *argv[])
