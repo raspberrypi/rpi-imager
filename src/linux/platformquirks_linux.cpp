@@ -861,6 +861,9 @@ static QString xmlEscape(const QString& input) {
 // worth pinning: an escaping mistake puts attacker-influenced text into a
 // privilege-granting document, and a filename mistake either collides with
 // another AppImage's policy or writes outside the actions directory.
+// Defined further down, beside unmountDisk which is its only caller.
+static bool mountIsOnDevice(const char* devicePath, const char* mountSource);
+
 #ifdef PLATFORMQUIRKS_ENABLE_TEST_API
 namespace TestAPI {
     QString xmlEscape(const QString& input) { return ::PlatformQuirks::xmlEscape(input); }
@@ -868,6 +871,11 @@ namespace TestAPI {
     bool generatePolkitPolicyFilename(const char* appImagePath, char* buffer, size_t bufferSize)
     {
         return ::PlatformQuirks::generatePolkitPolicyFilename(appImagePath, buffer, bufferSize);
+    }
+
+    bool mountIsOnDevice(const char* devicePath, const char* mountSource)
+    {
+        return ::PlatformQuirks::mountIsOnDevice(devicePath, mountSource);
     }
 }
 #endif
@@ -1583,6 +1591,47 @@ QString getEjectDevicePath(const QString& devicePath) {
     return devicePath;
 }
 
+// Whether a /proc/mounts entry belongs to `devicePath` -- either the whole
+// disk or one of its partitions. Pure, and exposed through TestAPI, because
+// getting it wrong means unmounting a filesystem on some other device.
+//
+// The kernel names a partition after its disk: where the disk name ends in a
+// letter the partition number is appended directly (sda1, sda11), and where
+// it ends in a digit the number is separated by 'p' (mmcblk0p1, nvme0n1p1,
+// loop1p1). Only one of those forms is possible for any given disk, so only
+// one is accepted -- accepting both made /dev/loop1 match a mount on
+// /dev/loop11, and /dev/sda match one on /dev/sdap1, which are different
+// devices belonging to somebody else.
+static bool mountIsOnDevice(const char* devicePath, const char* mountSource) {
+    if (!devicePath || !mountSource)
+        return false;
+
+    const size_t deviceLen = strlen(devicePath);
+    if (deviceLen == 0)
+        return false;
+    if (strncmp(mountSource, devicePath, deviceLen) != 0)
+        return false;
+
+    const char* suffix = mountSource + deviceLen;
+    if (*suffix == '\0')
+        return true;                    // the whole disk is mounted
+
+    if (devicePath[deviceLen - 1] >= '0' && devicePath[deviceLen - 1] <= '9') {
+        if (*suffix != 'p')
+            return false;
+        ++suffix;
+    }
+
+    // Whatever remains has to be the partition number and nothing else, so
+    // that sda_backup, mmcblk0boot0 and loop11 are all left alone.
+    if (*suffix == '\0')
+        return false;
+    for (const char* c = suffix; *c != '\0'; ++c)
+        if (*c < '0' || *c > '9')
+            return false;
+    return true;
+}
+
 DiskResult unmountDisk(const QString& device) {
     QByteArray deviceBytes = device.toUtf8();
     const char* devicePath = deviceBytes.constData();
@@ -1614,20 +1663,9 @@ DiskResult unmountDisk(const QString& device) {
     char mntBuf[4096 + 1024];  // Buffer for getmntent_r
     
     while ((mnt = getmntent_r(procMounts, &data, mntBuf, sizeof(mntBuf)))) {
-        // Check if this mount is on the device or any of its partitions
-        // Match exact device path or device path followed by a partition number (digit)
-        // This prevents matching /dev/sda when we have /dev/sda_backup or similar
-        size_t devicePathLen = strlen(devicePath);
-        if (strncmp(mnt->mnt_fsname, devicePath, devicePathLen) == 0) {
-            char nextChar = mnt->mnt_fsname[devicePathLen];
-            // Accept exact match, partition number (digit), or 'p' followed by digit (nvme style)
-            if (nextChar == '\0' || 
-                (nextChar >= '0' && nextChar <= '9') ||
-                (nextChar == 'p' && mnt->mnt_fsname[devicePathLen + 1] >= '0' && 
-                 mnt->mnt_fsname[devicePathLen + 1] <= '9')) {
-                qDebug() << "unmountDisk: found mount" << mnt->mnt_dir << "for" << mnt->mnt_fsname;
-                mountDirs.push_back(mnt->mnt_dir);
-            }
+        if (mountIsOnDevice(devicePath, mnt->mnt_fsname)) {
+            qDebug() << "unmountDisk: found mount" << mnt->mnt_dir << "for" << mnt->mnt_fsname;
+            mountDirs.push_back(mnt->mnt_dir);
         }
     }
     endmntent(procMounts);

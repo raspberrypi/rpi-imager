@@ -2340,3 +2340,111 @@ TEST_CASE("Nothing is installed when we are not root",
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
+
+#ifdef Q_OS_LINUX
+// ══════════════════════════════════════════════════════════════
+// Which mounts belong to the card being written
+//
+// Imager unmounts the target before writing to it, and works out what to
+// unmount by matching every line of /proc/mounts against the device path.
+// Matching one line too many means unmounting a filesystem on somebody
+// else's disk, out from under whatever was using it -- so this is the sort
+// of comparison worth being exact about, and it had no tests.
+//
+// The kernel names a partition after its disk. Where the disk name ends in a
+// letter the number is appended directly (sda1, and sda11 for the eleventh);
+// where it ends in a digit the number is separated by 'p' (mmcblk0p1,
+// nvme0n1p1, loop1p1). Only one of those forms can occur for any given disk.
+// ══════════════════════════════════════════════════════════════
+
+namespace PlatformQuirks::TestAPI {
+bool mountIsOnDevice(const char* devicePath, const char* mountSource);
+}
+
+TEST_CASE("A disk and its own partitions are matched", "[platformquirks][unmount]")
+{
+    using PlatformQuirks::TestAPI::mountIsOnDevice;
+
+    // Names ending in a letter: the number goes straight on.
+    CHECK(mountIsOnDevice("/dev/sda", "/dev/sda"));
+    CHECK(mountIsOnDevice("/dev/sda", "/dev/sda1"));
+    CHECK(mountIsOnDevice("/dev/sda", "/dev/sda2"));
+    CHECK(mountIsOnDevice("/dev/sda", "/dev/sda11"));
+
+    // Names ending in a digit: separated by 'p'. These are the ones a user
+    // of this application actually writes to.
+    CHECK(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk0"));
+    CHECK(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk0p1"));
+    CHECK(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk0p2"));
+    CHECK(mountIsOnDevice("/dev/nvme0n1", "/dev/nvme0n1p1"));
+    CHECK(mountIsOnDevice("/dev/loop1", "/dev/loop1p1"));
+}
+
+TEST_CASE("A mount on another disk is left alone", "[platformquirks][unmount]")
+{
+    using PlatformQuirks::TestAPI::mountIsOnDevice;
+
+    // Different disk entirely.
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/sdb"));
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/sdb1"));
+    CHECK_FALSE(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk1p1"));
+
+    // A longer name that merely starts the same way.
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/sda_backup"));
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/sdaa"));
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/sdaa1"));
+
+    // The eMMC boot areas, which sit beside mmcblk0 and are not partitions
+    // of it.
+    CHECK_FALSE(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk0boot0"));
+    CHECK_FALSE(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk0rpmb"));
+
+    // Not a prefix at all.
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/nvme0n1p1"));
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "tmpfs"));
+}
+
+TEST_CASE("A device whose name ends in a digit does not swallow its neighbours",
+          "[platformquirks][unmount]")
+{
+    using PlatformQuirks::TestAPI::mountIsOnDevice;
+
+    // The case that made this worth extracting. Accepting a bare digit after
+    // a name that already ends in one matched the *next* device along:
+    // /dev/loop1 took in a mount on /dev/loop11, and unmounted it. Loop
+    // devices are offered as write targets -- the drive list keeps them
+    // deliberately, since a mounted disk image is a valid thing to write --
+    // so this is reachable rather than theoretical.
+    CHECK_FALSE(mountIsOnDevice("/dev/loop1", "/dev/loop11"));
+    CHECK_FALSE(mountIsOnDevice("/dev/loop1", "/dev/loop11p1"));
+    CHECK_FALSE(mountIsOnDevice("/dev/loop1", "/dev/loop12"));
+    CHECK_FALSE(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk01"));
+    CHECK_FALSE(mountIsOnDevice("/dev/nvme0n1", "/dev/nvme0n11"));
+
+    // And the mirror image: a 'p' suffix on a name ending in a letter is not
+    // a partition either. /dev/sdap1 is the first partition of the
+    // forty-second SCSI disk, which a machine with a shelf of them has.
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/sdap1"));
+    CHECK_FALSE(mountIsOnDevice("/dev/sdb", "/dev/sdbp2"));
+}
+
+TEST_CASE("A partial partition number is not a partition",
+          "[platformquirks][unmount]")
+{
+    using PlatformQuirks::TestAPI::mountIsOnDevice;
+
+    // 'p' with nothing after it, and digits with something after them.
+    CHECK_FALSE(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk0p"));
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", "/dev/sda1x"));
+    CHECK_FALSE(mountIsOnDevice("/dev/mmcblk0", "/dev/mmcblk0p1x"));
+}
+
+TEST_CASE("Nothing at all matches nothing", "[platformquirks][unmount]")
+{
+    using PlatformQuirks::TestAPI::mountIsOnDevice;
+
+    CHECK_FALSE(mountIsOnDevice(nullptr, "/dev/sda1"));
+    CHECK_FALSE(mountIsOnDevice("/dev/sda", nullptr));
+    CHECK_FALSE(mountIsOnDevice("", "/dev/sda1"));
+}
+#endif // Q_OS_LINUX
