@@ -828,6 +828,7 @@ TestCase {
 
         // Parsing an OS list records an event, so the session has something
         // to export whatever ran before this.
+        const before = ImageWriterSingleton.osListUrl()
         const repo = TestFiles.write("main_window_perf_repo.json",
                                      JSON.stringify({ "os_list": [] }))
         verify(repo !== "", "wrote a repository file")
@@ -842,5 +843,9 @@ TestCase {
 
         performanceSave().close()
         tryVerify(function () { return !performanceSave().visible }, 3000)
+
+        // The repository is process-wide: left pointed at the file above, the
+        // files after this one open on a custom source they never chose.
+        leaveAnOsListBehind(before)
     }
 }
