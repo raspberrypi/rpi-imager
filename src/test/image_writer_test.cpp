@@ -22,6 +22,8 @@
 #include <unistd.h>
 
 #include "imagewriter.h"
+#include "platformquirks.h"
+#include "curlnetworkconfig.h"
 #include "config.h"
 #include "cli.h"
 #include "bootimgcreator.h"
@@ -765,6 +767,277 @@ TEST_CASE("A later cancellation is not still blamed on the card",
 
     CHECK(outcome.cancelledPlain == 1);
     CHECK(outcome.cancelledByRemoval == 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Noticing that the network came back
+//
+// isOnline() is polled, and it is where Imager decides whether to go and
+// fetch the OS list. Two of its branches carry issue numbers in the source:
+// #1212, where a firewall blocked the first fetch and the user later allowed
+// it, and #809, where the application starts with no network at all. Both
+// were user reports, and neither branch had a test.
+//
+// The property that matters as much as the retry is that it happens once.
+// pollNetwork() calls this on a hundred-millisecond timer, so a missing
+// guard would restart the fetch ten times a second and it would never
+// finish.
+//
+// The repository is pointed at a file on disk, so the fetch these cases
+// provoke is real but local -- nothing here contacts raspberrypi.com.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class OnlineWriter : public ImageWriter
+{
+public:
+    OnlineWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::onOsListFetchComplete;
+};
+
+struct OnlineSpy
+{
+    int networkOnline = 0;
+    int osListUnavailable = 0;
+
+    explicit OnlineSpy(ImageWriter *w)
+    {
+        QObject::connect(w, &ImageWriter::networkOnline,
+                         [this]() { ++networkOnline; });
+        QObject::connect(w, &ImageWriter::osListUnavailableChanged,
+                         [this]() { ++osListUnavailable; });
+    }
+};
+
+QString writeRepositoryFile(const QString& dir, const QString& name)
+{
+    const QString path = QDir(dir).filePath(name);
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    const QByteArray body = QByteArrayLiteral(
+        "{\"os_list\":[{\"name\":\"Test OS\",\"description\":\"d\","
+        "\"url\":\"https://example.invalid/x.img.xz\",\"icon\":\"\","
+        "\"release_date\":\"2026-01-01\",\"extract_size\":1048576,"
+        "\"image_download_size\":524288,\"extract_sha256\":\"ab\"}]}");
+    REQUIRE(f.write(body) == body.size());
+    return path;
+}
+
+} // namespace
+
+TEST_CASE("A network that comes back sends Imager to fetch the list again",
+          "[imagewriter][online]")
+{
+    // Issue #1212: the first fetch was refused by a firewall, the user
+    // allowed it, and nothing went back for the list -- so the OS list
+    // stayed empty until the application was restarted.
+    if (!PlatformQuirks::hasNetworkConnectivity())
+        SKIP("this machine reports no network, so the branch under test is "
+             "not the one that runs");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString repo = writeRepositoryFile(dir.path(), QStringLiteral("repo.json"));
+
+    OnlineWriter writer;
+    OnlineSpy spy(&writer);
+    writer.setCustomOsListUrl(QUrl::fromLocalFile(repo));
+
+    CHECK(writer.isOnline());
+    CHECK(spy.networkOnline == 1);
+}
+
+TEST_CASE("Noticing the network twice does not fetch the list twice",
+          "[imagewriter][online]")
+{
+    // The guard on the retry. Polled ten times a second, an unguarded branch
+    // would abandon and restart the fetch on every tick, and the list would
+    // never arrive at all.
+    if (!PlatformQuirks::hasNetworkConnectivity())
+        SKIP("this machine reports no network");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString repo = writeRepositoryFile(dir.path(), QStringLiteral("repo.json"));
+
+    OnlineWriter writer;
+    OnlineSpy spy(&writer);
+    writer.setCustomOsListUrl(QUrl::fromLocalFile(repo));
+
+    for (int i = 0; i < 5; ++i)
+        writer.isOnline();
+
+    CHECK(spy.networkOnline == 1);
+}
+
+TEST_CASE("With a list already in hand, coming online fetches nothing",
+          "[imagewriter][online]")
+{
+    // The other online branch. There is a list, so there is nothing to go
+    // back for: noticing the network is worth recording but not worth
+    // another request.
+    if (!PlatformQuirks::hasNetworkConnectivity())
+        SKIP("this machine reports no network");
+
+    OnlineWriter writer;
+    writer.onOsListFetchComplete(
+        QByteArrayLiteral("{\"os_list\":[{\"name\":\"Already here\","
+                          "\"description\":\"d\",\"url\":\"\",\"icon\":\"\"}]}"),
+        writer.osListUrl(), writer.osListUrl());
+
+    OnlineSpy spy(&writer);
+    CHECK(writer.isOnline());
+
+    CHECK(spy.networkOnline == 0);
+    CHECK(spy.osListUnavailable == 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// When fetching the OS list fails
+//
+// Four different things depending on what failed and what is already on
+// screen, and the differences are all visible to the user: whether they get
+// the offline placeholder, whether the list they can already see survives,
+// and whether Imager quietly tries again a different way.
+//
+// The repository is a file on disk throughout, so the retries these cases
+// provoke are local. IPv4-only is process-wide state and is put back after
+// each case.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class FetchFailWriter : public ImageWriter
+{
+public:
+    FetchFailWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::onOsListFetchComplete;
+    using ImageWriter::onOsListFetchError;
+};
+
+class Ipv4OnlyGuard
+{
+public:
+    Ipv4OnlyGuard() : _saved(CurlNetworkConfig::instance().ipv4Only()) {}
+    ~Ipv4OnlyGuard() { CurlNetworkConfig::instance().setIPv4Only(_saved); }
+
+    Ipv4OnlyGuard(const Ipv4OnlyGuard&) = delete;
+    Ipv4OnlyGuard& operator=(const Ipv4OnlyGuard&) = delete;
+
+private:
+    bool _saved;
+};
+
+} // namespace
+
+TEST_CASE("A first failure retries the list over IPv4 before giving up",
+          "[imagewriter][fetchfail]")
+{
+    // Windows 11 with broken IPv6 routing: DNS answers with AAAA records and
+    // the connection then times out, where a browser would have fallen back
+    // to IPv4 without anyone noticing. Imager does the same thing once
+    // rather than showing an offline screen to a machine that is online.
+    if (!PlatformQuirks::hasNetworkConnectivity())
+        SKIP("the retry is conditional on connectivity being present");
+
+    Ipv4OnlyGuard guard;
+    CurlNetworkConfig::instance().setIPv4Only(false);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString repo = writeRepositoryFile(dir.path(), QStringLiteral("repo.json"));
+
+    FetchFailWriter writer;
+    OnlineSpy spy(&writer);
+    writer.setCustomOsListUrl(QUrl::fromLocalFile(repo));
+
+    writer.onOsListFetchError(QStringLiteral("Connection timed out"),
+                              writer.osListUrl());
+
+    CHECK(CurlNetworkConfig::instance().ipv4Only());
+    // Not offline yet: it has not finished trying.
+    CHECK(spy.osListUnavailable == 0);
+}
+
+TEST_CASE("A second failure gives up and shows the offline screen",
+          "[imagewriter][fetchfail]")
+{
+    // The retry has already been spent, so this is the end of the road and
+    // the user needs the placeholder and its Retry button rather than an
+    // empty list that looks like there are no images.
+    Ipv4OnlyGuard guard;
+    CurlNetworkConfig::instance().setIPv4Only(true);
+
+    FetchFailWriter writer;
+    OnlineSpy spy(&writer);
+
+    writer.onOsListFetchError(QStringLiteral("Connection timed out"),
+                              writer.osListUrl());
+
+    CHECK(spy.osListUnavailable == 1);
+}
+
+TEST_CASE("A failed refresh keeps the list already on screen",
+          "[imagewriter][fetchfail]")
+{
+    // A refresh of a list that arrived earlier. Reporting this as offline
+    // would replace a working list with the placeholder because of a blip,
+    // and the user would be told to check a connection that is fine.
+    Ipv4OnlyGuard guard;
+    CurlNetworkConfig::instance().setIPv4Only(true);
+
+    FetchFailWriter writer;
+    writer.onOsListFetchComplete(
+        QByteArrayLiteral("{\"os_list\":[{\"name\":\"Already here\","
+                          "\"description\":\"d\",\"url\":\"\",\"icon\":\"\"}]}"),
+        writer.osListUrl(), writer.osListUrl());
+    // What the screen is showing, built-in "Erase" and "Use custom" entries
+    // and all.
+    const QJsonArray before = writer.getFilteredOSlistDocument().object()
+                                  .value(QStringLiteral("os_list")).toArray();
+    REQUIRE_FALSE(before.isEmpty());
+
+    OnlineSpy spy(&writer);
+    writer.onOsListFetchError(QStringLiteral("Temporary failure in name resolution"),
+                              writer.osListUrl());
+
+    CHECK(spy.osListUnavailable == 0);
+    // Not merely non-empty: the same list, unchanged.
+    const QJsonArray after = writer.getFilteredOSlistDocument().object()
+                                 .value(QStringLiteral("os_list")).toArray();
+    CHECK(after == before);
+    bool stillListed = false;
+    for (const auto& entry : after) {
+        if (entry.toObject().value(QStringLiteral("name")).toString()
+            == QStringLiteral("Already here"))
+            stillListed = true;
+    }
+    CHECK(stillListed);
+}
+
+TEST_CASE("An error about some other address is not the list failing",
+          "[imagewriter][fetchfail]")
+{
+    // Categories are fetched from their own addresses, so one of them being
+    // unreachable is not the repository being unreachable, and only the
+    // repository's own failure means offline.
+    //
+    // Checked with nothing fetched yet, deliberately. With a list already in
+    // hand the previous case's route reaches the same answer whether or not
+    // the address is compared, so treating every failure as the top-level one
+    // would go unnoticed -- which it did, until this case was written this
+    // way round.
+    Ipv4OnlyGuard guard;
+    CurlNetworkConfig::instance().setIPv4Only(true);
+
+    FetchFailWriter writer;
+    OnlineSpy spy(&writer);
+    writer.onOsListFetchError(
+        QStringLiteral("404"),
+        QUrl(QStringLiteral("https://example.invalid/a-category.json")));
+
+    CHECK(spy.osListUnavailable == 0);
 }
 
 int main(int argc, char *argv[])
