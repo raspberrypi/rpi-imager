@@ -5999,6 +5999,37 @@ TEST_CASE("A key directory that is not there yields no key",
 // operator gets -- there is no dialog to read and no list to look at.
 // ══════════════════════════════════════════════════════════════
 
+TEST_CASE("A cache file with no hash to check it against is refused",
+          "[imagewriter][cli][cache]")
+{
+    // --cache-file's own help text has always said it requires --sha256.
+    // Nothing enforced it, and the failure was silent: both hashes are empty,
+    // the cache lookup compares them and matches, and the file named by
+    // --cache-file is written in place of the image the script asked for.
+    // An automation run would report success having written the wrong image.
+    const QString problem =
+        Cli::validateCacheOptions(QStringLiteral("/tmp/cached.img"), QString());
+    INFO("reported: " << problem.toStdString());
+    REQUIRE_FALSE(problem.isEmpty());
+    // Names both options, since the fix is to add one of them.
+    CHECK_THAT(problem.toStdString(), ContainsSubstring("--cache-file"));
+    CHECK_THAT(problem.toStdString(), ContainsSubstring("--sha256"));
+}
+
+TEST_CASE("A cache file with a hash is accepted", "[imagewriter][cli][cache]")
+{
+    CHECK(Cli::validateCacheOptions(QStringLiteral("/tmp/cached.img"),
+                                    QStringLiteral("abc123")).isEmpty());
+}
+
+TEST_CASE("No cache file means there is nothing to require", "[imagewriter][cli][cache]")
+{
+    // --sha256 on its own is ordinary: it is how a script pins the image it
+    // expects, with or without a cache.
+    CHECK(Cli::validateCacheOptions(QString(), QString()).isEmpty());
+    CHECK(Cli::validateCacheOptions(QString(), QStringLiteral("abc123")).isEmpty());
+}
+
 TEST_CASE("An http source is fetched rather than looked for on disk",
           "[cli][source]")
 {

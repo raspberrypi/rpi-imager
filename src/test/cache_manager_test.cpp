@@ -420,6 +420,53 @@ int main(int argc, char *argv[])
     return rc;
 }
 
+TEST_CASE("A custom cache file with no hash matches a lookup with no hash",
+          "[cache][custom]")
+{
+    // Recorded because it is the reason the CLI refuses --cache-file without
+    // --sha256 rather than passing an empty hash through. A custom cache is
+    // handed back when its stored hash equals the one being looked up, and
+    // with neither set that comparison is "" == "" -- so whatever is in the
+    // cache file is returned as if it were the image that was asked for, and
+    // nothing downstream checks it, because there is no hash to check
+    // against.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString cacheFile = dir.filePath(QStringLiteral("stale.img"));
+    {
+        QFile f(cacheFile);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("an image from some earlier run");
+    }
+
+    CacheManager mgr;
+    mgr.setCustomCacheFile(cacheFile, QByteArray());
+
+    CHECK(mgr.getCacheFilePath(QByteArray()) == cacheFile);
+    // With a hash to check against it behaves: a cache recorded under no hash
+    // is not offered for a specific one.
+    CHECK(mgr.getCacheFilePath(QByteArray("abc123")).isEmpty());
+}
+
+TEST_CASE("A custom cache file with a hash is only offered for that hash",
+          "[cache][custom]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString cacheFile = dir.filePath(QStringLiteral("cached.img"));
+    {
+        QFile f(cacheFile);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("the image that was asked for");
+    }
+
+    CacheManager mgr;
+    mgr.setCustomCacheFile(cacheFile, QByteArray("aa11"));
+
+    CHECK(mgr.getCacheFilePath(QByteArray("aa11")) == cacheFile);
+    CHECK(mgr.getCacheFilePath(QByteArray("bb22")).isEmpty());
+}
+
 // ---------------------------------------------------------------------------
 // Disk space and readiness
 // ---------------------------------------------------------------------------

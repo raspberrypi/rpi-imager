@@ -44,6 +44,15 @@ public:
     // written instead.
     static QStringList removableDestinations(class DriveListModel &drives);
 
+    // Empty when the pair is usable, otherwise the reason it is not.
+    //
+    // --cache-file without --sha256 is the case that matters, and the option's
+    // own help text has always said so. Unenforced, both hashes are empty, the
+    // cache lookup compares them and matches, and the file named by
+    // --cache-file is written in place of the image the script asked for --
+    // unverified, with nothing on the console to say it happened.
+    static QString validateCacheOptions(const QString &cacheFile, const QString &sha256);
+
     // Read a customisation file named on the command line. `what` is how the
     // file is described back to the operator. Returns false with `error`
     // filled when the file cannot be used -- unreadable is told apart from

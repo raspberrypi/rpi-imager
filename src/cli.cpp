@@ -51,6 +51,20 @@ Cli::SourceKind Cli::classifySource(const QString &src)
     return SourceKind::NotRegular;
 }
 
+QString Cli::validateCacheOptions(const QString &cacheFile, const QString &sha256)
+{
+    if (cacheFile.isEmpty())
+        return {};
+
+    if (sha256.isEmpty()) {
+        return QStringLiteral("--cache-file requires --sha256: without a hash "
+                              "the cached file is written without being checked "
+                              "against the image that was asked for.");
+    }
+
+    return {};
+}
+
 QString Cli::validateSecureBootKey(const QString &path)
 {
     const QFileInfo keyFile(path);
@@ -212,6 +226,14 @@ int Cli::run()
         {
             std::cerr << "Secure boot signing enabled with key: " << keyPath.toStdString() << std::endl;
         }
+    }
+
+    const QString cacheProblem = validateCacheOptions(parser.value("cache-file"),
+                                                      parser.value("sha256"));
+    if (!cacheProblem.isEmpty())
+    {
+        std::cerr << "ERROR: " << cacheProblem.toStdString() << std::endl;
+        return 1;
     }
 
     switch (classifySource(args[0]))
