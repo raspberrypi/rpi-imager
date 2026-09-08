@@ -7375,6 +7375,56 @@ TEST_CASE("The fallback image picker reports a custom image", "[imagewriter][fil
 }
 
 // ══════════════════════════════════════════════════════════════
+// Asking for an organisation key when there is none
+//
+// The Pi Connect step can mint a single-use auth key from an
+// organisation's API key, so a fleet of boards each join the
+// organisation on first boot without anyone pasting a per-device token.
+//
+// The first thing that can go wrong is having no organisation key to mint
+// from -- the feature turned on without one configured, or the key cleared
+// between sessions. The refusal for that was uncovered, and it is the one
+// the user sees: the step puts the message straight on screen, so a refusal
+// with no message is a button that appears to do nothing.
+//
+// The paths past it are deliberately not driven here. They build a
+// ConnectDeviceRegistrar against the real Connect API, and there is no seam
+// to point it elsewhere from this function -- the registrar's own tests
+// cover the request and its failures against a local server, with a base
+// URL it takes as an argument.
+
+TEST_CASE("Minting an organisation key without one configured says so",
+          "[imagewriter][connect]")
+{
+    ImageWriter writer(nullptr);
+    writer.clearConnectOrgRegistration();
+    REQUIRE_FALSE(writer.hasConnectOrgRegistration());
+
+    const QVariantMap result =
+        writer.requestOrgAuthKey(QStringLiteral("a device"), 7);
+
+    CHECK_FALSE(result.value(QStringLiteral("ok")).toBool());
+    CHECK_FALSE(result.value(QStringLiteral("error")).toString().isEmpty());
+    CHECK_THAT(result.value(QStringLiteral("error")).toString().toStdString(),
+               ContainsSubstring("organisation"));
+}
+
+TEST_CASE("A refusal to mint reports no key of its own", "[imagewriter][connect]")
+{
+    // Whatever comes back must not look like a token. The step writes what
+    // it is given into the image, and "ok" being false is the only thing
+    // between a failed mint and a board configured with a rejected key.
+    ImageWriter writer(nullptr);
+    writer.clearConnectOrgRegistration();
+
+    const QVariantMap result =
+        writer.requestOrgAuthKey(QStringLiteral("a device"), 7);
+
+    CHECK_FALSE(result.contains(QStringLiteral("secret")));
+    CHECK_FALSE(result.contains(QStringLiteral("id")));
+}
+
+// ══════════════════════════════════════════════════════════════
 // Whose Wi-Fi passphrase gets written into the image
 //
 // The wireless step offers to reuse the network this computer is on, which
