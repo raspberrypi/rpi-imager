@@ -30,6 +30,7 @@
 #include "downloadthread.h"
 #include "file_operations.h"
 #include "app_resources.h"
+#include "platform_tools.h"
 #include "drivelistmodel.h"
 #include "drivelistmodelpollthread.h"
 
@@ -7715,10 +7716,8 @@ namespace {
 
 bool haveMtools()
 {
-    return !QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
-               {QStringLiteral("/usr/sbin"), QStringLiteral("/sbin"),
-                QStringLiteral("/usr/bin")}).isEmpty()
-        && !QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty();
+    return rpi_test::haveTool(QStringLiteral("mkfs.vfat"))
+        && rpi_test::haveTool(QStringLiteral("mcopy"));
 }
 
 // Read a file back out of the image with mtools.
@@ -7752,7 +7751,7 @@ TEST_CASE("A file put in the boot image can be read back out",
           "[bootimg]")
 {
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7773,7 +7772,7 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
     // The firmware tree is nested. A file flattened into the root is a file
     // the bootloader will not find.
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7791,7 +7790,7 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
 TEST_CASE("Directories several deep are all created", "[bootimg]")
 {
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7811,7 +7810,7 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
     // The directory is created once for the first file; the rest have to
     // land in it rather than being lost to an "already exists" failure.
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7832,7 +7831,7 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
 TEST_CASE("Root files and nested files coexist", "[bootimg]")
 {
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7855,7 +7854,7 @@ TEST_CASE("Binary content survives unchanged", "[bootimg]")
     // The bootcode and firmware blobs are binary. A text-mode copy would
     // mangle them in ways that do not show up until the board fails to boot.
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7887,7 +7886,7 @@ TEST_CASE("An empty set of files makes no image", "[bootimg]")
 TEST_CASE("The output directory is created if it is not there", "[bootimg]")
 {
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7906,7 +7905,7 @@ TEST_CASE("The image is a filesystem, not just a sized file", "[bootimg]")
     // wrote it -- so this checks the image really is mountable FAT32 rather
     // than that our own writer agrees with itself.
     if (!haveMtools())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());

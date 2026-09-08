@@ -38,32 +38,12 @@
 #include "devicewrapperstructs.h"
 
 #include "fixture_process.h"
+#include "platform_tools.h"
+#include "platform_fat.h"
 
 using Catch::Matchers::ContainsSubstring;
 
 namespace {
-
-bool haveMkfsVfat()
-{
-    static const bool found = []() {
-        for (const char *dir : {"/sbin", "/usr/sbin", "/bin", "/usr/bin"}) {
-            if (QFileInfo::exists(QString::fromUtf8(dir) + QStringLiteral("/mkfs.vfat")))
-                return true;
-        }
-        return false;
-    }();
-    return found;
-}
-
-QString mkfsPath()
-{
-    for (const char *dir : {"/sbin", "/usr/sbin", "/bin", "/usr/bin"}) {
-        const QString candidate = QString::fromUtf8(dir) + QStringLiteral("/mkfs.vfat");
-        if (QFileInfo::exists(candidate))
-            return candidate;
-    }
-    return QStringLiteral("mkfs.vfat");
-}
 
 // A FAT filesystem in a scratch file, wrapped in the driver under test.
 //
@@ -122,13 +102,12 @@ public:
             throw std::runtime_error("could not create the scratch image");
         }
 
-        QProcess mkfs;
-        mkfs.start(mkfsPath(), {QStringLiteral("-F"), QString::number(fatBits),
-                                QStringLiteral("-n"), QStringLiteral("TESTVOL"), _path});
-        mkfs.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
-        if (mkfs.exitStatus() != QProcess::NormalExit || mkfs.exitCode() != 0)
-            throw std::runtime_error("mkfs.vfat failed: " +
-                                     mkfs.readAllStandardError().toStdString());
+        QString formatError;
+        if (!rpi_test::makeFatFilesystem(_path, fatBits, QStringLiteral("TESTVOL"),
+                                         &formatError)) {
+            throw std::runtime_error("could not build the filesystem: " +
+                                     formatError.toStdString());
+        }
 
         if (populate)
             populate(_path);
@@ -185,7 +164,8 @@ bool runMtool(const QString &tool, const QStringList &args)
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert(QStringLiteral("MTOOLS_SKIP_CHECK"), QStringLiteral("1"));
     proc.setProcessEnvironment(env);
-    proc.start(QStringLiteral("/usr/bin/") + tool, args);
+    const QString toolPath = rpi_test::toolPath(tool);
+    proc.start(toolPath.isEmpty() ? tool : toolPath, args);
     proc.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
     return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
 }
@@ -202,8 +182,8 @@ QByteArray patternOfSize(int size, char seed)
 } // namespace
 
 #define REQUIRE_MKFS()                                                                             \
-    if (!haveMkfsVfat())                                                                           \
-    SKIP("mkfs.vfat is not installed, so no filesystem can be built to test against")
+    if (!rpi_test::haveFatFormatter())                                                             \
+    SKIP(rpi_test::noFatFormatterReason())
 
 // ---------------------------------------------------------------------------
 // Mounting
@@ -998,7 +978,10 @@ struct OpenAttempt {
     std::string message;
 };
 
-OpenAttempt tryOpenAs(const QString &mkfsTool, const QStringList &mkfsArgs, int sizeMB)
+// The formatter is a callable rather than a tool and its arguments: what
+// builds a FAT filesystem is not the same program everywhere, and the cases
+// that want an unusual one (FAT12, exFAT) still name their own.
+OpenAttempt tryOpenAs(const std::function<bool(const QString &)> &formatter, int sizeMB)
 {
     ScopedTempDir scratch(QStringLiteral("rpi-imager-reject"));
     const QString path = scratch.filePath(QStringLiteral("fs.img"));
@@ -1013,10 +996,7 @@ OpenAttempt tryOpenAs(const QString &mkfsTool, const QStringList &mkfsArgs, int 
         }
     }
 
-    QProcess mkfs;
-    mkfs.start(mkfsTool, QStringList(mkfsArgs) << path);
-    mkfs.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
-    if (mkfs.exitStatus() != QProcess::NormalExit || mkfs.exitCode() != 0) {
+    if (!formatter(path)) {
         return result;
     }
 
@@ -1045,7 +1025,9 @@ TEST_CASE("FAT driver refuses a FAT12 filesystem", "[fat][image]")
     // bits, so reading them as 16 would produce plausible-looking but wrong
     // cluster numbers.
     const OpenAttempt attempt =
-        tryOpenAs(mkfsPath(), {QStringLiteral("-F"), QStringLiteral("12")}, 4);
+        tryOpenAs([](const QString &path) {
+            return rpi_test::makeFatFilesystem(path, 12);
+        }, 4);
 
     INFO("message: " << attempt.message);
     CHECK(attempt.threw);
@@ -1054,13 +1036,17 @@ TEST_CASE("FAT driver refuses a FAT12 filesystem", "[fat][image]")
 
 TEST_CASE("FAT driver refuses an exFAT filesystem", "[fat][image]")
 {
-    if (!QFileInfo::exists(QStringLiteral("/usr/sbin/mkfs.exfat")))
+    const QString mkfsExfat = rpi_test::toolPath(QStringLiteral("mkfs.exfat"));
+    if (mkfsExfat.isEmpty())
         SKIP("mkfs.exfat is not installed");
 
     // exFAT is the default for cards over 32GB, so this is the most likely
     // unsupported filesystem to actually turn up in a reader.
     const OpenAttempt attempt =
-        tryOpenAs(QStringLiteral("/usr/sbin/mkfs.exfat"), {}, 64);
+        tryOpenAs([&mkfsExfat](const QString &path) {
+            QString error;
+            return rpi_test::detail::runFixtureTool(mkfsExfat, {path}, &error);
+        }, 64);
 
     INFO("message: " << attempt.message);
     CHECK(attempt.threw);
@@ -1130,10 +1116,9 @@ TEST_CASE("FAT driver refuses a bad sector size", "[fat][image]")
         REQUIRE(ops->CreateTestFile(path.toStdString(), 64ull * 1024 * 1024) ==
                 rpi_imager::FileError::kSuccess);
     }
-    QProcess mkfs;
-    mkfs.start(mkfsPath(), {QStringLiteral("-F"), QStringLiteral("32"), path});
-    mkfs.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
-    REQUIRE(mkfs.exitCode() == 0);
+    QString formatError;
+    INFO("formatter: " << formatError.toStdString());
+    REQUIRE(rpi_test::makeFatFilesystem(path, 32, QString(), &formatError));
 
     // Corrupt BPB_BytsPerSec (offset 11, little-endian) to a value that is
     // not a multiple of four. The driver checks this explicitly because the
@@ -1368,10 +1353,9 @@ TEST_CASE("FAT driver refuses a circular cluster chain", "[fat][image]")
         REQUIRE(ops->CreateTestFile(path.toStdString(), imageSize) ==
                 rpi_imager::FileError::kSuccess);
     }
-    QProcess mkfs;
-    mkfs.start(mkfsPath(), {QStringLiteral("-F"), QStringLiteral("32"), path});
-    mkfs.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
-    REQUIRE(mkfs.exitCode() == 0);
+    QString formatError;
+    INFO("formatter: " << formatError.toStdString());
+    REQUIRE(rpi_test::makeFatFilesystem(path, 32, QString(), &formatError));
 
     // Give the filesystem a real file, so there is a cluster chain to walk.
     // Reading a directory stops at the end-of-directory marker and never

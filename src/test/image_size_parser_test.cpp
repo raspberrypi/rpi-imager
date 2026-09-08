@@ -29,13 +29,11 @@
 #include <QTemporaryDir>
 
 #include "fixture_process.h"
+#include "platform_tools.h"
 
 namespace {
 
-bool haveTool(const QString &name)
-{
-    return QFileInfo::exists(QStringLiteral("/usr/bin/") + name);
-}
+using rpi_test::haveTool;
 
 // Deterministic, compressible-but-not-trivial content.
 QByteArray payloadOfSize(int bytes)

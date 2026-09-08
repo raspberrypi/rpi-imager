@@ -39,6 +39,8 @@
 #include <stdexcept>
 
 #include "fixture_process.h"
+#include "platform_tools.h"
+#include "platform_fat.h"
 
 namespace {
 
@@ -48,18 +50,6 @@ bool haveTool(const QString &path)
 }
 
 bool haveOpenssl() { return haveTool(QStringLiteral("/usr/bin/openssl")); }
-
-bool haveMkfsVfat()
-{
-    return haveTool(QStringLiteral("/sbin/mkfs.vfat")) ||
-           haveTool(QStringLiteral("/usr/sbin/mkfs.vfat"));
-}
-
-QString mkfsPath()
-{
-    return haveTool(QStringLiteral("/sbin/mkfs.vfat")) ? QStringLiteral("/sbin/mkfs.vfat")
-                                                       : QStringLiteral("/usr/sbin/mkfs.vfat");
-}
 
 // A scratch directory that removes itself.
 class ScratchDir
@@ -391,8 +381,8 @@ TEST_CASE("SecureBoot boot signature fails on a missing key", "[secureboot][cryp
 
 TEST_CASE("SecureBoot extracts every file from a boot partition", "[secureboot][fat]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString imgPath = scratch.filePath(QStringLiteral("bootfs.img"));
@@ -401,11 +391,9 @@ TEST_CASE("SecureBoot extracts every file from a boot partition", "[secureboot][
     REQUIRE(ops->CreateTestFile(imgPath.toStdString(), 64ull * 1024 * 1024) ==
             rpi_imager::FileError::kSuccess);
 
-    QProcess mkfs;
-    mkfs.start(mkfsPath(), {QStringLiteral("-F"), QStringLiteral("32"), QStringLiteral("-n"),
-                            QStringLiteral("bootfs"), imgPath});
-    mkfs.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
-    REQUIRE(mkfs.exitCode() == 0);
+    QString formatError;
+    INFO("formatter: " << formatError.toStdString());
+    REQUIRE(rpi_test::makeFatFilesystem(imgPath, 32, QStringLiteral("bootfs"), &formatError));
 
     auto reopened = rpi_imager::FileOperations::Create();
     REQUIRE(reopened->OpenDevice(imgPath.toStdString()) == rpi_imager::FileError::kSuccess);

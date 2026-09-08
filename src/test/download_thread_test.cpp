@@ -31,6 +31,8 @@
 #include <catch2/generators/catch_generators.hpp>
 #include "signal_log.h"
 #include "platform_file_operations.h"
+#include "platform_tools.h"
+#include "platform_fat.h"
 #include "timeout_utils.h"
 
 using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
@@ -811,19 +813,6 @@ TEST_CASE("DownloadThread async controls are safe after a write finishes",
 
 namespace {
 
-bool haveMkfsVfat()
-{
-    return QFileInfo::exists(QStringLiteral("/sbin/mkfs.vfat")) ||
-           QFileInfo::exists(QStringLiteral("/usr/sbin/mkfs.vfat"));
-}
-
-QString mkfsVfatPath()
-{
-    return QFileInfo::exists(QStringLiteral("/sbin/mkfs.vfat"))
-               ? QStringLiteral("/sbin/mkfs.vfat")
-               : QStringLiteral("/usr/sbin/mkfs.vfat");
-}
-
 // Build a disk image: MBR at sector 0, one FAT32 partition at LBA 2048.
 //
 // The MBR is written by hand rather than shelled out to sfdisk so the layout
@@ -843,18 +832,9 @@ bool buildPartitionedImage(const QString &imagePath, int fatMegabytes)
         fat.close();
     }
 
-    QProcess mkfs;
-    mkfs.start(mkfsVfatPath(), {QStringLiteral("-F"), QStringLiteral("32"),
-                                QStringLiteral("-n"), QStringLiteral("bootfs"), fatPath});
-    if (!mkfs.waitForFinished(rpi_test::kFixtureProcessTimeoutMs)) {
-        qWarning() << "buildPartitionedImage: mkfs.vfat did not finish in time";
-        mkfs.kill();
-        mkfs.waitForFinished(5000);
-        return false;
-    }
-    if (mkfs.exitStatus() != QProcess::NormalExit || mkfs.exitCode() != 0) {
-        qWarning() << "buildPartitionedImage: mkfs.vfat failed:"
-                   << mkfs.exitCode() << mkfs.readAllStandardError();
+    QString formatError;
+    if (!rpi_test::makeFatFilesystem(fatPath, 32, QStringLiteral("bootfs"), &formatError)) {
+        qWarning() << "buildPartitionedImage: could not build the filesystem:" << formatError;
         return false;
     }
 
@@ -918,8 +898,8 @@ QByteArray readFromBootPartition(const QString &devicePath, const QString &name)
 
 TEST_CASE("DownloadThread writes config.txt into the boot partition", "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("cust-src.img"));
@@ -950,8 +930,8 @@ TEST_CASE("DownloadThread writes config.txt into the boot partition", "[download
 TEST_CASE("DownloadThread writes cmdline and firstrun into the boot partition",
           "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("cust2-src.img"));
@@ -986,8 +966,8 @@ TEST_CASE("DownloadThread writes cmdline and firstrun into the boot partition",
 TEST_CASE("DownloadThread writes cloud-init files into the boot partition",
           "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("cust3-src.img"));
@@ -1020,8 +1000,8 @@ TEST_CASE("DownloadThread writes cloud-init files into the boot partition",
 TEST_CASE("DownloadThread leaves the image alone when nothing is customised",
           "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("plain-src.img"));
@@ -1392,8 +1372,8 @@ TEST_CASE("A signing key that is not a key stops the write", "[download][secureb
     // as a failure, naming the step that could not be done.
     //
     // A key the user picked with the file chooser is whatever they picked.
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString key = scratch.filePath(QStringLiteral("not-a-key.pem"));
@@ -1439,8 +1419,8 @@ TEST_CASE("A signing key that is not a key stops the write", "[download][secureb
 
 TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secureboot]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
     if (!haveOpenssl())
         SKIP("openssl is not installed, so no signing key can be generated");
 
@@ -1481,8 +1461,8 @@ TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secur
 TEST_CASE("DownloadThread refuses secure boot with no key configured",
           "[download][secureboot]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     setConfiguredRsaKey(QString());
@@ -1511,8 +1491,8 @@ TEST_CASE("DownloadThread refuses secure boot with no key configured",
 TEST_CASE("DownloadThread refuses secure boot with a key that is not there",
           "[download][secureboot]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     setConfiguredRsaKey(QStringLiteral("/nonexistent-rpi-imager-dir/absent.pem"));
@@ -1546,8 +1526,8 @@ TEST_CASE("DownloadThread refuses secure boot with a key that is not there",
 
 TEST_CASE("DownloadThread verifies the customisation it wrote", "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("vc-src.img"));
@@ -1582,8 +1562,8 @@ TEST_CASE("DownloadThread verifies the customisation it wrote", "[download][cust
 
 TEST_CASE("DownloadThread verifies cloud-init customisation", "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("vci-src.img"));
@@ -1614,8 +1594,8 @@ TEST_CASE("DownloadThread verifies cloud-init customisation", "[download][custom
 
 TEST_CASE("DownloadThread applies rpi-preseed customisation", "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("preseed-src.img"));
@@ -2038,8 +2018,8 @@ TEST_CASE("DownloadThread does not cache an unverified download", "[download][ca
 TEST_CASE("DownloadThread skips customisation without an init format",
           "[download][customise]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString source = scratch.filePath(QStringLiteral("noinit-src.img"));
@@ -3022,8 +3002,8 @@ bool plantInBootPartition(const QString &devicePath, const QString &name,
 TEST_CASE("Customisation read-back passes when the card kept what was written",
           "[download][customise][verify]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString dest = scratch.filePath(QStringLiteral("verify-ok.img"));
@@ -3042,8 +3022,8 @@ TEST_CASE("Customisation read-back passes when the card kept what was written",
 TEST_CASE("Customisation read-back fails when a file never reached the card",
           "[download][customise][verify]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString dest = scratch.filePath(QStringLiteral("verify-missing.img"));
@@ -3061,8 +3041,8 @@ TEST_CASE("Customisation read-back fails when a file never reached the card",
 TEST_CASE("Customisation read-back fails when a file came back truncated",
           "[download][customise][verify]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString dest = scratch.filePath(QStringLiteral("verify-short.img"));
@@ -3083,8 +3063,8 @@ TEST_CASE("Customisation read-back fails when a file came back truncated",
 TEST_CASE("Customisation read-back fails when a file came back corrupted",
           "[download][customise][verify]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString dest = scratch.filePath(QStringLiteral("verify-corrupt.img"));
@@ -3108,8 +3088,8 @@ TEST_CASE("Customisation read-back fails when a file came back corrupted",
 TEST_CASE("Customisation read-back checks every file it recorded",
           "[download][customise][verify]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     ScratchDir scratch;
     const QString dest = scratch.filePath(QStringLiteral("verify-many.img"));
@@ -3169,8 +3149,8 @@ TEST_CASE("A card that cannot be read back is not failed for it",
 TEST_CASE("A large file is still size-checked when verification is off",
           "[download][customise][verify]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
 
     // Content-checking a large file means reading it back a 4 KiB block at a
     // time with direct I/O, which for a secure-boot boot.img is thousands of
@@ -3432,8 +3412,8 @@ public:
 TEST_CASE("Secure boot refuses to package an empty boot partition",
           "[download][secureboot]")
 {
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
     if (!haveOpenssl())
         SKIP("openssl is not installed, so no signing key can be generated");
 
@@ -3470,8 +3450,8 @@ TEST_CASE("Secure boot packaging leaves no signature behind when it refuses",
     // Refusing has to leave the card as it was. A boot.sig with no boot.img,
     // or either of them half-written, is worse than neither: the firmware
     // would find a signature it cannot check.
-    if (!haveMkfsVfat())
-        SKIP("mkfs.vfat is not installed, so no boot partition can be built");
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
     if (!haveOpenssl())
         SKIP("openssl is not installed, so no signing key can be generated");
 

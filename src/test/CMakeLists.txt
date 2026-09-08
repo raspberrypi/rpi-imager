@@ -129,6 +129,8 @@ if(WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/acceleratedcryptographichash_cng.cpp)
+    set(PLATFORM_DRIVELIST_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp)
     set(PLATFORM_BACKEND_LIBS
         ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt)
 elseif(APPLE)
@@ -140,6 +142,8 @@ elseif(APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/bootimgcreator_macos.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/acceleratedcryptographichash_commoncrypto.cpp)
+    set(PLATFORM_DRIVELIST_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_darwin.mm)
     set(PLATFORM_BACKEND_LIBS
         "-framework AppKit"
         "-framework SystemConfiguration"
@@ -160,6 +164,8 @@ else()
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp)
+    set(PLATFORM_DRIVELIST_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_linux.cpp)
     set(PLATFORM_BACKEND_LIBS "")
 endif()
 
@@ -1619,7 +1625,7 @@ set(RPI_DOWNLOAD_PIPELINE_SOURCES
     ${PLATFORM_SECUREBOOT_CRYPTO_SRC}
     ${PLATFORM_BOOTIMGCREATOR_SRC}
     ${PLATFORM_ACCEL_HASH_SRC}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_linux.cpp
+    ${PLATFORM_DRIVELIST_SRC}
     ${PLATFORM_FILE_OPS}
 )
 

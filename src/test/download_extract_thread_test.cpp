@@ -39,6 +39,8 @@
 #include <unistd.h>
 
 #include "fixture_process.h"
+#include "platform_tools.h"
+#include "platform_fat.h"
 
 namespace {
 
@@ -63,21 +65,8 @@ private:
     QString _path;
 };
 
-bool haveTool(const QString &name)
-{
-    for (const char *dir : {"/usr/bin/", "/bin/"}) {
-        if (QFileInfo::exists(QString::fromUtf8(dir) + name))
-            return true;
-    }
-    return false;
-}
-
-QString toolPath(const QString &name)
-{
-    return QFileInfo::exists(QStringLiteral("/usr/bin/") + name)
-               ? QStringLiteral("/usr/bin/") + name
-               : QStringLiteral("/bin/") + name;
-}
+using rpi_test::haveTool;
+using rpi_test::toolPath;
 
 // An image with structure rather than a constant: a run of identical bytes
 // compresses to almost nothing and would not exercise the streaming path.
@@ -1094,18 +1083,6 @@ bool runPrivileged(const QString &program, const QStringList &args, QByteArray *
     return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
 }
 
-bool haveMkfsVfat()
-{
-    return QFileInfo::exists(QStringLiteral("/sbin/mkfs.vfat")) ||
-           QFileInfo::exists(QStringLiteral("/usr/sbin/mkfs.vfat"));
-}
-
-QString mkfsVfatPath()
-{
-    return QFileInfo::exists(QStringLiteral("/sbin/mkfs.vfat")) ? QStringLiteral("/sbin/mkfs.vfat")
-                                                                : QStringLiteral("/usr/sbin/mkfs.vfat");
-}
-
 // A loop device carrying an MBR with one FAT32 partition, already mounted and
 // owned by the invoking user. Unmounts and detaches itself.
 class MountedFatDevice
@@ -1126,11 +1103,8 @@ public:
         // FAT filesystem first, then an MBR in front of it.
         const QString fatPath = QDir(_dir).filePath(QStringLiteral("fat.img"));
         { QFile f(fatPath); if (!f.open(QIODevice::WriteOnly) || !f.resize(fatBytes)) return; }
-        QProcess mkfs;
-        mkfs.start(mkfsVfatPath(), {QStringLiteral("-F"), QStringLiteral("32"),
-                                    QStringLiteral("-n"), QStringLiteral("bootfs"), fatPath});
-        mkfs.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
-        if (mkfs.exitCode() != 0) return;
+        if (!rpi_test::makeFatFilesystem(fatPath, 32, QStringLiteral("bootfs")))
+            return;
 
         QFile fat(fatPath);
         if (!fat.open(QIODevice::ReadOnly)) return;
@@ -1207,7 +1181,7 @@ TEST_CASE("DownloadExtractThread unpacks a multi-file archive onto the target",
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed, so no multi-file archive can be built");
@@ -1254,7 +1228,7 @@ TEST_CASE("DownloadExtractThread reports a multi-file archive it cannot read",
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
 
     MountedFatDevice device(32);
@@ -1285,7 +1259,7 @@ TEST_CASE("A multi-file archive that fails leaves nothing behind on the card",
     // the end rejects it.
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed, so no multi-file archive can be built");
@@ -1336,7 +1310,7 @@ TEST_CASE("A truncated multi-file archive leaves no partial tree",
     // kind of thing that makes a later write look like it worked.
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed, so no multi-file archive can be built");
@@ -1387,7 +1361,7 @@ TEST_CASE("DownloadExtractThread unpacks nested directories", "[extract][multifi
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed");
@@ -1433,7 +1407,7 @@ TEST_CASE("DownloadExtractThread unpacks many small files", "[extract][multifile
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed");
@@ -1480,7 +1454,7 @@ TEST_CASE("DownloadExtractThread unpacks a compressed multi-file archive",
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed");
@@ -1538,7 +1512,7 @@ TEST_CASE("DownloadExtractThread reports a corrupt multi-file archive",
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed");
@@ -1606,7 +1580,7 @@ TEST_CASE("DownloadExtractThread will not write outside the target",
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed, so no archive can be built");
@@ -1677,7 +1651,7 @@ TEST_CASE("DownloadExtractThread will not write to an absolute path",
 {
     if (!canRunPrivileged())
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
-    if (!haveMkfsVfat())
+    if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
         SKIP("zip is not installed, so no archive can be built");
