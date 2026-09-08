@@ -19,6 +19,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include "fixture_process.h"
 
@@ -2677,9 +2678,45 @@ TEST_CASE("Generator passes through a pre-derived Wi-Fi PSK unchanged", "[custom
 
 namespace {
 
-bool havePython()
+// The python3 that can parse `language`, or empty if none here can.
+//
+// Existing was not the same question as usable. macOS ships 3.9.6 at
+// /usr/bin/python3, which has neither PyYAML nor tomllib -- tomllib arrived in
+// 3.11 -- so five cases reported the generated documents as unparseable on a
+// machine that simply had no parser. That is the failure these cases are for,
+// which made it a convincing one. Ask the interpreter whether it can import
+// the module, and try a python3 on PATH too: a Homebrew or pyenv one usually
+// can, so the cases run rather than skip.
+QString pythonThatParses(const char *language)
 {
-    return QFileInfo::exists(QStringLiteral("/usr/bin/python3"));
+    const QString module = QString::fromLatin1(language) == QLatin1String("yaml")
+                               ? QStringLiteral("yaml")
+                               : QStringLiteral("tomllib");
+
+    static QHash<QString, QString> cache;
+    const auto cached = cache.constFind(module);
+    if (cached != cache.cend())
+        return *cached;
+
+    QStringList candidates{QStringLiteral("/usr/bin/python3")};
+    const QString onPath = QStandardPaths::findExecutable(QStringLiteral("python3"));
+    if (!onPath.isEmpty() && !candidates.contains(onPath))
+        candidates << onPath;
+
+    QString usable;
+    for (const QString &python : std::as_const(candidates)) {
+        if (!QFileInfo::exists(python))
+            continue;
+        QProcess proc;
+        proc.start(python, {QStringLiteral("-c"), QStringLiteral("import ") + module});
+        proc.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+        if (proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0) {
+            usable = python;
+            break;
+        }
+    }
+    cache.insert(module, usable);
+    return usable;
 }
 
 // Parses `document` with python3 and returns true if the parser accepted it.
@@ -2701,8 +2738,12 @@ bool parsesAs(const QByteArray &document, const char *language, QString *error)
             ? QStringLiteral("import sys,yaml; yaml.safe_load(open(sys.argv[1],'rb').read())")
             : QStringLiteral("import sys,tomllib; tomllib.load(open(sys.argv[1],'rb'))");
 
+    const QString python = pythonThatParses(language);
+    if (python.isEmpty())
+        return false;
+
     QProcess proc;
-    proc.start(QStringLiteral("/usr/bin/python3"), {QStringLiteral("-c"), script, path});
+    proc.start(python, {QStringLiteral("-c"), script, path});
     proc.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
     if (error)
         *error = QString::fromUtf8(proc.readAllStandardError()).trimmed();
@@ -2730,8 +2771,8 @@ QVariantMap awkwardSettings()
 
 TEST_CASE("Generated cloud-init user-data is valid YAML", "[customisation][parse]")
 {
-    if (!havePython())
-        SKIP("python3 is not installed, so the output cannot be parsed");
+    if (pythonThatParses("yaml").isEmpty())
+        SKIP("no python3 with PyYAML here, so the output cannot be parsed");
 
     const QByteArray yaml =
         CustomisationGenerator::generateCloudInitUserData(awkwardSettings(), QString());
@@ -2745,8 +2786,8 @@ TEST_CASE("Generated cloud-init user-data is valid YAML", "[customisation][parse
 
 TEST_CASE("Generated cloud-init network config is valid YAML", "[customisation][parse]")
 {
-    if (!havePython())
-        SKIP("python3 is not installed, so the output cannot be parsed");
+    if (pythonThatParses("yaml").isEmpty())
+        SKIP("no python3 with PyYAML here, so the output cannot be parsed");
 
     const QByteArray yaml =
         CustomisationGenerator::generateCloudInitNetworkConfig(awkwardSettings(), false);
@@ -2761,8 +2802,8 @@ TEST_CASE("Generated cloud-init network config is valid YAML", "[customisation][
 
 TEST_CASE("Generated rpi-preseed is valid TOML", "[customisation][parse]")
 {
-    if (!havePython())
-        SKIP("python3 is not installed, so the output cannot be parsed");
+    if (pythonThatParses("toml").isEmpty())
+        SKIP("no python3 with tomllib here, so the output cannot be parsed");
 
     const QByteArray toml =
         CustomisationGenerator::generateRpiPreseedToml(awkwardSettings(), QString());
@@ -2777,8 +2818,8 @@ TEST_CASE("Generated rpi-preseed is valid TOML", "[customisation][parse]")
 TEST_CASE("A value that looks like YAML cannot restructure the document",
           "[customisation][parse]")
 {
-    if (!havePython())
-        SKIP("python3 is not installed, so the output cannot be parsed");
+    if (pythonThatParses("yaml").isEmpty())
+        SKIP("no python3 with PyYAML here, so the output cannot be parsed");
 
     QVariantMap s = awkwardSettings();
     // Everything here is a value a user can type into the dialog. If any of
@@ -2807,8 +2848,8 @@ TEST_CASE("A value that looks like YAML cannot restructure the document",
 TEST_CASE("A value that looks like TOML cannot restructure the document",
           "[customisation][parse]")
 {
-    if (!havePython())
-        SKIP("python3 is not installed, so the output cannot be parsed");
+    if (pythonThatParses("toml").isEmpty())
+        SKIP("no python3 with tomllib here, so the output cannot be parsed");
 
     QVariantMap s = awkwardSettings();
     s.insert(QStringLiteral("wifiSSID"),

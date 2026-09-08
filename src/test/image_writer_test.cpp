@@ -6716,8 +6716,23 @@ QJsonArray mediaEntries(const QByteArray &json)
 
 } // namespace
 
+// Both groups below name functions that are #ifdef Q_OS_LINUX from end to
+// end: getUsbSourceOSlist() reads /media, and mountUsbSourceMedia() reads
+// /sys/class/block and mounts what it finds. Everywhere else they do nothing
+// and report nothing, so these cases were not exercising the behaviour they
+// describe -- the ones expecting a mount or a listing failed, and the ones
+// expecting neither passed for a reason unrelated to the code they name.
+// Both are worth saying out loud rather than reading as a result.
+#ifdef Q_OS_LINUX
+#define SKIP_WITHOUT_LINUX_MEDIA() do { } while (false)
+#else
+#define SKIP_WITHOUT_LINUX_MEDIA() \
+    SKIP("reading images from mounted media is implemented on Linux only")
+#endif
+
 TEST_CASE("An image on inserted media is offered", "[imagewriter][usbsource]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     QTemporaryDir media;
     REQUIRE(media.isValid());
     layOutMedia(media.path(), {{QStringLiteral("STICK"),
@@ -6739,6 +6754,7 @@ TEST_CASE("An image on inserted media is offered", "[imagewriter][usbsource]")
 
 TEST_CASE("Only image-shaped files are offered", "[imagewriter][usbsource]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     // A stick with holiday photos on it should not fill the OS list with
     // them, and selecting a text file to write to a card helps nobody.
     QTemporaryDir media;
@@ -6767,6 +6783,7 @@ TEST_CASE("Only image-shaped files are offered", "[imagewriter][usbsource]")
 
 TEST_CASE("Every mounted volume is looked at", "[imagewriter][usbsource]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     QTemporaryDir media;
     REQUIRE(media.isValid());
     layOutMedia(media.path(), {
@@ -6783,6 +6800,7 @@ TEST_CASE("Every mounted volume is looked at", "[imagewriter][usbsource]")
 
 TEST_CASE("The volume an image came from is named", "[imagewriter][usbsource]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     // Two sticks can hold a file of the same name. The description is the
     // only thing telling the user which one they are picking.
     QTemporaryDir media;
@@ -6805,6 +6823,7 @@ TEST_CASE("The volume an image came from is named", "[imagewriter][usbsource]")
 
 TEST_CASE("Nothing mounted offers nothing", "[imagewriter][usbsource]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     QTemporaryDir media;
     REQUIRE(media.isValid());
 
@@ -6817,6 +6836,7 @@ TEST_CASE("Nothing mounted offers nothing", "[imagewriter][usbsource]")
 TEST_CASE("A media root that is not there is not an error",
           "[imagewriter][usbsource]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     // /media does not exist on every system, and a machine without it should
     // simply offer no local images rather than failing to build a chooser.
     MediaImageWriter w;
@@ -6830,6 +6850,7 @@ TEST_CASE("A media root that is not there is not an error",
 TEST_CASE("A volume with no images contributes nothing",
           "[imagewriter][usbsource]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     QTemporaryDir media;
     REQUIRE(media.isValid());
     layOutMedia(media.path(), {
@@ -6847,6 +6868,7 @@ TEST_CASE("A volume with no images contributes nothing",
           == QStringLiteral("STICK/os.img"));
 }
 
+
 // ══════════════════════════════════════════════════════════════
 // Which block devices get mounted to look for images
 //
@@ -6858,6 +6880,7 @@ TEST_CASE("A volume with no images contributes nothing",
 TEST_CASE("A removable disk is mounted to look for images",
           "[imagewriter][usbmount]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     QTemporaryDir tmp;
     REQUIRE(tmp.isValid());
     const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
@@ -6874,6 +6897,7 @@ TEST_CASE("A removable disk is mounted to look for images",
 TEST_CASE("The card the machine is running from is never mounted",
           "[imagewriter][usbmount]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     // mmcblk0 is the boot card on a Pi. Mounting it here and offering its
     // contents as images to write is reaching for the disk under your feet.
     QTemporaryDir tmp;
@@ -6895,6 +6919,7 @@ TEST_CASE("The card the machine is running from is never mounted",
 
 TEST_CASE("Another card is still eligible", "[imagewriter][usbmount]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     // The guard is on mmcblk0 specifically, not on cards in general -- a
     // second card reader is a perfectly good place to keep an image.
     QTemporaryDir tmp;
@@ -6916,6 +6941,7 @@ TEST_CASE("Another card is still eligible", "[imagewriter][usbmount]")
 TEST_CASE("Devices that are not real storage are skipped",
           "[imagewriter][usbmount]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     // loop and ram devices live under devices/virtual. Mounting them finds
     // nothing and clutters /media with mount points.
     QTemporaryDir tmp;
@@ -6937,6 +6963,7 @@ TEST_CASE("Devices that are not real storage are skipped",
 TEST_CASE("A mount that fails leaves no empty mount point behind",
           "[imagewriter][usbmount]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     // An unformatted or unreadable disk. The directory made for it has to go
     // again, or /media fills with empty folders that later scans walk.
     QTemporaryDir tmp;
@@ -6958,6 +6985,7 @@ TEST_CASE("A mount that fails leaves no empty mount point behind",
 TEST_CASE("An already-mounted disk is counted, not mounted again",
           "[imagewriter][usbmount]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     QTemporaryDir tmp;
     REQUIRE(tmp.isValid());
     const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
@@ -6975,6 +7003,7 @@ TEST_CASE("An already-mounted disk is counted, not mounted again",
 
 TEST_CASE("No block devices at all mounts nothing", "[imagewriter][usbmount]")
 {
+    SKIP_WITHOUT_LINUX_MEDIA();
     QTemporaryDir tmp;
     REQUIRE(tmp.isValid());
     const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));

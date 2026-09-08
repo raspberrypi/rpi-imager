@@ -49,6 +49,17 @@
 
 #include <functional>
 
+// Stub, for the same reason as the one in eeprom_signer_test.cpp: the
+// platform secureboot_crypto_*.cpp linked in here defines extractRsaPubkeyBin,
+// which calls parseSubjectPublicKeyInfoDerToNE. The real one lives in
+// secureboot.cpp, and pulling that in brings the device wrapper hierarchy and
+// the boot image creator with it. Nothing in this file signs anything.
+#if !defined(_WIN32)
+namespace SecureBootCrypto {
+QByteArray parseSubjectPublicKeyInfoDerToNE(const QByteArray&) { return {}; }
+}
+#endif
+
 using namespace rpiboot::testing;
 using Catch::Matchers::ContainsSubstring;
 

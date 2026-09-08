@@ -1229,7 +1229,16 @@ TEST_CASE("A writable loopback image is offered", "[models][drivelist]")
     loop.isRemovable = false;
 
     model->processDriveList({loop});
+#ifdef Q_OS_LINUX
     CHECK(rowsOf(model) == 1);
+#else
+    // Off Linux the same device is hidden, and deliberately: DriveListModel
+    // requires a virtual device to be removable there, because isSystem alone
+    // misses APFS volumes on non-ejectable enclosures and Storage Spaces
+    // pools. The loop device this case is about is a Linux thing to begin
+    // with, so what it asserts is the Linux rule, not a general one.
+    CHECK(rowsOf(model) == 0);
+#endif
 }
 
 TEST_CASE("Several drives all appear", "[models][drivelist]")

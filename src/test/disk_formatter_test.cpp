@@ -487,10 +487,25 @@ class DiskFormatterTest {
     // available" and ignored. execv() answers 127 when the binary is not
     // there, which tells the two apart.
     {
+      // Which fdisk is this? Only util-linux's takes `-l` and lists a table
+      // from a file. macOS ships the BSD one, which has no such option and
+      // answers "illegal option" -- a statement about the tool, not about our
+      // partition table, and it was being counted as a failed test. Ask for a
+      // version string first: the BSD one has no --version either, so it says
+      // the same thing again and the check below simply does not run.
+      std::string version;
+      runCommandCapture("/usr/sbin/fdisk", {"fdisk", "--version", nullptr}, version);
+      const bool utilLinuxFdisk = version.find("util-linux") != std::string::npos;
+
       std::vector<const char*> argv = {"fdisk", "-l", test_file.c_str(), nullptr};
       std::string listing;
-      const int rc = runCommandCapture("/usr/sbin/fdisk", argv, listing);
-      if (rc == 127) {
+      const int rc = utilLinuxFdisk
+                         ? runCommandCapture("/usr/sbin/fdisk", argv, listing)
+                         : 127;
+      if (!utilLinuxFdisk) {
+        std::cout << "fdisk here does not list partition tables from a file, "
+                     "partition table not checked\n";
+      } else if (rc == 127) {
         std::cout << "fdisk is not installed, partition table not checked\n";
       } else if (rc != 0) {
         std::cout << "fdisk could not read the image (exit " << rc << ")\n";

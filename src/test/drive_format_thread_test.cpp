@@ -28,12 +28,18 @@
 #include "disk_formatter.h"
 
 #include <QCoreApplication>
+#include <QDeadlineTimer>
+#include <QEventLoop>
 #include <QDir>
 #include <QFile>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QProcess>
 #include "fixture_process.h"
+
+#ifdef Q_OS_MACOS
+#include <CoreFoundation/CFRunLoop.h>
+#endif
 
 using Catch::Matchers::ContainsSubstring;
 
@@ -61,7 +67,32 @@ Outcome runToCompletion(DriveFormatThread &t)
     QObject::connect(&t, &DriveFormatThread::error,
                      [&out](QString m) { out.errors << m; });
     t.start();
-    REQUIRE(t.wait(60000));
+
+    // Wait by pumping, not by parking. The thread can need the main one:
+    // PlatformQuirks::unmountDisk on macOS hands the DiskArbitration work to
+    // the main queue with dispatch_sync and blocks the worker until it comes
+    // back, which is fine under an application that runs an event loop and a
+    // deadlock under a test binary whose main thread is sitting in
+    // QThread::wait(). It deadlocked twice over: the 60s wait expired, the
+    // REQUIRE threw, and ~DriveFormatThread waited on the same thread with no
+    // timeout at all, so the run stopped there rather than failing.
+    //
+    // processEvents() runs the main run loop, which is what drains the main
+    // queue. Elsewhere it costs a few microseconds a turn and changes nothing.
+    QDeadlineTimer deadline(60000);
+    bool finished = false;
+    while (!(finished = t.wait(50)) && !deadline.hasExpired()) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+#ifdef Q_OS_MACOS
+        // processEvents() alone is not enough here. The main dispatch queue is
+        // drained by the main run loop, and Qt's dispatcher for a
+        // QCoreApplication on macOS is the UNIX one, which never runs a
+        // CFRunLoop. Run it directly, briefly, so the block the worker is
+        // waiting on actually executes.
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, true);
+#endif
+    }
+    REQUIRE(finished);
     return out;
 }
 
@@ -101,7 +132,16 @@ TEST_CASE("Formatting a path the user cannot write is refused", "[format]")
 
     CHECK_FALSE(outcome.succeeded);
     REQUIRE(outcome.errors.size() == 1);
+#ifdef Q_OS_MACOS
+    // macOS never gets as far as the permission check. The format begins by
+    // unmounting, and DiskArbitration will not unmount something that is not
+    // a disk, so the refusal arrives one step earlier and says so. What the
+    // case is really about -- refused, told why, card untouched -- still
+    // holds; only the wording is out of reach here.
+    CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("unmount"));
+#else
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("permission"));
+#endif
 
     // Nothing was written to it.
     QFile check(path);

@@ -14,7 +14,7 @@
 
 foreach(_required
         COVERAGE_BINARY_DIR COVERAGE_SOURCE_DIR COVERAGE_OUTPUT_DIR
-        GCOVR_EXECUTABLE CTEST_EXECUTABLE)
+        COVERAGE_GENERATOR GCOVR_EXECUTABLE CTEST_EXECUTABLE)
     if(NOT DEFINED ${_required})
         message(FATAL_ERROR "RunCoverage.cmake: -D${_required} is required")
     endif()
@@ -128,9 +128,16 @@ message(STATUS "Coverage: building instrumented targets")
 # hypothetical -- a single unlinked test hid nineteen others and produced a
 # report over a third of the suite short, with a plausible-looking
 # percentage and nothing obviously wrong.
-if(CMAKE_GENERATOR MATCHES "Ninja")
+#
+# The generator has to be passed in. This script runs under `cmake -P`, where
+# CMAKE_GENERATOR is whatever the -P invocation was given and not what the
+# project was configured with -- which is to say empty. Testing it directly
+# chose the no-flag branch every time, so the keep-going above never actually
+# happened: on macOS one Linux-only source took twenty-five objects and ten
+# binaries down with it, and the report came back a confident 0.0%.
+if(COVERAGE_GENERATOR MATCHES "Ninja")
     set(_keep_going -- -k 0)
-elseif(CMAKE_GENERATOR MATCHES "Make")
+elseif(COVERAGE_GENERATOR MATCHES "Make")
     set(_keep_going -- -k)
 else()
     set(_keep_going)
@@ -197,8 +204,11 @@ endif()
 # 2. Run the suite
 # ---------------------------------------------------------------------------
 message(STATUS "Coverage: running the CTest suite")
+# --timeout, because a deadlocked case must not cost the whole report. CTest's
+# own default is 1500s per test; a suite whose slowest legitimate case is a few
+# seconds does not need to wait 25 minutes to learn that one has wedged.
 execute_process(
-    COMMAND "${CTEST_EXECUTABLE}" --output-on-failure
+    COMMAND "${CTEST_EXECUTABLE}" --output-on-failure --timeout 300
     WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
     RESULT_VARIABLE _ctest_result
 )

@@ -108,6 +108,68 @@ else()
     )
 endif()
 
+# The other four platform backends, chosen the same way.
+#
+# Eleven targets below named the linux/ sources directly, so the suite could
+# only ever be built on Linux: platformquirks_linux.cpp needs <sys/eventfd.h>
+# and acceleratedcryptographichash_gnutls.cpp needs GnuTLS, which cost 15
+# failed objects and 10 binaries that never linked on macOS. The application
+# has always picked these per platform in ../CMakeLists.txt; the tests now do
+# too, in one place rather than eleven.
+#
+# PLATFORM_BACKEND_LIBS goes with them: the macOS halves are Objective-C++
+# against AppKit, SystemConfiguration, CoreWLAN and CoreLocation, and the
+# secure-boot crypto against Security, none of which arrive with Qt.
+if(WIN32)
+    set(PLATFORM_QUIRKS_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/platformquirks_windows.cpp)
+    set(PLATFORM_SECUREBOOT_CRYPTO_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp)
+    set(PLATFORM_BOOTIMGCREATOR_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp)
+    set(PLATFORM_ACCEL_HASH_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/acceleratedcryptographichash_cng.cpp)
+    set(PLATFORM_BACKEND_LIBS
+        ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt)
+elseif(APPLE)
+    set(PLATFORM_QUIRKS_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm)
+    set(PLATFORM_SECUREBOOT_CRYPTO_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp)
+    set(PLATFORM_BOOTIMGCREATOR_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/bootimgcreator_macos.cpp)
+    set(PLATFORM_ACCEL_HASH_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/acceleratedcryptographichash_commoncrypto.cpp)
+    set(PLATFORM_BACKEND_LIBS
+        "-framework AppKit"
+        "-framework SystemConfiguration"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
+        "-framework CoreServices"  # LSSetDefaultHandlerForURLScheme (registerUriScheme)
+        "-framework CoreWLAN"
+        "-framework CoreLocation"
+        "-framework Security"
+        "-framework IOKit"
+    )
+else()
+    set(PLATFORM_QUIRKS_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp)
+    set(PLATFORM_SECUREBOOT_CRYPTO_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp)
+    set(PLATFORM_BOOTIMGCREATOR_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp)
+    set(PLATFORM_ACCEL_HASH_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp)
+    set(PLATFORM_BACKEND_LIBS "")
+endif()
+
+# Link the frameworks and libraries the platform backends above need.
+# Companion to rpi_link_platform_file_ops, and for the same reason: the
+# application's own list reaches the app target alone.
+function(rpi_link_platform_backends target)
+    target_link_libraries(${target} PRIVATE ${PLATFORM_BACKEND_LIBS})
+endfunction()
+
 # Add the FAT partition test executable (manual test against real filesystem)
 add_executable(fat_partition_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.h
@@ -243,35 +305,10 @@ add_custom_target(test_drivelist
 # PlatformQuirks Tests
 # ============================================================================
 
-# Determine platform-specific platformquirks implementation
-if(WIN32)
-    set(PLATFORMQUIRKS_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/platformquirks_windows.cpp
-    )
-    set(PLATFORMQUIRKS_LIBS
-        ws2_32
-        iphlpapi
-        wbemuuid
-        ole32
-        oleaut32
-    )
-elseif(APPLE)
-    set(PLATFORMQUIRKS_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm
-    )
-    set(PLATFORMQUIRKS_LIBS
-        "-framework AppKit"
-        "-framework SystemConfiguration"
-        "-framework DiskArbitration"
-        "-framework CoreFoundation"
-        "-framework CoreServices"  # LSSetDefaultHandlerForURLScheme (registerUriScheme)
-    )
-else()
-    set(PLATFORMQUIRKS_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
-    )
-    set(PLATFORMQUIRKS_LIBS "")
-endif()
+# Kept as names of their own because two targets read them, but the choice
+# itself is the one made once above.
+set(PLATFORMQUIRKS_SOURCES ${PLATFORM_QUIRKS_SRC})
+set(PLATFORMQUIRKS_LIBS ${PLATFORM_BACKEND_LIBS})
 
 # Add the platformquirks test executable
 add_executable(platformquirks_test
@@ -548,19 +585,7 @@ add_custom_target(test_fastboot_eeprom_wire
 )
 
 # EEPROM signer tests (in-process .sig builder + cross-check vs rpi-eeprom-digest)
-if(WIN32)
-    set(EEPROM_SIGNER_PLATFORM_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp
-    )
-elseif(APPLE)
-    set(EEPROM_SIGNER_PLATFORM_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp
-    )
-else()
-    set(EEPROM_SIGNER_PLATFORM_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
-    )
-endif()
+set(EEPROM_SIGNER_PLATFORM_SRC ${PLATFORM_SECUREBOOT_CRYPTO_SRC})
 
 add_executable(eeprom_signer_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/eeprom_signer.h
@@ -671,10 +696,10 @@ add_executable(rpiboot_integration_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/secure_boot_provisioner.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC}
+    ${PLATFORM_BOOTIMGCREATOR_SRC}
+    ${PLATFORM_ACCEL_HASH_SRC}
+    ${PLATFORM_QUIRKS_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
@@ -694,6 +719,7 @@ target_link_libraries(rpiboot_integration_test PRIVATE
     ${LIBLZMA_LIBRARIES}
     ${ZSTD_LIBRARIES}
 )
+rpi_link_platform_backends(rpiboot_integration_test)
 
 target_include_directories(rpiboot_integration_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -712,6 +738,10 @@ target_compile_options(rpiboot_integration_test PRIVATE
 )
 # PLATFORM_FILE_OPS brings in the io_uring write path, so the target needs
 # liburing on the link line as well as in its sources.
+# The device wrapper hierarchy and the platform file classes are QObjects,
+# and moc emits their vtables: without this the target does not link.
+set_target_properties(rpiboot_integration_test PROPERTIES AUTOMOC ON)
+
 rpi_link_platform_file_ops(rpiboot_integration_test)
 
 rpi_discover_tests(rpiboot_integration_test)
@@ -1311,6 +1341,7 @@ if(RPI_IMAGER_COVERAGE)
                     -DCOVERAGE_BINARY_DIR=${CMAKE_BINARY_DIR}
                     -DCOVERAGE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/..
                     -DCOVERAGE_OUTPUT_DIR=${CMAKE_BINARY_DIR}/coverage
+                    -DCOVERAGE_GENERATOR=${CMAKE_GENERATOR}
                     -DGCOVR_EXECUTABLE=${GCOVR_EXECUTABLE}
                     -DCTEST_EXECUTABLE=${CMAKE_CTEST_COMMAND}
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/RunCoverage.cmake
@@ -1462,9 +1493,9 @@ rpi_discover_tests(system_memory_manager_test)
 add_executable(secureboot_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC}
+    ${PLATFORM_BOOTIMGCREATOR_SRC}
+    ${PLATFORM_ACCEL_HASH_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
@@ -1485,6 +1516,7 @@ target_link_libraries(secureboot_test PRIVATE
     Qt6::Core
     ${GNUTLS_LIBRARIES}
 )
+rpi_link_platform_backends(secureboot_test)
 
 target_include_directories(secureboot_test PRIVATE ${GNUTLS_INCLUDE_DIRS})
 
@@ -1531,10 +1563,10 @@ set(RPI_DOWNLOAD_PIPELINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../asynccachewriter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${PLATFORM_QUIRKS_SRC}
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC}
+    ${PLATFORM_BOOTIMGCREATOR_SRC}
+    ${PLATFORM_ACCEL_HASH_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_linux.cpp
     ${PLATFORM_FILE_OPS}
 )
@@ -1696,6 +1728,15 @@ if(NOT BUILD_CLI_ONLY)
         ${LIBUSB_LIBRARIES}
         ${CMAKE_DL_LIBS}
     )
+
+    # The platform libraries the application itself links. This target
+    # compiles the application's own source list, which on macOS means
+    # Objective-C++ against CoreWLAN, CoreLocation, SystemConfiguration and
+    # Security -- and EXTRALIBS reaches the app target alone, so every binary
+    # built on this library failed to link with a page of undefined
+    # Objective-C classes. Taking the application's list rather than restating
+    # it means a framework added there cannot be forgotten here.
+    target_link_libraries(rpi_imager_testable PUBLIC ${EXTRALIBS})
 
     # customization_generator hashes passwords through the bundled yescrypt.
     if(TARGET yescrypt)
@@ -1951,9 +1992,9 @@ add_executable(fastboot_flash_thread_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../connect_device_registrar.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../systemmemorymanager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${PLATFORM_ACCEL_HASH_SRC}
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC}
+    ${PLATFORM_QUIRKS_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
     fastboot_flash_thread_test.cpp
 )
@@ -1979,6 +2020,7 @@ target_link_libraries(fastboot_flash_thread_test PRIVATE
     ${GNUTLS_LIBRARIES}
     ${LIBUSB_LIBRARIES}
 )
+rpi_link_platform_backends(fastboot_flash_thread_test)
 
 target_compile_features(fastboot_flash_thread_test PRIVATE cxx_std_20)
 
@@ -2006,6 +2048,7 @@ target_link_libraries(download_thread_test PRIVATE
     CURL::libcurl
     ${GNUTLS_LIBRARIES}
 )
+rpi_link_platform_backends(download_thread_test)
 
 rpi_link_platform_file_ops(download_thread_test)
 
@@ -2059,6 +2102,7 @@ target_link_libraries(download_extract_thread_test PRIVATE
     ${LIBLZMA_LIBRARIES}
     ${GNUTLS_LIBRARIES}
 )
+rpi_link_platform_backends(download_extract_thread_test)
 
 rpi_link_platform_file_ops(download_extract_thread_test)
 
@@ -2114,7 +2158,7 @@ add_executable(curl_fetcher_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlfetcher.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlfetcher.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${PLATFORM_QUIRKS_SRC}
     curl_fetcher_test.cpp
 )
 
@@ -2130,6 +2174,7 @@ target_link_libraries(curl_fetcher_test PRIVATE
     Qt6::Network
     CURL::libcurl
 )
+rpi_link_platform_backends(curl_fetcher_test)
 
 target_compile_features(curl_fetcher_test PRIVATE cxx_std_20)
 
@@ -2150,11 +2195,15 @@ rpi_discover_tests(curl_fetcher_test)
 
 add_executable(secure_boot_provisioner_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/secure_boot_provisioner.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_protocol.cpp  # the provisioner runs the boot protocol
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/file_server.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootcode_loader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC}
+    ${PLATFORM_BOOTIMGCREATOR_SRC}
+    ${PLATFORM_ACCEL_HASH_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
@@ -2176,7 +2225,13 @@ target_link_libraries(secure_boot_provisioner_test PRIVATE
     Catch2::Catch2WithMain
     Qt6::Core
     ${GNUTLS_LIBRARIES}
+    # Bootfiles reads the boot image out of an archive.
+    ${LibArchive_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    ${LIBLZMA_LIBRARIES}
+    ${ZSTD_LIBRARIES}
 )
+rpi_link_platform_backends(secure_boot_provisioner_test)
 
 rpi_link_platform_file_ops(secure_boot_provisioner_test)
 
@@ -2202,7 +2257,7 @@ add_executable(download_stats_telemetry_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../downloadstatstelemetry.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../downloadstatstelemetry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${PLATFORM_QUIRKS_SRC}
     download_stats_telemetry_test.cpp
 )
 
@@ -2218,6 +2273,7 @@ target_link_libraries(download_stats_telemetry_test PRIVATE
     Qt6::Network
     CURL::libcurl
 )
+rpi_link_platform_backends(download_stats_telemetry_test)
 
 target_compile_features(download_stats_telemetry_test PRIVATE cxx_std_20)
 
@@ -2237,7 +2293,7 @@ add_executable(connect_device_registrar_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../connect_device_registrar.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${PLATFORM_QUIRKS_SRC}
     connect_device_registrar_test.cpp
 )
 
@@ -2253,6 +2309,7 @@ target_link_libraries(connect_device_registrar_test PRIVATE
     Qt6::Network
     CURL::libcurl
 )
+rpi_link_platform_backends(connect_device_registrar_test)
 
 target_compile_features(connect_device_registrar_test PRIVATE cxx_std_20)
 
@@ -2278,12 +2335,13 @@ add_executable(firmware_manager_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/secure_boot_provisioner.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootloader_image.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_protocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/file_server.cpp  # RpibootProtocol::execute serves files through it
     ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC}
+    ${PLATFORM_BOOTIMGCREATOR_SRC}
+    ${PLATFORM_ACCEL_HASH_SRC}
+    ${PLATFORM_QUIRKS_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
@@ -2310,6 +2368,7 @@ target_link_libraries(firmware_manager_test PRIVATE
     ${LIBLZMA_LIBRARIES}
     ${GNUTLS_LIBRARIES}
 )
+rpi_link_platform_backends(firmware_manager_test)
 
 rpi_link_platform_file_ops(firmware_manager_test)
 
