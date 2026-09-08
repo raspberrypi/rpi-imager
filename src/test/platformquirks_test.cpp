@@ -2958,6 +2958,217 @@ TEST_CASE("An interface that is up settles it without spawning anything",
     CHECK_FALSE(QFileInfo::exists(marker));
 }
 
+#ifdef BEEP_PROBE_BINARY
+// ══════════════════════════════════════════════════════════════
+// The chime at the end of a write.
+//
+// How a user who has looked away, or whose window is behind something else,
+// learns the write has finished -- and for a long write on a slow card, that
+// is a real wait. isBeepAvailable() decides whether "beep when finished" is
+// offered at all; offering it where nothing can make a sound is a setting
+// that silently does nothing.
+//
+// beep() then works down a list. The interesting part is not the order but
+// the falling through: a tool being installed is not the same as it working,
+// and the commonest case -- canberra-gtk-play present but the sound theme
+// missing -- has to move on to the next rather than give up.
+//
+// Both cache what they find for the life of the process, so every case is a
+// fresh one with PATH pointed at a directory of fakes.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// A fake audio tool: records that it ran, and exits with `code`.
+bool plantAudioTool(const QString& binDir, const QString& name,
+                    const QString& markerDir, int code)
+{
+    const QString path = binDir + QLatin1Char('/') + name;
+    // `: >` is a shell builtin. PATH here is the fixture directory alone, so
+    // touch would not be found and the mark would never appear -- the case
+    // would then read as "this tool was not tried", which is what it is
+    // meant to be distinguishing.
+    const QByteArray script =
+        "#!/bin/sh\n"
+        ": > \"" + markerDir.toUtf8() + "/" + name.toUtf8() + "\"\n"
+        "exit " + QByteArray::number(code) + "\n";
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    if (f.write(script) != script.size())
+        return false;
+    f.close();
+    return f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner);
+}
+
+QString runBeepProbe(const QString& binDir, const QString& mode)
+{
+    QProcess p;
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    // Pointed at the fixture rather than unset: QStandardPaths::
+    // findExecutable falls back to a built-in default when PATH is empty and
+    // would find the machine's real audio tools.
+    env.insert(QStringLiteral("PATH"), binDir);
+    p.setProcessEnvironment(env);
+    p.start(QStringLiteral(BEEP_PROBE_BINARY), QStringList{mode});
+    if (!p.waitForFinished(30000))
+        return QString();
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
+// findSoundFile() looks in /usr/share/sounds, which is not redirectable
+// without a mount namespace. The cases that need one say so rather than
+// asserting something that depends on the host.
+bool haveASystemSoundFile()
+{
+    for (const char* path : {"/usr/share/sounds/freedesktop/stereo/complete.oga",
+                             "/usr/share/sounds/freedesktop/stereo/bell.oga",
+                             "/usr/share/sounds/Yaru/stereo/complete.oga",
+                             "/usr/share/sounds/ocean/stereo/completion.oga",
+                             "/usr/share/sounds/gnome/default/alerts/glass.ogg"}) {
+        if (QFileInfo::exists(QString::fromLatin1(path)))
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("With nothing installed to make a sound, the option is not offered",
+          "[platformquirks][beep]")
+{
+    // A minimal or headless install. Offering "beep when finished" here
+    // gives the user a switch that does nothing at all.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(bin));
+
+    CHECK(runBeepProbe(bin, QStringLiteral("available"))
+              .contains(QStringLiteral("AVAILABLE=0")));
+}
+
+TEST_CASE("Any one of the mechanisms is enough to offer it",
+          "[platformquirks][beep]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    const QString marks = tmp.filePath(QStringLiteral("marks"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(QDir().mkpath(marks));
+
+    SECTION("canberra-gtk-play, which needs no sound file of its own")
+    {
+        // It plays from the desktop's sound theme, so it is offered even
+        // where none of the file paths exist.
+        REQUIRE(plantAudioTool(bin, QStringLiteral("canberra-gtk-play"), marks, 0));
+        CHECK(runBeepProbe(bin, QStringLiteral("available"))
+                  .contains(QStringLiteral("AVAILABLE=1")));
+    }
+
+    SECTION("the PC speaker, which needs nothing at all")
+    {
+        REQUIRE(plantAudioTool(bin, QStringLiteral("beep"), marks, 0));
+        CHECK(runBeepProbe(bin, QStringLiteral("available"))
+                  .contains(QStringLiteral("AVAILABLE=1")));
+    }
+
+    SECTION("a player, given there is something for it to play")
+    {
+        if (!haveASystemSoundFile())
+            SKIP("this machine has none of the sound files the players need");
+        REQUIRE(plantAudioTool(bin, QStringLiteral("pw-play"), marks, 0));
+        CHECK(runBeepProbe(bin, QStringLiteral("available"))
+                  .contains(QStringLiteral("AVAILABLE=1")));
+    }
+}
+
+TEST_CASE("The desktop's own sound theme is tried first",
+          "[platformquirks][beep]")
+{
+    // canberra-gtk-play plays the theme's "complete" sound, which is what
+    // the user hears from everything else on their desktop. Reaching for a
+    // file directly first would play a different noise from the rest of the
+    // system.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    const QString marks = tmp.filePath(QStringLiteral("marks"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(QDir().mkpath(marks));
+
+    REQUIRE(plantAudioTool(bin, QStringLiteral("canberra-gtk-play"), marks, 0));
+    REQUIRE(plantAudioTool(bin, QStringLiteral("pw-play"), marks, 0));
+    REQUIRE(plantAudioTool(bin, QStringLiteral("aplay"), marks, 0));
+
+    REQUIRE(runBeepProbe(bin, QStringLiteral("beep")).contains(QStringLiteral("DONE=1")));
+
+    CHECK(QFileInfo::exists(marks + QStringLiteral("/canberra-gtk-play")));
+    CHECK_FALSE(QFileInfo::exists(marks + QStringLiteral("/pw-play")));
+    CHECK_FALSE(QFileInfo::exists(marks + QStringLiteral("/aplay")));
+}
+
+TEST_CASE("A player that is installed but fails is not the end of it",
+          "[platformquirks][beep]")
+{
+    // The case that actually happens: canberra-gtk-play installed as a
+    // dependency of something else, with no sound theme behind it, so it
+    // exits non-zero. Stopping there would mean no chime on a machine that
+    // has three other ways to make one.
+    if (!haveASystemSoundFile())
+        SKIP("this machine has none of the sound files the later players need");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    const QString marks = tmp.filePath(QStringLiteral("marks"));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(QDir().mkpath(marks));
+
+    SECTION("the next one along is tried")
+    {
+        REQUIRE(plantAudioTool(bin, QStringLiteral("canberra-gtk-play"), marks, 1));
+        REQUIRE(plantAudioTool(bin, QStringLiteral("pw-play"), marks, 0));
+
+        REQUIRE(runBeepProbe(bin, QStringLiteral("beep")).contains(QStringLiteral("DONE=1")));
+
+        CHECK(QFileInfo::exists(marks + QStringLiteral("/canberra-gtk-play")));
+        CHECK(QFileInfo::exists(marks + QStringLiteral("/pw-play")));
+    }
+
+    SECTION("and the one after that, all the way down")
+    {
+        REQUIRE(plantAudioTool(bin, QStringLiteral("canberra-gtk-play"), marks, 1));
+        REQUIRE(plantAudioTool(bin, QStringLiteral("pw-play"), marks, 1));
+        REQUIRE(plantAudioTool(bin, QStringLiteral("aplay"), marks, 1));
+        REQUIRE(plantAudioTool(bin, QStringLiteral("pactl"), marks, 1));
+        REQUIRE(plantAudioTool(bin, QStringLiteral("beep"), marks, 0));
+
+        REQUIRE(runBeepProbe(bin, QStringLiteral("beep")).contains(QStringLiteral("DONE=1")));
+
+        CHECK(QFileInfo::exists(marks + QStringLiteral("/pw-play")));
+        CHECK(QFileInfo::exists(marks + QStringLiteral("/aplay")));
+        CHECK(QFileInfo::exists(marks + QStringLiteral("/pactl")));
+        CHECK(QFileInfo::exists(marks + QStringLiteral("/beep")));
+    }
+}
+
+TEST_CASE("Asking for a chime where none can be made is not a crash",
+          "[platformquirks][beep]")
+{
+    // The setting can be on from a machine that had the tools, or from a
+    // synchronised profile. Nothing plays, and that is all that happens.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(bin));
+
+    CHECK(runBeepProbe(bin, QStringLiteral("beep")).contains(QStringLiteral("DONE=1")));
+}
+#endif // BEEP_PROBE_BINARY
+
 #endif // NETWORK_PROBE_BINARY
 #endif // Q_OS_LINUX
 

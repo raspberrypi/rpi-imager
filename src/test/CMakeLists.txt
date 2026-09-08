@@ -1095,6 +1095,30 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         NETWORK_PROBE_BINARY="$<TARGET_FILE:platform_quirks_network_probe>")
     add_dependencies(platformquirks_test platform_quirks_network_probe)
 
+    # isBeepAvailable() and beep() find their audio tools through PATH, but
+    # cache each answer for the life of the process with std::call_once, so
+    # they cannot be driven in-process. platformquirks_test runs this once per
+    # case with PATH pointed at a directory of fakes.
+    add_executable(platform_quirks_beep_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../platformquirks.h
+        ${PLATFORMQUIRKS_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/platform_quirks_beep_probe.cpp
+    )
+    target_link_libraries(platform_quirks_beep_probe PRIVATE
+        Qt6::Core
+        ${PLATFORMQUIRKS_LIBS}
+    )
+    target_include_directories(platform_quirks_beep_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(platform_quirks_beep_probe PRIVATE cxx_std_20)
+    target_compile_options(platform_quirks_beep_probe PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+    target_compile_definitions(platformquirks_test PRIVATE
+        BEEP_PROBE_BINARY="$<TARGET_FILE:platform_quirks_beep_probe>")
+    add_dependencies(platformquirks_test platform_quirks_beep_probe)
+
     # secureSettingsFile() hands a root-owned settings file back to the user
     # before narrowing it, and that needs a real root to exercise.
     # image_writer_test runs this inside `unshare -r --map-auto`, where the
