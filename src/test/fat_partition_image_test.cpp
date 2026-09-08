@@ -2185,3 +2185,173 @@ TEST_CASE("A GPT partition longer than the arithmetic allows is refused", "[tabl
     CHECK_THROWS_WITH(image.wrapper().fatPartition(1),
                       ContainsSubstring("offset/size overflow"));
 }
+
+// ══════════════════════════════════════════════════════════════
+// A directory whose cluster chain loops back on itself
+//
+// The driver walks a directory by following its chain of clusters through
+// the FAT. A corrupt FAT can point a cluster back at one already visited,
+// and a walker that does not notice follows it forever.
+//
+// That is the worst way for this to fail. There is no error and no
+// progress: the application stops responding part-way through writing the
+// customisation to a card, with the card half-configured and nothing on
+// screen to explain it. The user's only move is to pull it out.
+//
+// Three walkers carry the same guard -- listing, reading and deleting --
+// and none of them was covered, because a filesystem built by mkfs never
+// has a loop in it. The fixture below makes one: it fills the root
+// directory until it needs a second cluster, then rewrites that cluster's
+// FAT entry to point back at the first.
+
+namespace {
+
+// Enough entries to push the root directory past one cluster. Long names
+// take several directory entries each, so this does not need to be many
+// files -- but it does need to be more than fits, which is checked rather
+// than assumed.
+bool fillRootDirectory(const QString &imagePath, int fileCount)
+{
+    ScopedTempDir sources(QStringLiteral("rpi-imager-fatsrc"));
+    QStringList args;
+    args << QStringLiteral("-i") << imagePath << QStringLiteral("-o");
+    for (int i = 0; i < fileCount; ++i) {
+        const QString name = QStringLiteral("a-file-with-a-fairly-long-name-%1.txt")
+                                 .arg(i, 3, 10, QLatin1Char('0'));
+        const QString path = sources.filePath(name);
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly))
+            return false;
+        f.write("x");
+        f.close();
+        args << path;
+    }
+    args << QStringLiteral("::/");
+    return runMtool(QStringLiteral("mcopy"), args);
+}
+
+struct Fat32Geometry {
+    quint32 fatStartByte = 0;
+    quint32 rootCluster = 0;
+    quint16 bytesPerSector = 0;
+};
+
+Fat32Geometry readGeometry(const QString &imagePath)
+{
+    Fat32Geometry g;
+    QFile f(imagePath);
+    if (!f.open(QIODevice::ReadOnly))
+        return g;
+    const QByteArray boot = f.read(512);
+    f.close();
+    if (boot.size() < 512)
+        return g;
+    auto u16 = [&](int at) {
+        return quint16(quint8(boot.at(at))) | (quint16(quint8(boot.at(at + 1))) << 8);
+    };
+    auto u32 = [&](int at) {
+        return quint32(quint8(boot.at(at)))
+             | (quint32(quint8(boot.at(at + 1))) << 8)
+             | (quint32(quint8(boot.at(at + 2))) << 16)
+             | (quint32(quint8(boot.at(at + 3))) << 24);
+    };
+    g.bytesPerSector = u16(11);
+    const quint16 reservedSectors = u16(14);
+    g.rootCluster = u32(44);
+    g.fatStartByte = quint32(reservedSectors) * g.bytesPerSector;
+    return g;
+}
+
+quint32 readFatEntry(const QString &imagePath, const Fat32Geometry &g, quint32 cluster)
+{
+    QFile f(imagePath);
+    if (!f.open(QIODevice::ReadOnly))
+        return 0;
+    f.seek(g.fatStartByte + cluster * 4);
+    const QByteArray raw = f.read(4);
+    f.close();
+    if (raw.size() < 4)
+        return 0;
+    return (quint32(quint8(raw.at(0)))
+            | (quint32(quint8(raw.at(1))) << 8)
+            | (quint32(quint8(raw.at(2))) << 16)
+            | (quint32(quint8(raw.at(3))) << 24)) & 0x0FFFFFFF;
+}
+
+bool writeFatEntry(const QString &imagePath, const Fat32Geometry &g,
+                   quint32 cluster, quint32 value)
+{
+    QFile f(imagePath);
+    if (!f.open(QIODevice::ReadWrite))
+        return false;
+    if (!f.seek(g.fatStartByte + cluster * 4))
+        return false;
+    char raw[4];
+    raw[0] = char(value & 0xFF);
+    raw[1] = char((value >> 8) & 0xFF);
+    raw[2] = char((value >> 16) & 0xFF);
+    raw[3] = char((value >> 24) & 0xFF);
+    const bool ok = f.write(raw, 4) == 4;
+    f.close();
+    return ok;
+}
+
+// Fills the root directory, then makes its second cluster point back at the
+// first. Returns false when the directory did not need a second cluster,
+// which would leave nothing to loop and a case that proves nothing.
+bool loopTheRootDirectory(const QString &imagePath)
+{
+    if (!fillRootDirectory(imagePath, 200))
+        return false;
+    const Fat32Geometry g = readGeometry(imagePath);
+    if (g.bytesPerSector == 0 || g.rootCluster < 2)
+        return false;
+    const quint32 second = readFatEntry(imagePath, g, g.rootCluster);
+    if (second < 2 || second >= 0x0FFFFFF8)
+        return false;  // the directory still fits in one cluster
+    return writeFatEntry(imagePath, g, second, g.rootCluster);
+}
+
+} // namespace
+
+TEST_CASE("A directory whose cluster chain loops is refused, not followed",
+          "[fat][image][corrupt]")
+{
+    REQUIRE_MKFS();
+    if (!haveMtools())
+        SKIP("mtools is needed to fill the directory before corrupting it");
+
+    bool looped = false;
+    bool threw = false;
+    std::string message;
+    try {
+        FatImage image(32, 256, [&](const QString &path) {
+            looped = loopTheRootDirectory(path);
+        });
+        // Reached only if the driver accepted the filesystem.
+        (void)image.fat().listAllFiles();
+    } catch (const std::exception &e) {
+        threw = true;
+        message = e.what();
+    }
+
+    if (!looped)
+        SKIP("the root directory did not need a second cluster, so there is "
+             "no chain to loop and this would prove nothing");
+
+    // Reported, and reported as what it is. The alternative is not an
+    // exception but a walk that never ends: the application stops
+    // responding part-way through configuring a card, with nothing on
+    // screen to say why, and the user pulls it out.
+    CHECK(threw);
+    CHECK_THAT(message, ContainsSubstring("Circular cluster references"));
+}
+
+// The other two walkers -- readFile and deleteFile -- carry the same guard
+// and answer a loop by giving up on the search rather than by throwing.
+// Neither is reachable with a loop in the root directory, because opening
+// the partition walks that directory first and throws before any of them is
+// called. Reaching them needs the loop in a subdirectory chain, which mkfs
+// and mtools do not produce and which would have to be assembled entry by
+// entry. Left as a known gap rather than a test that cannot be built
+// honestly.
