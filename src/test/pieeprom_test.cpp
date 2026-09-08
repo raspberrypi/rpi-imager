@@ -481,3 +481,71 @@ TEST_CASE("real pieeprom fixture: changing BOOT_ORDER round-trips through rpi-ee
     INFO("first divergence at offset 0x" << std::hex << firstDiff);
     CHECK(ours == ref);
 }
+
+// ── A malformed image must be refused, not walked off the end ──────────
+//
+// pieeprom.bin arrives as a firmware download and is then walked
+// section-by-section using lengths taken from the image itself. Every one of
+// those lengths is data, so the walk has to treat them as data: a section
+// declaring more bytes than the file holds is the shape of a truncated
+// download, and reading it would run past the buffer.
+//
+// The refusals are also what the operator sees. Provisioning stops with a
+// reason instead of continuing against an image that is not what it claims,
+// which for secure boot means an EEPROM written from a half-read file.
+
+TEST_CASE("a section running past the end of the image is refused",
+          "[pieeprom][parse]")
+{
+    auto img = makeSyntheticImage("[all]\nBOOT_ORDER=0xf41\n");
+
+    // Same image, with the first section's length claiming far more than the
+    // file contains -- what a download cut short looks like once the header
+    // has arrived and the body has not.
+    putBE32(img, 4, static_cast<uint32_t>(img.size() + 4096));
+
+    Image image(std::move(img));
+    const std::string err = image.parse();
+    INFO("parse said: " << err);
+    CHECK_FALSE(err.empty());
+    CHECK(err.find("runs past image end") != std::string::npos);
+}
+
+TEST_CASE("a section whose magic is not a section is refused",
+          "[pieeprom][parse]")
+{
+    // Not 0x00 or 0xff either, which are the fill values that legitimately
+    // end the walk -- this is a value in the middle, which means the offset
+    // arithmetic has landed somewhere that is not a section header.
+    auto img = makeSyntheticImage("[all]\nBOOT_ORDER=0xf41\n");
+    putBE32(img, 0, 0x12345678u);
+
+    Image image(std::move(img));
+    const std::string err = image.parse();
+    INFO("parse said: " << err);
+    CHECK_FALSE(err.empty());
+    CHECK(err.find("corrupt section") != std::string::npos);
+}
+
+TEST_CASE("an image too small to hold a header is refused",
+          "[pieeprom][parse]")
+{
+    Image image(std::vector<uint8_t>(SECTION_HDR_LEN - 1, 0xff));
+    CHECK_FALSE(image.parse().empty());
+}
+
+TEST_CASE("fill at the end of the image ends the walk rather than failing",
+          "[pieeprom][parse]")
+{
+    // The bootloader scratch page is 0x00 or 0xff, and both mean "no more
+    // sections". Reading either as a corrupt header would refuse every real
+    // image there is.
+    for (uint32_t fill : {0x00000000u, 0xffffffffu}) {
+        auto img = makeSyntheticImage("[all]\nBOOT_ORDER=0xf41\n");
+        // Terminate immediately: the first thing in the image is fill.
+        putBE32(img, 0, fill);
+        Image image(std::move(img));
+        INFO("fill word 0x" << std::hex << fill);
+        CHECK(image.parse().empty());
+    }
+}
