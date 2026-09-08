@@ -526,6 +526,16 @@ TEST_CASE("Network monitoring handles null callback gracefully", "[platformquirk
 
 // How many descriptors and threads this process is holding. The monitor takes
 // one netlink socket, one eventfd and one thread each time it starts.
+//
+// Both counts come from procfs, which is a Linux thing: on macOS the counter
+// below reads an empty directory and answers zero for everything, so the two
+// cases that use it were failing on their own precondition rather than on the
+// leak they are about.
+static bool haveProcfsCounts()
+{
+    return QDir(QStringLiteral("/proc/self/fd")).exists();
+}
+
 static int countEntries(const char* dir)
 {
     return QDir(QString::fromLatin1(dir)).entryList(QDir::Files | QDir::Dirs |
@@ -545,6 +555,9 @@ TEST_CASE("Watching for the network back does not accumulate",
     // user then sees is not a network problem: it is the write failing to
     // open the storage device, hours later, because the process has run out
     // of descriptors.
+    if (!haveProcfsCounts())
+        SKIP("counting descriptors and threads needs procfs");
+
     const int fdsBefore = countEntries("/proc/self/fd");
     const int threadsBefore = countEntries("/proc/self/task");
     REQUIRE(fdsBefore > 0);
@@ -570,6 +583,9 @@ TEST_CASE("Watching for the network back does not accumulate",
 
 TEST_CASE("Start and stop in a loop leaves nothing behind",
           "[platformquirks][network]") {
+    if (!haveProcfsCounts())
+        SKIP("counting descriptors and threads needs procfs");
+
     const int fdsBefore = countEntries("/proc/self/fd");
     const int threadsBefore = countEntries("/proc/self/task");
 
@@ -3889,6 +3905,14 @@ TEST_CASE("An empty runtime directory leaves the display alone",
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
 
+#ifdef Q_OS_LINUX
+// Both sections below are Linux, and only Linux: pkexec elevation and
+// launching a browser as the invoking user are implemented in
+// platformquirks_linux.cpp alone, and so are the TestAPI entry points they
+// call. They were written after the guard above closed, so they compiled
+// everywhere and platformquirks_test stopped linking on macOS against
+// buildElevationCommand and resolveOriginalUid.
+
 // ══════════════════════════════════════════════════════════════
 // The command line handed to pkexec.
 //
@@ -4328,3 +4352,5 @@ TEST_CASE("The URL stays a single argument", "[platformquirks][openurl]")
     CHECK(args.last() == awkward);
     CHECK(args.count(awkward) == 1);
 }
+
+#endif // Q_OS_LINUX
