@@ -864,6 +864,10 @@ static QString xmlEscape(const QString& input) {
 // Defined further down, beside unmountDisk which is its only caller.
 static bool mountIsOnDevice(const char* devicePath, const char* mountSource);
 
+// Defined beside tryElevate, its only caller.
+static QStringList buildElevationCommand(const QString& bundlePath,
+                                         const QStringList& userArgs);
+
 #ifdef PLATFORMQUIRKS_ENABLE_TEST_API
 namespace TestAPI {
     QString xmlEscape(const QString& input) { return ::PlatformQuirks::xmlEscape(input); }
@@ -876,6 +880,12 @@ namespace TestAPI {
     bool mountIsOnDevice(const char* devicePath, const char* mountSource)
     {
         return ::PlatformQuirks::mountIsOnDevice(devicePath, mountSource);
+    }
+
+    QStringList buildElevationCommand(const QString& bundlePath,
+                                      const QStringList& userArgs)
+    {
+        return ::PlatformQuirks::buildElevationCommand(bundlePath, userArgs);
     }
 }
 #endif
@@ -1386,6 +1396,27 @@ bool openUrlExternally(const QUrl& url) {
     return false;
 }
 
+// The command line pkexec is given to re-run this application as root.
+//
+// Pure, and exposed through TestAPI, because what ends up here is what runs
+// with root's authority. Two things in particular: the program is the
+// resolved bundle path rather than argv[0], which a caller controls and
+// which the installed policy would otherwise be lent to; and the user's own
+// arguments are forwarded one element each, never joined into a string for
+// something else to split again.
+//
+// --disable-internal-agent stops pkexec spawning its own text-mode polkit
+// agent, which fights the desktop's and produces duplicate prompts or hangs.
+static QStringList buildElevationCommand(const QString& bundlePath,
+                                         const QStringList& userArgs) {
+    QStringList command;
+    command << QStringLiteral("/usr/bin/pkexec")
+            << QStringLiteral("--disable-internal-agent")
+            << bundlePath;
+    command += userArgs;
+    return command;
+}
+
 bool tryElevate(int argc, char** argv) {
     // Only attempt elevation if not already root, have a bundle path, and have a polkit policy
     const char* bundlePath = getBundlePath();
@@ -1397,19 +1428,20 @@ bool tryElevate(int argc, char** argv) {
         return false;
     }
 
-    // --disable-internal-agent prevents pkexec from spawning its own polkit agent.
-    // We rely on the desktop environment's agent (e.g., gnome-shell, kde-polkit)
-    // to show the auth dialog. Without this flag, pkexec's built-in text-mode agent
-    // can interfere with the GUI agent, causing duplicate prompts or hangs.
-    char** newArgv = new char*[argc + 3];
-    int newArgc = 0;
+    QStringList forwarded;
+    for (int i = 1; i < argc; i++)
+        forwarded << QString::fromLocal8Bit(argv[i]);
 
-    newArgv[newArgc++] = strdup("/usr/bin/pkexec");
-    newArgv[newArgc++] = strdup("--disable-internal-agent");
-    newArgv[newArgc++] = strdup(bundlePath);
-    
-    for (int i = 1; i < argc; i++) {
-        newArgv[newArgc++] = strdup(argv[i]);
+    const QStringList elevated = buildElevationCommand(
+        QString::fromUtf8(bundlePath), forwarded);
+
+    const int newArgc = elevated.size();
+    char** newArgv = new char*[newArgc + 1];
+    QList<QByteArray> held;
+    held.reserve(newArgc);
+    for (int i = 0; i < newArgc; i++) {
+        held << elevated[i].toLocal8Bit();
+        newArgv[i] = strdup(held[i].constData());
     }
     newArgv[newArgc] = nullptr;
     

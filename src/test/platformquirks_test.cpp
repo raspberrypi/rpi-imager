@@ -2605,3 +2605,142 @@ TEST_CASE("An empty runtime directory leaves the display alone",
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
+
+// ══════════════════════════════════════════════════════════════
+// The command line handed to pkexec.
+//
+// This is the one place in the application where a command line is built to
+// be run as root, so it is worth being exact about. tryElevate re-runs the
+// application under pkexec when the user asked for something that needs
+// privileges; whatever ends up in this list runs with root's authority.
+//
+// The construction was inline in tryElevate, which forks and execs and so
+// cannot be called from a test at all. Extracted so it can be.
+// ══════════════════════════════════════════════════════════════
+
+namespace PlatformQuirks::TestAPI {
+QStringList buildElevationCommand(const QString& bundlePath,
+                                  const QStringList& userArgs);
+}
+
+TEST_CASE("The program run as root is the resolved bundle path",
+          "[platformquirks][elevate]")
+{
+    using PlatformQuirks::TestAPI::buildElevationCommand;
+
+    // argv[0] is whatever the caller chose to put there -- a symlink name, a
+    // relative path, or something crafted. The program pkexec is asked to run
+    // is the path this application resolved for itself, and the user's
+    // arguments start at argv[1]. Nothing the caller supplies can become the
+    // program.
+    const QStringList cmd = buildElevationCommand(
+        QStringLiteral("/usr/bin/rpi-imager"),
+        QStringList{QStringLiteral("--repo"), QStringLiteral("https://example.invalid/os.json")});
+
+    REQUIRE(cmd.size() == 5);
+    CHECK(cmd[0] == QStringLiteral("/usr/bin/pkexec"));
+    CHECK(cmd[2] == QStringLiteral("/usr/bin/rpi-imager"));
+
+    // The bundle path is at the program position, not merely present
+    // somewhere: pkexec runs cmd[2] once its own options are consumed.
+    const int programIndex = cmd.indexOf(QStringLiteral("/usr/bin/rpi-imager"));
+    CHECK(programIndex == 2);
+}
+
+TEST_CASE("The desktop's own authentication dialog is the one shown",
+          "[platformquirks][elevate]")
+{
+    using PlatformQuirks::TestAPI::buildElevationCommand;
+
+    // Without --disable-internal-agent, pkexec starts its own text-mode
+    // polkit agent. In a desktop session that fights the session's agent:
+    // the user sees two prompts, or a prompt that never appears because it
+    // was written to a terminal nobody is looking at. The flag has to come
+    // before the program, or pkexec passes it to the program instead.
+    const QStringList cmd = buildElevationCommand(
+        QStringLiteral("/usr/bin/rpi-imager"), QStringList{});
+
+    const int flagIndex = cmd.indexOf(QStringLiteral("--disable-internal-agent"));
+    REQUIRE(flagIndex != -1);
+    CHECK(flagIndex < cmd.indexOf(QStringLiteral("/usr/bin/rpi-imager")));
+}
+
+TEST_CASE("The user's arguments survive elevation intact",
+          "[platformquirks][elevate]")
+{
+    using PlatformQuirks::TestAPI::buildElevationCommand;
+
+    SECTION("in the order they were given")
+    {
+        const QStringList given{
+            QStringLiteral("--cli"),
+            QStringLiteral("/home/pi/My Images/2026-01-01-raspios.img.xz"),
+            QStringLiteral("/dev/sda"),
+        };
+        const QStringList cmd = buildElevationCommand(
+            QStringLiteral("/usr/bin/rpi-imager"), given);
+
+        REQUIRE(cmd.size() == 3 + given.size());
+        CHECK(cmd.mid(3) == given);
+    }
+
+    SECTION("an argument containing spaces stays one argument")
+    {
+        // The whole reason for building a list rather than a string. A path
+        // with a space in it, joined and re-split, becomes two arguments and
+        // the write targets a file that does not exist -- or, worse, the
+        // wrong one.
+        const QString path =
+            QStringLiteral("/home/pi/Raspberry Pi/os images/raspios.img");
+        const QStringList cmd = buildElevationCommand(
+            QStringLiteral("/usr/bin/rpi-imager"), QStringList{path});
+
+        REQUIRE(cmd.size() == 4);
+        CHECK(cmd[3] == path);
+    }
+
+    SECTION("and so does one that looks like a shell fragment")
+    {
+        // execv takes the list as it stands: there is no shell to interpret
+        // these, and nothing here is quoted or escaped away either.
+        const QStringList given{
+            QStringLiteral("--repo"),
+            QStringLiteral("http://example.invalid/a;rm -rf /"),
+            QStringLiteral("$(id)"),
+            QStringLiteral("`id`"),
+            QStringLiteral("a\nb"),
+        };
+        const QStringList cmd = buildElevationCommand(
+            QStringLiteral("/usr/bin/rpi-imager"), given);
+
+        REQUIRE(cmd.size() == 3 + given.size());
+        CHECK(cmd.mid(3) == given);
+    }
+
+    SECTION("with no arguments, only the three elements are present")
+    {
+        const QStringList cmd = buildElevationCommand(
+            QStringLiteral("/usr/bin/rpi-imager"), QStringList{});
+
+        CHECK(cmd == QStringList{QStringLiteral("/usr/bin/pkexec"),
+                                 QStringLiteral("--disable-internal-agent"),
+                                 QStringLiteral("/usr/bin/rpi-imager")});
+    }
+}
+
+TEST_CASE("An unusual install location is passed through as it is",
+          "[platformquirks][elevate]")
+{
+    using PlatformQuirks::TestAPI::buildElevationCommand;
+
+    // AppImage extracts to a temporary directory whose name changes every
+    // run, and a locally built binary can be anywhere. The policy file is
+    // matched against this same resolved path by hasPolkitPolicyForPath
+    // before we get here, so what is checked and what is run agree.
+    const QString bundle =
+        QStringLiteral("/tmp/.mount_rpi-imAbC123/usr/bin/rpi-imager");
+    const QStringList cmd = buildElevationCommand(bundle, QStringList{});
+
+    REQUIRE(cmd.size() == 3);
+    CHECK(cmd[2] == bundle);
+}
