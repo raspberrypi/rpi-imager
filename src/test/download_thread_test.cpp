@@ -1339,15 +1339,26 @@ TEST_CASE("A signing key that is not a key stops the write", "[download][secureb
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
 
+    // Every message, not the one that happened to arrive last. Two are
+    // emitted -- the step that failed, and then the caller reporting that
+    // secure boot could not be set up -- and runToCompletion() keeps
+    // whichever lands second, which is a race: this case passed on one
+    // machine and failed on another for exactly that reason.
+    QStringList reported;
+    QObject::connect(&dt, &DownloadThread::error, &dt,
+                     [&reported](const QString &m) { reported << m; });
+
     const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
     setConfiguredRsaKey(QString());
 
     REQUIRE(outcome.finished);
-    INFO("message: " << outcome.errorMessage.toStdString());
+    INFO("reported: " << reported.join(QStringLiteral(" | ")).toStdString());
     CHECK_FALSE(outcome.succeeded);
-    // Named, so somebody who chose the wrong file knows which step objected.
-    CHECK_THAT(outcome.errorMessage.toStdString(),
-               Catch::Matchers::ContainsSubstring("boot.sig"));
+    // The step that objected is named somewhere in what the user is told, so
+    // somebody who chose the wrong file knows which one it was.
+    CHECK(std::any_of(reported.cbegin(), reported.cend(), [](const QString &m) {
+        return m.contains(QStringLiteral("boot.sig"));
+    }));
 
     // What the card holds afterwards is deliberately not asserted. Reading
     // boot.sig back and finding it absent would pass just as readily because
