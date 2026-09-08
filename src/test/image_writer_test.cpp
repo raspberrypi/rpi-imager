@@ -1870,6 +1870,83 @@ TEST_CASE("A verified write checks what it wrote", "[imagewriter][write]")
     CHECK(out.succeeded);
 }
 
+TEST_CASE("Verifying is reported as a stage of its own", "[imagewriter][write][verify]")
+{
+    // After the last byte is written Imager reads the card back and compares
+    // it, which on a real card takes about as long as the write did. If the
+    // state never moves off Writing, the user watches a full progress bar for
+    // minutes with nothing to say why -- indistinguishable from a hang, and
+    // the point at which people pull the card out.
+    //
+    // Big enough that the read-back reports progress at all: the 4 MB case
+    // above verifies too, and finishes inside a single tick.
+    LargeWriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
+    w.setDst(fx.target(), LargeWriteFixture::kSize);
+
+    QStringList states;
+    QObject::connect(&w, &ImageWriter::writeStateChanged, &w, [&] {
+        states << w.property("writeState").toString();
+    });
+
+    const WriteOutcome out = runWrite(w, 600000);
+
+    INFO("states: " << states.join(QStringLiteral(" -> ")).toStdString());
+    INFO("progress: " << out.progressKinds.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE_FALSE(out.failed);
+    CHECK(out.succeeded);
+
+    const bool sawVerifyProgress =
+        std::any_of(out.progressKinds.cbegin(), out.progressKinds.cend(),
+                    [](const QString &k) { return k.startsWith(QStringLiteral("verify ")); });
+    CHECK(sawVerifyProgress);
+    CHECK(states.contains(QStringLiteral("Verifying")));
+}
+
+TEST_CASE("Skipping verification leaves a finished write, not an abandoned one",
+          "[imagewriter][write][verify]")
+{
+    // The button offered on the writing screen. Somebody who trusts the card,
+    // or who has waited long enough, can stop the read-back -- and what they
+    // get has to be a finished write. Treating Skip as a cancel would throw
+    // away a card that is already correctly written, and they would start
+    // again for nothing.
+    //
+    // Pressed while the write is still running rather than part-way through
+    // the read-back, which is both what the screen allows and the only way to
+    // see it work: at any size a test can afford the read-back reports
+    // progress exactly once, so a skip taken on that tick lands after the
+    // checking has already finished and proves nothing.
+    LargeWriteFixture fx;
+    ImageWriter w(nullptr);
+    w.setVerifyEnabled(true);
+    w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
+    w.setDst(fx.target(), LargeWriteFixture::kSize);
+
+    int verifyTicks = 0;
+    bool skipped = false;
+    QObject::connect(&w, &ImageWriter::verifyProgress, &w,
+                     [&](QVariant, QVariant) { ++verifyTicks; });
+    QObject::connect(&w, &ImageWriter::writeProgress, &w, [&](QVariant now, QVariant) {
+        if (!skipped && now.toULongLong() > 0) {
+            skipped = true;
+            w.skipCurrentVerification();
+        }
+    });
+
+    const WriteOutcome out = runWrite(w, 600000);
+
+    INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
+    REQUIRE(skipped);
+    CHECK_FALSE(out.failed);
+    CHECK(out.succeeded);
+    // The checking really was skipped rather than the button being
+    // decorative -- and the write still came back as done.
+    CHECK(verifyTicks == 0);
+}
+
 // ══════════════════════════════════════════════════════════════
 // Cancelling
 //
