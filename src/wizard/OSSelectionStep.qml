@@ -335,6 +335,7 @@ WizardStepBase {
                         // announces the new list.
                         announcePopulationChanges: false
                         id: oslist
+                        objectName: "osList"
                         model: root.osmodel
                         delegate: osdelegate
                         accessibleName: {
