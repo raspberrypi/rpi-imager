@@ -7657,7 +7657,9 @@ TEST_CASE("A customisation file that is not there names what was wanted",
                                            contents, error));
 
     CHECK(error.contains(QStringLiteral("network-config file")));
-    CHECK(error.contains(QStringLiteral("does not exists")));
+    CHECK(error.contains(QStringLiteral("does not exist")));
+    // Named, so a mistyped path can be compared against what was meant.
+    CHECK(error.contains(QStringLiteral("absent")));
 }
 
 TEST_CASE("Each of the three files is described by its own name",
@@ -7704,7 +7706,7 @@ TEST_CASE("A file that cannot be opened is told apart from one that is absent",
     CHECK_FALSE(Cli::readCustomisationFile(path, QStringLiteral("user-data file"),
                                            contents, error));
     CHECK(error.contains(QStringLiteral("opening")));
-    CHECK_FALSE(error.contains(QStringLiteral("does not exists")));
+    CHECK_FALSE(error.contains(QStringLiteral("does not exist")));
 
     QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
