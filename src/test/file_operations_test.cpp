@@ -40,6 +40,7 @@
 #include <vector>
 
 #include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -1830,4 +1831,161 @@ TEST_CASE("A card that stops answering has the write abandoned, not waited on",
   // And the handle is shut, so nothing writes into the void afterwards.
   CHECK_FALSE(ops->IsOpen());
   CHECK(ops->WriteSequential(buffer.get(), kChunk) == FileError::kOpenError);
+}
+
+TEST_CASE("A buffered write that only the flush finds out about is reported",
+          "[file-ops][faulty]") {
+  // Direct I/O is the normal path and it fails at the write. Buffered is the
+  // fallback -- taken whenever O_DIRECT is refused, and by the customisation
+  // step, which reopens without it -- and there the write returns success as
+  // soon as the bytes reach the page cache. Nothing has touched the card yet.
+  // The card's answer arrives at the fsync, and if that answer is thrown away
+  // the writer reports a finished, flushed image over data the card refused.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+
+  FaultyDevice device(64, 8);
+  if (!device.isReady())
+    SKIP("the device-mapper fault injection device could not be created");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  REQUIRE(ops->SetDirectIOEnabled(false) == FileError::kSuccess);
+  REQUIRE_FALSE(ops->IsDirectIOEnabled());
+
+  constexpr std::size_t kChunk = 1u << 20;
+  auto buffer = alignedBuffer(kChunk, 0x6B);
+  REQUIRE(buffer);
+
+  // Past the 8MB boundary, where the mapping returns EIO -- but buffered, so
+  // the write itself is only a copy into the page cache and succeeds.
+  REQUIRE(ops->Seek(16ull << 20) == FileError::kSuccess);
+  REQUIRE(ops->WriteSequential(buffer.get(), kChunk) == FileError::kSuccess);
+
+  // The card's answer, arriving late.
+  const FileError synced = ops->ForceSync();
+  INFO("errno was " << ops->GetLastErrorCode());
+  CHECK(synced == FileError::kSyncError);
+  CHECK(ops->GetLastErrorCode() == EIO);
+  CHECK(ops->ClassifyLastWriteError() ==
+        rpi_imager::WriteErrorClass::kIoDeviceError);
+
+  ops->Close();
+}
+
+TEST_CASE("A host with no io_uring writes anyway", "[file-ops]") {
+  // io_uring is not a given. An older kernel does not have it; a container
+  // with a restrictive seccomp profile blocks the syscall; some distributions
+  // ship it switched off. On any of those the ring fails to initialise in the
+  // constructor, and every async entry point has to degrade to a synchronous
+  // write rather than refuse -- the caller does not ask whether async is
+  // available before handing over a buffer.
+  //
+  // Reproduced by making file descriptors unobtainable for the length of the
+  // constructor: io_uring_setup needs one, so it fails exactly as it does on
+  // a host without the syscall. The limit is put back immediately, because
+  // everything after this point needs to open files normally.
+  struct rlimit original {};
+  REQUIRE(::getrlimit(RLIMIT_NOFILE, &original) == 0);
+
+  std::unique_ptr<FileOperations> ops;
+  {
+    struct rlimit tight = original;
+    // Three: stdin, stdout and stderr are already open, so every new
+    // descriptor would be numbered at or above the limit and none can be
+    // allocated. Anything higher leaves a gap for io_uring_setup to land in.
+    tight.rlim_cur = 3;
+    if (::setrlimit(RLIMIT_NOFILE, &tight) != 0)
+      SKIP("cannot lower RLIMIT_NOFILE on this host");
+    ops = FileOperations::Create();
+    REQUIRE(::setrlimit(RLIMIT_NOFILE, &original) == 0);
+  }
+  REQUIRE(ops != nullptr);
+
+  if (ops->IsAsyncIOSupported())
+    SKIP("io_uring initialised despite the descriptor limit");
+
+  // Asking for a queue is answered honestly...
+  CHECK_FALSE(ops->SetAsyncQueueDepth(16));
+  // ...and cancelling one that was never created is not a crash.
+  CHECK_NOTHROW(ops->CancelAsyncIO());
+  CHECK(ops->WaitForPendingWrites() == FileError::kSuccess);
+
+  // ...and the write still happens, synchronously, callback and all.
+  const std::string path = makeImage("no-io-uring.img");
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  const auto expected = pattern(16384, 0x4F);
+  int calls = 0;
+  std::size_t reported = 0;
+  REQUIRE(ops->AsyncWriteSequential(expected.data(), expected.size(),
+                                    [&](FileError e, std::size_t n) {
+                                      ++calls;
+                                      if (e == FileError::kSuccess) reported = n;
+                                    }) == FileError::kSuccess);
+  CHECK(calls == 1);
+  CHECK(reported == expected.size());
+  CHECK(ops->GetPendingWriteCount() == 0);
+
+  ops->Close();
+  CHECK(readBack(path, 0, expected.size()) == expected);
+}
+
+TEST_CASE("A write the card only half takes is an error, not a write",
+          "[file-ops][loop]") {
+  // The card accepting fewer bytes than it was handed is its own failure mode,
+  // distinct from refusing them: the completion comes back positive, so
+  // nothing about it looks like an error, and the count is simply smaller than
+  // asked for. It happens at the end of a device that is smaller than the
+  // image thinks it is -- a counterfeit card, or a declared size that does not
+  // match the media.
+  //
+  // Counting the request as written would carry on from an offset the data
+  // never reached, silently displacing everything after it, and the image
+  // would fail verification with no indication of where it went wrong.
+  //
+  // Provoked exactly as a card does it: a device whose last 32K is real and
+  // whose next 32K is not, and a 64K write straddling the join.
+  constexpr std::uint64_t kDeviceSize = 16u * 1024 * 1024 + 32u * 1024;
+  constexpr std::size_t kChunk = 64u * 1024;
+
+  const std::string backing = makeImage("half-taken.img", kDeviceSize);
+  LoopDevice loop(backing);
+  if (!loop.valid())
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(loop.path()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no async completion to read");
+  REQUIRE(ops->SetAsyncQueueDepth(8));
+
+  auto buffer = alignedBuffer(kChunk, 0xE1);
+  REQUIRE(buffer);
+
+  // Half of this fits. The other half is past the end of the device.
+  REQUIRE(ops->Seek(16ull * 1024 * 1024) == FileError::kSuccess);
+
+  int calls = 0;
+  FileError reported = FileError::kSuccess;
+  std::size_t reportedBytes = kChunk;
+  REQUIRE(ops->AsyncWriteSequential(buffer.get(), kChunk,
+                                    [&](FileError e, std::size_t n) {
+                                      ++calls;
+                                      reported = e;
+                                      reportedBytes = n;
+                                    }) == FileError::kSuccess);
+
+  const FileError drained = ops->WaitForPendingWrites();
+
+  CHECK(calls == 1);
+  CHECK(reported == FileError::kWriteError);
+  // Not "32768 written" either: a partial count would be taken as progress.
+  CHECK(reportedBytes == 0);
+  CHECK(drained == FileError::kWriteError);
+
+  ops->Close();
 }
