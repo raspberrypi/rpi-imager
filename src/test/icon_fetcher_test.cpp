@@ -573,3 +573,71 @@ TEST_CASE("Scrolling an icon out of view cancels it", "[icons][provider]")
     CHECK_NOTHROW(delete response);
     waitFor([] { return false; }, 500);
 }
+
+// ---------------------------------------------------------------------------
+// Closing down with work still in it
+//
+// Both cases below call shutdown(), which the fetcher does not come back
+// from: it is a singleton, the thread is deleted, and every later request is
+// refused. ctest runs each Catch2 case in its own process so they cannot
+// reach each other there, and they are last in the file so a direct run of
+// the whole binary reaches them last too. Do not add cases after them.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Shutting down with an icon still arriving comes back promptly",
+          "[icons]")
+{
+    // Closing the window while the OS list is still loading its icons. The
+    // transfers in flight have to be taken down with the loop rather than
+    // left for the thread to be terminated over -- terminate() on a thread
+    // inside libcurl is how a clean exit becomes a crash report.
+    rpi_test::StallingHttpServer server(64 * 1024);
+    REQUIRE_HTTP_SERVER(server);
+
+    const QUrl url(QString::fromUtf8(server.urlFor(QStringLiteral("icon.png"))));
+    IconImageResponse response(url);
+    IconMultiFetcher::instance().queueFetch(&response, url);
+
+    // Long enough for the request to have left: the server answers with
+    // headers and then holds the connection open, so it is still in flight.
+    waitFor([] { return false; }, 1000);
+
+    QElapsedTimer t;
+    t.start();
+    CHECK_NOTHROW(IconMultiFetcher::instance().shutdown());
+
+    // The thread wait inside shutdown() allows five seconds before it
+    // resorts to terminate(). Coming back well inside that is the difference
+    // between the loop noticing and the thread being killed.
+    INFO("shutdown took " << t.elapsed() << " ms");
+    CHECK(t.elapsed() < 4000);
+}
+
+TEST_CASE("A request made after shutdown is dropped rather than queued",
+          "[icons]")
+{
+    // The QML engine tears down in its own order, so a delegate can still ask
+    // for an icon after the fetcher has gone. Queueing it would put work on a
+    // thread that no longer exists.
+    //
+    // The guard that refuses it cannot be caught by reverting: with the
+    // thread already deleted nothing would process the request anyway, so
+    // removing the check leaves this passing. What the case holds down is the
+    // outcome -- no crash, no callback into a half-destroyed engine, nothing
+    // cached -- rather than the mechanism that produces it.
+    IconMultiFetcher::instance().shutdown();
+
+    const QUrl url(QStringLiteral("https://example.invalid/late.png"));
+    IconImageResponse response(url);
+    bool finished = false;
+    QObject::connect(&response, &QQuickImageResponse::finished,
+                     [&finished] { finished = true; });
+
+    CHECK_NOTHROW(IconMultiFetcher::instance().queueFetch(&response, url));
+
+    // Dropped in silence: nothing is waiting on the answer by this point, and
+    // the callback would run against a half-destroyed engine.
+    waitFor([&finished] { return finished; }, 500);
+    CHECK_FALSE(finished);
+    CHECK(IconMultiFetcher::instance().getCachedData(url.toString()).isEmpty());
+}
