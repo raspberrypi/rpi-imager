@@ -2849,7 +2849,14 @@ bool DownloadThread::_customizeImage()
     catch (std::runtime_error &err)
     {
         emit eventCustomisation(static_cast<quint32>(customTimer.elapsed()), false, metadata);
-        emit error(err.what());
+        // Say what was being attempted. What comes out of here is the disk
+        // parser's own words -- "MBR does not have valid signature",
+        // "Partition does not exist" -- and on their own they read as though
+        // the card had failed. What has actually happened is that the image
+        // has no boot partition to put the settings on, which is the answer
+        // when the file chosen is not a Pi image at all.
+        emit error(tr("Could not apply the OS customisation: %1")
+                       .arg(QString::fromUtf8(err.what())));
         return false;
     }
 

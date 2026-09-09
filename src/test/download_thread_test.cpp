@@ -3975,3 +3975,72 @@ TEST_CASE("With no proxy configured none is set", "[download][http][proxy]")
 
     CHECK(DownloadThread::proxy().isEmpty());
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Customisation asked of something that is not a Pi image
+//
+// The customisation pass reopens the destination and edits config.txt,
+// cmdline.txt and firstrun.sh on the boot partition. It needs there to be
+// one. A .img that is not a Pi image -- a filesystem with no partition table,
+// a firmware blob, a file that was renamed -- has no partition 1 to open, and
+// the wizard offers the customisation page for any image at all.
+//
+// So this has to fail, and say so. Reporting success would leave the user
+// with a card that boots without a single one of the settings they entered,
+// and nothing anywhere to explain it.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Customising an image with no boot partition fails rather than skipping",
+          "[download][customise]")
+{
+    ScratchDir scratch;
+    // Not a disk image: no MBR, no partitions, just bytes.
+    const QString source = scratch.filePath(QStringLiteral("not-an-image.img"));
+    REQUIRE(writeFile(source, patternOfSize(4 * 1024 * 1024, 41)));
+
+    const QString dest = scratch.filePath(QStringLiteral("no-boot-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(8 * 1024 * 1024, '\0')));
+
+    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setImageCustomisation("dtoverlay=disable-bt", QByteArray(), QByteArray(), QByteArray(),
+                             QByteArray(), "systemd", ImageOptions::AdvancedOptions());
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    REQUIRE(outcome.finished);
+
+    INFO("error: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.succeeded);
+    // Says what was being attempted. The rest of the sentence is the disk
+    // parser's own words, which on their own read as though the card had
+    // failed rather than the image being the wrong sort of file.
+    CHECK_THAT(outcome.errorMessage.toStdString(),
+               Catch::Matchers::ContainsSubstring("customisation"));
+    CHECK_THAT(outcome.errorMessage.toStdString(),
+               Catch::Matchers::ContainsSubstring("MBR"));
+}
+
+TEST_CASE("An image with no boot partition is still written when nothing is customised",
+          "[download][customise]")
+{
+    // The counterpart, and the reason the refusal above cannot simply be
+    // "refuse images without a partition table". Plenty of things people
+    // write to a card are not partitioned, and with no customisation asked
+    // for there is nothing that needs a boot partition.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(4 * 1024 * 1024, 41);
+    const QString source = scratch.filePath(QStringLiteral("plain-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    const QString dest = scratch.filePath(QStringLiteral("plain-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(8 * 1024 * 1024, '\0')));
+
+    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK(outcome.succeeded);
+    CHECK(readFile(dest).left(payload.size()) == payload);
+}
