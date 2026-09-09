@@ -11619,3 +11619,89 @@ TEST_CASE("What the machine can do is answered without a window",
     // touchscreen.
     CHECK(w.hasMouse());
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Saving the whole customisation at once
+//
+// The wizard writes the page back as one map when the user moves on, rather
+// than a field at a time. That has to *replace* what was saved, not merge
+// into it: a field the user cleared has to stay cleared, or their old wifi
+// passphrase comes back the next time they open the page and goes onto the
+// next card they write.
+//
+// The single-field setter beside it merges, which is right for what it is
+// for. Nothing had run the map one at all.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Saving the customisation replaces what was saved before",
+          "[imagewriter][customisation]")
+{
+    ImageWriter w(nullptr);
+    w.clearSavedCustomisationSettings();
+
+    QVariantMap first;
+    first.insert(QStringLiteral("hostname"), QStringLiteral("first-pi"));
+    first.insert(QStringLiteral("wifiPassword"), QStringLiteral("hunter2"));
+    w.setSavedCustomisationSettings(first);
+
+    QVariantMap saved = w.getSavedCustomisationSettings();
+    REQUIRE(saved.value(QStringLiteral("hostname")).toString() == QStringLiteral("first-pi"));
+    REQUIRE(saved.value(QStringLiteral("wifiPassword")).toString() == QStringLiteral("hunter2"));
+
+    // The user clears the wifi field and moves on. The page saves what it
+    // now holds, which no longer mentions it.
+    QVariantMap second;
+    second.insert(QStringLiteral("hostname"), QStringLiteral("second-pi"));
+    w.setSavedCustomisationSettings(second);
+
+    saved = w.getSavedCustomisationSettings();
+    CHECK(saved.value(QStringLiteral("hostname")).toString() == QStringLiteral("second-pi"));
+    // Gone, not hidden. Merging here is how a passphrase somebody deleted
+    // ends up on the next card.
+    CHECK_FALSE(saved.contains(QStringLiteral("wifiPassword")));
+
+    w.clearSavedCustomisationSettings();
+}
+
+TEST_CASE("A saved customisation comes back as what was put in",
+          "[imagewriter][customisation]")
+{
+    // The page reads these straight into its fields. A checkbox that was on
+    // has to come back on, and a number has to come back as a number: this
+    // goes through QSettings, which does not always hand back the type it
+    // was given.
+    ImageWriter w(nullptr);
+    w.clearSavedCustomisationSettings();
+
+    QVariantMap out;
+    out.insert(QStringLiteral("hostname"), QStringLiteral("pi-with-a-name"));
+    out.insert(QStringLiteral("sshEnabled"), true);
+    out.insert(QStringLiteral("telemetryEnabled"), false);
+    out.insert(QStringLiteral("wifiCountry"), QStringLiteral("GB"));
+    w.setSavedCustomisationSettings(out);
+
+    const QVariantMap back = w.getSavedCustomisationSettings();
+    CHECK(back.value(QStringLiteral("hostname")).toString() == QStringLiteral("pi-with-a-name"));
+    CHECK(back.value(QStringLiteral("wifiCountry")).toString() == QStringLiteral("GB"));
+    // Read the way the page reads them.
+    CHECK(back.value(QStringLiteral("sshEnabled")).toBool());
+    CHECK_FALSE(back.value(QStringLiteral("telemetryEnabled")).toBool());
+    // Every key that went in came back: a map saved and reloaded is the same
+    // map, not a subset of it.
+    CHECK(back.size() == out.size());
+
+    w.clearSavedCustomisationSettings();
+}
+
+TEST_CASE("Saving an empty customisation clears what was there",
+          "[imagewriter][customisation]")
+{
+    // Which is what happens when somebody empties the page and moves on.
+    ImageWriter w(nullptr);
+    w.setPersistedCustomisationSetting(QStringLiteral("hostname"),
+                                       QStringLiteral("leftover"));
+    REQUIRE_FALSE(w.getSavedCustomisationSettings().isEmpty());
+
+    w.setSavedCustomisationSettings(QVariantMap());
+    CHECK(w.getSavedCustomisationSettings().isEmpty());
+}
