@@ -21,8 +21,9 @@
 #include "linux/stpanalyzer.h"
 
 #include <QCoreApplication>
-#include <QSignalSpy>
 #include <QSocketNotifier>
+
+#include "signal_log.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -166,7 +167,7 @@ TEST_CASE("A switch holding the port down for long enough is reported",
     // difference between a slow start and an apparent failure.
     WiredAnalyser analyser;
     REQUIRE(analyser.ready());
-    QSignalSpy detected(&analyser, &StpAnalyzer::detected);
+    rpi_test::SignalLog detected(&analyser, &StpAnalyzer::detected);
 
     analyser.deliver(makeBpdu(forwardDelaySeconds(15)));
 
@@ -180,7 +181,7 @@ TEST_CASE("A switch that forwards almost at once is not worth warning about",
     // would appear on every managed switch with fast forwarding on.
     WiredAnalyser analyser;
     REQUIRE(analyser.ready());
-    QSignalSpy detected(&analyser, &StpAnalyzer::detected);
+    rpi_test::SignalLog detected(&analyser, &StpAnalyzer::detected);
 
     analyser.deliver(makeBpdu(forwardDelaySeconds(4)));
 
@@ -193,7 +194,7 @@ TEST_CASE("The first BPDU settles it and the socket is let go", "[stp]")
 {
     WiredAnalyser analyser;
     REQUIRE(analyser.ready());
-    QSignalSpy detected(&analyser, &StpAnalyzer::detected);
+    rpi_test::SignalLog detected(&analyser, &StpAnalyzer::detected);
 
     analyser.deliver(makeBpdu(forwardDelaySeconds(15)));
     REQUIRE(detected.count() == 1);
@@ -211,7 +212,7 @@ TEST_CASE("A frame that is not a BPDU is left alone", "[stp]")
     // produce a warning from whatever bytes were in those positions.
     WiredAnalyser analyser;
     REQUIRE(analyser.ready());
-    QSignalSpy detected(&analyser, &StpAnalyzer::detected);
+    rpi_test::SignalLog detected(&analyser, &StpAnalyzer::detected);
 
     analyser.deliver(makeBpdu(forwardDelaySeconds(15), 0xAA, 0xAA));
 
@@ -224,7 +225,7 @@ TEST_CASE("A BPDU-looking frame of another protocol is left alone", "[stp]")
 {
     WiredAnalyser analyser;
     REQUIRE(analyser.ready());
-    QSignalSpy detected(&analyser, &StpAnalyzer::detected);
+    rpi_test::SignalLog detected(&analyser, &StpAnalyzer::detected);
 
     analyser.deliver(makeBpdu(forwardDelaySeconds(15), kLsapBpdu, kLsapBpdu,
                               /*protocol=*/0x1234));
@@ -239,7 +240,7 @@ TEST_CASE("A frame too short to be a BPDU is left alone", "[stp]")
     // whatever the buffer happened to hold.
     WiredAnalyser analyser;
     REQUIRE(analyser.ready());
-    QSignalSpy detected(&analyser, &StpAnalyzer::detected);
+    rpi_test::SignalLog detected(&analyser, &StpAnalyzer::detected);
 
     auto runt = makeBpdu(forwardDelaySeconds(15));
     runt.resize(20);

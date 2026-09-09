@@ -2046,7 +2046,6 @@ target_include_directories(stp_analyzer_test PRIVATE
 target_link_libraries(stp_analyzer_test PRIVATE
     Catch2::Catch2
     Qt6::Core
-    Qt6::Test
 )
 
 target_compile_features(stp_analyzer_test PRIVATE cxx_std_20)
