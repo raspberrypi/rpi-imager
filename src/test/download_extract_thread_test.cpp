@@ -351,6 +351,104 @@ TEST_CASE("DownloadExtractThread reports a corrupt archive", "[extract]")
     CHECK_FALSE(outcome.errorMessage.isEmpty());
 }
 
+TEST_CASE("A download that stops mid-archive is not blamed on the file",
+          "[extract]")
+{
+    // The archive is well-formed as far as it goes and then simply stops,
+    // which is what a transfer cut off part-way looks like. libarchive words
+    // that as "No progress is possible" -- the same words it uses for a file
+    // on disk that was truncated -- and the two need different answers.
+    //
+    // A file the user chose is short and always will be: say so, and say the
+    // file is incomplete. A download is short because it has not all arrived,
+    // and telling somebody their image is corrupt sends them to re-download
+    // the file they were already downloading. The distinction is
+    // inputWasCompleteBeforeExtracting(), which is false here and true for
+    // LocalFileExtractThread.
+    if (!haveTool(QStringLiteral("xz")))
+        SKIP("xz is not installed, so no .xz image can be built to cut short");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(512 * 1024, 23);
+    const QString raw = scratch.filePath(QStringLiteral("short.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
+
+    const QString archive = raw + QStringLiteral(".xz");
+    const QByteArray whole = readFile(archive);
+    REQUIRE(whole.size() > 4096);
+    // Two thirds: the header and a good deal of data survive, so the stream
+    // starts and then runs out rather than being rejected at the front.
+    REQUIRE(writeFile(archive, whole.left(whole.size() * 2 / 3)));
+
+    // The hash the repository publishes for the whole image. This is what
+    // actually catches a short download: the extract loop deliberately treats
+    // running out of input as the end of the stream, because for a download
+    // that has just finished it is the tail of a race between the producer
+    // signalling completion and the last bytes being consumed -- without
+    // that, every download would fail at 100%.
+    const QByteArray hash = QCryptographicHash::hash(image, QCryptographicHash::Sha256).toHex();
+
+    const QString dest = scratch.filePath(QStringLiteral("short-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
+    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(), hash);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    REQUIRE(outcome.finished);
+
+    // A card written from two thirds of an image boots into nothing, so this
+    // has to fail however it is worded.
+    CHECK_FALSE(outcome.succeeded);
+    INFO("reported: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.errorMessage.isEmpty());
+
+    // Not the local-file wording: that one says the *file* is incomplete,
+    // which is the right thing to tell somebody who chose a file off their
+    // disk and the wrong thing to tell somebody whose download was short.
+    CHECK_FALSE(outcome.errorMessage.contains(QStringLiteral("image file is incomplete")));
+}
+
+TEST_CASE("A download that stops mid-archive with no hash to check is not caught",
+          "[extract][!shouldfail]")
+{
+    // The same short archive with no hash published for it. Nothing refuses
+    // it: the extract loop treats running out of input as the end of the
+    // stream (it has to -- see the case above), _extractTotal is carried for
+    // the progress bar and never compared against what was actually
+    // decompressed, and with no hash there is nothing else looking. The card
+    // is written two thirds of the way and reported as a success.
+    //
+    // Marked shouldfail so the gap is recorded rather than described in a
+    // comment nobody runs. It will start failing -- and want deleting -- the
+    // day a completeness check lands.
+    //
+    // The exposure is narrow: every image in the repository publishes
+    // extract_sha256, so the case above is what a user meets. It is a custom
+    // URL, or a repository entry with a size but no hash, that reaches here.
+    if (!haveTool(QStringLiteral("xz")))
+        SKIP("xz is not installed, so no .xz image can be built to cut short");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(512 * 1024, 29);
+    const QString raw = scratch.filePath(QStringLiteral("nohash.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
+
+    const QString archive = raw + QStringLiteral(".xz");
+    const QByteArray whole = readFile(archive);
+    REQUIRE(whole.size() > 4096);
+    REQUIRE(writeFile(archive, whole.left(whole.size() * 2 / 3)));
+
+    auto dt = makeExtract(scratch, image, archive, QStringLiteral("nohash-dest.img"));
+    dt->setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(*dt, 180000);
+    REQUIRE(outcome.finished);
+    CHECK_FALSE(outcome.succeeded);
+}
+
 TEST_CASE("DownloadExtractThread reports an archive that is not there", "[extract]")
 {
     ScratchDir scratch;
