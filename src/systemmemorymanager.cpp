@@ -67,7 +67,19 @@ qint64 SystemMemoryManager::getAvailableMemoryMB()
 
 SystemMemoryManager::SyncConfiguration SystemMemoryManager::calculateSyncConfiguration()
 {
-    qint64 totalMemMB = getTotalMemoryMB();
+    const SyncConfiguration config = syncConfigurationFor(getTotalMemoryMB());
+
+    qDebug() << "Adaptive sync configuration:"
+             << config.memoryTier
+             << "- Sync interval:" << (config.syncIntervalBytes / 1024 / 1024) << "MB"
+             << "- Time interval:" << config.syncIntervalMs << "ms";
+
+    return config;
+}
+
+SystemMemoryManager::SyncConfiguration
+SystemMemoryManager::syncConfigurationFor(qint64 totalMemMB)
+{
     SyncConfiguration config;
     
     qint64 syncIntervalMB;
@@ -93,12 +105,6 @@ SystemMemoryManager::SyncConfiguration SystemMemoryManager::calculateSyncConfigu
     config.syncIntervalBytes = syncIntervalMB * 1024 * 1024;
     config.syncIntervalBytes = qMax(MIN_SYNC_INTERVAL_BYTES, 
                                    qMin(MAX_SYNC_INTERVAL_BYTES, config.syncIntervalBytes));
-    
-    qDebug() << "Adaptive sync configuration:"
-             << config.memoryTier
-             << "- Sync interval:" << (config.syncIntervalBytes / 1024 / 1024) << "MB"
-             << "- Time interval:" << config.syncIntervalMs << "ms"
-             << "- Platform:" << getPlatformName();
     
     return config;
 }

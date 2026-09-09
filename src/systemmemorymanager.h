@@ -50,6 +50,19 @@ public:
      */
     SyncConfiguration calculateSyncConfiguration();
 
+    /*
+     * The same decision, on a memory figure rather than this machine's.
+     *
+     * How often the writer syncs is what decides how much written data is
+     * in flight at once. Too much on a small machine and the kernel starts
+     * reclaiming during a write -- or kills the application outright; too
+     * little on a large one and the write is slowed down for nothing. The
+     * tiers are the whole of that policy, and separating them from reading
+     * /proc/meminfo is what lets each be checked rather than only whichever
+     * one the machine running the tests happens to fall into.
+     */
+    static SyncConfiguration syncConfigurationFor(qint64 totalMemMB);
+
     /**
      * @brief Get platform name for logging
      * @return Platform identifier string

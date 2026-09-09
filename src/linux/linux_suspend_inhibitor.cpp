@@ -12,6 +12,8 @@
 #include <pwd.h>
 #include <limits.h>
 #include <errno.h>
+#include <signal.h>
+#include <time.h>
 #include <string>
 
 #include <QtDBus/QtDBus>
@@ -233,6 +235,28 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
     }
 }
 
+namespace {
+
+// 40 x 25ms: comfortably longer than a child needs to reach its open() and
+// exit, and short enough that nobody watching an exit would call it a hang.
+constexpr int kCleanUpAttempts = 40;
+
+// True once the child has been reaped, or was never ours to reap.
+bool reaped(pid_t pid)
+{
+    int status = 0;
+    const pid_t r = waitpid(pid, &status, WNOHANG);
+    return r == pid || (r < 0 && errno == ECHILD);
+}
+
+void sleepBriefly()
+{
+    struct timespec ts = {0, 25L * 1000L * 1000L};   // 25ms
+    nanosleep(&ts, nullptr);
+}
+
+} // namespace
+
 void ProcessScopedSuspendInhibitor::CleanUp()
 {
     // Close the FIFO, which will unblock the child process
@@ -241,12 +265,61 @@ void ProcessScopedSuspendInhibitor::CleanUp()
         close(_controlFd);
         _controlFd = -1;
     }
-    
-    // Wait for the child process to exit (prevents zombie processes)
+
+    // Wait for the child process to exit (prevents zombie processes).
+    //
+    // Closing the write end above is normally all it takes: the `cat` the
+    // inhibitor tool is running sees EOF and exits, the tool exits with it,
+    // and the wait returns at once.
+    //
+    // It is not enough when the write finished before that `cat` got as far
+    // as opening the FIFO. A FIFO open for reading blocks until a writer
+    // appears, and ours has already gone -- so `cat` waits for a writer that
+    // will never come, the inhibitor tool waits on `cat`, and an unbounded
+    // wait here waits on both. For ever. A small image, or a fast target, is
+    // enough to lose that race, and the whole application then never exits:
+    // `rpi-imager --cli` reports the write succeeded and hangs, which in a
+    // provisioning script wedges the pipeline.
+    //
+    // So: give any reader stuck in open() the writer it is waiting for, by
+    // reopening the FIFO briefly. That lets its open() complete, and closing
+    // again delivers the EOF it was supposed to get in the first place.
+    // O_RDWR because opening a FIFO write-only would block in turn.
     if (_childPid > 0)
     {
-        int status;
-        waitpid(_childPid, &status, 0);
+        bool done = reaped(_childPid);
+
+        for (int attempt = 0; !done && attempt < kCleanUpAttempts; ++attempt)
+        {
+            if (_fifoName[0])
+            {
+                const int nudge = open(_fifoName, O_RDWR | O_CLOEXEC | O_NONBLOCK);
+                if (nudge >= 0)
+                    close(nudge);
+            }
+            sleepBriefly();
+            done = reaped(_childPid);
+        }
+
+        // Still there: it is not waiting on us any more, whatever it is
+        // waiting on. Nothing about a suspend inhibitor is worth holding an
+        // exit open for.
+        if (!done)
+        {
+            kill(_childPid, SIGTERM);
+            for (int attempt = 0; !done && attempt < kCleanUpAttempts; ++attempt)
+            {
+                sleepBriefly();
+                done = reaped(_childPid);
+            }
+            if (!done)
+            {
+                kill(_childPid, SIGKILL);
+                int status = 0;
+                waitpid(_childPid, &status, 0);   // SIGKILL cannot be ignored
+            }
+        }
+
         _childPid = -1;
     }
     
