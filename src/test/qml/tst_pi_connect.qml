@@ -403,4 +403,64 @@ TestCase {
 
         endOrgMode()
     }
+
+    // ── Where the switch sits in the tab ring ─────────────────────────
+    //
+    // The ring a wizard step builds is Next, then Back, Skip and App
+    // Options, and only then the page's own controls. On a page that is one
+    // switch and what follows from it, that leaves the switch four presses
+    // from the start -- so this step asks for its controls to come straight
+    // after Next instead.
+
+    // The ring as it is actually wired, walked along KeyNavigation.tab.
+    function tabRing() {
+        var seen = []
+        var cur = step.nextButtonItem
+        for (var i = 0; i < 30 && cur && seen.indexOf(cur) === -1; i++) {
+            seen.push(cur)
+            cur = cur.KeyNavigation.tab
+        }
+        return seen
+    }
+
+    function test_the_switch_comes_straight_after_next() {
+        waitForRendering(step)
+        var ring = tabRing()
+        verify(ring.length > 2, "the ring was walked")
+        compare(ring[0], step.nextButtonItem, "the walk started at Next")
+        compare(ring[1], child("connectUseTokenToggle").focusItem,
+                "the switch is the next thing reached")
+    }
+
+    function test_the_secondary_buttons_come_after_the_page_controls() {
+        // Back and Skip still exist, and still come round -- behind the
+        // controls rather than in front of them.
+        waitForRendering(step)
+        var ring = tabRing()
+        var pill = ring.indexOf(child("connectUseTokenToggle").focusItem)
+        var back = ring.indexOf(step.backButtonItem)
+        var skip = ring.indexOf(step.skipButtonItem)
+        verify(pill !== -1, "the switch is in the ring")
+        verify(back !== -1, "so is Back")
+        verify(skip !== -1, "and Skip")
+        verify(pill < back, "the switch comes before Back")
+        verify(back < skip, "and Back still comes before Skip")
+    }
+
+    function test_turning_it_on_keeps_its_own_controls_together() {
+        // Enabling reveals the sign-in button, which is the next thing to do
+        // on the page. It belongs with the switch, ahead of Back, not on the
+        // far side of the secondary buttons.
+        var pill = child("connectUseTokenToggle")
+        mouseClick(pill.focusItem)
+        tryVerify(function () { return pill.checked }, 3000, "Connect is on")
+        waitForRendering(step)
+
+        var ring = tabRing()
+        var back = ring.indexOf(step.backButtonItem)
+        var signIn = ring.indexOf(child("connectOpenSignInButton"))
+        verify(signIn !== -1, "the sign-in button is reachable")
+        verify(back !== -1, "and Back is still in the ring")
+        verify(signIn < back, "with sign-in ahead of it")
+    }
 }

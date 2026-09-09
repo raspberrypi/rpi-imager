@@ -39,6 +39,15 @@ FocusScope {
     property alias customButtonContainer: customButtonArea.children
     // Step may set the first item to receive focus when the step becomes visible
     property var initialFocusItem: null
+    // Where the page's own controls sit in the tab ring.
+    //
+    // The ring is normally Next, Back, Skip, App Options and then the
+    // fields, which puts a page whose whole purpose is one control four
+    // presses away from it. A step can ask for its controls to come
+    // immediately after Next instead; the secondary buttons then follow
+    // them. Opt-in rather than the default, so the order every other step
+    // has is left alone.
+    property bool fieldsFollowNextButton: false
     // Expose action buttons for KeyNavigation in child content
     property alias nextButtonItem: nextButton
     property alias backButtonItem: backButton
@@ -321,18 +330,25 @@ FocusScope {
         }
         _focusableItems = items
 
-        // Build complete navigation chain in order: Next -> Back -> Skip -> App Options -> Fields
+        // Build complete navigation chain in order: Next -> Back -> Skip -> App Options -> Fields,
+        // or Next -> Fields -> Back -> Skip -> App Options where the step asked for it.
         var navigationChain = []
         
         // Add navigation buttons in order (include if visible, regardless of enabled state)
         if (nextButton.visible) navigationChain.push(nextButton)
+        if (fieldsFollowNextButton) {
+            for (var f = 0; f < _focusableItems.length; f++)
+                navigationChain.push(_focusableItems[f])
+        }
         if (backButton.visible) navigationChain.push(backButton)
         if (skipButton.visible) navigationChain.push(skipButton)
         if (appOptionsButton && appOptionsButton.visible) navigationChain.push(appOptionsButton)
         
         // Add all focusable fields
-        for (var i = 0; i < _focusableItems.length; i++) {
-            navigationChain.push(_focusableItems[i])
+        if (!fieldsFollowNextButton) {
+            for (var i = 0; i < _focusableItems.length; i++) {
+                navigationChain.push(_focusableItems[i])
+            }
         }
         
         // Wire the complete chain with perfect circular navigation
