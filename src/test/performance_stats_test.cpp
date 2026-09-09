@@ -20,6 +20,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QThread>
 #include <QUuid>
 
@@ -669,4 +670,39 @@ TEST_CASE("PerformanceStats survives a total smaller than the progress", "[perfs
     stats.endSession(true);
 
     CHECK(stats.exportToJson().isObject());
+}
+
+// ---------------------------------------------------------------------------
+// The names events are exported under
+//
+// The performance report is what somebody attaches to a support thread when a
+// write was slow or failed, and every event in it is identified by the string
+// below rather than by its enum value. An event with no name of its own is
+// exported as "unknown", and two events sharing a name are merged into one row
+// by the summary -- in both cases the report reads as though the thing that
+// went wrong never happened.
+//
+// One case over the whole table, because the table is the kind that grows an
+// entry at a time and the missing one is never the one anybody checks.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Every event type is exported under a name of its own",
+          "[performancestats]")
+{
+    QSet<QString> seen;
+    for (int i = 0; i < static_cast<int>(PerformanceStats::EventType::_Count); ++i) {
+        const auto type = static_cast<PerformanceStats::EventType>(i);
+        const QString name = PerformanceStats::eventTypeName(type);
+
+        INFO("EventType " << i << " is named \"" << name.toStdString() << "\"");
+        CHECK_FALSE(name.isEmpty());
+        // "unknown" is the fallback for a value with no entry in the table.
+        CHECK(name != QStringLiteral("unknown"));
+        // Shared names are silently merged in the exported summary, which is
+        // keyed by name.
+        CHECK_FALSE(seen.contains(name));
+        seen.insert(name);
+    }
+
+    CHECK(seen.size() == static_cast<int>(PerformanceStats::EventType::_Count));
 }
