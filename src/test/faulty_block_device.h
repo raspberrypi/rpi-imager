@@ -15,8 +15,11 @@
 // its real capacity and errors beyond it.
 //
 // Creating the mapping needs root, so callers should skip when
-// canRunPrivileged() is false -- matching how disk_formatter_test handles
+// canInjectFaults() is false -- matching how disk_formatter_test handles
 // privileged setup.
+//
+// macOS has no device-mapper; faults come from dyld interposition instead
+// (faulty_io_interpose.c).
 
 #ifndef RPI_IMAGER_TEST_FAULTY_BLOCK_DEVICE_H_
 #define RPI_IMAGER_TEST_FAULTY_BLOCK_DEVICE_H_
@@ -30,18 +33,28 @@
 #include <QStringList>
 #include <QThread>
 #include <QUuid>
+#include <QtGlobal>
 
 #include <memory>
 #include "fixture_process.h"
+
+#ifdef Q_OS_MACOS
+#include <dlfcn.h>
+#include <cstdint>
+#endif
 
 namespace rpi_imager::testing {
 
 inline bool canRunPrivileged()
 {
+#ifdef Q_OS_MACOS
+    return false;
+#else
     QProcess probe;
     probe.start(QStringLiteral("sudo"), {QStringLiteral("-n"), QStringLiteral("true")});
     probe.waitForFinished(10000);
     return probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
+#endif
 }
 
 inline bool runPrivileged(const QString &program, const QStringList &args, QByteArray *stdOut = nullptr)
@@ -52,6 +65,66 @@ inline bool runPrivileged(const QString &program, const QStringList &args, QByte
     if (stdOut)
         *stdOut = proc.readAllStandardOutput();
     return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
+}
+
+#ifdef Q_OS_MACOS
+namespace detail {
+
+using ArmFn      = int (*)(const char *, std::uint64_t, std::uint64_t, std::uint64_t,
+                           std::uint64_t);
+using DisarmFn   = void (*)();
+using FailuresFn = std::uint64_t (*)();
+
+inline ArmFn armFn()
+{
+    static ArmFn fn = reinterpret_cast<ArmFn>(dlsym(RTLD_DEFAULT, "rpi_faulty_arm"));
+    return fn;
+}
+
+inline DisarmFn disarmFn()
+{
+    static DisarmFn fn = reinterpret_cast<DisarmFn>(dlsym(RTLD_DEFAULT, "rpi_faulty_disarm"));
+    return fn;
+}
+
+inline FailuresFn failuresFn()
+{
+    static FailuresFn fn =
+        reinterpret_cast<FailuresFn>(dlsym(RTLD_DEFAULT, "rpi_faulty_injected_failures"));
+    return fn;
+}
+
+} // namespace detail
+#endif
+
+inline bool canInjectFaults()
+{
+#ifdef Q_OS_MACOS
+    return detail::armFn() != nullptr;
+#else
+    return canRunPrivileged();
+#endif
+}
+
+// -1 on Linux: the count is the kernel's.
+inline qint64 faultsInjected()
+{
+#ifdef Q_OS_MACOS
+    if (auto fn = detail::failuresFn())
+        return static_cast<qint64>(fn());
+#endif
+    return -1;
+}
+
+// macOS runs async writes on a DISPATCH_QUEUE_SERIAL, so N delayed writes
+// cost N delays there; io_uring overlaps them.
+inline bool asyncWritesOverlap()
+{
+#ifdef Q_OS_MACOS
+    return false;
+#else
+    return true;
+#endif
 }
 
 // A plain loop device backed by a temporary file.
@@ -66,11 +139,17 @@ inline bool runPrivileged(const QString &program, const QStringList &args, QByte
 // set a device up by hand. In practice that meant never: the whole group sat
 // skipped in every run. This provisions one where the suite is allowed to,
 // and still skips where it is not.
+//
+// Linux only: OpenDevice() routes /dev/ paths through authopen's GUI
+// prompt, hanging CI.
 class LoopDevice
 {
 public:
     explicit LoopDevice(int megabytes)
     {
+#ifdef Q_OS_MACOS
+        Q_UNUSED(megabytes)
+#else
         if (!canRunPrivileged())
             return;
 
@@ -102,6 +181,7 @@ public:
         // Writable by this user, so the imager opens it without being root.
         runPrivileged(QStringLiteral("chmod"), {QStringLiteral("0666"), _loop});
         _ready = QFileInfo::exists(_loop);
+#endif
     }
 
     ~LoopDevice()
@@ -203,7 +283,81 @@ public:
     {
     }
 
+    FaultyDevice(const FaultyDevice &) = delete;
+    FaultyDevice &operator=(const FaultyDevice &) = delete;
+
 private:
+    static constexpr qint64 kMB = 1024 * 1024;
+
+#ifdef Q_OS_MACOS
+    // A regular file, not /dev/rdiskN, per authopen above. Sized
+    // exactly: the writer fstats it.
+    FaultyDevice(int totalMegabytes, int goodMegabytes, int bandStartMB, int bandLenMB,
+                 int writeDelayMs)
+    {
+        const auto arm = detail::armFn();
+        if (!arm)
+            return;
+
+        _dir = QDir::temp().filePath(
+            QStringLiteral("rpi-imager-faulty-%1")
+                .arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
+        if (!QDir().mkpath(_dir))
+            return;
+        _path = QDir(_dir).filePath(QStringLiteral("backing.img"));
+
+        const qint64 totalBytes = static_cast<qint64>(totalMegabytes) * kMB;
+        QFile f(_path);
+        if (!f.open(QIODevice::WriteOnly) || !f.resize(totalBytes))
+            return;
+        f.close();
+
+        qint64 badStart = 0, badLen = 0;
+        if (writeDelayMs > 0) {
+            // Nothing fails; writes just take time.
+        } else if (bandStartMB >= 0) {
+            // good | error | good
+            badStart = static_cast<qint64>(bandStartMB) * kMB;
+            badLen = static_cast<qint64>(bandLenMB) * kMB;
+            if (badStart + badLen > totalBytes)
+                return;
+        } else if (goodMegabytes < totalMegabytes) {
+            // good | error, to the end.
+            badStart = static_cast<qint64>(goodMegabytes) * kMB;
+            badLen = totalBytes - badStart;
+        }
+        // else: fully writable, separating device from harness.
+
+        if (arm(_path.toLocal8Bit().constData(), static_cast<std::uint64_t>(totalBytes),
+                static_cast<std::uint64_t>(badStart), static_cast<std::uint64_t>(badLen),
+                static_cast<std::uint64_t>(writeDelayMs) * 1000000ull) != 0)
+            return;
+
+        _armed = true;
+    }
+
+public:
+    ~FaultyDevice()
+    {
+        // Process-wide state: a fault left set would follow later tests.
+        if (_armed) {
+            if (auto disarm = detail::disarmFn())
+                disarm();
+        }
+        if (!_dir.isEmpty())
+            QDir(_dir).removeRecursively();
+    }
+
+    bool isReady() const { return _armed && QFileInfo::exists(_path); }
+    QString path() const { return _path; }
+
+private:
+    QString _dir;
+    QString _path;
+    bool _armed = false;
+
+#else  // Linux: a device-mapper table over a loop device.
+
     FaultyDevice(int totalMegabytes, int goodMegabytes, int bandStartMB, int bandLenMB,
                  int writeDelayMs)
         // Unique per instance, not just per process: two of these exist in
@@ -221,7 +375,7 @@ private:
 
         QFile f(_backing);
         if (!f.open(QIODevice::WriteOnly) ||
-            !f.resize(static_cast<qint64>(totalMegabytes) * 1024 * 1024))
+            !f.resize(static_cast<qint64>(totalMegabytes) * kMB))
             return;
         f.close();
 
@@ -235,10 +389,8 @@ private:
         if (!_loop.startsWith(QStringLiteral("/dev/loop")))
             return;
 
-        const qint64 goodSectors = static_cast<qint64>(goodMegabytes) * 1024 * 1024 / 512;
-        const qint64 totalSectors = static_cast<qint64>(totalMegabytes) * 1024 * 1024 / 512;
-        // A fully writable device when asked for one, so a control case can
-        // tell "the device failed" from "the harness is broken".
+        const qint64 goodSectors = static_cast<qint64>(goodMegabytes) * kMB / 512;
+        const qint64 totalSectors = static_cast<qint64>(totalMegabytes) * kMB / 512;
         QString table;
         if (writeDelayMs > 0) {
             // dm-delay is a separate module from dm-mod, and dmsetup does not
@@ -254,8 +406,8 @@ private:
                         .arg(writeDelayMs);
         } else if (bandStartMB >= 0) {
             // good | error | good
-            const qint64 bandStart = static_cast<qint64>(bandStartMB) * 1024 * 1024 / 512;
-            const qint64 bandLen = static_cast<qint64>(bandLenMB) * 1024 * 1024 / 512;
+            const qint64 bandStart = static_cast<qint64>(bandStartMB) * kMB / 512;
+            const qint64 bandLen = static_cast<qint64>(bandLenMB) * kMB / 512;
             const qint64 tailStart = bandStart + bandLen;
             if (tailStart > totalSectors)
                 return;
@@ -315,9 +467,6 @@ public:
         QDir(_dir).removeRecursively();
     }
 
-    FaultyDevice(const FaultyDevice &) = delete;
-    FaultyDevice &operator=(const FaultyDevice &) = delete;
-
     bool isReady() const { return _mapped && QFileInfo::exists(path()); }
     QString path() const { return QStringLiteral("/dev/mapper/") + _name; }
 
@@ -327,8 +476,8 @@ private:
     QString _backing;
     QString _loop;
     bool _mapped = false;
+#endif
 };
-
 
 }  // namespace rpi_imager::testing
 

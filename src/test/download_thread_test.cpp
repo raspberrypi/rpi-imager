@@ -1835,22 +1835,22 @@ TEST_CASE("DownloadThread applies rpi-preseed customisation", "[download][custom
 
 namespace {
 
-using rpi_imager::testing::canRunPrivileged;
+using rpi_imager::testing::canInjectFaults;
 using rpi_imager::testing::FaultyDevice;
 
 } // namespace
 
 #define REQUIRE_FAULTY(device)                                                                     \
-    if (!canRunPrivileged())                                                                       \
-        SKIP("passwordless sudo is unavailable, so no faulty device can be built");                \
+    if (!canInjectFaults())                                                                       \
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");                \
     if (!(device).isReady())                                                                       \
-    SKIP("the device-mapper fault injection device could not be created")
+    SKIP("the faulty device could not be created")
 
 TEST_CASE("DownloadThread reports a device that fails partway through a write",
           "[download][faulty]")
 {
-    if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     FaultyDevice device(64, 16);
     REQUIRE_FAULTY(device);
@@ -1894,8 +1894,8 @@ TEST_CASE("DownloadThread reports a device that fails partway through a write",
 TEST_CASE("DownloadThread reports a faulty device under async I/O",
           "[download][faulty]")
 {
-    if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     FaultyDevice device(64, 16);
     REQUIRE_FAULTY(device);
@@ -1924,8 +1924,8 @@ TEST_CASE("DownloadThread reports a faulty device under async I/O",
 TEST_CASE("DownloadThread writes successfully within the good region",
           "[download][faulty]")
 {
-    if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     // Fully writable: the control case. Note it has to be *fully* writable,
     // not merely large enough for the payload -- the imager deliberately
@@ -1976,8 +1976,8 @@ TEST_CASE("An image larger than the device is refused, not half-written",
     // What matters is that it stops and says so. Reporting success would
     // leave the user with a card holding a truncated image: it may even mount
     // and appear to have worked, and only fails to boot later.
-    if (!rpi_imager::testing::canRunPrivileged())
-        SKIP("needs root or passwordless sudo to create a loop device");
+    if (!rpi_imager::testing::canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     FaultyDevice device(32, 32);
     REQUIRE_FAULTY(device);
@@ -2246,8 +2246,8 @@ TEST_CASE("DownloadThread skips customisation without an init format",
 TEST_CASE("DownloadThread detects a card that lies about its capacity",
           "[download][faulty]")
 {
-    if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     // Claims 64MB, only the first 48MB are real.
     FaultyDevice device(64, 48);
@@ -2277,8 +2277,8 @@ TEST_CASE("DownloadThread detects a card that lies about its capacity",
 TEST_CASE("DownloadThread can be told to skip the end-of-device check",
           "[download][faulty]")
 {
-    if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     FaultyDevice device(64, 48);
     REQUIRE_FAULTY(device);

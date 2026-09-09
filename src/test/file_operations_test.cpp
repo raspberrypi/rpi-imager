@@ -431,15 +431,15 @@ static std::unique_ptr<std::uint8_t[], void (*)(void *)> alignedBuffer(std::size
 }
 
 TEST_CASE("Async writes report a device that fails partway", "[file-ops][faulty]") {
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
   FaultyDevice device(64, 8);
   if (!device.isReady())
-    SKIP("the device-mapper fault injection device could not be created");
+    SKIP("the faulty device could not be created");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -475,15 +475,15 @@ TEST_CASE("Async writes report a device that fails partway", "[file-ops][faulty]
 }
 
 TEST_CASE("Async write callbacks see the failure", "[file-ops][faulty]") {
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
   FaultyDevice device(64, 8);
   if (!device.isReady())
-    SKIP("the device-mapper fault injection device could not be created");
+    SKIP("the faulty device could not be created");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -518,17 +518,17 @@ TEST_CASE("Async write callbacks see the failure", "[file-ops][faulty]") {
 
 TEST_CASE("Writes succeed inside the good region of a mapped device",
           "[file-ops][faulty]") {
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
   // Fully mapped: the control case, so a failure above is the device rather
   // than the harness.
   FaultyDevice device(32, 32);
   if (!device.isReady())
-    SKIP("the device-mapper fault injection device could not be created");
+    SKIP("the faulty device could not be created");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -1308,15 +1308,15 @@ TEST_CASE("A write replayed onto a device that has stopped taking them is report
   // the same wall, and the fallback has to say so -- carrying on in sync mode
   // over a device that is refusing writes is how a write reports success with
   // half an image on the card.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
   FaultyDevice device(64, 8);
   if (!device.isReady())
-    SKIP("the device-mapper fault injection device could not be created");
+    SKIP("the faulty device could not be created");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -1441,15 +1441,15 @@ TEST_CASE("A read that hits a bad sector is reported, not returned as data",
   // in the buffer into the hash, and the user is shown a verification mismatch
   // -- pointing at the write, which was fine -- instead of a read error on a
   // card that has developed a bad sector.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
   FaultyDevice device(64, 8);
   if (!device.isReady())
-    SKIP("the device-mapper fault injection device could not be created");
+    SKIP("the faulty device could not be created");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -1485,15 +1485,18 @@ TEST_CASE("A card slow enough to matter makes the writer back off",
   //
   // dm-delay holds each write for longer than that threshold. Reads are left
   // at full speed, so the check that the data actually landed costs nothing.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
+
+  if (!rpi_imager::testing::asyncWritesOverlap())
+    SKIP("this platform writes serially, so the delays would not overlap");
 
   FaultyDevice device(64, FaultyDevice::SlowWrites{11000});
   if (!device.isReady())
-    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+    SKIP("the delaying device could not be created (dm-delay?)");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -1553,15 +1556,18 @@ TEST_CASE("Cancelling a busy card is answered without waiting it out",
   // What must not happen is the outstanding writes being reported as write
   // errors: the user asked for this, and a failure dialog for a cancellation
   // sends them looking for a fault in the card.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
+
+  if (!rpi_imager::testing::asyncWritesOverlap())
+    SKIP("this platform writes serially, so the delays would not overlap");
 
   FaultyDevice device(64, FaultyDevice::SlowWrites{4000});
   if (!device.isReady())
-    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+    SKIP("the delaying device could not be created (dm-delay?)");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -1617,15 +1623,18 @@ TEST_CASE("A write waiting for a queue slot answers a cancel",
   // the write reported as cancelled rather than as an error -- and it has to
   // be reported at all, or the extract loop sees a success for data that was
   // never queued and moves its cursor past it.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
+
+  if (!rpi_imager::testing::asyncWritesOverlap())
+    SKIP("this platform writes serially, so the delays would not overlap");
 
   FaultyDevice device(64, FaultyDevice::SlowWrites{6000});
   if (!device.isReady())
-    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+    SKIP("the delaying device could not be created (dm-delay?)");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -1726,16 +1735,19 @@ TEST_CASE("A drain waits while the queue is still going down",
   //
   // The completions are staggered so the pending count is seen falling rather
   // than jumping straight to zero, which is what the progress arm is for.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
+
+  if (!rpi_imager::testing::asyncWritesOverlap())
+    SKIP("this platform writes serially, so the delays would not overlap");
 
   constexpr int kDelayMs = 1500;
   FaultyDevice device(64, FaultyDevice::SlowWrites{kDelayMs});
   if (!device.isReady())
-    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+    SKIP("the delaying device could not be created (dm-delay?)");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
@@ -1788,17 +1800,20 @@ TEST_CASE("A card that stops answering has the write abandoned, not waited on",
   // Timing out is only half of it. The handle is closed as the timeout fires,
   // so that anything that carries on writing gets an error rather than
   // quietly addressing a file descriptor number that has since been reused.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no unresponsive device exists");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
+
+  if (!rpi_imager::testing::asyncWritesOverlap())
+    SKIP("this platform writes serially, so the delays would not overlap");
 
   // Longer than kSyncWriteTimeoutSeconds, so the timeout is what ends the
   // write; not much longer, so the device is free again shortly afterwards.
   FaultyDevice device(64, FaultyDevice::SlowWrites{33000});
   if (!device.isReady())
-    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+    SKIP("the delaying device could not be created (dm-delay?)");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);

@@ -5908,8 +5908,8 @@ TEST_CASE("A card that fails part-way through is reported", "[imagewriter][fault
 {
     using namespace rpi_imager::testing;
 
-    if (!canRunPrivileged())
-        SKIP("needs root to create the device-mapper table that injects EIO");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     // 64 MB of device, of which only the first 8 MB accept writes.
     FaultyDevice card(64, 8);
@@ -5940,8 +5940,8 @@ TEST_CASE("A card that fails is not reported as verified", "[imagewriter][faulty
 {
     using namespace rpi_imager::testing;
 
-    if (!canRunPrivileged())
-        SKIP("needs root to create the device-mapper table that injects EIO");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     FaultyDevice card(64, 8);
     if (!card.isReady())
@@ -5969,8 +5969,8 @@ TEST_CASE("A card large enough for the image succeeds on the same harness", "[im
 {
     using namespace rpi_imager::testing;
 
-    if (!canRunPrivileged())
-        SKIP("needs root to create the device-mapper table that injects EIO");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     // Same mapping, but every megabyte is good. Without this the case above
     // would pass for any reason at all -- a broken harness included.
@@ -6629,8 +6629,8 @@ TEST_CASE("A card that fails mid-write reports it", "[imagewriter][faulty]")
 {
     using namespace rpi_imager::testing;
 
-    if (!canRunPrivileged())
-        SKIP("needs root to create the device-mapper table that injects EIO");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     // Writable at both ends, failing from 16 MB to 32 MB. Both ends matter:
     // the end-of-device check during preparation writes to the last
@@ -6666,8 +6666,8 @@ TEST_CASE("A card failing mid-write in sync mode reports it too", "[imagewriter]
 {
     using namespace rpi_imager::testing;
 
-    if (!canRunPrivileged())
-        SKIP("needs root to create the device-mapper table that injects EIO");
+    if (!canInjectFaults())
+        SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
     FaultyDevice card(64, FaultyDevice::BadBand{16, 16});
     if (!card.isReady())

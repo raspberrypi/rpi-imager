@@ -26,9 +26,28 @@ include(Catch)
 # fixtures or hardware are absent (the pieeprom and eeprom_signer ones) were
 # accounting for six phantom failures. Use this in place of
 # catch_discover_tests() so a new test binary cannot reintroduce them.
+# Pass FAULT_INJECTION for a target using faulty_block_device.h, to insert the
+# macOS interposer at launch -- dyld only honours __interpose in an image
+# present then, so linking it would not do.
 function(rpi_discover_tests target)
-    catch_discover_tests(${target} PROPERTIES SKIP_RETURN_CODE 4)
+    set(_extra_props "")
+    if(APPLE AND "FAULT_INJECTION" IN_LIST ARGN)
+        add_dependencies(${target} faulty_io_interpose)
+        list(APPEND _extra_props
+             ENVIRONMENT "DYLD_INSERT_LIBRARIES=${RPI_FAULTY_INTERPOSE_LIB}")
+    endif()
+    catch_discover_tests(${target} PROPERTIES SKIP_RETURN_CODE 4 ${_extra_props})
 endfunction()
+
+# Inert until a test arms it, so it costs every other test one atomic load
+# per pwrite.
+if(APPLE)
+    add_library(faulty_io_interpose SHARED faulty_io_interpose.c)
+    set_target_properties(faulty_io_interpose PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set(RPI_FAULTY_INTERPOSE_LIB
+        "${CMAKE_CURRENT_BINARY_DIR}/libfaulty_io_interpose.dylib")
+endif()
 
 # Link liburing into a target that compiles the platform file_operations.
 #
@@ -1305,7 +1324,7 @@ target_compile_options(file_operations_test PRIVATE
 )
 
 rpi_link_platform_file_ops(file_operations_test)
-rpi_discover_tests(file_operations_test)
+rpi_discover_tests(file_operations_test FAULT_INJECTION)
 
 add_custom_target(test_file_operations
     COMMAND file_operations_test
@@ -1816,7 +1835,7 @@ if(NOT BUILD_CLI_ONLY)
     target_link_libraries(image_writer_test PRIVATE Catch2::Catch2 rpi_imager_testable)
     target_compile_definitions(image_writer_test PRIVATE
         IMAGER_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
-    rpi_discover_tests(image_writer_test)
+    rpi_discover_tests(image_writer_test FAULT_INJECTION)
 
 # The keyboard probe is declared with the other Linux-only probes above; the
 # definition has to come after this target exists.
@@ -2225,7 +2244,7 @@ rpi_link_platform_file_ops(download_thread_test)
 
 target_compile_features(download_thread_test PRIVATE cxx_std_20)
 
-rpi_discover_tests(download_thread_test)
+rpi_discover_tests(download_thread_test FAULT_INJECTION)
 
 # ============================================================================
 # DownloadExtractThread
