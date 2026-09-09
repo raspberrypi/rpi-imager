@@ -497,6 +497,7 @@ FileError MacOSFileOperations::ReadSequential(std::uint8_t* data, std::size_t si
   }
   ssize_t result = ::pread(fd_, dst, aligned_size, (off_t)async_write_offset_);
   if (result < 0) {
+    last_error_code_ = errno;
     bytes_read = 0;
     return FileError::kReadError;
   }
@@ -522,6 +523,7 @@ FileError MacOSFileOperations::Seek(std::uint64_t position) {
   WaitForPendingWrites();
 
   if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
+    last_error_code_ = errno;
     return FileError::kSeekError;
   }
 
