@@ -2025,6 +2025,43 @@ rpi_discover_tests(oslist_parser_test)
 # Header-only, and shared by both write paths so they cannot drift apart
 # again -- drifting apart is how the substring bug came to exist in two
 # places at once.
+# ── hardware detection ──────────────────────────────────────────────────────
+# The embedded build reads the board's revision code to decide which images it
+# is offered. The desktop build links a stub instead, so the real one is
+# compiled only here; it reads /proc/cpuinfo from a hardcoded path, which the
+# driver replaces inside a mount namespace.
+add_executable(device_info_probe
+    ${CMAKE_CURRENT_SOURCE_DIR}/../embedded/device_info.cpp
+    device_info_probe.cpp
+)
+
+target_include_directories(device_info_probe PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(device_info_probe PRIVATE Qt6::Core)
+target_compile_features(device_info_probe PRIVATE cxx_std_20)
+
+add_executable(device_info_test device_info_test.cpp)
+
+target_include_directories(device_info_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(device_info_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_definitions(device_info_test PRIVATE
+    DEVICE_INFO_PROBE_BINARY="$<TARGET_FILE:device_info_probe>")
+
+target_compile_features(device_info_test PRIVATE cxx_std_20)
+
+add_dependencies(device_info_test device_info_probe)
+
+rpi_discover_tests(device_info_test)
+
 # ── suspend inhibition ──────────────────────────────────────────────────────
 # The machine must not go to sleep while a card is being written, and letting
 # go of the inhibit must not hold the application open afterwards. The FIFO it
