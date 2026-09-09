@@ -2339,3 +2339,332 @@ TEST_CASE("A directory whose cluster chain loops is refused, not followed",
 // and mtools do not produce and which would have to be assembled entry by
 // entry. Left as a known gap rather than a test that cannot be built
 // honestly.
+
+// ══════════════════════════════════════════════════════════════
+// The same loop, one directory down
+//
+// The note above left the other two walkers uncovered because a loop in the
+// root directory is caught when the partition is opened, before readFile()
+// or deleteFile() can be called. Putting the loop in a subdirectory gets
+// past that: the root walks cleanly, the partition opens, and the loop is
+// only met when something goes looking inside.
+//
+// Which is the case that matters. Customisation writes go into the boot
+// partition and its subdirectories, and both of these are called with a
+// path -- readFile("overlays/x") when checking what is already there,
+// deleteFile("overlays/x") when replacing it. A walker that follows the loop
+// does not fail; it stops, part-way through configuring a card, with nothing
+// on screen and a half-written filesystem in the reader.
+//
+// mkfs and mtools never produce a loop, so the fixture builds one: create a
+// subdirectory, fill it until its chain runs to three clusters, then point
+// the second cluster back at the first.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// The 8.3 name is chosen so mtools writes no long-name entries for the
+// directory itself, which keeps finding it in the root a matter of matching
+// eleven bytes.
+const char *const kLoopDirShortName = "LOOPDIR    ";
+const QString kLoopDirName = QStringLiteral("LOOPDIR");
+
+// Everything readGeometry() collects, plus what is needed to turn a cluster
+// number into a byte offset.
+struct Fat32DataArea {
+    Fat32Geometry base;
+    quint8  sectorsPerCluster = 0;
+    quint32 firstDataSector = 0;
+};
+
+Fat32DataArea readDataArea(const QString &imagePath)
+{
+    Fat32DataArea d;
+    d.base = readGeometry(imagePath);
+    QFile f(imagePath);
+    if (!f.open(QIODevice::ReadOnly))
+        return d;
+    const QByteArray boot = f.read(512);
+    f.close();
+    if (boot.size() < 512)
+        return d;
+    auto u16 = [&](int at) {
+        return quint16(quint8(boot.at(at))) | (quint16(quint8(boot.at(at + 1))) << 8);
+    };
+    auto u32 = [&](int at) {
+        return quint32(quint8(boot.at(at)))
+             | (quint32(quint8(boot.at(at + 1))) << 8)
+             | (quint32(quint8(boot.at(at + 2))) << 16)
+             | (quint32(quint8(boot.at(at + 3))) << 24);
+    };
+    d.sectorsPerCluster = quint8(boot.at(13));
+    const quint16 reservedSectors = u16(14);
+    const quint8  numberOfFats    = quint8(boot.at(16));
+    const quint32 sectorsPerFat   = u32(36);
+    d.firstDataSector = quint32(reservedSectors) + quint32(numberOfFats) * sectorsPerFat;
+    return d;
+}
+
+qint64 clusterByteOffset(const Fat32DataArea &d, quint32 cluster)
+{
+    if (d.sectorsPerCluster == 0 || cluster < 2)
+        return -1;
+    return (qint64(d.firstDataSector) + qint64(cluster - 2) * d.sectorsPerCluster)
+           * d.base.bytesPerSector;
+}
+
+// The first cluster of the named directory, found by matching its 8.3 name
+// among the root directory's entries. 0 when it is not there.
+quint32 directoryFirstCluster(const QString &imagePath, const Fat32DataArea &d,
+                              const char *shortName)
+{
+    const qint64 at = clusterByteOffset(d, d.base.rootCluster);
+    if (at < 0)
+        return 0;
+    QFile f(imagePath);
+    if (!f.open(QIODevice::ReadOnly) || !f.seek(at))
+        return 0;
+    const int clusterBytes = int(d.sectorsPerCluster) * int(d.base.bytesPerSector);
+    const QByteArray root = f.read(clusterBytes);
+    f.close();
+
+    for (int off = 0; off + 32 <= root.size(); off += 32) {
+        if (root.at(off) == '\0')
+            break;                                  // end of directory
+        if (quint8(root.at(off)) == 0xE5)
+            continue;                               // deleted
+        const quint8 attr = quint8(root.at(off + 11));
+        if ((attr & 0x0F) == 0x0F)
+            continue;                               // long-name fragment
+        if (!(attr & 0x10))
+            continue;                               // not a directory
+        if (std::memcmp(root.constData() + off, shortName, 11) != 0)
+            continue;
+        const quint16 hi = quint16(quint8(root.at(off + 20)))
+                         | (quint16(quint8(root.at(off + 21))) << 8);
+        const quint16 lo = quint16(quint8(root.at(off + 26)))
+                         | (quint16(quint8(root.at(off + 27))) << 8);
+        return (quint32(hi) << 16) | quint32(lo);
+    }
+    return 0;
+}
+
+bool fillSubdirectory(const QString &imagePath, int fileCount)
+{
+    if (!runMtool(QStringLiteral("mmd"),
+                  {QStringLiteral("-i"), imagePath,
+                   QStringLiteral("::/") + kLoopDirName}))
+        return false;
+
+    ScopedTempDir sources(QStringLiteral("rpi-imager-fatsub"));
+    QStringList args;
+    args << QStringLiteral("-i") << imagePath << QStringLiteral("-o");
+    for (int i = 0; i < fileCount; ++i) {
+        const QString name = QStringLiteral("a-file-with-a-fairly-long-name-%1.txt")
+                                 .arg(i, 3, 10, QLatin1Char('0'));
+        const QString path = sources.filePath(name);
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly))
+            return false;
+        f.write("x");
+        f.close();
+        args << path;
+    }
+    args << QStringLiteral("::/") + kLoopDirName + QStringLiteral("/");
+    return runMtool(QStringLiteral("mcopy"), args);
+}
+
+// Builds the loop. Returns false when the subdirectory did not need three
+// clusters, in which case there is nothing worth looping: the walk has to
+// cross one cluster boundary legitimately and meet the loop at the next, so
+// the cluster it lands in must itself be full.
+bool loopASubdirectory(const QString &imagePath)
+{
+    if (!fillSubdirectory(imagePath, 400))
+        return false;
+    const Fat32DataArea d = readDataArea(imagePath);
+    if (d.base.bytesPerSector == 0 || d.sectorsPerCluster == 0)
+        return false;
+
+    const quint32 first = directoryFirstCluster(imagePath, d, kLoopDirShortName);
+    if (first < 2)
+        return false;
+    const quint32 second = readFatEntry(imagePath, d.base, first);
+    if (second < 2 || second >= 0x0FFFFFF8)
+        return false;
+    const quint32 third = readFatEntry(imagePath, d.base, second);
+    if (third < 2 || third >= 0x0FFFFFF8)
+        return false;   // only two clusters: the walk would stop before the loop
+
+    return writeFatEntry(imagePath, d.base, second, first);
+}
+
+// ── A directory that is not laid out contiguously ───────────────────────
+//
+// mkfs and mtools allocate a directory's clusters one after another, so a
+// walker that ignores the FAT and just reads on gets the right answer
+// anyway. Moving one cluster elsewhere is what separates the two: reading
+// on then lands in the old copy, and following the chain lands in the new
+// one.
+
+// A cluster with nothing in it, somewhere past what the fixture has used.
+quint32 findFreeCluster(const QString &imagePath, const Fat32DataArea &d,
+                        quint32 from = 4000)
+{
+    for (quint32 c = from; c < from + 4000; ++c)
+        if (readFatEntry(imagePath, d.base, c) == 0)
+            return c;
+    return 0;
+}
+
+bool moveCluster(const QString &imagePath, const Fat32DataArea &d,
+                 quint32 from, quint32 to)
+{
+    const qint64 src = clusterByteOffset(d, from);
+    const qint64 dst = clusterByteOffset(d, to);
+    if (src < 0 || dst < 0)
+        return false;
+    const int clusterBytes = int(d.sectorsPerCluster) * int(d.base.bytesPerSector);
+    QFile f(imagePath);
+    if (!f.open(QIODevice::ReadWrite))
+        return false;
+    if (!f.seek(src))
+        return false;
+    const QByteArray body = f.read(clusterBytes);
+    if (body.size() != clusterBytes)
+        return false;
+    if (!f.seek(dst) || f.write(body) != clusterBytes)
+        return false;
+    // End-of-directory where the cluster used to be, so a walk that reads
+    // straight on rather than following the chain stops there.
+    if (!f.seek(src))
+        return false;
+    const QByteArray blank(32, '\0');
+    const bool ok = f.write(blank) == blank.size();
+    f.close();
+    return ok;
+}
+
+// Fills a subdirectory, then relocates its second cluster. Returns false
+// when the directory did not need a second cluster, or there was nowhere to
+// move it to.
+bool fragmentASubdirectory(const QString &imagePath)
+{
+    if (!fillSubdirectory(imagePath, 400))
+        return false;
+    const Fat32DataArea d = readDataArea(imagePath);
+    if (d.base.bytesPerSector == 0 || d.sectorsPerCluster == 0)
+        return false;
+
+    const quint32 first = directoryFirstCluster(imagePath, d, kLoopDirShortName);
+    if (first < 2)
+        return false;
+    const quint32 second = readFatEntry(imagePath, d.base, first);
+    if (second < 2 || second >= 0x0FFFFFF8)
+        return false;
+    const quint32 third = readFatEntry(imagePath, d.base, second);
+    if (third < 2)
+        return false;
+
+    const quint32 far = findFreeCluster(imagePath, d);
+    if (far < 2)
+        return false;
+
+    if (!moveCluster(imagePath, d, second, far))
+        return false;
+    if (!writeFatEntry(imagePath, d.base, far, third))
+        return false;
+    if (!writeFatEntry(imagePath, d.base, first, far))
+        return false;
+    return writeFatEntry(imagePath, d.base, second, 0);
+}
+
+} // namespace
+
+TEST_CASE("A subdirectory whose cluster chain loops does not trap a read",
+          "[fat][image][corrupt]")
+{
+    REQUIRE_MKFS();
+    if (!haveMtools())
+        SKIP("mtools is needed to build the subdirectory before corrupting it");
+
+    bool looped = false;
+    FatImage image(32, 256, [&](const QString &path) {
+        looped = loopASubdirectory(path);
+    });
+    if (!looped)
+        SKIP("the subdirectory did not need three clusters, so the walk would "
+             "never reach the loop and this would prove nothing");
+
+    // Asking for something that is not in the looping directory is what makes
+    // the walk run to the end of the chain. With the guard the search gives
+    // up and says so; without it there is no end to run to and this call does
+    // not return.
+    const QByteArray contents =
+        image.fat().readFile(kLoopDirName + QStringLiteral("/not-here.txt"));
+    CHECK(contents.isEmpty());
+
+    // And the partition is still usable afterwards -- the guard gives up on
+    // the search, not on the filesystem.
+    CHECK_FALSE(image.fat().fileExists(QStringLiteral("not-here-either.txt")));
+}
+
+TEST_CASE("A subdirectory whose cluster chain loops does not trap a delete",
+          "[fat][image][corrupt]")
+{
+    // The counterpart. Replacing a customisation file deletes the old one
+    // first, so this is the walker a re-run of the same write meets.
+    REQUIRE_MKFS();
+    if (!haveMtools())
+        SKIP("mtools is needed to build the subdirectory before corrupting it");
+
+    bool looped = false;
+    FatImage image(32, 256, [&](const QString &path) {
+        looped = loopASubdirectory(path);
+    });
+    if (!looped)
+        SKIP("the subdirectory did not need three clusters, so the walk would "
+             "never reach the loop and this would prove nothing");
+
+    CHECK_FALSE(image.fat().deleteFile(kLoopDirName + QStringLiteral("/not-here.txt")));
+}
+
+TEST_CASE("A file past the first cluster of a scattered directory can still be deleted",
+          "[fat][image][corrupt]")
+{
+    // Deleting from a subdirectory has to follow the FAT rather than read on
+    // through the image. It used to consult the chain only after a
+    // short-name entry, and a directory of long names does not put its
+    // cluster boundaries there: "." and ".." shift everything by two
+    // entries, so the boundary lands inside a long-name run and the check
+    // was skipped. On a contiguously allocated directory reading on lands in
+    // the right place anyway, which is why nothing noticed.
+    //
+    // This directory is not contiguous. Reading on lands in the cluster the
+    // second one used to occupy, which now ends the directory -- so the file
+    // is reported missing and the caller logs "failed to delete" and carries
+    // on. Following the chain finds it.
+    REQUIRE_MKFS();
+    if (!haveMtools())
+        SKIP("mtools is needed to build the subdirectory before moving it");
+
+    bool scattered = false;
+    FatImage image(32, 256, [&](const QString &path) {
+        scattered = fragmentASubdirectory(path);
+    });
+    if (!scattered)
+        SKIP("the subdirectory could not be scattered, so reading on and "
+             "following the chain would land in the same place");
+
+    const QString victim =
+        kLoopDirName + QStringLiteral("/a-file-with-a-fairly-long-name-399.txt");
+
+    // readFile() has always consulted the chain after a long-name entry, so
+    // it finds the file either way. It is here to show the file really is
+    // there to be deleted -- without it a failed delete could just mean a
+    // fixture that never wrote it.
+    CHECK_FALSE(image.fat().readFile(victim).isEmpty());
+
+    CHECK(image.fat().deleteFile(victim));
+    CHECK_FALSE(image.fat().fileExists(victim));
+}

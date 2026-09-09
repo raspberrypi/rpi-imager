@@ -170,9 +170,15 @@ bool waitForBus(uint16_t vid, uint16_t pid, bool wantPresent, std::chrono::secon
     return false;
 }
 
+// Thirty seconds rather than fifteen. These are wait-for-it loops, so a
+// longer budget costs nothing when the machine is idle -- and the whole
+// suite runs under -j4, where enumeration and the udev rule that follows it
+// have been seen to take considerably longer than they do alone.
+constexpr auto kBusSettleLimit = std::chrono::seconds(30);
+
 bool waitUntilOnTheBus(uint16_t vid, uint16_t pid)
 {
-    return waitForBus(vid, pid, true, std::chrono::seconds(15));
+    return waitForBus(vid, pid, true, kBusSettleLimit);
 }
 
 // The counterpart, and the one that matters between cases. Taking the
@@ -182,7 +188,7 @@ bool waitUntilOnTheBus(uint16_t vid, uint16_t pid)
 // CM3 case came to be handed a CM4 and report the wrong generation.
 bool waitUntilOffTheBus(uint16_t vid, uint16_t pid)
 {
-    return waitForBus(vid, pid, false, std::chrono::seconds(15));
+    return waitForBus(vid, pid, false, kBusSettleLimit);
 }
 
 // An emulated USB device, present for as long as this object is alive.
@@ -197,7 +203,13 @@ public:
         : _vid(vid), _pid(pid)
     {
         std::string out;
-        _up = runEmulator({"up", hex16(vid), hex16(pid), std::to_string(interfaces)}, &out) == 0;
+        // "up" returns once usbip has accepted the attach; the device reaches
+        // the bus a moment later. Waiting for it here means up() answers the
+        // question the tests actually ask, and a device that never arrives
+        // fails at the REQUIRE that checks it rather than somewhere further
+        // on that reads as something else.
+        _up = runEmulator({"up", hex16(vid), hex16(pid), std::to_string(interfaces)}, &out) == 0
+              && waitUntilOnTheBus(vid, pid);
     }
 
     ~EmulatedDevice()
@@ -227,7 +239,7 @@ public:
     std::vector<UsbDeviceInfo> waitUntilOpenable(const IUsbContext &ctx, ScanFn scan) const
     {
         using namespace std::chrono;
-        const auto deadline = steady_clock::now() + seconds(15);
+        const auto deadline = steady_clock::now() + kBusSettleLimit;
         while (steady_clock::now() < deadline) {
             auto found = scan(ctx);
             if (!found.empty()) {
@@ -619,7 +631,7 @@ TEST_CASE("A Compute Module that has been unplugged cannot be opened", "[rpiboot
     device.unplug();
 
     using namespace std::chrono;
-    const auto deadline = steady_clock::now() + seconds(15);
+    const auto deadline = steady_clock::now() + kBusSettleLimit;
     while (steady_clock::now() < deadline && !ctx.scanBootDevices().empty())
         std::this_thread::sleep_for(milliseconds(100));
 

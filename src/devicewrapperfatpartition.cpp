@@ -303,6 +303,36 @@ bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
         quint64 entryOffset = 0;
         QString longFilename;
 
+        // Step to the directory's next cluster when the read has just crossed
+        // a cluster boundary. Returns false when the chain ends or turns back
+        // on itself, which is the caller's signal to stop looking.
+        //
+        // This has to be consulted after *every* entry, long-name fragments
+        // included. It used to be checked only after a short-name entry, and
+        // a directory holding long names does not put its boundaries there:
+        // "." and ".." shift everything by two entries, so the boundary lands
+        // in the middle of a long-name run. The walk then read straight on
+        // into whatever cluster physically follows rather than the next one
+        // in the chain -- right by luck for a directory laid out
+        // contiguously, and reading unrelated data for one that is not.
+        auto followChain = [&]() -> bool {
+            if (_type != FAT32 || (pos() - _clusterOffset) % _bytesPerCluster != 0)
+                return true;
+            uint32_t nextCluster = getFAT(_fat32_currentRootDirCluster);
+            if (nextCluster >= 0xFFFFFF8)
+                return false;
+            if (_currentDirClusters.contains(nextCluster))
+            {
+                qDebug() << "DeviceWrapperFatPartition::deleteFile: circular cluster "
+                            "reference in" << dirName;
+                return false;
+            }
+            _currentDirClusters.append(nextCluster);
+            _fat32_currentRootDirCluster = nextCluster;
+            seekCluster(nextCluster);
+            return true;
+        };
+
         while (true)
         {
             const quint64 thisEntryOffset = _offset;
@@ -320,6 +350,8 @@ bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
                 memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
                 QString lnamePart((QChar *) lnamePartStr, 13);
                 longFilename = lnamePart + longFilename;
+                if (!followChain())
+                    break;
                 continue;
             }
 
@@ -352,21 +384,8 @@ bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
             longFilename.clear();
 
             /* Follow the directory's cluster chain on FAT32 */
-            if (_type == FAT32 && (pos() - _clusterOffset) % _bytesPerCluster == 0)
-            {
-                uint32_t nextCluster = getFAT(_fat32_currentRootDirCluster);
-                if (nextCluster >= 0xFFFFFF8)
-                    break;
-                if (_currentDirClusters.contains(nextCluster))
-                {
-                    qDebug() << "DeviceWrapperFatPartition::deleteFile: circular cluster "
-                                "reference in" << dirName;
-                    break;
-                }
-                _currentDirClusters.append(nextCluster);
-                _fat32_currentRootDirCluster = nextCluster;
-                seekCluster(nextCluster);
-            }
+            if (!followChain())
+                break;
         }
 
         if (!found)
