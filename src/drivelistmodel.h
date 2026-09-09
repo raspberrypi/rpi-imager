@@ -49,6 +49,18 @@ public:
      * device selection.
      */
     void resumePolling();
+
+    /**
+     * @brief The scanning state pausePolling()/resumePolling() set
+     *
+     * The setters above are forwarded to the poll thread; this is the
+     * matching reader, so a caller -- or a test -- can tell whether scanning
+     * actually came back.
+     */
+    DriveListModelPollThread::ScanMode scanMode() const { return _thread.scanMode(); }
+
+    /** @brief Whether the poll is looking for fastboot storage devices */
+    bool fastbootScanEnabled() const { return _thread.fastbootScanEnabled(); }
     
     /**
      * @brief Set slow polling mode (reduced frequency)

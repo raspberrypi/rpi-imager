@@ -191,20 +191,24 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     // (e.g., RTL override characters that could make device names misleading)
     device.description = sanitizeForDisplay(descParts.join(" ").toStdString());
 
-    // For virtual devices, check if they're backing system paths
-    if (device.isVirtual && !device.isSystem) {
-        for (const auto& mp : device.mountpoints) {
-            QString mpStr = QString::fromStdString(mp);
-            if (mpStr == "/" ||
-                mpStr == "/usr" ||
-                mpStr == "/var" ||
-                mpStr == "/home" ||
-                mpStr == "/boot" ||
-                mpStr.startsWith("/snap/")) {
-                device.isSystem = true;
-                break;
-            }
-        }
+    // Anything carrying a system mountpoint is a system drive, whether or
+    // not it is removable.
+    //
+    // isSystem starts out as "not removable and not virtual", which is
+    // decided before the mountpoints are known and is wrong for the most
+    // common Raspberry Pi setup there is: a Pi booted from its SD card. The
+    // card is removable -- isCard forces isRemovable true a few lines up --
+    // so the drive the machine is running from came back isSystem false, and
+    // the warning shown before overwriting the system drive never appeared
+    // for it. This check already existed and already listed the right
+    // mountpoints; it was just gated on isVirtual, so it only ever rescued
+    // loopback-mounted images.
+    //
+    // The list itself now lives only in DeviceDescriptor::
+    // hasSystemMountpoint(), rather than being duplicated here where the two
+    // copies could drift.
+    if (!device.isSystem && device.hasSystemMountpoint()) {
+        device.isSystem = true;
     }
 
     // Handle NVMe drives: mark as system by default to avoid showing internal drives
@@ -282,11 +286,18 @@ std::optional<QByteArray> executeLsblk()
 // Public API
 // ============================================================================
 
-std::vector<DeviceDescriptor> ListStorageDevices()
+// Everything ListStorageDevices() does once lsblk has answered -- or failed
+// to. Separate from the call itself so the test API can drive the same code
+// the application runs, including the two failure shapes: nullopt for an
+// lsblk that could not be run, and unparseable output for one that answered
+// with rubbish. Before this the test API had a second copy of the parsing
+// that returned an empty list where this one returns the sentinel, so the
+// behaviour a user actually meets was the one nothing checked.
+std::vector<DeviceDescriptor> devicesFromLsblkOutput(
+    const std::optional<QByteArray>& jsonOutput, bool embeddedMode)
 {
     std::vector<DeviceDescriptor> deviceList;
 
-    auto jsonOutput = executeLsblk();
     if (!jsonOutput) {
         // Return a sentinel device with error message so UI can display failure
         // instead of showing an empty list (which looks like "no drives found")
@@ -310,9 +321,8 @@ std::vector<DeviceDescriptor> ListStorageDevices()
         return deviceList;
     }
 
-    const bool embeddedMode = ::isEmbeddedMode();
     const QJsonArray blockDevices = doc.object().value("blockdevices").toArray();
-    
+
     // Reserve capacity to avoid reallocations during enumeration
     deviceList.reserve(static_cast<size_t>(blockDevices.size()));
 
@@ -326,6 +336,11 @@ std::vector<DeviceDescriptor> ListStorageDevices()
     return deviceList;
 }
 
+std::vector<DeviceDescriptor> ListStorageDevices()
+{
+    return devicesFromLsblkOutput(executeLsblk(), ::isEmbeddedMode());
+}
+
 // ============================================================================
 // Test API
 // ============================================================================
@@ -336,27 +351,24 @@ namespace testing {
 
 std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput, bool embeddedMode)
 {
-    std::vector<DeviceDescriptor> deviceList;
+    return devicesFromLsblkOutput(QByteArray::fromStdString(jsonOutput), embeddedMode);
+}
 
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(jsonOutput), &parseError);
-    if (parseError.error != QJsonParseError::NoError) {
-        return deviceList;
-    }
+std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode)
+{
+    return devicesFromLsblkOutput(std::nullopt, embeddedMode);
+}
 
-    const QJsonArray blockDevices = doc.object().value("blockdevices").toArray();
-    
-    // Reserve capacity to avoid reallocations during enumeration
-    deviceList.reserve(static_cast<size_t>(blockDevices.size()));
-    
-    for (const auto& item : blockDevices) {
-        auto device = parseBlockDevice(item.toObject(), embeddedMode);
-        if (device) {
-            deviceList.push_back(std::move(*device));
-        }
-    }
-
-    return deviceList;
+// lsblk itself, run for real against whatever PATH the caller has arranged.
+//
+// The bounded wait inside it is the interesting part. Enumerating block
+// devices goes out to the kernel and, through it, to whatever is plugged in;
+// a stuck USB bridge or a slow hub can wedge lsblk for as long as it likes.
+// The drive list is refreshed on a timer, so a wait without a limit does not
+// just delay the list -- it takes the window with it.
+std::optional<QByteArray> runLsblk()
+{
+    return executeLsblk();
 }
 
 } // namespace testing

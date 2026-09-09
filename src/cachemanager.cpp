@@ -398,22 +398,6 @@ void CacheManager::loadCacheSettings()
     }
 }
 
-void CacheManager::saveCacheSettings()
-{
-    QMutexLocker locker(&mutex_);
-    
-    if (status_.customCacheFile) {
-        return; // Don't save settings for custom cache files
-    }
-    
-    settings_.beginGroup("caching");
-    settings_.setValue("enabled", cachingEnabled_);
-    settings_.setValue("lastFileName", status_.cacheFileName);
-    settings_.setValue("lastDownloadSHA256", status_.cachedHash);
-    settings_.setValue("lastCacheFileHash", status_.cacheFileHash);
-    settings_.endGroup();
-    settings_.sync();
-}
 
 QString CacheManager::getDefaultCacheFilePath() const
 {

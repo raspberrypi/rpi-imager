@@ -4,6 +4,7 @@
  */
 
 #include "drivelistmodel.h"
+#include "rpiboot/rpiboot_types.h"
 #include "config.h"
 #include "drivelist/drivelist.h"
 #include <QSet>
@@ -142,13 +143,11 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             rpibootInThisPoll.insert(devUri);
             if (!_seenRpibootDevices.contains(devUri)) {
                 QList<uint8_t> portPath(i.usbPortPath.begin(), i.usbPortPath.end());
-                uint8_t bus = 0, addr = 0;
-                QString devPath = devUri.startsWith("rpiboot://") ? devUri.mid(10) : devUri;
-                QStringList uriParts = devPath.split(':');
-                if (uriParts.size() >= 2) {
-                    bus  = static_cast<uint8_t>(uriParts[0].toUInt());
-                    addr = static_cast<uint8_t>(uriParts[1].toUInt());
-                }
+                // rpiboot://bus:addr:port.path:pid -- see rpiboot_types.h
+                const rpiboot::DeviceUri parsedUri =
+                    rpiboot::parseDeviceUri(devUri.toStdString());
+                const uint8_t bus = parsedUri.busNumber;
+                const uint8_t addr = parsedUri.deviceAddress;
                 emit rpibootDeviceDetected(devUri, bus, addr, portPath, i.rpibootPid);
             }
             continue;

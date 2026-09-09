@@ -55,6 +55,11 @@ public:
 
     Q_INVOKABLE bool reload();
 
+    // Replace the rows with `next`, reporting the difference rather than a
+    // reset. See model_row_diff.h for why a reset is worth avoiding: it
+    // destroys every delegate in the view, and a click in progress with it.
+    void applyRows(QVector<HardwareDevice> &&next);
+
     // Returns the name associated with the current index
     QString currentName() const;
 

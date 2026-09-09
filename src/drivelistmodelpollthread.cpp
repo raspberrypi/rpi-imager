@@ -134,157 +134,9 @@ void DriveListModelPollThread::run()
             driveList.insert(driveList.end(), rpibootDevices.begin(), rpibootDevices.end());
         }
 
-        // Fastboot device scanning — enumerate storage on fastboot-mode Compute Modules
-        if (_fastbootScanEnabled.load(std::memory_order_relaxed)) {
-            try {
-                rpiboot::LibusbContext ctx;
-                auto fbDevices = ctx.scanFastbootDevices();
-
-                // Build set of currently-present port path keys
-                std::set<std::string> presentKeys;
-                for (const auto& dev : fbDevices) {
-                    std::string ppKey = rpiboot::portPathToString(dev.portPath);
-                    presentKeys.insert(ppKey);
-
-                    // Query new devices not yet in cache
-                    if (_fastbootCache.find(ppKey) == _fastbootCache.end()) {
-                        auto transport = ctx.openDevice(dev);
-                        if (!transport || !transport->isOpen())
-                            continue;
-
-                        fastboot::FastbootProtocol fb;
-                        FastbootDeviceCache cache;
-                        cache.fastbootId = std::to_string(dev.busNumber) + ":" + std::to_string(dev.deviceAddress);
-                        cache.portPath = dev.portPath;
-
-                        // Positively identify a genuine rpi-fastbootd gadget
-                        // before exposing it as a flashable target. The gadget
-                        // borrows Google's 18d1:4e40 VID/PID, so a non-Pi
-                        // device (e.g. an Android phone in a colliding fastboot
-                        // mode) could enumerate identically. identifyRpiFastboot()
-                        // checks the authoritative USB interface descriptor
-                        // ("fastbootd-provisioner") and falls back to the
-                        // RPi-specific block-devices getvar. Only a device that
-                        // actually answered and denied it is cached as a
-                        // storage-less entry, so it is neither listed as a
-                        // target nor re-probed on every tick; a probe that got
-                        // no answer is retried instead of being banked.
-                        const auto identity = fb.identifyRpiFastboot(*transport);
-                        if (identity == fastboot::RpiIdentity::ConfirmedNotPi) {
-                            qDebug() << "Fastboot: ignoring non-RPi device at"
-                                     << QString::fromStdString(ppKey)
-                                     << "(did not identify as rpi-fastbootd)";
-                            _fastbootCache[ppKey] = std::move(cache);
-                            continue;
-                        }
-                        if (identity == fastboot::RpiIdentity::Inconclusive) {
-                            // The probe got no answer — which is also what a Pi
-                            // still starting its gadget looks like. Caching this
-                            // would strand a genuine device until it is
-                            // unplugged, so skip the tick and re-probe next one.
-                            qDebug() << "Fastboot: identity probe inconclusive at"
-                                     << QString::fromStdString(ppKey)
-                                     << "- will retry on the next scan";
-                            continue;
-                        }
-
-                        // Query product name
-                        auto product = fb.getVar(*transport, "product");
-                        cache.productName = product.value_or("Compute Module");
-
-                        // Query block devices (comma-separated list)
-                        auto blockDevStr = fb.getVar(*transport, "block-devices");
-                        if (blockDevStr) {
-                            // Parse comma-separated list: "mmcblk0,nvme0n1"
-                            std::string devList = *blockDevStr;
-                            std::istringstream iss(devList);
-                            std::string blockDev;
-                            while (std::getline(iss, blockDev, ',')) {
-                                if (blockDev.empty()) continue;
-
-                                FastbootStorageInfo storInfo;
-                                storInfo.blockDevice = blockDev;
-                                storInfo.sizeBytes = 0;
-                                storInfo.storageType = "unknown";
-
-                                // Query size
-                                auto sizeStr = fb.getVar(*transport, "block-device-size:" + blockDev);
-                                if (sizeStr) {
-                                    try {
-                                        std::string val = *sizeStr;
-                                        if (val.starts_with("0x") || val.starts_with("0X"))
-                                            storInfo.sizeBytes = std::stoull(val, nullptr, 16);
-                                        else
-                                            storInfo.sizeBytes = std::stoull(val);
-                                    } catch (...) {}
-                                }
-
-                                // Query type
-                                auto typeStr = fb.getVar(*transport, "block-device-type:" + blockDev);
-                                if (typeStr)
-                                    storInfo.storageType = *typeStr;
-
-                                cache.storage.push_back(std::move(storInfo));
-                            }
-                        }
-
-                        qDebug() << "Fastboot cache: new device" << QString::fromStdString(ppKey)
-                                 << "product=" << QString::fromStdString(cache.productName)
-                                 << "storage count=" << cache.storage.size();
-                        _fastbootCache[ppKey] = std::move(cache);
-                    }
-                }
-
-                // Remove stale cache entries
-                for (auto it = _fastbootCache.begin(); it != _fastbootCache.end(); ) {
-                    if (presentKeys.find(it->first) == presentKeys.end()) {
-                        qDebug() << "Fastboot cache: removing stale" << QString::fromStdString(it->first);
-                        it = _fastbootCache.erase(it);
-                    } else {
-                        ++it;
-                    }
-                }
-
-                // Create DeviceDescriptor entries from cached fastboot devices
-                for (const auto& [ppKey, cache] : _fastbootCache) {
-                    for (const auto& stor : cache.storage) {
-                        Drivelist::DeviceDescriptor dd;
-                        dd.device = "fastboot://" + cache.fastbootId + "/" + stor.blockDevice;
-                        dd.size = stor.sizeBytes;
-                        dd.isRemovable = true;
-                        dd.isUSB = true;
-                        dd.isReadOnly = false;
-                        dd.isSystem = false;
-                        dd.isVirtual = false;
-
-                        // Build description: "CM5 eMMC" / "CM5 NVMe"
-                        std::string typeLabel = stor.storageType;
-                        if (typeLabel == "emmc") typeLabel = "eMMC";
-                        else if (typeLabel == "sd") typeLabel = "SD";
-                        else if (typeLabel == "nvme") typeLabel = "NVMe";
-                        else if (typeLabel == "usb") typeLabel = "USB";
-                        else if (typeLabel == "scsi") typeLabel = "SCSI";
-                        dd.description = cache.productName + " " + typeLabel;
-
-                        dd.isFastbootStorage = true;
-                        dd.fastbootId = cache.fastbootId;
-                        dd.fastbootBlockDevice = stor.blockDevice;
-                        dd.fastbootStorageType = stor.storageType;
-                        dd.fastbootPortPath = cache.portPath;
-
-                        // Set busType for icon selection
-                        if (stor.storageType == "nvme")
-                            dd.busType = "NVME";
-
-                        driveList.push_back(std::move(dd));
-                    }
-                }
-            } catch (const std::exception& e) {
-                qDebug() << "Fastboot scan error:" << e.what();
-            } catch (...) {
-                // Ignore errors during fastboot scan
-            }
-        }
+        // Fastboot-mode compute modules, if the scan is switched on.
+        if (_fastbootScanEnabled.load(std::memory_order_relaxed))
+            appendFastbootDevices(driveList);
 
         emit newDriveList(driveList);
         quint32 elapsed = static_cast<quint32>(t1.elapsed());
@@ -309,3 +161,174 @@ void DriveListModelPollThread::run()
         }
     }
 }
+
+// The fastboot half of a scan, lifted out of run()'s loop where it was 150 lines deep.
+//
+// Enumerates fastboot-mode devices, works out which of them are genuine Pi
+// gadgets, and appends the storage they report to the drive list.
+std::unique_ptr<rpiboot::IUsbContext> DriveListModelPollThread::makeUsbContext()
+{
+    try {
+        return std::make_unique<rpiboot::LibusbContext>();
+    } catch (...) {
+        // No USB, no permissions. The rest of the drive list is unaffected.
+        return nullptr;
+    }
+}
+
+void DriveListModelPollThread::appendFastbootDevices(std::vector<Drivelist::DeviceDescriptor> &driveList)
+{
+        auto ctxOwned = makeUsbContext();
+        if (!ctxOwned)
+            return;
+        rpiboot::IUsbContext &ctx = *ctxOwned;
+
+        try {
+            auto fbDevices = ctx.scanFastbootDevices();
+
+            // Build set of currently-present port path keys
+            std::set<std::string> presentKeys;
+            for (const auto& dev : fbDevices) {
+                std::string ppKey = rpiboot::portPathToString(dev.portPath);
+                presentKeys.insert(ppKey);
+
+                // Query new devices not yet in cache
+                if (_fastbootCache.find(ppKey) == _fastbootCache.end()) {
+                    auto transport = ctx.openDevice(dev);
+                    if (!transport || !transport->isOpen())
+                        continue;
+
+                    fastboot::FastbootProtocol fb;
+                    FastbootDeviceCache cache;
+                    cache.fastbootId = std::to_string(dev.busNumber) + ":" + std::to_string(dev.deviceAddress);
+                    cache.portPath = dev.portPath;
+
+                    // Positively identify a genuine rpi-fastbootd gadget
+                    // before exposing it as a flashable target. The gadget
+                    // borrows Google's 18d1:4e40 VID/PID, so a non-Pi
+                    // device (e.g. an Android phone in a colliding fastboot
+                    // mode) could enumerate identically. identifyRpiFastboot()
+                    // checks the authoritative USB interface descriptor
+                    // ("fastbootd-provisioner") and falls back to the
+                    // RPi-specific block-devices getvar. Only a device that
+                    // actually answered and denied it is cached as a
+                    // storage-less entry, so it is neither listed as a
+                    // target nor re-probed on every tick; a probe that got
+                    // no answer is retried instead of being banked.
+                    const auto identity = fb.identifyRpiFastboot(*transport);
+                    if (identity == fastboot::RpiIdentity::ConfirmedNotPi) {
+                        qDebug() << "Fastboot: ignoring non-RPi device at"
+                                 << QString::fromStdString(ppKey)
+                                 << "(did not identify as rpi-fastbootd)";
+                        _fastbootCache[ppKey] = std::move(cache);
+                        continue;
+                    }
+                    if (identity == fastboot::RpiIdentity::Inconclusive) {
+                        // The probe got no answer — which is also what a Pi
+                        // still starting its gadget looks like. Caching this
+                        // would strand a genuine device until it is
+                        // unplugged, so skip the tick and re-probe next one.
+                        qDebug() << "Fastboot: identity probe inconclusive at"
+                                 << QString::fromStdString(ppKey)
+                                 << "- will retry on the next scan";
+                        continue;
+                    }
+
+                    // Query product name
+                    auto product = fb.getVar(*transport, "product");
+                    cache.productName = product.value_or("Compute Module");
+
+                    // Query block devices (comma-separated list)
+                    auto blockDevStr = fb.getVar(*transport, "block-devices");
+                    if (blockDevStr) {
+                        // Parse comma-separated list: "mmcblk0,nvme0n1"
+                        std::string devList = *blockDevStr;
+                        std::istringstream iss(devList);
+                        std::string blockDev;
+                        while (std::getline(iss, blockDev, ',')) {
+                            if (blockDev.empty()) continue;
+
+                            FastbootStorageInfo storInfo;
+                            storInfo.blockDevice = blockDev;
+                            storInfo.sizeBytes = 0;
+                            storInfo.storageType = "unknown";
+
+                            // Query size
+                            auto sizeStr = fb.getVar(*transport, "block-device-size:" + blockDev);
+                            if (sizeStr) {
+                                try {
+                                    std::string val = *sizeStr;
+                                    if (val.starts_with("0x") || val.starts_with("0X"))
+                                        storInfo.sizeBytes = std::stoull(val, nullptr, 16);
+                                    else
+                                        storInfo.sizeBytes = std::stoull(val);
+                                } catch (...) {}
+                            }
+
+                            // Query type
+                            auto typeStr = fb.getVar(*transport, "block-device-type:" + blockDev);
+                            if (typeStr)
+                                storInfo.storageType = *typeStr;
+
+                            cache.storage.push_back(std::move(storInfo));
+                        }
+                    }
+
+                    qDebug() << "Fastboot cache: new device" << QString::fromStdString(ppKey)
+                             << "product=" << QString::fromStdString(cache.productName)
+                             << "storage count=" << cache.storage.size();
+                    _fastbootCache[ppKey] = std::move(cache);
+                }
+            }
+
+            // Remove stale cache entries
+            for (auto it = _fastbootCache.begin(); it != _fastbootCache.end(); ) {
+                if (presentKeys.find(it->first) == presentKeys.end()) {
+                    qDebug() << "Fastboot cache: removing stale" << QString::fromStdString(it->first);
+                    it = _fastbootCache.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+
+            // Create DeviceDescriptor entries from cached fastboot devices
+            for (const auto& [ppKey, cache] : _fastbootCache) {
+                for (const auto& stor : cache.storage) {
+                    Drivelist::DeviceDescriptor dd;
+                    dd.device = "fastboot://" + cache.fastbootId + "/" + stor.blockDevice;
+                    dd.size = stor.sizeBytes;
+                    dd.isRemovable = true;
+                    dd.isUSB = true;
+                    dd.isReadOnly = false;
+                    dd.isSystem = false;
+                    dd.isVirtual = false;
+
+                    // Build description: "CM5 eMMC" / "CM5 NVMe"
+                    std::string typeLabel = stor.storageType;
+                    if (typeLabel == "emmc") typeLabel = "eMMC";
+                    else if (typeLabel == "sd") typeLabel = "SD";
+                    else if (typeLabel == "nvme") typeLabel = "NVMe";
+                    else if (typeLabel == "usb") typeLabel = "USB";
+                    else if (typeLabel == "scsi") typeLabel = "SCSI";
+                    dd.description = cache.productName + " " + typeLabel;
+
+                    dd.isFastbootStorage = true;
+                    dd.fastbootId = cache.fastbootId;
+                    dd.fastbootBlockDevice = stor.blockDevice;
+                    dd.fastbootStorageType = stor.storageType;
+                    dd.fastbootPortPath = cache.portPath;
+
+                    // Set busType for icon selection
+                    if (stor.storageType == "nvme")
+                        dd.busType = "NVME";
+
+                    driveList.push_back(std::move(dd));
+                }
+            }
+        } catch (const std::exception& e) {
+            qDebug() << "Fastboot scan error:" << e.what();
+        } catch (...) {
+            // Ignore errors during fastboot scan
+        }
+}
+
