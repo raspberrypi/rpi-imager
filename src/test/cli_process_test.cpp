@@ -39,6 +39,7 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
+#include <QFileInfo>
 #include <QTemporaryDir>
 
 #include <unistd.h>
@@ -64,34 +65,42 @@ bool haveSudo()
     return probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
 }
 
+// Hand back any coverage counters the elevated run created.
+//
+// A coverage build writes them beside the object files, and the first process
+// to touch one creates it. Run as root that is a root-owned file, and every
+// later unprivileged run of the same binary then fails to write it --
+// silently, so those counters are simply gone. Nearly every case here runs
+// the binary as root, so diverting root's counters elsewhere is not the
+// answer either: it is the unprivileged runs that are the minority. Giving
+// the files back after each elevated run keeps both.
+//
+// Only files that are not already ours, so an ordinary build finds nothing to
+// do and this costs one find(1) over the build tree.
+void reclaimCoverageCounters()
+{
+    const QString buildTree = QFileInfo(QStringLiteral(IMAGER_BINARY)).absolutePath();
+    if (buildTree.isEmpty())
+        return;
+    const QString owner = QStringLiteral("%1:%2").arg(::getuid()).arg(::getgid());
+    QProcess p;
+    p.start(QStringLiteral("sudo"),
+            {QStringLiteral("-n"), QStringLiteral("find"), buildTree,
+             QStringLiteral("-name"), QStringLiteral("*.gcda"),
+             QStringLiteral("!"), QStringLiteral("-uid"), QString::number(::getuid()),
+             QStringLiteral("-exec"), QStringLiteral("chown"), owner,
+             QStringLiteral("{}"), QStringLiteral("+")});
+    p.waitForFinished(60000);
+}
+
 Run runImager(const QStringList &args, bool asRoot)
 {
     Run r;
     QProcess p;
     p.setProcessChannelMode(QProcess::MergedChannels);
 
-    // The elevated runs send their coverage counters somewhere else.
-    //
-    // A coverage build writes them beside the object files, and the first
-    // process to touch one creates it. Run as root that is a root-owned file,
-    // and every later unprivileged run of the same binary then fails to write
-    // it -- silently, so the counters simply vanish. Most cases here run the
-    // binary as the ordinary user, so losing those would understate the CLI's
-    // coverage by most of what it has. Which run goes first is not fixed, so
-    // the report moved between runs as well.
-    //
-    // What is given up is the handful of lines only the elevated runs reach,
-    // and those are what their own assertions are about. A build without
-    // instrumentation ignores the variable.
-    QTemporaryDir rootCounters;
-
     if (asRoot) {
-        QStringList sudoArgs{QStringLiteral("-n")};
-        if (rootCounters.isValid()) {
-            sudoArgs << QStringLiteral("env")
-                     << QStringLiteral("GCOV_PREFIX=") + rootCounters.path();
-        }
-        sudoArgs << QStringLiteral(IMAGER_BINARY);
+        QStringList sudoArgs{QStringLiteral("-n"), QStringLiteral(IMAGER_BINARY)};
         sudoArgs << args;
         p.start(QStringLiteral("sudo"), sudoArgs);
     } else {
@@ -102,14 +111,8 @@ Run runImager(const QStringList &args, bool asRoot)
     r.output = QString::fromUtf8(p.readAll());
     r.exitCode = p.exitCode();
 
-    // Written by root, so QTemporaryDir cannot clear them itself.
-    if (asRoot && rootCounters.isValid()) {
-        QProcess rm;
-        rm.start(QStringLiteral("sudo"),
-                 {QStringLiteral("-n"), QStringLiteral("rm"), QStringLiteral("-rf"),
-                  rootCounters.path()});
-        rm.waitForFinished(10000);
-    }
+    if (asRoot)
+        reclaimCoverageCounters();
     return r;
 }
 

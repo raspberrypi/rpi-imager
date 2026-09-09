@@ -2255,28 +2255,13 @@ struct ProbeRun
 // `assign` set in it. Applied inside the elevated process with env(1), so they
 // win over what sudo itself sets -- and every -u has to precede the
 // assignments, or env takes the next one for the command name.
-//
-// GCOV_PREFIX sends this run's coverage counters somewhere else. A coverage
-// build writes them beside the object files, and the first process to touch
-// one creates it: run as root, it becomes a root-owned file that every later
-// unprivileged run of the same probe then fails to write, silently. Under
-// `ctest -j` which of the two goes first is a coin toss, so the reported
-// coverage of platformquirks_linux.cpp moved between runs and understated
-// itself by everything the unprivileged probe invocations cover -- the whole
-// polkit-policy scan among it. What is lost this way is only what this
-// elevated run alone reaches, and that is measured by the case's assertions
-// rather than by the report. The variable is ignored by a build without
-// instrumentation.
 ProbeRun runProbeAsRoot(const QStringList& unset, const QStringList& assign)
 {
     ProbeRun r;
-    QTemporaryDir rootCounters;
     QStringList args{QStringLiteral("-n"), QStringLiteral("env")};
     for (const QString& name : QStringList{QStringLiteral("DISPLAY")} + unset)
         args << QStringLiteral("-u") << name;
     args << QStringLiteral("WAYLAND_DISPLAY=wayland-test");
-    if (rootCounters.isValid())
-        args << QStringLiteral("GCOV_PREFIX=") + rootCounters.path();
     args += assign;
     args << QStringLiteral(ELEVATION_PROBE_BINARY);
 
@@ -2289,13 +2274,32 @@ ProbeRun runProbeAsRoot(const QStringList& unset, const QStringList& assign)
     r.out = QString::fromUtf8(p.readAllStandardOutput());
     r.err = QString::fromUtf8(p.readAllStandardError());
 
-    // Written by root, so QTemporaryDir cannot clear them on its own.
-    if (rootCounters.isValid()) {
-        QProcess rm;
-        rm.start(QStringLiteral("sudo"),
-                 {QStringLiteral("-n"), QStringLiteral("rm"), QStringLiteral("-rf"),
-                  rootCounters.path()});
-        rm.waitForFinished(10000);
+    // Hand back any coverage counters this run created.
+    //
+    // A coverage build writes them beside the object files, and the first
+    // process to touch one creates it. Run as root that is a root-owned file,
+    // and every later unprivileged run of the same probe then fails to write
+    // it -- silently, so those counters are gone. This probe is run both ways:
+    // under sudo here, and under `unshare -rm` for the polkit scans, which is
+    // most of what it covers. Under `ctest -j` which went first was a coin
+    // toss, and the reported coverage of platformquirks_linux.cpp moved with
+    // it. Giving the files back keeps both.
+    //
+    // Only files that are not already ours, so an ordinary build finds nothing
+    // to do.
+    const QString buildTree =
+        QFileInfo(QStringLiteral(ELEVATION_PROBE_BINARY)).absolutePath();
+    if (!buildTree.isEmpty()) {
+        const QString owner = QStringLiteral("%1:%2").arg(::getuid()).arg(::getgid());
+        QProcess chown;
+        chown.start(QStringLiteral("sudo"),
+                    {QStringLiteral("-n"), QStringLiteral("find"), buildTree,
+                     QStringLiteral("-name"), QStringLiteral("*.gcda"),
+                     QStringLiteral("!"), QStringLiteral("-uid"),
+                     QString::number(::getuid()),
+                     QStringLiteral("-exec"), QStringLiteral("chown"), owner,
+                     QStringLiteral("{}"), QStringLiteral("+")});
+        chown.waitForFinished(60000);
     }
     return r;
 }
