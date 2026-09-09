@@ -150,6 +150,18 @@ private:
     QString _path;
 };
 
+// Teardown for a device something may still be finishing with: retry for a
+// while before giving up, so a slow write in flight does not leak the mapping.
+inline bool retryPrivileged(const QString &program, const QStringList &args)
+{
+    for (int attempt = 0; attempt < 40; ++attempt) {
+        if (runPrivileged(program, args))
+            return true;
+        QThread::msleep(500);
+    }
+    return false;
+}
+
 // A block device whose first `goodMegabytes` are writable and whose remainder
 // returns EIO. Tears itself down, including on an assertion failure.
 class FaultyDevice
@@ -290,10 +302,16 @@ private:
 public:
     ~FaultyDevice()
     {
+        // Both of these fail with EBUSY while an I/O is still outstanding
+        // against the device, which is exactly the state a test of the write
+        // timeouts leaves behind: the code under test closes the handle and
+        // walks away, and the write it abandoned is still in the block layer.
+        // Giving up on the first refusal would leak a mapping and a loop
+        // device onto the machine running the suite.
         if (_mapped)
-            runPrivileged(QStringLiteral("dmsetup"), {QStringLiteral("remove"), _name});
+            retryPrivileged(QStringLiteral("dmsetup"), {QStringLiteral("remove"), _name});
         if (!_loop.isEmpty())
-            runPrivileged(QStringLiteral("losetup"), {QStringLiteral("-d"), _loop});
+            retryPrivileged(QStringLiteral("losetup"), {QStringLiteral("-d"), _loop});
         QDir(_dir).removeRecursively();
     }
 

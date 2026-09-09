@@ -1674,3 +1674,160 @@ TEST_CASE("A write waiting for a queue slot answers a cancel",
   ops->WaitForPendingWrites();
   ops->Close();
 }
+
+TEST_CASE("A drain that never makes progress gives up", "[file-ops]") {
+  // The watchdog calls DrainAndSwitchToSync when a write has stopped moving,
+  // and it deliberately does not consume the completion queue itself -- the
+  // extract thread is the only thread allowed to. So if the extract thread is
+  // the thing that is stuck, nothing drains, and the drain has to come back
+  // and say so. Waiting indefinitely would leave the user watching a progress
+  // bar that has stopped, with a Cancel button whose handler is behind this
+  // call.
+  auto ops = FileOperations::Create();
+  if (!ops->IsAsyncIOSupported())
+    SKIP("async I/O is not available in this build (no liburing, or too old)");
+
+  const std::string path = makeImage("drain-stalled.img");
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+  REQUIRE(ops->SetAsyncQueueDepth(8));
+
+  constexpr std::size_t kChunk = 32 * 1024;
+  const auto block = pattern(kChunk, 0x2A);
+  for (int i = 0; i < 4; ++i)
+    REQUIRE(ops->AsyncWriteSequential(block.data(), kChunk, nullptr) ==
+            FileError::kSuccess);
+  REQUIRE(ops->GetPendingWriteCount() == 4);
+
+  // Nobody consuming: the pending count cannot fall however fast the device is.
+  const auto start = std::chrono::steady_clock::now();
+  const bool drained = ops->DrainAndSwitchToSync(1);
+  const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - start)
+                          .count();
+
+  INFO("the drain returned after " << waited << "ms");
+  CHECK_FALSE(drained);
+  CHECK(waited < 5000);
+
+  // And it still switched to sync mode on the way in, so whatever the caller
+  // does next is not queued behind the writes it could not drain.
+  CHECK(ops->IsInSyncFallbackMode());
+  ops->Close();
+}
+
+TEST_CASE("A drain waits while the queue is still going down",
+          "[file-ops][faulty][slow]") {
+  // The other half of the same call. Progress resets the stall timer, so a
+  // card that is merely slow gets as long as it needs -- the timeout is for a
+  // card that has stopped, not for one that is taking its time. Getting the
+  // two confused would abandon the async queue on exactly the cards that
+  // most need it drained in order.
+  //
+  // The completions are staggered so the pending count is seen falling rather
+  // than jumping straight to zero, which is what the progress arm is for.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+
+  constexpr int kDelayMs = 1500;
+  FaultyDevice device(64, FaultyDevice::SlowWrites{kDelayMs});
+  if (!device.isReady())
+    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no queue to drain");
+  REQUIRE(ops->SetAsyncQueueDepth(8));
+
+  constexpr std::size_t kChunk = 64u * 1024;
+  auto buffer = alignedBuffer(kChunk, 0x5E);
+  REQUIRE(buffer);
+
+  // Half a second apart, so the device answers them half a second apart:
+  // completions at roughly 1.5s, 2.0s and 2.5s from here.
+  for (int i = 0; i < 3; ++i) {
+    REQUIRE(ops->AsyncWriteSequential(buffer.get(), kChunk, nullptr) ==
+            FileError::kSuccess);
+    if (i < 2)
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
+  REQUIRE(ops->GetPendingWriteCount() == 3);
+
+  // The extract thread, doing the draining the drain call is waiting on.
+  std::thread consumer([&ops] { ops->WaitForPendingWrites(); });
+
+  // A one-second stall timeout against a drain that takes a second and a half.
+  // Each completion is inside the second, so the timer keeps being reset; a
+  // drain that timed the whole thing instead would have given up half a second
+  // before the last write landed.
+  const bool drained = ops->DrainAndSwitchToSync(1);
+  consumer.join();
+
+  CHECK(drained);
+  CHECK(ops->IsInSyncFallbackMode());
+  CHECK(ops->GetPendingWriteCount() == 0);
+
+  ops->Close();
+}
+
+TEST_CASE("A card that stops answering has the write abandoned, not waited on",
+          "[file-ops][faulty][slow]") {
+  // The last line of defence. Sync fallback is already the recovery path --
+  // the async queue was not draining, so the queued writes are replayed one at
+  // a time through pwrite -- and if the card does not answer those either,
+  // there is nothing left to fall back to. Each replayed write gets
+  // kSyncWriteTimeoutSeconds and no more, because pwrite to a card that has
+  // stopped responding does not return: without the timeout the writer thread
+  // is gone for good, progress stops at whatever percentage it reached, and
+  // Cancel cannot get it back.
+  //
+  // Timing out is only half of it. The handle is closed as the timeout fires,
+  // so that anything that carries on writing gets an error rather than
+  // quietly addressing a file descriptor number that has since been reused.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no unresponsive device exists");
+
+  // Longer than kSyncWriteTimeoutSeconds, so the timeout is what ends the
+  // write; not much longer, so the device is free again shortly afterwards.
+  FaultyDevice device(64, FaultyDevice::SlowWrites{33000});
+  if (!device.isReady())
+    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no async queue to fall back from");
+  REQUIRE(ops->SetAsyncQueueDepth(8));
+
+  constexpr std::size_t kChunk = 64u * 1024;
+  auto buffer = alignedBuffer(kChunk, 0x9D);
+  REQUIRE(buffer);
+
+  for (int i = 0; i < 2; ++i)
+    REQUIRE(ops->AsyncWriteSequential(buffer.get(), kChunk, nullptr) ==
+            FileError::kSuccess);
+  REQUIRE(ops->GetPendingWriteCount() == 2);
+
+  const auto start = std::chrono::steady_clock::now();
+  const FileError result = ops->AttemptSyncFallback();
+  const auto waited = std::chrono::duration_cast<std::chrono::seconds>(
+                          std::chrono::steady_clock::now() - start)
+                          .count();
+
+  INFO("the fallback gave up after " << waited << "s");
+  CHECK(result == FileError::kTimeout);
+
+  // Bounded by the timeout rather than by the card: it came back well before
+  // the device would have answered on its own.
+  CHECK(waited < 33);
+
+  // And the handle is shut, so nothing writes into the void afterwards.
+  CHECK_FALSE(ops->IsOpen());
+  CHECK(ops->WriteSequential(buffer.get(), kChunk) == FileError::kOpenError);
+}
