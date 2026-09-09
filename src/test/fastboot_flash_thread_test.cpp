@@ -1365,6 +1365,41 @@ TEST_CASE("A device that refuses a segment does not get a success",
     CHECK_FALSE(log.success);
     REQUIRE_FALSE(log.errors.isEmpty());
     INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    // Named for the step that refused. The segment reaching the device and
+    // the device declining to commit it are different faults with different
+    // things to check, and they are reported separately -- so asserting only
+    // that something failed would pass for either.
+    CHECK(log.errors.last().contains(QStringLiteral("flash failed")));
+}
+
+TEST_CASE("A segment that will not reach the device is reported as a download",
+          "[fastboot][flash][pipeline]")
+{
+    // The other half of the same step. The image is sent to the device's
+    // buffer and then committed, and a USB transfer that fails part-way is a
+    // different thing from a device that takes the bytes and refuses them --
+    // one points at the cable, the other at the storage.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(4 * 1024 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     1024u * 1024};
+    t.device.failCommand("download:");
+
+    SignalLog log;
+    log.attach(&t);
+
+    t.runImpl();
+
+    CHECK_FALSE(log.success);
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.errors.last().contains(QStringLiteral("download failed")));
+    // And half an image is not left looking written.
+    CHECK_FALSE(log.success);
 }
 
 TEST_CASE("Cancelling partway stops sending and does not report success",
