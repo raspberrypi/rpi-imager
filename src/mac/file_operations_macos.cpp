@@ -562,6 +562,7 @@ FileError MacOSFileOperations::ForceSync() {
 
   // Force filesystem sync using fsync - same logic as MacFile::forceSync()
   if (::fsync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kSyncError;
   }
 
@@ -580,6 +581,7 @@ FileError MacOSFileOperations::Flush() {
 
   // On macOS, use fsync for both flush and sync operations
   if (::fsync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kFlushError;
   }
 
