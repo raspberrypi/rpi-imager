@@ -19,7 +19,10 @@
 
 #include "systemmemorymanager.h"
 
+#include <QFile>
 #include <QString>
+
+#include <cstdlib>
 
 namespace {
 
@@ -886,4 +889,127 @@ TEST_CASE("The async queue depth follows what is free, not what is installed",
         // queue at all, and the writer has no other mode to fall back to here.
         CHECK(SystemMemoryManager::asyncQueueDepthFor(0, kBlock) == 4);
     }
+}
+
+// ---------------------------------------------------------------------------
+// The /proc/meminfo fallback.
+//
+// On Linux both figures come from sysinfo(), and sysinfo() does not fail on a
+// working kernel -- its only documented error is a bad pointer. So this parser
+// had never once been executed, which is a poor state for the code that runs
+// where sysinfo() is unavailable: a sandbox that filters the syscall, or a
+// kernel too old to have it. Getting it wrong there reports 0MB, and 0MB puts
+// every ladder above on its lowest rung -- a 32GB machine writing through a
+// 512KB buffer, four writes deep.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Memory is read out of a normal /proc/meminfo", "[memory]")
+{
+    const QString meminfo = QStringLiteral(
+        "MemTotal:        8039584 kB\n"
+        "MemFree:          213984 kB\n"
+        "MemAvailable:    6120448 kB\n"
+        "Buffers:          109376 kB\n"
+        "Cached:          5501952 kB\n"
+        "SwapCached:            0 kB\n");
+
+    CHECK(SystemMemoryManager::totalMemoryFromMeminfo(meminfo) == 8039584 / 1024);
+    CHECK(SystemMemoryManager::availableMemoryFromMeminfo(meminfo) == 6120448 / 1024);
+}
+
+TEST_CASE("A kernel too old for MemAvailable is estimated instead", "[memory]")
+{
+    // MemAvailable arrived in 3.14. Before it, the best estimate is free plus
+    // what the kernel could give back -- buffers and cache. Reporting only
+    // MemFree there would put a perfectly healthy machine on the bottom rung
+    // of every ladder, because almost all of its memory is page cache.
+    const QString meminfo = QStringLiteral(
+        "MemTotal:        2048000 kB\n"
+        "MemFree:          102400 kB\n"
+        "Buffers:           51200 kB\n"
+        "Cached:          1024000 kB\n");
+
+    CHECK(SystemMemoryManager::availableMemoryFromMeminfo(meminfo) ==
+          (102400 + 51200 + 1024000) / 1024);
+
+    // And the estimate is not simply MemFree, which is the mistake it exists
+    // to avoid.
+    CHECK(SystemMemoryManager::availableMemoryFromMeminfo(meminfo) >
+          102400 / 1024);
+}
+
+TEST_CASE("SwapCached is not mistaken for Cached", "[memory]")
+{
+    // Both lines end in "Cached:", and on a machine that has been swapping
+    // SwapCached is not small. Counting it as reclaimable page cache would
+    // overstate what is free and size the buffers for memory the machine has
+    // not got.
+    //
+    // In the order the kernel prints them: Cached first, SwapCached after.
+    // That order is the whole of the test. A match that was not anchored to
+    // the start of the line would take Cached correctly and then have
+    // SwapCached overwrite it -- which the other order would hide, because
+    // the right value would happen to be assigned last.
+    const QString meminfo = QStringLiteral(
+        "MemFree:          102400 kB\n"
+        "Buffers:           51200 kB\n"
+        "Cached:           204800 kB\n"
+        "SwapCached:       999999 kB\n");
+
+    CHECK(SystemMemoryManager::availableMemoryFromMeminfo(meminfo) ==
+          (102400 + 51200 + 204800) / 1024);
+}
+
+TEST_CASE("A /proc/meminfo that says nothing useful reports nothing", "[memory]")
+{
+    // Zero is what the callers already treat as "detection failed", and it is
+    // the only honest answer. Anything invented here would be a number the
+    // buffer ladders then act on.
+    SECTION("empty") {
+        CHECK(SystemMemoryManager::totalMemoryFromMeminfo(QString()) == 0);
+        CHECK(SystemMemoryManager::availableMemoryFromMeminfo(QString()) == 0);
+    }
+    SECTION("the fields are simply absent") {
+        const QString other = QStringLiteral("Slab: 123 kB\nVmallocTotal: 456 kB\n");
+        CHECK(SystemMemoryManager::totalMemoryFromMeminfo(other) == 0);
+        CHECK(SystemMemoryManager::availableMemoryFromMeminfo(other) == 0);
+    }
+    SECTION("the field is there but the number is not") {
+        const QString broken = QStringLiteral("MemTotal:        not-a-number kB\n");
+        CHECK(SystemMemoryManager::totalMemoryFromMeminfo(broken) == 0);
+    }
+    SECTION("the field has no value at all") {
+        const QString bare = QStringLiteral("MemTotal:\nMemAvailable:\n");
+        CHECK(SystemMemoryManager::totalMemoryFromMeminfo(bare) == 0);
+        CHECK(SystemMemoryManager::availableMemoryFromMeminfo(bare) == 0);
+    }
+}
+
+TEST_CASE("The parser agrees with this machine's own /proc/meminfo", "[memory]")
+{
+    // The fixtures above are what the format looked like when this was
+    // written. This one reads the real file, so a change to the format is
+    // caught here rather than on the machine where the fallback is the only
+    // path there is.
+    QFile f(QStringLiteral("/proc/meminfo"));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+        SKIP("/proc/meminfo is not readable on this host");
+    const QString contents = QString::fromUtf8(f.readAll());
+    f.close();
+
+    const qint64 parsedTotal = SystemMemoryManager::totalMemoryFromMeminfo(contents);
+    const qint64 parsedAvailable =
+        SystemMemoryManager::availableMemoryFromMeminfo(contents);
+
+    REQUIRE(parsedTotal > 0);
+    CHECK(parsedAvailable > 0);
+    CHECK(parsedAvailable <= parsedTotal);
+
+    // And within a few percent of what sysinfo() reports, which is the figure
+    // this would be standing in for. Not equal: sysinfo's totalram excludes
+    // the memory the kernel image itself occupies, and the two are sampled a
+    // moment apart.
+    const qint64 viaSysinfo = SystemMemoryManager::instance().getTotalMemoryMB();
+    INFO("meminfo says " << parsedTotal << "MB, sysinfo says " << viaSysinfo << "MB");
+    CHECK(std::llabs(parsedTotal - viaSysinfo) < parsedTotal / 10);
 }

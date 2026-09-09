@@ -79,6 +79,23 @@ public:
     static size_t verifyBufferSizeFor(qint64 fileSize, qint64 totalMemMB);
     static int asyncQueueDepthFor(qint64 availableMemMB, size_t writeBlockSize);
 
+    /*
+     * The /proc/meminfo half of memory detection, given the text rather than
+     * the file.
+     *
+     * On Linux both figures come from sysinfo(), and sysinfo() does not fail
+     * on a working kernel -- its only documented error is a bad pointer. So
+     * the fallback underneath it had never once been executed, which is a
+     * poor state for the code that runs where sysinfo() is unavailable: a
+     * sandbox that filters the syscall, or a kernel too old for it. Reading
+     * the file and parsing it are separate here so the parsing can be.
+     *
+     * Both return 0 when the figure is not there or does not parse, which the
+     * callers already treat as "detection failed".
+     */
+    static qint64 totalMemoryFromMeminfo(const QString &contents);
+    static qint64 availableMemoryFromMeminfo(const QString &contents);
+
     /**
      * @brief Get platform name for logging
      * @return Platform identifier string
