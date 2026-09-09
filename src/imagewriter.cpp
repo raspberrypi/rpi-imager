@@ -2055,17 +2055,71 @@ namespace {
         for (auto ositem : parent_list) {
             auto ositemObject = ositem.toObject();
 
-            if (ositemObject.contains("subitems")) {
+            // subitems_url first, because after a refresh an entry can carry
+            // both: the previous contents, kept so the category does not
+            // empty while the new sublist is on its way, and the URL the new
+            // one is coming from. Recursing on the stale contents instead
+            // would leave the arriving sublist with nowhere to land.
+            if (ositemObject.contains("subitems_url")
+                && !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
+                ositemObject.insert("subitems", incomingBody);
+                ositemObject.remove("subitems_url");
+            } else if (ositemObject.contains("subitems")) {
                 // Recurse!
                 ositemObject["subitems"] = findAndInsertJsonResult(ositemObject["subitems"].toArray(), incomingBody, referenceUrl, count + 1);
-            } else if (ositemObject.contains("subitems_url")) {
-                if ( !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
-                    ositemObject.insert("subitems", incomingBody);
-                    ositemObject.remove("subitems_url");
-                }
             }
 
             returnArray += ositemObject;
+        }
+
+        return returnArray;
+    }
+
+    // Bring a refreshed top-level list up to date without emptying its
+    // categories.
+    //
+    // A category arrives from the repository as a name and a subitems_url,
+    // and its contents are fetched separately; once they land, subitems_url
+    // is replaced by subitems. So a refreshed list has categories that are
+    // once again nothing but a URL, and dropping the previous contents on
+    // the floor would blank every category until its sublist came back --
+    // or for good, if that fetch then failed, because a category with
+    // nothing in it is pruned from the chooser entirely.
+    //
+    // Matching is by name: it is what identifies a category to the person
+    // reading the list, and it is the only field left on an entry whose
+    // subitems_url has already been consumed.
+    QJsonArray carryOverSubitems(const QJsonArray &previous, const QJsonArray &incoming,
+                                 uint8_t count) {
+        if (count > MAX_SUBITEMS_DEPTH)
+            return incoming;
+
+        QHash<QString, QJsonArray> known;
+        for (const auto &entry : previous) {
+            const QJsonObject obj = entry.toObject();
+            const QString name = obj["name"].toString();
+            if (!name.isEmpty() && obj.contains("subitems"))
+                known.insert(name, obj["subitems"].toArray());
+        }
+
+        QJsonArray returnArray = {};
+        for (const auto &entry : incoming) {
+            QJsonObject obj = entry.toObject();
+            const auto found = known.constFind(obj["name"].toString());
+            if (found != known.constEnd()) {
+                if (obj.contains("subitems")) {
+                    // Both sides have contents: the new list is authoritative
+                    // for what is there, and the old one only for categories
+                    // nested inside it that have not been refetched yet.
+                    obj["subitems"] = carryOverSubitems(*found, obj["subitems"].toArray(),
+                                                        count + 1);
+                } else if (obj.contains("subitems_url")) {
+                    // Kept alongside subitems_url, not instead of it: the
+                    // refetch is queued and will replace these.
+                    obj.insert("subitems", *found);
+                }
+            }
+            returnArray += obj;
         }
 
         return returnArray;
@@ -2238,6 +2292,27 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url,
             _completeOsList = QJsonDocument(response_object);
             // Notify UI that OS list is now available (was unavailable, now has data)
             emit osListUnavailableChanged();
+        } else if (isTopLevelRequest) {
+            /* A refresh of the whole list, which is a replacement and not an
+               insertion. The repository asks to be refetched through
+               imager.refresh_interval_minutes and scheduleOsListRefresh()
+               obliges, so this is the reply to that -- but sending it through
+               findAndInsertJsonResult() below looks for an entry whose
+               subitems_url is this URL, finds none at the top level, and
+               hands back the list exactly as it was. A new release, a changed
+               download URL or a corrected checksum therefore never appeared
+               in a session that stayed open; only a restart picked it up.
+
+               Contents already fetched for a category are carried across so
+               it does not empty while its sublist is refetched below. */
+            QJsonObject imager_meta = response_object.contains("imager")
+                                          ? response_object["imager"].toObject()
+                                          : _completeOsList["imager"].toObject();
+            _completeOsList = QJsonDocument(QJsonObject({
+                {"imager", imager_meta},
+                {"os_list", carryOverSubitems(_completeOsList["os_list"].toArray(),
+                                              response_object["os_list"].toArray(), 1)}
+            }));
         } else {
             // Preserve latest top-level imager metadata if present in the top-level fetch
             auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), url, 1);

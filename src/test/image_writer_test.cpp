@@ -20,6 +20,7 @@
 #include <catch2/catch_session.hpp>
 
 #include <unistd.h>
+#include <pwd.h>
 
 #include "imagewriter.h"
 #include "platformquirks.h"
@@ -32,6 +33,7 @@
 #include "app_resources.h"
 #include "platform_tools.h"
 #include "drivelistmodel.h"
+#include "oslistmodel.h"
 #include "drivelistmodelpollthread.h"
 
 #include <QCryptographicHash>
@@ -2568,6 +2570,175 @@ TEST_CASE("A fetched sub-list is merged into the category that asked for it",
         CHECK_FALSE(o.contains(QStringLiteral("subitems_url")));
     }
     CHECK(found);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Refreshing the whole list
+//
+// The repository can ask to be refetched -- imager.refresh_interval_minutes
+// -- and scheduleOsListRefresh() obliges on a timer. The reply arrives at the
+// same handler a category's contents do, and was merged the same way: look
+// for an entry whose subitems_url is this URL, and insert into it. At the top
+// level there is no such entry, so the merge handed the existing list
+// straight back and the refetched one was dropped.
+//
+// What that cost the user: a new release, a changed download URL or a
+// corrected checksum never appeared in a session that stayed open. Only a
+// restart picked it up, and nothing said so.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+QStringList descriptionsIn(const QJsonDocument &doc)
+{
+    QStringList out;
+    for (const auto &v : doc.object().value(QStringLiteral("os_list")).toArray())
+        out << v.toObject().value(QStringLiteral("description")).toString();
+    return out;
+}
+
+QJsonObject entryNamed(const QJsonDocument &doc, const QString &name)
+{
+    for (const auto &v : doc.object().value(QStringLiteral("os_list")).toArray()) {
+        const QJsonObject o = v.toObject();
+        if (o.value(QStringLiteral("name")).toString() == name)
+            return o;
+    }
+    return {};
+}
+
+QStringList childNamesOf(const QJsonObject &entry)
+{
+    QStringList out;
+    for (const auto &v : entry.value(QStringLiteral("subitems")).toArray())
+        out << v.toObject().value(QStringLiteral("name")).toString();
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("A refreshed list replaces the one already held",
+          "[imagewriter][oslist]")
+{
+    FeedableImageWriter writer;
+    writer.feedOsList(QByteArray(R"JSON({
+        "os_list": [
+            { "name": "Pi OS", "url": "https://example.invalid/2026-01.img.xz",
+              "description": "January release", "extract_sha256": "aaaa" }
+        ]
+    })JSON"));
+    REQUIRE(descriptionsIn(writer.getFilteredOSlistDocument())
+                .contains(QStringLiteral("January release")));
+
+    writer.feedOsList(QByteArray(R"JSON({
+        "os_list": [
+            { "name": "Pi OS", "url": "https://example.invalid/2026-02.img.xz",
+              "description": "February release", "extract_sha256": "bbbb" }
+        ]
+    })JSON"));
+
+    const QJsonObject entry = entryNamed(writer.getFilteredOSlistDocument(),
+                                         QStringLiteral("Pi OS"));
+    INFO("entry: " << QString::fromUtf8(QJsonDocument(entry).toJson()).toStdString());
+    CHECK(entry.value(QStringLiteral("description")).toString()
+          == QStringLiteral("February release"));
+    // The URL and the checksum matter more than the label: a stale pair here
+    // writes last month's image and then fails its own hash check.
+    CHECK(entry.value(QStringLiteral("url")).toString()
+          == QStringLiteral("https://example.invalid/2026-02.img.xz"));
+    CHECK(entry.value(QStringLiteral("extract_sha256")).toString()
+          == QStringLiteral("bbbb"));
+}
+
+TEST_CASE("A refresh takes the newer imager metadata with it",
+          "[imagewriter][oslist]")
+{
+    // The refresh interval itself lives in this block, so a repository that
+    // changes its mind about how often to be asked can only say so here.
+    FeedableImageWriter writer;
+    writer.feedOsList(QByteArray(R"JSON({
+        "imager": { "latest_version": "1.9.0" },
+        "os_list": [ { "name": "Pi OS", "url": "https://example.invalid/a.img" } ]
+    })JSON"));
+
+    writer.feedOsList(QByteArray(R"JSON({
+        "imager": { "latest_version": "2.0.0" },
+        "os_list": [ { "name": "Pi OS", "url": "https://example.invalid/a.img" } ]
+    })JSON"));
+
+    const QJsonObject imager = writer.getFilteredOSlistDocument().object()
+                                   .value(QStringLiteral("imager")).toObject();
+    CHECK(imager.value(QStringLiteral("latest_version")).toString()
+          == QStringLiteral("2.0.0"));
+}
+
+TEST_CASE("A refresh does not empty a category while its contents are refetched",
+          "[imagewriter][oslist]")
+{
+    // A category arrives as a name and a subitems_url, and its contents come
+    // separately. A refreshed list has it as a bare URL again, so replacing
+    // the list wholesale would blank every category until its sublist came
+    // back -- and for good if that fetch then failed, because a category with
+    // nothing in it is dropped from the chooser rather than shown empty.
+    FeedableImageWriter writer;
+    const QUrl subUrl(QStringLiteral("https://example.invalid/other.json"));
+
+    writer.feedOsList(QByteArray(R"JSON({
+        "os_list": [
+            { "name": "Other", "subitems_url": "https://example.invalid/other.json" }
+        ]
+    })JSON"));
+    writer.feedSubList(QByteArray(R"JSON({
+        "os_list": [ { "name": "Child one", "url": "https://example.invalid/c1.img" } ]
+    })JSON"), subUrl);
+    REQUIRE(childNamesOf(entryNamed(writer.getFilteredOSlistDocument(),
+                                    QStringLiteral("Other")))
+                .contains(QStringLiteral("Child one")));
+
+    writer.feedOsList(QByteArray(R"JSON({
+        "os_list": [
+            { "name": "Other", "subitems_url": "https://example.invalid/other.json" }
+        ]
+    })JSON"));
+
+    const QStringList still = childNamesOf(
+        entryNamed(writer.getFilteredOSlistDocument(), QStringLiteral("Other")));
+    INFO("children after the refresh: " << still.join(QStringLiteral(", ")).toStdString());
+    CHECK(still.contains(QStringLiteral("Child one")));
+}
+
+TEST_CASE("A refetched category takes the sub-list that follows the refresh",
+          "[imagewriter][oslist]")
+{
+    // The other half: what is kept is a stand-in, not the answer. When the
+    // sublist arrives it has to land, even though the entry now holds both
+    // the previous contents and the URL the new ones are coming from.
+    FeedableImageWriter writer;
+    const QUrl subUrl(QStringLiteral("https://example.invalid/other.json"));
+    const QByteArray topLevel = R"JSON({
+        "os_list": [
+            { "name": "Other", "subitems_url": "https://example.invalid/other.json" }
+        ]
+    })JSON";
+
+    writer.feedOsList(topLevel);
+    writer.feedSubList(QByteArray(R"JSON({
+        "os_list": [ { "name": "Child one", "url": "https://example.invalid/c1.img" } ]
+    })JSON"), subUrl);
+
+    writer.feedOsList(topLevel);
+    writer.feedSubList(QByteArray(R"JSON({
+        "os_list": [ { "name": "Child two", "url": "https://example.invalid/c2.img" } ]
+    })JSON"), subUrl);
+
+    const QJsonObject entry = entryNamed(writer.getFilteredOSlistDocument(),
+                                         QStringLiteral("Other"));
+    const QStringList children = childNamesOf(entry);
+    INFO("children: " << children.join(QStringLiteral(", ")).toStdString());
+    CHECK(children.contains(QStringLiteral("Child two")));
+    CHECK_FALSE(children.contains(QStringLiteral("Child one")));
+    // And the pending URL is gone again, or the category refetches for ever.
+    CHECK_FALSE(entry.contains(QStringLiteral("subitems_url")));
 }
 
 TEST_CASE("A repository naming an unusable sub-list URL still gives a chooser",
@@ -10827,6 +10998,264 @@ TEST_CASE("An elevated run hands the whole cache tree back",
                    QStringLiteral("rm"), QStringLiteral("-rf"), root});
     cleanup.waitForFinished(15000);
 }
+namespace {
+
+// Run the probe as root in a user namespace with `env` set on top of the
+// inherited environment, and hand back what it printed. Returns an empty
+// string when the namespace could not be created.
+QString runElevatedProbe(const QStringList &probeArgs, const QStringList &env)
+{
+    QProcess check;
+    check.start(QStringLiteral("unshare"),
+                {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+                 QStringLiteral("true")});
+    if (!check.waitForFinished(10000) || check.exitCode() != 0)
+        return {};
+
+    QProcess p;
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    // Neither variable is set for the test binary itself, but say so rather
+    // than assume it: a case that meant to test PKEXEC_UID would otherwise
+    // quietly test SUDO_UID if the suite were ever started under sudo.
+    environment.remove(QStringLiteral("SUDO_UID"));
+    environment.remove(QStringLiteral("PKEXEC_UID"));
+    for (const QString &entry : env) {
+        const int split = entry.indexOf(QLatin1Char('='));
+        environment.insert(entry.left(split), entry.mid(split + 1));
+    }
+    p.setProcessEnvironment(environment);
+    p.start(QStringLiteral("unshare"),
+            QStringList{QStringLiteral("-r"), QStringLiteral("--map-auto"),
+                        QStringLiteral(SETTINGS_PERMISSIONS_PROBE_BINARY)}
+                + probeArgs);
+    if (!p.waitForFinished(30000))
+        return {};
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
+// uid 1000 is the account the file gets handed to below, and getpwuid_r has
+// to find it or the lookup rightly refuses. Standard on a desktop; checked
+// rather than assumed.
+bool haveHandoverAccount() { return ::getpwuid(1000) != nullptr; }
+
+// The namespace leaves files owned by a subordinate uid this account cannot
+// touch from outside, so removal has to happen back inside one -- and it has
+// to take the whole scratch directory, because QTemporaryDir cannot delete a
+// file it does not own either.
+void removeAsRoot(const QString &path)
+{
+    QProcess cleanup;
+    cleanup.start(QStringLiteral("unshare"),
+                  {QStringLiteral("-r"), QStringLiteral("--map-auto"),
+                   QStringLiteral("rm"), QStringLiteral("-rf"), path});
+    cleanup.waitForFinished(10000);
+}
+
+} // namespace
+
+TEST_CASE("An elevated run finds the invoking account in SUDO_UID",
+          "[imagewriter][settingsperms]")
+{
+    // Nothing in Imager passes a uid to secureSettingsFile(). The product
+    // calls the one-argument form, which works the account out of the
+    // environment sudo or pkexec left behind -- so that lookup is the part
+    // that decides whether an elevated run leaves the user able to open
+    // their own settings, and it is the part worth holding down.
+    if (!haveHandoverAccount())
+        SKIP("uid 1000 is not an account here, so there is nobody to hand the "
+             "file to");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    const QString out = runElevatedProbe(
+        {path, QStringLiteral("-1"), QStringLiteral("-1"), QStringLiteral("env")},
+        {QStringLiteral("SUDO_UID=1000")});
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable, so no second uid can be "
+             "mapped to hand the file to");
+    INFO("probe said:\n" << out.toStdString());
+
+    REQUIRE(out.contains(QStringLiteral("EUID=0")));
+    CHECK(out.contains(QStringLiteral("OWNER=1000")));
+    CHECK(out.contains(QStringLiteral("REOWNED=1")));
+    CHECK(out.contains(QStringLiteral("MODE=600")));
+    CHECK(out.contains(QStringLiteral("SECURED=1")));
+
+    removeAsRoot(tmp.path());
+}
+
+TEST_CASE("PKEXEC_UID is used when sudo did not leave one",
+          "[imagewriter][settingsperms]")
+{
+    // The graphical elevation path. pkexec sets PKEXEC_UID and not SUDO_UID,
+    // and on a desktop that is how Imager is elevated -- so reading only
+    // SUDO_UID would leave every polkit-elevated run with a root-owned
+    // settings file, which is the state this whole mechanism exists to
+    // repair.
+    if (!haveHandoverAccount())
+        SKIP("uid 1000 is not an account here, so there is nobody to hand the "
+             "file to");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    const QString out = runElevatedProbe(
+        {path, QStringLiteral("-1"), QStringLiteral("-1"), QStringLiteral("env")},
+        {QStringLiteral("PKEXEC_UID=1000")});
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable, so no second uid can be "
+             "mapped to hand the file to");
+    INFO("probe said:\n" << out.toStdString());
+
+    REQUIRE(out.contains(QStringLiteral("EUID=0")));
+    CHECK(out.contains(QStringLiteral("OWNER=1000")));
+    CHECK(out.contains(QStringLiteral("REOWNED=1")));
+
+    removeAsRoot(tmp.path());
+}
+
+TEST_CASE("A SUDO_UID that is not an account is not acted on",
+          "[imagewriter][settingsperms]")
+{
+    // The variable is inherited from whatever launched Imager, so it can say
+    // anything. Handing the settings file -- which holds the account password
+    // hash and the wireless PSK -- to a uid picked out of a malformed string
+    // would be worse than leaving it with root. Nothing plausible means no
+    // handover, and the file is still narrowed.
+    const auto junk = GENERATE(
+        // not a number at all
+        QStringLiteral("root"),
+        // a number with something after it
+        QStringLiteral("1000x"),
+        // empty
+        QStringLiteral(""),
+        // root itself, which is not a handover to anyone
+        QStringLiteral("0"),
+        // past what a uid can hold
+        QStringLiteral("99999999999999999999"));
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    const QString out = runElevatedProbe(
+        {path, QStringLiteral("-1"), QStringLiteral("-1"), QStringLiteral("env")},
+        {QStringLiteral("SUDO_UID=") + junk});
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable, so no second uid can be "
+             "mapped to hand the file to");
+    INFO("SUDO_UID=" << junk.toStdString() << "\nprobe said:\n" << out.toStdString());
+
+    REQUIRE(out.contains(QStringLiteral("EUID=0")));
+    CHECK(out.contains(QStringLiteral("REOWNED=0")));
+    CHECK(out.contains(QStringLiteral("OWNER=0")));
+    // Still not left group-readable: refusing to guess an owner is not a
+    // reason to leave the password hash where anyone can read it.
+    CHECK(out.contains(QStringLiteral("MODE=600")));
+
+    removeAsRoot(tmp.path());
+}
+
+TEST_CASE("A SUDO_UID naming no account on this machine is ignored",
+          "[imagewriter][settingsperms]")
+{
+    // A number in range, and nobody. The uid is looked up rather than
+    // trusted, because chowning the settings file to an account that does
+    // not exist would leave it belonging to nothing -- unreadable to the
+    // user and un-repairable by the next run.
+    uid_t unused = 65500;
+    while (unused > 60000 && ::getpwuid(unused) != nullptr)
+        --unused;
+    if (::getpwuid(unused) != nullptr)
+        SKIP("every uid tried is a real account on this machine");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    const QString out = runElevatedProbe(
+        {path, QStringLiteral("-1"), QStringLiteral("-1"), QStringLiteral("env")},
+        {QStringLiteral("SUDO_UID=") + QString::number(unused)});
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable, so no second uid can be "
+             "mapped to hand the file to");
+    INFO("SUDO_UID=" << unused << "\nprobe said:\n" << out.toStdString());
+
+    REQUIRE(out.contains(QStringLiteral("EUID=0")));
+    CHECK(out.contains(QStringLiteral("REOWNED=0")));
+    CHECK(out.contains(QStringLiteral("OWNER=0")));
+
+    removeAsRoot(tmp.path());
+}
+
+TEST_CASE("The first elevated run creates the settings file for the user",
+          "[imagewriter][settingsperms]")
+{
+    // No settings file yet, which is what a first launch looks like. Root
+    // makes it, and then has to hand it over -- and the chown has to be
+    // followed by the narrowing rather than preceding it, because changing
+    // ownership can clear mode bits.
+    if (!haveHandoverAccount())
+        SKIP("uid 1000 is not an account here, so there is nobody to hand the "
+             "file to");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("Imager.conf"));
+
+    const QString out = runElevatedProbe(
+        {path, QStringLiteral("-1"), QStringLiteral("-1"), QStringLiteral("newenv")},
+        {QStringLiteral("SUDO_UID=1000")});
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable, so no second uid can be "
+             "mapped to hand the file to");
+    INFO("probe said:\n" << out.toStdString());
+
+    REQUIRE(out.contains(QStringLiteral("EUID=0")));
+    CHECK(out.contains(QStringLiteral("CREATED=1")));
+    CHECK(out.contains(QStringLiteral("OWNER=1000")));
+    CHECK(out.contains(QStringLiteral("REOWNED=1")));
+    CHECK(out.contains(QStringLiteral("MODE=600")));
+    CHECK(out.contains(QStringLiteral("SECURED=1")));
+
+    removeAsRoot(tmp.path());
+}
+
+TEST_CASE("The ownership sweep also reads the account from the environment",
+          "[imagewriter][ownership]")
+{
+    // Same lookup, other caller. This is the one that repairs the desktop
+    // file and the mime caches an elevated run leaves behind as root, and it
+    // is called with no uid too.
+    if (!haveHandoverAccount())
+        SKIP("uid 1000 is not an account here, so there is nobody to hand the "
+             "file to");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString path = tmp.filePath(QStringLiteral("handler.desktop"));
+    {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("[Desktop Entry]\n");
+    }
+
+    const QString out = runElevatedProbe(
+        {path, QStringLiteral("-1"), QStringLiteral("-1"), QStringLiteral("ownenv")},
+        {QStringLiteral("SUDO_UID=1000")});
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable, so no second uid can be "
+             "mapped to hand the file to");
+    INFO("probe said:\n" << out.toStdString());
+
+    REQUIRE(out.contains(QStringLiteral("EUID=0")));
+    CHECK(out.contains(QStringLiteral("CHANGED=1")));
+
+    removeAsRoot(tmp.path());
+}
 #endif // SETTINGS_PERMISSIONS_PROBE_BINARY
 
 // ══════════════════════════════════════════════════════════════
@@ -11781,4 +12210,204 @@ TEST_CASE("Going back to an ordinary card leaves neither path set",
     w.setDst(QString(), 0);
     CHECK_FALSE(w.isFastbootDevice());
     CHECK_FALSE(w.isRpibootDevice());
+}
+
+// ---------------------------------------------------------------------------
+// The OS list model
+//
+// Between the parsed JSON and the chooser on screen. Two things it does are
+// invisible when they go wrong: it decides which rows changed since the last
+// refresh -- a row it thinks is unchanged is never redrawn, so a new size or
+// a new download URL simply does not appear -- and it names the roles QML
+// binds to, where a name that does not match leaves a blank where the text
+// should be.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// One os_list entry, with `extra` folded in so a case can change exactly one
+// field and leave the rest identical.
+QByteArray oneEntryList(const QByteArray &extra = {})
+{
+    QByteArray json = "{\"os_list\":[{"
+                      "\"name\":\"Raspberry Pi OS\","
+                      "\"description\":\"A port of Debian\","
+                      "\"url\":\"https://example.invalid/os.img.xz\","
+                      "\"icon\":\"\"";
+    if (!extra.isEmpty())
+        json += "," + extra;
+    json += "}]}";
+    return json;
+}
+
+// OSListModel narrows QAbstractItemModel's reading interface to protected --
+// it is there for QML, not for callers. Reading it through the base class is
+// how QML reaches it too, so this is the interface under test rather than a
+// way round an access specifier.
+const QAbstractItemModel &asModel(const OSListModel &model) { return model; }
+
+// The row the entry above lands on, which is not row zero: the chooser puts
+// its own entries around the repository's.
+int rowOf(const OSListModel &model, const QString &name)
+{
+    const QAbstractItemModel &m = asModel(model);
+    for (int i = 0; i < m.rowCount(QModelIndex()); ++i) {
+        if (m.data(m.index(i, 0), OSListModel::NameRole).toString() == name)
+            return i;
+    }
+    return -1;
+}
+
+} // namespace
+
+TEST_CASE("A changed field redraws the row it changed",
+          "[imagewriter][oslist][model]")
+{
+    // The refresh keeps the rows it already has and only redraws the ones
+    // whose contents differ, so every field an entry carries has to be part
+    // of that comparison. One left out means a list that has genuinely
+    // changed on the server -- a new image size, a new checksum, a new
+    // download URL for the same release -- is fetched, compared, judged
+    // identical and never shown. The user sees stale information with
+    // nothing to suggest it is stale.
+    //
+    // One field per run, each differing from the baseline in that field
+    // alone.
+    const auto changed = GENERATE(
+        QByteArray("\"description\":\"Something else\""),
+        QByteArray("\"devices\":[\"pi5-64bit\"]"),
+        QByteArray("\"capabilities\":[\"secure-boot\"]"),
+        QByteArray("\"icon\":\"https://example.invalid/pi.png\""),
+        QByteArray("\"init_format\":\"cloudinit\""),
+        QByteArray("\"release_date\":\"2026-01-01\""),
+        QByteArray("\"subitems_json\":\"[]\""),
+        QByteArray("\"tooltip\":\"Hover text\""),
+        QByteArray("\"website\":\"https://example.invalid/\""),
+        QByteArray("\"extract_sha256\":\"abc123\""),
+        QByteArray("\"bmap_url\":\"https://example.invalid/os.bmap\""),
+        QByteArray("\"architecture\":\"armv8\""),
+        QByteArray("\"image_download_size\":12345"),
+        QByteArray("\"extract_size\":67890"),
+        QByteArray("\"random\":true"),
+        QByteArray("\"enable_rpi_connect\":true"));
+
+    FeedableImageWriter writer;
+    OSListModel model(writer);
+
+    writer.feedOsList(oneEntryList());
+    REQUIRE(model.reload());
+    const int row = rowOf(model, QStringLiteral("Raspberry Pi OS"));
+    REQUIRE(row >= 0);
+
+    rpi_test::SignalLog redrawn(&model, &QAbstractItemModel::dataChanged);
+
+    writer.feedOsList(oneEntryList(changed));
+    REQUIRE(model.reload());
+
+    INFO("changed: " << changed.toStdString());
+    // The entry is still the same row -- same name, same URL -- so this is a
+    // redraw rather than a remove and an insert.
+    REQUIRE(rowOf(model, QStringLiteral("Raspberry Pi OS")) == row);
+    CHECK(redrawn.count() >= 1);
+}
+
+TEST_CASE("An unchanged list redraws nothing", "[imagewriter][oslist][model]")
+{
+    // The other half of the same contract, and the reason it is not simply
+    // "always redraw": the list is refetched on a timer, and redrawing every
+    // row each time drops the chooser's scroll position and its selection
+    // while somebody is reading it.
+    FeedableImageWriter writer;
+    OSListModel model(writer);
+
+    writer.feedOsList(oneEntryList());
+    REQUIRE(model.reload());
+
+    rpi_test::SignalLog redrawn(&model, &QAbstractItemModel::dataChanged);
+
+    writer.feedOsList(oneEntryList());
+    REQUIRE(model.reload());
+
+    CHECK(redrawn.count() == 0);
+}
+
+TEST_CASE("A remote icon is routed through the image provider",
+          "[imagewriter][oslist][model]")
+{
+    // Icons are fetched over the network, and letting QML fetch them itself
+    // puts them on the same connection queue as the list: a slow icon server
+    // holds up everything behind it. The provider fetches them separately,
+    // so what reaches QML has to be its URL rather than the original one.
+    FeedableImageWriter writer;
+    OSListModel model(writer);
+
+    writer.feedOsList(oneEntryList("\"icon\":\"https://example.invalid/pi.png\""));
+    REQUIRE(model.reload());
+
+    const int row = rowOf(model, QStringLiteral("Raspberry Pi OS"));
+    REQUIRE(row >= 0);
+    const QAbstractItemModel &m = asModel(model);
+    const QString icon = m.data(m.index(row, 0), OSListModel::IconRole).toString();
+    INFO("icon: " << icon.toStdString());
+    CHECK(icon == QStringLiteral("image://icons/https://example.invalid/pi.png"));
+}
+
+TEST_CASE("A bundled icon is left for QML to load directly",
+          "[imagewriter][oslist][model]")
+{
+    // Nothing to fetch, so nothing to route: sending a qrc path through the
+    // network image provider would fail to load and leave a blank tile.
+    FeedableImageWriter writer;
+    OSListModel model(writer);
+
+    writer.feedOsList(oneEntryList("\"icon\":\"qrc:/icons/pi.png\""));
+    REQUIRE(model.reload());
+
+    const int row = rowOf(model, QStringLiteral("Raspberry Pi OS"));
+    REQUIRE(row >= 0);
+    const QAbstractItemModel &m = asModel(model);
+    CHECK(m.data(m.index(row, 0), OSListModel::IconRole).toString()
+          == QStringLiteral("qrc:/icons/pi.png"));
+}
+
+TEST_CASE("Every role the chooser binds to has the name QML uses",
+          "[imagewriter][oslist][model]")
+{
+    // QML looks these up by string. A role with no name, or one renamed on
+    // the C++ side, does not raise an error anywhere -- the binding just
+    // resolves to undefined and the chooser shows an empty space where the
+    // description or the size should be.
+    FeedableImageWriter writer;
+    OSListModel model(writer);
+    const QHash<int, QByteArray> names = asModel(model).roleNames();
+
+    const QVector<QPair<int, QByteArray>> expected = {
+        { OSListModel::NameRole, "name" },
+        { OSListModel::DescriptionRole, "description" },
+        { OSListModel::DevicesRole, "devices" },
+        { OSListModel::CapabilitiesRole, "capabilities" },
+        { OSListModel::ExtractSha256Role, "extract_sha256" },
+        { OSListModel::BmapUrlRole, "bmap_url" },
+        { OSListModel::ExtractSizeRole, "extract_size" },
+        { OSListModel::IconRole, "icon" },
+        { OSListModel::ImageDownloadSizeRole, "image_download_size" },
+        { OSListModel::InitFormatRole, "init_format" },
+        { OSListModel::ReleaseDataRole, "release_date" },
+        { OSListModel::UrlRole, "url" },
+        { OSListModel::RandomRole, "random" },
+        { OSListModel::SubItemsJsonRole, "subitems_json" },
+        { OSListModel::TooltipRole, "tooltip" },
+        { OSListModel::WebsiteRole, "website" },
+        { OSListModel::ArchitectureRole, "architecture" },
+        { OSListModel::PiConnectRole, "enable_rpi_connect" },
+    };
+
+    for (const auto &pair : expected) {
+        INFO("role " << pair.first << " should be " << pair.second.toStdString());
+        CHECK(names.value(pair.first) == pair.second);
+    }
+
+    // And nothing beyond them, so a role added in C++ without a name here
+    // shows up as a mismatch rather than as a blank in the chooser.
+    CHECK(names.size() == expected.size());
 }
