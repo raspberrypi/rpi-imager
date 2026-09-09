@@ -90,6 +90,7 @@ public:
     using FastbootFlashThread::applyCustomisation;
     using FastbootFlashThread::applyBootOrderUpdate;
     using FastbootFlashThread::runImpl;
+    using FastbootFlashThread::run;
 };
 
 // A transport that can run a callback after each command reaches the "wire",
@@ -957,11 +958,20 @@ public:
 
     MockUsbTransport mock;              // outlives runImpl()
     bool openShouldFail = false;
+    // Something goes wrong in a way nobody wrote a handler for. `Throw` is a
+    // std::exception and carries a message; `ThrowSomethingElse` is not, and
+    // stands in for anything that reaches the top of the thread without one.
+    enum class OnOpen { Succeed, Throw, ThrowSomethingElse };
+    OnOpen onOpen = OnOpen::Succeed;
 
 protected:
     std::unique_ptr<rpiboot::IUsbTransport> openFastbootTransport(
         rpiboot::LibusbContext &, const rpiboot::UsbDeviceInfo &) override
     {
+        if (onOpen == OnOpen::Throw)
+            throw std::runtime_error("the bus went away mid-open");
+        if (onOpen == OnOpen::ThrowSomethingElse)
+            throw 42;
         if (openShouldFail)
             return nullptr;
         return std::make_unique<TransportView>(mock);
@@ -1989,4 +1999,58 @@ TEST_CASE("An image that cannot be fetched is reported as the download failing",
     CHECK_THAT(said, ContainsSubstring("Download failed"));
     // And the board is as it was.
     CHECK(t.device.flashed().empty());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Something nobody wrote a handler for
+//
+// The flash runs on its own thread, and an exception that reaches the top of
+// one is not caught by anything above it. Letting it out terminates the
+// process; swallowing it leaves the wizard on "Writing..." with nothing
+// coming, because the signal that would move it on is never emitted.
+//
+// So the top of the thread catches everything and turns it into an error the
+// user can see. The board is mid-provisioning when this happens, which is
+// exactly when being told is worth most.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("An exception escaping the flash reaches the user as an error",
+          "[fastboot][flash]")
+{
+    MockedFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                        QStringLiteral("mmcblk0")};
+    t.onOpen = MockedFlashThread::OnOpen::Throw;
+
+    SignalLog log;
+    log.attach(&t);
+
+    // run() rather than start(): the same code, without the thread.
+    CHECK_NOTHROW(t.run());
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.errors.last().contains(QStringLiteral("Fastboot error")));
+    // What went wrong, not just that something did.
+    CHECK(log.errors.last().contains(QStringLiteral("bus went away")));
+}
+
+TEST_CASE("Something thrown that is not an exception is still reported",
+          "[fastboot][flash]")
+{
+    // Nothing in this code throws a bare int on purpose. The catch-all is
+    // there because the alternative -- std::terminate part-way through
+    // writing a board -- is the worst outcome available, and it is only
+    // worth having if it says something.
+    MockedFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img.xz")),
+                        QStringLiteral("mmcblk0")};
+    t.onOpen = MockedFlashThread::OnOpen::ThrowSomethingElse;
+
+    SignalLog log;
+    log.attach(&t);
+
+    CHECK_NOTHROW(t.run());
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.errors.last().contains(QStringLiteral("Fastboot error")));
 }
