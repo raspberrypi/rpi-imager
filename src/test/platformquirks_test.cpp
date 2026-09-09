@@ -630,9 +630,14 @@ TEST_CASE("Watching for the network back does not accumulate",
     for (int i = 0; i < 8; i++)
         PlatformQuirks::startNetworkMonitoring([](bool) {});
 
-    // One watcher's worth, however many times it was asked for.
-    CHECK(countEntries("/proc/self/fd") - fdsBefore <= 2);
-    CHECK(countEntries("/proc/self/task") - threadsBefore <= 1);
+    // One watcher's worth, however many times it was asked for -- settled to,
+    // not sampled. Each start stops the one before it, and the thread it is
+    // stopping takes a moment to finish going; catching that moment reads as
+    // two watchers when there is only ever one being kept. Under -j4 it did.
+    // Accumulation is what this is about, and eight starts leaking would not
+    // settle back to one however long it waited.
+    CHECK(settlesTo("/proc/self/fd", fdsBefore + 2));
+    CHECK(settlesTo("/proc/self/task", threadsBefore + 1));
 
     PlatformQuirks::stopNetworkMonitoring();
 

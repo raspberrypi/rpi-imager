@@ -11407,3 +11407,125 @@ TEST_CASE("A Windows account name with a space is cut as well",
     ImageWriter writer(nullptr);
     CHECK(writer.getCurrentUser() == QStringLiteral("grace"));
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// What the OS list hands to the screen
+//
+// Every field the chooser shows -- the name, the description, the icon, the
+// board tags that decide whether an entry is offered at all -- reaches QML
+// through a role on this model. QML asks for them by name, so a role that is
+// missing from the name table or wired to the wrong field is not a compile
+// error and not a crash: the entry renders with that part blank, or with
+// somebody else's value in it.
+//
+// Nothing had read them. What follows sets one fully populated entry and
+// asks for every role by the name QML uses.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+OSListModel::OS fullyPopulatedEntry()
+{
+    OSListModel::OS os;
+    os.name = QStringLiteral("Raspberry Pi OS (64-bit)");
+    os.description = QStringLiteral("A port of Debian Bookworm with the desktop");
+    os.devices = QStringList{QStringLiteral("pi4-64bit"), QStringLiteral("pi5")};
+    os.capabilities = QStringList{QStringLiteral("usb_gadget")};
+    os.icon = QStringLiteral("https://downloads.raspberrypi.org/icons/os.png");
+    os.initFormat = QStringLiteral("systemd");
+    os.releaseDate = QStringLiteral("2026-08-01");
+    os.url = QStringLiteral("https://downloads.raspberrypi.org/os.img.xz");
+    os.subitemsJson = QStringLiteral("[{\"name\":\"nested\"}]");
+    os.tooltip = QStringLiteral("Recommended for most users");
+    os.website = QStringLiteral("https://www.raspberrypi.com/software/");
+    os.extractSha256 = QStringLiteral("00112233445566778899aabbccddeeff");
+    os.bmapUrl = QStringLiteral("https://downloads.raspberrypi.org/os.bmap");
+    os.architecture = QStringLiteral("armv8");
+    os.imageDownloadSize = 1234567;
+    os.extractSize = 7654321;
+    os.random = true;
+    os.enableRPiConnect = true;
+    return os;
+}
+
+// data() and roleNames() are narrowed to protected on the subclass, which is
+// only a statement about who calls them directly: QML reaches them through
+// the base class, and so does this.
+QVariant roleValue(QAbstractListModel &model, int role)
+{
+    return model.data(model.index(0, 0), role);
+}
+
+} // namespace
+
+TEST_CASE("Every field the chooser shows comes back under the name QML asks for",
+          "[imagewriter][oslist]")
+{
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    QVector<OSListModel::OS> rows{fullyPopulatedEntry()};
+    model.applyRows(std::move(rows));
+
+    QAbstractListModel &m = model;
+    REQUIRE(m.rowCount(QModelIndex()) == 1);
+
+    const QHash<int, QByteArray> names = m.roleNames();
+
+    struct Expected {
+        OSListModel::OSListRole role;
+        const char *name;
+        QVariant value;
+    };
+    const OSListModel::OS os = fullyPopulatedEntry();
+    const std::vector<Expected> expected{
+        {OSListModel::NameRole,              "name",                os.name},
+        {OSListModel::DescriptionRole,       "description",         os.description},
+        {OSListModel::DevicesRole,           "devices",             os.devices},
+        {OSListModel::CapabilitiesRole,      "capabilities",        os.capabilities},
+        {OSListModel::ExtractSha256Role,     "extract_sha256",      os.extractSha256},
+        {OSListModel::BmapUrlRole,           "bmap_url",            os.bmapUrl},
+        {OSListModel::ExtractSizeRole,       "extract_size",        QVariant(os.extractSize)},
+        {OSListModel::IconRole,              "icon",                os.icon},
+        {OSListModel::ImageDownloadSizeRole, "image_download_size", QVariant(os.imageDownloadSize)},
+        {OSListModel::InitFormatRole,        "init_format",         os.initFormat},
+        {OSListModel::ReleaseDataRole,       "release_date",        os.releaseDate},
+        {OSListModel::UrlRole,               "url",                 os.url},
+        {OSListModel::RandomRole,            "random",              QVariant(os.random)},
+        {OSListModel::SubItemsJsonRole,      "subitems_json",       os.subitemsJson},
+        {OSListModel::TooltipRole,           "tooltip",             os.tooltip},
+        {OSListModel::WebsiteRole,           "website",             os.website},
+        {OSListModel::ArchitectureRole,      "architecture",        os.architecture},
+        {OSListModel::PiConnectRole,         "enable_rpi_connect",  QVariant(os.enableRPiConnect)},
+    };
+
+    for (const Expected &e : expected) {
+        INFO("role " << e.name);
+        // The name QML writes in the delegate.
+        REQUIRE(names.contains(e.role));
+        CHECK(names.value(e.role) == QByteArray(e.name));
+        // And the field behind it. Every value in the fixture is distinct, so
+        // a role wired to its neighbour is caught here rather than by
+        // somebody noticing the wrong text on screen.
+        CHECK(roleValue(m, e.role) == e.value);
+    }
+
+    // No extras: a name in the table with nothing behind it is a delegate
+    // binding that silently reads undefined.
+    CHECK(names.size() == int(expected.size()));
+}
+
+TEST_CASE("A row that is not there yields nothing rather than reading past the end",
+          "[imagewriter][oslist]")
+{
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+    QAbstractListModel &m = model;
+
+    // An empty model, which is what the chooser holds before the list
+    // arrives. A delegate created against a stale index asks anyway.
+    CHECK(m.rowCount(QModelIndex()) == 0);
+    CHECK_FALSE(m.data(m.index(0, 0), OSListModel::NameRole).isValid());
+    CHECK_FALSE(m.data(m.index(-1, 0), OSListModel::NameRole).isValid());
+    CHECK_FALSE(m.data(m.index(5, 0), OSListModel::UrlRole).isValid());
+}
