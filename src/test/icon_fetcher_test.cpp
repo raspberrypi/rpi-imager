@@ -423,3 +423,153 @@ TEST_CASE("The icon cache evicts the oldest once it is full", "[icons][cache]")
 
     IconMultiFetcher::instance().clearCache();
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// The provider QML actually goes through
+//
+// Every icon in the chooser is an Image whose source is
+// "image://icons/<url>". QML hands that to IconImageProvider, gets a response
+// back, waits for it to finish and then asks it for a texture. The cases
+// above drive the fetcher and the response; nothing had gone in by the front
+// door, and nothing had asked for the texture at the end of it.
+//
+// The texture is where a failed icon stops being cosmetic: QML asks for one
+// whether or not the fetch worked. What these hold down is that a failure
+// yields no texture and says why.
+//
+// Note that the explicit null check in textureFactory() is belt and braces --
+// Qt's textureFactoryForImage() answers nullptr for a null image on its own,
+// so removing it changes nothing here. The assertion is on the contract QML
+// depends on rather than on that one line.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Drive a response the way QML does: ask the provider, wait, then look.
+bool waitForResponse(QQuickImageResponse *response, int timeoutMs = 15000)
+{
+    bool finished = false;
+    QObject::connect(response, &QQuickImageResponse::finished, [&] { finished = true; });
+    return waitFor([&] { return finished; }, timeoutMs);
+}
+
+} // namespace
+
+TEST_CASE("The provider serves the icon QML asked for", "[icons][provider]")
+{
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    writeIcon(QDir(served.path()).filePath(QStringLiteral("provider.png")), Qt::magenta);
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+    IconMultiFetcher::instance().clearCache();
+
+    IconImageProvider provider;
+    // The id is what QML puts after "image://icons/": the icon's own URL.
+    QQuickImageResponse *response = provider.requestImageResponse(
+        QString::fromUtf8(server.urlFor(QStringLiteral("provider.png"))), QSize());
+    REQUIRE(response != nullptr);
+    REQUIRE(waitForResponse(response));
+
+    CHECK(response->errorString().isEmpty());
+
+    // And something to draw. QML takes ownership of the factory it is given.
+    QQuickTextureFactory *texture = response->textureFactory();
+    CHECK(texture != nullptr);
+    delete texture;
+
+    delete response;
+}
+
+TEST_CASE("An icon that never arrives has nothing to draw", "[icons][provider]")
+{
+    // A 404: an entry in the OS list whose icon was taken down. The tile is
+    // blank either way; what matters is that nothing is handed to the scene
+    // graph to upload.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+    IconMultiFetcher::instance().clearCache();
+
+    IconImageProvider provider;
+    QQuickImageResponse *response = provider.requestImageResponse(
+        QString::fromUtf8(server.urlFor(QStringLiteral("not-here.png"))), QSize());
+    REQUIRE(response != nullptr);
+    REQUIRE(waitForResponse(response));
+
+    CHECK_FALSE(response->errorString().isEmpty());
+    CHECK(response->textureFactory() == nullptr);
+
+    delete response;
+}
+
+TEST_CASE("Something that is not an image is reported rather than drawn",
+          "[icons][provider]")
+{
+    // An icon URL that answers with a login page, or an error document served
+    // as a 200. It arrives, it is cached, and it is not a picture.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    {
+        QFile f(QDir(served.path()).filePath(QStringLiteral("notanimage.png")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("<html><body>sign in</body></html>");
+    }
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+    IconMultiFetcher::instance().clearCache();
+
+    IconImageProvider provider;
+    QQuickImageResponse *response = provider.requestImageResponse(
+        QString::fromUtf8(server.urlFor(QStringLiteral("notanimage.png"))), QSize());
+    REQUIRE(response != nullptr);
+    REQUIRE(waitForResponse(response));
+
+    INFO("error: " << response->errorString().toStdString());
+    CHECK_FALSE(response->errorString().isEmpty());
+    CHECK(response->textureFactory() == nullptr);
+
+    delete response;
+}
+
+TEST_CASE("Scrolling an icon out of view cancels it", "[icons][provider]")
+{
+    // QML calls cancel() when the delegate holding the image goes away, which
+    // in a list of thirty operating systems happens constantly. The response
+    // has to take itself off the fetcher's books: a fetch completing into a
+    // response QML has since deleted is a write to freed memory.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    writeIcon(QDir(served.path()).filePath(QStringLiteral("scrolled.png")), Qt::cyan);
+
+    rpi_test::LocalHttpServer server(served.path());
+    REQUIRE_HTTP_SERVER(server);
+    IconMultiFetcher::instance().clearCache();
+
+    IconImageProvider provider;
+    QQuickImageResponse *response = provider.requestImageResponse(
+        QString::fromUtf8(server.urlFor(QStringLiteral("scrolled.png"))), QSize());
+    REQUIRE(response != nullptr);
+
+    // Cancelled before the loop has run once, so the flag is set whatever the
+    // transfer did in the meantime.
+    response->cancel();
+    CHECK(static_cast<IconImageResponse *>(response)->isCancelled());
+
+    // Which is the difference between this and the fetcher's own
+    // cancelFetch(), a few cases up: that one takes the request off the
+    // transfer without the response knowing.
+    //
+    // Whether finished() still arrives is not something this can pin down --
+    // against a server on loopback the bytes are usually already in before
+    // cancel() is reached. What has to hold is that the response can be
+    // destroyed afterwards without the fetcher writing into it, which is what
+    // QML does the moment the delegate goes.
+    waitFor([] { return false; }, 500);
+    CHECK_NOTHROW(delete response);
+    waitFor([] { return false; }, 500);
+}
