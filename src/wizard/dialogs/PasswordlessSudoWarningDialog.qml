@@ -79,6 +79,7 @@ BaseDialog {
 
         ImButton {
             id: cancelButton
+            objectName: "sudoCancelButton"
             text: qsTr("CANCEL")
             accessibleDescription: qsTr("Cancel and keep sudo requiring a password")
             activeFocusOnTab: true
@@ -90,6 +91,7 @@ BaseDialog {
 
         ImButtonRed {
             id: enableButton
+            objectName: "sudoEnableButton"
             text: qsTr("ENABLE")
             accessibleDescription: qsTr("Enable passwordless sudo for this user account")
             activeFocusOnTab: true

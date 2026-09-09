@@ -20,6 +20,25 @@ ListView {
     property var isItemSelectableFunction: null  // Function(index) that returns true if item can be selected
     property string accessibleName: "Selection list"
     property string accessibleDescription: "Use arrow keys to navigate, Enter or Space to select"
+
+    // What the things in this list are called, for the announcements below.
+    // Singular and plural because "1 devices available" is worse than not
+    // saying it, and several languages need more than an -s.
+    property string itemNoun: qsTr("item")
+    property string itemNounPlural: qsTr("items")
+    // Set false for a list whose population never changes after loading, to
+    // keep it out of the accessibility tree entirely.
+    property bool announcePopulationChanges: true
+    // Whether the first time this list has contents is worth announcing.
+    //
+    // It depends on where the contents come from, which only the owner
+    // knows. A list filled in one go when a fetch lands is *loading*, and
+    // announcing that talks over the heading being read as the screen
+    // opens. A list backed by something live -- drives appearing and
+    // disappearing as they are plugged in -- has no such moment: the first
+    // card is the thing the user was waiting for, and staying quiet about
+    // it is the whole problem this exists to fix.
+    property bool announceFirstPopulation: false
     
     // Signals for selection actions
     signal itemSelected(int index, var item)
@@ -89,7 +108,7 @@ ListView {
             // Delay selection to allow VoiceOver to announce the list container first
             Qt.callLater(function() {
                 if (activeFocus && currentIndex === -1 && count > 0) {
-                    currentIndex = 0
+                    currentIndex = root.findNextSelectableIndex(-1, 1)
                 }
             })
         }
@@ -101,9 +120,93 @@ ListView {
             // Delay selection to allow VoiceOver to announce the list container first
             Qt.callLater(function() {
                 if (count > 0 && currentIndex === -1) {
-                    currentIndex = 0
+                    currentIndex = root.findNextSelectableIndex(-1, 1)
                 }
             })
+        }
+        root.announcePopulation()
+    }
+
+    // ── Telling a screen reader the list changed ──────────────────────
+    //
+    // A ListView announces nothing of its own when a row appears or
+    // disappears, and a changed Accessible.name on an element nobody is
+    // focused on is not read out. Every list in this application is
+    // populated by something the user is waiting for -- a network fetch, a
+    // card being plugged in -- and a sighted user simply watches it happen.
+    //
+    // Lives here rather than in each step because three lists need it: the
+    // board list, the OS list and the storage list. The two that could have
+    // announced something did not -- one hooked onCountChanged to a function
+    // whose whole body is a comment saying it does nothing, and the other
+    // only re-announced when the list already had focus, which it does not
+    // when the fetch lands.
+    //
+    // autoSelectFirst is not a substitute. The lists that matter most here
+    // deliberately turn it off, to avoid highlighting a row the user did not
+    // choose, so its VoiceOver delay never runs for them.
+
+    // What the alert below is currently saying. Empty when there is nothing
+    // to say, which keeps the node out of the tree.
+    property string populationAnnouncement: ""
+    // -1 until populated once: the first arrival is the list loading, not
+    // something that changed while the user was reading it.
+    property int lastKnownCount: -1
+
+    function announcePopulation() {
+        var now = count
+        var before = root.lastKnownCount
+
+        // A ListView emits this once while it is being built, before it has
+        // a model worth speaking of. Taking that as the starting population
+        // would spend the "first time" allowance on it and then announce the
+        // real arrival as though a device had been plugged in.
+        if (before < 0 && now === 0)
+            return
+
+        root.lastKnownCount = now
+
+        if (!announcePopulationChanges || now === before)
+            return
+
+        if (before < 0 && !announceFirstPopulation)
+            return
+
+        var noun = (now === 1) ? root.itemNoun : root.itemNounPlural
+        if (now > before) {
+            root.populationAnnouncement =
+                qsTr("A %1 was connected. %2 %3 available.").arg(root.itemNoun).arg(now).arg(noun)
+        } else if (now === 0) {
+            root.populationAnnouncement =
+                qsTr("A %1 was removed. None available.").arg(root.itemNoun)
+        } else {
+            root.populationAnnouncement =
+                qsTr("A %1 was removed. %2 %3 remaining.").arg(root.itemNoun).arg(now).arg(noun)
+        }
+    }
+
+    // Drawn but transparent, so it is in the accessibility tree without
+    // being on screen -- the same shape the storage step already uses for
+    // its hidden status text. An alert rather than a status, because it
+    // describes something that just happened.
+    Label {
+        id: populationAlert
+        objectName: "populationAnnouncement"
+        anchors.fill: parent
+        opacity: 0
+        text: root.populationAnnouncement
+        Accessible.role: Accessible.AlertMessage
+        Accessible.name: text
+        Accessible.ignored: text.length === 0
+
+        // Re-assert the node so the alert is read again when the wording is
+        // the same but the event has happened twice -- two cards of the same
+        // kind removed in a row, say.
+        onTextChanged: {
+            if (text.length > 0) {
+                Accessible.ignored = true
+                Qt.callLater(function() { populationAlert.Accessible.ignored = false })
+            }
         }
     }
     
@@ -176,33 +279,37 @@ ListView {
         }
     }
     
+    // Arrow navigation cannot land the highlight on an unselectable row, but
+    // it is not the only thing that moves it: the model is refreshed while the
+    // page is open, and a row can stop being selectable underneath a highlight
+    // that is already on it. A card whose lock switch is set, or one that goes
+    // read-only after a media error, becomes unselectable on the next poll of
+    // the drive list. Without this check the row is still greyed out, and
+    // Enter still picks it -- the write then fails somewhere much less
+    // legible than the picker refusing in the first place.
+    function _activateCurrent(signalFn) {
+        if (root.currentIndex === -1 || !root.isItemSelectable(root.currentIndex))
+            return
+        var item = root.itemAtIndex(root.currentIndex)
+        signalFn(root.currentIndex, item)
+        root.handleKeyboardSelection(root.currentIndex, item)
+    }
+
     Keys.onSpacePressed: {
-        if (currentIndex !== -1) {
-            var item = itemAtIndex(currentIndex)
-            root.spacePressed(currentIndex, item)
-            root.handleKeyboardSelection(currentIndex, item)
-        }
+        root._activateCurrent(function(i, item) { root.spacePressed(i, item) })
     }
-    
+
     Keys.onEnterPressed: {
-        if (currentIndex !== -1) {
-            var item = itemAtIndex(currentIndex)
-            root.enterPressed(currentIndex, item)
-            root.handleKeyboardSelection(currentIndex, item)
-        }
+        root._activateCurrent(function(i, item) { root.enterPressed(i, item) })
     }
-    
+
     Keys.onReturnPressed: {
-        if (currentIndex !== -1) {
-            var item = itemAtIndex(currentIndex)
-            root.returnPressed(currentIndex, item)
-            root.handleKeyboardSelection(currentIndex, item)
-        }
+        root._activateCurrent(function(i, item) { root.returnPressed(i, item) })
     }
     
     // Accessibility support
     Accessible.onPressAction: {
-        if (currentIndex !== -1) {
+        if (currentIndex !== -1 && root.isItemSelectable(currentIndex)) {
             var item = itemAtIndex(currentIndex)
             root.itemSelected(currentIndex, item)
         }
@@ -259,9 +366,10 @@ ListView {
         return data
     }
     
-    // Helper function to select an item programmatically
+    // Helper function to select an item programmatically. Refuses an
+    // unselectable index for the same reason the key handlers do.
     function selectItem(index) {
-        if (index >= 0 && index < count) {
+        if (index >= 0 && index < count && root.isItemSelectable(index)) {
             currentIndex = index
             var item = itemAtIndex(index)
             root.itemSelected(index, item)

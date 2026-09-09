@@ -119,6 +119,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkBeep
+                objectName: "beepToggle"
                 text: qsTr("Play sound when finished")
                 accessibleDescription: ImageWriterSingleton.isBeepAvailable() 
                     ? qsTr("Play an audio notification when the image write process completes")
@@ -132,6 +133,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkEject
+                objectName: "ejectToggle"
                 text: qsTr("Eject media when finished")
                 accessibleDescription: qsTr("Automatically eject the storage device when the write process completes successfully")
                 Layout.fillWidth: true
@@ -142,6 +144,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkDisableWarnings
+                objectName: "disableWarningsToggle"
                 text: qsTr("Disable warnings")
                 accessibleDescription: qsTr("Skip confirmation dialogs before writing images (advanced users only)")
                 Layout.fillWidth: true
@@ -165,6 +168,7 @@ BaseDialog {
 
             ImOptionButton {
                 id: editRepoButton
+                objectName: "editRepoButton"
                 text: qsTr("Content Repository")
                 btnText: qsTr("Edit")
                 accessibleDescription: qsTr("Change the source of operating system images between official Raspberry Pi repository and custom sources")
@@ -190,6 +194,7 @@ BaseDialog {
 
             ImOptionButton {
                 id: secureBootKeyButton
+                objectName: "secureBootKeyButton"
                 text: qsTr("Secure Boot RSA Key")
                 btnText: rsaKeyPath.text ? qsTr("Change") : qsTr("Select")
                 accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
@@ -226,6 +231,7 @@ BaseDialog {
                 
                 Text {
                     id: rsaKeyPath
+                    objectName: "rsaKeyPathField"
                     text: ""
                     visible: false
                 }
@@ -233,6 +239,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkConnectOrg
+                objectName: "connectOrgToggle"
                 text: qsTr("Raspberry Pi Connect for Organisations")
                 accessibleDescription: qsTr("Enable the organisation-level Raspberry Pi Connect registration flow. When active, the Connect wizard step collects an organisation API key and registers each provisioned device with Connect.")
                 helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("What is this?")
@@ -245,6 +252,7 @@ BaseDialog {
 
             ImOptionButton {
                 id: clearSettingsButton
+                objectName: "clearSettingsButton"
                 text: qsTr("Saved Customisation")
                 btnText: qsTr("Clear")
                 // Disabled mid-write: clearing only wipes the persisted settings
@@ -268,6 +276,7 @@ BaseDialog {
             // commonly-toggled options like Beep / Eject / Disable warnings.
             ImOptionPill {
                 id: chkTelemetry
+                objectName: "telemetryToggle"
                 text: qsTr("Enable anonymous statistics (telemetry)")
                 accessibleDescription: qsTr("Send anonymous usage statistics to help improve Raspberry Pi Imager")
                 helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("What is this?")
@@ -313,6 +322,7 @@ BaseDialog {
 
             ImButton {
                 id: cancelButton
+                objectName: "optionsCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Close the options dialog without saving any changes")
                 Layout.minimumWidth: Style.buttonWidthMinimum
@@ -324,6 +334,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: saveButton
+                objectName: "optionsSaveButton"
                 text: qsTr("Save")
                 accessibleDescription: qsTr("Save the selected options and apply them to Raspberry Pi Imager")
                 Layout.minimumWidth: Style.buttonWidthMinimum
@@ -338,6 +349,7 @@ BaseDialog {
 
     RepositoryDialog {
         id: repoDialog
+        objectName: "optionsRepoDialog"
         parent: popup.parent
         wizardContainer: popup.wizardContainer
     }
@@ -345,6 +357,7 @@ BaseDialog {
     // File dialog for RSA key selection (embedded mode)
     ImFileDialog {
         id: rsaKeyFileDialog
+        objectName: "rsaKeyFileDialog"
         parent: popup.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select RSA Private Key")
@@ -452,6 +465,7 @@ BaseDialog {
     // Confirmation dialog for disabling warnings
     BaseDialog {
         id: confirmDisableWarnings
+        objectName: "confirmDisableWarningsDialog"
         parent: popup.contentItem
         anchors.centerIn: parent
 
@@ -524,6 +538,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: confirmDisableButton
+                objectName: "confirmDisableWarningsButton"
                 text: qsTr("Disable warnings")
                 accessibleDescription: qsTr("Disable confirmation prompts before writing images, requiring only exact name entry for system drives")
                 activeFocusOnTab: true
@@ -540,6 +555,7 @@ BaseDialog {
     // Confirmation dialog for clearing saved customisation settings
     BaseDialog {
         id: confirmClearSettings
+        objectName: "confirmClearSettingsDialog"
         parent: popup.contentItem
         anchors.centerIn: parent
 
@@ -594,6 +610,7 @@ BaseDialog {
 
             ImButton {
                 id: clearSettingsCancelButton
+                objectName: "clearSettingsCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Keep saved customisation settings and return to the options dialog")
                 activeFocusOnTab: true
@@ -602,6 +619,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: clearSettingsConfirmButton
+                objectName: "clearSettingsConfirmButton"
                 text: qsTr("Clear")
                 accessibleDescription: qsTr("Remove all saved OS customisation settings permanently")
                 activeFocusOnTab: true

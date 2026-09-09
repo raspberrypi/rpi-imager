@@ -59,6 +59,7 @@ WizardStepBase {
                 // Replace checkbox with an option pill and help link
                 ImOptionPill {
                     id: sshEnablePill
+                    objectName: "sshEnableToggle"
                     Layout.fillWidth: true
                     text: qsTr("Enable SSH")
                     accessibleDescription: qsTr("Enable secure shell access for remote command-line control of your Raspberry Pi")
@@ -93,6 +94,7 @@ WizardStepBase {
                             
                             ImRadioButton {
                                 id: radioPassword
+                                objectName: "sshPasswordAuthRadio"
                                 text: qsTr("Use password authentication")
                                 checked: true
                                 ButtonGroup.group: authGroup
@@ -102,6 +104,7 @@ WizardStepBase {
                             
                             ImRadioButton {
                                 id: radioPublicKey
+                                objectName: "sshPublicKeyAuthRadio"
                                 text: qsTr("Use public key authentication")
                                 checked: false
                                 ButtonGroup.group: authGroup
@@ -114,6 +117,7 @@ WizardStepBase {
                     // SSH Key Manager (expands naturally within outer ScrollView)
                     SshKeyManager {
                         id: sshKeyManager
+                        objectName: "sshKeyManager"
                         Layout.fillWidth: true
                         visible: radioPublicKey.checked
                     }
@@ -135,6 +139,15 @@ WizardStepBase {
         // Include labels before their corresponding controls so users hear the explanation first
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [labelAuthMechanism, radioPassword, radioPublicKey] : [] }, 1)
+        // The key manager's own controls. Nested components are not walked by
+        // WizardStepBase, so without this the Show button, the Remove button
+        // on each key and the add field are on screen and unreachable -- which
+        // is exactly the state the step opens in when keys are already saved,
+        // because that selects public-key authentication for the user.
+        root.registerFocusGroup("ssh_keys", function(){
+            return (sshEnablePill.checked && radioPublicKey.checked && sshKeyManager.visible)
+                ? sshKeyManager.focusItems() : []
+        }, 2)
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings
         if (settings.sshEnabled === true || settings.sshEnabled === "true") {
@@ -184,6 +197,18 @@ WizardStepBase {
         function onCheckedButtonChanged() {
             root.rebuildFocusOrder()
         }
+    }
+    // Expanding the list, and adding or removing a key, changes which of its
+    // controls exist.
+    //
+    // Deferred rather than immediate: the controls appear because a binding
+    // on the enclosing layout's visible property re-evaluates, and that has
+    // not necessarily happened by the time the property-change handler runs.
+    // A rebuild taken at that instant reads them as invisible and drops them
+    // -- which is the same as not rebuilding at all.
+    Connections {
+        target: sshKeyManager
+        function onFocusItemsUpdated() { root.requestFocusRebuild() }
     }
     
     // Validation: allow proceed when
@@ -246,15 +271,6 @@ WizardStepBase {
     }
     
     // Handle skip button
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 } 

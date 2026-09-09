@@ -24,6 +24,12 @@ WizardStepBase {
     // shown. Keep the section hidden until the rpiboot OTP-bootstrap flow is ported from
     // rpi-sb-provisioner; flip this to true (or remove the gate) when it lands. Shipping
     // it inert would present misleading "device is locked to signed boot" UI.
+    //
+    // When it does land, add otpProvisionPill to the focus group below.
+    // WizardStepBase builds the tab order from what a step registers, not by
+    // walking the tree, so a control left out of it is reachable by mouse
+    // only -- and this one programs OTP, which cannot be undone. It is not a
+    // live bug today only because the section is hidden.
     readonly property bool otpProvisioningImplemented: false
 
     // Only show and enable this step if OS supports secure boot
@@ -50,6 +56,7 @@ WizardStepBase {
             // RSA Key selection button
             ImOptionButton {
                 id: rsaKeyButton
+                objectName: "secureBootKeyButton"
                 text: qsTr("RSA Private Key")
                 btnText: root.rsaKeyPath ? qsTr("Change") : qsTr("Select")
                 accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
@@ -96,6 +103,7 @@ WizardStepBase {
             // Enable/disable Secure Boot option pill
             ImOptionPill {
                 id: secureBootEnablePill
+                objectName: "secureBootEnablePill"
                 Layout.fillWidth: true
                 Layout.topMargin: Style.spacingMedium
                 text: qsTr("Enable Secure Boot Signing")
@@ -249,6 +257,7 @@ WizardStepBase {
     // File dialog for RSA key selection (fallback when native dialog unavailable)
     ImFileDialog {
         id: rsaKeyFileDialog
+        objectName: "secureBootKeyFileDialog"
         parent: root.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select RSA Private Key")
@@ -328,17 +337,7 @@ WizardStepBase {
     }
     
     // Handle skip button
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        wizardContainer.secureBootEnabled = false
-        
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 }
 

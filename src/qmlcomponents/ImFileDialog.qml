@@ -306,6 +306,7 @@ BaseDialog {
         // previously set by hand.
         ImTextField {
             id: pathField
+            objectName: "fileDialogPathField"
             Layout.fillWidth: true
             text: dialog._toDisplayPath(dialog.currentFolder)
             placeholderText: dialog.isSaveDialog
@@ -349,6 +350,7 @@ BaseDialog {
         
         ImTextField {
             id: filenameField
+            objectName: "fileDialogFilenameField"
             Layout.fillWidth: true
             text: dialog._currentFilename
             placeholderText: qsTr("Enter filename…")
@@ -396,6 +398,7 @@ BaseDialog {
 
                 ListView {
                     id: placesList
+                    objectName: "fileDialogPlacesList"
                     Layout.fillWidth: true
                     Layout.preferredHeight: contentHeight
                     clip: true
@@ -476,6 +479,7 @@ BaseDialog {
 
                 ListView {
                     id: subfoldersList
+                    objectName: "fileDialogFoldersList"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
@@ -578,41 +582,24 @@ BaseDialog {
                 anchors.fill: parent
                 activeFocusOnTab: false  // Don't focus the ScrollView itself, only its children
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
-                
-                property int currentFileIndex: -1
-                
-                Keys.onUpPressed: {
-                    if (currentFileIndex > 0) {
-                        currentFileIndex--
-                        // Update selection
-                        var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                        if (fileItem && fileItem.fileUrl) {
-                            dialog.selectedFile = fileItem.fileUrl
-                        }
-                    }
-                }
-                Keys.onDownPressed: {
-                    if (currentFileIndex < filesOnlyModel.count - 1) {
-                        currentFileIndex++
-                        // Update selection
-                        var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                        if (fileItem && fileItem.fileUrl) {
-                            dialog.selectedFile = fileItem.fileUrl
-                        }
-                    }
-                }
-                Keys.onEnterPressed: {
-                    if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
-                        dialog.close()
-                        dialog.accepted()
-                    }
-                }
-                Keys.onReturnPressed: {
-                    if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
-                        dialog.close()
-                        dialog.accepted()
-                    }
-                }
+
+                // This used to carry its own Up/Down/Enter/Return handlers
+                // and a currentFileIndex to go with them. They could not
+                // work, and were removed rather than covered.
+                //
+                // Two reasons. The view is activeFocusOnTab: false and
+                // nothing focuses it, so the keys never arrived. And the
+                // handlers picked a file out of fileColumn.children by
+                // position -- "+1 because of up entry" -- from a Column
+                // whose three children are the up button, the file list and
+                // the empty-folder message. The files are delegates inside
+                // that list, not siblings of it, so none of the children has
+                // a fileUrl and nothing could be selected. Forcing focus and
+                // pressing Down twice advanced the counter to 1 and left
+                // selectedFile empty.
+                //
+                // The working versions of all four are on filesList below,
+                // which does take focus and does address its own model.
 
                 Column {
                     id: fileColumn
@@ -622,6 +609,7 @@ BaseDialog {
                     // Up entry at top of right pane - always show when not at root
                     ImButton {
                         id: upEntry
+                        objectName: "fileDialogUpEntry"
                         width: parent.width
                         visible: dialog._canGoUp()
                         height: visible ? implicitHeight : 0
@@ -660,6 +648,7 @@ BaseDialog {
                     // Files list with focus support (hidden in save mode)
                     ListView {
                         id: filesList
+                        objectName: "fileDialogFilesList"
                         width: fileColumn.width
                         height: dialog.isSaveDialog ? 0 : Math.max(contentHeight, filesOnlyModel.count === 0 ? 60 : 0)
                         visible: !dialog.isSaveDialog
@@ -782,12 +771,14 @@ BaseDialog {
         Item { Layout.fillWidth: true }
         ImButton {
             id: cancelButton
+            objectName: "fileDialogCancelButton"
             text: CommonStrings.cancel
             activeFocusOnTab: true
             onClicked: { dialog.close(); dialog.rejected() }
         }
         ImButton {
             id: openButton
+            objectName: "fileDialogOpenButton"
             text: dialog.isSaveDialog ? qsTr("Save") : qsTr("Open")
             enabled: dialog.isSaveDialog
                 ? String(dialog._currentFilename).trim().length > 0

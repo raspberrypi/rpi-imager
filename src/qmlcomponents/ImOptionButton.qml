@@ -26,6 +26,19 @@ Item {
     property alias focusItem: optionButton
     // Expose the help link for tab navigation (when visible)
     property alias helpLinkItem: helpText
+
+    // Opening the help link, in one place. The pointer, the three keyboard
+    // routes and the accessibility press action all arrive here, so no route
+    // can quietly drift from the others or be left off a new one. A test
+    // shadows this method to see which routes arrive, rather than launching a
+    // browser on the machine running the suite.
+    function openHelpLink() {
+        if (ImageWriterSingleton) {
+            ImageWriterSingleton.openUrl(control.helpUrl)
+        } else {
+            Qt.openUrlExternally(control.helpUrl)
+        }
+    }
     
     // Single source of truth for label font (used by both label and TextMetrics)
     readonly property font labelFont: Qt.font({
@@ -75,7 +88,12 @@ Item {
             Text {
                 id: helpText
                 Layout.alignment: Qt.AlignVCenter
-                visible: control.helpLabel !== "" && control.helpUrl !== ""
+                // String(): a QML url property is a JS object in Qt 6, not a
+                // string, so `helpUrl !== ""` compares an object to a string
+                // and is true even when the url is empty. The guard then
+                // reduced to the label alone, and a row given a label with
+                // no url offered a link that went nowhere.
+                visible: control.helpLabel !== "" && String(control.helpUrl) !== ""
                 text: control.helpLabel
                 font.family: Style.fontFamily
                 font.pointSize: Style.fontSizeDescription
@@ -93,13 +111,7 @@ Item {
                 
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onTapped: {
-                        if (ImageWriterSingleton) {
-                            ImageWriterSingleton.openUrl(control.helpUrl)
-                        } else {
-                            Qt.openUrlExternally(control.helpUrl)
-                        }
-                    }
+                    onTapped: { control.openHelpLink() }
                 }
                 HoverHandler {
                     id: helpHover
@@ -108,35 +120,11 @@ Item {
                 }
                 
                 // Keyboard activation
-                Keys.onEnterPressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(control.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(control.helpUrl)
-                    }
-                }
-                Keys.onReturnPressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(control.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(control.helpUrl)
-                    }
-                }
-                Keys.onSpacePressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(control.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(control.helpUrl)
-                    }
-                }
+                Keys.onEnterPressed: { control.openHelpLink() }
+                Keys.onReturnPressed: { control.openHelpLink() }
+                Keys.onSpacePressed: { control.openHelpLink() }
                 
-                Accessible.onPressAction: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(control.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(control.helpUrl)
-                    }
-                }
+                Accessible.onPressAction: { control.openHelpLink() }
             }
         }
 
