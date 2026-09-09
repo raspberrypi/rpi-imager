@@ -55,6 +55,27 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    // Fourth mode: self-elevation. tryElevate() forks /usr/bin/pkexec and
+    // then decides what to do with the child's exit status -- which is where
+    // the user pressing Cancel on the password prompt is told apart from an
+    // elevated run that finished, and from one that died. Getting that wrong
+    // either kills Imager when somebody declines the prompt or leaves two
+    // copies of it on screen when they accept.
+    //
+    // Nothing here can be reached from the test binary: the function refuses
+    // to act as root, and every branch that hands the child's status on calls
+    // _exit(). So the caller drops to an ordinary uid inside a namespace,
+    // puts a script of its own choosing at /usr/bin/pkexec, and reads this
+    // process's exit code -- 40 only when tryElevate() returned rather than
+    // exiting, with RET saying which way.
+    if (argc > 1 && std::string_view(argv[1]) == "elevate") {
+        const bool elevated = PlatformQuirks::tryElevate(argc, argv);
+        std::printf("EUID=%lu\n", static_cast<unsigned long>(::geteuid()));
+        std::printf("RET=%d\n", elevated ? 1 : 0);
+        std::fflush(stdout);
+        return 40;
+    }
+
     if (argc > 1 && std::string_view(argv[1]) == "policy") {
         std::printf("BUNDLE=%s\n", PlatformQuirks::getBundlePath());
         std::printf("POLICY=%d\n",

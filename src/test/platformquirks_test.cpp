@@ -8,6 +8,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <QtGlobal>
 #include <QString>
 #include <QUrl>
@@ -4076,6 +4077,236 @@ TEST_CASE("An empty runtime directory leaves the display alone",
     CHECK(reportedValue(out, QStringLiteral("AFTER_WAYLAND_DISPLAY")).isEmpty());
     // The handover itself still happened.
     CHECK(reportedValue(out, QStringLiteral("AFTER_HOME")) == QDir::homePath());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Self-elevation
+//
+// On Linux, writing to a card needs root, and Imager asks for it by
+// re-launching itself under pkexec. tryElevate() forks that, waits, and then
+// decides what the child's exit status means. Three outcomes reach the user
+// directly:
+//
+//   - they typed their password and the elevated copy ran: this copy has to
+//     go, or they are left looking at two Imagers, and the one in front of
+//     them is the one that cannot write
+//   - they pressed Cancel, or polkit refused: this copy has to stay,
+//     unelevated, or pressing Cancel closes the application
+//   - the elevated copy failed: its exit code has to come out of here, or a
+//     script driving `rpi-imager --cli` reads a failed write as a success
+//
+// None of it is reachable in-process -- the function declines to act as root,
+// and every branch that passes the child's status on calls _exit(). So it
+// runs in a probe, in a namespace where /usr/bin/pkexec is a script of the
+// case's choosing.
+//
+// Two namespaces, nested. The outer one is where the mounts happen, and needs
+// root. The inner one exists only to make geteuid() report something other
+// than zero: it maps the outer root to uid 1000, which changes what the
+// process *sees* without changing the credentials the kernel checks -- so the
+// probe still reads its own fixtures, and still writes its own coverage
+// counters, as the account running the suite.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+struct ElevationRun {
+    bool ran = false;      // the namespace could be built and the probe started
+    int exitCode = -1;
+    QString out;
+};
+
+// The fixtures tryElevate() needs: something for getBundlePath() to name,
+// somewhere for the polkit scan to look, and a pkexec of our own.
+struct ElevationFixture {
+    QTemporaryDir scratch;
+    QString bundle, pkexec, etcRoot, usrActions;
+
+    // `pkexecBody` is the body of the script standing in for pkexec; whatever
+    // it exits with is what tryElevate() has to interpret.
+    bool build(const QString &pkexecBody)
+    {
+        if (!scratch.isValid())
+            return false;
+        bundle = scratch.filePath(QStringLiteral("rpi-imager.AppImage"));
+        pkexec = scratch.filePath(QStringLiteral("pkexec"));
+        etcRoot = scratch.filePath(QStringLiteral("etc"));
+        usrActions = scratch.filePath(QStringLiteral("usr-actions"));
+        if (!QDir().mkpath(etcRoot + QStringLiteral("/actions")) ||
+            !QDir().mkpath(usrActions))
+            return false;
+
+        QFile b(bundle);
+        if (!b.open(QIODevice::WriteOnly))
+            return false;
+        b.write("not really an AppImage");
+        b.close();
+
+        QFile p(pkexec);
+        if (!p.open(QIODevice::WriteOnly))
+            return false;
+        p.write(QByteArray("#!/bin/sh\n") + pkexecBody.toUtf8() + "\n");
+        p.close();
+        return p.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                QFileDevice::ExeOwner);
+    }
+};
+
+// `installPolicy` false leaves the polkit directories empty, which is a
+// machine where nothing authorises this binary.
+ElevationRun runElevation(const ElevationFixture &fixture, bool installPolicy)
+{
+    ElevationRun result;
+
+    const QString script = QStringLiteral(
+        "export APPIMAGE=\"$1\" && "
+        "mount --bind \"$2\" /usr/bin/pkexec && "
+        "mount --bind \"$3\" /etc/polkit-1 && "
+        "mount --bind \"$4\" /usr/share/polkit-1/actions && ") +
+        (installPolicy ? QStringLiteral("\"$5\" install >/dev/null 2>&1 && ")
+                       : QString()) +
+        QStringLiteral("exec unshare -U --map-user=1000 --map-group=1000 "
+                       "\"$5\" elevate");
+
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             script, QStringLiteral("_"), fixture.bundle, fixture.pkexec,
+             fixture.etcRoot, fixture.usrActions,
+             QStringLiteral(ELEVATION_PROBE_BINARY)});
+    if (!p.waitForFinished(60000))
+        return result;
+
+    result.ran = true;
+    result.exitCode = p.exitCode();
+    result.out = QString::fromUtf8(p.readAllStandardOutput());
+    return result;
+}
+
+bool haveElevationHarness()
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("exec unshare -U --map-user=1000 --map-group=1000 true")});
+    if (!p.waitForFinished(15000))
+        return false;
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+} // namespace
+
+#define REQUIRE_ELEVATION_HARNESS()                                                 \
+    if (!haveElevationHarness())                                                    \
+    SKIP("nested user namespaces are unavailable, so pkexec cannot be replaced "    \
+         "and the probe cannot be made to look unprivileged")
+
+TEST_CASE("Declining the password prompt leaves this copy running",
+          "[platformquirks][elevation]")
+{
+    // pkexec exits 126 when authorisation is refused and 127 when it could
+    // not run the program at all. Neither is a reason to close the window the
+    // user is looking at: they are where they were, and the write they asked
+    // for simply has not started.
+    const int refusal = GENERATE(126, 127);
+
+    REQUIRE_ELEVATION_HARNESS();
+    ElevationFixture fixture;
+    REQUIRE(fixture.build(QStringLiteral("exit %1").arg(refusal)));
+
+    const ElevationRun run = runElevation(fixture, true);
+    if (!run.ran)
+        SKIP("the elevation namespace could not be built");
+
+    INFO("pkexec exited " << refusal << "; probe said:\n" << run.out.toStdString());
+    // 40 is the probe's own code, reached only when tryElevate() returned
+    // rather than ending the process.
+    CHECK(run.exitCode == 40);
+    CHECK(run.out.contains(QStringLiteral("RET=0")));
+    // And it really did look unprivileged, or the function would have
+    // declined before reaching any of this.
+    CHECK(run.out.contains(QStringLiteral("EUID=1000")));
+}
+
+TEST_CASE("An elevated copy that ran ends the one that started it",
+          "[platformquirks][elevation]")
+{
+    // The elevated process did the work. If this one carried on, the user
+    // would have two Imagers on screen, and the one they are looking at is
+    // the one that cannot write to a card.
+    REQUIRE_ELEVATION_HARNESS();
+    ElevationFixture fixture;
+    REQUIRE(fixture.build(QStringLiteral("exit 0")));
+
+    const ElevationRun run = runElevation(fixture, true);
+    if (!run.ran)
+        SKIP("the elevation namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    CHECK(run.exitCode == 0);
+    // Nothing after the fork ran: no RET line, because the function never
+    // returned to print one.
+    CHECK_FALSE(run.out.contains(QStringLiteral("RET=")));
+}
+
+TEST_CASE("An elevated copy that failed passes its exit code out",
+          "[platformquirks][elevation]")
+{
+    // Imager is scriptable, and the elevated process is the one that does the
+    // work. Reporting zero here would tell a provisioning script that a write
+    // succeeded when it did not.
+    REQUIRE_ELEVATION_HARNESS();
+    ElevationFixture fixture;
+    REQUIRE(fixture.build(QStringLiteral("exit 3")));
+
+    const ElevationRun run = runElevation(fixture, true);
+    if (!run.ran)
+        SKIP("the elevation namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    CHECK(run.exitCode == 3);
+    CHECK_FALSE(run.out.contains(QStringLiteral("RET=")));
+}
+
+TEST_CASE("An elevated copy killed by a signal is not reported as success",
+          "[platformquirks][elevation]")
+{
+    // A write killed by the OOM killer, or by a Ctrl-C reaching the process
+    // group. There is no exit code to pass on, so the shell's convention is
+    // followed instead: 128 plus the signal number. Zero would be a lie.
+    REQUIRE_ELEVATION_HARNESS();
+    ElevationFixture fixture;
+    REQUIRE(fixture.build(QStringLiteral("kill -TERM $$; sleep 5")));
+
+    const ElevationRun run = runElevation(fixture, true);
+    if (!run.ran)
+        SKIP("the elevation namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    CHECK(run.exitCode == 128 + 15);
+    CHECK_FALSE(run.out.contains(QStringLiteral("RET=")));
+}
+
+TEST_CASE("With no policy installed the prompt is not raised at all",
+          "[platformquirks][elevation]")
+{
+    // Nothing authorises this binary, so pkexec could only ever be denied.
+    // Asking anyway means a password prompt on every launch that cannot
+    // succeed. The fake pkexec here reports success, so a pass means it was
+    // never reached.
+    REQUIRE_ELEVATION_HARNESS();
+    ElevationFixture fixture;
+    REQUIRE(fixture.build(QStringLiteral("exit 0")));
+
+    const ElevationRun run = runElevation(fixture, false);
+    if (!run.ran)
+        SKIP("the elevation namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    CHECK(run.exitCode == 40);
+    CHECK(run.out.contains(QStringLiteral("RET=0")));
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
