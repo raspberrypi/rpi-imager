@@ -19,6 +19,103 @@
 
 #include <Security/Security.h>
 
+namespace {
+
+// Read one DER tag-length header at `pos`, leaving `pos` on the contents.
+bool derHeader(const QByteArray& der, int& pos, quint8& tag, int& length)
+{
+    if (pos + 2 > der.size())
+        return false;
+    tag = static_cast<quint8>(der.at(pos++));
+    const quint8 first = static_cast<quint8>(der.at(pos++));
+    if (first < 0x80) {
+        length = first;
+    } else {
+        const int count = first & 0x7F;
+        if (count == 0 || count > 4 || pos + count > der.size())
+            return false;
+        length = 0;
+        for (int i = 0; i < count; ++i)
+            length = (length << 8) | static_cast<quint8>(der.at(pos++));
+    }
+    return length >= 0 && pos + length <= der.size();
+}
+
+// The RSAPrivateKey inside a PKCS#8 PrivateKeyInfo, or an empty result if
+// this is not one.
+//
+// SecKeyCreateWithData wants PKCS#1, and so did SecItemImport before it. What
+// arrives depends entirely on which openssl generated the key: LibreSSL, which
+// macOS ships, writes PKCS#1 -- "BEGIN RSA PRIVATE KEY" -- while OpenSSL 3
+// writes PKCS#8 for the very same `genrsa` command. So on a machine with a
+// Homebrew openssl ahead of the system one, the application generated a key
+// through its own provisioner and then could not read it back to sign with,
+// failing at SecItemImport with errSecUnknownFormat. Unwrap it here rather
+// than depending on which openssl happens to be first on PATH.
+//
+// PrivateKeyInfo ::= SEQUENCE { version INTEGER,
+//                               privateKeyAlgorithm AlgorithmIdentifier,
+//                               privateKey OCTET STRING }
+QByteArray pkcs8ToPkcs1(const QByteArray& der)
+{
+    int pos = 0;
+    quint8 tag = 0;
+    int length = 0;
+    if (!derHeader(der, pos, tag, length) || tag != 0x30)   // SEQUENCE
+        return {};
+    if (!derHeader(der, pos, tag, length) || tag != 0x02)   // INTEGER version
+        return {};
+    pos += length;
+    if (!derHeader(der, pos, tag, length) || tag != 0x30)   // AlgorithmIdentifier
+        return {};
+    pos += length;
+    if (!derHeader(der, pos, tag, length) || tag != 0x04)   // OCTET STRING
+        return {};
+    return der.mid(pos, length);
+}
+
+// The DER body of a PEM file, as PKCS#1, whichever of the two it was written
+// as. Encrypted keys are not handled -- they were not before either.
+QByteArray readRsaPrivateKeyDer(const QByteArray& pem, QString* what)
+{
+    const bool pkcs8 = pem.contains("BEGIN PRIVATE KEY");
+    const bool pkcs1 = pem.contains("BEGIN RSA PRIVATE KEY");
+    if (!pkcs8 && !pkcs1) {
+        if (what)
+            *what = QStringLiteral("not an unencrypted RSA private key in PEM form");
+        return {};
+    }
+
+    QByteArray base64;
+    bool inBody = false;
+    for (const QByteArray& line : pem.split('\n')) {
+        const QByteArray trimmed = line.trimmed();
+        if (trimmed.startsWith("-----BEGIN")) {
+            inBody = true;
+        } else if (trimmed.startsWith("-----END")) {
+            break;
+        } else if (inBody) {
+            base64 += trimmed;
+        }
+    }
+
+    const QByteArray der = QByteArray::fromBase64(base64);
+    if (der.isEmpty()) {
+        if (what)
+            *what = QStringLiteral("PEM body did not decode");
+        return {};
+    }
+    if (!pkcs8)
+        return der;
+
+    const QByteArray unwrapped = pkcs8ToPkcs1(der);
+    if (unwrapped.isEmpty() && what)
+        *what = QStringLiteral("PKCS#8 wrapper did not parse");
+    return unwrapped;
+}
+
+} // namespace
+
 namespace SecureBootCrypto {
 
 QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPath)
@@ -31,32 +128,45 @@ QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPa
     QByteArray pemData = keyFile.readAll();
     keyFile.close();
 
+    QString why;
+    const QByteArray keyDer = readRsaPrivateKeyDer(pemData, &why);
+    if (keyDer.isEmpty()) {
+        qDebug() << "SecureBootCrypto/mac: cannot read" << rsaKeyPath << ":" << why;
+        return {};
+    }
+
     CFDataRef keyData = CFDataCreate(nullptr,
-        reinterpret_cast<const UInt8*>(pemData.constData()), pemData.size());
+        reinterpret_cast<const UInt8*>(keyDer.constData()), keyDer.size());
     if (!keyData) {
         qDebug() << "SecureBootCrypto/mac: CFDataCreate(keyData) failed";
         return {};
     }
 
-    SecExternalFormat format = kSecFormatPEMSequence;
-    SecExternalItemType itemType = kSecItemTypePrivateKey;
-    SecItemImportExportKeyParameters params{};
-    params.version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION;
-    params.passphrase = nullptr;
+    const void* attrKeys[] = { kSecAttrKeyType, kSecAttrKeyClass, kSecAttrKeySizeInBits };
+    const int bits = keyDer.size() >= 1100 ? 4096 : 2048;
+    CFNumberRef sizeInBits = CFNumberCreate(nullptr, kCFNumberIntType, &bits);
+    const void* attrValues[] = { kSecAttrKeyTypeRSA, kSecAttrKeyClassPrivate, sizeInBits };
+    CFDictionaryRef attrs = CFDictionaryCreate(nullptr, attrKeys, attrValues, 3,
+                                               &kCFTypeDictionaryKeyCallBacks,
+                                               &kCFTypeDictionaryValueCallBacks);
 
-    CFArrayRef items = nullptr;
-    OSStatus status = SecItemImport(keyData, nullptr, &format, &itemType, 0,
-                                     &params, nullptr, &items);
+    CFErrorRef importError = nullptr;
+    SecKeyRef privateKey = SecKeyCreateWithData(keyData, attrs, &importError);
     CFRelease(keyData);
-    if (status != errSecSuccess || !items || CFArrayGetCount(items) == 0) {
-        qDebug() << "SecureBootCrypto/mac: SecItemImport failed, status=" << status;
-        if (items) CFRelease(items);
+    if (sizeInBits) CFRelease(sizeInBits);
+    if (attrs) CFRelease(attrs);
+    if (!privateKey) {
+        if (importError) {
+            CFStringRef desc = CFErrorCopyDescription(importError);
+            qDebug() << "SecureBootCrypto/mac: SecKeyCreateWithData failed:"
+                     << QString::fromCFString(desc);
+            CFRelease(desc);
+            CFRelease(importError);
+        } else {
+            qDebug() << "SecureBootCrypto/mac: SecKeyCreateWithData failed";
+        }
         return {};
     }
-
-    SecKeyRef privateKey = (SecKeyRef)CFArrayGetValueAtIndex(items, 0);
-    CFRetain(privateKey);
-    CFRelease(items);
 
     CFDataRef dataToSign = CFDataCreate(nullptr,
         reinterpret_cast<const UInt8*>(sha256Digest.constData()), sha256Digest.size());

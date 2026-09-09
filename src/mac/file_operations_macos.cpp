@@ -114,9 +114,41 @@ void MacOSFileOperations::InitAsyncIO() {
 void MacOSFileOperations::CleanupAsyncIO() {
   // Wait for pending writes before cleanup
   WaitForPendingWrites();
-  
+
+  // ...and then wait for them again, because the wait above gives up as soon
+  // as the write is cancelled -- by design, so a user who has pressed cancel
+  // is not made to sit through the rest of the queue. What it leaves behind
+  // is blocks still running on the queue, each holding a slot of the
+  // semaphore and each still touching this object.
+  //
+  // Releasing a dispatch semaphore whose value is below the one it was
+  // created with is a hard error in libdispatch: _dispatch_semaphore_dispose
+  // traps, and the process dies with SIGTRAP. Cancelling a write therefore
+  // crashed on the way out -- reliably, in the app as much as in the test
+  // that caught it, since both destroy the device after cancelling.
+  //
+  // pending_writes_ is decremented last of all, after the callback has run,
+  // so reaching zero means every block has both signalled the semaphore and
+  // finished with this object.
+  if (pending_writes_.load() > 0) {
+    constexpr auto kDrainLimit = std::chrono::seconds(30);
+    const auto deadline = std::chrono::steady_clock::now() + kDrainLimit;
+    std::unique_lock<std::mutex> lock(completion_mutex_);
+    completion_cv_.wait_until(lock, deadline,
+                              [this] { return pending_writes_.load() == 0; });
+  }
+
   if (queue_semaphore_ != nullptr) {
-    dispatch_release(queue_semaphore_);
+    if (pending_writes_.load() == 0) {
+      dispatch_release(queue_semaphore_);
+    } else {
+      // Still not drained. Leaking one semaphore costs a few bytes for the
+      // life of the process; releasing this one would take the process with
+      // it, and take the user's cancelled write with that.
+      Log("CleanupAsyncIO: " + std::to_string(pending_writes_.load()) +
+          " write(s) still in flight after draining; leaking the queue "
+          "semaphore rather than tripping libdispatch");
+    }
     queue_semaphore_ = nullptr;
   }
   if (async_queue_ != nullptr) {
