@@ -159,20 +159,33 @@ static int getPartitionNumber(const std::string& partition_path) {
 }
 
 // Helper to get the shared FAT partition (all tests use the same device)
+//
+// Skipped, not failed, when there is no device: these cases need a real
+// mounted FAT partition named by FAT_TEST_MOUNT_PATH, which no automated run
+// has. They used to throw here, and every case carried the tag that lets a
+// failure through so the run stayed green -- which also meant that on a
+// machine that did have the device, a driver breaking all seven of them
+// still reported success. A test that cannot fail is worse than one that is
+// not there, because it gets counted.
+//
+// The filesystem behaviour these cover against a real card is covered
+// against a synthesised image, with no device and no privileges, in
+// test/fat_partition_image_test.cpp -- which is what runs in CI.
 static DeviceWrapperFatPartition* getSharedFatPartition() {
     if (!g_shared_device_wrapper) {
-        throw std::runtime_error("Shared device not initialized. Set FAT_TEST_MOUNT_PATH environment variable.");
+        SKIP("no FAT test device: set FAT_TEST_MOUNT_PATH to a mounted FAT "
+             "partition to run these");
     }
-    
+
     DeviceWrapperFatPartition* fat = g_shared_device_wrapper->fatPartition(g_partition_num);
     if (!fat) {
         throw std::runtime_error("Failed to get FAT partition");
     }
-    
+
     return fat;
 }
 
-TEST_CASE("DeviceWrapperFatPartition list files", "[fat][!mayfail]") {
+TEST_CASE("DeviceWrapperFatPartition list files", "[fat]") {
     INFO("Testing against: " << g_test_device_path);
     
     DeviceWrapperFatPartition* fat = getSharedFatPartition();
@@ -245,7 +258,7 @@ TEST_CASE("DeviceWrapperFatPartition list files", "[fat][!mayfail]") {
         CHECK(!file.contains("/"));
     }
 }
-TEST_CASE("DeviceWrapperFatPartition file reading", "[fat][!mayfail]") {
+TEST_CASE("DeviceWrapperFatPartition file reading", "[fat]") {
     DeviceWrapperFatPartition* fat = getSharedFatPartition();
     REQUIRE(fat != nullptr);
     
@@ -298,7 +311,7 @@ TEST_CASE("DeviceWrapperFatPartition file reading", "[fat][!mayfail]") {
         }
     }
 }
-TEST_CASE("DeviceWrapperFatPartition fileExists", "[fat][!mayfail]") {
+TEST_CASE("DeviceWrapperFatPartition fileExists", "[fat]") {
     DeviceWrapperFatPartition* fat = getSharedFatPartition();
     REQUIRE(fat != nullptr);
     
@@ -324,7 +337,7 @@ TEST_CASE("DeviceWrapperFatPartition fileExists", "[fat][!mayfail]") {
     }
 }
 
-TEST_CASE("DeviceWrapperFatPartition deleteFile", "[fat][!mayfail][.destructive]") {
+TEST_CASE("DeviceWrapperFatPartition deleteFile", "[fat][.destructive]") {
     WARN("This test will modify the filesystem!");
     
     DeviceWrapperFatPartition* fat = getSharedFatPartition();
@@ -376,7 +389,7 @@ TEST_CASE("DeviceWrapperFatPartition deleteFile", "[fat][!mayfail][.destructive]
     }
 }
 
-TEST_CASE("DeviceWrapperFatPartition LFN checksum validation", "[fat][!mayfail][.destructive]") {
+TEST_CASE("DeviceWrapperFatPartition LFN checksum validation", "[fat][.destructive]") {
     WARN("This test will create files with long names to test LFN checksum validation!");
     
     DeviceWrapperFatPartition* fat = getSharedFatPartition();
@@ -539,7 +552,7 @@ TEST_CASE("DeviceWrapperFatPartition LFN checksum validation", "[fat][!mayfail][
     }
 }
 
-TEST_CASE("DeviceWrapperFatPartition LFN checksum algorithm", "[fat][!mayfail]") {
+TEST_CASE("DeviceWrapperFatPartition LFN checksum algorithm", "[fat]") {
     // Test the LFN checksum algorithm itself with known values
     // This validates our implementation against the FAT specification
     
@@ -606,7 +619,7 @@ TEST_CASE("DeviceWrapperFatPartition LFN checksum algorithm", "[fat][!mayfail]")
     }
 }
 
-TEST_CASE("DeviceWrapperFatPartition comprehensive tests", "[fat][!mayfail][.destructive]") {
+TEST_CASE("DeviceWrapperFatPartition comprehensive tests", "[fat][.destructive]") {
     WARN("This test will create and delete files with various name formats!");
     
     DeviceWrapperFatPartition* fat = getSharedFatPartition();

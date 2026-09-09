@@ -23,6 +23,10 @@ public:
     QByteArray readFile(const QString &filename);
     void writeFile(const QString &filename, const QByteArray &contents);
     bool fileExists(const QString &filename);
+    /* The length recorded in the directory entry, without reading the file.
+       -1 when there is no such file. Lets a caller check a large file's size
+       without paying for a block-by-block read-back of its contents. */
+    qint64 fileSize(const QString &filename);
     bool deleteFile(const QString &filename);
     QStringList listAllFiles(); // List all files recursively
     QStringList listAllFilesRecursive(); // List all files including subdirectories
