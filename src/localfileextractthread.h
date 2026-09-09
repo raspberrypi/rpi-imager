@@ -24,10 +24,14 @@ public:
 protected:
     virtual void _cancelExtract();
     virtual void run();
+    // The file is on disk in its entirety before a byte is read.
+    bool inputWasCompleteBeforeExtracting() const override { return true; }
+
     virtual ssize_t _on_read(struct archive *a, const void **buff);
     virtual int _on_close(struct archive *a);
     void extractRawImageRun();
     bool _testArchiveFormat();
+    bool _nameClaimsCompression() const;
     static ssize_t _archive_read_test(struct archive *, void *client_data, const void **buff);
     static int _archive_close_test(struct archive *, void *client_data);
     QFile _inputfile;
