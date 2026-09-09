@@ -1549,7 +1549,7 @@ TEST_CASE("A finished bootstrap starts the drive scan looking for fastboot stora
     // would hold whether or not the handler did anything.
     REQUIRE_FALSE(drives->fastbootScanEnabled());
 
-    writer.onBootstrapComplete(QStringLiteral("1.4"), QStringLiteral("fastboot-1"));
+    writer.onBootstrapComplete(QStringLiteral("250.252"), QStringLiteral("fastboot-1"));
 
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
     // And it is now looking for what the board has just become.
@@ -1569,7 +1569,7 @@ TEST_CASE("A bootstrap that fails does not leave the drive list frozen",
     drives->pausePolling();
     REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
-    writer.onBootstrapError(QStringLiteral("1.4"),
+    writer.onBootstrapError(QStringLiteral("250.252"),
                             QStringLiteral("device went away mid-sideload"));
 
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
@@ -12604,6 +12604,12 @@ public:
     {
         // A gadget image on disk, so the bootstrap has one without asking for
         // it. The guard above stops the rest of the firmware being fetched.
+        //
+        // The cases below name bus 250, which no machine has. The thread that
+        // gets started is real and does enumerate USB, and the rpiboot suite
+        // attaches emulated gadgets over usbip -- under `ctest -j4` the two
+        // run at the same time, and a plausible bus and address is an
+        // invitation to interfere with them.
         _gadget.open();
         _gadget.write("not a gadget, but a file that exists");
         _gadget.flush();
@@ -12632,7 +12638,7 @@ TEST_CASE("A board on the bus is left alone unless rpiboot is enabled",
     REQUIRE(drives);
     const auto before = drives->scanMode();
 
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
 
     CHECK(drives->scanMode() == before);
 }
@@ -12645,12 +12651,12 @@ TEST_CASE("Bootstrapping a board pauses the drive scan, and finishing resumes it
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
 
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
     CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
     // The port path is the key: 1 and 2 joined, which is what the callbacks
     // are given back.
-    w.onBootstrapComplete(QStringLiteral("1.2"), QStringLiteral("fastboot:1-2"));
+    w.onBootstrapComplete(QStringLiteral("250.250"), QStringLiteral("fastboot:1-2"));
 
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
     // And the poll starts looking for the storage the board now presents.
@@ -12668,10 +12674,10 @@ TEST_CASE("A bootstrap that failed lets go of the drive scan too",
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
 
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
     REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
-    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("could not open the bus"));
+    w.onBootstrapError(QStringLiteral("250.250"), QStringLiteral("could not open the bus"));
 
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
@@ -12687,14 +12693,14 @@ TEST_CASE("A board that failed once can be tried again", "[imagewriter][rpiboot]
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
 
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
-    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
+    w.onBootstrapError(QStringLiteral("250.250"), QStringLiteral("no"));
     REQUIRE(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
     CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
-    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+    w.onBootstrapError(QStringLiteral("250.250"), QStringLiteral("no"));
 }
 
 TEST_CASE("A board reported over and over needs one completion to unwind",
@@ -12716,14 +12722,14 @@ TEST_CASE("A board reported over and over needs one completion to unwind",
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
 
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
     REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
     // One completion is enough to unwind it. If three bootstraps had been
     // started, two would still be registered and the scan would stay paused.
-    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+    w.onBootstrapError(QStringLiteral("250.250"), QStringLiteral("no"));
 
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
@@ -12738,14 +12744,14 @@ TEST_CASE("Two boards at once keep the scan paused until both are done",
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
 
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-3"), 1, 3, {1, 3}, 0x2712);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-251"), 250, 251, {250, 251}, 0x2712);
     REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
-    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+    w.onBootstrapError(QStringLiteral("250.250"), QStringLiteral("no"));
     CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
-    w.onBootstrapError(QStringLiteral("1.3"), QStringLiteral("no"));
+    w.onBootstrapError(QStringLiteral("250.251"), QStringLiteral("no"));
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
 
@@ -12852,7 +12858,7 @@ TEST_CASE("Re-provisioning without a key says so rather than going quiet",
 
     // It still starts -- refusing outright would be worse for a board that is
     // not fused, which does not need the signature at all.
-    w.onRpibootDeviceDetected(QStringLiteral("usb:1-4"), 1, 4, {1, 4}, 0x2712);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:250-252"), 250, 252, {250, 252}, 0x2712);
     CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
 
     INFO("warnings: " << warnings.join(QStringLiteral(" | ")).toStdString());
@@ -12860,7 +12866,7 @@ TEST_CASE("Re-provisioning without a key says so rather than going quiet",
         return m.contains(QStringLiteral("no secure boot RSA key configured"));
     }));
 
-    w.onBootstrapError(QStringLiteral("1.4"), QStringLiteral("no"));
+    w.onBootstrapError(QStringLiteral("250.252"), QStringLiteral("no"));
 }
 
 TEST_CASE("A secure boot key that is not a file is refused, saying which it is",
