@@ -142,6 +142,17 @@ static QByteArray defaultBootConf2711()
     return b;
 }
 
+#ifdef SECUREBOOT_ENABLE_TEST_API
+// The two boot configurations above decide what a re-provisioned board will
+// accept for the rest of its life, and they are written into an EEPROM whose
+// key hash is already fused. Exposed so their content can be pinned without
+// a device on the bus.
+namespace TestAPI {
+QByteArray defaultBootConf2712() { return ::rpiboot::defaultBootConf2712(); }
+QByteArray defaultBootConf2711() { return ::rpiboot::defaultBootConf2711(); }
+}
+#endif
+
 // Generate the pieeprom.sig file alongside a signed pieeprom.bin.  Format
 // matches rpi-eeprom-digest run *with* -k:
 //   <sha256-hex>\n

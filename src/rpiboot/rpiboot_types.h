@@ -44,6 +44,110 @@ inline std::optional<ChipGeneration> chipGenerationFromPid(uint16_t pid)
     }
 }
 
+// The synthetic device URI for a board sitting in rpiboot mode.
+//
+//     rpiboot://<bus>:<address>:<port.path>:<pid>
+//
+// Kept here in one place because it is written in rpiboot_scanner.cpp and
+// read in two others -- ImageWriter::startWrite(), to address the device, and
+// DriveListModel, to announce it -- each of which had its own copy of the
+// splitting.
+//
+// The last field is the chip generation, whose value is also the USB product
+// ID, written in decimal. It selects which bootcode is uploaded, so a reader
+// that disagreed with the writer about the base would quietly send CM4
+// firmware to a CM5 and the board would never appear in fastboot mode. That
+// agreement is what the round-trip test pins.
+struct DeviceUri
+{
+    bool valid = false;              // false unless at least bus and address parsed
+    uint8_t busNumber = 0;
+    uint8_t deviceAddress = 0;
+    std::vector<uint8_t> portPath;
+    std::optional<ChipGeneration> chipGeneration;   // absent when missing or unknown
+};
+
+inline std::string portPathToUriField(const std::vector<uint8_t>& portPath)
+{
+    std::string result;
+    for (size_t i = 0; i < portPath.size(); ++i) {
+        if (i > 0) result += '.';
+        result += std::to_string(portPath[i]);
+    }
+    return result;
+}
+
+inline std::string formatDeviceUri(uint8_t busNumber, uint8_t deviceAddress,
+                                   const std::vector<uint8_t>& portPath,
+                                   ChipGeneration generation)
+{
+    return "rpiboot://" + std::to_string(busNumber) + ":"
+         + std::to_string(deviceAddress) + ":" + portPathToUriField(portPath)
+         + ":" + std::to_string(static_cast<uint16_t>(generation));
+}
+
+// Unparseable numbers read as zero, which is what the QString::toUInt() calls
+// this replaced did.
+inline unsigned long uriFieldToNumber(std::string_view field)
+{
+    unsigned long value = 0;
+    for (const char c : field) {
+        if (c < '0' || c > '9')
+            return 0;
+        value = value * 10 + static_cast<unsigned long>(c - '0');
+        if (value > 0xFFFFUL)
+            return 0;
+    }
+    return field.empty() ? 0 : value;
+}
+
+inline DeviceUri parseDeviceUri(std::string_view uri)
+{
+    DeviceUri out;
+
+    constexpr std::string_view kScheme = "rpiboot://";
+    if (uri.substr(0, kScheme.size()) == kScheme)
+        uri.remove_prefix(kScheme.size());
+
+    std::vector<std::string_view> fields;
+    while (!uri.empty()) {
+        const size_t colon = uri.find(':');
+        if (colon == std::string_view::npos) {
+            fields.push_back(uri);
+            break;
+        }
+        fields.push_back(uri.substr(0, colon));
+        uri.remove_prefix(colon + 1);
+    }
+
+    if (fields.size() < 2)
+        return out;
+
+    out.valid = true;
+    out.busNumber = static_cast<uint8_t>(uriFieldToNumber(fields[0]));
+    out.deviceAddress = static_cast<uint8_t>(uriFieldToNumber(fields[1]));
+
+    if (fields.size() >= 3) {
+        std::string_view path = fields[2];
+        while (!path.empty()) {
+            const size_t dot = path.find('.');
+            const std::string_view part =
+                dot == std::string_view::npos ? path : path.substr(0, dot);
+            if (!part.empty())
+                out.portPath.push_back(static_cast<uint8_t>(uriFieldToNumber(part)));
+            if (dot == std::string_view::npos)
+                break;
+            path.remove_prefix(dot + 1);
+        }
+    }
+
+    if (fields.size() >= 4)
+        out.chipGeneration =
+            chipGenerationFromPid(static_cast<uint16_t>(uriFieldToNumber(fields[3])));
+
+    return out;
+}
+
 // Human-readable name for each chip generation
 inline std::string_view chipGenerationName(ChipGeneration gen)
 {

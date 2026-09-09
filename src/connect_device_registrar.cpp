@@ -261,6 +261,15 @@ ConnectDeviceRegistrar::AuthKeyResult ConnectDeviceRegistrar::requestAuthKey(
     CurlNetworkConfig::instance().applyCurlSettings(
         c, CurlNetworkConfig::FetchProfile::FireAndForget);
 
+    // The shared configuration turns FAILONERROR on, which is right for a
+    // download -- a 404 there is nothing but a failure. Here it threw away
+    // the part that matters: curl returned CURLE_HTTP_RETURNED_ERROR before
+    // the status could be looked at, so every refusal read "Network error:
+    // The requested URL returned error: 401", and the body carrying the
+    // API's own explanation was discarded with it. The code below is written
+    // to read the status and the body, and could never reach either.
+    curl_easy_setopt(c, CURLOPT_FAILONERROR, 0L);
+
     QByteArray responseBody;
     struct curl_slist *headers = nullptr;
     const QByteArray authHeader =
@@ -374,6 +383,11 @@ ConnectDeviceRegistrar::HttpResult ConnectDeviceRegistrar::httpPost(
     // FireAndForget profile — registration is a short one-shot request.
     CurlNetworkConfig::instance().applyCurlSettings(
         c, CurlNetworkConfig::FetchProfile::FireAndForget);
+
+    // As in requestAuthKey above: FAILONERROR would fail this request before
+    // the status and body could be read, and both are what the caller
+    // reports.
+    curl_easy_setopt(c, CURLOPT_FAILONERROR, 0L);
 
     struct curl_slist *headers = nullptr;
     const QByteArray authHeader = QByteArrayLiteral("Authorization: ") + bearerToken;

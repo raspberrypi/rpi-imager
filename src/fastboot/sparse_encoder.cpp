@@ -12,20 +12,16 @@
 
 namespace fastboot {
 
-// Minimum segment must hold: file header + leading DONT_CARE prefix +
-// one chunk header + one block + trailing DONT_CARE suffix
-static constexpr size_t MIN_SEGMENT_SIZE =
-    SPARSE_FILE_HDR_SZ + 2 * SPARSE_CHUNK_HDR_SZ + SPARSE_CHUNK_HDR_SZ + SPARSE_BLK_SZ;
-
 SparseEncoder::SparseEncoder(uint32_t maxSegmentSize, uint64_t totalImageSize)
-    : _maxSegmentSize(maxSegmentSize)
+    : _maxSegmentSize(std::max(maxSegmentSize, MIN_SEGMENT_SIZE))
     , _totalImageBlocks(totalImageSize > 0
           ? (totalImageSize + SPARSE_BLK_SZ - 1) / SPARSE_BLK_SZ
           : 0)
 {
-    assert(maxSegmentSize >= MIN_SEGMENT_SIZE);
-    _out.reserve(maxSegmentSize);
-    _ready.reserve(maxSegmentSize);
+    // The floor is applied above rather than asserted. asserts compile out
+    // of release builds, and this value comes off the wire from the device.
+    _out.reserve(_maxSegmentSize);
+    _ready.reserve(_maxSegmentSize);
     beginSegment();
 }
 

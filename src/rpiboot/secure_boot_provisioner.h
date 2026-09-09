@@ -45,8 +45,12 @@ public:
     //                          embedded, customer pubkey embedded, and (when
     //                          counterSignFirmware) a customer-counter-signed
     //                          bootcode.
-    //   - `pieeprom.sig`     — sha256+ts (no rsa2048; RSA proof is embedded
-    //                          as bootconf.sig inside pieeprom.bin).
+    //   - `pieeprom.sig`     — sha256 + ts + rsa2048, signed with the
+    //                          customer key. The recovery binary verifies
+    //                          this before flashing on a secure-boot device,
+    //                          so the rsa2048 line is required; bootconf.sig
+    //                          embedded inside pieeprom.bin is a separate
+    //                          proof, not a replacement for it.
     //   - `bootcode5.bin`    — counter-signed recovery.original.bin (BCM2712
     //                          only; produced when counterSignFirmware).
     // counterSignFirmware should be true when the device already has

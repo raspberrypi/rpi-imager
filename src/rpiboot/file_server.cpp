@@ -512,8 +512,45 @@ std::vector<uint8_t> FileServer::readFileFromDisk(const std::filesystem::path& d
     if (!filename.empty() && filename[0] == '*')
         return {};
 
-    auto path = dir / filename;
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    // The filename arrives from the USB device, and the device is not
+    // trusted: anything that speaks the rpiboot protocol chooses it. The
+    // caller only checks that it is printable ASCII, which "../../etc/shadow"
+    // satisfies -- and an absolute path is worse still, because
+    // std::filesystem::path::operator/ discards the left-hand side entirely
+    // when the right-hand side is absolute, so `dir / "/etc/shadow"` is just
+    // "/etc/shadow". Whatever is opened here is sent straight back to the
+    // device by handleReadFile(), and the imager is often running elevated so
+    // that it can write to block devices.
+    //
+    // Resolve the request and require it to stay inside the firmware
+    // directory. Legitimate requests are plain names or chip subdirectories
+    // ("2712/bootcode5.bin"), which are unaffected.
+    std::error_code ec;
+    const auto base = std::filesystem::weakly_canonical(dir, ec);
+    if (ec)
+        return {};
+    const auto resolved = std::filesystem::weakly_canonical(dir / filename, ec);
+    if (ec)
+        return {};
+
+    const auto relative = resolved.lexically_relative(base);
+    if (relative.empty() || relative.native().rfind("..", 0) == 0) {
+        qWarning() << "rpiboot: refusing file request that escapes the firmware"
+                      " directory:" << QString::fromStdString(filename);
+        return {};
+    }
+
+    // Must be a regular file. An empty filename resolves to the firmware
+    // directory itself, and the device can send one -- the caller's garbage
+    // check only walks the characters of the name, so an empty name passes
+    // it. On Linux a directory opens happily through ifstream, tellg() then
+    // reports a nonsense size, and reserving a buffer that big throws
+    // std::bad_alloc out of a code path with no handler for it.
+    std::error_code fec;
+    if (!std::filesystem::is_regular_file(resolved, fec) || fec)
+        return {};
+
+    std::ifstream file(resolved, std::ios::binary | std::ios::ate);
     if (!file.is_open())
         return {};
 

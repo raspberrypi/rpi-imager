@@ -17,12 +17,16 @@
 #include <QString>
 #include <QUrl>
 
+#include <string>
+
 #include <memory>
 
 class RingBuffer;
 class AcceleratedCryptographicHash;
 namespace fastboot { class FastbootProtocol; }
 namespace rpiboot { class IUsbTransport; }
+
+namespace rpiboot { class IUsbTransport; class LibusbContext; struct UsbDeviceInfo; }
 
 class FastbootFlashThread : public QThread
 {
@@ -59,6 +63,21 @@ public:
     void setConnectRegistration(const QString &apiKey,
                                  const QString &descriptionPrefix);
 
+    // Turn the device's reported max-download-size into a segment size we are
+    // willing to allocate against.
+    //
+    // The value arrives as a decimal or 0x-prefixed string from the device, so
+    // it is attacker-shaped in the same sense any USB descriptor is: whatever
+    // happens to be plugged in chooses it. Two buffers of this size are
+    // reserved up front by SparseEncoder, so an absurd value is an absurd
+    // allocation.
+    //
+    // `reported` is null when the device answered nothing, in which case the
+    // default is used. `availableBytes` is the memory budget to size against;
+    // pass 0 to skip the memory-derived ceiling.
+    static uint32_t resolveMaxDownloadSize(const std::string *reported,
+                                           quint64 availableBytes);
+
 signals:
     void writing();   // Emitted when download+flash pipeline starts
     void success();
@@ -72,7 +91,19 @@ signals:
 protected:
     void run() override;
 
-private:
+// Protected rather than private so a test can subclass and drive the parts
+// that already take their transport as a parameter.
+//
+// isEraseOperation(), performErase() and applyCustomisation() are what
+// decide whether a board is about to be wiped and what gets written to it,
+// and they were designed to take an IUsbTransport, which the tree already
+// has a mock for; src/test/fastboot_flash_thread_test.cpp drives all three
+// through it. applyBootOrderUpdate() is reachable the same way but is not
+// covered yet -- it needs a device EEPROM image queued up on the mock. The only thing standing in the way was that the whole class beyond
+// run() was private, so the sole way in was to start the thread and have it
+// look for a real device on the USB bus. Widening to protected changes
+// nothing for existing callers.
+protected:
     void runImpl();
     void downloadProducer();
     void decompressConsumerProducer();
@@ -91,6 +122,20 @@ private:
     // which writes a mountable FAT32.  Emits success()/error() itself.
     bool performErase(class fastboot::FastbootProtocol& fb,
                       class rpiboot::IUsbTransport& transport);
+
+    // How the fastboot device is opened.
+    //
+    // Everything past this point drives the device through IUsbTransport,
+    // which is why the individual steps -- erase, customisation, boot order
+    // -- were already testable against the mock. Constructing a concrete
+    // LibusbTransport was the single thing that kept runImpl(), the whole
+    // flash sequence, reachable only with hardware attached. Behind a
+    // virtual it is reachable without.
+    //
+    // The context is passed in rather than created here so its lifetime
+    // stays exactly where it was: it has to outlive the transport.
+    virtual std::unique_ptr<class rpiboot::IUsbTransport> openFastbootTransport(
+        class rpiboot::LibusbContext& ctx, const struct rpiboot::UsbDeviceInfo& target);
 
     // Best-effort: after the OS image has been flashed, set the
     // EEPROM's BOOT_ORDER so the chosen storage device boots first on
