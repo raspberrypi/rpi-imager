@@ -1838,3 +1838,136 @@ TEST_CASE("A ragged local image reaches a real device, whose last sector must be
     written.close();
     CHECK(head == image);
 }
+
+// ══════════════════════════════════════════════════════════════
+// Keeping the compressed copy
+//
+// A decompressing write can also keep what it downloaded, so the next write
+// of the same OS costs nothing. What is kept is the archive, not the image:
+// a two-gigabyte .img.xz rather than the eight gigabytes it becomes.
+//
+// That means two hashes, and they are not interchangeable. The image hash is
+// what the OS list published and what the write was verified against; the
+// cache hash is of the compressed bytes on disk, and is the only way a later
+// run can tell a good cache entry from a truncated one without decompressing
+// it. Emit them the wrong way round and every cached image is rejected on the
+// next launch -- the user downloads it again, and nothing says why.
+//
+// Nothing had told them apart: the existing cache cases all sit on the
+// uncompressed path, where the cache file *is* the image, both hashes are the
+// same bytes, and swapping them is undetectable. Handing them over the wrong
+// way round fails only the case below, and passes all six of those.
+//
+// (The cache-completion block in DownloadExtractThread itself belongs to the
+// multi-file zip path, which unpacks onto a mounted FAT partition and needs
+// root. A single compressed image finishes through the base class.)
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A verified compressed download is kept for next time",
+          "[extract][cache]")
+{
+    if (!haveTool(QStringLiteral("xz")))
+        SKIP("xz is not installed, so no .xz image can be built to extract");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(1024 * 1024, 53);
+    const QString raw = scratch.filePath(QStringLiteral("cached.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
+    const QString archive = raw + QStringLiteral(".xz");
+    REQUIRE(QFileInfo::exists(archive));
+    const QByteArray archiveBytes = readFile(archive);
+    REQUIRE_FALSE(archiveBytes.isEmpty());
+
+    // The cache is kept only for a download whose hash was given and matched:
+    // an unverified image is deliberately never cached. The hash is of the
+    // image, which is what the OS list publishes.
+    const QByteArray imageHash =
+        QCryptographicHash::hash(image, QCryptographicHash::Sha256).toHex();
+
+    const QString dest = scratch.filePath(QStringLiteral("cache-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
+
+    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+                             imageHash);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+    dt.setVerifyEnabled(false);
+
+    const QString cachePath = scratch.filePath(QStringLiteral("kept.xz"));
+    dt.setCacheFile(cachePath, archiveBytes.size());
+
+    QByteArray reportedCacheHash;
+    QByteArray reportedImageHash;
+    QObject::connect(&dt, &DownloadThread::cacheFileHashUpdated,
+                     [&](QByteArray cacheHash, QByteArray imgHash) {
+                         reportedCacheHash = cacheHash;
+                         reportedImageHash = imgHash;
+                     });
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    // What was kept is the archive, byte for byte -- not the image, and not
+    // a re-compression of it.
+    const QByteArray cached = readFile(cachePath);
+    CHECK(cached == archiveBytes);
+
+    // And the pair, the right way round. The second is the image the OS list
+    // named; the first is the file on disk, which is what a later run can
+    // check cheaply.
+    REQUIRE_FALSE(reportedImageHash.isEmpty());
+    CHECK(reportedImageHash == imageHash);
+    CHECK(reportedCacheHash ==
+          QCryptographicHash::hash(archiveBytes, QCryptographicHash::Sha256).toHex());
+    CHECK(reportedCacheHash != reportedImageHash);
+}
+
+TEST_CASE("A download whose hash does not match is not kept", "[extract][cache]")
+{
+    // A corrupted transfer, or the wrong file behind the URL. Caching it
+    // would hand the same bad bytes back on every later run, and the user
+    // would have no way to get past it short of finding the cache directory.
+    //
+    // Defended twice, and worth saying so: the guard on the cache-completion
+    // block tests the same equality, but removing it changes nothing here
+    // because a mismatched hash fails the write before that block is reached
+    // at all. What this holds is the outcome -- nothing offered to the cache
+    // -- rather than the line that would otherwise stop it.
+    if (!haveTool(QStringLiteral("xz")))
+        SKIP("xz is not installed, so no .xz image can be built to extract");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(512 * 1024, 67);
+    const QString raw = scratch.filePath(QStringLiteral("wrong.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
+    const QString archive = raw + QStringLiteral(".xz");
+
+    const QByteArray wrongHash =
+        QCryptographicHash::hash(QByteArrayLiteral("not this image"),
+                                 QCryptographicHash::Sha256).toHex();
+
+    const QString dest = scratch.filePath(QStringLiteral("nocache-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
+
+    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+                             wrongHash);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+    dt.setVerifyEnabled(false);
+
+    const QString cachePath = scratch.filePath(QStringLiteral("kept.xz"));
+    dt.setCacheFile(cachePath, 1024 * 1024);
+
+    bool cacheAnnounced = false;
+    QObject::connect(&dt, &DownloadThread::cacheFileHashUpdated,
+                     [&](QByteArray, QByteArray) { cacheAnnounced = true; });
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    REQUIRE(outcome.finished);
+    CHECK_FALSE(outcome.succeeded);
+
+    // Nothing offered to the cache: the next run must not find this.
+    CHECK_FALSE(cacheAnnounced);
+}
