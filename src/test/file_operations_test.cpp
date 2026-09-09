@@ -23,6 +23,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "loop_device.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -122,130 +124,10 @@ std::string makeImage(const std::string& name, std::uint64_t size = kImageSize) 
   return path;
 }
 
-// Run a command, capturing stdout. Returns exit status, or -1 on failure.
-int runCapture(const char* path, const std::vector<const char*>& argv,
-               std::string* out) {
-  int pipefd[2];
-  if (::pipe(pipefd) != 0) return -1;
-
-  pid_t pid = ::fork();
-  if (pid < 0) {
-    ::close(pipefd[0]);
-    ::close(pipefd[1]);
-    return -1;
-  }
-  if (pid == 0) {
-    ::close(pipefd[0]);
-    ::dup2(pipefd[1], STDOUT_FILENO);
-    ::close(pipefd[1]);
-    int devnull = ::open("/dev/null", O_WRONLY);
-    if (devnull >= 0) { ::dup2(devnull, STDERR_FILENO); ::close(devnull); }
-    ::execv(path, const_cast<char* const*>(argv.data()));
-    ::_exit(127);
-  }
-
-  ::close(pipefd[1]);
-  char buf[256] = {};
-  ssize_t n = ::read(pipefd[0], buf, sizeof(buf) - 1);
-  ::close(pipefd[0]);
-  int status = 0;
-  ::waitpid(pid, &status, 0);
-  if (out && n > 0) {
-    out->assign(buf, static_cast<std::size_t>(n));
-  }
-  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-}
-
-// A loopback device backed by one of our scratch images, detached on
-// destruction. Yields an empty path when the host will not give us one, which
-// is the normal case in CI and in containers: no CAP_SYS_ADMIN, or no
-// passwordless sudo. Callers skip rather than fail.
-class LoopDevice {
- public:
-  explicit LoopDevice(const std::string& backingFile) {
-    std::string out;
-    // -P so the partition table inside the image is scanned; several of the
-    // things worth testing live in partitions, not at the raw offset 0.
-    if (losetup({"--find", "--show", "-P", backingFile.c_str()}, &out) != 0) return;
-
-    // Trim, then insist on exactly /dev/loop<digits> before we ever hand this
-    // string to a detach command.
-    while (!out.empty() && (out.back() == '\n' || out.back() == '\r')) out.pop_back();
-    if (!isLoopPath(out)) return;
-
-    device_ = out;
-
-    // Make the node readable and writable by the user running the suite.
-    //
-    // losetup creates /dev/loopN as root:disk, mode 0660. A developer is
-    // normally not in the disk group -- and should not have to be, since that
-    // is a standing grant of raw access to every disk on the machine -- so
-    // without this the test attaches a device it then cannot open, and fails
-    // at OpenDevice() rather than testing anything. Scoped to the loop device
-    // this object just created and gone again when it is detached.
-    if (::geteuid() != 0) {
-      std::string ignored;
-      chownDevice(device_, &ignored);
-    }
-  }
-
-  ~LoopDevice() {
-    if (device_.empty()) return;
-    std::string ignored;
-    losetup({"-d", device_.c_str()}, &ignored);
-  }
-
-  LoopDevice(const LoopDevice&) = delete;
-  LoopDevice& operator=(const LoopDevice&) = delete;
-
-  bool valid() const { return !device_.empty(); }
-  const std::string& path() const { return device_; }
-
- private:
-  // Run losetup, directly when we are already root and via sudo -n otherwise.
-  // Going straight to losetup matters for rootful CI containers and VMs, where
-  // sudo is frequently not installed at all; -n on the fallback means a host
-  // that would prompt for a password fails immediately instead of hanging the
-  // suite.
-  static int losetup(std::vector<const char*> args, std::string* out) {
-    std::vector<const char*> argv;
-    const char* binary = nullptr;
-    if (::geteuid() == 0) {
-      binary = "/usr/sbin/losetup";
-      argv.push_back("losetup");
-    } else {
-      binary = "/usr/bin/sudo";
-      argv.insert(argv.end(), {"sudo", "-n", "losetup"});
-    }
-    argv.insert(argv.end(), args.begin(), args.end());
-    argv.push_back(nullptr);
-    return runCapture(binary, argv, out);
-  }
-
-  // Hand the loop node to the user running the suite, via sudo since it is
-  // created owned by root.
-  //
-  // chown to this uid rather than chmod 0666: the node only needs to be
-  // reachable by the process under test, and making a block device
-  // world-writable for the duration -- even a synthetic one -- is a wider
-  // grant than the job needs.
-  static int chownDevice(const std::string& device, std::string* out) {
-    const std::string uid = std::to_string(::geteuid());
-    std::vector<const char*> argv = {"sudo", "-n", "chown", uid.c_str(), device.c_str(),
-                                     nullptr};
-    return runCapture("/usr/bin/sudo", argv, out);
-  }
-
-  static bool isLoopPath(const std::string& s) {
-    if (s.rfind("/dev/loop", 0) != 0) return false;
-    const std::string digits = s.substr(9);
-    if (digits.empty()) return false;
-    return std::all_of(digits.begin(), digits.end(),
-                       [](unsigned char c) { return c >= '0' && c <= '9'; });
-  }
-
-  std::string device_;
-};
+// runCapture() and LoopDevice live in loop_device.h: the extract tests need
+// the same block device, for the same reason.
+using rpi_test::LoopDevice;
+using rpi_test::runCapture;
 
 }  // namespace
 
@@ -1226,4 +1108,44 @@ TEST_CASE("An async write that fails at completion is reported",
   CHECK(ops->GetLastErrorCode() == ENOSPC);
 
   ops->Close();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A write that does not fill a sector
+//
+// Cards are opened with O_DIRECT, and the kernel refuses a write whose length
+// is not a multiple of the logical block size. That is the rule every caller
+// writing an image has to respect on its last block, and the reason both
+// extract paths pad theirs.
+//
+// It is stated here rather than assumed, because it is not visible anywhere a
+// scratch file can reach: O_DIRECT is only ever set for a block device path,
+// so a regular file accepts any length and a caller that forgot to pad looks
+// perfectly correct right up until it meets a real card.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A device using direct I/O refuses a partial sector", "[fileops][loop]") {
+  AsyncFixture fx("rpi-imager-partial-sector.img");
+  if (!fx.haveDevice())
+    SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless sudo)");
+  REQUIRE(fx.open());
+  // Only meaningful with direct I/O actually on, which for a block device it
+  // is by default.
+  REQUIRE(fx.ops->IsDirectIOEnabled());
+
+  // The buffer is aligned either way; it is the length that is wrong.
+  const AlignedBlock block(4096, 5);
+  REQUIRE(block.valid());
+
+  const auto partial = fx.ops->WriteSequential(block.data(), 100);
+  INFO("100 bytes -> " << static_cast<int>(partial)
+       << ", errno " << fx.ops->GetLastErrorCode());
+  CHECK(partial != rpi_imager::FileError::kSuccess);
+  // EINVAL, which is the kernel objecting to the length rather than anything
+  // being wrong with the device.
+  CHECK(fx.ops->GetLastErrorCode() == EINVAL);
+
+  // A whole sector of the same buffer goes through, so the refusal is about
+  // the length and not the handle.
+  CHECK(fx.ops->WriteSequential(block.data(), 512) == rpi_imager::FileError::kSuccess);
 }

@@ -156,9 +156,31 @@ void LocalFileExtractThread::extractRawImageRun()
             break;
         }
         
-        // Write the data directly to the output device
-        size_t written = _writeFile(_inputBuf, len);
-        if (written != (size_t)len)
+        // Write the data directly to the output device, padding the last
+        // block out to a whole sector.
+        //
+        // A card is opened with O_DIRECT unless the user has turned direct
+        // I/O off, and the kernel refuses a write whose length is not a
+        // multiple of the logical block size -- EINVAL, which arrives here as
+        // a plain write error. An image whose length does not divide by 512
+        // would fail on its final write, at the end of a write that had
+        // otherwise succeeded, and the card would be left one sector short of
+        // complete. The decompressing path in DownloadExtractThread has
+        // always padded for this reason; the raw copy did not.
+        //
+        // The padding always fits: len is at most _inputBufSize, and when it
+        // is exactly that there is nothing to pad, because the buffer size is
+        // a whole number of sectors.
+        size_t toWrite = static_cast<size_t>(len);
+        if (toWrite % 512 != 0 && toWrite + (512 - (toWrite % 512)) <= _inputBufSize)
+        {
+            const size_t padding = 512 - (toWrite % 512);
+            memset(_inputBuf + toWrite, 0, padding);
+            toWrite += padding;
+        }
+
+        size_t written = _writeFile(_inputBuf, toWrite);
+        if (written != toWrite)
         {
             _onDownloadError(_writeFailureReason());
             break;

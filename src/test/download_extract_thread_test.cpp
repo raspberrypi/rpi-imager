@@ -38,6 +38,8 @@
 
 #include <unistd.h>
 
+#include "loop_device.h"
+
 #include "fixture_process.h"
 #include "platform_tools.h"
 #include "platform_fat.h"
@@ -1761,13 +1763,8 @@ TEST_CASE("A ragged local image is written whole", "[extract][local]")
     // takes the raw copy rather than the libarchive route, and a local .img
     // is the commonest way to meet a length that does not divide by 512.
     //
-    // This asserts only that every byte arrives. It cannot say anything
-    // about padding: the raw path does not pad, and device preparation
-    // zeroes the start of the destination anyway, so the bytes after the
-    // image are zero either way. Nor can it exercise the case that would
-    // make padding necessary -- O_DIRECT is only ever set for a block
-    // device path, so a scratch file never gets the alignment rule that
-    // rejects a short final write.
+    // Against a scratch file this asserts only that every byte arrives; the
+    // case below is the one that meets the rule the padding exists for.
     ScratchDir scratch;
     const QByteArray image = imageOfSize(64 * 1024 + 5, 91);
     REQUIRE(image.size() % 512 != 0);
@@ -1789,4 +1786,55 @@ TEST_CASE("A ragged local image is written whole", "[extract][local]")
     REQUIRE(outcome.succeeded);
 
     CHECK(readFile(dest).left(image.size()) == image);
+}
+
+TEST_CASE("A ragged local image reaches a real device, whose last sector must be whole",
+          "[extract][local][loop]")
+{
+    // The case a scratch file cannot show. A card is opened with O_DIRECT,
+    // and the kernel refuses a write whose length is not a multiple of the
+    // sector size -- see "A device using direct I/O refuses a partial sector"
+    // in the file-operations tests, which states that rule against the same
+    // kind of device.
+    //
+    // So an image whose length does not divide by 512 fails on its final
+    // write: at the end of a write that had otherwise succeeded, with the
+    // card one sector short of complete and "Error writing to device" on
+    // screen. A loopback device is the only way to get the rule enforced
+    // here, and it needs privileges the suite may not have.
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(64 * 1024 + 5, 91);
+    REQUIRE(image.size() % 512 != 0);
+
+    const QString raw = scratch.filePath(QStringLiteral("ragged-device.img"));
+    REQUIRE(writeFile(raw, image));
+
+    // The backing file is generously larger than the image, so nothing here
+    // is about running out of room.
+    const QString backing = scratch.filePath(QStringLiteral("backing.img"));
+    REQUIRE(writeFile(backing, QByteArray(8 * 1024 * 1024, '\0')));
+
+    rpi_test::LoopDevice device(backing.toStdString());
+    if (!device.valid())
+        SKIP("no loopback device available (needs CAP_SYS_ADMIN or passwordless "
+             "sudo), so the sector rule cannot be enforced");
+
+    const QString dest = QString::fromStdString(device.path());
+    LocalFileExtractThread dt(QByteArray("file://") + raw.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK(outcome.succeeded);
+
+    // And the image is on the device, whole. The padding goes after it, so
+    // nothing of the image itself is lost to the rounding.
+    QFile written(dest);
+    REQUIRE(written.open(QIODevice::ReadOnly));
+    const QByteArray head = written.read(image.size());
+    written.close();
+    CHECK(head == image);
 }
