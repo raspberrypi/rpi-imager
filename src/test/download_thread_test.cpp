@@ -3855,3 +3855,123 @@ TEST_CASE("A write that failed for no stated reason still says something",
     INFO("gone: " << gone);
     CHECK(gone == silent);
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Going out through a proxy
+//
+// On a corporate or school network the only way out is a proxy, and the
+// system already knows where it is. The writer asks for it and hands it to
+// curl; getting that wrong means every download fails to connect, on exactly
+// the networks where the user has no way to change it.
+//
+// The scheme matters as much as the address. curl's "socks5" resolves the
+// hostname locally and sends the address; "socks5h" sends the name and lets
+// the proxy resolve it. On a network whose DNS only answers proxy-side --
+// which is the usual arrangement behind a SOCKS proxy -- the first fails to
+// resolve at all.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Sets the environment Qt reads the system proxy from, and puts it back.
+// The proxy the writer resolves is kept in a static, so that is reset too:
+// left behind, it would be used by whatever ran next.
+class ScopedSystemProxy
+{
+public:
+    explicit ScopedSystemProxy(const char *value) : _saved(qgetenv("http_proxy"))
+    {
+        if (value)
+            qputenv("http_proxy", QByteArray(value));
+        else
+            qunsetenv("http_proxy");
+        DownloadThread::setProxy(QByteArray());
+    }
+
+    ~ScopedSystemProxy()
+    {
+        if (_saved.isNull())
+            qunsetenv("http_proxy");
+        else
+            qputenv("http_proxy", _saved);
+        DownloadThread::setProxy(QByteArray());
+    }
+
+    ScopedSystemProxy(const ScopedSystemProxy &) = delete;
+    ScopedSystemProxy &operator=(const ScopedSystemProxy &) = delete;
+
+private:
+    QByteArray _saved;
+};
+
+// Run a download that will not connect, purely to make the writer resolve
+// the proxy. Nothing is listening wherever it ends up pointing.
+void attemptDownloadThroughProxy(const ScratchDir &scratch, const QString &destName)
+{
+    const QString dest = scratch.filePath(destName);
+    REQUIRE(writeFile(dest, QByteArray(1024 * 1024, '\0')));
+
+    DownloadThread dt("http://127.0.0.1:1/image.img", dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setDebugIPv4Only(true);
+
+    const Outcome outcome = runToCompletion(dt, 120000);
+    REQUIRE(outcome.finished);
+    CHECK_FALSE(outcome.succeeded);
+}
+
+} // namespace
+
+TEST_CASE("The system's HTTP proxy is the one used", "[download][http][proxy]")
+{
+    ScopedSystemProxy proxy("http://127.0.0.1:3128");
+    ScratchDir scratch;
+    attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-http-dest.img"));
+
+    const QString used = QString::fromUtf8(DownloadThread::proxy());
+    INFO("proxy: " << used.toStdString());
+    CHECK(used.startsWith(QStringLiteral("http://")));
+    CHECK(used.contains(QStringLiteral("127.0.0.1")));
+    CHECK(used.contains(QStringLiteral("3128")));
+}
+
+TEST_CASE("A SOCKS proxy is asked for by the scheme that resolves through it",
+          "[download][http][proxy]")
+{
+    // socks5h, not socks5. Behind a SOCKS proxy the names being fetched are
+    // usually only resolvable on the far side of it, and resolving locally
+    // fails before a connection is attempted.
+    ScopedSystemProxy proxy("socks5://127.0.0.1:1080");
+    ScratchDir scratch;
+    attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-socks-dest.img"));
+
+    const QString used = QString::fromUtf8(DownloadThread::proxy());
+    INFO("proxy: " << used.toStdString());
+    CHECK(used.startsWith(QStringLiteral("socks5h://")));
+    CHECK(used.contains(QStringLiteral("1080")));
+}
+
+TEST_CASE("A proxy that wants a password gets one", "[download][http][proxy]")
+{
+    // An authenticating proxy is the common corporate arrangement. Dropping
+    // the credentials turns every download into a 407 the user cannot act on.
+    ScopedSystemProxy proxy("http://bob:secret@127.0.0.1:3128");
+    ScratchDir scratch;
+    attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-auth-dest.img"));
+
+    const QString used = QString::fromUtf8(DownloadThread::proxy());
+    INFO("proxy: " << used.toStdString());
+    CHECK(used.contains(QStringLiteral("bob")));
+    CHECK(used.contains(QStringLiteral("secret")));
+}
+
+TEST_CASE("With no proxy configured none is set", "[download][http][proxy]")
+{
+    // The counterpart. Inventing one would send every direct connection
+    // somewhere that is not listening.
+    ScopedSystemProxy proxy(nullptr);
+    ScratchDir scratch;
+    attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-none-dest.img"));
+
+    CHECK(DownloadThread::proxy().isEmpty());
+}
