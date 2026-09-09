@@ -24,6 +24,12 @@ WizardStepBase {
     // shown. Keep the section hidden until the rpiboot OTP-bootstrap flow is ported from
     // rpi-sb-provisioner; flip this to true (or remove the gate) when it lands. Shipping
     // it inert would present misleading "device is locked to signed boot" UI.
+    //
+    // When it does land, add otpProvisionPill to the focus group below.
+    // WizardStepBase builds the tab order from what a step registers, not by
+    // walking the tree, so a control left out of it is reachable by mouse
+    // only -- and this one programs OTP, which cannot be undone. It is not a
+    // live bug today only because the section is hidden.
     readonly property bool otpProvisioningImplemented: false
 
     // Only show and enable this step if OS supports secure boot

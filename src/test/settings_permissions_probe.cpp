@@ -20,7 +20,19 @@
  * changed. Used for the cache tree, which is a directory the walk has to
  * descend.
  *
- * Usage: settings_permissions_probe <path> <ownerUid> <ownerGid> [own]
+ * "env" and "ownenv" call the one-argument forms of those two, which work
+ * the invoking account out of SUDO_UID or PKEXEC_UID rather than being told
+ * it. That is what the product itself calls: nothing passes a uid in, so a
+ * uid that arrives as a test argument proves nothing about whether Imager
+ * finds the right one. The uid/gid arguments are ignored in those modes but
+ * still expected, so the usage stays one shape.
+ *
+ * "newenv" is "env" without making the file first, which is the very first
+ * elevated launch: there is no settings file yet, so root creates it and
+ * then has to hand it over.
+ *
+ * Usage: settings_permissions_probe <path> <ownerUid> <ownerGid>
+ *                                   [own|env|ownenv|newenv]
  */
 
 #include "settings_permissions.h"
@@ -46,26 +58,36 @@ int main(int argc, char* argv[])
     const int ownerUid = std::atoi(argv[2]);
     const int ownerGid = std::atoi(argv[3]);
 
-    if (argc > 4 && std::strcmp(argv[4], "own") == 0) {
-        const int changed = rpi_imager::restoreUserOwnership(path, ownerUid, ownerGid);
+    const char* mode = argc > 4 ? argv[4] : "";
+
+    if (std::strcmp(mode, "own") == 0 || std::strcmp(mode, "ownenv") == 0) {
+        const int changed = std::strcmp(mode, "ownenv") == 0
+                                ? rpi_imager::restoreUserOwnership(path)
+                                : rpi_imager::restoreUserOwnership(path, ownerUid, ownerGid);
         std::printf("EUID=%u\n", (unsigned)::geteuid());
         std::printf("CHANGED=%d\n", changed);
         std::fflush(stdout);
         return 0;
     }
 
-    {
-        QFile f(path);
-        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-            std::fprintf(stderr, "could not create %s\n", argv[1]);
-            return 3;
+    const bool fromEnvironment =
+        std::strcmp(mode, "env") == 0 || std::strcmp(mode, "newenv") == 0;
+
+    if (std::strcmp(mode, "newenv") != 0) {
+        {
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                std::fprintf(stderr, "could not create %s\n", argv[1]);
+                return 3;
+            }
+            f.write("[imagecustomization]\nhostname=raspberrypi\n");
         }
-        f.write("[imagecustomization]\nhostname=raspberrypi\n");
+        ::chmod(argv[1], 0664);
     }
-    ::chmod(argv[1], 0664);
 
     const rpi_imager::SettingsPermissions r =
-        rpi_imager::secureSettingsFile(path, ownerUid, ownerGid);
+        fromEnvironment ? rpi_imager::secureSettingsFile(path)
+                        : rpi_imager::secureSettingsFile(path, ownerUid, ownerGid);
 
     struct stat st{};
     ::stat(argv[1], &st);
@@ -77,6 +99,7 @@ int main(int argc, char* argv[])
     std::printf("TIGHTENED=%d\n", r.tightened ? 1 : 0);
     std::printf("SECURED=%d\n", r.secured ? 1 : 0);
     std::printf("FOREIGN=%d\n", r.foreignOwner ? 1 : 0);
+    std::printf("CREATED=%d\n", r.created ? 1 : 0);
     std::fflush(stdout);
     return 0;
 }
