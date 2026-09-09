@@ -2668,3 +2668,150 @@ TEST_CASE("A file past the first cluster of a scattered directory can still be d
     CHECK(image.fat().deleteFile(victim));
     CHECK_FALSE(image.fat().fileExists(victim));
 }
+
+TEST_CASE("FAT driver reads a subdirectory that spans more than one cluster",
+          "[fat][image]")
+{
+    // overlays/ on a Raspberry Pi OS boot partition holds a couple of hundred
+    // device-tree overlays -- several clusters' worth of directory entries.
+    // The root directory's cluster chain has been followed since there was a
+    // root directory; a subdirectory's had not, so everything past its first
+    // cluster was invisible to the driver.
+    //
+    // What that costs is not a missing file in a listing. Secure-boot
+    // packaging reads every file off the partition and packs it into
+    // boot.img, so the board would boot from a properly signed image with
+    // most of its overlays gone: no Bluetooth, no I2C, no display on some
+    // boards, and nothing anywhere saying why.
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    // Enough entries to spill the directory whatever cluster size mkfs picks.
+    // The names are long on purpose: each one costs a short entry plus three
+    // long-name fragments, so this is four times as many entries as files.
+    constexpr int kOverlays = 120;
+    auto overlayName = [](int i) {
+        return QStringLiteral("disable-peripheral-%1.dtbo").arg(i, 3, 10, QLatin1Char('0'));
+    };
+    auto overlayBody = [](int i) {
+        return QByteArray("overlay body ") + QByteArray::number(i);
+    };
+
+    ScopedTempDir sources(QStringLiteral("rpi-imager-overlays"));
+    FatImage image(32, 64, [&](const QString &imagePath) {
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+
+        // The overlays go in in bursts with a large file dropped between
+        // each, to push the directory into clusters that are not next to the
+        // ones it already has.
+        //
+        // Worth knowing what this does and does not establish. It drives the
+        // driver over a directory far larger than one cluster, which nothing
+        // else here does, and it holds down what the user needs: every file
+        // in a real overlays/ is readable, listed and deletable. It does not
+        // prove the FAT chain is being followed -- mtools lays the directory
+        // out consecutively whatever is dropped between the bursts, so
+        // reading straight through the partition reaches the later clusters
+        // anyway, and disabling the chain-walking code leaves this passing.
+        // The case that would separate them needs a directory whose clusters
+        // are genuinely out of order, which no tool here produces.
+        int written = 0;
+        for (int burst = 0; written < kOverlays; ++burst) {
+            QStringList args{QStringLiteral("-i"), imagePath};
+            const int upTo = qMin(kOverlays, written + 20);
+            for (; written < upTo; ++written) {
+                const QString src = sources.filePath(overlayName(written));
+                QFile f(src);
+                REQUIRE(f.open(QIODevice::WriteOnly));
+                f.write(overlayBody(written));
+                f.close();
+                args << src;
+            }
+            args << QStringLiteral("::/overlays/");
+            REQUIRE(runMtool(QStringLiteral("mcopy"), args));
+
+            const QString filler =
+                sources.filePath(QStringLiteral("filler-%1.bin").arg(burst));
+            QFile f(filler);
+            REQUIRE(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(64 * 1024, '\x5A'));
+            f.close();
+            REQUIRE(runMtool(QStringLiteral("mcopy"),
+                             {QStringLiteral("-i"), imagePath, filler,
+                              QStringLiteral("::/filler-%1.bin").arg(burst)}));
+        }
+    });
+
+    // The first one is in the directory's opening cluster and would be found
+    // either way; it is here so a failure below means "the chain was not
+    // followed" rather than "mtools wrote nothing".
+    const QString first = QStringLiteral("overlays/") + overlayName(0);
+    const QString last = QStringLiteral("overlays/") + overlayName(kOverlays - 1);
+    CHECK(image.fat().readFile(first) == overlayBody(0));
+
+    INFO("reading " << last.toStdString());
+    CHECK(image.fat().readFile(last) == overlayBody(kOverlays - 1));
+
+    // And the recursive walk, which is what _clearFatPartition() and the
+    // secure-boot extraction both enumerate the partition with. A file it
+    // does not list is a file that is neither packed nor deleted.
+    const QStringList everything = image.fat().listAllFilesRecursive();
+    INFO("listed " << everything.size() << " entries");
+    CHECK(everything.size() >= kOverlays);
+    CHECK(everything.contains(last));
+}
+
+TEST_CASE("FAT driver deletes from a subdirectory that spans clusters",
+          "[fat][image]")
+{
+    // The other side of the same walk. _clearFatPartition() lists every file
+    // and deletes each one before secure-boot packaging writes boot.img; a
+    // file it cannot reach is left on the partition beside the signed image,
+    // which is how a "cleared" boot partition ends up still holding the
+    // overlays it was supposed to have folded away.
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    constexpr int kOverlays = 120;
+    auto overlayName = [](int i) {
+        return QStringLiteral("disable-peripheral-%1.dtbo").arg(i, 3, 10, QLatin1Char('0'));
+    };
+
+    ScopedTempDir sources(QStringLiteral("rpi-imager-overlays-del"));
+    FatImage image(32, 64, [&](const QString &imagePath) {
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+        // Fragmented, for the reason given in the case above.
+        {
+            const QString filler = sources.filePath(QStringLiteral("filler.bin"));
+            QFile f(filler);
+            REQUIRE(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(256 * 1024, '\x5A'));
+            f.close();
+            REQUIRE(runMtool(QStringLiteral("mcopy"),
+                             {QStringLiteral("-i"), imagePath, filler,
+                              QStringLiteral("::/filler.bin")}));
+        }
+        QStringList args{QStringLiteral("-i"), imagePath};
+        for (int i = 0; i < kOverlays; ++i) {
+            const QString src = sources.filePath(overlayName(i));
+            QFile f(src);
+            REQUIRE(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray("body ") + QByteArray::number(i));
+            f.close();
+            args << src;
+        }
+        args << QStringLiteral("::/overlays/");
+        REQUIRE(runMtool(QStringLiteral("mcopy"), args));
+    });
+
+    const QString late = QStringLiteral("overlays/") + overlayName(kOverlays - 2);
+    REQUIRE_FALSE(image.fat().readFile(late).isEmpty());
+
+    CHECK(image.fat().deleteFile(late));
+    image.sync();
+
+    CHECK(image.fat().readFile(late).isEmpty());
+    CHECK_FALSE(image.fat().listAllFilesRecursive().contains(late));
+}
