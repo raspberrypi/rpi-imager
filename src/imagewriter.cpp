@@ -645,6 +645,15 @@ void ImageWriter::setRpibootDevice(const QString &deviceId,
     _rpibootDeviceId = deviceId;
     _rpibootStorageTarget = storageTarget;
     _isRpibootDevice = true;
+    // And no longer the other kind. setFastbootDevice() clears this flag's
+    // counterpart for the same reason: choosePath() asks the fastboot
+    // question first, so a board selected here while that was still set
+    // would be sent down the fastboot path -- the imager talking fastboot to
+    // something that is not listening for it, having skipped the bootstrap
+    // that would have made it listen. Both states can be in the storage list
+    // at once, and the step that fills it in calls one setter per selection
+    // with no reset in between.
+    _isFastbootDevice = false;
     _selectedDeviceValid = true;
     // Set _dst to the rpiboot ID so readyToWrite() passes
     _dst = deviceId;

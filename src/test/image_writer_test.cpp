@@ -11705,3 +11705,80 @@ TEST_CASE("Saving an empty customisation clears what was there",
     w.setSavedCustomisationSettings(QVariantMap());
     CHECK(w.getSavedCustomisationSettings().isEmpty());
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Which of the three write paths the target is on
+//
+// A Compute Module can be selected in two states: in rpiboot mode, where it
+// has to be bootstrapped before anything can be written, and as a fastboot
+// storage device, where it is already listening. An ordinary card is neither.
+// The writer picks between them by asking these two questions, in this order,
+// so exactly one has to be true at a time.
+//
+// Both states can be in the storage list together -- two boards attached, or
+// one list refresh either side of a board finishing its bootstrap -- and the
+// step that fills them in calls one setter per selection, never a reset in
+// between. Changing a selection therefore has to undo the last one.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("An ordinary card is on neither of the compute-module paths",
+          "[imagewriter][writepath]")
+{
+    ImageWriter w(nullptr);
+    w.setDst(QStringLiteral("/dev/sdz"), 32ULL * 1024 * 1024 * 1024);
+
+    CHECK_FALSE(w.isFastbootDevice());
+    CHECK_FALSE(w.isRpibootDevice());
+}
+
+TEST_CASE("Choosing a fastboot board after an rpiboot one takes the fastboot path",
+          "[imagewriter][writepath]")
+{
+    ImageWriter w(nullptr);
+    w.setRpibootDevice(QStringLiteral("rpiboot://1:5:1.2:2712"), QStringLiteral("nvme0n1"));
+    REQUIRE(w.isRpibootDevice());
+
+    w.setFastbootDevice(QStringLiteral("fastboot://1:4/nvme0n1"), 1024 * 1024);
+
+    CHECK(w.isFastbootDevice());
+    CHECK_FALSE(w.isRpibootDevice());
+}
+
+TEST_CASE("Choosing an rpiboot board after a fastboot one takes the rpiboot path",
+          "[imagewriter][writepath]")
+{
+    // The other way round, which is the one that was not undone. The fastboot
+    // question is asked first, so a board still in rpiboot mode would have
+    // been sent down the fastboot path -- the imager talking fastboot to
+    // something that is not listening for it, having skipped the bootstrap
+    // that would have made it listen.
+    ImageWriter w(nullptr);
+    w.setFastbootDevice(QStringLiteral("fastboot://1:4/nvme0n1"), 1024 * 1024);
+    REQUIRE(w.isFastbootDevice());
+
+    w.setRpibootDevice(QStringLiteral("rpiboot://1:5:1.2:2712"), QStringLiteral("nvme0n1"));
+
+    CHECK(w.isRpibootDevice());
+    CHECK_FALSE(w.isFastbootDevice());
+}
+
+TEST_CASE("Going back to an ordinary card leaves neither path set",
+          "[imagewriter][writepath]")
+{
+    // Deselecting is how the wizard clears the target, and the next write
+    // must not still think it is talking to a compute module.
+    ImageWriter w(nullptr);
+    w.setFastbootDevice(QStringLiteral("fastboot://1:4/nvme0n1"), 1024 * 1024);
+    REQUIRE(w.isFastbootDevice());
+
+    w.setDst(QStringLiteral("/dev/sdz"), 32ULL * 1024 * 1024 * 1024);
+    CHECK_FALSE(w.isFastbootDevice());
+    CHECK_FALSE(w.isRpibootDevice());
+
+    w.setRpibootDevice(QStringLiteral("rpiboot://1:5:1.2:2712"), QStringLiteral("nvme0n1"));
+    REQUIRE(w.isRpibootDevice());
+
+    w.setDst(QString(), 0);
+    CHECK_FALSE(w.isFastbootDevice());
+    CHECK_FALSE(w.isRpibootDevice());
+}
