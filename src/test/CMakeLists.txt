@@ -2025,6 +2025,34 @@ rpi_discover_tests(oslist_parser_test)
 # Header-only, and shared by both write paths so they cannot drift apart
 # again -- drifting apart is how the substring bug came to exist in two
 # places at once.
+# ── spanning-tree detection ─────────────────────────────────────────────────
+# The embedded build warns that a switch running STP will hold the port down
+# for its forward delay before an address arrives. Getting the decision wrong
+# either warns on every managed switch or leaves the user watching a board
+# that looks like it has failed to reach the network.
+add_executable(stp_analyzer_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../linux/stpanalyzer.cpp
+    stp_analyzer_test.cpp
+)
+
+set_target_properties(stp_analyzer_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(stp_analyzer_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+# Catch2 without its main(): the analyser owns a QSocketNotifier, which needs
+# a QCoreApplication to exist before it is constructed.
+target_link_libraries(stp_analyzer_test PRIVATE
+    Catch2::Catch2
+    Qt6::Core
+    Qt6::Test
+)
+
+target_compile_features(stp_analyzer_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(stp_analyzer_test)
+
 add_executable(config_txt_merge_test config_txt_merge_test.cpp)
 target_link_libraries(config_txt_merge_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
 target_include_directories(config_txt_merge_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
