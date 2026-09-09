@@ -193,6 +193,72 @@ private:
     int _port = 0;
 };
 
+// A server that answers with headers and then nothing at all.
+//
+// It promises a Content-Length it never delivers a byte of, so the transfer
+// sits open with no data moving. That is the only way to reach the clean
+// cancellation path: with data arriving, cancelling stops the write callback
+// first and curl reports a write error instead. Here the write callback is
+// never called, and the progress callback -- which curl keeps calling while
+// the connection is idle -- is the one that has to notice.
+//
+// The stall is what a user hits when a mirror accepts the connection and then
+// goes quiet. libcurl gives up on that after a minute; the question this
+// fixture asks is what happens when the user does not wait.
+class StallingHttpServer
+{
+public:
+    explicit StallingHttpServer(qint64 announcedBytes)
+    {
+        static const char *kScript =
+            "import http.server, socketserver, sys, time\n"
+            "size = int(sys.argv[1])\n"
+            "class H(http.server.BaseHTTPRequestHandler):\n"
+            "    protocol_version = 'HTTP/1.1'\n"
+            "    def log_message(self, *a): pass\n"
+            "    def do_GET(self):\n"
+            "        self.send_response(200)\n"
+            "        self.send_header('Content-Length', str(size))\n"
+            "        self.end_headers()\n"
+            "        self.wfile.flush()\n"
+            "        time.sleep(600)\n"
+            "socketserver.ThreadingTCPServer.allow_reuse_address = True\n"
+            "socketserver.ThreadingTCPServer.daemon_threads = True\n"
+            "s = socketserver.ThreadingTCPServer(('127.0.0.1', 0), H)\n"
+            "print(s.server_address[1], flush=True)\n"
+            "s.serve_forever()\n";
+
+        _process.start(QStringLiteral("/usr/bin/python3"),
+                       {QStringLiteral("-c"), QString::fromUtf8(kScript),
+                        QString::number(announcedBytes)});
+        if (!_process.waitForStarted(10000))
+            return;
+        if (_process.waitForReadyRead(10000))
+            _port = _process.readLine().trimmed().toInt();
+    }
+
+    ~StallingHttpServer()
+    {
+        _process.kill();
+        _process.waitForFinished(5000);
+    }
+
+    StallingHttpServer(const StallingHttpServer &) = delete;
+    StallingHttpServer &operator=(const StallingHttpServer &) = delete;
+
+    bool isRunning() const { return _port > 0; }
+
+    QByteArray urlFor(const QString &name) const
+    {
+        return QByteArray("http://127.0.0.1:") + QByteArray::number(_port) + "/" +
+               name.toUtf8();
+    }
+
+private:
+    QProcess _process;
+    int _port = 0;
+};
+
 bool inline havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
 
 } // namespace rpi_test

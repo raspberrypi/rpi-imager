@@ -23,6 +23,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include "downloadthread.h"
 
 #include <QSet>
@@ -1295,6 +1296,76 @@ TEST_CASE("A corrupt download is blamed on the network, not on the user",
     CHECK_THAT(message, !Catch::Matchers::ContainsSubstring("Local file"));
 }
 
+TEST_CASE("Cancelling a stalled download does not wait for the stall to time out",
+          "[download][http]")
+{
+    // A mirror that accepts the connection and then goes quiet leaves the
+    // transfer sitting there with nothing moving. libcurl gives that a full
+    // minute before it gives up, which is a long time to watch a progress bar
+    // that is not progressing, so the user presses Cancel.
+    //
+    // Cancelling has to be noticed by the progress callback, because that is
+    // the only callback curl is still making: no data has arrived, so the
+    // write callback -- where every other cancellation in this class is
+    // spotted -- is never reached at all. If the progress callback does not
+    // object, Cancel does nothing visible until the stall timeout expires.
+    rpi_test::StallingHttpServer server(8 * 1024 * 1024);
+    REQUIRE_HTTP_SERVER(server);
+
+    ScratchDir scratch;
+    const QString dest = scratch.filePath(QStringLiteral("stall-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(9 * 1024 * 1024, '\0')));
+    const QString cachePath = scratch.filePath(QStringLiteral("stall-cache.img"));
+
+    // On the heap, and deliberately not in a unique_ptr. If the cancel is not
+    // noticed the thread does not stop at all -- libcurl's own stall timeout
+    // puts the transfer into the reconnect loop rather than ending it -- and
+    // destroying a running QThread aborts the process before Catch2 can
+    // report anything. Leaking one thread for the rest of a failing run is
+    // the cheaper outcome.
+    auto *dt = new DownloadThread(server.urlFor(QStringLiteral("stalled.img")),
+                                  dest.toUtf8(), QByteArray());
+    dt->setVerifyEnabled(false);
+    dt->setCacheFile(cachePath, 8 * 1024 * 1024);
+
+    // Direct connections: these fire on the download thread and nothing here
+    // runs an event loop to deliver a queued one.
+    std::atomic<bool> reportedError{false};
+    std::atomic<bool> reportedSuccess{false};
+    QObject::connect(dt, &DownloadThread::error, dt,
+                     [&reportedError](const QString &) { reportedError = true; },
+                     Qt::DirectConnection);
+    QObject::connect(dt, &DownloadThread::success, dt,
+                     [&reportedSuccess]() { reportedSuccess = true; }, Qt::DirectConnection);
+
+    dt->start();
+    // Long enough for the device to be opened and the request to be answered,
+    // so the cancel lands while curl is waiting on a body that never comes.
+    QThread::msleep(2000);
+    REQUIRE_FALSE(dt->isFinished());
+
+    dt->cancelDownload();
+
+    // Fifteen seconds is the discriminator, not a performance target: libcurl
+    // waits sixty before it calls a stalled transfer stalled, so a thread that
+    // only ends because libcurl gave up is still running when this returns.
+    const bool endedPromptly = dt->wait(15000);
+    REQUIRE(endedPromptly);
+
+    // Cancelling is not a fault, and it is not a finished write either. A
+    // dialog here would be reporting the user's own decision back to them.
+    CHECK_FALSE(reportedError.load());
+    CHECK_FALSE(reportedSuccess.load());
+    CHECK_FALSE(dt->successfull());
+
+    // And the part-file that was opened for the cache goes with it. Leaving
+    // it behind is worse than not caching at all: the next run finds a cache
+    // entry for this image and writes a truncated card from it.
+    CHECK_FALSE(QFileInfo::exists(cachePath));
+
+    delete dt;
+}
+
 TEST_CASE("DownloadThread caches an image fetched over HTTP", "[download][http][cache]")
 {
     ScratchDir scratch;
@@ -1456,6 +1527,126 @@ TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secur
     CHECK_FALSE(bootImg.isEmpty());
     CHECK_FALSE(bootSig.isEmpty());
     CHECK(QString::fromUtf8(bootSig).contains(QStringLiteral("ts:")));
+
+    setConfiguredRsaKey(QString());
+}
+
+TEST_CASE("Secure boot does not throw away the user's own settings",
+          "[download][secureboot][customise]")
+{
+    // Packaging for secure boot empties the boot partition: every file that
+    // was on it is read out, packed into boot.img, and then deleted from the
+    // filesystem so that boot.img and boot.sig are all that remain. The
+    // customisation files must not go the same way -- firstrun.sh is what
+    // creates the user account and joins the Wi-Fi network, and it has to be
+    // a real file on the partition, because the firmware runs it from there
+    // and never looks inside boot.img for it.
+    //
+    // Losing it is silent: the card is written, the signature is valid, the
+    // board boots, and it comes up with no account and no network. So this
+    // asks for both at once -- the settings the user filled in and the secure
+    // boot they ticked -- and then reads the card back.
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
+    if (!haveOpenssl())
+        SKIP("openssl is not installed, so no signing key can be generated");
+
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("sb-cust.pem"));
+    REQUIRE(generateRsaKey(key));
+    setConfiguredRsaKey(key);
+
+    const QString source = scratch.filePath(QStringLiteral("sb-cust-src.img"));
+    REQUIRE(buildPartitionedImage(source, 48));
+    const QString dest = scratch.filePath(QStringLiteral("sb-cust-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
+
+    const QByteArray firstrun =
+        "#!/bin/bash\n"
+        "set -e\n"
+        "/usr/lib/userconf-pi/userconf 'pi' '$5$notarealhash'\n"
+        "rm -f /boot/firstrun.sh\n";
+
+    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setImageCustomisation("arm_64bit=1", QByteArray(), firstrun, QByteArray(), QByteArray(),
+                             "systemd", ImageOptions::EnableSecureBoot);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    // The read-back check runs over everything that was recorded, so a
+    // customisation file that did not survive the repack fails the write
+    // here rather than reaching the user as a card that boots wrong.
+    REQUIRE(outcome.succeeded);
+
+    // Both halves of secure boot are present...
+    CHECK_FALSE(readFromBootPartition(dest, QStringLiteral("boot.img")).isEmpty());
+    CHECK_FALSE(readFromBootPartition(dest, QStringLiteral("boot.sig")).isEmpty());
+
+    // ...and so is the file that does the provisioning, byte for byte. Not
+    // "contains": a truncated firstrun.sh runs as far as it got and then
+    // stops, which is worse than not being there at all.
+    const QByteArray onCard = readFromBootPartition(dest, QStringLiteral("firstrun.sh"));
+    INFO("firstrun.sh on the card: " << QString::fromUtf8(onCard).toStdString());
+    CHECK(onCard == firstrun);
+
+    // cmdline.txt is what tells systemd to run it. It is a boot file, so it
+    // goes inside boot.img rather than staying on the partition -- the point
+    // here is only that the customisation pass added the entry before the
+    // packaging step took the file away.
+    setConfiguredRsaKey(QString());
+}
+
+TEST_CASE("Secure boot keeps every cloud-init file and not just the first",
+          "[download][secureboot][customise]")
+{
+    // cloud-init needs three files together: user-data for the configuration,
+    // network-config for the network, and meta-data, without which the
+    // NoCloud datasource is not detected at all and the other two are never
+    // read. They are written back one at a time after the repack, so keeping
+    // one is not the same as keeping the set.
+    if (!rpi_test::haveFatFormatter())
+        SKIP(rpi_test::noFatFormatterReason());
+    if (!haveOpenssl())
+        SKIP("openssl is not installed, so no signing key can be generated");
+
+    ScratchDir scratch;
+    const QString key = scratch.filePath(QStringLiteral("sb-ci.pem"));
+    REQUIRE(generateRsaKey(key));
+    setConfiguredRsaKey(key);
+
+    const QString source = scratch.filePath(QStringLiteral("sb-ci-src.img"));
+    REQUIRE(buildPartitionedImage(source, 48));
+    const QString dest = scratch.filePath(QStringLiteral("sb-ci-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
+
+    const QByteArray userData = "hostname: securepi\nusers:\n  - name: pi\n";
+    const QByteArray networkData = "version: 2\nethernets:\n  eth0:\n    dhcp4: true\n";
+
+    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), userData, networkData,
+                             "cloudinit", ImageOptions::EnableSecureBoot);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    const QByteArray userDataOnCard = readFromBootPartition(dest, QStringLiteral("user-data"));
+    const QByteArray networkOnCard = readFromBootPartition(dest, QStringLiteral("network-config"));
+    const QByteArray metaOnCard = readFromBootPartition(dest, QStringLiteral("meta-data"));
+
+    INFO("user-data: " << QString::fromUtf8(userDataOnCard).toStdString());
+    INFO("network-config: " << QString::fromUtf8(networkOnCard).toStdString());
+    INFO("meta-data: " << QString::fromUtf8(metaOnCard).toStdString());
+
+    CHECK(userDataOnCard.contains("hostname: securepi"));
+    CHECK(networkOnCard == networkData);
+    // meta-data carries the instance-id cloud-init keys its cache on; an
+    // empty one leaves the datasource undetectable.
+    CHECK(metaOnCard.contains("instance-id: rpi-imager-"));
 
     setConfiguredRsaKey(QString());
 }
@@ -2497,9 +2688,14 @@ public:
     int queueDepth = 1;
     int pendingWrites = 0;
 
+    rpi_imager::FileError drainResult = rpi_imager::FileError::kSuccess;
+    bool fellBackToSync = false;
+
     bool IsAsyncIOSupported() const override { return asyncSupported; }
     int GetAsyncQueueDepth() const override { return queueDepth; }
     int GetPendingWriteCount() const override { return pendingWrites; }
+    rpi_imager::FileError WaitForPendingWrites() override { return drainResult; }
+    bool IsInSyncFallbackMode() const override { return fellBackToSync; }
     bool flushFails = false;
     bool forceSyncFails = false;
     int flushes = 0;
@@ -2663,6 +2859,159 @@ TEST_CASE("A sync that fails is recorded as having failed",
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// Draining the async write queue when the data runs out
+//
+// With async I/O the last writes are still in flight when the download ends,
+// so _writeComplete() waits for the queue before it does anything else. What
+// it is waiting for is the card, and the card is what fails: a queue that
+// never drains is a device that has stopped answering, and the write must
+// not go on to verify, sync and report success over it.
+//
+// Writing to a file cannot produce that -- the completions always come back.
+// It is the device's answer to "are you done" that has to be replaced.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+class WriteCompletion : public DownloadThread
+{
+public:
+    WriteCompletion() : DownloadThread("file:///nonexistent", "", "")
+    {
+        device = std::make_shared<SyncCountingDevice>();
+        // A queue deeper than one is what puts _writeComplete() into the
+        // drain at all; with async I/O off there is nothing outstanding.
+        device->asyncSupported = true;
+        device->queueDepth = 16;
+        device->pendingWrites = 8;
+        _file = device;
+    }
+
+    // Everything after the drain check needs a real device under it. Where a
+    // case is only about the drain, this stops the function at the next exit
+    // rather than letting it flush and sync a device that was never opened.
+    void asIfCancelled() { _cancelled = true; }
+
+    std::shared_ptr<SyncCountingDevice> device;
+
+    using DownloadThread::_writeComplete;
+};
+
+} // namespace
+
+TEST_CASE("A card that never finishes its writes is called unresponsive",
+          "[downloadthread][async]")
+{
+    // The queue does not drain and the synchronous retry does not help
+    // either: the device has gone. Carrying on from here would verify and
+    // report success over writes that were never acknowledged, which is the
+    // one outcome worse than saying so.
+    WriteCompletion thread;
+    thread.device->drainResult = rpi_imager::FileError::kTimeout;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    rpi_test::SignalLog timedOut(&thread, &DownloadThread::eventDeviceIOTimeout);
+
+    thread._writeComplete();
+
+    REQUIRE(failed.count() == 1);
+    const QString message = failed.at(0).at(0).toString();
+    INFO("reported: " << message.toStdString());
+    // Named as the device, and with something to do about it: the usual cause
+    // is a cable or a hub, and reconnecting is what fixes it.
+    CHECK_THAT(message.toStdString(),
+               Catch::Matchers::ContainsSubstring("not responding"));
+    CHECK_THAT(message.toStdString(),
+               Catch::Matchers::ContainsSubstring("reconnect"));
+
+    // And the diagnostic says how many writes were outstanding, which is what
+    // separates "the card stalled" from "the card was never there".
+    REQUIRE(timedOut.count() == 1);
+    CHECK_THAT(timedOut.at(0).at(1).toString().toStdString(),
+               Catch::Matchers::ContainsSubstring("8 async writes"));
+
+    // Nothing claims the write worked.
+    CHECK_FALSE(thread.successfull());
+}
+
+TEST_CASE("A drain that fails for some other reason is still reported",
+          "[downloadthread][async]")
+{
+    // Not a timeout: the queue came back with writes that failed. The advice
+    // differs -- a full or write-protected card is as likely as a broken one
+    // -- but the write stops either way.
+    WriteCompletion thread;
+    thread.device->drainResult = rpi_imager::FileError::kWriteError;
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+
+    thread._writeComplete();
+
+    REQUIRE(failed.count() == 1);
+    const QString message = failed.at(0).at(0).toString();
+    INFO("reported: " << message.toStdString());
+    CHECK_THAT(message.toStdString(),
+               Catch::Matchers::ContainsSubstring("Some writes failed to complete"));
+    CHECK_FALSE(thread.successfull());
+}
+
+TEST_CASE("Writes cancelled with the write are not a device fault",
+          "[downloadthread][async]")
+{
+    // The user pressed Cancel, so the outstanding writes were cancelled with
+    // everything else. That comes back from the queue as an error like any
+    // other, and reporting it would put a device-failure dialog in front of
+    // somebody who had just asked to stop.
+    WriteCompletion thread;
+    thread.device->drainResult = rpi_imager::FileError::kCancelled;
+    thread.asIfCancelled();
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+
+    thread._writeComplete();
+
+    CHECK(failed.count() == 0);
+    CHECK_FALSE(thread.successfull());
+}
+
+TEST_CASE("A stall the fallback recovered from is recorded but not shown",
+          "[downloadthread][async]")
+{
+    // The queue stalled, the synchronous fallback took over, and the writes
+    // did land. Nothing is wrong by the time this runs, so there is nothing
+    // to tell the user -- a warning raised here would be dismissed by the
+    // next screen before it could be read. It is still worth recording,
+    // because a card that needs the fallback is a card that will need it
+    // again.
+    WriteCompletion thread;
+    thread.device->fellBackToSync = true;
+    thread.device->pendingWrites = 5;
+    thread.asIfCancelled();
+    rpi_test::SignalLog failed(&thread, &DownloadThread::error);
+    rpi_test::SignalLog recovered(&thread, &DownloadThread::eventDeviceIOTimeout);
+
+    thread._writeComplete();
+
+    CHECK(failed.count() == 0);
+    REQUIRE(recovered.count() == 1);
+    CHECK_THAT(recovered.at(0).at(1).toString().toStdString(),
+               Catch::Matchers::ContainsSubstring("replayed synchronously"));
+}
+
+TEST_CASE("The queue depth reported is the device's own",
+          "[downloadthread][async]")
+{
+    // The write watchdog reads this to tell a stalled queue from a card that
+    // is merely slow, and it can only do that if the number is the one the
+    // device is actually running with rather than the depth that was asked
+    // for. A device with no async I/O has no queue at all -- reporting one
+    // would have the watchdog measuring a queue that does not exist.
+    WriteCompletion thread;
+    thread.device->queueDepth = 12;
+    CHECK(thread.getAsyncQueueDepth() == 12);
+
+    thread.device->asyncSupported = false;
+    CHECK(thread.getAsyncQueueDepth() == 0);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // Throughput belongs to one write, not to the process
 //
 // The figures shown while a card is written -- the rate, and whether
@@ -2795,6 +3144,11 @@ public:
     QByteArray readsBack;
     bool readFails = false;
     std::uint64_t written = 0;
+    // Hand back less than was asked for, and take a while over it, so a
+    // read-back can be made slow enough for the periodic reporting inside
+    // the loop to have something to report.
+    std::size_t chunkLimit = 0;
+    int readDelayMs = 0;
 
     std::uint64_t Tell() const override { return written; }
     rpi_imager::FileError Seek(std::uint64_t position) override
@@ -2809,6 +3163,10 @@ public:
     {
         if (readFails)
             return rpi_imager::FileError::kReadError;
+        if (chunkLimit)
+            size = std::min(size, chunkLimit);
+        if (readDelayMs)
+            QThread::msleep(static_cast<unsigned long>(readDelayMs));
         const std::size_t available =
             static_cast<std::size_t>(readsBack.size()) > _pos
                 ? static_cast<std::size_t>(readsBack.size()) - _pos : 0;
@@ -2999,6 +3357,45 @@ bool plantInBootPartition(const QString &devicePath, const QString &name,
         return false;
     fat->writeFile(name, contents);
     return true;
+}
+
+TEST_CASE("A slow read-back keeps saying how slowly it is reading",
+          "[downloadthread][verify]")
+{
+    // Verification reads the whole card back, and on a slow reader that takes
+    // longer than the write did. The rate goes out every half second while it
+    // runs, so the progress screen can name verification as the thing being
+    // waited on -- reporting it once at the end would be no use to anybody
+    // watching a bar that has apparently stopped.
+    const QByteArray image(256 * 1024, '\x5A');
+
+    Verification thread;
+    thread.wroteThis(image);
+    thread.cardReadsBack(image);
+    // Four reads a third of a second apart: slow enough for the half-second
+    // gate to open part-way through, rather than only after the last read.
+    thread.device->chunkLimit = 64 * 1024;
+    thread.device->readDelayMs = 300;
+
+    rpi_test::SignalLog states(&thread, &DownloadThread::bottleneckStateChanged);
+
+    CHECK(thread._verify());
+
+    int verifyingRows = 0;
+    bool everReportedARate = false;
+    for (int i = 0; i < states.count(); ++i) {
+        if (states.at(i).at(0).toInt()
+            != static_cast<int>(DownloadThread::BottleneckState::Verifying))
+            continue;
+        ++verifyingRows;
+        if (states.at(i).at(1).toUInt() > 0)
+            everReportedARate = true;
+    }
+
+    INFO("bottleneck rows: " << states.count() << ", verifying: " << verifyingRows);
+    CHECK(verifyingRows >= 1);
+    // A rate of zero would be reported as a stall by anything reading it.
+    CHECK(everReportedARate);
 }
 
 TEST_CASE("Customisation read-back passes when the card kept what was written",
