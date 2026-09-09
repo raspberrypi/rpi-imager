@@ -322,74 +322,28 @@ endif()
 # that does. cli_process_test drives the shipping binary as a subprocess --
 # the only way to reach Cli::run(), which builds its own QCoreApplication --
 # so the app target's objects come back with counters on them for every
-# source that binary touches while starting up. Seventy of them, which is
-# most of the core.
+# source that binary touches. Seventy of them, which is most of the core.
 #
-# Two copies with counters is worse than two copies where one is empty. gcov
-# writes its .gcov next to the object it was given but names it after the
-# *source*, so for a source built twice the second run overwrites the first,
-# and which one the report ends up describing depends on the order gcovr got
-# through them. It is not a small difference either: the app target is built
-# with the shipping optimisation flags and the test library is not, so the
-# two copies do not even have the same number of branches. One run put
-# imagewriter.cpp at 2033 of 3386 and the next at 425 of 3386, from the same
-# suite and the same counters -- eleven points off the total, in whichever
-# direction the walk happened to go.
+# Both copies are kept, and the render below reads them separately and merges
+# the two tracefiles. What that fixes: anything reachable *only* by running
+# the shipping binary used to be reported as never run.
 #
-# So one copy per source, chosen rather than raced for. The library copy is
-# the one to keep: every test binary links it, so it carries the whole
-# suite's counters, where the app target's carries ten CLI invocations that
-# exit before doing anything. The exception is the file those invocations
-# exist to cover -- run() is compiled into both, but only ever executed in
-# the app target's copy, so for that one the app copy is the measurement and
-# the library's is the near-empty duplicate.
-set(_subprocess_measured_sources "cli.cpp")
-
-set(_app_object_dir "${COVERAGE_BINARY_DIR}/CMakeFiles/rpi-imager.dir")
-file(GLOB_RECURSE _app_gcda "${_app_object_dir}/*.gcda")
-set(_raced_copies)
-foreach(_gcda IN LISTS _app_gcda)
-    string(REGEX REPLACE "\\.gcda$" "" _stem "${_gcda}")
-    string(REGEX REPLACE "^.*\\.dir/" "" _key "${_gcda}")
-    string(REGEX REPLACE "(__/)+" "" _key "${_key}")
-    string(REGEX REPLACE "\\.gcda$" "" _key "${_key}")
-
-    list(FIND _subprocess_measured_sources "${_key}" _keep_app_copy)
-    if(NOT _keep_app_copy EQUAL -1)
-        # Drop the library's copy instead, for the same reason in reverse.
-        get_filename_component(_leaf "${_key}" NAME)
-        file(GLOB_RECURSE _other_copies "${COVERAGE_BINARY_DIR}/*/${_leaf}.gcda")
-        foreach(_other IN LISTS _other_copies)
-            if(NOT _other MATCHES "^${_app_object_dir}/")
-                string(REGEX REPLACE "\\.gcda$" "" _other_stem "${_other}")
-                list(APPEND _raced_copies "${_other_stem}.gcda" "${_other_stem}.gcno")
-            endif()
-        endforeach()
-        continue()
-    endif()
-
-    # Only a duplicate if the same source is measured somewhere else.
-    get_filename_component(_leaf "${_key}" NAME)
-    file(GLOB_RECURSE _other_copies "${COVERAGE_BINARY_DIR}/*/${_leaf}.gcda")
-    set(_has_other FALSE)
-    foreach(_other IN LISTS _other_copies)
-        if(NOT _other MATCHES "^${_app_object_dir}/")
-            set(_has_other TRUE)
-        endif()
-    endforeach()
-    if(_has_other)
-        list(APPEND _raced_copies "${_stem}.gcda" "${_stem}.gcno")
-    endif()
-endforeach()
-
-list(REMOVE_DUPLICATES _raced_copies)
-list(LENGTH _raced_copies _raced_count)
-if(_raced_count GREATER 0)
-    message(STATUS
-        "Coverage: dropping ${_raced_count} object file(s) for sources measured "
-        "in two places, so the report does not depend on which gcov ran last")
-    file(REMOVE ${_raced_copies})
-endif()
+# This replaced a rule that picked one copy per source and deleted the other,
+# with cli.cpp hand-listed as the single exception. Picking was necessary
+# because gcov writes its .gcov next to the object it was given but names it
+# after the *source*, so for a source built twice the second run overwrites
+# the first and the report describes whichever gcov happened to run last --
+# one run put imagewriter.cpp at 2033 of 3386 branches and the next at 425,
+# from identical counters. But picking the library copy threw away every
+# subprocess-only path along with the ambiguity: the truncated-.img.xz guard
+# in downloadextractthread, the "not running as root" advice, the CLI's own
+# refusals. They were covered, by a test that passes, and read as uncovered.
+#
+# Two gcovr passes over disjoint object directories cannot race for the same
+# .gcov name, and merging the tracefiles keeps both sets of counters. The
+# copies are compiled with different optimisation flags and so do not even
+# have the same number of branches; gcovr merges by source line, which is the
+# only level at which the two are comparable.
 endif()
 
 # ---------------------------------------------------------------------------
@@ -542,88 +496,140 @@ if(COVERAGE_FLAVOUR STREQUAL "llvm")
 else()
     file(MAKE_DIRECTORY "${COVERAGE_OUTPUT_DIR}")
 
+    # Arguments that decide what is measured and how it is parsed. Both
+    # producing passes below get the same set, so the two tracefiles describe
+    # the same universe and merge cleanly.
+    set(_gcovr_parse_args
+        --root "${COVERAGE_SOURCE_DIR}"
+        ${_exclude_args}
+        --decisions
+        # Without these two a branch-metric report on C++ is unreadable. Every
+        # call that might throw carries a branch pair for the unwind edge, and
+        # the unwind arm is never taken in a passing run, so gcov reports it
+        # half-covered forever. It is not a gap anyone can close -- you would
+        # have to make the allocation fail.
+        #
+        # Not a small correction, either: they were 10,598 of the 28,284
+        # branches here, and removing them takes the headline from 13.8% to
+        # 21.5% without a line of test code changing. What they cost in
+        # legibility is worse than what they cost in percentage points --
+        # lines like `out += ":";` were being painted as partially covered,
+        # and those lines contain no branch at all.
+        --exclude-throw-branches
+        --exclude-unreachable-branches
+        # Qt's registration macros. Q_ENUM and its relatives expand to
+        # meta-object glue the runtime touches only when something looks the
+        # type up by name, so they sit at zero for the life of the project and
+        # no test can move them. Six lines across four files -- nothing in the
+        # total, but two of those files are otherwise empty of code, so they
+        # led the report at 0% and 40% and drew the eye away from the real
+        # gaps.
+        #
+        # Deliberately not Q_INVOKABLE or Q_ARG: those appear on lines that
+        # also carry a function or a call, and excluding them would hide code
+        # that a test can and should reach.
+        --exclude-lines-by-pattern "^\\s*(Q_ENUM|Q_ENUM_NS|Q_FLAG|Q_FLAG_NS|Q_DECLARE_OPERATORS_FOR_FLAGS|Q_DECLARE_METATYPE)\\s*\\("
+        # The --exclude patterns above decide what reaches the report, but
+        # gcovr processes every .gcda it finds before applying them, and
+        # instrumentation is global -- so it walked into every FetchContent
+        # dependency, 492 of the 508 .gcno files here. gcov cannot resolve
+        # their sources from our build tree, and each failure printed: it was
+        # 10,461 lines of stderr on a run whose real output is four numbers.
+        # Pruning the walk removes the noise and the work both.
+        #
+        # The pattern is matched against the directory name rather than the
+        # full path, so it takes no leading slash -- ".*/_deps.*" matches
+        # nothing at all, silently.
+        #
+        # Only _deps. Pruning ".*dependencies.*" as well looks tempting -- the
+        # vendored crypto built in-tree still emits a couple of dozen gcov
+        # warnings -- but the pattern is matched against the path relative to
+        # the search root, and the test binaries compile that crypto through
+        # object directories of their own. It took 1,192 covered branches of
+        # customization_generator.cpp out of the report along with the
+        # warnings. Twenty-two lines of noise is the cheaper of the two.
+        --gcov-exclude-directories ".*_deps.*"
+        # Kept as a backstop only. This suppresses the "could not infer a
+        # working directory" failure, which before the pruning above was not
+        # an edge case but the single loudest thing in the run -- and fatal
+        # without it. Nothing in our own tree provokes it now.
+        --gcov-ignore-errors no_working_dir_found)
+
+    set(_app_object_dir "${COVERAGE_BINARY_DIR}/CMakeFiles/rpi-imager.dir")
+    set(_library_tracefile "${COVERAGE_BINARY_DIR}/coverage-library.json")
+    set(_app_tracefile "${COVERAGE_BINARY_DIR}/coverage-app.json")
+    set(_tracefile_args -a "${_library_tracefile}")
+
+    # Pass one: everything the test binaries link, which is the whole suite's
+    # counters. The app target's objects are held back for pass two rather
+    # than raced with these -- see the note above section 3.
+    message(STATUS "Coverage: reading the test objects")
+    execute_process(
+        COMMAND "${GCOVR_EXECUTABLE}"
+                ${_gcovr_parse_args}
+                --gcov-exclude-directories "rpi-imager\\.dir"
+                "${COVERAGE_BINARY_DIR}"
+                --json "${_library_tracefile}"
+        WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
+        RESULT_VARIABLE _gcovr_result
+    )
+    if(NOT _gcovr_result EQUAL 0)
+        message(FATAL_ERROR "Coverage: gcovr failed reading the test objects (${_gcovr_result})")
+    endif()
+
+    # Pass two: the shipping binary, which cli_process_test drives as a
+    # subprocess. Skipped when it was never run, so a build that did not
+    # produce it does not fail the report.
+    file(GLOB_RECURSE _app_gcda "${_app_object_dir}/*.gcda")
+    if(_app_gcda)
+        list(LENGTH _app_gcda _app_gcda_count)
+        message(STATUS "Coverage: reading ${_app_gcda_count} object(s) from the shipping binary")
+        execute_process(
+            COMMAND "${GCOVR_EXECUTABLE}"
+                    ${_gcovr_parse_args}
+                    "${_app_object_dir}"
+                    --json "${_app_tracefile}"
+            WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
+            RESULT_VARIABLE _gcovr_result
+        )
+        if(NOT _gcovr_result EQUAL 0)
+            message(FATAL_ERROR "Coverage: gcovr failed reading the shipping binary (${_gcovr_result})")
+        endif()
+        list(APPEND _tracefile_args -a "${_app_tracefile}")
+    else()
+        message(STATUS "Coverage: the shipping binary was not run; reporting the test objects alone")
+    endif()
+
     message(STATUS "Coverage: rendering report")
     execute_process(
         COMMAND "${GCOVR_EXECUTABLE}"
                 --root "${COVERAGE_SOURCE_DIR}"
-                "${COVERAGE_BINARY_DIR}"
-                ${_exclude_args}
+                ${_tracefile_args}
                 # Branch coverage is the reason for doing this at all: line
                 # coverage would have called runWithTimeout's timeout path
                 # "reached" as soon as anything entered the loop.
                 --txt-metric branch
-                --decisions
-                # Without these two a branch-metric report on C++ is unreadable.
-                # Every call that might throw carries a branch pair for the unwind
-                # edge, and the unwind arm is never taken in a passing run, so
-                # gcov reports it half-covered forever. It is not a gap anyone can
-                # close -- you would have to make the allocation fail.
-                #
-                # Not a small correction, either: they were 10,598 of the 28,284
-                # branches here, and removing them takes the headline from 13.8%
-                # to 21.5% without a line of test code changing. What they cost in
-                # legibility is worse than what they cost in percentage points --
-                # lines like `out += ":";` were being painted as partially
-                # covered, and those lines contain no branch at all.
-                --exclude-throw-branches
-                --exclude-unreachable-branches
-                # Qt's registration macros. Q_ENUM and its relatives expand to
-                # meta-object glue the runtime touches only when something
-                # looks the type up by name, so they sit at zero for the life
-                # of the project and no test can move them. Six lines across
-                # four files -- nothing in the total, but two of those files
-                # are otherwise empty of code, so they led the report at 0%
-                # and 40% and drew the eye away from the real gaps.
-                #
-                # Deliberately not Q_INVOKABLE or Q_ARG: those appear on lines
-                # that also carry a function or a call, and excluding them
-                # would hide code that a test can and should reach.
-                --exclude-lines-by-pattern "^\\s*(Q_ENUM|Q_ENUM_NS|Q_FLAG|Q_FLAG_NS|Q_DECLARE_OPERATORS_FOR_FLAGS|Q_DECLARE_METATYPE)\\s*\\("
                 # Sort by uncovered *branches*, not uncovered lines: without
                 # --sort-branches the table is ordered by a metric it does not
-                # display. --sort-reverse because gcovr sorts ascending, which for
-                # a gap report is exactly backwards -- it opened on 27 rows of
-                # header files with no branches at all ("--%"), and put
-                # downloadthread.cpp, the single biggest gap in the tree at 1,958
-                # uncovered branches, last in an 89-row table.
+                # display. --sort-reverse because gcovr sorts ascending, which
+                # for a gap report is exactly backwards -- it opened on 27 rows
+                # of header files with no branches at all ("--%"), and put
+                # downloadthread.cpp, the single biggest gap in the tree at
+                # 1,958 uncovered branches, last in an 89-row table.
                 --sort uncovered-number
                 --sort-branches
                 --sort-reverse
-                # Left on gcovr's default theme deliberately. The `github.*` themes
-                # look considerably more modern, but all four of them render a
-                # partially covered line in near enough the same colour as a fully
-                # covered one -- and a partially covered line is the single thing
-                # this report exists to show. The default theme's green/yellow/red
-                # are ugly and unambiguous, in that order of importance.
+                # Left on gcovr's default theme deliberately. The `github.*`
+                # themes look considerably more modern, but all four of them
+                # render a partially covered line in near enough the same
+                # colour as a fully covered one -- and a partially covered line
+                # is the single thing this report exists to show. The default
+                # theme's green/yellow/red are ugly and unambiguous, in that
+                # order of importance.
                 --html-details "${COVERAGE_OUTPUT_DIR}/index.html"
                 --html-title "rpi-imager core coverage"
                 --txt "${COVERAGE_OUTPUT_DIR}/summary.txt"
                 --print-summary
-                # The --exclude patterns above decide what reaches the report, but
-                # gcovr processes every .gcda it finds before applying them, and
-                # instrumentation is global -- so it walked into every FetchContent
-                # dependency, 492 of the 508 .gcno files here. gcov cannot resolve
-                # their sources from our build tree, and each failure printed: it
-                # was 10,461 lines of stderr on a run whose real output is four
-                # numbers. Pruning the walk removes the noise and the work both.
-                #
-                # The pattern is matched against the directory name rather than
-                # the full path, so it takes no leading slash -- ".*/_deps.*"
-                # matches nothing at all, silently.
-                # Only _deps. Pruning ".*dependencies.*" as well looks tempting --
-                # the vendored crypto built in-tree still emits a couple of dozen
-                # gcov warnings -- but the pattern is matched against the path
-                # relative to the search root, and the test binaries compile that
-                # crypto through object directories of their own. It took 1,192
-                # covered branches of customization_generator.cpp out of the
-                # report along with the warnings. Twenty-two lines of noise is the
-                # cheaper of the two.
-                --gcov-exclude-directories ".*_deps.*"
-                # Kept as a backstop only. This suppresses the "could not infer a
-                # working directory" failure, which before the pruning above was
-                # not an edge case but the single loudest thing in the run -- and
-                # fatal without it. Nothing in our own tree provokes it now.
-                --gcov-ignore-errors no_working_dir_found
         WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
         RESULT_VARIABLE _gcovr_result
     )
