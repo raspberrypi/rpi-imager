@@ -98,6 +98,9 @@ class MacOSFileOperations : public FileOperations {
   // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
+  // Shared tail of OpenDevice, for a device fd however it was obtained.
+  FileError FinishOpeningDevice();
+
   int fd_;
   std::string current_path_;
   int last_error_code_;

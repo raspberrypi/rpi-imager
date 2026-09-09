@@ -157,6 +157,46 @@ void MacOSFileOperations::CleanupAsyncIO() {
   }
 }
 
+// Direct I/O, the transfer limits and the block size, for a device fd however
+// it was obtained.
+FileError MacOSFileOperations::FinishOpeningDevice() {
+  // Enable direct I/O via F_NOCACHE for block devices
+  // This bypasses the unified buffer cache for:
+  // 1. Better performance by avoiding double-buffering
+  // 2. More accurate verification (reads from actual device, not cache)
+  // 3. Reduced memory pressure on the system
+  if (!EnableDirectIO()) {
+    std::cout << "Warning: Could not enable direct I/O, continuing with buffered I/O" << std::endl;
+  }
+
+  // Query device I/O limits via ioctl now that we have an open fd.
+  // DKIOCGETMAXBYTECOUNTWRITE returns the maximum single write size the driver accepts.
+#ifdef DKIOCGETMAXBYTECOUNTWRITE
+  {
+    uint64_t maxWriteBytes = 0;
+    if (ioctl(fd_, DKIOCGETMAXBYTECOUNTWRITE, &maxWriteBytes) == 0 && maxWriteBytes > 0) {
+      device_io_limits_.max_transfer_bytes = static_cast<size_t>(maxWriteBytes);
+      std::cout << "Device max write transfer: " << maxWriteBytes << " bytes" << std::endl;
+    }
+  }
+#endif
+  // Cache the logical block size so the alignment fix-up doesn't ioctl on
+  // every write. /dev/rdisk* requires pwrite/pread lengths to be a multiple
+  // of this value.
+  {
+    uint32_t bs = 512;
+    if (ioctl(fd_, DKIOCGETBLOCKSIZE, &bs) == 0 && bs > 0) {
+      logical_block_size_ = bs;
+    }
+    tail_bytes_.reserve(logical_block_size_);
+  }
+  // macOS doesn't expose queue depth directly; leave suggested_queue_depth as 0
+
+  std::cout << "Successfully opened device, fd=" << fd_
+            << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
+  return FileError::kSuccess;
+}
+
 FileError MacOSFileOperations::OpenDevice(const std::string& path) {
   std::cout << "Opening macOS device: " << path << std::endl;
   
@@ -165,6 +205,24 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
   // For raw device access on macOS, we need to use the authorization mechanism
   // Similar to how MacFile::authOpen() works
   if (isBlockDevice) {
+    // Ask the kernel before asking the user. A node this user can already
+    // write to -- one hdiutil attached, or a card whose permissions allow it
+    // -- needs no authorisation, and prompting for it is a dialog the user
+    // has to dismiss to get what they already had. Only a refusal is worth
+    // escalating: ENOENT or ENXIO means there is nothing there to authorise.
+    int direct = ::open(path.c_str(), O_RDWR);
+    if (direct < 0 && errno != EACCES && errno != EPERM) {
+      last_error_code_ = errno;
+      std::cout << "Device open failed, errno=" << errno << std::endl;
+      return FileError::kOpenError;
+    }
+    if (direct >= 0) {
+      std::cout << "Device opened directly, no authorization needed" << std::endl;
+      fd_ = direct;
+      current_path_ = path;
+      return FinishOpeningDevice();
+    }
+
     std::cout << "Device path detected, using macOS authorization..." << std::endl;
     
     // Create a MacFile instance to handle authorization
@@ -201,41 +259,7 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
     fd_ = duplicated_fd;
     current_path_ = path;
     
-    // Enable direct I/O via F_NOCACHE for block devices
-    // This bypasses the unified buffer cache for:
-    // 1. Better performance by avoiding double-buffering
-    // 2. More accurate verification (reads from actual device, not cache)
-    // 3. Reduced memory pressure on the system
-    if (!EnableDirectIO()) {
-      std::cout << "Warning: Could not enable direct I/O, continuing with buffered I/O" << std::endl;
-    }
-    
-    // Query device I/O limits via ioctl now that we have an open fd.
-    // DKIOCGETMAXBYTECOUNTWRITE returns the maximum single write size the driver accepts.
-#ifdef DKIOCGETMAXBYTECOUNTWRITE
-    {
-      uint64_t maxWriteBytes = 0;
-      if (ioctl(fd_, DKIOCGETMAXBYTECOUNTWRITE, &maxWriteBytes) == 0 && maxWriteBytes > 0) {
-        device_io_limits_.max_transfer_bytes = static_cast<size_t>(maxWriteBytes);
-        std::cout << "Device max write transfer: " << maxWriteBytes << " bytes" << std::endl;
-      }
-    }
-#endif
-    // Cache the logical block size so the alignment fix-up below
-    // doesn't ioctl on every write. /dev/rdisk* requires pwrite/pread
-    // lengths to be a multiple of this value.
-    {
-      uint32_t bs = 512;
-      if (ioctl(fd_, DKIOCGETBLOCKSIZE, &bs) == 0 && bs > 0) {
-        logical_block_size_ = bs;
-      }
-      tail_bytes_.reserve(logical_block_size_);
-    }
-    // macOS doesn't expose queue depth directly; leave suggested_queue_depth as 0
-
-    std::cout << "Successfully opened device with authorization, fd=" << fd_
-              << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
-    return FileError::kSuccess;
+    return FinishOpeningDevice();
   }
 
   // For regular files, use standard POSIX open

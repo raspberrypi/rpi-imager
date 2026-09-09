@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -368,6 +369,32 @@ TEST_CASE("Opening a path that does not exist fails cleanly", "[file-ops]") {
   ops->Close();
   CHECK_FALSE(ops->IsOpen());
 }
+
+#ifdef __APPLE__
+TEST_CASE("A device the user can already write to is opened without asking",
+          "[file-ops][macos]") {
+  // OpenDevice() used to send every /dev/ path to authopen, so opening a node
+  // this user can already write to raised a prompt to grant access they had.
+  // /dev/null is such a node, and needs no privilege to prove it: the open
+  // has to succeed, and it has to succeed without a dialog -- which is also
+  // why this test can run unattended at all.
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice("/dev/null") == FileError::kSuccess);
+  CHECK(ops->IsOpen());
+  ops->Close();
+}
+
+TEST_CASE("A device that is not there fails rather than prompting",
+          "[file-ops][macos]") {
+  // The other half: escalate only on a refusal. ENOENT is not something an
+  // authorisation dialog can fix, so asking would be a prompt whose only
+  // possible outcome is the failure we already have.
+  auto ops = FileOperations::Create();
+  CHECK(ops->OpenDevice("/dev/rpi-imager-no-such-device") != FileError::kSuccess);
+  CHECK(ops->GetLastErrorCode() == ENOENT);
+  CHECK_FALSE(ops->IsOpen());
+}
+#endif
 
 TEST_CASE("Writes round-trip through a loopback block device", "[file-ops][loop]") {
   const std::string backing = makeImage("loop.img", 32u * 1024 * 1024);
