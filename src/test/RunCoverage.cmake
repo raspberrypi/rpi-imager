@@ -235,8 +235,22 @@ else()
     set(_ctest_launcher)
 endif()
 
+# In parallel, like every other run of this suite. Serially the report took an
+# hour of which most was one case waiting on the next: the two secure-boot
+# cases are four minutes each on their own, and nothing overlapped them.
+#
+# Concurrent counter-writing is safe by construction here. Both runtimes merge
+# into an existing counter file rather than truncating it -- gcov under
+# -fprofile-update=atomic, which the instrumented build already sets, and LLVM
+# via the %m pattern above -- so several cases finishing at once accumulate
+# instead of racing. The suite is already run at this width uninstrumented,
+# so no case depends on having the machine to itself.
+set(COVERAGE_CTEST_PARALLEL "4" CACHE STRING
+    "How many test processes the coverage run may use at once")
+
 execute_process(
     COMMAND ${_ctest_launcher} "${CTEST_EXECUTABLE}" --output-on-failure --timeout 300
+            -j "${COVERAGE_CTEST_PARALLEL}"
     WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
     RESULT_VARIABLE _ctest_result
 )
