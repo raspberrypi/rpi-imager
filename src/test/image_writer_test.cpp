@@ -11529,3 +11529,93 @@ TEST_CASE("A row that is not there yields nothing rather than reading past the e
     CHECK_FALSE(m.data(m.index(-1, 0), OSListModel::NameRole).isValid());
     CHECK_FALSE(m.data(m.index(5, 0), OSListModel::UrlRole).isValid());
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// The values the customisation page starts from
+//
+// The wizard pre-fills the timezone, the keyboard and the Wi-Fi network from
+// the machine doing the imaging, on the reasonable assumption that the Pi is
+// going on the same desk and the same network. Each of those goes into the
+// dropdown as a selected value, and a dropdown asked to select something that
+// is not in its list shows nothing selected instead.
+//
+// That failure is quiet in the worst way: the page looks filled in, the user
+// presses Next, and the Pi comes up on UTC with a US keyboard.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("The timezone the page starts on is one it offers", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+
+    const QString here = w.getTimezone();
+    INFO("system timezone: " << here.toStdString());
+    REQUIRE_FALSE(here.isEmpty());
+
+    // The list is the dropdown's contents. A default outside it selects
+    // nothing, and nothing selected writes no timezone at all.
+    const QStringList zones = w.getTimezoneList();
+    REQUIRE_FALSE(zones.isEmpty());
+    CHECK(zones.contains(here));
+}
+
+TEST_CASE("The keyboard layout the page starts on is one it offers",
+          "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+
+    const QString layout = w.getCurrentKeyboard();
+    INFO("keyboard layout: " << layout.toStdString());
+    // Empty is a legitimate answer -- the detection has nothing to go on
+    // where there is no keyboard to ask -- and the page then falls back on
+    // its own default rather than selecting something absent.
+    if (layout.isEmpty())
+        SKIP("no keyboard layout detected here, so there is no default to check");
+
+    const QStringList layouts = w.getKeymapLayoutList();
+    REQUIRE_FALSE(layouts.isEmpty());
+    CHECK(layouts.contains(layout));
+}
+
+TEST_CASE("Asking for the Wi-Fi network the machine is on answers safely",
+          "[imagewriter][locale]")
+{
+    // The imaging machine may be on Ethernet, or on nothing at all, and on
+    // Linux the password comes from NetworkManager over D-Bus, which may not
+    // be running. None of that may throw or hang: the customisation page
+    // calls these while it is being built.
+    ImageWriter w(nullptr);
+
+    QString ssid;
+    CHECK_NOTHROW(ssid = w.getSSID());
+    INFO("ssid: " << ssid.toStdString());
+
+    // Whatever came back, asking for its key must answer the same way.
+    CHECK_NOTHROW((void)w.getPSK());
+    CHECK_NOTHROW((void)w.getPSKForSSID(ssid));
+    // Including for a network this machine has certainly never joined.
+    QString unknown;
+    CHECK_NOTHROW(unknown = w.getPSKForSSID(QStringLiteral("rpi-imager-no-such-network")));
+    CHECK(unknown.isEmpty());
+}
+
+TEST_CASE("What the machine can do is answered without a window",
+          "[imagewriter][locale]")
+{
+    // These decide whether the page offers to make an SSH key, whether the
+    // beep option appears, and whether the window draws its own decorations.
+    // They are read while the UI is being built, before there is anything on
+    // screen to ask, so each has to answer from the machine rather than from
+    // the window.
+    ImageWriter w(nullptr);
+
+    CHECK_NOTHROW((void)w.hasSshKeyGen());
+    CHECK_NOTHROW((void)w.isBeepAvailable());
+    CHECK_NOTHROW((void)w.hasMouse());
+    CHECK_NOTHROW((void)w.hasWindowDecorations());
+    CHECK_NOTHROW((void)w.isScreenReaderActive());
+
+    // On a desktop there is a pointer by definition: the check is only ever
+    // false in the embedded build, where there may be nothing but a
+    // touchscreen.
+    CHECK(w.hasMouse());
+}
