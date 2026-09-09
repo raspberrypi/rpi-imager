@@ -32,6 +32,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -801,6 +802,13 @@ TEST_CASE("The queue depth can be shrunk for recovery", "[fileops][async]") {
   fx.ops->ReduceQueueDepthForRecovery(2);
   CHECK(fx.ops->GetAsyncQueueDepth() <= original);
 
+  // And only ever down. Recovery is entered because the card is struggling;
+  // a caller that asks for a deeper queue while that is still true would undo
+  // the back-off, so the request is ignored rather than obeyed.
+  const int reduced = fx.ops->GetAsyncQueueDepth();
+  fx.ops->ReduceQueueDepthForRecovery(reduced * 8);
+  CHECK(fx.ops->GetAsyncQueueDepth() == reduced);
+
   const AlignedBlock block(16 * 1024, 9);
   for (int i = 0; i < 4; ++i)
     REQUIRE(fx.ops->AsyncWriteSequential(block.data(), block.size(), nullptr)
@@ -1177,7 +1185,23 @@ TEST_CASE("Every entry point survives a handle that was never opened",
   CHECK(ops->ReadSequential(readInto.data(), readInto.size(), got) != FileError::kSuccess);
   CHECK(ops->Seek(0) != FileError::kSuccess);
   CHECK(ops->Flush() != FileError::kSuccess);
+  CHECK(ops->ForceSync() != FileError::kSuccess);
   CHECK(ops->SetDirectIOEnabled(true) != FileError::kSuccess);
+  CHECK(ops->WriteAtOffset(0, data.data(), data.size()) != FileError::kSuccess);
+
+  std::uint64_t size = 999;
+  CHECK(ops->GetSize(size) != FileError::kSuccess);
+
+  // The async entry point too: the write loop calls this one, and on a handle
+  // that failed to open it has to report rather than queue. The callback is
+  // the only channel the caller has, so it must fire even here.
+  int asyncCalls = 0;
+  CHECK(ops->AsyncWriteSequential(data.data(), data.size(),
+                                  [&](FileError, std::size_t) { ++asyncCalls; }) !=
+        FileError::kSuccess);
+  CHECK(asyncCalls == 1);
+  CHECK(ops->WaitForPendingWrites() == FileError::kSuccess);
+  CHECK(ops->GetPendingWriteCount() == 0);
 
   // These have no error to return, so what matters is that they answer at all
   // and answer something a caller can act on.
@@ -1324,5 +1348,329 @@ TEST_CASE("A write replayed onto a device that has stopped taking them is report
       (ops->WriteSequential(buffer.get(), kChunk) != FileError::kSuccess);
   CHECK((refused || deviceIsUnusable));
 
+  ops->Close();
+}
+
+TEST_CASE("A device with no async queue still writes, and still calls back",
+          "[file-ops]") {
+  // io_uring is not everywhere: an older kernel, a container with the syscall
+  // seccomp-blocked, or a host where the ring would not initialise all end up
+  // here, and so does the queue depth of 1 that FileOperations starts with.
+  // The caller does not branch on any of that -- it hands over a buffer and a
+  // callback either way -- so the synchronous fall-through has to honour the
+  // same contract: the bytes land, and the callback fires exactly once with
+  // the number of bytes it was given.
+  const std::string path = makeImage("no-async-queue.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+  REQUIRE(ops->GetAsyncQueueDepth() <= 1);
+
+  const auto expected = pattern(8192, 0x64);
+  int calls = 0;
+  FileError reported = FileError::kLockError;  // anything the call cannot return
+  std::size_t reportedBytes = 0;
+
+  REQUIRE(ops->AsyncWriteSequential(expected.data(), expected.size(),
+                                    [&](FileError e, std::size_t n) {
+                                      ++calls;
+                                      reported = e;
+                                      reportedBytes = n;
+                                    }) == FileError::kSuccess);
+
+  CHECK(calls == 1);
+  CHECK(reported == FileError::kSuccess);
+  CHECK(reportedBytes == expected.size());
+  CHECK(ops->Tell() == expected.size());
+
+  ops->Close();
+  CHECK(readBack(path, 0, expected.size()) == expected);
+}
+
+TEST_CASE("A position the kernel cannot represent is refused", "[file-ops]") {
+  // Seek takes an unsigned offset and lseek a signed one, so anything with the
+  // top bit set arrives at the kernel as a negative position. The only two
+  // answers are to report it or to carry on writing at whatever position the
+  // handle happened to be left at -- and the second one silently puts image
+  // data somewhere other than where the caller asked for it.
+  const std::string path = makeImage("impossible-seek.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+  REQUIRE(ops->Seek(4096) == FileError::kSuccess);
+
+  CHECK(ops->Seek(std::numeric_limits<std::uint64_t>::max()) ==
+        FileError::kSeekError);
+  CHECK(ops->GetLastErrorCode() == EINVAL);
+
+  ops->Close();
+}
+
+TEST_CASE("A scratch file that cannot be made says so", "[file-ops]") {
+  // CreateTestFile is how the write-speed benchmark and the pre-flight space
+  // check get a file to work with. Both are on the path to starting a write,
+  // so a failure here has to come back as a failure rather than as a handle
+  // to a file that does not exist or is not the size that was asked for.
+  auto ops = FileOperations::Create();
+
+  SECTION("nowhere to put it") {
+    CHECK(ops->CreateTestFile("/proc/self/no/such/place/probe.bin", 4096) !=
+          FileError::kSuccess);
+    CHECK_FALSE(ops->IsOpen());
+  }
+
+  SECTION("a size that cannot be represented") {
+    // The size arrives unsigned and reaches ftruncate signed, so anything with
+    // the top bit set is a negative length by the time the kernel sees it. The
+    // handle is opened before the size is set, so what matters is that the
+    // failure closes it again rather than leaving an empty file open behind a
+    // returned error -- the caller has no handle to close it with.
+    const std::string path = scratch().file("absurd-size.bin");
+    CHECK(ops->CreateTestFile(path, std::numeric_limits<std::uint64_t>::max()) ==
+          FileError::kSizeError);
+    CHECK_FALSE(ops->IsOpen());
+  }
+}
+
+TEST_CASE("A read that hits a bad sector is reported, not returned as data",
+          "[file-ops][faulty]") {
+  // Verification reads the card back and hashes what it finds. A read that
+  // fails has to be told apart from one that succeeded, because the buffer is
+  // hashed either way: a failure reported as success feeds whatever was left
+  // in the buffer into the hash, and the user is shown a verification mismatch
+  // -- pointing at the write, which was fine -- instead of a read error on a
+  // card that has developed a bad sector.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+
+  FaultyDevice device(64, 8);
+  if (!device.isReady())
+    SKIP("the device-mapper fault injection device could not be created");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+
+  // Inside the good region first, so a failure below is the mapping and not
+  // the harness.
+  auto buffer = alignedBuffer(1u << 20, 0);
+  REQUIRE(buffer);
+  std::size_t got = 0;
+  REQUIRE(ops->Seek(0) == FileError::kSuccess);
+  REQUIRE(ops->ReadSequential(buffer.get(), 1u << 20, got) == FileError::kSuccess);
+  CHECK(got == (1u << 20));
+
+  // And past the 8MB boundary, where the mapping returns EIO.
+  REQUIRE(ops->Seek(16ull << 20) == FileError::kSuccess);
+  got = 12345;
+  CHECK(ops->ReadSequential(buffer.get(), 1u << 20, got) == FileError::kReadError);
+  CHECK(got == 0);
+  CHECK(ops->GetLastErrorCode() == EIO);
+
+  ops->Close();
+}
+
+TEST_CASE("A card slow enough to matter makes the writer back off",
+          "[file-ops][faulty][slow]") {
+  // A card that is slow rather than broken is the common complaint, and it
+  // needs different handling: nothing errors, the writes all land eventually,
+  // but a deep queue in front of a device that cannot keep up just moves the
+  // stall somewhere the user cannot see. So a write that takes longer than
+  // kHighLatencyThresholdMs halves the queue depth, repeatedly, down to the
+  // floor -- fewer outstanding writes, so the card drains what it has and the
+  // progress the user is watching keeps moving.
+  //
+  // dm-delay holds each write for longer than that threshold. Reads are left
+  // at full speed, so the check that the data actually landed costs nothing.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+
+  FaultyDevice device(64, FaultyDevice::SlowWrites{11000});
+  if (!device.isReady())
+    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no queue to shrink");
+
+  constexpr int kStartingDepth = 16;
+  REQUIRE(ops->SetAsyncQueueDepth(kStartingDepth));
+  REQUIRE(ops->GetAsyncQueueDepth() == kStartingDepth);
+
+  constexpr std::size_t kChunk = 64u * 1024;
+  auto buffer = alignedBuffer(kChunk, 0xA7);
+  REQUIRE(buffer);
+
+  // Four writes, submitted together so the device delays them in parallel and
+  // the whole case costs one delay rather than four.
+  std::atomic<int> completed{0};
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE(ops->AsyncWriteSequential(buffer.get(), kChunk,
+                                      [&](FileError e, std::size_t) {
+                                        if (e == FileError::kSuccess) ++completed;
+                                      }) == FileError::kSuccess);
+  }
+
+  // The wait itself is part of what is under test: ProcessCompletions gives up
+  // on any single blocking wait after kAsyncFirstCompletionTimeoutMs so the
+  // caller can react, and WaitForPendingWrites has to come back and wait again
+  // rather than treat that as the device being gone.
+  CHECK(ops->WaitForPendingWrites() == FileError::kSuccess);
+  CHECK(completed.load() == 4);
+  CHECK(ops->GetPendingWriteCount() == 0);
+
+  const int settled = ops->GetAsyncQueueDepth();
+  INFO("queue depth settled at " << settled << " from " << kStartingDepth);
+  CHECK(settled < kStartingDepth);
+  CHECK(settled >= 2);
+
+  // Backing off is only worth anything if the data still arrives.
+  REQUIRE(ops->Seek(0) == FileError::kSuccess);
+  auto readInto = alignedBuffer(kChunk, 0);
+  REQUIRE(readInto);
+  std::size_t got = 0;
+  REQUIRE(ops->ReadSequential(readInto.get(), kChunk, got) == FileError::kSuccess);
+  CHECK(got == kChunk);
+  CHECK(std::memcmp(readInto.get(), buffer.get(), kChunk) == 0);
+
+  ops->Close();
+}
+
+TEST_CASE("Cancelling a busy card is answered without waiting it out",
+          "[file-ops][faulty][slow]") {
+  // Cancel has to be answered while the card is busy, which is the only time
+  // anyone presses it. Waiting for the writes already handed to a slow card
+  // would leave the button dead for as long as the card takes, which on the
+  // cards people complain about is the whole complaint.
+  //
+  // What must not happen is the outstanding writes being reported as write
+  // errors: the user asked for this, and a failure dialog for a cancellation
+  // sends them looking for a fault in the card.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+
+  FaultyDevice device(64, FaultyDevice::SlowWrites{4000});
+  if (!device.isReady())
+    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is nothing to cancel");
+
+  constexpr int kDepth = 4;
+  REQUIRE(ops->SetAsyncQueueDepth(kDepth));
+
+  constexpr std::size_t kChunk = 64u * 1024;
+  auto buffer = alignedBuffer(kChunk, 0x3B);
+  REQUIRE(buffer);
+
+  std::atomic<int> cancelled{0};
+  std::atomic<int> failed{0};
+  std::atomic<int> succeeded{0};
+  auto note = [&](FileError e, std::size_t) {
+    if (e == FileError::kCancelled)
+      ++cancelled;
+    else if (e == FileError::kSuccess)
+      ++succeeded;
+    else
+      ++failed;
+  };
+
+  for (int i = 0; i < kDepth; ++i)
+    REQUIRE(ops->AsyncWriteSequential(buffer.get(), kChunk, note) ==
+            FileError::kSuccess);
+  REQUIRE(ops->GetPendingWriteCount() == kDepth);
+
+  const auto start = std::chrono::steady_clock::now();
+  ops->CancelAsyncIO();
+  ops->WaitForPendingWrites();
+  const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - start)
+                          .count();
+
+  INFO("drained in " << waited << "ms; " << cancelled.load() << " cancelled, "
+                     << succeeded.load() << " completed, " << failed.load()
+                     << " failed");
+  CHECK(ops->GetPendingWriteCount() == 0);
+  CHECK(cancelled.load() + succeeded.load() == kDepth);
+  CHECK(failed.load() == 0);
+
+  ops->Close();
+}
+
+TEST_CASE("A write waiting for a queue slot answers a cancel",
+          "[file-ops][faulty][slow]") {
+  // The extract thread blocks inside AsyncWriteSequential whenever the queue
+  // is full, which on a slow card is most of the time. A cancel arriving from
+  // the UI thread while it is parked there has to be noticed in that wait, and
+  // the write reported as cancelled rather than as an error -- and it has to
+  // be reported at all, or the extract loop sees a success for data that was
+  // never queued and moves its cursor past it.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no slow device can be built");
+
+  FaultyDevice device(64, FaultyDevice::SlowWrites{6000});
+  if (!device.isReady())
+    SKIP("the device-mapper delay device could not be created (dm-delay?)");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no queue to fill");
+
+  constexpr int kDepth = 4;
+  REQUIRE(ops->SetAsyncQueueDepth(kDepth));
+
+  constexpr std::size_t kChunk = 64u * 1024;
+  auto buffer = alignedBuffer(kChunk, 0x77);
+  REQUIRE(buffer);
+
+  for (int i = 0; i < kDepth; ++i)
+    REQUIRE(ops->AsyncWriteSequential(buffer.get(), kChunk, nullptr) ==
+            FileError::kSuccess);
+  REQUIRE(ops->GetPendingWriteCount() == kDepth);
+
+  // The extract thread: parks in the queue-full wait, because nothing can
+  // complete for another six seconds.
+  std::atomic<int> callbacks{0};
+  std::atomic<int> viaCallback{-1};
+  std::atomic<int> returned{-1};
+  std::thread writer([&] {
+    returned.store(static_cast<int>(ops->AsyncWriteSequential(
+        buffer.get(), kChunk, [&](FileError e, std::size_t) {
+          ++callbacks;
+          viaCallback.store(static_cast<int>(e));
+        })));
+  });
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  const auto cancelAt = std::chrono::steady_clock::now();
+  ops->CancelAsyncIO();
+  writer.join();
+  const auto answered = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - cancelAt)
+                            .count();
+
+  INFO("the parked write was answered " << answered << "ms after the cancel");
+  CHECK(callbacks.load() == 1);
+  CHECK(viaCallback.load() == static_cast<int>(FileError::kCancelled));
+  CHECK(returned.load() == static_cast<int>(FileError::kCancelled));
+  // Long before the card would have freed a slot on its own.
+  CHECK(answered < 3000);
+
+  ops->WaitForPendingWrites();
   ops->Close();
 }

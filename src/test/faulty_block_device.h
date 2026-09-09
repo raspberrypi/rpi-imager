@@ -166,18 +166,34 @@ public:
         int lengthMegabytes;
     };
 
+    // A device that takes every write but takes its time over it: a card whose
+    // controller is slow rather than broken, which is a different failure for
+    // the writer to handle. dm-delay holds each bio for the requested number
+    // of milliseconds before passing it down, and reads are left at full speed
+    // so a test can still check what landed without paying the delay twice.
+    struct SlowWrites
+    {
+        int milliseconds;
+    };
+
     FaultyDevice(int totalMegabytes, BadBand band)
-        : FaultyDevice(totalMegabytes, -1, band.startMegabytes, band.lengthMegabytes)
+        : FaultyDevice(totalMegabytes, -1, band.startMegabytes, band.lengthMegabytes, 0)
     {
     }
 
     explicit FaultyDevice(int totalMegabytes, int goodMegabytes)
-        : FaultyDevice(totalMegabytes, goodMegabytes, -1, -1)
+        : FaultyDevice(totalMegabytes, goodMegabytes, -1, -1, 0)
+    {
+    }
+
+    FaultyDevice(int totalMegabytes, SlowWrites slow)
+        : FaultyDevice(totalMegabytes, -1, -1, -1, slow.milliseconds)
     {
     }
 
 private:
-    FaultyDevice(int totalMegabytes, int goodMegabytes, int bandStartMB, int bandLenMB)
+    FaultyDevice(int totalMegabytes, int goodMegabytes, int bandStartMB, int bandLenMB,
+                 int writeDelayMs)
         // Unique per instance, not just per process: two of these exist in
         // quick succession within a run, and a name collision would have one
         // tear down the other's mapping underneath it.
@@ -212,7 +228,19 @@ private:
         // A fully writable device when asked for one, so a control case can
         // tell "the device failed" from "the harness is broken".
         QString table;
-        if (bandStartMB >= 0) {
+        if (writeDelayMs > 0) {
+            // dm-delay is a separate module from dm-mod, and dmsetup does not
+            // always pull it in on its own. Best effort: if it is unavailable
+            // the create below fails and isReady() stays false, which is what
+            // the caller skips on anyway.
+            runPrivileged(QStringLiteral("modprobe"), {QStringLiteral("dm-delay")});
+            // <read dev> <read offset> <read delay> <write dev> <write offset>
+            // <write delay>. Reads pass straight through.
+            table = QStringLiteral("0 %1 delay %2 0 0 %2 0 %3\n")
+                        .arg(totalSectors)
+                        .arg(_loop)
+                        .arg(writeDelayMs);
+        } else if (bandStartMB >= 0) {
             // good | error | good
             const qint64 bandStart = static_cast<qint64>(bandStartMB) * 1024 * 1024 / 512;
             const qint64 bandLen = static_cast<qint64>(bandLenMB) * 1024 * 1024 / 512;
