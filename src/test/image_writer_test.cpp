@@ -33,6 +33,10 @@
 #include "app_resources.h"
 #include "platform_tools.h"
 #include "drivelistmodel.h"
+#include "drivelistmodelpollthread.h"
+#if defined(Q_OS_LINUX) && defined(QT_DBUS_LIB)
+#include "linux/urihandler_dbus.h"
+#endif
 #include "oslistmodel.h"
 #include "drivelistmodelpollthread.h"
 
@@ -57,6 +61,7 @@
 #include <QJsonObject>
 #include <QStringList>
 #include <QTemporaryDir>
+#include <QTemporaryFile>
 #include <QUrl>
 #include <QVariant>
 #include <QVersionNumber>
@@ -12410,4 +12415,299 @@ TEST_CASE("Every role the chooser binds to has the name QML uses",
     // And nothing beyond them, so a role added in C++ without a name here
     // shows up as a mismatch rather than as a blank in the chooser.
     CHECK(names.size() == expected.size());
+}
+
+// ══════════════════════════════════════════════════════════════
+// A link handed over from a second launch
+//
+// Clicking an rpi-imager:// link when Imager is already running does not
+// start a second copy: the new process hands the URL to the running one over
+// D-Bus and exits. That is how the Raspberry Pi Connect sign-in callback gets
+// back to the window the user started from, so if the hand-off stops here,
+// signing in through the browser does nothing at all and there is no error
+// anywhere to say why.
+//
+// The adaptor was at 0% -- twelve lines and seven branches, none of them run.
+// It needs no bus to test: the slot is public, and what it does with what it
+// is given is the whole of it.
+// ══════════════════════════════════════════════════════════════
+
+#if defined(Q_OS_LINUX) && defined(QT_DBUS_LIB)
+
+TEST_CASE("A link handed over D-Bus reaches the running Imager",
+          "[imagewriter][dbus]")
+{
+    ImageWriter w(nullptr);
+    QStringList accepted;
+    QObject::connect(&w, &ImageWriter::repositoryUrlReceived,
+                     [&accepted](QString u) { accepted << u; });
+
+    // The adaptor attaches to an object rather than owning one; on the real
+    // path that object is what gets registered on the bus.
+    QObject owner;
+    UriHandlerAdaptor adaptor(&w, &owner);
+
+    adaptor.HandleUrl(QStringLiteral(
+        "rpi-imager://open?repo=https://example.com/os_list.json"));
+
+    // Handed over rather than run where it arrived. A D-Bus call is delivered
+    // on whichever thread the connection is serviced from, and reaching into
+    // the writer from there would touch its models from the wrong thread.
+    CHECK(accepted.isEmpty());
+
+    QCoreApplication::processEvents();
+
+    INFO("accepted: " << accepted.join(QStringLiteral(", ")).toStdString());
+    CHECK(accepted.size() == 1);
+}
+
+TEST_CASE("A link over D-Bus is passed on exactly as it arrived",
+          "[imagewriter][dbus]")
+{
+    // The adaptor takes a string and the writer takes a QUrl, so the
+    // conversion happens here. A query string that is re-encoded on the way
+    // through is a repository URL that no longer matches what was signed.
+    ImageWriter w(nullptr);
+    QStringList accepted;
+    QObject::connect(&w, &ImageWriter::repositoryUrlReceived,
+                     [&accepted](QString u) { accepted << u; });
+
+    QObject owner;
+    UriHandlerAdaptor adaptor(&w, &owner);
+    adaptor.HandleUrl(QStringLiteral(
+        "rpi-imager://open?repo=https://example.com/os_list.json%3Fv%3D2"));
+    QCoreApplication::processEvents();
+
+    REQUIRE(accepted.size() == 1);
+    INFO("accepted: " << accepted.at(0).toStdString());
+    CHECK(accepted.at(0).contains(QStringLiteral("v=2")));
+}
+
+TEST_CASE("A D-Bus caller sending nonsense is ignored, not obeyed",
+          "[imagewriter][dbus]")
+{
+    // Anything on the session bus can call this. What it sends is not
+    // necessarily a URL, and it is certainly not necessarily one of ours.
+    ImageWriter w(nullptr);
+    int emitted = 0;
+    QObject::connect(&w, &ImageWriter::repositoryUrlReceived,
+                     [&emitted](QString) { ++emitted; });
+    QObject::connect(&w, &ImageWriter::connectTokenConflictDetected,
+                     [&emitted](QString) { ++emitted; });
+
+    QObject owner;
+    UriHandlerAdaptor adaptor(&w, &owner);
+
+    const QStringList junk = {
+        QString(),
+        QStringLiteral("not a url at all"),
+        QStringLiteral("file:///etc/passwd"),
+        QStringLiteral("rpi-imager://open?repo=file:///etc/passwd"),
+        QStringLiteral("rpi-imager://open"),
+    };
+    for (const QString &s : junk) {
+        INFO("sent: " << s.toStdString());
+        CHECK_NOTHROW(adaptor.HandleUrl(s));
+    }
+    QCoreApplication::processEvents();
+
+    CHECK(emitted == 0);
+}
+
+#endif // Q_OS_LINUX && QT_DBUS_LIB
+
+// ══════════════════════════════════════════════════════════════
+// Bootstrapping a Compute Module that appears on the USB bus
+//
+// With rpiboot enabled, a board in ROM mode appearing on the bus is picked up
+// and booted into fastboot without the user asking. While that runs the drive
+// scan is paused, because the poll thread and the bootstrap would otherwise
+// be walking the same USB bus a second apart -- which on macOS produces
+// sporadic transfer failures partway through the boot.img upload.
+//
+// The pause is the thing to get right. Fail to resume it and the drive list
+// is frozen for the rest of the session; fail to release the port path and
+// that board can never be tried again.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+// Points every transfer in the process at a closed port for the life of the
+// object.
+//
+// Starting a bootstrap thread sends FirmwareManager after the boot files and
+// the fastboot gadget, and these cases are about the bookkeeping around the
+// thread rather than about fetching firmware. A test that reaches github.com
+// is a test that fails when the network does -- and one that quietly stops
+// reaching it would never be noticed. This makes the attempt fail in
+// microseconds without leaving the machine.
+class NoNetworkGuard
+{
+public:
+    NoNetworkGuard() : _saved(CurlNetworkConfig::instance().proxy())
+    {
+        CurlNetworkConfig::instance().setProxy(QByteArrayLiteral("http://127.0.0.1:1"));
+    }
+    ~NoNetworkGuard() { CurlNetworkConfig::instance().setProxy(_saved); }
+
+    NoNetworkGuard(const NoNetworkGuard &) = delete;
+    NoNetworkGuard &operator=(const NoNetworkGuard &) = delete;
+
+private:
+    QByteArray _saved;
+};
+
+// The bootstrap callbacks are protected slots -- they are wired to the
+// scanner and the thread, not called from outside. A subclass is how a test
+// stands where the scanner stands.
+class BootstrapProbe : public ImageWriter
+{
+public:
+    BootstrapProbe() : ImageWriter(nullptr)
+    {
+        // A gadget image on disk, so the bootstrap has one without asking for
+        // it. The guard above stops the rest of the firmware being fetched.
+        _gadget.open();
+        _gadget.write("not a gadget, but a file that exists");
+        _gadget.flush();
+        setDebugCustomFastbootGadget(_gadget.fileName());
+    }
+
+    using ImageWriter::onRpibootDeviceDetected;
+    using ImageWriter::onBootstrapComplete;
+    using ImageWriter::onBootstrapError;
+
+private:
+    NoNetworkGuard _offline;
+    QTemporaryFile _gadget;
+};
+
+} // namespace
+
+TEST_CASE("A board on the bus is left alone unless rpiboot is enabled",
+          "[imagewriter][rpiboot]")
+{
+    // Auto-bootstrap is behind a debug option. Without it, a Compute Module
+    // plugged in for some other reason must not have its boot ROM driven, and
+    // the drive list must keep scanning.
+    BootstrapProbe w;
+    DriveListModel *drives = w.getDriveList();
+    REQUIRE(drives);
+    const auto before = drives->scanMode();
+
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+
+    CHECK(drives->scanMode() == before);
+}
+
+TEST_CASE("Bootstrapping a board pauses the drive scan, and finishing resumes it",
+          "[imagewriter][rpiboot]")
+{
+    BootstrapProbe w;
+    w.setDebugRpiboot(true);
+    DriveListModel *drives = w.getDriveList();
+    REQUIRE(drives);
+
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    // The port path is the key: 1 and 2 joined, which is what the callbacks
+    // are given back.
+    w.onBootstrapComplete(QStringLiteral("1.2"), QStringLiteral("fastboot:1-2"));
+
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
+    // And the poll starts looking for the storage the board now presents.
+    CHECK(drives->fastbootScanEnabled());
+}
+
+TEST_CASE("A bootstrap that failed lets go of the drive scan too",
+          "[imagewriter][rpiboot]")
+{
+    // The failure path is the one that matters: a board that will not boot is
+    // more likely than one that will, and leaving the scan paused means the
+    // user's card reader never appears again.
+    BootstrapProbe w;
+    w.setDebugRpiboot(true);
+    DriveListModel *drives = w.getDriveList();
+    REQUIRE(drives);
+
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("could not open the bus"));
+
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
+}
+
+TEST_CASE("A board that failed once can be tried again", "[imagewriter][rpiboot]")
+{
+    // The port path is held while a bootstrap is in flight so a board seen
+    // twice on consecutive polls is not bootstrapped twice. It has to be let
+    // go of afterwards, or unplugging and replugging the board does nothing
+    // for the rest of the session.
+    BootstrapProbe w;
+    w.setDebugRpiboot(true);
+    DriveListModel *drives = w.getDriveList();
+    REQUIRE(drives);
+
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+    REQUIRE(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
+
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+}
+
+TEST_CASE("A board reported over and over needs one completion to unwind",
+          "[imagewriter][rpiboot]")
+{
+    // The poll runs every second and a bootstrap takes far longer, so the
+    // same board is reported again and again while it is being worked on.
+    // Whatever happens in between, one completion has to bring the drive
+    // scan back -- if each repeat left something behind, the scan would stay
+    // paused for the rest of the session.
+    //
+    // It does not, on its own, prove that only one rpiboot was started: the
+    // threads are held in a map keyed by port path, so a second one would
+    // replace the first rather than accumulate, and this would pass either
+    // way. The guard that stops the second start is checked by the case
+    // above, which needs the port path to have been released first.
+    BootstrapProbe w;
+    w.setDebugRpiboot(true);
+    DriveListModel *drives = w.getDriveList();
+    REQUIRE(drives);
+
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    // One completion is enough to unwind it. If three bootstraps had been
+    // started, two would still be registered and the scan would stay paused.
+    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
+}
+
+TEST_CASE("Two boards at once keep the scan paused until both are done",
+          "[imagewriter][rpiboot]")
+{
+    // A carrier board with two Compute Modules on it. The scan must not come
+    // back while the second one is still being uploaded to.
+    BootstrapProbe w;
+    w.setDebugRpiboot(true);
+    DriveListModel *drives = w.getDriveList();
+    REQUIRE(drives);
+
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-2"), 1, 2, {1, 2}, 0x2711);
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-3"), 1, 3, {1, 3}, 0x2712);
+    REQUIRE(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    w.onBootstrapError(QStringLiteral("1.2"), QStringLiteral("no"));
+    CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    w.onBootstrapError(QStringLiteral("1.3"), QStringLiteral("no"));
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
