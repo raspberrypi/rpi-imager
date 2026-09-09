@@ -13,12 +13,15 @@
 #include "rpiboot/rpiboot_types.h"
 #include "rpiboot/bootcode_loader.h"
 #include "rpiboot/file_server.h"
+#include <vector>
+#include <cstdint>
 #include "rpiboot/rpiboot_protocol.h"
 
 #include <atomic>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <QTemporaryDir>
 
 using namespace rpiboot;
 using namespace rpiboot::testing;
@@ -724,4 +727,721 @@ TEST_CASE("RpibootProtocol execute respects cancellation", "[rpiboot][protocol][
     CHECK_FALSE(protocol.execute(mock, ChipGeneration::BCM2711,
                                   SideloadMode::Fastboot, fw.path(),
                                   nullptr, cancelled));
+}
+
+// ── File requests from the device ───────────────────────────────────────────
+//
+// The rpiboot file server answers file requests made by whatever is plugged
+// in. The filename comes off the wire and the contents go straight back to
+// the requester, so the device chooses what gets read. The only check on the
+// way in is that the name is printable ASCII, which a traversal satisfies
+// perfectly well. The imager frequently runs elevated so that it can write to
+// block devices, so "any file this process can read" is a wide set.
+
+TEST_CASE("Firmware files inside the directory are served", "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    {
+        std::ofstream f(base / "bootcode4.bin", std::ios::binary);
+        f << "firmware-bytes";
+    }
+    std::filesystem::create_directories(base / "2712");
+    {
+        std::ofstream f(base / "2712" / "bootcode5.bin", std::ios::binary);
+        f << "chip-specific";
+    }
+
+    const auto plain = rpiboot::FileServer::readFileFromDisk(base, "bootcode4.bin");
+    CHECK(std::string(plain.begin(), plain.end()) == "firmware-bytes");
+
+    // Chip subdirectories are a normal request and must keep working.
+    const auto nested = rpiboot::FileServer::readFileFromDisk(base, "2712/bootcode5.bin");
+    CHECK(std::string(nested.begin(), nested.end()) == "chip-specific");
+}
+
+TEST_CASE("A file request that climbs out of the firmware directory is refused",
+          "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+    std::filesystem::create_directories(base / "firmware");
+
+    // A secret next to the firmware directory, standing in for anything the
+    // imager's process can read.
+    {
+        std::ofstream f(base / "secret.txt", std::ios::binary);
+        f << "not-for-the-device";
+    }
+
+    for (const char *escape : {"../secret.txt",
+                               "./../secret.txt",
+                               "sub/../../secret.txt",
+                               "../../../../../../etc/passwd"}) {
+        INFO("request: " << escape);
+        const auto data = rpiboot::FileServer::readFileFromDisk(base / "firmware", escape);
+        CHECK(data.empty());
+    }
+}
+
+TEST_CASE("An absolute file request is refused", "[rpiboot][fileserver]")
+{
+    // std::filesystem::path's operator/ throws away the base when the right
+    // side is absolute, so this is a plain read of the named file unless it
+    // is checked for.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    const auto data = rpiboot::FileServer::readFileFromDisk(base, "/etc/passwd");
+    CHECK(data.empty());
+    CHECK(std::string(data.begin(), data.end()).find("root:") == std::string::npos);
+}
+
+TEST_CASE("A metadata request is not treated as a file", "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "*").empty());
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "*BOARD").empty());
+}
+
+TEST_CASE("A request for something that is not there yields nothing",
+          "[rpiboot][fileserver]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "absent.bin").empty());
+}
+
+TEST_CASE("A request that names a directory rather than a file is refused",
+          "[rpiboot][fileserver]")
+{
+    // An empty filename resolves to the firmware directory itself, and a
+    // device can send one: the caller's garbage check walks the characters of
+    // the name, so a name with no characters passes it unexamined.
+    //
+    // A directory opens perfectly well through ifstream on Linux, and the
+    // size it then reports is nonsense -- large enough that reserving a
+    // buffer for it throws std::bad_alloc, out of a call with no handler
+    // anywhere above it. It surfaced here as a test that passed alone and
+    // failed under `ctest -j4`, because whether the allocation throws depends
+    // on what else is running.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+    std::filesystem::create_directories(base / "subdir");
+
+    CHECK_NOTHROW(rpiboot::FileServer::readFileFromDisk(base, ""));
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "").empty());
+
+    CHECK_NOTHROW(rpiboot::FileServer::readFileFromDisk(base, "subdir"));
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, "subdir").empty());
+
+    CHECK_NOTHROW(rpiboot::FileServer::readFileFromDisk(base, "."));
+    CHECK(rpiboot::FileServer::readFileFromDisk(base, ".").empty());
+}
+
+// ── The file-serving loop ───────────────────────────────────────────────────
+//
+// FileServer::run() is what a Compute Module talks to while it boots: the
+// device asks for files by name and the host serves them until it says Done.
+// Failures here are the ones where a board sits at a blank screen -- it asked
+// for something it needed and did not get it -- so what matters is that the
+// loop serves what it can, declines what it cannot, and terminates.
+//
+// Driven through the mock transport: requests are queued as the 260-byte
+// messages the protocol expects.
+
+namespace {
+
+// One request as it arrives from the device.
+std::vector<uint8_t> fileRequest(rpiboot::FileCommand cmd, const std::string &name)
+{
+    std::vector<uint8_t> msg(sizeof(rpiboot::FileMessage), 0);
+    const auto c = static_cast<int32_t>(cmd);
+    std::memcpy(msg.data(), &c, sizeof(c));
+    const size_t n = std::min(name.size(), size_t(255));
+    std::memcpy(msg.data() + sizeof(int32_t), name.data(), n);
+    return msg;
+}
+
+// A firmware directory holding one file.
+struct FirmwareDir
+{
+    FirmwareDir()
+    {
+        REQUIRE(dir.isValid());
+        path = std::filesystem::path(dir.path().toStdString());
+        std::ofstream f(path / "bootcode4.bin", std::ios::binary);
+        f << "bootcode contents";
+    }
+    QTemporaryDir dir;
+    std::filesystem::path path;
+};
+
+} // namespace
+
+TEST_CASE("The file server stops when the device says it is done",
+          "[rpiboot][fileserver]")
+{
+    // The ordinary ending: the board has what it needs and signals Done.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+}
+
+TEST_CASE("The file server answers a size request", "[rpiboot][fileserver]")
+{
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::GetFileSize, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+
+    // The size goes back as a zero-data vendor control transfer with the
+    // value split across wValue and wIndex -- not as a bulk write. Checking
+    // the number reaches the device matters: the board allocates from it,
+    // so a wrong size is a truncated or over-read transfer rather than a
+    // clean failure.
+    REQUIRE_FALSE(mock.capturedControlTransfers().empty());
+    const auto &ct = mock.capturedControlTransfers().front();
+    const uint32_t reported = uint32_t(ct.wValue) | (uint32_t(ct.wIndex) << 16);
+    INFO("reported size: " << reported);
+    CHECK(reported == std::string("bootcode contents").size());
+}
+
+TEST_CASE("The file server serves a file the device asks for",
+          "[rpiboot][fileserver]")
+{
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+
+    // The contents went out on the wire.
+    bool sawContents = false;
+    for (const auto &w : mock.capturedBulkWrites()) {
+        const std::string s(w.begin(), w.end());
+        if (s.find("bootcode contents") != std::string::npos)
+            sawContents = true;
+    }
+    CHECK(sawContents);
+}
+
+TEST_CASE("A request for a file that is not there does not end the boot",
+          "[rpiboot][fileserver]")
+{
+    // The device probes for optional files it may not need. Treating a miss
+    // as fatal would abort a boot that would otherwise have worked.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "not-present.bin"));
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+}
+
+TEST_CASE("A cancelled file server stops rather than serving on",
+          "[rpiboot][fileserver]")
+{
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    for (int i = 0; i < 8; ++i)
+        mock.queueBulkReadResponse(
+            fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+
+    std::atomic<bool> cancelled{true};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("ok=" << ok << " error: " << server.lastError());
+    // Whether it reports success or failure, it must not have kept serving.
+    CHECK(mock.capturedBulkWrites().size() < 8);
+}
+
+TEST_CASE("A custom resolver is preferred over the firmware directory",
+          "[rpiboot][fileserver]")
+{
+    // How the bootfiles archive is served: the resolver answers from memory
+    // and only falls back to disk. A resolver that is ignored means the
+    // signed gadget is never sent and the board boots the unsigned one.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    mock.queueBulkReadResponse(
+        fileRequest(rpiboot::FileCommand::ReadFile, "bootcode4.bin"));
+    mock.queueBulkReadResponse(fileRequest(rpiboot::FileCommand::Done, ""));
+
+    bool resolverAsked = false;
+    auto resolver = [&resolverAsked](const std::string &) -> std::vector<uint8_t> {
+        resolverAsked = true;
+        const std::string data = "from the resolver";
+        return {data.begin(), data.end()};
+    };
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    server.run(mock, fw.path, nullptr, cancelled, resolver);
+
+    CHECK(resolverAsked);
+
+    bool sawResolverData = false;
+    for (const auto &w : mock.capturedBulkWrites()) {
+        const std::string s(w.begin(), w.end());
+        if (s.find("from the resolver") != std::string::npos)
+            sawResolverData = true;
+    }
+    CHECK(sawResolverData);
+}
+
+TEST_CASE("Garbage from the device does not wedge the file server",
+          "[rpiboot][fileserver]")
+{
+    // After the board reboots into the next stage, reads return whatever is
+    // left in the pipe. The loop has to bound that rather than interpreting
+    // it as filenames for ever.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+    for (int i = 0; i < 6; ++i)
+        mock.queueBulkReadResponse(std::vector<uint8_t>(260, 0xA5));
+
+    std::atomic<bool> cancelled{false};
+    rpiboot::FileServer server;
+    const bool ok = server.run(mock, fw.path, nullptr, cancelled);
+
+    INFO("ok=" << ok << " error: " << server.lastError());
+    // It returned, which is the whole point.
+    SUCCEED("run() terminated on garbage input");
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// A Compute Module that stops answering
+//
+// The device going quiet mid-serve means one of two opposite things, and
+// which one depends on whether anything was served yet. After the boot
+// files have gone across, a disconnect is the device rebooting into the
+// next stage -- the thing that was supposed to happen. Before any file has
+// been served, the same disconnect is a cable that fell out.
+//
+// Reading those the wrong way round reports a successful sideload as a
+// failure, or a failed one as success, and neither is recoverable by the
+// user without knowing which happened. None of it was covered.
+// ══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A device that reboots after being served is a success",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // The mock returns -1 once its queue is empty, and -1 is
+    // LIBUSB_ERROR_IO -- so a queue that runs dry after one file is a device
+    // that answered once and then went away, which is exactly the shape of a
+    // Compute Module restarting into the gadget.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("bootcode.bin", "second stage bootloader");
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "bootcode.bin"));
+
+    std::atomic<bool> cancelled{false};
+    std::string lastStatus;
+    FileServer server;
+
+    const bool ok = server.run(
+        mock, fw.path(),
+        [&](int, int, const std::string& status) { lastStatus = status; },
+        cancelled);
+
+    CHECK(ok);
+    CHECK_THAT(lastStatus, Catch::Matchers::ContainsSubstring("rebooted"));
+}
+
+TEST_CASE("A device that goes away before serving anything is a failure",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // Nothing was transferred, so there is nothing the device could have
+    // rebooted into. Reported as a disconnect rather than a completion.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    const bool ok = server.run(mock, fw.path(), nullptr, cancelled);
+
+    CHECK_FALSE(ok);
+    CHECK_THAT(server.lastError(), Catch::Matchers::ContainsSubstring("disconnected"));
+}
+
+TEST_CASE("A device confirmed as re-enumerated is a success",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // With confirmation required, the server waits for the caller to say the
+    // device came back as the next stage. The caller signals that through
+    // the same flag it would use to cancel -- a bridge the rpiboot thread
+    // sets when the fastboot device appears -- so the flag is flipped from
+    // the progress callback here, which is where the real one flips it.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("bootcode.bin", "second stage bootloader");
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "bootcode.bin"));
+
+    std::atomic<bool> cancelled{false};
+    std::string lastStatus;
+    FileServer server;
+
+    const bool ok = server.run(
+        mock, fw.path(),
+        [&](int, int, const std::string& status) {
+            lastStatus = status;
+            // Flipped while the server is already waiting, not during
+            // serving: the outer loop checks the same flag, so setting it
+            // any earlier ends the run before the disconnect is reached.
+            // The real bridge has the same timing -- the device goes away
+            // first, and comes back as the next stage during the wait.
+            if (status.find("Confirming") != std::string::npos)
+                cancelled = true;
+        },
+        cancelled, nullptr, /*requireReEnumConfirmation=*/true);
+
+    CHECK(ok);
+    CHECK_THAT(lastStatus, Catch::Matchers::ContainsSubstring("rebooted"));
+}
+
+// ══════════════════════════════════════════════════════════════
+// The rpiboot device URI
+//
+// A Compute Module sitting in USB boot mode is not a block device yet, so
+// the scanner invents an address for it and the rest of the application
+// passes that string around: rpiboot://bus:address:port.path:pid.
+//
+// It was written in one file and taken apart in two others, each with its
+// own copy of the splitting. What the last field means is the part that
+// matters -- it is the chip generation, whose value is also the USB product
+// ID, written in decimal -- because it chooses which bootcode is uploaded.
+// A reader disagreeing with the writer about the base would send CM4
+// firmware to a CM5, and the board would simply never come back in fastboot
+// mode, with nothing to say why.
+//
+// So the first case here is a round trip: format it, parse it, and the
+// generation has to survive. The rest is what the parser does with input it
+// did not write itself.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A device URI survives being written and read back", "[rpiboot][uri]")
+{
+    const rpiboot::ChipGeneration generations[] = {
+        rpiboot::ChipGeneration::BCM2836_7,
+        rpiboot::ChipGeneration::BCM2711,
+        rpiboot::ChipGeneration::BCM2712,
+    };
+
+    for (const auto gen : generations) {
+        const std::vector<uint8_t> portPath{1, 4, 2};
+        const std::string uri = rpiboot::formatDeviceUri(3, 17, portPath, gen);
+        INFO("uri: " << uri);
+
+        const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri(uri);
+        REQUIRE(parsed.valid);
+        CHECK(parsed.busNumber == 3);
+        CHECK(parsed.deviceAddress == 17);
+        CHECK(parsed.portPath == portPath);
+        REQUIRE(parsed.chipGeneration.has_value());
+        CHECK(*parsed.chipGeneration == gen);
+    }
+}
+
+TEST_CASE("A URI without the scheme parses the same way", "[rpiboot][uri]")
+{
+    // DriveListModel is handed the string with the scheme on it and
+    // ImageWriter sometimes without, so both have to work.
+    const rpiboot::DeviceUri withScheme =
+        rpiboot::parseDeviceUri("rpiboot://1:5:2.3:10001");
+    const rpiboot::DeviceUri without = rpiboot::parseDeviceUri("1:5:2.3:10001");
+
+    REQUIRE(withScheme.valid);
+    REQUIRE(without.valid);
+    CHECK(withScheme.busNumber == without.busNumber);
+    CHECK(withScheme.deviceAddress == without.deviceAddress);
+    CHECK(withScheme.portPath == without.portPath);
+    CHECK(withScheme.chipGeneration == without.chipGeneration);
+}
+
+TEST_CASE("A URI with only a bus and an address is still usable", "[rpiboot][uri]")
+{
+    // The shortest form anything produces. No port path and no generation,
+    // so the caller keeps its own default for the latter -- which is what
+    // selects CM4 firmware, and is why the generation is reported as absent
+    // rather than guessed.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("rpiboot://2:9");
+
+    REQUIRE(parsed.valid);
+    CHECK(parsed.busNumber == 2);
+    CHECK(parsed.deviceAddress == 9);
+    CHECK(parsed.portPath.empty());
+    CHECK_FALSE(parsed.chipGeneration.has_value());
+}
+
+TEST_CASE("A URI with no address at all is refused", "[rpiboot][uri]")
+{
+    // Fewer than two fields means there is nothing to talk to.
+    for (const char *uri : {"", "rpiboot://", "rpiboot://1", "1"}) {
+        INFO("uri: " << uri);
+        CHECK_FALSE(rpiboot::parseDeviceUri(uri).valid);
+    }
+}
+
+TEST_CASE("Separators with nothing between them read as zeros", "[rpiboot][uri]")
+{
+    // Deliberately the same as the QString::split() and toUInt() this
+    // replaced, so the extraction changed no behaviour: two empty fields are
+    // two fields, and empty parses as zero.
+    //
+    // Harmless in practice rather than by design -- libusb has no bus 0
+    // address 0, so the open fails and says so, instead of reaching some
+    // other device. Worth pinning either way, since it is the kind of thing
+    // a later tightening should be a deliberate decision about.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("::::");
+    CHECK(parsed.valid);
+    CHECK(parsed.busNumber == 0);
+    CHECK(parsed.deviceAddress == 0);
+}
+
+TEST_CASE("A generation nobody knows is reported as unknown", "[rpiboot][uri]")
+{
+    // Rather than a wrong one. A PID this build does not recognise means a
+    // newer chip, and the caller's fallback is a deliberate choice; silently
+    // presenting it as a known generation would not be.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("rpiboot://1:5:2:9999");
+
+    REQUIRE(parsed.valid);
+    CHECK_FALSE(parsed.chipGeneration.has_value());
+}
+
+TEST_CASE("A hexadecimal generation is not read as a decimal one", "[rpiboot][uri]")
+{
+    // The field is decimal, and 0x2711 written as "2711" is 2711 -- not a
+    // generation at all. Reporting it as unknown is what stops the wrong
+    // bootcode going up; the round-trip case above is what stops the writer
+    // and the reader drifting apart in the first place.
+    CHECK_FALSE(rpiboot::parseDeviceUri("rpiboot://1:5:2:2711")
+                    .chipGeneration.has_value());
+    // And the decimal form of the same value is recognised.
+    REQUIRE(rpiboot::parseDeviceUri("rpiboot://1:5:2:10001")
+                .chipGeneration.has_value());
+    CHECK(*rpiboot::parseDeviceUri("rpiboot://1:5:2:10001").chipGeneration
+          == rpiboot::ChipGeneration::BCM2711);
+}
+
+TEST_CASE("An odd port path is taken apart without complaint", "[rpiboot][uri]")
+{
+    // The path is however many hops the device is from the root hub. Empty
+    // segments are skipped rather than becoming port 0, which would be a
+    // real port on a real hub.
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:").portPath.empty());
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:4").portPath
+          == std::vector<uint8_t>{4});
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:1..2").portPath
+          == std::vector<uint8_t>{1, 2});
+    CHECK(rpiboot::parseDeviceUri("rpiboot://1:5:1.2.3.4.5.6").portPath
+          == std::vector<uint8_t>{1, 2, 3, 4, 5, 6});
+}
+
+TEST_CASE("Numbers that are not numbers read as zero", "[rpiboot][uri]")
+{
+    // What the QString::toUInt() calls this replaced did, kept deliberately:
+    // the alternative is refusing a device over a malformed field the caller
+    // has no way to repair.
+    const rpiboot::DeviceUri parsed = rpiboot::parseDeviceUri("rpiboot://x:y:z:w");
+    REQUIRE(parsed.valid);
+    CHECK(parsed.busNumber == 0);
+    CHECK(parsed.deviceAddress == 0);
+    CHECK_FALSE(parsed.chipGeneration.has_value());
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// A board that is there and will not talk
+//
+// The file server retries a few times before giving up. What it says when it
+// does is the whole diagnosis: the board is enumerated -- the imager found
+// it, opened it and started the conversation -- and then answers nothing, or
+// answers noise. On a Compute Module that is a cable that carries power but
+// not data, a port that is not the right one, or a board that is not
+// actually in rpiboot mode. None of those look like anything from the
+// outside, so the message has to carry what happened.
+//
+// These take a few seconds each: the retry loop sleeps a second between
+// attempts, which is the behaviour, not the test being slow.
+// ────────────────────────────────────────────────────────────────────────
+
+namespace {
+
+// A board that answers every read with the same libusb error code. -7 is
+// LIBUSB_ERROR_TIMEOUT: present, enumerated, silent. (-1 and -4 are handled
+// separately as hard disconnects.)
+class SilentBoard : public IUsbTransport
+{
+public:
+    explicit SilentBoard(int code) : _code(code) {}
+
+    bool controlTransfer(uint8_t, uint8_t, uint16_t, uint16_t,
+                         std::span<const uint8_t>, int) override { return true; }
+    int controlTransferIn(uint8_t, uint8_t, uint16_t, uint16_t,
+                          std::span<uint8_t>, int) override
+    {
+        ++reads;
+        return _code;
+    }
+    int bulkWrite(uint8_t, std::span<const uint8_t>, int) override { return 0; }
+    int bulkRead(uint8_t, std::span<uint8_t>, int) override { return _code; }
+    bool isOpen() const override { return true; }
+    std::string interfaceString() const override { return "silent"; }
+    uint8_t outEndpoint() const override { return 0x01; }
+    uint8_t inEndpoint() const override { return 0x81; }
+
+    int reads = 0;
+
+private:
+    int _code;
+};
+
+// A board answering with bytes that are not a message: what a device sends
+// on the way through a reboot. Two shapes matter -- a command word that is
+// not a command, and a real command carrying a filename of bytes no filename
+// has, which is the one that would otherwise reach std::filesystem::path.
+class NoisyBoard : public IUsbTransport
+{
+public:
+    NoisyBoard() = default;
+    explicit NoisyBoard(FileCommand realCommand)
+        : _command(realCommand), _commandIsReal(true) {}
+
+    bool controlTransfer(uint8_t, uint8_t, uint16_t, uint16_t,
+                         std::span<const uint8_t>, int) override { return true; }
+    int controlTransferIn(uint8_t, uint8_t, uint16_t, uint16_t,
+                          std::span<uint8_t> buffer, int) override
+    {
+        ++reads;
+        std::fill(buffer.begin(), buffer.end(), uint8_t(0xA5));
+        if (_commandIsReal && buffer.size() >= sizeof(FileCommand))
+            std::memcpy(buffer.data(), &_command, sizeof(_command));
+        return static_cast<int>(buffer.size());
+    }
+    int bulkWrite(uint8_t, std::span<const uint8_t>, int) override { return 0; }
+    int bulkRead(uint8_t, std::span<uint8_t>, int) override { return -1; }
+    bool isOpen() const override { return true; }
+    std::string interfaceString() const override { return "noisy"; }
+    uint8_t outEndpoint() const override { return 0x01; }
+    uint8_t inEndpoint() const override { return 0x81; }
+
+    int reads = 0;
+
+private:
+    FileCommand _command{};
+    bool _commandIsReal = false;
+};
+
+} // namespace
+
+TEST_CASE("A board that never answers is given up on, and the error says so",
+          "[rpiboot][fileserver][silent]")
+{
+    SilentBoard board(-7);   // LIBUSB_ERROR_TIMEOUT
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    CHECK_FALSE(server.run(board, std::filesystem::temp_directory_path(),
+                           nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    // It gave up rather than looping for ever, and it tried more than once.
+    CHECK(board.reads > 1);
+    // The libusb code is in the message: -7 is a timeout and -4 is an
+    // unplugged cable, and telling them apart is the whole of the diagnosis.
+    CHECK(server.lastError().find("-7") != std::string::npos);
+    CHECK(server.lastError().find("retries") != std::string::npos);
+}
+
+TEST_CASE("A board sending noise is given up on rather than obeyed",
+          "[rpiboot][fileserver][silent]")
+{
+    // Garbage that happens to decode as a command must not be acted on: the
+    // filename in it would be passed to the filesystem, and the reply would
+    // go to a device that is not listening for one.
+    NoisyBoard board;
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    CHECK_FALSE(server.run(board, std::filesystem::temp_directory_path(),
+                           nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    CHECK(board.reads > 1);
+    CHECK_FALSE(server.lastError().empty());
+}
+
+TEST_CASE("A real command with a filename of noise is not acted on",
+          "[rpiboot][fileserver][silent]")
+{
+    // The half that matters most: the command word survives the corruption
+    // and the filename does not. Trusting it would send 256 bytes of
+    // whatever the device happened to be holding to the filesystem as a
+    // path, and reply to a device that is not listening for a reply.
+    NoisyBoard board(FileCommand::ReadFile);
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    CHECK_FALSE(server.run(board, std::filesystem::temp_directory_path(),
+                           nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    CHECK(board.reads > 1);
+    CHECK_FALSE(server.lastError().empty());
+}
+
+TEST_CASE("A cancelled file server stops without blaming the device",
+          "[rpiboot][fileserver][silent]")
+{
+    // Cancelling is the user closing the wizard. The loop has to notice
+    // between reads rather than sitting out its retries.
+    SilentBoard board(-7);
+    std::atomic<bool> cancelled{true};
+    FileServer server;
+
+    server.run(board, std::filesystem::temp_directory_path(), nullptr, cancelled);
+    CHECK(board.reads == 0);
 }

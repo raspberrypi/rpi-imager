@@ -15,6 +15,8 @@
 
 #include <cstring>
 #include <vector>
+#include <QTemporaryDir>
+#include <QDir>
 
 using namespace rpiboot;
 
@@ -251,4 +253,132 @@ TEST_CASE("Bootfiles extractFromMemory clears previous state", "[rpiboot][bootfi
     CHECK(bf.find("first.txt") == nullptr);
     CHECK(bf.find("second.txt") != nullptr);
     CHECK(bf.size() == 1);
+}
+
+// ── Rewriting the archive ───────────────────────────────────────────────────
+//
+// The imager does not just read the bootfiles archive: for a secure-boot
+// board it replaces the fastboot gadget inside it with a counter-signed copy
+// and writes the whole thing back out. Everything downstream boots from what
+// comes out of here, so a replacement that silently does not take, or a
+// rewrite that loses the other entries, produces a board that will not start
+// with nothing to say why.
+
+TEST_CASE("A replaced entry survives a write and re-read", "[rpiboot][bootfiles]")
+{
+    const std::vector<uint8_t> original = {'o', 'l', 'd'};
+    const std::vector<uint8_t> other    = {'k', 'e', 'e', 'p'};
+    const std::vector<uint8_t> signed_  = {'s', 'i', 'g', 'n', 'e', 'd'};
+
+    auto tar = createTarInMemory({
+        {"boot.img", original},
+        {"config.txt", other},
+    });
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+    REQUIRE(bf.replaceEntry("boot.img", signed_));
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::string path = QDir(dir.path()).filePath(QStringLiteral("out.tar")).toStdString();
+    REQUIRE(bf.writeToFile(path));
+
+    Bootfiles reread;
+    REQUIRE(reread.extractFromFile(path));
+
+    auto* replaced = reread.find("boot.img");
+    REQUIRE(replaced != nullptr);
+    CHECK(*replaced == signed_);
+
+    // The entries that were not touched have to come back intact, or the
+    // board boots a signed gadget and nothing else.
+    auto* untouched = reread.find("config.txt");
+    REQUIRE(untouched != nullptr);
+    CHECK(*untouched == other);
+
+    CHECK(reread.size() == 2);
+}
+
+TEST_CASE("Replacing an entry that is not there is refused", "[rpiboot][bootfiles]")
+{
+    // Silently succeeding would mean the unsigned gadget gets shipped to the
+    // board while the caller believes it swapped in the signed one.
+    auto tar = createTarInMemory({{"config.txt", {'x'}}});
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+    CHECK_FALSE(bf.replaceEntry("absent.img", {'y'}));
+    CHECK_FALSE(bf.lastError().empty());
+    CHECK(bf.size() == 1);
+}
+
+TEST_CASE("Replacing works through the ./ prefix too", "[rpiboot][bootfiles]")
+{
+    // find() treats "./name" and "name" as the same entry; replaceEntry has
+    // to agree, or a tar written with ./ prefixes silently refuses every
+    // replacement.
+    const std::vector<uint8_t> replacement = {'n', 'e', 'w'};
+    auto tar = createTarInMemory({{"./boot.img", {'o', 'l', 'd'}}});
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+    REQUIRE(bf.replaceEntry("boot.img", replacement));
+
+    auto* got = bf.find("boot.img");
+    REQUIRE(got != nullptr);
+    CHECK(*got == replacement);
+}
+
+TEST_CASE("A replacement of a different size is written correctly",
+          "[rpiboot][bootfiles]")
+{
+    // A counter-signed gadget is bigger than the original. The tar header
+    // records the size, so writing the new bytes under the old size would
+    // truncate it or run into the next entry.
+    const std::vector<uint8_t> small(64, 0x11);
+    const std::vector<uint8_t> large(9000, 0x22);
+
+    auto tar = createTarInMemory({{"boot.img", small}, {"after.txt", {'z'}}});
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+    REQUIRE(bf.replaceEntry("boot.img", large));
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::string path = QDir(dir.path()).filePath(QStringLiteral("grown.tar")).toStdString();
+    REQUIRE(bf.writeToFile(path));
+
+    Bootfiles reread;
+    REQUIRE(reread.extractFromFile(path));
+
+    auto* grown = reread.find("boot.img");
+    REQUIRE(grown != nullptr);
+    CHECK(grown->size() == large.size());
+    CHECK(*grown == large);
+
+    auto* after = reread.find("after.txt");
+    REQUIRE(after != nullptr);
+    CHECK(after->size() == 1);
+}
+
+TEST_CASE("Writing to a path that cannot be created is reported",
+          "[rpiboot][bootfiles][negative]")
+{
+    auto tar = createTarInMemory({{"config.txt", {'x'}}});
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+    CHECK_FALSE(bf.writeToFile("/nonexistent-rpi-imager-dir-8f21/out.tar"));
+    CHECK_FALSE(bf.lastError().empty());
+}
+
+TEST_CASE("Reading an archive that is not there is reported",
+          "[rpiboot][bootfiles][negative]")
+{
+    Bootfiles bf;
+    CHECK_FALSE(bf.extractFromFile("/nonexistent-rpi-imager-dir-8f21/in.tar"));
+    CHECK_FALSE(bf.lastError().empty());
+    CHECK(bf.size() == 0);
 }
