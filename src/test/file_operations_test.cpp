@@ -1149,3 +1149,95 @@ TEST_CASE("A device using direct I/O refuses a partial sector", "[fileops][loop]
   // the length and not the handle.
   CHECK(fx.ops->WriteSequential(block.data(), 512) == rpi_imager::FileError::kSuccess);
 }
+
+// ---------------------------------------------------------------------------
+// The handle after the card has gone
+//
+// Every entry point below can be called on a closed handle, because the write
+// path calls them from its own error handling: the card has been pulled, the
+// open failed, or a previous step already tore the handle down. One of them
+// touching fd_ = -1 is a crash in the middle of a failure the user was about
+// to be told about.
+//
+// The existing case covers GetSize, WriteAtOffset and ForceSync. These are
+// the rest.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Every entry point survives a handle that was never opened",
+          "[file-ops]") {
+  auto ops = FileOperations::Create();
+  REQUIRE(ops != nullptr);
+  REQUIRE_FALSE(ops->IsOpen());
+
+  const auto data = pattern(512, 0x11);
+  std::vector<std::uint8_t> readInto(512, 0);
+  std::size_t got = 12345;
+
+  CHECK(ops->WriteSequential(data.data(), data.size()) != FileError::kSuccess);
+  CHECK(ops->ReadSequential(readInto.data(), readInto.size(), got) != FileError::kSuccess);
+  CHECK(ops->Seek(0) != FileError::kSuccess);
+  CHECK(ops->Flush() != FileError::kSuccess);
+  CHECK(ops->SetDirectIOEnabled(true) != FileError::kSuccess);
+
+  // These have no error to return, so what matters is that they answer at all
+  // and answer something a caller can act on.
+  CHECK(ops->Tell() == 0);
+  CHECK(ops->GetHandle() < 0);
+  CHECK_FALSE(ops->IsDirectIOEnabled());
+  CHECK_NOTHROW(ops->PrepareForSequentialRead(0, 4096));
+  CHECK_NOTHROW(ops->CancelAsyncIO());
+}
+
+TEST_CASE("Asking for the direct I/O state the handle is already in costs nothing",
+          "[file-ops]") {
+  // The read-back before customisation verification asks for direct I/O
+  // without knowing whether it is already on, precisely so it does not have
+  // to. Reopening the device to tell it what it already knows would drop the
+  // exclusive hold on the card for no reason.
+  const std::string path = makeImage("directio-noop.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  // Unlinked while open, which is what makes this case say something: the
+  // open handle keeps working, but the path no longer resolves. A no-op
+  // succeeds; a reopen would go back to the path and fail. Without this the
+  // case passes either way -- a reopen usually gets the same descriptor
+  // number back, so nothing else here can tell the two apart.
+  REQUIRE(::unlink(path.c_str()) == 0);
+
+  const bool before = ops->IsDirectIOEnabled();
+
+  CHECK(ops->SetDirectIOEnabled(before) == FileError::kSuccess);
+  CHECK(ops->IsDirectIOEnabled() == before);
+  CHECK(ops->IsOpen());
+
+  ops->Close();
+}
+
+TEST_CASE("Toggling direct I/O keeps the place in the file", "[file-ops]") {
+  // Turning direct I/O on reopens the handle, and a reopened handle starts at
+  // zero. The customisation read-back asks for it part-way through the device
+  // -- after the write has already positioned the handle -- so losing the
+  // position there means verifying the wrong bytes and reporting a card
+  // corrupt that is fine.
+  const std::string path = makeImage("directio-seek.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  constexpr std::uint64_t kSomewhere = 8192;
+  REQUIRE(ops->Seek(kSomewhere) == FileError::kSuccess);
+  REQUIRE(ops->Tell() == kSomewhere);
+
+  const bool before = ops->IsDirectIOEnabled();
+  // Toggle to the other state and back, so the case works whichever state a
+  // plain file opens in.
+  REQUIRE(ops->SetDirectIOEnabled(!before) == FileError::kSuccess);
+  CHECK(ops->Tell() == kSomewhere);
+
+  REQUIRE(ops->SetDirectIOEnabled(before) == FileError::kSuccess);
+  CHECK(ops->Tell() == kSomewhere);
+
+  ops->Close();
+}
