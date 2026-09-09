@@ -4,8 +4,11 @@
  */
 
 #include "downloadthread.h"
+
+#include <QCoreApplication>
 #include "aligned_buffer.h"
 #include "config.h"
+#include "config_txt_merge.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "systemmemorymanager.h"
@@ -58,6 +61,28 @@ using rpi_imager::TimeoutDefaults::kMemoryCheckIntervalMs;
 using rpi_imager::TimeoutDefaults::kCriticalMemoryMB;
 
 QByteArray DownloadThread::_proxy;
+
+QString DownloadThread::bottleneckStatusText(BottleneckState state)
+{
+    // Translated in the ImageWriter context, deliberately. These four strings
+    // have lived there since they were written and the translations already
+    // in src/i18n/*.ts are keyed on it, so naming any other context here
+    // would drop every one of them back to English.
+    switch (state)
+    {
+    case BottleneckState::None:
+        return {};
+    case BottleneckState::Network:
+        return QCoreApplication::translate("ImageWriter", "Limited by download speed");
+    case BottleneckState::Decompression:
+        return QCoreApplication::translate("ImageWriter", "Limited by decompression speed");
+    case BottleneckState::Storage:
+        return QCoreApplication::translate("ImageWriter", "Limited by storage device speed");
+    case BottleneckState::Verifying:
+        return QCoreApplication::translate("ImageWriter", "Verifying written data");
+    }
+    return {};
+}
 
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _extractTotal(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
@@ -384,7 +409,27 @@ bool DownloadThread::_openAndPrepareDevice()
         QProcess::execute("open", args);
         emit error(msg);
 #elif defined(Q_OS_LINUX)
-        emit error(tr("Cannot open storage device '%1'. Please run with elevated privileges (sudo).").arg(QString(_filename)));
+        // Say what actually went wrong, and only advise sudo where sudo is
+        // the answer. Telling somebody who is already root to run with sudo
+        // sends them round the same loop again with nothing to change -- and
+        // "permission denied" is not why an open fails when the path is not
+        // there or the device is in use.
+        {
+            const int openErrno = _file->GetLastErrorCode();
+            const bool permissionProblem =
+                (openErrno == EACCES || openErrno == EPERM);
+            QString msg = tr("Cannot open storage device '%1'.").arg(QString(_filename));
+
+            if (permissionProblem && ::geteuid() != 0) {
+                msg += QLatin1Char(' ');
+                msg += tr("Please run with elevated privileges (sudo).");
+            } else if (openErrno != 0) {
+                msg += QLatin1Char(' ');
+                msg += tr("The system reported: %1.")
+                           .arg(QString::fromLocal8Bit(::strerror(openErrno)));
+            }
+            emit error(msg);
+        }
 #else
         emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
 #endif
@@ -519,19 +564,29 @@ bool DownloadThread::_openAndPrepareDevice()
         _timer.restart();
         emit preparationStatusUpdate(tr("Zero'ing out end of drive..."));
         
-        // Capture needed values for the lambda
-        auto file = _file.get();
-        const uint8_t* bufferData = emptyMB.data();
+        // Everything the lambda touches has to outlive it, because
+        // runWithTimeout() detaches its worker on the cancel and timeout
+        // paths and the worker runs on for as long as the syscall blocks.
+        // A raw _file.get() and a pointer into the local emptyMB were both
+        // dangling by the time a cancelled worker unblocked -- pressing
+        // Cancel early in a write could take the process down with it.
+        auto file = _file;                       // shares ownership
+        auto buffer = std::make_shared<rpi_imager::AlignedBuffer>(emptyMBSize);
+        if (!*buffer) {
+            emit error(tr("Failed to allocate buffer for MBR zeroing.\n\n"
+                          "The system may be low on memory."));
+            return false;
+        }
         uint64_t seekPosition = knownsize - emptyMBSize;
         
         // Write to end of device can hang on counterfeit cards with fake capacity
         // Use timeout to detect counterfeit cards with fake capacity
         int lastMBResultInt = 0;
         auto timeoutResult = runWithTimeout(
-            [file, seekPosition, bufferData, emptyMBSize]() {
+            [file, seekPosition, buffer, emptyMBSize]() {
                 if (file->Seek(seekPosition) != rpi_imager::FileError::kSuccess)
                     return static_cast<int>(rpi_imager::FileError::kSeekError);
-                if (file->WriteSequential(bufferData, emptyMBSize) != rpi_imager::FileError::kSuccess)
+                if (file->WriteSequential(buffer->data(), emptyMBSize) != rpi_imager::FileError::kSuccess)
                     return static_cast<int>(rpi_imager::FileError::kWriteError);
                 if (file->Flush() != rpi_imager::FileError::kSuccess)
                     return static_cast<int>(rpi_imager::FileError::kFlushError);
@@ -565,7 +620,16 @@ bool DownloadThread::_openAndPrepareDevice()
         }
         qDebug() << "  Last MB + flush + sync took" << _timer.elapsed() << "ms";
     }
-    _file->Seek(0);
+    // Back to the start for the image itself. The position is currently at
+    // the end of the device, where the last megabyte was just zeroed, so a
+    // failure here that went unnoticed would begin the image there.
+    const rpi_imager::FileError rewind = _file->Seek(0);
+    if (rewind != rpi_imager::FileError::kSuccess)
+    {
+        emit error(_fileErrorToString(rewind, tr("returning to the start of the device")));
+        return false;
+    }
+
     qint64 mbrTotalMs = mbrTimer.elapsed();
     qDebug() << "Done zero'ing out start and end of drive. Total MBR prep:" << mbrTotalMs << "ms";
     
@@ -640,6 +704,17 @@ void DownloadThread::run()
     curl_easy_setopt(_c, CURLOPT_URL, _url.constData());
     curl_easy_setopt(_c, CURLOPT_FOLLOWLOCATION, 1);
     curl_easy_setopt(_c, CURLOPT_MAXREDIRS, 10);
+    // Said out loud rather than left to libcurl.
+    //
+    // The image URL comes from the repository, which can arrive from --repo,
+    // from the repository dialog, or from an rpi-imager:// link somebody
+    // accepted -- and it is followed through up to ten redirects. A redirect
+    // into file:// would have this read a local file and write it to the
+    // card. libcurl's default already excludes file, scp and smb, so that
+    // particular hole is not open; what this adds is ftp and ftps, and
+    // independence from a default that is libcurl's to change. The OS list
+    // fetcher has always said it explicitly; this is the same list.
+    curl_easy_setopt(_c, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
     curl_easy_setopt(_c, CURLOPT_ERRORBUFFER, errorBuf);
     curl_easy_setopt(_c, CURLOPT_FAILONERROR, 1);
     curl_easy_setopt(_c, CURLOPT_HEADERFUNCTION, &DownloadThread::_curl_header_callback);
@@ -785,8 +860,14 @@ void DownloadThread::run()
         ret = curl_easy_perform(_c);
     }
 
-    curl_easy_cleanup(_c);
-
+    // Deliberately not cleaned up here.
+    //
+    // Both arms of the switch below read from the handle -- the success arm
+    // collects the connection timing metrics, and the error arm asks for
+    // CURLINFO_PRIMARY_IP to name the server in the message. Destroying it
+    // first made every one of those a use-after-free on the happy path of
+    // every download; AddressSanitizer reports it at curl_easy_getinfo,
+    // easy.c:861. Cleanup happens once the switch is done with it.
     switch (ret)
     {
         case CURLE_OK:
@@ -862,6 +943,9 @@ void DownloadThread::run()
 
             _onDownloadError(tr("Error downloading: %1").arg(errorMsg));
     }
+
+    curl_easy_cleanup(_c);
+    _c = nullptr;
 }
 
 size_t DownloadThread::_writeData(const char *buf, size_t len)
@@ -1037,6 +1121,31 @@ size_t DownloadThread::_writeFileZeroSkip(const char *buf, size_t len)
     return totalProcessed;
 }
 
+QString DownloadThread::_writeFailureReason() const
+{
+    const int err = _file ? _file->GetLastErrorCode() : 0;
+
+    if (err == ENOSPC) {
+        // Writing past the end of the device. Either the image is bigger
+        // than the card, or the card is not the size it says it is -- the
+        // second is worth naming, because a card that reports more capacity
+        // than it has is a common thing to be sold and an unlikely thing to
+        // suspect.
+        return tr("The storage device ran out of space before the image was "
+                  "fully written.\n\n"
+                  "There is less room on it than the image needs. A card that "
+                  "reports more capacity than it really has will fail this "
+                  "way; try a different one.");
+    }
+
+    if (err != 0) {
+        return tr("Error writing to device.\n\nThe system reported: %1.")
+                   .arg(QString::fromLocal8Bit(::strerror(err)));
+    }
+
+    return tr("Error writing to device.");
+}
+
 size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete)
 {
     if (_cancelled) {
@@ -1195,7 +1304,18 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
                 bytes_written = len;
                 // Don't increment _bytesWritten here - callback will do it on completion
             } else {
-                qFreeAligned(asyncBuf);
+                // Deliberately no qFreeAligned() here.
+                //
+                // AsyncWriteSequential() invokes the callback exactly once on
+                // every path it can return by -- bad fd, async unavailable, a
+                // previous async error, cancellation, no submission queue
+                // entry, submit failure -- and the callback above frees the
+                // buffer. Freeing it again here is a double free, and it is
+                // not a rare corner: it fires on every async submission
+                // failure. A card that starts erroring mid-write took the
+                // process down with "double free or corruption" instead of
+                // reporting the write error, losing the one message that
+                // would have told the user what went wrong.
                 qDebug() << "Async write queue failed with error" << static_cast<int>(write_result);
             }
         } else {
@@ -1616,14 +1736,31 @@ void DownloadThread::_closeFiles()
 {
     QElapsedTimer closeTimer;
     closeTimer.start();
-    
-    // Close unified file operations
+
+    // Close unified file operations.
+    //
+    // The result is worth keeping here. Closing a block device is where
+    // deferred write errors surface -- data the kernel took and never managed
+    // to put on the card -- and this discarded it, then reported the close as
+    // a success below regardless of what had happened.
+    bool closedCleanly = true;
+
     if (_file && _file->IsOpen()) {
-        _file->Close();
+        const rpi_imager::FileError err = _file->Close();
+        if (err != rpi_imager::FileError::kSuccess) {
+            closedCleanly = false;
+            qWarning() << "DownloadThread: closing the storage device failed:"
+                       << _fileErrorToString(err, tr("closing the storage device"));
+        }
     }
 #ifdef Q_OS_WIN
     if (_volumeFile && _volumeFile->IsOpen()) {
-        _volumeFile->Close();
+        const rpi_imager::FileError err = _volumeFile->Close();
+        if (err != rpi_imager::FileError::kSuccess) {
+            closedCleanly = false;
+            qWarning() << "DownloadThread: closing the volume failed:"
+                       << _fileErrorToString(err, tr("closing the volume"));
+        }
     }
 #endif
     // Cancel async cache writer if still running (regardless of error state)
@@ -1634,8 +1771,11 @@ void DownloadThread::_closeFiles()
     }
     
     quint32 closeDurationMs = static_cast<quint32>(closeTimer.elapsed());
-    if (closeDurationMs > 0) {
-        emit eventDeviceClose(closeDurationMs, true);
+    // Reported whenever it went wrong, not only when it took long enough to
+    // measure: a close that failed in under a millisecond is precisely the one
+    // worth knowing about, and the duration gate hid it.
+    if (closeDurationMs > 0 || !closedCleanly) {
+        emit eventDeviceClose(closeDurationMs, closedCleanly);
     }
 }
 
@@ -1849,7 +1989,21 @@ void DownloadThread::_writeComplete()
             return;
         }
 
-        _file->Seek(0);
+        // The partition table was held back until the image was down; this
+        // puts it at sector zero. If the seek fails and the write does not,
+        // those 512 bytes land wherever the file position happens to be --
+        // the end of the image -- and the card is returned with no partition
+        // table and a successful write behind it.
+        const rpi_imager::FileError seekResult = _file->Seek(0);
+        if (seekResult != rpi_imager::FileError::kSuccess)
+        {
+            qFreeAligned(_firstBlock);
+            _firstBlock = nullptr;
+            DownloadThread::_onDownloadError(
+                _fileErrorToString(seekResult, tr("seeking to write the partition table")));
+            return;
+        }
+
         rpi_imager::FileError writeResult = _file->WriteSequential(reinterpret_cast<const std::uint8_t*>(_firstBlock), _firstBlockSize);
         rpi_imager::FileError flushResult = (writeResult == rpi_imager::FileError::kSuccess) ? _file->Flush() : writeResult;
         
@@ -2044,7 +2198,17 @@ bool DownloadThread::_verifyCustomisation()
 
             if (it.value().size > kAlwaysVerifyMaxBytes && !_verifyEnabled)
             {
-                notContentChecked << it.key();
+                /* Skipping the content read is the whole point of this branch,
+                   but the length is in the directory entry, so checking it
+                   costs one seek rather than a block-by-block read of the
+                   file. Worth doing: for a secure-boot write the large file is
+                   the signed bootloader payload, and a short one leaves a
+                   board that will not boot. */
+                const qint64 recorded = fat->fileSize(it.key());
+                if (recorded >= 0 && recorded != it.value().size)
+                    sizeMismatched << it.key();
+                else
+                    notContentChecked << it.key();
                 continue;
             }
 
@@ -2182,7 +2346,19 @@ bool DownloadThread::_verify()
     qDebug() << "Verify hash:" << _verifyhash.result().toHex();
     qDebug() << "Verify done in" << t1.elapsed() / 1000.0 << "seconds";
 
-    if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)
+    // Verification that did not happen is not verification that passed.
+    //
+    // Disabled, or cancelled partway, this used to emit the same success
+    // event as a clean read-back. That event becomes a HashComputation entry
+    // in the performance report -- the file someone exports and attaches to a
+    // bug report about a card that will not boot -- so it read as "post-write
+    // verification succeeded" with an empty verify hash next to it. Saying
+    // nothing is the honest answer; the absence of the event is what tells a
+    // reader it did not run.
+    if (!_verifyEnabled || _cancelled)
+        return true;
+
+    if (_verifyhash.result() == _writehash.result())
     {
         emit eventVerify(static_cast<quint32>(t1.elapsed()), true, 
                          _writehash.result().toHex(), _verifyhash.result().toHex());
@@ -2241,23 +2417,20 @@ void DownloadThread::_updateBottleneckState()
     
     // Calculate current write throughput for display
     qint64 currentBytes = _bytesWritten.load();
-    static qint64 lastThroughputBytes = 0;
-    static QElapsedTimer throughputTimer;
-    static bool throughputTimerStarted = false;
-    
-    if (!throughputTimerStarted) {
-        throughputTimer.start();
-        throughputTimerStarted = true;
-        lastThroughputBytes = currentBytes;
+
+    if (!_throughputTimerStarted) {
+        _throughputTimer.start();
+        _throughputTimerStarted = true;
+        _lastThroughputBytes = currentBytes;
     } else {
-        qint64 elapsed = throughputTimer.elapsed();
+        qint64 elapsed = _throughputTimer.elapsed();
         if (elapsed >= 500) {  // Update throughput every 500ms
-            qint64 bytesDelta = currentBytes - lastThroughputBytes;
+            qint64 bytesDelta = currentBytes - _lastThroughputBytes;
             if (bytesDelta > 0 && elapsed > 0) {
                 throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
             }
-            lastThroughputBytes = currentBytes;
-            throughputTimer.restart();
+            _lastThroughputBytes = currentBytes;
+            _throughputTimer.restart();
         }
     }
     
@@ -2272,14 +2445,12 @@ void DownloadThread::_updateBottleneckState()
         // Same state, reset timer and emit periodic throughput updates
         _bottleneckTimer.restart();
         // Emit throughput updates even when state hasn't changed (every 500ms)
-        static QElapsedTimer updateTimer;
-        static bool updateTimerStarted = false;
-        if (!updateTimerStarted) {
-            updateTimer.start();
-            updateTimerStarted = true;
-        } else if (updateTimer.elapsed() >= 500) {
+        if (!_throughputUpdateTimerStarted) {
+            _throughputUpdateTimer.start();
+            _throughputUpdateTimerStarted = true;
+        } else if (_throughputUpdateTimer.elapsed() >= 500) {
             emit bottleneckStateChanged(_currentBottleneck, throughputKBps);
-            updateTimer.restart();
+            _throughputUpdateTimer.restart();
         }
     }
 }
@@ -2589,20 +2760,7 @@ bool DownloadThread::_customizeImage()
             QByteArray config = fat->readFile("config.txt");
 
             for (const QByteArray& item : std::as_const(configItems))
-            {
-                if (config.contains("#"+item)) {
-                    // Uncomment existing line
-                    config.replace("#"+item, item);
-                } else if (config.contains("\n"+item)) {
-                    // config.txt already contains the line
-                } else {
-                    // Append new line to config.txt
-                    if (config.right(1) != QByteArray("\n"))
-                        config += "\n"+item+"\n";
-                    else
-                        config += item+"\n";
-                }
-            }
+                config = mergeConfigTxtItem(config, item);
 
             fat->writeFile("config.txt", config);
             _recordCustomisationWrite("config.txt", config);
@@ -2691,7 +2849,14 @@ bool DownloadThread::_customizeImage()
     catch (std::runtime_error &err)
     {
         emit eventCustomisation(static_cast<quint32>(customTimer.elapsed()), false, metadata);
-        emit error(err.what());
+        // Say what was being attempted. What comes out of here is the disk
+        // parser's own words -- "MBR does not have valid signature",
+        // "Partition does not exist" -- and on their own they read as though
+        // the card had failed. What has actually happened is that the image
+        // has no boot partition to put the settings on, which is the answer
+        // when the file chosen is not a Pi image at all.
+        emit error(tr("Could not apply the OS customisation: %1")
+                       .arg(QString::fromUtf8(err.what())));
         return false;
     }
 

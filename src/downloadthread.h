@@ -41,6 +41,16 @@ public:
     Q_ENUM(BottleneckState)
 
     /*
+     * The text shown to a user while a write is running, for a given state.
+     *
+     * Kept here, beside the enum, so the mapping can be checked on its own:
+     * "Limited by download speed" and "Limited by storage device speed" send
+     * somebody to replace two different things, and crossed cases would send
+     * them after the wrong one.
+     */
+    static QString bottleneckStatusText(BottleneckState state);
+
+    /*
      * Constructor
      *
      * - url: URL to download
@@ -141,31 +151,31 @@ public:
     /*
      * Thread safe download progress query functions
      */
-    uint64_t dlNow();
+    virtual uint64_t dlNow();
     uint64_t dlTotal();
     uint64_t extractTotal();
     void setExtractTotal(uint64_t total);
-    uint64_t verifyNow();
+    virtual uint64_t verifyNow();
     uint64_t verifyTotal();
-    uint64_t bytesWritten();
-    int pendingAsyncWrites() const;
+    virtual uint64_t bytesWritten();
+    virtual int pendingAsyncWrites() const;
     
     // Force poll for async I/O completions - call when stall detected
     // This can unstick deadlocks where no one is polling IOCP
-    void forcePollAsyncCompletions();
+    virtual void forcePollAsyncCompletions();
     
     // Reduce async queue depth for recovery - allows pending writes to drain
     // Returns true if reduction was applied, false if not supported
-    bool reduceAsyncQueueDepth(int newDepth);
+    virtual bool reduceAsyncQueueDepth(int newDepth);
     
     // Get current async queue depth
-    int getAsyncQueueDepth() const;
+    virtual int getAsyncQueueDepth() const;
     
     // Drain pending async writes and switch to sync mode for hot-swap.
     // Waits up to timeoutSeconds for pending writes to complete naturally.
     // Returns true if drain succeeded (all pending completed), false if timeout.
     // After success, writes continue in sync mode without restart.
-    bool drainAndSwitchToSync(int timeoutSeconds);
+    virtual bool drainAndSwitchToSync(int timeoutSeconds);
     
     // Force recovery from stuck async I/O - cancels pending writes and switches to sync
     // Call this when stall is persistent and forcePollAsyncCompletions doesn't help
@@ -184,6 +194,11 @@ public:
     // If onComplete is null or async is disabled, the buffer can be reused after return.
     size_t _writeFileZeroSkip(const char *buf, size_t len);
     size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr);
+
+    // Why a write to the device failed, in terms the reader can act on.
+    // The system knows -- ENOSPC, EIO, ENXIO -- and a bare "Error writing to
+    // device" throws that away.
+    QString _writeFailureReason() const;
 
 signals:
     void success();
@@ -308,7 +323,13 @@ protected:
     int _inputBufferSize;
 
     // Unified cross-platform file operations
-    std::unique_ptr<rpi_imager::FileOperations> _file;
+    // shared, not unique: runWithTimeout() abandons its worker on the cancel
+    // and timeout paths, and _openAndPrepareDevice() hands that worker this
+    // file. A worker still inside a stuck write when DownloadThread is
+    // destroyed would otherwise call through a freed FileOperations. Sharing
+    // ownership keeps the object alive until the abandoned operation lets go,
+    // which is a leak only for as long as the syscall is genuinely stuck.
+    std::shared_ptr<rpi_imager::FileOperations> _file;
     
     // Async cache writer for non-blocking cache file I/O
     std::unique_ptr<AsyncCacheWriter> _asyncCacheWriter;
@@ -356,6 +377,20 @@ protected:
     // Adaptive memory recovery state (instance members, not static, for thread safety)
     QElapsedTimer _memoryCheckTimer;
     bool _memoryCheckStarted = false;
+
+    // Throughput measurement state, for the same reason the memory-recovery
+    // state above is not static: these were function-local statics, so every
+    // DownloadThread in the process shared one timer and one byte count. A
+    // second write -- "write another card" reaches this -- began with the
+    // previous write's final byte count as its baseline, so its first delta
+    // was negative and the throughput it reported was zero. Only the
+    // "delta > 0" guard kept that from being a nonsense figure rather than
+    // an absent one.
+    QElapsedTimer _throughputTimer;
+    bool _throughputTimerStarted = false;
+    qint64 _lastThroughputBytes = 0;
+    QElapsedTimer _throughputUpdateTimer;
+    bool _throughputUpdateTimerStarted = false;
     
     // Write timing breakdown tracking (for performance hypothesis testing)
     struct WriteTimingStats {
