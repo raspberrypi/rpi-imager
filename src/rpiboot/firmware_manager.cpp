@@ -486,7 +486,14 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         QByteArray signedBootcode = SecureBoot::signBootcode2712(
             bootcode, QString::fromStdString(_signFastbootGadgetKey));
         if (signedBootcode.isEmpty()) {
-            _lastError = "Failed to counter-sign bootcode5.bin for re-provisioning";
+            // Name the key. The commonest reason this fails is that the
+            // setting points at something that is not an RSA private key,
+            // and "failed to counter-sign bootcode5.bin" sends the reader
+            // looking at the firmware instead of at the one thing they
+            // chose. Matches what the gadget-signing failure says below.
+            _lastError = "Failed to counter-sign bootcode5.bin with "
+                       + _signFastbootGadgetKey
+                       + ". Check that the RSA private key is valid (PEM, RSA-2048).";
             return {};
         }
         QFile out(QString::fromStdString(bootcodePath.string()));

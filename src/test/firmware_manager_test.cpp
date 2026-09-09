@@ -36,6 +36,7 @@
 #include <string>
 
 #include "fixture_process.h"
+#include "platform_tools.h"
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -1862,4 +1863,207 @@ TEST_CASE("A custom fastboot gadget that is not there is reported",
     INFO("error: " << fm.lastError());
     CHECK(dir.empty());
     CHECK(fm.lastError().find("boot.img") != std::string::npos);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Signing what a fused board will be asked to run
+//
+// A CM5 whose customer key is in OTP will not run a fastboot gadget that is
+// not signed with it, and will not run the bootcode inside the bundle either.
+// The refusal is silent: the board simply does not come back, and the imager
+// sits waiting for a device that is never going to appear.
+//
+// So when a key is configured the fetch has three more things to do -- sign
+// boot.img, counter-sign the extracted bootcode, and put that signed bootcode
+// back into the bundle the board reads it from. None of them had been run.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// A throwaway RSA-2048 key. Nothing here signs anything real; the point is
+// that the signing path runs against a key openssl will accept.
+bool makeRsaKey(const QString &path)
+{
+    QProcess openssl;
+    openssl.start(rpi_test::toolPath(QStringLiteral("openssl")),
+                  {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
+                   QStringLiteral("2048")});
+    if (!openssl.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
+        return false;
+    return openssl.exitCode() == 0 && QFileInfo(path).size() > 0;
+}
+
+qint64 sizeOf(const std::filesystem::path &p)
+{
+    return QFileInfo(QString::fromStdString(p.string())).size();
+}
+
+// One member of a tar, as bytes. Used to read the bootcode back out of the
+// bundle the board is served from.
+QByteArray tarMember(const std::filesystem::path &archive, const QString &member)
+{
+    QProcess tar;
+    tar.start(QStringLiteral("tar"),
+              {QStringLiteral("-xOf"), QString::fromStdString(archive.string()), member});
+    if (!tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
+        return {};
+    if (tar.exitCode() != 0)
+        return {};
+    return tar.readAllStandardOutput();
+}
+
+// The counter-signature the 2712 boot ROM checks: len + keynum + version +
+// a 256-byte RSA-2048 signature + a 264-byte public key.
+constexpr qint64 kCounterSignatureBytes = 4 + 4 + 4 + 256 + 264;
+
+} // namespace
+
+TEST_CASE("A signing key gets the gadget and the bootcode signed",
+          "[firmware][fetch][sign]")
+{
+    if (!rpi_test::haveTool(QStringLiteral("openssl")))
+        SKIP("openssl is not installed, so no key can be made to sign with");
+
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir keyDir;
+    REQUIRE(keyDir.isValid());
+    const QString key = keyDir.filePath(QStringLiteral("customer.pem"));
+    REQUIRE(makeRsaKey(key));
+
+    QTemporaryDir cache;
+    REQUIRE(cache.isValid());
+    PinnedFirmwareManager fm(server.base(),
+                             fs::path(cache.path().toStdString()) / "rpiboot-firmware");
+    fm.setSignFastbootGadgetKey(key.toStdString());
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+    INFO("error: " << fm.lastError());
+    REQUIRE_FALSE(dir.empty());
+
+    // The gadget the board is told to boot, and its signature beside it.
+    CHECK(fs::exists(dir / "fastboot" / "boot.img"));
+    REQUIRE(fs::exists(dir / "fastboot" / "boot.sig"));
+    CHECK(sizeOf(dir / "fastboot" / "boot.sig") > 0);
+
+    // The bootcode uploaded to the ROM, counter-signed. The unsigned original
+    // is what the bundle carried, so the difference is the signature.
+    const QByteArray upstream = tarMember(dir / "fastboot" / "bootfiles.bin.original",
+                                          QStringLiteral("2712/bootcode5.bin"));
+    REQUIRE_FALSE(upstream.isEmpty());
+    const qint64 signedSize = sizeOf(dir / "bootcode5.bin");
+    INFO("upstream " << upstream.size() << " signed " << signedSize);
+    CHECK(signedSize == upstream.size() + kCounterSignatureBytes);
+
+    // And the same signed bytes put back into the bundle, because the running
+    // bootcode chain-loads the next stage out of it and checks that one too.
+    const QByteArray inBundle = tarMember(dir / "fastboot" / "bootfiles.bin",
+                                          QStringLiteral("2712/bootcode5.bin"));
+    CHECK(inBundle.size() == signedSize);
+    CHECK(inBundle.left(upstream.size()) == upstream);
+}
+
+TEST_CASE("Signing twice does not sign the signature", "[firmware][fetch][sign]")
+{
+    // Re-provisioning runs the whole thing again over a cache that already
+    // holds a signed bundle. Signing what is in it would chain a second
+    // signature onto the first, and the ROM rejects that -- which is what the
+    // pristine copy kept alongside it is for.
+    if (!rpi_test::haveTool(QStringLiteral("openssl")))
+        SKIP("openssl is not installed, so no key can be made to sign with");
+
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir keyDir;
+    REQUIRE(keyDir.isValid());
+    const QString key = keyDir.filePath(QStringLiteral("customer.pem"));
+    REQUIRE(makeRsaKey(key));
+
+    QTemporaryDir cache;
+    REQUIRE(cache.isValid());
+    PinnedFirmwareManager fm(server.base(),
+                             fs::path(cache.path().toStdString()) / "rpiboot-firmware");
+    fm.setSignFastbootGadgetKey(key.toStdString());
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+    REQUIRE_FALSE(dir.empty());
+    const qint64 first = sizeOf(dir / "bootcode5.bin");
+    REQUIRE(first > 0);
+
+    // Take the bundle off the source, so the second run keeps the cached copy
+    // rather than replacing it. That cached copy is the signed one this run
+    // wrote, which is the only way the question arises: with the bundle
+    // re-downloaded every time there is never a signed one to sign again.
+    REQUIRE(QFile::remove(QDir(served.path())
+                              .filePath(QStringLiteral("firmware/bootfiles.bin"))));
+
+    const auto again = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                          rpiboot::ChipGeneration::BCM2712,
+                                          nullptr, cancelled);
+    INFO("second run error: " << fm.lastError());
+    REQUIRE_FALSE(again.empty());
+
+    // Same length, so one signature and not two.
+    CHECK(sizeOf(dir / "bootcode5.bin") == first);
+    CHECK(tarMember(dir / "fastboot" / "bootfiles.bin",
+                    QStringLiteral("2712/bootcode5.bin")).size() == first);
+}
+
+TEST_CASE("A key that is not a key is reported rather than shipped",
+          "[firmware][fetch][sign]")
+{
+    // Someone points the setting at the wrong file. Carrying on would put an
+    // unsigned or half-signed gadget in front of a board that refuses it,
+    // with nothing to say why.
+    QTemporaryDir served;
+    REQUIRE(served.isValid());
+    layOutFirmware(served.path());
+
+    LocalFirmwareServer server(served.path());
+    if (!server.isRunning())
+        SKIP("could not start the local firmware server");
+
+    QTemporaryDir keyDir;
+    REQUIRE(keyDir.isValid());
+    const QString key = keyDir.filePath(QStringLiteral("not-a-key.pem"));
+    {
+        QFile f(key);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("this is not a private key\n");
+    }
+
+    QTemporaryDir cache;
+    REQUIRE(cache.isValid());
+    PinnedFirmwareManager fm(server.base(),
+                             fs::path(cache.path().toStdString()) / "rpiboot-firmware");
+    fm.setSignFastbootGadgetKey(key.toStdString());
+
+    std::atomic<bool> cancelled{false};
+    const auto dir = fm.ensureAvailable(rpiboot::SideloadMode::Fastboot,
+                                        rpiboot::ChipGeneration::BCM2712,
+                                        nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    CHECK(dir.empty());
+    CHECK_FALSE(fm.lastError().empty());
+    // Names the key, so the reader knows which setting to look at.
+    CHECK(fm.lastError().find("key") != std::string::npos);
 }
