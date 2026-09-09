@@ -32,6 +32,8 @@
 #include "file_operations.h"
 #include "app_resources.h"
 #include "platform_tools.h"
+#include <QHostAddress>
+#include <QNetworkInterface>
 #include "drivelistmodel.h"
 #include "urlfmt.h"
 #include "drivelistmodelpollthread.h"
@@ -1713,6 +1715,9 @@ public:
     {
         onOsListFetchComplete(json, url, url);
     }
+
+    using ImageWriter::onOsListRefreshTimeout;
+    using ImageWriter::onSTPdetected;
 
     void reportOsListFailure(const QString &message)
     {
@@ -12619,6 +12624,7 @@ public:
     using ImageWriter::onRpibootDeviceDetected;
     using ImageWriter::onBootstrapComplete;
     using ImageWriter::onBootstrapError;
+    using ImageWriter::onRpibootError;
 
 private:
     NoNetworkGuard _offline;
@@ -12902,4 +12908,117 @@ TEST_CASE("A secure boot key that is not a file is refused, saying which it is",
         f.write("-----BEGIN PRIVATE KEY-----\n");
     }
     CHECK(Cli::validateSecureBootKey(real).isEmpty());
+}
+
+// ---------------------------------------------------------------------------
+// What reaches the user when something outside Imager does not answer
+//
+// Four entry points that were uncovered, none of them needing hardware: the
+// rpiboot failure that has to become a message, the Connect key that cannot
+// be minted, the OS list refresh that comes back empty, and the spanning-tree
+// warning that must not fire when there is already an address.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("A board that will not boot is reported rather than going quiet",
+          "[imagewriter][rpiboot]")
+{
+    // rpiboot has given up. The wizard is on a progress screen waiting for a
+    // device that is never going to appear, so this is the only thing that
+    // moves it -- and the message is the only account of what went wrong.
+    BootstrapProbe w;
+    QStringList reported;
+    QObject::connect(&w, &ImageWriter::error, &w,
+                     [&reported](QVariant m) { reported << m.toString(); });
+
+    w.onRpibootError(QStringLiteral("the bus would not open"));
+
+    REQUIRE(reported.size() == 1);
+    INFO("reported: " << reported.at(0).toStdString());
+    // Passed on rather than replaced with something generic: the reason is
+    // what tells somebody whether to try another cable or another board.
+    CHECK(reported.at(0).contains(QStringLiteral("the bus would not open")));
+}
+
+TEST_CASE("A Connect key that cannot be minted is reported, not returned empty",
+          "[imagewriter][connect]")
+{
+    // Organisation mode asks Raspberry Pi Connect for an auth key and writes
+    // it into the image. If the request fails and this returned an empty key
+    // as though it had worked, the card would be written with a device that
+    // enrols into nothing -- and the user would find out when the board came
+    // up unregistered.
+    //
+    // It does not tell a failed request apart from a response that arrived
+    // and was rejected: with nothing on the other end both end here, ok false
+    // and no secret, which is the property that matters. Deleting the
+    // request-failed branch leaves this passing, because the format check
+    // below it catches the empty secret instead.
+    NoNetworkGuard offline;
+    FeedableImageWriter w;
+    w.setSetting(QStringLiteral("connect_org_api_key"),
+                 QStringLiteral("rpak_notarealkeybutthecorrectshape"));
+
+    // Ten years, which the caller is allowed to ask for and the code clamps
+    // to thirty days before it goes anywhere near the network.
+    const QVariantMap out = w.requestOrgAuthKey(QStringLiteral("a test device"), 3650);
+
+    INFO("returned: " << out.value(QStringLiteral("error")).toString().toStdString());
+    CHECK_FALSE(out.value(QStringLiteral("ok")).toBool());
+    CHECK_FALSE(out.value(QStringLiteral("error")).toString().isEmpty());
+    // And no secret came back to be written into anything.
+    CHECK(out.value(QStringLiteral("secret")).toString().isEmpty());
+}
+
+TEST_CASE("A refresh that cannot reach the repository keeps the list on screen",
+          "[imagewriter][oslist]")
+{
+    // The refresh timer fires on a machine that has since gone offline. The
+    // list the user is looking at has to survive it: replacing a working
+    // chooser with an empty one because of a blip is worse than showing
+    // something slightly stale.
+    NoNetworkGuard offline;
+    FeedableImageWriter w;
+    w.feedOsList(QByteArrayLiteral(
+        "{\"os_list\":[{\"name\":\"Already here\",\"url\":\"https://example.invalid/a.img\"}]}"));
+    const QStringList before = namesIn(w.getFilteredOSlistDocument());
+    REQUIRE(before.contains(QStringLiteral("Already here")));
+
+    w.onOsListRefreshTimeout();
+
+    // The fetch is asynchronous and, pointed at a closed port, fails almost
+    // at once; give it a moment to come back and report.
+    for (int i = 0; i < 40; ++i) {
+        QCoreApplication::processEvents();
+        QThread::msleep(25);
+    }
+
+    const QStringList after = namesIn(w.getFilteredOSlistDocument());
+    INFO("after: " << after.join(QStringLiteral(", ")).toStdString());
+    CHECK(after.contains(QStringLiteral("Already here")));
+}
+
+TEST_CASE("A board that already has an address is not told to wait for one",
+          "[imagewriter][network]")
+{
+    // Spanning tree on the switch can hold a port down for half a minute, so
+    // the embedded build says so rather than leaving the user watching an
+    // empty list. Saying it to somebody who already has an address is just
+    // alarming -- and on a board that is already online, it is wrong.
+    bool haveAddress = false;
+    for (const QHostAddress &a : QNetworkInterface::allAddresses()) {
+        if (!a.isLoopback() && a.scopeId().isEmpty())
+            haveAddress = true;
+    }
+    if (!haveAddress)
+        SKIP("this machine has no non-loopback address, so there is nothing to check");
+
+    FeedableImageWriter w;
+    QStringList said;
+    QObject::connect(&w, &ImageWriter::networkInfo, &w,
+                     [&said](QVariant m) { said << m.toString(); });
+
+    w.onSTPdetected();
+
+    INFO("said: " << said.join(QStringLiteral(" | ")).toStdString());
+    CHECK(said.isEmpty());
 }
