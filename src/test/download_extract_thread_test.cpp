@@ -1687,3 +1687,106 @@ TEST_CASE("DownloadExtractThread will not write to an absolute path",
 
     QFile::remove(escapeTarget);
 }
+
+// ---------------------------------------------------------------------------
+// An image that does not end on a sector boundary
+//
+// A card is written in whole sectors. An image whose length is not a
+// multiple of 512 -- a hand-built one, a filesystem image cut to its
+// contents, a truncated download that still decompressed -- leaves a partial
+// last write, and a device opened with O_DIRECT refuses one of those
+// outright. The writer pads the last block with zeroes instead.
+//
+// Two things have to hold, and only one of them is obvious. The write has to
+// succeed, and the bytes before the padding have to be the image: padding
+// that started one byte early, or that overwrote rather than followed the
+// tail, would corrupt the last sector of the filesystem being written and
+// show up as a card that mounts and then reports errors.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("An image that does not fill its last sector is padded, not truncated",
+          "[extract]")
+{
+    if (!haveTool(QStringLiteral("xz")))
+        SKIP("xz is not installed, so no .xz image can be built to extract");
+
+    ScratchDir scratch;
+    // Deliberately not a multiple of 512: the last write is 195 bytes short
+    // of a sector.
+    const QByteArray image = imageOfSize(1024 * 1024 + 317, 23);
+    REQUIRE(image.size() % 512 != 0);
+
+    const QString raw = scratch.filePath(QStringLiteral("ragged.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
+    const QString archive = raw + QStringLiteral(".xz");
+    REQUIRE(QFileInfo::exists(archive));
+
+    // The destination is filled with a byte that is not zero, so the padding
+    // can be told apart from the ground it is written onto. Filled with
+    // zeroes -- as the shared fixture does -- "the tail is zeroes" holds
+    // whether the padding was written or not.
+    const QString dest = scratch.filePath(QStringLiteral("ragged-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\xEE')));
+
+    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+                             QByteArray());
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    const QByteArray written = readFile(dest);
+    REQUIRE(written.size() >= image.size());
+
+    // Every byte of the image, up to and including the last partial sector.
+    CHECK(written.left(image.size()) == image);
+
+    // And the rest of that sector is zeroes rather than what was there
+    // before, or whatever the decompression buffer happened to hold.
+    const int padding = 512 - (image.size() % 512);
+    CHECK(written.mid(image.size(), padding) == QByteArray(padding, '\0'));
+
+    // Only that sector: the writer pads to the boundary, it does not clear
+    // the card beyond the image.
+    CHECK(written.at(image.size() + padding) == '\xEE');
+}
+
+TEST_CASE("A ragged local image is written whole", "[extract][local]")
+{
+    // The same length with no container around it. LocalFileExtractThread
+    // takes the raw copy rather than the libarchive route, and a local .img
+    // is the commonest way to meet a length that does not divide by 512.
+    //
+    // This asserts only that every byte arrives. It cannot say anything
+    // about padding: the raw path does not pad, and device preparation
+    // zeroes the start of the destination anyway, so the bytes after the
+    // image are zero either way. Nor can it exercise the case that would
+    // make padding necessary -- O_DIRECT is only ever set for a block
+    // device path, so a scratch file never gets the alignment rule that
+    // rejects a short final write.
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(64 * 1024 + 5, 91);
+    REQUIRE(image.size() % 512 != 0);
+
+    const QString raw = scratch.filePath(QStringLiteral("ragged-local.img"));
+    REQUIRE(writeFile(raw, image));
+
+    const QString dest = scratch.filePath(QStringLiteral("ragged-local-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (1024 * 1024), '\xEE')));
+
+    LocalFileExtractThread dt(QByteArray("file://") + raw.toUtf8(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    CHECK(readFile(dest).left(image.size()) == image);
+}
