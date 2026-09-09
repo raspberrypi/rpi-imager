@@ -12862,3 +12862,38 @@ TEST_CASE("Re-provisioning without a key says so rather than going quiet",
 
     w.onBootstrapError(QStringLiteral("1.4"), QStringLiteral("no"));
 }
+
+TEST_CASE("A secure boot key that is not a file is refused, saying which it is",
+          "[imagewriter][cli]")
+{
+    // --secure-boot-key takes a path from the command line, so it can be
+    // anything. The two ways it goes wrong are worth telling apart: a typo
+    // in the filename, and pointing at the directory the key is in -- which
+    // is what tab-completion leaves behind when the name is not finished.
+    // "Error: secure boot key file does not exist" for the second one would
+    // send somebody looking for a file that is right there.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QString absent = dir.filePath(QStringLiteral("private.pem"));
+    INFO("missing: " << Cli::validateSecureBootKey(absent).toStdString());
+    CHECK_THAT(Cli::validateSecureBootKey(absent).toStdString(),
+               Catch::Matchers::ContainsSubstring("does not exist"));
+    CHECK_THAT(Cli::validateSecureBootKey(absent).toStdString(),
+               Catch::Matchers::ContainsSubstring(absent.toStdString()));
+
+    INFO("directory: " << Cli::validateSecureBootKey(dir.path()).toStdString());
+    CHECK_THAT(Cli::validateSecureBootKey(dir.path()).toStdString(),
+               Catch::Matchers::ContainsSubstring("not a regular file"));
+
+    // And a real file is accepted: an empty message is what "carry on" looks
+    // like here, so a check that only ever saw failures would pass with the
+    // function returning a complaint for everything.
+    const QString real = dir.filePath(QStringLiteral("key.pem"));
+    {
+        QFile f(real);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("-----BEGIN PRIVATE KEY-----\n");
+    }
+    CHECK(Cli::validateSecureBootKey(real).isEmpty());
+}
