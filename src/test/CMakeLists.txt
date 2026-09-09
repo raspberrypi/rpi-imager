@@ -2025,6 +2025,50 @@ rpi_discover_tests(oslist_parser_test)
 # Header-only, and shared by both write paths so they cannot drift apart
 # again -- drifting apart is how the substring bug came to exist in two
 # places at once.
+# ── suspend inhibition ──────────────────────────────────────────────────────
+# The machine must not go to sleep while a card is being written, and letting
+# go of the inhibit must not hold the application open afterwards. The FIFO it
+# uses lives in /run, which an ordinary user cannot write to, so the probe is
+# run under `unshare -rm` with a tmpfs over it.
+if(TARGET Qt6::DBus)
+    add_executable(suspend_inhibitor_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${PLATFORM_QUIRKS_SRC}
+        suspend_inhibitor_probe.cpp
+    )
+
+    target_include_directories(suspend_inhibitor_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_link_libraries(suspend_inhibitor_probe PRIVATE
+        Qt6::Core
+        Qt6::DBus
+    )
+
+    target_compile_features(suspend_inhibitor_probe PRIVATE cxx_std_20)
+
+    add_executable(suspend_inhibitor_test suspend_inhibitor_test.cpp)
+
+    target_include_directories(suspend_inhibitor_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_link_libraries(suspend_inhibitor_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+    )
+
+    target_compile_definitions(suspend_inhibitor_test PRIVATE
+        SUSPEND_INHIBITOR_PROBE_BINARY="$<TARGET_FILE:suspend_inhibitor_probe>")
+
+    target_compile_features(suspend_inhibitor_test PRIVATE cxx_std_20)
+
+    add_dependencies(suspend_inhibitor_test suspend_inhibitor_probe)
+
+    rpi_discover_tests(suspend_inhibitor_test)
+endif()
+
 # ── spanning-tree detection ─────────────────────────────────────────────────
 # The embedded build warns that a switch running STP will hold the port down
 # for its forward delay before an address arrives. Getting the decision wrong
