@@ -696,4 +696,33 @@ TestCase {
                "and the bottom is the bottom; contentY " + f.contentY
                + " against " + maxY)
     }
+
+    // ── How the confirmation is laid out ──────────────────────────────
+
+    function test_the_erase_warning_is_not_padded_out_underneath() {
+        // The dialog sizes itself to its content, so anything left in the
+        // layout below the buttons becomes visible whitespace under them.
+        // A spacer had been added here to "balance the dialog's internal top
+        // padding" that BaseDialog already applies through its content
+        // margins, so the gap under the buttons came to nearly three times
+        // the gap above the heading -- a short warning sitting in the top
+        // half of a tall box.
+        step.nextClicked()
+        tryVerify(function () { return confirmDialog().opened }, 3000)
+        tryVerify(function () { return confirmDialog().allowAccept }, 6000,
+                  "the countdown finished and the buttons appeared")
+        waitForRendering(step)
+
+        var d = confirmDialog()
+        // The row the buttons sit in, whose y is in the content layout's own
+        // coordinates -- the layout is what the dialog's padding is applied
+        // to, so measuring in its frame is measuring the padding.
+        var buttonRow = acceptButton().parent
+        var above = d.contentLayout.y
+        var below = d.height - (d.contentLayout.y + buttonRow.y + buttonRow.height)
+
+        verify(above > 0, "there is padding above the content")
+        compare(below, above,
+                "and the same amount of it under the last row of buttons")
+    }
 }
