@@ -76,6 +76,25 @@ int main(int argc, char *argv[])
         return 40;
     }
 
+    // Fifth mode: opening a link.
+    //
+    // Every help link in the application ends up here. Elevated, it cannot
+    // just run xdg-open -- that would open the browser as root, on a session
+    // bus root cannot reach -- so it works out who invoked us and runs it as
+    // them, falling back from runuser to pkexec. None of that is reachable
+    // in-process: it forks and execs, and the elevated half needs euid 0.
+    //
+    // The caller binds scripts of its own over the three programs this can
+    // reach and reads what they recorded.
+    if (argc > 2 && std::string_view(argv[1]) == "openurl") {
+        const bool opened =
+            PlatformQuirks::openUrlExternally(QUrl(QString::fromLocal8Bit(argv[2])));
+        std::printf("EUID=%lu\n", static_cast<unsigned long>(::geteuid()));
+        std::printf("OPENED=%d\n", opened ? 1 : 0);
+        std::fflush(stdout);
+        return 0;
+    }
+
     if (argc > 1 && std::string_view(argv[1]) == "policy") {
         std::printf("BUNDLE=%s\n", PlatformQuirks::getBundlePath());
         std::printf("POLICY=%d\n",

@@ -19,6 +19,7 @@
 #include <cmath>
 
 #include <QProcess>
+#include <QThread>
 #include <QStringList>
 
 #include <atomic>
@@ -4307,6 +4308,246 @@ TEST_CASE("With no policy installed the prompt is not raised at all",
     INFO("probe said:\n" << run.out.toStdString());
     CHECK(run.exitCode == 40);
     CHECK(run.out.contains(QStringLiteral("RET=0")));
+}
+
+// ══════════════════════════════════════════════════════════════
+// Opening a link
+//
+// Every help link in the application ends up in openUrlExternally(). Elevated
+// -- which Imager is for most of a write -- it cannot simply run xdg-open:
+// that would open the browser as root, against a session bus root cannot
+// reach, and on most desktops nothing happens at all. So it works out who
+// invoked us and runs the browser as them, preferring runuser and falling
+// back to pkexec.
+//
+// The whole function was uncovered, elevated path and ordinary path alike. It
+// forks and execs, and half of it needs euid 0, so it runs in the probe with
+// scripts of the case's own bound over the three programs it can reach --
+// file over file, so /bin/sh is left alone and the fakes can be shell
+// scripts.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+struct OpenUrlRun {
+    bool ran = false;
+    QString out;
+    QStringList runuserArgs;   // what each stand-in was invoked with
+    QStringList pkexecArgs;
+    QStringList xdgOpenArgs;
+};
+
+// Reads back what a stand-in recorded, waiting for it: launchDetached()
+// returns as soon as the exec succeeds, and the process that writes the log
+// is a detached grandchild, so it has not necessarily run yet.
+QStringList recordedRun(const QString &path)
+{
+    for (int i = 0; i < 100; ++i) {
+        QFile f(path);
+        if (f.open(QIODevice::ReadOnly)) {
+            const QString body = QString::fromUtf8(f.readAll());
+            if (!body.isEmpty())
+                return body.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        }
+        QThread::msleep(50);
+    }
+    return {};
+}
+
+// `elevated` runs the probe as root in the namespace; otherwise it goes
+// through a nested one that maps root to 1000, so geteuid() reports something
+// other than zero without changing the credentials the kernel checks.
+//
+// A stand-in that "does not work" is planted without the execute bit, which
+// is what launchDetached() reports as a failure to start -- an exit code
+// would not, because the exec has already succeeded by then.
+OpenUrlRun runOpenUrl(const QString &url, bool elevated, const QString &invokingUid,
+                      bool runuserWorks = true, bool pkexecWorks = true)
+{
+    OpenUrlRun result;
+
+    QTemporaryDir scratch;
+    if (!scratch.isValid())
+        return result;
+
+    auto plant = [&](const QString &name, bool executable) {
+        const QString p = QDir(scratch.path()).filePath(name);
+        QFile f(p);
+        if (!f.open(QIODevice::WriteOnly))
+            return QString();
+        f.write(QByteArray("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$RECORD/")
+                + name.toUtf8() + ".log\"\n");
+        f.close();
+        QFileDevice::Permissions perms = QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                         | QFileDevice::ReadOther;
+        if (executable)
+            perms |= QFileDevice::ExeOwner | QFileDevice::ExeOther;
+        f.setPermissions(perms);
+        return p;
+    };
+    if (plant(QStringLiteral("runuser"), runuserWorks).isEmpty()
+        || plant(QStringLiteral("pkexec"), pkexecWorks).isEmpty()
+        || plant(QStringLiteral("xdg-open"), true).isEmpty())
+        return result;
+
+    QString script = QStringLiteral(
+        "export RECORD=\"$1\" && "
+        "export DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-for-this-case && ");
+    if (invokingUid.isEmpty())
+        script += QStringLiteral("unset SUDO_UID PKEXEC_UID && ");
+    else
+        script += QStringLiteral("export SUDO_UID=\"$4\" && ");
+    script += QStringLiteral(
+        "mount --bind \"$1/runuser\" /usr/sbin/runuser && "
+        "mount --bind \"$1/pkexec\" /usr/bin/pkexec && "
+        "mount --bind \"$1/xdg-open\" /usr/bin/xdg-open && ");
+    script += elevated
+                  ? QStringLiteral("exec \"$2\" openurl \"$3\"")
+                  : QStringLiteral("exec unshare -U --map-user=1000 --map-group=1000 "
+                                   "\"$2\" openurl \"$3\"");
+
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             script, QStringLiteral("_"), scratch.path(),
+             QStringLiteral(ELEVATION_PROBE_BINARY), url,
+             invokingUid.isEmpty() ? QStringLiteral("0") : invokingUid});
+    if (!p.waitForFinished(60000))
+        return result;
+
+    result.ran = true;
+    result.out = QString::fromUtf8(p.readAllStandardOutput());
+    if (result.out.contains(QStringLiteral("OPENED=1"))) {
+        result.runuserArgs = recordedRun(QDir(scratch.path()).filePath(QStringLiteral("runuser.log")));
+        result.pkexecArgs = recordedRun(QDir(scratch.path()).filePath(QStringLiteral("pkexec.log")));
+        result.xdgOpenArgs = recordedRun(QDir(scratch.path()).filePath(QStringLiteral("xdg-open.log")));
+    }
+    return result;
+}
+
+bool haveOpenUrlHarness()
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("test -e /usr/sbin/runuser && test -e /usr/bin/pkexec "
+                            "&& test -e /usr/bin/xdg-open "
+                            "&& exec unshare -U --map-user=1000 --map-group=1000 true")});
+    if (!p.waitForFinished(15000))
+        return false;
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+} // namespace
+
+#define REQUIRE_OPENURL_HARNESS()                                                   \
+    if (!haveOpenUrlHarness())                                                      \
+    SKIP("nested namespaces, or one of runuser/pkexec/xdg-open to bind over, are "  \
+         "not available here")
+
+TEST_CASE("An elevated window opens a link as the user who started it",
+          "[platformquirks][openurl]")
+{
+    // Root's browser is the wrong browser: it has no session bus to talk to
+    // and no profile of the user's. The link has to be handed to the account
+    // that invoked Imager.
+    REQUIRE_OPENURL_HARNESS();
+    const OpenUrlRun run = runOpenUrl(QStringLiteral("https://example.invalid/help"),
+                                      /*elevated=*/true, QStringLiteral("1000"));
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\\n" << run.out.toStdString());
+    REQUIRE(run.out.contains(QStringLiteral("EUID=0")));
+    CHECK(run.out.contains(QStringLiteral("OPENED=1")));
+
+    INFO("runuser got: " << run.runuserArgs.join(QStringLiteral(" ")).toStdString());
+    REQUIRE_FALSE(run.runuserArgs.isEmpty());
+    // Run as somebody, and the somebody is a name rather than the number the
+    // environment carried -- runuser takes an account, not a uid.
+    CHECK(run.runuserArgs.contains(QStringLiteral("-u")));
+    CHECK(run.runuserArgs.contains(QStringLiteral("xdg-open")));
+    CHECK(run.runuserArgs.contains(QStringLiteral("https://example.invalid/help")));
+    // Not run directly as root as well.
+    CHECK(run.xdgOpenArgs.isEmpty());
+}
+
+TEST_CASE("With runuser unavailable the link goes through pkexec instead",
+          "[platformquirks][openurl]")
+{
+    // runuser is util-linux; it is not on every image Imager runs from. The
+    // fallback is what keeps the help links working there.
+    REQUIRE_OPENURL_HARNESS();
+    const OpenUrlRun run = runOpenUrl(QStringLiteral("https://example.invalid/help"),
+                                      /*elevated=*/true, QStringLiteral("1000"),
+                                      /*runuserWorks=*/false);
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\\n" << run.out.toStdString());
+    CHECK(run.out.contains(QStringLiteral("OPENED=1")));
+
+    INFO("pkexec got: " << run.pkexecArgs.join(QStringLiteral(" ")).toStdString());
+    REQUIRE_FALSE(run.pkexecArgs.isEmpty());
+    CHECK(run.pkexecArgs.contains(QStringLiteral("--user")));
+    CHECK(run.pkexecArgs.contains(QStringLiteral("xdg-open")));
+    CHECK(run.pkexecArgs.contains(QStringLiteral("https://example.invalid/help")));
+}
+
+TEST_CASE("With neither way of dropping privilege the link is not opened at all",
+          "[platformquirks][openurl]")
+{
+    // Better than opening it as root: a browser started as root on the user's
+    // display is a bigger problem than a link that did not open.
+    REQUIRE_OPENURL_HARNESS();
+    const OpenUrlRun run = runOpenUrl(QStringLiteral("https://example.invalid/help"),
+                                      /*elevated=*/true, QStringLiteral("1000"),
+                                      /*runuserWorks=*/false, /*pkexecWorks=*/false);
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\\n" << run.out.toStdString());
+    CHECK(run.out.contains(QStringLiteral("OPENED=0")));
+}
+
+TEST_CASE("An elevated run with no invoking account named opens nothing",
+          "[platformquirks][openurl]")
+{
+    // Neither SUDO_UID nor PKEXEC_UID, which is what a bare `su -` leaves.
+    // There is nobody to hand the link to, and root is not the answer.
+    REQUIRE_OPENURL_HARNESS();
+    const OpenUrlRun run = runOpenUrl(QStringLiteral("https://example.invalid/help"),
+                                      /*elevated=*/true, QString());
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\\n" << run.out.toStdString());
+    REQUIRE(run.out.contains(QStringLiteral("EUID=0")));
+    CHECK(run.out.contains(QStringLiteral("OPENED=0")));
+}
+
+TEST_CASE("Unelevated, the link goes straight to xdg-open",
+          "[platformquirks][openurl]")
+{
+    // The ordinary case, and the one every desktop user meets: no privilege
+    // to drop, so the browser is started directly.
+    REQUIRE_OPENURL_HARNESS();
+    const OpenUrlRun run = runOpenUrl(QStringLiteral("https://example.invalid/help"),
+                                      /*elevated=*/false, QStringLiteral("1000"));
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\\n" << run.out.toStdString());
+    CHECK_FALSE(run.out.contains(QStringLiteral("EUID=0")));
+    CHECK(run.out.contains(QStringLiteral("OPENED=1")));
+
+    INFO("xdg-open got: " << run.xdgOpenArgs.join(QStringLiteral(" ")).toStdString());
+    CHECK(run.xdgOpenArgs.contains(QStringLiteral("https://example.invalid/help")));
+    // And nothing was asked to drop privilege it does not have.
+    CHECK(run.runuserArgs.isEmpty());
+    CHECK(run.pkexecArgs.isEmpty());
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
