@@ -65,6 +65,9 @@ public:
         return fs::path(QDir(_path).filePath(name).toStdString());
     }
 
+    // The directory itself, for cases that need to put something on PATH.
+    QString dir() const { return _path; }
+
 private:
     QString _path;
 };
@@ -933,4 +936,131 @@ TEST_CASE("An original with no bootcode is refused before anything is signed",
     CHECK(err.find("Failed to extract bootcode.bin") != std::string::npos);
     CHECK(err.find("pieeprom.original.bin") != std::string::npos);
     CHECK_FALSE(fs::exists(recovery / "pieeprom.bin"));
+}
+
+// ---------------------------------------------------------------------------
+// When openssl is not there, or does not do what it is asked
+//
+// Key generation shells out to openssl by name, so it is found on PATH. That
+// makes three failures possible on a real machine, and all three end with the
+// user holding something that is not a key pair:
+//
+//   - openssl is not installed at all (a stripped container, an AppImage on
+//     a minimal system)
+//   - it starts and fails part-way, after the private key exists
+//   - it reports success and writes nothing, which is what a wrapper script
+//     or a full disk looks like
+//
+// The middle one matters most: a private key left behind with no public key
+// beside it is a file the user will reasonably point Imager at later, and
+// signing with it produces a card the board refuses.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Points PATH at one directory for the life of the object and puts it back
+// afterwards. A directory rather than an empty string: with PATH unset,
+// execvp falls back to a built-in default and finds the real openssl.
+class PathOverride
+{
+public:
+    explicit PathOverride(const QString &directory)
+        : _previous(qgetenv("PATH"))
+    {
+        qputenv("PATH", directory.toLocal8Bit());
+    }
+    ~PathOverride() { qputenv("PATH", _previous); }
+
+    PathOverride(const PathOverride &) = delete;
+    PathOverride &operator=(const PathOverride &) = delete;
+
+private:
+    QByteArray _previous;
+};
+
+// Write an executable stand-in for openssl into `directory`.
+bool plantFakeOpenssl(const QString &directory, const QByteArray &body)
+{
+    const QString path = QDir(directory).filePath(QStringLiteral("openssl"));
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    f.write(QByteArray("#!/bin/sh\n") + body);
+    f.close();
+    return f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner);
+}
+
+} // namespace
+
+TEST_CASE("Key generation with no openssl installed fails rather than pretending",
+          "[secureboot-otp]")
+{
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+
+    {
+        PathOverride only(toolDir.dir());
+        CHECK_FALSE(SecureBootProvisioner::generateKeyPair(priv, pub));
+    }
+
+    // Nothing was left behind to be mistaken for a key later.
+    CHECK_FALSE(fs::exists(priv));
+    CHECK_FALSE(fs::exists(pub));
+}
+
+TEST_CASE("A private key is not left behind when the public half cannot be made",
+          "[secureboot-otp]")
+{
+    // openssl generated the private key and then failed on the second call.
+    // Leaving the private key is the trap: it is a real RSA key, Imager's
+    // file chooser will offer it, and secure boot signed with a key whose
+    // public half was never derived produces a card the board will not boot.
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const QString tools = toolDir.dir();
+
+    // genrsa writes the file it was asked for; every other subcommand fails.
+    REQUIRE(plantFakeOpenssl(tools,
+                             "if [ \"$1\" = genrsa ]; then\n"
+                             "  : > \"$3\"\n"
+                             "  exit 0\n"
+                             "fi\n"
+                             "echo 'fake openssl: refusing' >&2\n"
+                             "exit 1\n"));
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+
+    {
+        PathOverride only(tools);
+        CHECK_FALSE(SecureBootProvisioner::generateKeyPair(priv, pub));
+    }
+
+    CHECK_FALSE(fs::exists(priv));
+    CHECK_FALSE(fs::exists(pub));
+}
+
+TEST_CASE("An openssl that reports success but writes nothing is not believed",
+          "[secureboot-otp]")
+{
+    // A wrapper script that swallows its arguments, or a disk that filled up
+    // between the two calls. Both openssl runs say they worked and there is
+    // no key pair at the end of it, so the caller has to check rather than
+    // take the exit codes at their word.
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const QString tools = toolDir.dir();
+
+    REQUIRE(plantFakeOpenssl(tools, "exit 0\n"));
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+
+    {
+        PathOverride only(tools);
+        CHECK_FALSE(SecureBootProvisioner::generateKeyPair(priv, pub));
+    }
 }
