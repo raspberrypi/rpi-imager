@@ -39,6 +39,8 @@
 #include "platform_tools.h"
 #include <sstream>
 
+#include "curlnetworkconfig.h"
+
 namespace fs = std::filesystem;
 
 using rpiboot::ChipGeneration;
@@ -2066,4 +2068,95 @@ TEST_CASE("A key that is not a key is reported rather than shipped",
     CHECK_FALSE(fm.lastError().empty());
     // Names the key, so the reader knows which setting to look at.
     CHECK(fm.lastError().find("key") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// A warm cache with no network
+//
+// ensureAvailable() is the largest untested thing in this class, and the
+// reason it is worth reaching is not the download: it is what happens when
+// the download cannot happen. Somebody bootstrapping a Compute Module on a
+// workbench has the firmware from last time and no internet, and the code is
+// written to carry on -- "network failures degrade gracefully: if the file is
+// already cached, we proceed with the stale copy". Nothing checked that.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Points every transfer in the process at a closed port for the life of the
+// object, so a case that means to be offline cannot quietly reach GitHub.
+class NoNetworkGuard
+{
+public:
+    NoNetworkGuard() : _saved(CurlNetworkConfig::instance().proxy())
+    {
+        CurlNetworkConfig::instance().setProxy(QByteArrayLiteral("http://127.0.0.1:1"));
+    }
+    ~NoNetworkGuard() { CurlNetworkConfig::instance().setProxy(_saved); }
+
+    NoNetworkGuard(const NoNetworkGuard &) = delete;
+    NoNetworkGuard &operator=(const NoNetworkGuard &) = delete;
+
+private:
+    QByteArray _saved;
+};
+
+// A manager whose cache is a directory the case owns.
+class CachedFirmwareManager : public TestableFirmwareManager
+{
+public:
+    explicit CachedFirmwareManager(fs::path root) : _root(std::move(root)) {}
+    fs::path cacheRoot() const override { return _root; }
+
+private:
+    fs::path _root;
+};
+
+} // namespace
+
+TEST_CASE("Firmware already cached is enough when the network has gone",
+          "[firmware]")
+{
+    ScratchDir scratch;
+    CachedFirmwareManager fm(scratch.path());
+    const fs::path versionDir = scratch.path() / "master";
+
+    // What a previous run left behind: every file the manifest names, the
+    // chip's bootcode, and the sidecar recording which EEPROM build it was.
+    const std::string version = "2026-05-22";
+    writeFile(versionDir / "secure-boot-recovery5" / ".eeprom-version", version + "\n");
+    for (const auto &entry : fm.buildManifest(SideloadMode::SecureBootRecovery,
+                                              ChipGeneration::BCM2712,
+                                              std::optional<std::string>(version)))
+        writeFile(versionDir / entry.localPath, "firmware bytes from last time");
+    writeFile(versionDir / "bootcode5.bin", "bootcode bytes");
+
+    NoNetworkGuard offline;
+    std::atomic<bool> cancelled{false};
+    const fs::path out = fm.ensureAvailable(SideloadMode::SecureBootRecovery,
+                                            ChipGeneration::BCM2712, nullptr, cancelled);
+
+    INFO("error: " << fm.lastError());
+    CHECK_FALSE(out.empty());
+    CHECK(fs::exists(out / "bootcode5.bin"));
+}
+
+TEST_CASE("A cold cache with no network says which file it could not get",
+          "[firmware]")
+{
+    // The other side of it. Nothing cached and nowhere to fetch from is a
+    // hard failure, and it has to name what is missing -- "firmware download
+    // failed" on its own leaves somebody with no idea whether to check their
+    // network or their disk.
+    ScratchDir scratch;
+    CachedFirmwareManager fm(scratch.path());
+
+    NoNetworkGuard offline;
+    std::atomic<bool> cancelled{false};
+    const fs::path out = fm.ensureAvailable(SideloadMode::SecureBootRecovery,
+                                            ChipGeneration::BCM2712, nullptr, cancelled);
+
+    CHECK(out.empty());
+    INFO("error: " << fm.lastError());
+    CHECK_FALSE(fm.lastError().empty());
 }
