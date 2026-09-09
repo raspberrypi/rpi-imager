@@ -163,6 +163,38 @@ ColumnLayout {
     function getAllKeysAsString() {
         return root.keys.join("\n")
     }
+
+    // What this component contributes to the wizard step's focus ring, in
+    // reading order.
+    //
+    // WizardStepBase builds the ring from the groups a step registers, and it
+    // does not walk into nested components -- so a control that is not
+    // returned here cannot be reached from the keyboard at all. That is what
+    // had happened to the Show button: with keys already configured the step
+    // opens with this whole component on screen and none of it in the ring,
+    // so keyboard and screen-reader users could see the keys and reach
+    // nothing to do with them.
+    //
+    // The list changes as the component is expanded and as keys are added and
+    // removed, hence focusItemsUpdated() for the step to rebuild on.
+    function focusItems() {
+        var items = [summaryText, expandButton]
+        if (!root.expanded)
+            return items
+        for (var i = 0; i < keysRepeater.count; i++) {
+            var row = keysRepeater.itemAt(i)
+            if (row && row.removeButton)
+                items.push(row.removeButton)
+        }
+        items.push(addKeyField)
+        items.push(addOrBrowseButton)
+        return items
+    }
+
+    signal focusItemsUpdated()
+
+    onExpandedChanged: root.focusItemsUpdated()
+    onKeysChanged: root.focusItemsUpdated()
     
     // Summary row (always visible)
     RowLayout {
@@ -188,6 +220,7 @@ ColumnLayout {
         
         ImButton {
             id: expandButton
+            objectName: "sshShowKeysButton"
             text: root.expanded ? qsTr("Hide") : qsTr("Show")
             Layout.minimumWidth: 80
             onClicked: root.expanded = !root.expanded
@@ -287,8 +320,15 @@ ColumnLayout {
                     Accessible.ignored: true  // Parent row provides accessibility
                 }
                 
+                // Named and aliased so focusItems() below can hand it to the
+                // step: a Repeater's delegates are only reachable through
+                // itemAt(), and the focus ring has to be told about each one.
+                property alias removeButton: removeKeyButton
+
                 // Remove button
                 ImButton {
+                    id: removeKeyButton
+                    objectName: "sshRemoveKeyButton"
                     text: qsTr("Remove")
                     Layout.minimumWidth: 80
                     onClicked: root.removeKey(keyRow.index)

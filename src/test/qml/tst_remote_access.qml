@@ -255,4 +255,113 @@ TestCase {
 
         verify(tabRing().indexOf(pill.focusItem) !== -1, "and while on")
     }
+
+    // ── The key manager's own controls ────────────────────────────────
+    //
+    // Arriving with keys already saved selects public-key authentication on
+    // the user's behalf, so the whole key list is on screen before they have
+    // touched anything. None of it was reachable: Show, the Remove button on
+    // each key and the add field all live inside SshKeyManager, and
+    // WizardStepBase builds its ring from the groups a step registers rather
+    // than by walking the tree -- so a nested component that registers
+    // nothing contributes nothing.
+    //
+    // What that leaves is a screen listing keys the user cannot inspect,
+    // remove or add to from the keyboard.
+
+    // A step created with a key already in the conserved settings, which is
+    // what returning to this page looks like. The keys are read in
+    // Component.onCompleted, so they have to be in place before it is built.
+    function stepWithSavedKey() {
+        if (step) {
+            step.destroy()
+            step = null
+        }
+        fakeContainer.customizationSettings = { sshEnabled: true, sshAuthorizedKeys: aKey }
+        step = stepComponent.createObject(testCase)
+        verify(step, "the step was created")
+        waitForRendering(step)
+        return step
+    }
+
+    function test_a_saved_key_leaves_the_show_button_reachable() {
+        stepWithSavedKey()
+        compare(keys().keys.length, 1, "the saved key was loaded")
+        verify(child("sshPublicKeyAuthRadio").checked,
+               "which selects key authentication without being asked")
+
+        verify(tabRing().indexOf(child("sshShowKeysButton")) !== -1,
+               "the Show button is in the tab order")
+    }
+
+    function test_expanding_the_list_puts_its_controls_in_the_order() {
+        stepWithSavedKey()
+        var show = child("sshShowKeysButton")
+        compare(tabRing().indexOf(child("sshAddKeyField")), -1,
+                "nothing from the list is offered while it is collapsed")
+
+        mouseClick(show)
+        tryVerify(function () { return keys().expanded }, 3000, "the list opened")
+        waitForRendering(step)
+
+        var ring = tabRing()
+        verify(ring.indexOf(child("sshRemoveKeyButton")) !== -1,
+               "the key can be removed from the keyboard")
+        verify(ring.indexOf(child("sshAddKeyField")) !== -1,
+               "another key can be typed in")
+        verify(ring.indexOf(child("sshAddOrBrowseButton")) !== -1,
+               "and one can be browsed for")
+    }
+
+    function test_collapsing_the_list_takes_them_out_again() {
+        // Tabbing onto a control that is no longer drawn puts the focus
+        // outline somewhere the user cannot see it.
+        stepWithSavedKey()
+        var show = child("sshShowKeysButton")
+        mouseClick(show)
+        tryVerify(function () { return keys().expanded }, 3000)
+        waitForRendering(step)
+        verify(tabRing().indexOf(child("sshAddKeyField")) !== -1)
+
+        mouseClick(show)
+        tryVerify(function () { return !keys().expanded }, 3000, "the list closed")
+        waitForRendering(step)
+
+        compare(tabRing().indexOf(child("sshAddKeyField")), -1,
+                "the add field went with it")
+    }
+
+    function test_choosing_passwords_takes_the_key_controls_out() {
+        // The manager is hidden behind the public-key option, so its
+        // controls have to leave the order when that option does.
+        stepWithSavedKey()
+        verify(tabRing().indexOf(child("sshShowKeysButton")) !== -1)
+
+        mouseClick(child("sshPasswordAuthRadio"))
+        tryVerify(function () { return child("sshPasswordAuthRadio").checked }, 3000)
+        waitForRendering(step)
+
+        compare(tabRing().indexOf(child("sshShowKeysButton")), -1,
+                "Show is out of the order with the list it opens")
+    }
+
+    function test_a_key_added_later_can_be_removed_from_the_keyboard() {
+        // The Remove buttons come from a Repeater, so they do not exist
+        // until there is a key. A ring built once at startup would not have
+        // them; one rebuilt when the list changes does.
+        var pill = child("sshEnableToggle")
+        mouseClick(pill.focusItem)
+        tryVerify(function () { return pill.checked }, 3000)
+        mouseClick(child("sshPublicKeyAuthRadio"))
+        tryVerify(function () { return child("sshPublicKeyAuthRadio").checked }, 3000)
+        waitForRendering(step)
+
+        keys().expanded = true
+        keys().addKey(aKey)
+        tryVerify(function () { return keys().keys.length === 1 }, 3000, "the key went in")
+        waitForRendering(step)
+
+        verify(tabRing().indexOf(child("sshRemoveKeyButton")) !== -1,
+               "the new key's Remove button joined the order")
+    }
 }

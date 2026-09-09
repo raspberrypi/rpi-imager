@@ -139,6 +139,15 @@ WizardStepBase {
         // Include labels before their corresponding controls so users hear the explanation first
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [labelAuthMechanism, radioPassword, radioPublicKey] : [] }, 1)
+        // The key manager's own controls. Nested components are not walked by
+        // WizardStepBase, so without this the Show button, the Remove button
+        // on each key and the add field are on screen and unreachable -- which
+        // is exactly the state the step opens in when keys are already saved,
+        // because that selects public-key authentication for the user.
+        root.registerFocusGroup("ssh_keys", function(){
+            return (sshEnablePill.checked && radioPublicKey.checked && sshKeyManager.visible)
+                ? sshKeyManager.focusItems() : []
+        }, 2)
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings
         if (settings.sshEnabled === true || settings.sshEnabled === "true") {
@@ -188,6 +197,18 @@ WizardStepBase {
         function onCheckedButtonChanged() {
             root.rebuildFocusOrder()
         }
+    }
+    // Expanding the list, and adding or removing a key, changes which of its
+    // controls exist.
+    //
+    // Deferred rather than immediate: the controls appear because a binding
+    // on the enclosing layout's visible property re-evaluates, and that has
+    // not necessarily happened by the time the property-change handler runs.
+    // A rebuild taken at that instant reads them as invisible and drops them
+    // -- which is the same as not rebuilding at all.
+    Connections {
+        target: sshKeyManager
+        function onFocusItemsUpdated() { root.requestFocusRebuild() }
     }
     
     // Validation: allow proceed when
