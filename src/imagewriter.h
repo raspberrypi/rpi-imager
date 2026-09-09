@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include <QPointer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QObject>
@@ -194,6 +195,12 @@ public:
     /* Overload which returns QJsonDocument */
     Q_INVOKABLE QJsonDocument getFilteredOSlistDocument();
 
+    // Which source a fastboot write reads from, and which storage it targets.
+    // Both are decisions the handoff makes on the user's behalf, and both
+    // were buried in the middle of onRpibootFastbootReady().
+    QUrl resolveFlashSource() const;
+    QString resolveFastbootStorageTarget() const;
+
     /** Begin the asynchronous fetch of the OS lists, and associated sublists. */
     Q_INVOKABLE void beginOSListFetch();
 
@@ -223,7 +230,18 @@ public:
     Q_INVOKABLE bool checkSWCapability(const QString &cap);
 
     /* Utility function to open OS file dialog */
-    Q_INVOKABLE void openFileDialog(const QString &title, const QString &filter);
+    /* Which request a file selection is answering.
+
+       The file dialog is a single shared entry point and its result is
+       broadcast to every listener, so a chooser has to say what it asked
+       for. Without that, choosing a custom repository file was also taken
+       as choosing a custom image: the selected OS became the repository
+       file and the user's staged customisation was discarded with it.
+
+       Defaults to the custom image, which is what an untagged selection
+       has always meant. */
+    Q_INVOKABLE void openFileDialog(const QString &title, const QString &filter,
+                                    const QString &purpose = QStringLiteral("customImage"));
 
     /* Expose native file dialog availability to QML */
     Q_INVOKABLE bool nativeFileDialogAvailable() {
@@ -235,7 +253,7 @@ public:
     }
 
     /* Accept selection from QML fallback FileDialog */
-    Q_INVOKABLE void acceptCustomImageFromQml(const QUrl &fileUrl) { onFileSelected(fileUrl.toLocalFile()); }
+    Q_INVOKABLE void acceptCustomImageFromQml(const QUrl &fileUrl) { onFileSelected(fileUrl.toLocalFile(), QStringLiteral("customImage")); }
 
     /* Generic native open-file dialog for QML callsites (sync) */
     Q_INVOKABLE QString getNativeOpenFileName(const QString &title = QString(),
@@ -250,6 +268,47 @@ public:
 
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
+
+    /// Which kind of write startWrite() is about to start.
+    ///
+    /// The three special targets are decided in a fixed order and the order is
+    /// load-bearing: a device already in fastboot mode is flashed as one even
+    /// when the erase sentinel was selected, because a Compute Module cannot
+    /// be erased through the SD card path. Naming the decision keeps that
+    /// precedence somewhere it can be read and tested rather than implied by
+    /// the order of three ifs.
+    enum class WritePath {
+        FastbootDevice,   ///< already in fastboot mode; flash over USB
+        RpibootDevice,    ///< needs sideloading into fastboot first
+        Erase,            ///< the internal://format sentinel
+        Normal,           ///< an ordinary image, cached or downloaded
+    };
+    WritePath choosePath() const;
+
+    /// Why a local source cannot be written, or empty if it can. Shared by
+    /// startWrite() and the post-cache-verification continuation so the two
+    /// cannot drift apart again.
+    QString _localSourceError(const QString &localPath) const;
+
+    /// Configure the freshly constructed _thread: signals, telemetry,
+    /// customisation and debug switches. Shared by startWrite() and the
+    /// post-cache-verification continuation, which each had their own copy.
+    void _configureWriteThread();
+
+    /// Attach a download cache file to _thread. Shared by both write paths;
+    /// the condition deciding whether to call it is not.
+    void _attachDownloadCache();
+
+    /// Start the configured thread and begin progress polling.
+    void _startConfiguredWrite();
+
+    /// Configure the fastboot flash thread and start it. Shared by the
+    /// post-sideload path and the directly-selected fastboot device path.
+    void _configureAndStartFastbootFlash();
+
+    // Emits cancelled() or writeCancelledDueToDeviceRemoval(), whichever the
+    // reason calls for, and clears the reason.
+    void _emitCancelled();
 
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
@@ -277,6 +336,21 @@ public:
 
     /* Returns a json formatted list of the OS images found on USB stick */
     Q_INVOKABLE QByteArray getUsbSourceOSlist();
+
+protected:
+    // Where inserted media appears. Virtual so the scan above can be run
+    // against a directory a test lays out, rather than only against real
+    // media mounted under /media by the running system.
+    virtual QString usbMediaRoot() const;
+
+    // Where block devices are enumerated from, and how one is mounted.
+    // Both virtual so the decision about *which* devices to mount can be
+    // checked without mounting anything -- that decision is what keeps the
+    // running system's own card from being touched.
+    virtual QString sysBlockRoot() const;
+    virtual int mountReadOnly(const QString &devicePath, const QString &mountPoint);
+
+public:
 
     /* Functions to collect information from computer running imager to make image customization easier */
     Q_INVOKABLE QString getDefaultPubKey();
@@ -478,7 +552,7 @@ signals:
     void verifyProgress(QVariant now, QVariant total);
     void error(QVariant msg);
     void success();
-    void fileSelected(QVariant filename);
+    void fileSelected(QVariant filename, QString purpose);
     void cancelled();
     void finalizing();
     void networkOnline();
@@ -519,7 +593,8 @@ protected slots:
     void onError(QString msg);
     void onEjectStarted();
     void onEjectFinished(bool succeeded);
-    void onFileSelected(QString filename);
+    void onFileSelected(QString filename,
+                        const QString &purpose = QStringLiteral("customImage"));
     void onCancelled();
     void onFinalizing();
     void onPreparationStatusUpdate(QString msg);
@@ -605,7 +680,15 @@ protected:
     // CLI flag to force enable secure boot regardless of OS capabilities
     static bool _forceSecureBootEnabled;
 #ifndef CLI_ONLY_BUILD
-    QWindow *_mainWindow;
+    // QPointer, not a raw pointer: every use of this is guarded by a null
+    // check, and a raw pointer to a destroyed window passes those checks
+    // and then dereferences freed memory. The application's own window
+    // outlives the writer, so this is not reachable today -- but nothing
+    // makes that true, and the same reasoning is already why
+    // PlatformHelper holds its observers through QPointer. A QPointer goes
+    // null when the window is destroyed, which is what the existing checks
+    // were written expecting.
+    QPointer<QWindow> _mainWindow;
 #endif
 
     // Performance statistics capture
@@ -651,13 +734,18 @@ protected:
     void _parseZstdFile();
     QString _pubKeyFileName();
     QString _privKeyFileName();
-    QString _sshKeyDir();
+    // Virtual so the key handling can be exercised against a directory a
+    // test owns. Everything else here is derived from it, and the real one
+    // is the user's ~/.ssh -- which holds keys that are not ours to write
+    // over or to leave lying around after a test run.
+    virtual QString _sshKeyDir();
     QString _sshKeyGen();
     void _applySystemdCustomisationFromSettings(const QVariantMap &s);
     void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
     void _applyRpiPreseedCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
+    bool _connectOrgRegistrationForWrite(QString &apiKey, QString &description) const;
     void _handleMemoryAllocationFailure(const char* what);
     void _handleSetupException(const char* what);
 };

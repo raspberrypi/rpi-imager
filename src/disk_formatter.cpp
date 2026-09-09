@@ -102,6 +102,17 @@ FormatError DiskFormatter::ConvertError(FileError error) const {
   return ConvertFileError(error);
 }
 
+std::uint32_t DiskFormatter::PartitionSectorsFor(
+    std::uint64_t device_size_bytes) {
+  const std::uint64_t total_sectors = device_size_bytes / kSectorSize;
+  if (total_sectors <= kPartitionStartSector) {
+    return 0;
+  }
+  const std::uint64_t available = total_sectors - kPartitionStartSector;
+  return static_cast<std::uint32_t>(
+      std::min<std::uint64_t>(available, UINT32_MAX));
+}
+
 Result<void> DiskFormatter::FormatDrive(const std::string& device_path) {
   // Pre-format checks for Windows physical drives
 #ifdef _WIN32
@@ -126,23 +137,34 @@ Result<void> DiskFormatter::FormatDrive(const std::string& device_path) {
     return Result<void>(ConvertError(error));
   }
 
-  // Write MBR
+  // The partition starts 4 MB in, so a device smaller than that offset has
+  // nothing to format at all, and one only a little larger cannot hold the
+  // clusters FAT32 requires however they are sized. Refuse either, rather
+  // than laying down a table for a card that is not there or a volume that
+  // says FAT32 and is not one.
+  if (!CanHoldFat32(PartitionSectorsFor(device_size_bytes))) {
+    return Result<void>(FormatError::kInsufficientSpace);
+  }
+
   if (auto result = WriteMbr(device_size_bytes); !result) {
     return result;
   }
 
-  // Calculate partition size
-  std::uint32_t total_sectors = device_size_bytes / kSectorSize;
-  std::uint32_t partition_size_sectors = total_sectors - kPartitionStartSector;
-
-  // Write FAT32 filesystem
-  return WriteFat32(kPartitionStartSector, partition_size_sectors);
+  // Write FAT32 filesystem, over exactly the partition the table describes.
+  return WriteFat32(kPartitionStartSector,
+                    PartitionSectorsFor(device_size_bytes));
 }
 
 Result<void> DiskFormatter::FormatFile(
     const std::string& file_path,
     std::uint64_t file_size_bytes) {
   
+  // The same floor as FormatDrive. This entry point had no such check, so a
+  // small file went on to be given a partition size that had underflowed.
+  if (!CanHoldFat32(PartitionSectorsFor(file_size_bytes))) {
+    return Result<void>(FormatError::kInsufficientSpace);
+  }
+
   // Create and open the file with the specified size
   FileError error = file_ops_->CreateTestFile(file_path, file_size_bytes);
   if (error != FileError::kSuccess) {
@@ -154,12 +176,9 @@ Result<void> DiskFormatter::FormatFile(
     return result;
   }
 
-  // Calculate partition size
-  std::uint32_t total_sectors = file_size_bytes / kSectorSize;
-  std::uint32_t partition_size_sectors = total_sectors - kPartitionStartSector;
-
-  // Write FAT32 filesystem
-  return WriteFat32(kPartitionStartSector, partition_size_sectors);
+  // Write FAT32 filesystem, over exactly the partition the table describes.
+  return WriteFat32(kPartitionStartSector,
+                    PartitionSectorsFor(file_size_bytes));
 }
 
 Result<void> DiskFormatter::WriteMbr(
@@ -172,13 +191,7 @@ Result<void> DiskFormatter::WriteMbr(
     return Result<void>(FormatError::kFileWriteError);
   }
   
-  // Calculate total sectors
-  std::uint64_t total_sectors = device_size_bytes / kSectorSize;
-  if (total_sectors > UINT32_MAX) {
-    total_sectors = UINT32_MAX;  // MBR limitation
-  }
-  
-  std::uint32_t partition_sectors = static_cast<std::uint32_t>(total_sectors) - kPartitionStartSector;
+  const std::uint32_t partition_sectors = PartitionSectorsFor(device_size_bytes);
 
   // Create partition entry at offset 446
   MbrPartitionEntry partition{};
@@ -197,14 +210,16 @@ Result<void> DiskFormatter::WriteMbr(
   partition.first_head = start_head;
   partition.first_sector = ((start_cyl >> 2) & 0xC0) | (start_sect & 0x3F);
 
-  std::uint32_t end_lba = kPartitionStartSector + partition_sectors - 1;
-  std::uint32_t end_cyl = end_lba / (63 * 255);
-  std::uint32_t end_head = (end_lba / 63) % 255;
-  std::uint32_t end_sect = (end_lba % 63) + 1;
+  const std::uint64_t end_lba =
+      std::uint64_t{kPartitionStartSector} + partition_sectors - 1;
+  std::uint64_t end_cyl = end_lba / (63 * 255);
+  std::uint64_t end_head = (end_lba / 63) % 255;
+  std::uint64_t end_sect = (end_lba % 63) + 1;
   
-  partition.last_cylinder = std::min(end_cyl, 1023U) & 0xFF;
-  partition.last_head = end_head;
-  partition.last_sector = ((std::min(end_cyl, 1023U) >> 2) & 0xC0) | (end_sect & 0x3F);
+  const std::uint64_t capped_end_cyl = std::min<std::uint64_t>(end_cyl, 1023U);
+  partition.last_cylinder = capped_end_cyl & 0xFF;
+  partition.last_head = static_cast<std::uint8_t>(end_head);
+  partition.last_sector = ((capped_end_cyl >> 2) & 0xC0) | (end_sect & 0x3F);
 
   // Copy partition entry to MBR
   std::memcpy(mbr_sector.data() + 446, &partition, sizeof(partition));
@@ -381,32 +396,56 @@ Result<void> DiskFormatter::WriteFatTables(
     std::uint32_t fat_start_sector,
     const Fat32Config& config) const {
   
-  std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
-  std::uint64_t fat_size_bytes = static_cast<std::uint64_t>(sectors_per_fat) * kSectorSize;
-  
+  const std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
+
+  // An empty FAT is three entries followed by zeros to its end, so it is
+  // written a chunk at a time rather than assembled whole in memory.
+  //
+  // Assembling it whole meant one allocation the size of the FAT, zeroed
+  // before a single byte reached the card: 8 MB for a 32 GB card, but 134 MB
+  // for a 512 GB drive and 536 MB for a 2 TiB one. On a Pi with 512 MB of RAM
+  // that allocation fails, and the only thing the failure could be reported as
+  // was "Error writing to device during formatting" -- a device error for what
+  // is actually the host running out of memory. Peak use is now one chunk
+  // whatever the card's size.
+  constexpr std::uint32_t kChunkSectors = 2048;  // 1 MB
+  const std::uint32_t chunk_sectors = std::min(kChunkSectors, sectors_per_fat);
+
   // Use aligned buffer for O_DIRECT compatibility on Linux
-  AlignedBuffer fat_table(fat_size_bytes);
-  if (!fat_table.valid()) {
+  AlignedBuffer chunk(static_cast<std::uint64_t>(chunk_sectors) * kSectorSize);
+  if (!chunk.valid()) {
     return Result<void>(FormatError::kFileWriteError);
   }
-  
-  auto* fat_entries = fat_table.as<std::uint32_t>();
-  
-  // First three entries are special
-  fat_entries[0] = ToLittleEndian(0x0FFFFFF8);  // Media descriptor + end marker
-  fat_entries[1] = ToLittleEndian(0x0FFFFFFF);  // End of cluster chain
-  fat_entries[2] = ToLittleEndian(0x0FFFFFFF);  // Root directory end marker
 
   // Write both FAT copies
   for (std::uint8_t fat_num = 0; fat_num < config.num_fats; ++fat_num) {
-    std::uint64_t fat_offset = (static_cast<std::uint64_t>(fat_start_sector)
+    const std::uint64_t fat_offset = (static_cast<std::uint64_t>(fat_start_sector)
         + static_cast<std::uint64_t>(fat_num) * sectors_per_fat) * kSectorSize;
-    FileError error = file_ops_->WriteAtOffset(fat_offset, fat_table.data(), fat_size_bytes);
-    if (error != FileError::kSuccess) {
-      return Result<void>(ConvertError(error));
+
+    for (std::uint32_t written = 0; written < sectors_per_fat; ) {
+      const std::uint32_t sectors =
+          std::min(chunk_sectors, sectors_per_fat - written);
+      const std::size_t bytes = static_cast<std::size_t>(sectors) * kSectorSize;
+      std::memset(chunk.data(), 0, bytes);
+
+      // Only the start of each copy carries entries; the rest is zeros.
+      if (written == 0) {
+        auto* fat_entries = chunk.as<std::uint32_t>();
+        fat_entries[0] = ToLittleEndian(0x0FFFFFF8);  // Media descriptor + end marker
+        fat_entries[1] = ToLittleEndian(0x0FFFFFFF);  // End of cluster chain
+        fat_entries[2] = ToLittleEndian(0x0FFFFFFF);  // Root directory end marker
+      }
+
+      const FileError error = file_ops_->WriteAtOffset(
+          fat_offset + static_cast<std::uint64_t>(written) * kSectorSize,
+          chunk.data(), bytes);
+      if (error != FileError::kSuccess) {
+        return Result<void>(ConvertError(error));
+      }
+      written += sectors;
     }
   }
-  
+
   return Result<void>();
 }
 
@@ -424,6 +463,26 @@ Result<void> DiskFormatter::WriteRootDirectory(
     return Result<void>(FormatError::kFileWriteError);
   }
   
+  // The boot sector carries a volume label, and FAT expects a matching entry
+  // in the root directory. Writing only the boot-sector copy leaves the two
+  // disagreeing: fsck reports "label in boot sector is 'BOOT', but there is
+  // no volume label in root directory" and offers to strip it, and file
+  // managers show the card unnamed.
+  //
+  // A volume-label entry is a normal 32-byte directory entry whose only
+  // meaningful fields are the 11-byte name and the volume-id attribute;
+  // cluster and size stay zero.
+  {
+    auto* entry = static_cast<std::uint8_t*>(root_cluster.data());
+    std::array<char, 11> padded_label{};
+    std::fill(padded_label.begin(), padded_label.end(), ' ');
+    std::copy_n(config.volume_label.begin(),
+                std::min(config.volume_label.size(), padded_label.size()),
+                padded_label.begin());
+    std::copy_n(padded_label.begin(), padded_label.size(), entry);
+    entry[11] = 0x08;  // ATTR_VOLUME_ID
+  }
+
   std::uint64_t offset = static_cast<std::uint64_t>(root_cluster_sector) * kSectorSize;
   FileError error = file_ops_->WriteAtOffset(offset, root_cluster.data(), root_cluster_size);
   if (error != FileError::kSuccess) {
@@ -448,27 +507,84 @@ Fat32Config DiskFormatter::CalculateFat32Config(std::uint32_t partition_size_sec
   } else {
     config.sectors_per_cluster = 32;  // 16KB
   }
-  
+
+  // The tiers above choose a cluster size for performance, but on a small
+  // partition a large cluster leaves too few clusters for the volume to be
+  // FAT32 at all -- and the tier boundaries made that worse rather than
+  // better. A 64 MB card was given 1 KB clusters and ended up with 60,944,
+  // under the 65,525 the specification requires; at 1 sector per cluster the
+  // same card holds 120,942 and is valid. Step down until there are enough.
+  //
+  // Nothing at 128 MB or above changes: those partitions already clear the
+  // minimum at the cluster size their tier picks.
+  while (config.sectors_per_cluster > 1 &&
+         ComputeGeometry(config.total_sectors, config.sectors_per_cluster,
+                         config.reserved_sectors, config.num_fats)
+                 .cluster_count < kMinimumFat32Clusters) {
+    config.sectors_per_cluster /= 2;
+  }
+
   return config;
 }
 
+Fat32Geometry DiskFormatter::ComputeGeometry(std::uint32_t partition_sectors,
+                                             std::uint32_t sectors_per_cluster,
+                                             std::uint16_t reserved_sectors,
+                                             std::uint8_t num_fats) {
+  if (partition_sectors <= reserved_sectors) {
+    return Fat32Geometry{0, 0};
+  }
+
+  // How long each FAT has to be, by the formula in Microsoft's FAT
+  // specification (fatgen103, "FAT Type Determination"), which is what
+  // mkfs.fat uses.
+  //
+  // The FAT's length and the volume's cluster count each depend on the other,
+  // because the FATs live inside the partition they index. This used to be
+  // resolved by approximating twice: size a FAT for the whole partition,
+  // subtract two of those, then size a second, shorter FAT for what was left.
+  // The shorter length is what went into the boot sector -- but a driver
+  // derives the cluster count from that shorter length, so it counted more
+  // clusters than the FAT had entries to track. A 260 MB card's FAT held
+  // 260,096 entries for a volume of 260,098 clusters, and its last two
+  // clusters had nowhere to record a chain; filling such a card completely
+  // writes FAT entries past the end of the first FAT and into the second
+  // copy. Six of the eighteen sizes checked in the tests were short this way.
+  const std::uint64_t usable = partition_sectors - reserved_sectors;
+  const std::uint64_t sectors_indexed_per_fat_sector =
+      (256ULL * sectors_per_cluster + num_fats) / 2;
+  const std::uint32_t fat_sectors = static_cast<std::uint32_t>(
+      (usable + sectors_indexed_per_fat_sector - 1) /
+      sectors_indexed_per_fat_sector);
+
+  // And the cluster count exactly as a driver computes it, from the fields
+  // that go into the boot sector -- so the two cannot disagree.
+  const std::uint64_t overhead =
+      std::uint64_t{reserved_sectors} + std::uint64_t{num_fats} * fat_sectors;
+  if (overhead >= partition_sectors) {
+    return Fat32Geometry{fat_sectors, 0};
+  }
+  const std::uint64_t data_sectors = partition_sectors - overhead;
+
+  return Fat32Geometry{fat_sectors,
+                       static_cast<std::uint32_t>(data_sectors /
+                                                  sectors_per_cluster)};
+}
+
 std::uint32_t DiskFormatter::CalculateSectorsPerFat(const Fat32Config& config) const {
-  // Calculate number of data sectors
-  std::uint32_t data_sectors = config.total_sectors - config.reserved_sectors;
-  
-  // Each cluster needs 4 bytes in FAT table
-  std::uint32_t clusters = data_sectors / config.sectors_per_cluster;
-  std::uint32_t fat_bytes = (clusters + 2) * 4;  // +2 for reserved entries
-  std::uint32_t fat_sectors = (fat_bytes + kSectorSize - 1) / kSectorSize;
-  
-  // Account for space taken by FAT tables themselves
-  std::uint32_t total_fat_sectors = fat_sectors * config.num_fats;
-  data_sectors -= total_fat_sectors;
-  clusters = data_sectors / config.sectors_per_cluster;
-  fat_bytes = (clusters + 2) * 4;
-  fat_sectors = (fat_bytes + kSectorSize - 1) / kSectorSize;
-  
-  return fat_sectors;
+  return ComputeGeometry(config.total_sectors, config.sectors_per_cluster,
+                         config.reserved_sectors, config.num_fats)
+      .sectors_per_fat;
+}
+
+bool DiskFormatter::CanHoldFat32(std::uint32_t partition_sectors) const {
+  if (partition_sectors < kMinimumPartitionSectors) {
+    return false;
+  }
+  const Fat32Config config = CalculateFat32Config(partition_sectors);
+  return ComputeGeometry(partition_sectors, config.sectors_per_cluster,
+                         config.reserved_sectors, config.num_fats)
+             .cluster_count >= kMinimumFat32Clusters;
 }
 
 }  // namespace rpi_imager 

@@ -72,6 +72,14 @@ struct Fat32Config {
   std::uint32_t volume_id = 0x12345678;
 };
 
+// What a partition of a given size works out to at a given cluster size.
+// Both the cluster size chosen for a card and the length of its FATs come out
+// of the same arithmetic, so they are computed together.
+struct Fat32Geometry {
+  std::uint32_t sectors_per_fat;
+  std::uint32_t cluster_count;
+};
+
 // MBR partition entry
 struct __attribute__((packed)) MbrPartitionEntry {
   std::uint8_t status;
@@ -153,12 +161,38 @@ class DiskFormatter {
  private:
   static constexpr std::uint32_t kSectorSize = 512;
   static constexpr std::uint32_t kPartitionStartSector = 8192;  // 4MB offset
+  // Enough partition for the reserved sectors, both FATs and a root cluster,
+  // with room to spare. Below this the geometry arithmetic in
+  // CalculateFat32Config and WriteBootSector has nothing sensible to produce.
+  static constexpr std::uint32_t kMinimumPartitionSectors = 2048;  // 1MB
   static constexpr std::uint8_t kFat32PartitionType = 0x0C;    // FAT32 LBA
+
+  // FAT32 is defined by its cluster count, not by what the boot sector claims:
+  // the specification reserves volumes with fewer clusters than this for
+  // FAT16, and a driver that enforces the rule -- Windows' does -- will reject
+  // or misread a volume that says FAT32 with fewer. Linux's vfat driver does
+  // not enforce it, which is how the 64 MB image these tests format mounted
+  // cleanly, passed fsck.fat, and still held only 60,944 clusters.
+  static constexpr std::uint32_t kMinimumFat32Clusters = 65525;
 
   std::unique_ptr<FileOperations> file_ops_;
 
   // Convert FileError to FormatError
   FormatError ConvertError(FileError error) const;
+
+  // The size of the partition, in sectors, that both the partition table and
+  // the filesystem inside it must describe.
+  //
+  // MBR holds it in a 32-bit field, so on a device too large for that field
+  // the partition can only cover as much as the field can express and the rest
+  // of the card is unreachable through this table. That is a limitation of
+  // MBR, not a choice -- but it has to be applied in exactly one place.
+  // WriteMbr and the WriteFat32 call used to each do their own arithmetic, one
+  // clamping and the other truncating, and disagreed on every device over
+  // 2 TiB: at 3 TiB the table described 4294959103 sectors while the FAT32
+  // inside it described 2147475456, and at 2 and 4 TiB the filesystem claimed
+  // one sector more than the partition held.
+  static std::uint32_t PartitionSectorsFor(std::uint64_t device_size_bytes);
 
   // Write MBR with single partition
   Result<void> WriteMbr(std::uint64_t device_size_bytes) const;
@@ -191,6 +225,18 @@ class DiskFormatter {
   // Utility functions
   Fat32Config CalculateFat32Config(std::uint32_t partition_size_sectors) const;
   std::uint32_t CalculateSectorsPerFat(const Fat32Config& config) const;
+
+  // The FAT length and data cluster count a partition works out to. One
+  // function so the cluster size chosen in CalculateFat32Config and the FAT
+  // length written into the boot sector cannot be derived differently.
+  static Fat32Geometry ComputeGeometry(std::uint32_t partition_sectors,
+                                       std::uint32_t sectors_per_cluster,
+                                       std::uint16_t reserved_sectors,
+                                       std::uint8_t num_fats);
+
+  // Whether a partition this size can hold a FAT32 at all, at the cluster
+  // size CalculateFat32Config would pick for it.
+  bool CanHoldFat32(std::uint32_t partition_sectors) const;
   
   Result<void> WriteAtOffset(
       int fd,
