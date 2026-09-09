@@ -1930,7 +1930,10 @@ TEST_CASE("A ragged local image reaches a real device, whose last sector must be
 
     // And the image is on the device, whole. The padding goes after it, so
     // nothing of the image itself is lost to the rounding.
-    QFile written(dest);
+    //
+    // Read from the media rather than the node: a successful write ejects the
+    // device, which on macOS detaches the image and takes the node with it.
+    QFile written(backing);
     REQUIRE(written.open(QIODevice::ReadOnly));
     const QByteArray head = written.read(image.size());
     written.close();

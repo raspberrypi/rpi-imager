@@ -57,18 +57,55 @@ inline int runCapture(const char* path, const std::vector<const char*>& argv,
     }
 
     ::close(pipefd[1]);
-    char buf[256] = {};
-    ssize_t n = ::read(pipefd[0], buf, sizeof(buf) - 1);
+    // Drained to EOF: one read truncates, and closing early costs the
+    // child a SIGPIPE it reports as failure.
+    std::string collected;
+    char buf[256];
+    ssize_t n;
+    while ((n = ::read(pipefd[0], buf, sizeof(buf))) > 0)
+        collected.append(buf, static_cast<std::size_t>(n));
     ::close(pipefd[0]);
     int status = 0;
     ::waitpid(pid, &status, 0);
-    if (out && n > 0)
-        out->assign(buf, static_cast<std::size_t>(n));
+    if (out)
+        *out = collected;
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
 class LoopDevice {
 public:
+#ifdef __APPLE__
+    // hdiutil attaches as the calling user, nodes owned by them: no
+    // privilege, no chown, unlike Linux.
+    explicit LoopDevice(const std::string& backingFile)
+    {
+        // diskimage-class is explicit: a raw .img has no header. -nomount
+        // keeps any filesystem inside unmounted.
+        std::string out;
+        if (hdiutil({"attach", "-nomount", "-imagekey",
+                     "diskimage-class=CRawDiskImage", backingFile.c_str()},
+                    &out) != 0)
+            return;
+
+        // First field of the first line: the whole-disk node.
+        const std::string block = firstField(out);
+        if (!isDiskPath(block))
+            return;
+        attached_ = block;
+
+        // The raw node: /dev/rdiskN refuses non-sector-multiple I/O, the
+        // rule this class exists to enforce.
+        device_ = "/dev/r" + block.substr(5);
+    }
+
+    ~LoopDevice()
+    {
+        if (attached_.empty())
+            return;
+        std::string ignored;
+        hdiutil({"detach", attached_.c_str()}, &ignored);
+    }
+#else
     explicit LoopDevice(const std::string& backingFile)
     {
         std::string out;
@@ -105,14 +142,50 @@ public:
         std::string ignored;
         losetup({"-d", device_.c_str()}, &ignored);
     }
+#endif
 
     LoopDevice(const LoopDevice&) = delete;
     LoopDevice& operator=(const LoopDevice&) = delete;
 
     bool valid() const { return !device_.empty(); }
+
     const std::string& path() const { return device_; }
 
+    // The same media, for a readback of any length: Linux has one node,
+    // strict only under O_DIRECT; macOS splits them.
+#ifdef __APPLE__
+    const std::string& readPath() const { return attached_; }
+#else
+    const std::string& readPath() const { return device_; }
+#endif
+
 private:
+#ifdef __APPLE__
+    static int hdiutil(std::vector<const char*> args, std::string* out)
+    {
+        std::vector<const char*> argv = {"hdiutil"};
+        argv.insert(argv.end(), args.begin(), args.end());
+        argv.push_back(nullptr);
+        return runCapture("/usr/bin/hdiutil", argv, out);
+    }
+
+    static std::string firstField(const std::string& s)
+    {
+        const std::size_t end = s.find_first_of(" \t\r\n");
+        return end == std::string::npos ? s : s.substr(0, end);
+    }
+
+    static bool isDiskPath(const std::string& s)
+    {
+        if (s.rfind("/dev/disk", 0) != 0)
+            return false;
+        const std::string digits = s.substr(9);
+        return !digits.empty() &&
+               std::all_of(digits.begin(), digits.end(),
+                           [](unsigned char c) { return c >= '0' && c <= '9'; });
+    }
+#endif
+
     // Run losetup, directly when already root and via sudo -n otherwise.
     // Going straight to losetup matters for rootful CI containers and VMs,
     // where sudo is frequently not installed at all; -n on the fallback means
@@ -158,6 +231,7 @@ private:
     }
 
     std::string device_;
+    std::string attached_;
 };
 
 } // namespace rpi_test

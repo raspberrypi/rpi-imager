@@ -1160,6 +1160,10 @@ TEST_CASE("An async write that fails at completion is reported",
 // perfectly correct right up until it meets a real card.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// The two platforms answer a partial sector differently, and both answers are
+// deliberate: Linux lets O_DIRECT refuse it, macOS absorbs it into a tail that
+// PwriteAligned commits by read-modify-write at the next flush.
+#ifndef __APPLE__
 TEST_CASE("A device using direct I/O refuses a partial sector", "[fileops][loop]") {
   AsyncFixture fx("rpi-imager-partial-sector.img");
   if (!fx.haveDevice())
@@ -1185,6 +1189,36 @@ TEST_CASE("A device using direct I/O refuses a partial sector", "[fileops][loop]
   // the length and not the handle.
   CHECK(fx.ops->WriteSequential(block.data(), 512) == rpi_imager::FileError::kSuccess);
 }
+#else
+TEST_CASE("A partial sector is absorbed and lands at the flush", "[fileops][loop]") {
+  // /dev/rdiskN refuses a write that is not a whole number of sectors, so
+  // PwriteAligned holds the residue back rather than passing the refusal up --
+  // libarchive hands over chunks of whatever length it likes. What has to be
+  // true is that the bytes are not lost: the tail is committed by
+  // read-modify-write, so it is on the device once the flush has run.
+  AsyncFixture fx("rpi-imager-partial-sector.img");
+  if (!fx.haveDevice())
+    SKIP("no raw disk image attached (hdiutil unavailable?)");
+  REQUIRE(fx.open());
+  REQUIRE(fx.ops->IsDirectIOEnabled());
+
+  const AlignedBlock block(4096, 5);
+  REQUIRE(block.valid());
+
+  // Accepted, though the device would have refused this length itself.
+  CHECK(fx.ops->WriteSequential(block.data(), 100) == rpi_imager::FileError::kSuccess);
+  REQUIRE(fx.ops->ForceSync() == rpi_imager::FileError::kSuccess);
+
+  // And actually there afterwards, which is the part a deferral could lose.
+  REQUIRE(fx.ops->Seek(0) == rpi_imager::FileError::kSuccess);
+  std::vector<std::uint8_t> readBack(512, 0);
+  std::size_t got = 0;
+  REQUIRE(fx.ops->ReadSequential(readBack.data(), readBack.size(), got) ==
+          rpi_imager::FileError::kSuccess);
+  REQUIRE(got == 512);
+  CHECK(std::equal(readBack.begin(), readBack.begin() + 100, block.data()));
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // The handle after the card has gone
