@@ -1282,3 +1282,132 @@ TEST_CASE("Cancelling during the file server says nothing to the user",
     INFO("errors: " << log.errors.join(" | ").toStdString());
     CHECK(log.errors.isEmpty());
 }
+
+// ══════════════════════════════════════════════════════════════
+// The phase finishing the way it is meant to
+//
+// Everything above is a failure. This is what a bootstrap looks like when it
+// works: the board is served its firmware, reboots, and comes back on the
+// same port as a fastboot device -- and the scanner watching for that is
+// what ends the phase, not the file server.
+//
+// So the file server "failing" is the ordinary outcome. The board stops
+// answering because it has gone to reboot, and whether that was a fault or
+// the whole point is decided by whether the next stage turned up. Reading
+// that the wrong way round is a bootstrap that worked being reported as a
+// failure, on a board that is now sitting in fastboot waiting to be written.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A board that comes back as a fastboot device finishes the phase",
+          "[rpiboot][phase][fastboot-wait]")
+{
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    t.bus.transport = &mock;
+    t.bus.bootDevices = { bootedBoard() };
+    // On the same port path, which is how it is known to be the same board
+    // rather than something else somebody plugged in.
+    t.bus.fastbootDevices = { device(1, 9, {1, 2}, 1) };
+    // Hold the file server up for longer than the scanner's first poll. A
+    // real one is shipping megabytes when the board stops answering; this
+    // one would otherwise give up in microseconds and decide the bootstrap
+    // had failed before anything had a chance to look.
+    t.bus.onFirstRead = [] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(900));
+    };
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    // Nothing said to the user: this is the good case.
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.errors.isEmpty());
+
+    // And the board is named for whoever writes to it next. Bus and address,
+    // which is what the flash thread opens.
+    INFO("fastbootId: " << fbId.toStdString());
+    CHECK(fbId == QStringLiteral("1:9"));
+}
+
+TEST_CASE("A board on another port is not the one waited for",
+          "[rpiboot][phase][fastboot-wait]")
+{
+    // Two boards on the bus, one of them somebody else's. Taking the wrong
+    // one hands the flash thread a device that was never bootstrapped.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    t.bus.transport = &mock;
+    t.bus.bootDevices = { bootedBoard() };
+    t.bus.fastbootDevices = { device(1, 9, {3, 4}, 1) };   // port 3.4, not ours
+    // Give up rather than waiting out the full minute for one that is not
+    // coming.
+    t.bus.onScan = [&t](int n) { if (n >= 3) t.cancel(); };
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+    CHECK(fbId.isEmpty());
+}
+
+TEST_CASE("A bootcode upload that throws is reported as a USB error",
+          "[rpiboot][phase][bootcode]")
+{
+    // The cable pulled while the first-stage bootcode is going up. Different
+    // place from the file-server open, and the same requirement: the wizard
+    // is waiting on a board that is now in an unknown state, so it has to be
+    // told rather than left.
+    FirmwareDir fw;
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = fw.path();
+    // Serial index 0: still in ROM mode, so the bootcode upload is attempted.
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+    t.bus.throwOnOpen = true;
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    REQUIRE_FALSE(log.errors.isEmpty());
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.errors.last().contains(QStringLiteral("USB error")));
+    CHECK(log.errors.last().contains(QStringLiteral("cable was pulled")));
+}
+
+TEST_CASE("A secure-boot phase watches for the board returning to rpiboot",
+          "[rpiboot][phase][sbr]")
+{
+    // After writing the EEPROM the board reboots back into rpiboot rather
+    // than into fastboot, so the phase watches for a different thing: the
+    // same board at a new address. Watching for the wrong one leaves a
+    // finished provisioning looking like a timeout.
+    FirmwareDir fw;
+    rpiboot::testing::MockUsbTransport mock;
+
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::SecureBootRecovery};
+    t.firmwareDir = fw.path();
+    t.bus.transport = &mock;
+    t.bus.bootDevices = { bootedBoard() };
+
+    SignalLog log;
+    log.attach(&t);
+
+    QString fbId, bcDiag, fsDiag;
+    // The board never comes back, so the file server's failure stands. What
+    // matters here is that the recovery scanner was the one started -- a
+    // fastboot device appearing would not end this phase.
+    t.bus.fastbootDevices = { device(1, 9, {1, 2}, 1) };
+    t.bus.onScan = [&t](int n) { if (n >= 4) t.cancel(); };
+
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::SecureBootRecovery, fbId, bcDiag, fsDiag));
+    CHECK(fbId.isEmpty());
+}
