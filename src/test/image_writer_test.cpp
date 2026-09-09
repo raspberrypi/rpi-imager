@@ -11297,3 +11297,113 @@ TEST_CASE("With two of them, the last is taken", "[imagewriter][eeprom]")
               "IMAGER_REPO_URL=https://second.invalid/os.json\n")
           == QStringLiteral("https://second.invalid/os.json"));
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// The username the customisation dialog offers
+//
+// getCurrentUser() fills in the account name on the OS customisation page,
+// and whatever is there when the user presses Next becomes the account on
+// the Pi. The desktop account it starts from is not a Unix username: it can
+// carry capitals, it can have a space in it on Windows and macOS, and when
+// the imager has been started with sudo it is "root".
+//
+// A name with a space in it is not a valid Linux username; "root" is an
+// account the first-boot script will not create, and offering it as the
+// default hands the user a card that stops at first boot with nothing to say
+// why. Only the plain case had ever been run.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Runs the accessor with USER and USERNAME set as given, and puts the
+// environment back afterwards -- these are read from the process, and
+// leaving them changed would follow into the next case.
+class ScopedUserEnv
+{
+public:
+    ScopedUserEnv(const char *user, const char *username)
+        : _user(qgetenv("USER")), _username(qgetenv("USERNAME"))
+    {
+        set("USER", user);
+        set("USERNAME", username);
+    }
+
+    ~ScopedUserEnv()
+    {
+        set("USER", _user.isNull() ? nullptr : _user.constData());
+        set("USERNAME", _username.isNull() ? nullptr : _username.constData());
+    }
+
+    ScopedUserEnv(const ScopedUserEnv &) = delete;
+    ScopedUserEnv &operator=(const ScopedUserEnv &) = delete;
+
+private:
+    static void set(const char *name, const char *value)
+    {
+        if (value)
+            qputenv(name, QByteArray(value));
+        else
+            qunsetenv(name);
+    }
+
+    QByteArray _user;
+    QByteArray _username;
+};
+
+} // namespace
+
+TEST_CASE("The offered username is the account name, in lower case",
+          "[imagewriter][username]")
+{
+    ScopedUserEnv env("Charlie", nullptr);
+    ImageWriter writer(nullptr);
+    CHECK(writer.getCurrentUser() == QStringLiteral("charlie"));
+}
+
+TEST_CASE("An account name with a space is cut at the first word",
+          "[imagewriter][username]")
+{
+    // "Ada Lovelace" is a perfectly ordinary account name on Windows and
+    // macOS and not a username Linux will accept. Offering it whole produces
+    // a card whose first boot fails to create the account.
+    ScopedUserEnv env("Ada Lovelace", nullptr);
+    ImageWriter writer(nullptr);
+    CHECK(writer.getCurrentUser() == QStringLiteral("ada"));
+}
+
+TEST_CASE("Running as root does not offer root as the account to create",
+          "[imagewriter][username]")
+{
+    // The imager is routinely started with sudo on Linux, which is exactly
+    // when this is read. "root" is not an account the first-boot script will
+    // create, and it is not one anybody should be offered by default.
+    ScopedUserEnv env("root", nullptr);
+    ImageWriter writer(nullptr);
+    CHECK(writer.getCurrentUser() == QStringLiteral("pi"));
+}
+
+TEST_CASE("With no account name in the environment the default is offered",
+          "[imagewriter][username]")
+{
+    ScopedUserEnv env("", nullptr);
+    ImageWriter writer(nullptr);
+    CHECK(writer.getCurrentUser() == QStringLiteral("pi"));
+}
+
+TEST_CASE("The Windows spelling of the variable is read too",
+          "[imagewriter][username]")
+{
+    // Windows sets USERNAME rather than USER, and the customisation page is
+    // the same page there.
+    ScopedUserEnv env("", "Grace");
+    ImageWriter writer(nullptr);
+    CHECK(writer.getCurrentUser() == QStringLiteral("grace"));
+}
+
+TEST_CASE("A Windows account name with a space is cut as well",
+          "[imagewriter][username]")
+{
+    ScopedUserEnv env("", "Grace Hopper");
+    ImageWriter writer(nullptr);
+    CHECK(writer.getCurrentUser() == QStringLiteral("grace"));
+}

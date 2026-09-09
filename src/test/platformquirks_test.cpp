@@ -2255,13 +2255,28 @@ struct ProbeRun
 // `assign` set in it. Applied inside the elevated process with env(1), so they
 // win over what sudo itself sets -- and every -u has to precede the
 // assignments, or env takes the next one for the command name.
+//
+// GCOV_PREFIX sends this run's coverage counters somewhere else. A coverage
+// build writes them beside the object files, and the first process to touch
+// one creates it: run as root, it becomes a root-owned file that every later
+// unprivileged run of the same probe then fails to write, silently. Under
+// `ctest -j` which of the two goes first is a coin toss, so the reported
+// coverage of platformquirks_linux.cpp moved between runs and understated
+// itself by everything the unprivileged probe invocations cover -- the whole
+// polkit-policy scan among it. What is lost this way is only what this
+// elevated run alone reaches, and that is measured by the case's assertions
+// rather than by the report. The variable is ignored by a build without
+// instrumentation.
 ProbeRun runProbeAsRoot(const QStringList& unset, const QStringList& assign)
 {
     ProbeRun r;
+    QTemporaryDir rootCounters;
     QStringList args{QStringLiteral("-n"), QStringLiteral("env")};
     for (const QString& name : QStringList{QStringLiteral("DISPLAY")} + unset)
         args << QStringLiteral("-u") << name;
     args << QStringLiteral("WAYLAND_DISPLAY=wayland-test");
+    if (rootCounters.isValid())
+        args << QStringLiteral("GCOV_PREFIX=") + rootCounters.path();
     args += assign;
     args << QStringLiteral(ELEVATION_PROBE_BINARY);
 
@@ -2273,6 +2288,15 @@ ProbeRun runProbeAsRoot(const QStringList& unset, const QStringList& assign)
     r.exitCode = p.exitCode();
     r.out = QString::fromUtf8(p.readAllStandardOutput());
     r.err = QString::fromUtf8(p.readAllStandardError());
+
+    // Written by root, so QTemporaryDir cannot clear them on its own.
+    if (rootCounters.isValid()) {
+        QProcess rm;
+        rm.start(QStringLiteral("sudo"),
+                 {QStringLiteral("-n"), QStringLiteral("rm"), QStringLiteral("-rf"),
+                  rootCounters.path()});
+        rm.waitForFinished(10000);
+    }
     return r;
 }
 
