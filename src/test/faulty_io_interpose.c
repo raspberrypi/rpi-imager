@@ -10,6 +10,8 @@
 // Inserted via DYLD_INSERT_LIBRARIES: dyld only honours __interpose at launch.
 
 #include <errno.h>
+#include <fcntl.h>
+#include <stdarg.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <sys/stat.h>
@@ -25,9 +27,11 @@ static _Atomic uint64_t g_bad_start;
 static _Atomic uint64_t g_bad_len;   // 0 = nothing fails
 static _Atomic uint64_t g_delay_ns;
 static _Atomic uint64_t g_failed;
+static _Atomic int      g_buffered;   // F_NOCACHE off on the target
+static _Atomic int      g_sync_owed;  // band write pending in cache
 
-// By (dev, ino), not path: OpenDevice()'s fd comes from authopen, dup()ed.
-// Uncached, because a recycled fd would fail the wrong file's writes.
+// By (dev, ino), not path: the fd comes from authopen, dup()ed. Uncached
+// because a recycled fd would fail the wrong file's writes.
 static int fd_is_target(int fd)
 {
     struct stat st;
@@ -37,7 +41,6 @@ static int fd_is_target(int fd)
         && (uint64_t)st.st_ino == atomic_load_explicit(&g_ino, memory_order_relaxed);
 }
 
-// dm commits the good part of a split bio; this refuses the write.
 static int hits_bad_band(off_t offset, size_t len)
 {
     const uint64_t bad_len = atomic_load_explicit(&g_bad_len, memory_order_relaxed);
@@ -69,7 +72,7 @@ static ssize_t rpi_faulty_pwrite(int fd, const void *buf, size_t count, off_t of
 
     hold_for_delay();
 
-    // A real device ends; the backing file would just grow.
+    // A real device ends; a backing file grows.
     const uint64_t total = atomic_load_explicit(&g_total, memory_order_relaxed);
     if (total != 0 && (uint64_t)offset + count > total) {
         atomic_fetch_add_explicit(&g_failed, 1, memory_order_relaxed);
@@ -78,6 +81,12 @@ static ssize_t rpi_faulty_pwrite(int fd, const void *buf, size_t count, off_t of
     }
 
     if (hits_bad_band(offset, count)) {
+        // Buffered, the write only reaches the cache; the card's refusal
+        // surfaces at the flush.
+        if (atomic_load_explicit(&g_buffered, memory_order_relaxed)) {
+            atomic_store_explicit(&g_sync_owed, 1, memory_order_relaxed);
+            return pwrite(fd, buf, count, offset);
+        }
         atomic_fetch_add_explicit(&g_failed, 1, memory_order_relaxed);
         errno = EIO;
         return -1;
@@ -85,7 +94,34 @@ static ssize_t rpi_faulty_pwrite(int fd, const void *buf, size_t count, off_t of
     return pwrite(fd, buf, count, offset);
 }
 
-// Reads fail in the band too, so verification cannot pass.
+// F_NOCACHE picks the mode and has no getter, so watch it being set.
+static int rpi_faulty_fcntl(int fd, int cmd, ...)
+{
+    va_list ap;
+    va_start(ap, cmd);
+    void *arg = va_arg(ap, void *);
+    va_end(ap);
+
+    if (cmd == F_NOCACHE && atomic_load_explicit(&g_armed, memory_order_acquire)
+        && fd_is_target(fd))
+        atomic_store_explicit(&g_buffered, (intptr_t)arg == 0, memory_order_relaxed);
+
+    return fcntl(fd, cmd, arg);
+}
+
+static int rpi_faulty_fsync(int fd)
+{
+    if (!atomic_load_explicit(&g_armed, memory_order_acquire) || !fd_is_target(fd))
+        return fsync(fd);
+
+    if (atomic_exchange_explicit(&g_sync_owed, 0, memory_order_relaxed)) {
+        atomic_fetch_add_explicit(&g_failed, 1, memory_order_relaxed);
+        errno = EIO;
+        return -1;
+    }
+    return fsync(fd);
+}
+
 static ssize_t rpi_faulty_pread(int fd, void *buf, size_t count, off_t offset)
 {
     if (!atomic_load_explicit(&g_armed, memory_order_acquire) || !fd_is_target(fd))
@@ -106,6 +142,8 @@ static ssize_t rpi_faulty_pread(int fd, void *buf, size_t count, off_t offset)
 
 RPI_INTERPOSE(rpi_faulty_pwrite, pwrite);
 RPI_INTERPOSE(rpi_faulty_pread,  pread);
+RPI_INTERPOSE(rpi_faulty_fcntl,  fcntl);
+RPI_INTERPOSE(rpi_faulty_fsync,  fsync);
 
 __attribute__((visibility("default")))
 int rpi_faulty_arm(const char *path, uint64_t total, uint64_t bad_start,
@@ -122,6 +160,8 @@ int rpi_faulty_arm(const char *path, uint64_t total, uint64_t bad_start,
     atomic_store_explicit(&g_bad_len, bad_len, memory_order_relaxed);
     atomic_store_explicit(&g_delay_ns, delay_ns, memory_order_relaxed);
     atomic_store_explicit(&g_failed, 0, memory_order_relaxed);
+    atomic_store_explicit(&g_buffered, 0, memory_order_relaxed);
+    atomic_store_explicit(&g_sync_owed, 0, memory_order_relaxed);
     atomic_store_explicit(&g_armed, 1, memory_order_release);
     return 0;
 }
@@ -133,6 +173,7 @@ void rpi_faulty_disarm(void)
     atomic_store_explicit(&g_total, 0, memory_order_relaxed);
     atomic_store_explicit(&g_bad_len, 0, memory_order_relaxed);
     atomic_store_explicit(&g_delay_ns, 0, memory_order_relaxed);
+    atomic_store_explicit(&g_sync_owed, 0, memory_order_relaxed);
 }
 
 __attribute__((visibility("default")))

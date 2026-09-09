@@ -1883,15 +1883,15 @@ TEST_CASE("A buffered write that only the flush finds out about is reported",
   // soon as the bytes reach the page cache. Nothing has touched the card yet.
   // The card's answer arrives at the fsync, and if that answer is thrown away
   // the writer reports a finished, flushed image over data the card refused.
-  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::canInjectFaults;
   using rpi_imager::testing::FaultyDevice;
 
-  if (!canRunPrivileged())
-    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs passwordless sudo on Linux, the ctest-inserted interposer on macOS)");
 
   FaultyDevice device(64, 8);
   if (!device.isReady())
-    SKIP("the device-mapper fault injection device could not be created");
+    SKIP("the faulty device could not be created");
 
   auto ops = FileOperations::Create();
   REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
