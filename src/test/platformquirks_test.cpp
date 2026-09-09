@@ -698,6 +698,7 @@ TEST_CASE("Start and stop in a loop leaves nothing behind",
 #include <sys/un.h>
 #include <cstring>
 #include <pwd.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace {
@@ -4452,3 +4453,178 @@ TEST_CASE("The URL stays a single argument", "[platformquirks][openurl]")
 }
 
 #endif // Q_OS_LINUX
+
+// ══════════════════════════════════════════════════════════════════════════
+// Starting the browser
+//
+// Clicking the documentation, the licence or the Raspberry Pi Connect
+// sign-in ends up at launchDetached(), which is what starts xdg-open --- and
+// runuser, and pkexec, on the elevated path. When it goes wrong the user gets
+// no browser and no explanation: the click simply does nothing.
+//
+// It does not use PATH. A program given by name is looked for in /usr/bin,
+// /bin, /usr/sbin and /sbin in turn, so an elevated process cannot be pointed
+// at somebody else's binary. An absolute path is run as given, which is what
+// lets these hand it a stand-in without touching the machine.
+// ══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// A stand-in program that records its arguments, one per line, and exits.
+bool writeArgumentRecorder(const QString& path, const QString& logPath,
+                           int exitCode = 0)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    f.write("#!/bin/sh\n");
+    // %s and not %%s: QString::arg only replaces %1, so a doubled percent
+    // reaches the shell as a doubled percent and printf writes a literal
+    // "%s" for every argument.
+    f.write(QStringLiteral("for a in \"$@\"; do printf '%s\\n' \"$a\" >> '%1'; done\n")
+                .arg(logPath).toUtf8());
+    f.write(QStringLiteral("exit %1\n").arg(exitCode).toUtf8());
+    f.close();
+    return QFile::setPermissions(path,
+                                 QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                 QFileDevice::ExeOwner);
+}
+
+// What the recorder was told, once it has had a moment to run. The launch is
+// detached, so it has not necessarily happened by the time the call returns.
+QStringList recordedArguments(const QString& logPath, int timeoutMs = 10000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (t.elapsed() < timeoutMs) {
+        QFile f(logPath);
+        if (f.open(QIODevice::ReadOnly)) {
+            const QStringList lines = QString::fromUtf8(f.readAll())
+                                          .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+            f.close();
+            if (!lines.isEmpty())
+                return lines;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    }
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("A program that starts is reported as started, with its arguments",
+          "[platformquirks][launch]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString program = dir.filePath(QStringLiteral("recorder"));
+    const QString log = dir.filePath(QStringLiteral("args.txt"));
+    REQUIRE(writeArgumentRecorder(program, log));
+
+    const QString url =
+        QStringLiteral("https://connect.raspberrypi.com/sign-in?next=%2Fdevices&id=abc");
+    CHECK(PlatformQuirks::launchDetached(program, QStringList() << url));
+
+    // One argument, whole. Joined into a command line for something else to
+    // split again, a URL with an ampersand in it arrives cut in two.
+    const QStringList got = recordedArguments(log);
+    REQUIRE(got.size() == 1);
+    CHECK(got.first() == url);
+}
+
+TEST_CASE("Arguments are passed one at a time, not run together",
+          "[platformquirks][launch]")
+{
+    // runuser is given a user, a shell and a command line; pkexec a user and
+    // a program. Anything that collapses those into one string hands the
+    // browser a single nonsensical argument.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString program = dir.filePath(QStringLiteral("recorder"));
+    const QString log = dir.filePath(QStringLiteral("args.txt"));
+    REQUIRE(writeArgumentRecorder(program, log));
+
+    const QStringList args{QStringLiteral("--user"), QStringLiteral("a user with spaces"),
+                           QStringLiteral("xdg-open"), QStringLiteral("https://example.invalid/")};
+    CHECK(PlatformQuirks::launchDetached(program, args));
+
+    const QStringList got = recordedArguments(log);
+    REQUIRE(got.size() == args.size());
+    CHECK(got == args);
+}
+
+TEST_CASE("A program that is not there is reported, not assumed to have run",
+          "[platformquirks][launch]")
+{
+    // This is what the status pipe is for. The first child exits as soon as
+    // it has forked the grandchild -- long before exec runs -- so waiting on
+    // it says nothing about whether the program started. Without the pipe a
+    // missing browser reads as success and the caller never reaches its own
+    // fallback, which on the elevated path is pkexec.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    CHECK_FALSE(PlatformQuirks::launchDetached(
+        dir.filePath(QStringLiteral("no-such-program")),
+        QStringList() << QStringLiteral("https://example.invalid/")));
+}
+
+TEST_CASE("A program that cannot be executed is reported too",
+          "[platformquirks][launch]")
+{
+    // Present and not runnable: a broken install, or a file where a program
+    // should be.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString program = dir.filePath(QStringLiteral("not-runnable"));
+    {
+        QFile f(program);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("this is not a program\n");
+        f.close();
+        REQUIRE(QFile::setPermissions(program,
+                                      QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    }
+
+    CHECK_FALSE(PlatformQuirks::launchDetached(program, QStringList()));
+}
+
+TEST_CASE("The browser outlives the call and is nobody's child",
+          "[platformquirks][launch]")
+{
+    // Detached means detached: the application must not be waiting on the
+    // browser, and must not leave a zombie behind when it exits without
+    // reaping one. The double fork is what arranges that, and a browser is
+    // expected to outlive the click by rather a long time.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString program = dir.filePath(QStringLiteral("slow"));
+    const QString log = dir.filePath(QStringLiteral("args.txt"));
+    {
+        QFile f(program);
+        REQUIRE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("#!/bin/sh\n");
+        // An absolute path: this runs with whatever environment the launcher
+        // left, and a bare `sleep` is not guaranteed to be findable.
+        f.write("/bin/sleep 1\n");
+        f.write(QStringLiteral("printf 'done\\n' >> '%1'\n").arg(log).toUtf8());
+        f.close();
+        REQUIRE(QFile::setPermissions(program,
+                                      QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                      QFileDevice::ExeOwner));
+    }
+
+    QElapsedTimer t;
+    t.start();
+    CHECK(PlatformQuirks::launchDetached(program, QStringList()));
+    // Returned without waiting for it.
+    CHECK(t.elapsed() < 900);
+
+    // And nothing of ours is left to reap: the first child is gone and the
+    // grandchild belongs to init.
+    int status = 0;
+    const pid_t reaped = ::waitpid(-1, &status, WNOHANG);
+    CHECK((reaped == 0 || (reaped < 0 && errno == ECHILD)));
+
+    // It really did run, a second later, with nobody waiting.
+    CHECK_FALSE(recordedArguments(log).isEmpty());
+}
