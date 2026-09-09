@@ -49,6 +49,28 @@ if(APPLE)
         "${CMAKE_CURRENT_BINARY_DIR}/libfaulty_io_interpose.dylib")
 endif()
 
+# MacFile: the authorised-open path, minus the authorisation.
+if(APPLE)
+    add_executable(authopen_stub ${CMAKE_CURRENT_SOURCE_DIR}/authopen_stub.cpp)
+    target_compile_features(authopen_stub PRIVATE cxx_std_20)
+    target_compile_options(authopen_stub PRIVATE -Wall -Wextra -Wpedantic)
+
+    find_library(SECURITY_FRAMEWORK Security)
+    add_executable(macfile_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/macfile.cpp
+        macfile_test.cpp
+    )
+    set_target_properties(macfile_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(macfile_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core ${SECURITY_FRAMEWORK})
+    target_include_directories(macfile_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(macfile_test PRIVATE cxx_std_20)
+    target_compile_definitions(macfile_test PRIVATE
+        AUTHOPEN_STUB_BINARY="$<TARGET_FILE:authopen_stub>")
+    add_dependencies(macfile_test authopen_stub)
+    rpi_discover_tests(macfile_test)
+endif()
+
 # Link liburing into a target that compiles the platform file_operations.
 #
 # linux/Platform.cmake adds -DHAVE_LIBURING with add_definitions(), which every
