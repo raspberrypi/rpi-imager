@@ -95,6 +95,38 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    // Sixth mode: asking pkexec to install the policy on our behalf.
+    //
+    // This is what runs when Imager finds it has no polkit policy and offers
+    // to install one. It shells out to pkexec to re-run itself elevated with
+    // --install-elevation-policy; get the arguments wrong and the elevated
+    // copy installs nothing, so the offer comes back on every launch and
+    // accepting it never helps.
+    if (argc > 1 && std::string_view(argv[1]) == "installpolicy") {
+        std::printf("EUID=%lu\n", static_cast<unsigned long>(::geteuid()));
+        std::printf("INSTALLER=%d\n",
+                    PlatformQuirks::runElevatedPolicyInstaller() ? 1 : 0);
+        std::fflush(stdout);
+        return 0;
+    }
+
+    // Seventh mode: replacing this process with an elevated one.
+    //
+    // execElevated() never returns on success -- the process is gone and
+    // pkexec's is in its place -- so the observable is this probe's exit code
+    // and whether the line below is ever printed.
+    if (argc > 1 && std::string_view(argv[1]) == "execelevated") {
+        QStringList extra;
+        for (int i = 2; i < argc; ++i)
+            extra << QString::fromLocal8Bit(argv[i]);
+        std::fflush(stdout);
+        PlatformQuirks::execElevated(extra);
+        // Only reached when the exec could not happen at all.
+        std::printf("EXEC_RETURNED=1\n");
+        std::fflush(stdout);
+        return 0;
+    }
+
     if (argc > 1 && std::string_view(argv[1]) == "policy") {
         std::printf("BUNDLE=%s\n", PlatformQuirks::getBundlePath());
         std::printf("POLICY=%d\n",

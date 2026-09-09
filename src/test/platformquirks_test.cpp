@@ -21,6 +21,7 @@
 #include <QProcess>
 #include <QThread>
 #include <QStringList>
+#include <QRegularExpression>
 
 #include <atomic>
 #include <chrono>
@@ -4548,6 +4549,171 @@ TEST_CASE("Unelevated, the link goes straight to xdg-open",
     // And nothing was asked to drop privilege it does not have.
     CHECK(run.runuserArgs.isEmpty());
     CHECK(run.pkexecArgs.isEmpty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// The other two ways pkexec gets run
+//
+// tryElevate() is the one that runs at startup. Two more sit beside it and
+// were uncovered: the installer Imager offers when it finds no polkit policy,
+// and the exec that replaces this process with an elevated one.
+//
+// Both matter to somebody who cannot write to a card. Get the installer's
+// arguments wrong and accepting the offer installs nothing, so the offer
+// comes back on every launch and never helps. Have the exec return where it
+// should not, or vanish where it should return, and the window is either
+// duplicated or gone.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+struct PkexecRun {
+    bool ran = false;
+    int exitCode = -1;
+    QString out;
+    QStringList args;      // what the stand-in was invoked with
+};
+
+// Runs one probe mode as root in a namespace with a pkexec of the caller's
+// choosing bound over the real one.
+PkexecRun runWithPkexec(const QStringList &probeArgs, int pkexecExit,
+                        bool pkexecRunnable = true)
+{
+    PkexecRun result;
+
+    QTemporaryDir scratch;
+    if (!scratch.isValid())
+        return result;
+
+    const QString bundle = scratch.filePath(QStringLiteral("rpi-imager.AppImage"));
+    const QString pkexec = scratch.filePath(QStringLiteral("pkexec"));
+    {
+        QFile f(bundle);
+        if (!f.open(QIODevice::WriteOnly))
+            return result;
+        f.write("not really an AppImage");
+    }
+    {
+        QFile f(pkexec);
+        if (!f.open(QIODevice::WriteOnly))
+            return result;
+        f.write(QByteArray("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$RECORD/pkexec.log\"\nexit ")
+                + QByteArray::number(pkexecExit) + "\n");
+        f.close();
+        QFileDevice::Permissions perms = QFileDevice::ReadOwner | QFileDevice::WriteOwner;
+        if (pkexecRunnable)
+            perms |= QFileDevice::ExeOwner;
+        f.setPermissions(perms);
+    }
+
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            QStringList{QStringLiteral("-rm"), QStringLiteral("--propagation"),
+                        QStringLiteral("private"), QStringLiteral("sh"),
+                        QStringLiteral("-c"),
+                        QStringLiteral("export APPIMAGE=\"$1\" RECORD=\"$2\" && "
+                                       "mount --bind \"$3\" /usr/bin/pkexec && "
+                                       "shift 3 && exec \"$@\""),
+                        QStringLiteral("_"), bundle, scratch.path(), pkexec,
+                        QStringLiteral(ELEVATION_PROBE_BINARY)}
+                + probeArgs);
+    if (!p.waitForFinished(60000))
+        return result;
+
+    result.ran = true;
+    result.exitCode = p.exitCode();
+    result.out = QString::fromUtf8(p.readAllStandardOutput());
+
+    QFile log(QDir(scratch.path()).filePath(QStringLiteral("pkexec.log")));
+    if (log.open(QIODevice::ReadOnly))
+        result.args = QString::fromUtf8(log.readAll())
+                          .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    return result;
+}
+
+} // namespace
+
+TEST_CASE("Installing the policy asks pkexec for the flag that installs it",
+          "[platformquirks][elevation]")
+{
+    REQUIRE_ELEVATION_HARNESS();
+    const PkexecRun run = runWithPkexec({QStringLiteral("installpolicy")}, 0);
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    INFO("pkexec got: " << run.args.join(QStringLiteral(" ")).toStdString());
+    CHECK(run.out.contains(QStringLiteral("INSTALLER=1")));
+
+    REQUIRE(run.args.size() >= 3);
+    // The agent is disabled because pkexec would otherwise spawn its own
+    // text-mode polkit agent, which fights the desktop's.
+    CHECK(run.args.contains(QStringLiteral("--disable-internal-agent")));
+    // Re-runs *this* binary, and tells it what to do when it gets there.
+    CHECK(run.args.contains(QStringLiteral("--install-elevation-policy")));
+    CHECK(run.args.at(run.args.size() - 2).endsWith(QStringLiteral("rpi-imager.AppImage")));
+}
+
+TEST_CASE("A policy install the user declined is reported as declined",
+          "[platformquirks][elevation]")
+{
+    // pkexec exits 126 when authorisation is refused. Reporting that as a
+    // success leaves Imager believing it can elevate, and the next write
+    // fails with a permissions error instead of an explanation.
+    REQUIRE_ELEVATION_HARNESS();
+    const PkexecRun run = runWithPkexec({QStringLiteral("installpolicy")}, 126);
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    CHECK(run.out.contains(QStringLiteral("INSTALLER=0")));
+}
+
+TEST_CASE("Re-running elevated replaces this process, arguments and all",
+          "[platformquirks][elevation]")
+{
+    // execElevated() does not fork: the process is gone and pkexec's is in
+    // its place, which is what keeps a single window on screen. Whatever the
+    // caller wanted passing on has to survive the handover.
+    REQUIRE_ELEVATION_HARNESS();
+    const PkexecRun run = runWithPkexec(
+        {QStringLiteral("execelevated"), QStringLiteral("--cli"),
+         QStringLiteral("--enable-writing-system-drives")}, 33);
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    INFO("pkexec got: " << run.args.join(QStringLiteral(" ")).toStdString());
+
+    // The stand-in's own code, because the stand-in *is* this process now.
+    CHECK(run.exitCode == 33);
+    CHECK_FALSE(run.out.contains(QStringLiteral("EXEC_RETURNED")));
+
+    CHECK(run.args.contains(QStringLiteral("--disable-internal-agent")));
+    CHECK(run.args.contains(QStringLiteral("--cli")));
+    CHECK(run.args.contains(QStringLiteral("--enable-writing-system-drives")));
+    // The bundle comes before what was asked for, or pkexec reads our
+    // arguments as its own.
+    const int bundleAt = run.args.indexOf(QRegularExpression(QStringLiteral(".*AppImage$")));
+    const int cliAt = run.args.indexOf(QStringLiteral("--cli"));
+    REQUIRE(bundleAt >= 0);
+    CHECK(bundleAt < cliAt);
+}
+
+TEST_CASE("An elevation that cannot start comes back rather than vanishing",
+          "[platformquirks][elevation]")
+{
+    // pkexec present but not runnable. execv() fails, and the process has to
+    // survive it -- there is nothing else left to tell the user anything.
+    REQUIRE_ELEVATION_HARNESS();
+    const PkexecRun run = runWithPkexec({QStringLiteral("execelevated"), QStringLiteral("--cli")},
+                                        0, /*pkexecRunnable=*/false);
+    if (!run.ran)
+        SKIP("the namespace could not be built");
+
+    INFO("probe said:\n" << run.out.toStdString());
+    CHECK(run.out.contains(QStringLiteral("EXEC_RETURNED=1")));
+    CHECK(run.args.isEmpty());
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
