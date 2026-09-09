@@ -33,6 +33,7 @@
 #include "app_resources.h"
 #include "platform_tools.h"
 #include "drivelistmodel.h"
+#include "urlfmt.h"
 #include "drivelistmodelpollthread.h"
 #if defined(Q_OS_LINUX) && defined(QT_DBUS_LIB)
 #include "linux/urihandler_dbus.h"
@@ -12557,6 +12558,42 @@ private:
     QByteArray _saved;
 };
 
+// Collects qWarning() output for the life of the object.
+//
+// Some of what Imager has to say about a bootstrap goes to the log rather
+// than to the screen, because it is advice for whoever reads the log after a
+// board did not come back. A case that only checked the call did not throw
+// would pass with the warning deleted.
+class LogCapture
+{
+public:
+    explicit LogCapture(QStringList *sink)
+    {
+        _sink = sink;
+        _previous = qInstallMessageHandler(&LogCapture::handle);
+    }
+    ~LogCapture()
+    {
+        qInstallMessageHandler(_previous);
+        _sink = nullptr;
+    }
+
+    LogCapture(const LogCapture &) = delete;
+    LogCapture &operator=(const LogCapture &) = delete;
+
+private:
+    static void handle(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
+    {
+        if (_sink && type == QtWarningMsg)
+            *_sink << msg;
+        if (_previous)
+            _previous(type, ctx, msg);
+    }
+
+    static inline QStringList *_sink = nullptr;
+    static inline QtMessageHandler _previous = nullptr;
+};
+
 // The bootstrap callbacks are protected slots -- they are wired to the
 // scanner and the thread, not called from outside. A subclass is how a test
 // stands where the scanner stands.
@@ -12710,4 +12747,118 @@ TEST_CASE("Two boards at once keep the scan paused until both are done",
 
     w.onBootstrapError(QStringLiteral("1.3"), QStringLiteral("no"));
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
+}
+
+// ---------------------------------------------------------------------------
+// How a repository is shown before it is switched to
+//
+// UrlFmt::display() is what the repository dialog puts in front of the user
+// when they pick a manifest, and it was at 0% -- two lines, neither run.
+// Switching repository changes which images Imager offers, so what the dialog
+// shows has to be what was actually chosen: a local file read back as a URL
+// ("file:///home/me/os_list.json") reads as though it came from somewhere
+// else, and an unnormalised path hides where it really points.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("A repository is shown as a path when it is one", "[imagewriter][url]")
+{
+    UrlFmt fmt;
+
+    // Local files read back as paths, not as file:// URLs.
+    CHECK(fmt.display(QUrl::fromLocalFile(QStringLiteral("/home/me/os_list.json")))
+          == QStringLiteral("/home/me/os_list.json"));
+
+    // A remote one is left as it is: there is no path to prefer.
+    CHECK(fmt.display(QUrl(QStringLiteral("https://example.invalid/os_list.json")))
+          == QStringLiteral("https://example.invalid/os_list.json"));
+}
+
+TEST_CASE("A repository path is shown where it actually points",
+          "[imagewriter][url]")
+{
+    // The dot segments are what makes this worth doing: a path that walks up
+    // and back down lands somewhere other than it reads, and the dialog is
+    // the last thing the user sees before agreeing to it.
+    UrlFmt fmt;
+
+    CHECK(fmt.display(QUrl(QStringLiteral(
+              "https://example.invalid/repo/../other/os_list.json")))
+          == QStringLiteral("https://example.invalid/other/os_list.json"));
+
+    // Nothing chosen yet is nothing shown, rather than a stray separator.
+    CHECK(fmt.display(QUrl()).isEmpty());
+}
+
+// ---------------------------------------------------------------------------
+// What Imager thinks it is running on
+//
+// On a desktop the hardware detection is a stub: no revision code, no board
+// name, not a Raspberry Pi. Those four answers reach the OS list -- a board
+// Imager believes it is running on filters the images offered -- so a stub
+// that answered anything other than "I don't know" would narrow the chooser
+// on a machine that is not a Pi at all. None of it was run.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("A desktop is not mistaken for a Raspberry Pi", "[imagewriter][hardware]")
+{
+    ImageWriter w(nullptr);
+
+    CHECK_FALSE(w.isRaspberryPiDevice());
+    // No board name to filter the list by, and no tags derived from one.
+    CHECK(w.getHardwareName().isEmpty());
+}
+
+TEST_CASE("A desktop takes no board tags from the repository's device list",
+          "[imagewriter][hardware]")
+{
+    // createHardwareTags() reads imager.devices out of the repository
+    // document and hands it to the hardware detection, which matches the
+    // board it thinks it is running on against the names there. On a desktop
+    // it thinks it is running on nothing, so nothing matches and the chooser
+    // stays unfiltered -- which is the right answer: a machine that is not a
+    // Pi should be offered every image, not none of them.
+    FeedableImageWriter w;
+    w.feedOsList(QByteArrayLiteral(
+        "{\"imager\":{\"devices\":[{\"name\":\"Raspberry Pi 5\",\"tags\":[\"pi5-64bit\"]}]},"
+        "\"os_list\":[{\"name\":\"Pi OS\",\"url\":\"https://example.invalid/a.img\"}]}"));
+
+    CHECK(w.createHardwareTags());
+    CHECK(w.getHardwareName().isEmpty());
+
+    // And the list is still whole afterwards.
+    const QStringList names = namesIn(w.getFilteredOSlistDocument());
+    INFO("offered: " << names.join(QStringLiteral(", ")).toStdString());
+    CHECK(names.contains(QStringLiteral("Pi OS")));
+}
+
+TEST_CASE("Re-provisioning without a key says so rather than going quiet",
+          "[imagewriter][rpiboot]")
+{
+    // With re-provisioning on, the bootcode uploaded to a Compute Module is
+    // counter-signed with the secure boot key. A pre-fused board rejects an
+    // unsigned one and never re-enumerates, so what the user sees is the
+    // fifteen-second wait timing out and the board reported as not appearing
+    // -- with the real reason, that no key is configured, nowhere at all.
+    QStringList warnings;
+    LogCapture capture(&warnings);
+
+    BootstrapProbe w;
+    w.setDebugRpiboot(true);
+    w.setDebugSignFastbootGadget(true);
+    w.setSetting(QStringLiteral("secureboot_rsa_key"), QString());
+
+    DriveListModel *drives = w.getDriveList();
+    REQUIRE(drives);
+
+    // It still starts -- refusing outright would be worse for a board that is
+    // not fused, which does not need the signature at all.
+    w.onRpibootDeviceDetected(QStringLiteral("usb:1-4"), 1, 4, {1, 4}, 0x2712);
+    CHECK(drives->scanMode() == DriveListModelPollThread::ScanMode::Paused);
+
+    INFO("warnings: " << warnings.join(QStringLiteral(" | ")).toStdString());
+    CHECK(std::any_of(warnings.cbegin(), warnings.cend(), [](const QString &m) {
+        return m.contains(QStringLiteral("no secure boot RSA key configured"));
+    }));
+
+    w.onBootstrapError(QStringLiteral("1.4"), QStringLiteral("no"));
 }

@@ -567,6 +567,18 @@ else()
                 # covered, and those lines contain no branch at all.
                 --exclude-throw-branches
                 --exclude-unreachable-branches
+                # Qt's registration macros. Q_ENUM and its relatives expand to
+                # meta-object glue the runtime touches only when something
+                # looks the type up by name, so they sit at zero for the life
+                # of the project and no test can move them. Six lines across
+                # four files -- nothing in the total, but two of those files
+                # are otherwise empty of code, so they led the report at 0%
+                # and 40% and drew the eye away from the real gaps.
+                #
+                # Deliberately not Q_INVOKABLE or Q_ARG: those appear on lines
+                # that also carry a function or a call, and excluding them
+                # would hide code that a test can and should reach.
+                --exclude-lines-by-pattern "^\\s*(Q_ENUM|Q_ENUM_NS|Q_FLAG|Q_FLAG_NS|Q_DECLARE_OPERATORS_FOR_FLAGS|Q_DECLARE_METATYPE)\\s*\\("
                 # Sort by uncovered *branches*, not uncovered lines: without
                 # --sort-branches the table is ordered by a metric it does not
                 # display. --sort-reverse because gcovr sorts ascending, which for
