@@ -63,6 +63,22 @@ public:
      */
     static SyncConfiguration syncConfigurationFor(qint64 totalMemMB);
 
+    /*
+     * The other three memory ladders, on a figure rather than this machine's,
+     * for the same reason syncConfigurationFor() exists.
+     *
+     * Each is a policy decision the user feels: the write buffer is how much
+     * of a small machine the writer is willing to occupy, the input buffer is
+     * what the download hands the decompressor in one go, and the queue depth
+     * is how many writes a card is asked to hold at once. A machine with
+     * 512MB and one with 32GB take opposite ends of every one of them, and a
+     * test can only ever be run on one machine.
+     */
+    static size_t writeBufferSizeFor(qint64 totalMemMB);
+    static size_t inputBufferSizeFor(qint64 totalMemMB);
+    static size_t verifyBufferSizeFor(qint64 fileSize, qint64 totalMemMB);
+    static int asyncQueueDepthFor(qint64 availableMemMB, size_t writeBlockSize);
+
     /**
      * @brief Get platform name for logging
      * @return Platform identifier string
@@ -92,7 +108,9 @@ public:
      * @brief Get system page size for memory alignment
      * @return System page size in bytes
      */
-    size_t getSystemPageSize();
+    // Static: it reads the machine's page size and nothing of this object's,
+    // so the ladder helpers above can align without an instance.
+    static size_t getSystemPageSize();
 
     /**
      * @brief Calculate optimal ring buffer slot count based on available memory

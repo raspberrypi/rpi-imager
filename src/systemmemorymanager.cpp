@@ -291,6 +291,16 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
 size_t SystemMemoryManager::getOptimalWriteBufferSize()
 {
     qint64 totalMemMB = getTotalMemoryMB();
+    const size_t bufferSize = writeBufferSizeFor(totalMemMB);
+
+    qDebug() << "Optimal write buffer size:" << (bufferSize / 1024) << "KB for"
+             << totalMemMB << "MB system";
+
+    return bufferSize;
+}
+
+size_t SystemMemoryManager::writeBufferSizeFor(qint64 totalMemMB)
+{
     size_t pageSize = getSystemPageSize();
     
     // Base buffer size calculation based on available memory
@@ -320,17 +330,17 @@ size_t SystemMemoryManager::getOptimalWriteBufferSize()
     const size_t minBufferSize = 256 * 1024;  // 256KB minimum
     const size_t maxBufferSize = 16 * 1024 * 1024;  // 16MB maximum
     bufferSize = qMax(minBufferSize, qMin(maxBufferSize, bufferSize));
-    
-    qDebug() << "Optimal write buffer size:" << (bufferSize / 1024) << "KB for" 
-             << totalMemMB << "MB system";
-    
+
     return bufferSize;
 }
 
 size_t SystemMemoryManager::getAdaptiveVerifyBufferSize(qint64 fileSize)
 {
-    qint64 totalMemMB = getTotalMemoryMB();
-    
+    return verifyBufferSizeFor(fileSize, getTotalMemoryMB());
+}
+
+size_t SystemMemoryManager::verifyBufferSizeFor(qint64 fileSize, qint64 totalMemMB)
+{
     // Base verification buffer size based on file size
     size_t baseBufferSize;
     if (fileSize < 100LL * 1024 * 1024) {        // < 100MB: use 256KB
@@ -371,8 +381,11 @@ size_t SystemMemoryManager::getAdaptiveVerifyBufferSize(qint64 fileSize)
 
 size_t SystemMemoryManager::getOptimalInputBufferSize()
 {
-    qint64 totalMemMB = getTotalMemoryMB();
-    
+    return inputBufferSizeFor(getTotalMemoryMB());
+}
+
+size_t SystemMemoryManager::inputBufferSizeFor(qint64 totalMemMB)
+{
     // Input buffer (ring buffer slot size) for downloads/streams.
     // Larger buffers reduce per-chunk overhead and improve throughput,
     // especially for decompression which works more efficiently on larger blocks.
@@ -493,9 +506,11 @@ void SystemMemoryManager::logConfigurationSummary()
 
 int SystemMemoryManager::getOptimalAsyncQueueDepth(size_t writeBlockSize)
 {
-    qint64 totalMemMB = getTotalMemoryMB();
-    qint64 availableMemMB = getAvailableMemoryMB();
-    
+    return asyncQueueDepthFor(getAvailableMemoryMB(), writeBlockSize);
+}
+
+int SystemMemoryManager::asyncQueueDepthFor(qint64 availableMemMB, size_t writeBlockSize)
+{
     // Async I/O queue depth strategy:
     //
     // With zero-copy async I/O, the ring buffer slots serve as async buffers.

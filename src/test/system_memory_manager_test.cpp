@@ -735,3 +735,155 @@ TEST_CASE("A machine reporting no memory still gets a usable interval", "[memory
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// The memory ladders, on a figure rather than this machine's.
+//
+// Each of these is a policy the user feels. Every test above runs on whatever
+// the build machine happens to have, so exactly one rung of each ladder was
+// ever executed and the other four were guesses. These walk all of them.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// The tiers named in the source, plus the far ends. 512MB is a Pi Zero;
+// 32GB is a desktop.
+constexpr qint64 kMemoryTiersMB[] = {0, 512, 1023, 1024, 2047, 2048,
+                                     4095, 4096, 8191, 8192, 16383,
+                                     16384, 32768};
+
+}  // namespace
+
+TEST_CASE("The write buffer grows with the machine and never runs backwards",
+          "[memory]") {
+    // Monotonic, because the ladder exists to give a bigger machine a bigger
+    // buffer. A rung that went the wrong way would quietly hand a 16GB
+    // desktop the buffer meant for a Pi Zero.
+    size_t previous = 0;
+    for (qint64 mb : kMemoryTiersMB) {
+        const size_t size = SystemMemoryManager::writeBufferSizeFor(mb);
+        INFO("a machine reporting " << mb << "MB");
+        CHECK(size >= previous);
+        CHECK(size >= 256u * 1024);          // the documented floor
+        CHECK(size <= 16u * 1024 * 1024);    // and ceiling
+        CHECK(size % SystemMemoryManager::getSystemPageSize() == 0);
+        previous = size;
+    }
+
+    // And it does actually move: a flat ladder would satisfy everything above.
+    CHECK(SystemMemoryManager::writeBufferSizeFor(32768) >
+          SystemMemoryManager::writeBufferSizeFor(512));
+}
+
+TEST_CASE("The write buffer takes the low rung on a machine that has nothing",
+          "[memory]") {
+    // Detection failing reports 0, which must land on the smallest buffer
+    // rather than the largest. Falling to the top of the ladder on a machine
+    // whose memory could not be read is how a small board gets a buffer it
+    // cannot afford.
+    CHECK(SystemMemoryManager::writeBufferSizeFor(0) ==
+          SystemMemoryManager::writeBufferSizeFor(512));
+    CHECK(SystemMemoryManager::writeBufferSizeFor(-1) <=
+          SystemMemoryManager::writeBufferSizeFor(2048));
+}
+
+TEST_CASE("The input buffer grows with the machine", "[memory]") {
+    // What the download hands the decompressor in one go. Same shape, one
+    // more rung: this ladder distinguishes 16GB from 8GB where the write
+    // buffer does not.
+    size_t previous = 0;
+    for (qint64 mb : kMemoryTiersMB) {
+        const size_t size = SystemMemoryManager::inputBufferSizeFor(mb);
+        INFO("a machine reporting " << mb << "MB");
+        CHECK(size >= previous);
+        CHECK(size >= 128u * 1024);
+        CHECK(size <= 4u * 1024 * 1024);
+        CHECK(size % SystemMemoryManager::getSystemPageSize() == 0);
+        previous = size;
+    }
+    CHECK(SystemMemoryManager::inputBufferSizeFor(32768) >
+          SystemMemoryManager::inputBufferSizeFor(16000));
+    CHECK(SystemMemoryManager::inputBufferSizeFor(0) ==
+          SystemMemoryManager::inputBufferSizeFor(512));
+}
+
+TEST_CASE("The verify buffer follows the image and then the machine",
+          "[memory]") {
+    // Two inputs. The image size picks the base, and the machine then scales
+    // it: half on a machine under 1GB, three-quarters under 2GB, half as much
+    // again over 8GB.
+    constexpr qint64 kSmall = 50LL * 1024 * 1024;
+    constexpr qint64 kMedium = 500LL * 1024 * 1024;
+    constexpr qint64 kLarge = 2LL * 1024 * 1024 * 1024;
+    constexpr qint64 kHuge = 8LL * 1024 * 1024 * 1024;
+
+    SECTION("a bigger image reads back in bigger pieces") {
+        constexpr qint64 kRoomy = 4096;
+        size_t previous = 0;
+        for (qint64 fileSize : {kSmall, kMedium, kLarge, kHuge}) {
+            const size_t size =
+                SystemMemoryManager::verifyBufferSizeFor(fileSize, kRoomy);
+            INFO("an image of " << (fileSize / (1024 * 1024)) << "MB");
+            CHECK(size >= previous);
+            previous = size;
+        }
+        CHECK(SystemMemoryManager::verifyBufferSizeFor(kHuge, kRoomy) >
+              SystemMemoryManager::verifyBufferSizeFor(kSmall, kRoomy));
+    }
+
+    SECTION("a smaller machine reads the same image in smaller pieces") {
+        size_t previous = 0;
+        for (qint64 mb : kMemoryTiersMB) {
+            const size_t size =
+                SystemMemoryManager::verifyBufferSizeFor(kLarge, mb);
+            INFO("a machine reporting " << mb << "MB");
+            CHECK(size >= previous);
+            CHECK(size >= 128u * 1024);
+            CHECK(size <= 16u * 1024 * 1024);
+            CHECK(size % SystemMemoryManager::getSystemPageSize() == 0);
+            previous = size;
+        }
+        CHECK(SystemMemoryManager::verifyBufferSizeFor(kLarge, 512) <
+              SystemMemoryManager::verifyBufferSizeFor(kLarge, 32768));
+    }
+
+    SECTION("an image size that makes no sense still gives a usable buffer") {
+        const size_t size = SystemMemoryManager::verifyBufferSizeFor(-1, 4096);
+        CHECK(size >= 128u * 1024);
+        CHECK(size <= 16u * 1024 * 1024);
+    }
+}
+
+TEST_CASE("The async queue depth follows what is free, not what is installed",
+          "[memory]") {
+    // Deliberately keyed on available rather than total memory: a 32GB
+    // machine with 400MB free is, for the purposes of holding writes in
+    // flight, a small machine. Asking a card to hold 256 writes on one would
+    // push the whole system into reclaim mid-write.
+    constexpr size_t kBlock = 1024 * 1024;
+
+    int previous = 0;
+    for (qint64 mb : kMemoryTiersMB) {
+        const int depth = SystemMemoryManager::asyncQueueDepthFor(mb, kBlock);
+        INFO("a machine with " << mb << "MB free");
+        CHECK(depth >= previous);
+        CHECK(depth >= 4);      // the documented floor
+        CHECK(depth <= 256);    // and ceiling
+        previous = depth;
+    }
+
+    CHECK(SystemMemoryManager::asyncQueueDepthFor(32768, kBlock) >
+          SystemMemoryManager::asyncQueueDepthFor(256, kBlock));
+
+    SECTION("a bigger block means fewer of them in flight") {
+        // The budget is a quantity of memory, not a count of writes.
+        CHECK(SystemMemoryManager::asyncQueueDepthFor(2048, 8 * 1024 * 1024) <=
+              SystemMemoryManager::asyncQueueDepthFor(2048, 256 * 1024));
+    }
+
+    SECTION("a machine reporting nothing free still gets a working queue") {
+        // Not zero, and not one: a depth below the floor is not an async
+        // queue at all, and the writer has no other mode to fall back to here.
+        CHECK(SystemMemoryManager::asyncQueueDepthFor(0, kBlock) == 4);
+    }
+}
