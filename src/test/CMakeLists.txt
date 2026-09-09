@@ -2104,6 +2104,28 @@ if(TARGET Qt6::DBus)
 
     target_compile_features(suspend_inhibitor_probe PRIVATE cxx_std_20)
 
+    # And the GNOME half, which is a D-Bus call rather than a held FIFO. The
+    # probe provides its own session manager to talk to; the test runs it
+    # under dbus-run-session so the bus is private to the case.
+    add_executable(gnome_inhibitor_probe
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${PLATFORM_QUIRKS_SRC}
+        gnome_inhibitor_probe.cpp
+    )
+
+    set_target_properties(gnome_inhibitor_probe PROPERTIES AUTOMOC ON)
+
+    target_include_directories(gnome_inhibitor_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_link_libraries(gnome_inhibitor_probe PRIVATE
+        Qt6::Core
+        Qt6::DBus
+    )
+
+    target_compile_features(gnome_inhibitor_probe PRIVATE cxx_std_20)
+
     add_executable(suspend_inhibitor_test suspend_inhibitor_test.cpp)
 
     target_include_directories(suspend_inhibitor_test PRIVATE
@@ -2116,11 +2138,12 @@ if(TARGET Qt6::DBus)
     )
 
     target_compile_definitions(suspend_inhibitor_test PRIVATE
-        SUSPEND_INHIBITOR_PROBE_BINARY="$<TARGET_FILE:suspend_inhibitor_probe>")
+        SUSPEND_INHIBITOR_PROBE_BINARY="$<TARGET_FILE:suspend_inhibitor_probe>"
+        GNOME_INHIBITOR_PROBE_BINARY="$<TARGET_FILE:gnome_inhibitor_probe>")
 
     target_compile_features(suspend_inhibitor_test PRIVATE cxx_std_20)
 
-    add_dependencies(suspend_inhibitor_test suspend_inhibitor_probe)
+    add_dependencies(suspend_inhibitor_test suspend_inhibitor_probe gnome_inhibitor_probe)
 
     rpi_discover_tests(suspend_inhibitor_test)
 endif()
