@@ -86,6 +86,40 @@ public:
      */
     Q_PROPERTY(bool prefersReducedMotion READ prefersReducedMotion CONSTANT)
     bool prefersReducedMotion() const;
+
+    /**
+     * @brief Whether an assistive technology is attached to this process
+     *
+     * True once an accessibility client -- a screen reader, a switch access
+     * device, a magnifier -- has connected. Qt reports this uniformly across
+     * platforms: AT-SPI on Linux, UI Automation on Windows, NSAccessibility
+     * on macOS. It can turn on partway through a session, when the user
+     * starts one, so this is a notifying property rather than a constant.
+     *
+     * This exists to decide whether to raise a confirmation dialog. Those
+     * dialogs are there to slow down someone who has not registered what a
+     * control does; a screen reader has already read the control's name,
+     * its role, and its accessible description aloud before it was
+     * activated, which is more than a sighted mouse user is ever shown. The
+     * dialog interrupts a user who was told the most, to protect one who
+     * was told the least.
+     *
+     * Not a substitute for a warning: anything the user genuinely needs to
+     * know belongs in the control's Accessible.description, where it is
+     * read out, rather than behind a prompt that is skipped.
+     */
+    Q_PROPERTY(bool assistiveTechnologyActive
+               READ assistiveTechnologyActive
+               NOTIFY assistiveTechnologyActiveChanged)
+    bool assistiveTechnologyActive() const;
+
+signals:
+    void assistiveTechnologyActiveChanged();
+
+private:
+    // Registers with QAccessible on first read of the property above, so a
+    // build that never asks does not pay for the observer.
+    void ensureAccessibilityObserver() const;
 };
 
 #endif // PLATFORMHELPER_H
