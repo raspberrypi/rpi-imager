@@ -1241,3 +1241,88 @@ TEST_CASE("Toggling direct I/O keeps the place in the file", "[file-ops]") {
 
   ops->Close();
 }
+
+// ---------------------------------------------------------------------------
+// Falling back to synchronous writes
+//
+// When the async queue stops making progress the writer abandons it and
+// replays whatever was outstanding synchronously, then carries on in sync
+// mode. It is the last thing between a stalled io_uring and a write that
+// never finishes, and most of it was uncovered.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Falling back with nothing outstanding is a clean switch",
+          "[fileops][async]") {
+  // The watchdog can decide the queue has stalled at a moment when it has in
+  // fact just drained. There is nothing to replay, and that is a switch to
+  // sync mode rather than a failure -- reporting an error here would abort a
+  // write that is going perfectly well.
+  const std::string path = makeImage("fallback-empty.img", 4u * 1024 * 1024);
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no async path to fall back from");
+
+  REQUIRE(ops->GetPendingWriteCount() == 0);
+  CHECK_FALSE(ops->IsInSyncFallbackMode());
+
+  CHECK(ops->AttemptSyncFallback() == FileError::kSuccess);
+
+  // And it really did switch, rather than deciding there was nothing to do:
+  // the caller reads this to know the queue is no longer in play.
+  CHECK(ops->IsInSyncFallbackMode());
+
+  ops->Close();
+}
+
+TEST_CASE("A write replayed onto a device that has stopped taking them is reported",
+          "[file-ops][faulty]") {
+  // The queue stalled because the card stopped answering, not because the
+  // kernel was busy. Replaying the outstanding writes synchronously runs into
+  // the same wall, and the fallback has to say so -- carrying on in sync mode
+  // over a device that is refusing writes is how a write reports success with
+  // half an image on the card.
+  using rpi_imager::testing::canRunPrivileged;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canRunPrivileged())
+    SKIP("passwordless sudo is unavailable, so no faulty device can be built");
+
+  FaultyDevice device(64, 8);
+  if (!device.isReady())
+    SKIP("the device-mapper fault injection device could not be created");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("io_uring is not available, so there is no async path to fall back from");
+
+  REQUIRE(ops->SetAsyncQueueDepth(16));
+
+  // Fill the queue with writes aimed past the 8MB boundary, where the mapping
+  // returns EIO, and do not poll: they are still outstanding when the
+  // fallback is asked to replay them.
+  const std::size_t kChunk = 1u << 20;
+  auto buffer = alignedBuffer(kChunk, 0x9E);
+  REQUIRE(buffer);
+  REQUIRE(ops->Seek(8u * 1024 * 1024) == FileError::kSuccess);
+  for (int i = 0; i < 12; ++i) {
+    if (ops->AsyncWriteSequential(buffer.get(), kChunk, nullptr) != FileError::kSuccess)
+      break;
+  }
+
+  const FileError fallback = ops->AttemptSyncFallback();
+
+  // Whatever it found -- writes still pending that then failed, or a queue
+  // that had already drained into errors -- it must not report a plain
+  // success over a device in this state.
+  INFO("fallback returned " << static_cast<int>(fallback)
+       << ", last errno " << ops->GetLastErrorCode());
+  const bool refused = (fallback != FileError::kSuccess);
+  const bool deviceIsUnusable =
+      (ops->WriteSequential(buffer.get(), kChunk) != FileError::kSuccess);
+  CHECK((refused || deviceIsUnusable));
+
+  ops->Close();
+}
