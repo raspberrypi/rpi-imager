@@ -3560,7 +3560,83 @@ QString runProbeInPolkitNamespace(const QString& mode, const QString& etcRoot,
     return QString::fromUtf8(p.readAllStandardOutput());
 }
 
+// The same, for a machine that has no polkit actions directory at all: empty
+// directories over /etc/polkit-1 and /usr/share/polkit-1, so that neither
+// .../actions beneath them exists and the scan finds nowhere to write.
+QString runProbeWithNoActionsDir(const QString& mode, const QString& etcPolkit,
+                                 const QString& usrPolkit)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /etc/polkit-1 "
+                            "&& mount --bind \"$2\" /usr/share/polkit-1 "
+                            "&& exec \"$3\" \"$4\""),
+             QStringLiteral("_"), etcPolkit, usrPolkit,
+             QStringLiteral(ELEVATION_PROBE_BINARY), mode});
+    if (!p.waitForFinished(30000))
+        return {};
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
 } // namespace
+
+TEST_CASE("A machine with no polkit actions directory gets one",
+          "[platformquirks][policyinstall]")
+{
+    // A minimal install, or a container: polkit is there but nothing has
+    // ever dropped an action file, so neither directory the scan looks in
+    // exists. Giving up would leave the AppImage unable to elevate, with the
+    // offer to fix it failing every time it is accepted.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+    // Both present and both empty: no actions/ beneath either.
+
+    const QString out = runProbeWithNoActionsDir(QStringLiteral("install"),
+                                                 etc.path(), usr.path());
+    INFO("probe said: " << out.toStdString());
+    CHECK(out.contains(QStringLiteral("INSTALLED=1")));
+
+    // Made, not assumed: the directory now exists and holds the policy.
+    const QDir actions(etc.filePath(QStringLiteral("actions")));
+    CHECK(actions.exists());
+    const QStringList written = actions.entryList(QStringList()
+                                                      << QStringLiteral("*.policy"),
+                                                  QDir::Files);
+    INFO("written: " << written.join(QStringLiteral(", ")).toStdString());
+    CHECK(written.size() == 1);
+
+    // /etc is the one it makes, not the vendor directory: /usr is read-only
+    // on an image-based system and is not ours to add to.
+    CHECK(QDir(usr.filePath(QStringLiteral("actions"))).entryList(
+              QStringList() << QStringLiteral("*.policy"), QDir::Files).isEmpty());
+}
+
+TEST_CASE("A policy installed into a directory that had to be made is found again",
+          "[platformquirks][policyinstall]")
+{
+    // The pair to the case above. Making the directory is only worth
+    // anything if the scan that looks for the policy afterwards agrees on
+    // where it went -- otherwise the application offers to install a policy
+    // it has already installed, every time it starts.
+    REQUIRE_POLICY_HARNESS();
+
+    QTemporaryDir etc, usr;
+    REQUIRE(etc.isValid());
+    REQUIRE(usr.isValid());
+
+    REQUIRE(runProbeWithNoActionsDir(QStringLiteral("install"), etc.path(), usr.path())
+                .contains(QStringLiteral("INSTALLED=1")));
+
+    const QString check = runProbeWithNoActionsDir(QStringLiteral("policy"),
+                                                   etc.path(), usr.path());
+    INFO("probe said: " << check.toStdString());
+    CHECK(check.contains(QStringLiteral("POLICY=1")));
+}
 
 TEST_CASE("A policy that cannot be written is reported, not assumed",
           "[platformquirks][policyinstall]")
