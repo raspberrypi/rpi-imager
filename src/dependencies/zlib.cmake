@@ -4,6 +4,18 @@ set(ZLIB_VERSION "1.3.2")
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
+# The option zlib 1.3.2 actually reads is ZLIB_BUILD_TESTING; ZLIB_BUILD_TESTS
+# and ZLIB_BUILD_EXAMPLES above are names from an older zlib and set nothing.
+# Left in place for the vendored-tree fallback, which may be an older version.
+#
+# Without this zlib's own suite is registered with CTest by every
+# -DBUILD_TESTING=ON build -- sixteen tests that have nothing to do with the
+# imager, ten of which fail or cannot run here. Three shell out to `cmake --build`
+# at test time, so under RPI_IMAGER_COVERAGE they also emit `undefined
+# reference to __gcov_init` link errors: --coverage reaches them as a compile
+# option but the link options do not follow into a nested build. That made a
+# healthy coverage run look broken before a single imager test had run.
+set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 rpi_imager_fetch_git_or_vendor(zlib

@@ -103,6 +103,60 @@ endif()
 #add_compile_options("-fsanitize=address")
 #add_link_options("-fsanitize=address")
 
+# Coverage instrumentation. Off by default; when on, test/ grows a `coverage`
+# target that runs the CTest suite and renders an HTML report.
+#
+# Deliberately global rather than per-target. Most of what we would want a gap
+# report for has no test binary of its own -- downloadthread.cpp is reached
+# only from the app -- and a translation unit with no .gcno is silently absent
+# from the report rather than showing up at 0%, which is the opposite of what a
+# gap report is for. Instrumenting the app target too costs build time and
+# nothing else; test/RunCoverage.cmake decides what actually gets reported.
+option(RPI_IMAGER_COVERAGE "Build with gcov instrumentation and add a `coverage` target" OFF)
+
+if(RPI_IMAGER_COVERAGE)
+    if(MSVC)
+        message(FATAL_ERROR "RPI_IMAGER_COVERAGE needs a GCC/Clang-style driver")
+    endif()
+    if(NOT BUILD_TESTING)
+        message(WARNING
+            "RPI_IMAGER_COVERAGE is set but BUILD_TESTING is off, so there is no suite "
+            "to run and no `coverage` target will be created. Configure with "
+            "-DBUILD_TESTING=ON.")
+    endif()
+    # LTO rewrites the call graph that coverage counts are attributed to, and
+    # any optimisation folds away the very branches the report exists to
+    # distinguish. Both have to go, whatever the build type asked for.
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
+
+    # Which instrumentation depends on the compiler, and it is not a detail.
+    #
+    # --coverage under clang produces gcov data that counts an edge for every
+    # call that could throw. GCC's gcov marks those "(throw)" and gcovr drops
+    # them with --exclude-throw-branches; clang's emits no marker, so the flag
+    # is a silent no-op and they all land in the denominator. The same tree
+    # read 69.5% of 20,016 branches under GCC and 40.6% of 32,009 under clang
+    # -- close to the same branches actually taken, measured against half as
+    # many again. downloadthread.cpp alone: 1,958 branches there, 2,784 here,
+    # 1,583 of the extra never taken and none of them a decision in the source.
+    #
+    # Clang's own source-based coverage counts conditions rather than edges,
+    # so it does not have the problem to begin with. Use it where it exists.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-fprofile-instr-generate -fcoverage-mapping -O0 -g)
+        add_link_options(-fprofile-instr-generate)
+        message(STATUS "Coverage instrumentation enabled "
+                       "(clang source-based, forcing -O0, LTO off)")
+    else()
+        # -fprofile-update=atomic matters here specifically: the write path is
+        # threaded, and the default non-atomic counter increments lose updates
+        # under concurrency, which shows up as branches wrongly reported as cold.
+        add_compile_options(--coverage -O0 -g -fprofile-update=atomic)
+        add_link_options(--coverage)
+        message(STATUS "Coverage instrumentation enabled (gcov, forcing -O0, LTO off)")
+    endif()
+endif()
+
 # Leave empty by default so we don't inject the wrong path on other platforms. (changing on every QT version)
 # Users/Kits can set Qt6_ROOT or CMAKE_PREFIX_PATH externally.
 set(Qt6_ROOT "" CACHE PATH "Path to Qt6 (optional; leave empty if using CMAKE_PREFIX_PATH)")
@@ -244,7 +298,8 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
     "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
-    "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp")
+    "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp"
+    "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "eeprom_repo_override.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -287,6 +342,7 @@ set(SOURCES ${SOURCES}
     "fastboot/eeprom_signer.cpp"
     "fastbootflashthread.cpp"
     "connect_device_registrar.cpp"
+    "settings_permissions.cpp"
 )
 
 # Find Qt components - different requirements for CLI-only vs GUI builds
@@ -461,6 +517,7 @@ if(NOT BUILD_CLI_ONLY)
     set(IMAGER_QML_FILES
         main.qml
         CommonStrings.qml
+        ConfirmationPolicy.qml
         Style.qml
         wizard/dialogs/ConfirmUnfilterDialog.qml
         wizard/dialogs/ConfirmSystemDriveDialog.qml
@@ -514,6 +571,7 @@ if(NOT BUILD_CLI_ONLY)
 
     set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
     set_source_files_properties(CommonStrings.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+    set_source_files_properties(ConfirmationPolicy.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
     # C++ types exposed to QML
     set(IMAGER_QML_CPP_TYPES

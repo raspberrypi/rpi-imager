@@ -323,7 +323,17 @@ export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
 else
     echo "Manual Qt deployment for $ARCH..."
     mkdir -p "$APPDIR/usr/lib" "$APPDIR/usr/plugins" "$APPDIR/usr/qml"
-    cp -d "$QT_DIR/lib/libQt6"*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    # Deliberately not a blanket glob: the Qt build now includes testlib so
+    # the suite can use QtTest/QtQuickTest, and nothing in the application
+    # links it. linuxdeploy resolves libraries from the binary and so never
+    # picks it up; this path copies whatever is present, so it has to say
+    # what it does not want.
+    for _lib in "$QT_DIR/lib/libQt6"*.so*; do
+        case "$(basename "$_lib")" in
+            libQt6Test.so*|libQt6QuickTest.so*) continue ;;
+        esac
+        cp -d "$_lib" "$APPDIR/usr/lib/" 2>/dev/null || true
+    done
     cp -d "$QT_DIR/lib/libicu"*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     for _plug in platforms imageformats tls iconengines xcbglintegrations; do
         if [ -d "$QT_DIR/plugins/$_plug" ]; then
@@ -348,9 +358,10 @@ fi
 # plugins/wayland-shell-integration; without libxdg-shell.so the "wayland" QPA
 # plugin loads, connects to the compositor, then aborts with "Loading shell
 # integration failed." Qt then falls back to "xcb", so every session -- Wayland
-# included -- ends up on XWayland and needs libxcb-cursor0. On a target without
-# that library (Raspberry Pi OS bookworm) both plugins fail and the app does not
-# start at all.
+# included -- ends up on XWayland and needs libxcb-cursor. That library is now
+# bundled (see appimage_lib_excluded() in debian/lib.sh, #1719), so the fallback
+# no longer depends on the host shipping it; deploying these plugins is still
+# what keeps a Wayland session off XWayland in the first place.
 #
 # These are Qt's own plugins and belong with the bundled Qt, unlike the wayland
 # *system* libraries: libwayland-client/-cursor stay host-provided via
