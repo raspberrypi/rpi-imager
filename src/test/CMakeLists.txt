@@ -2306,9 +2306,15 @@ rpi_discover_tests(device_info_test)
 if(TARGET Qt6::DBus)
     add_executable(suspend_inhibitor_probe
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.cpp
         ${PLATFORM_QUIRKS_SRC}
         suspend_inhibitor_probe.cpp
     )
+
+    # LinuxSuspendInhibitor derives from SuspendInhibitor, so the probe needs
+    # the base's constructor and destructor, and AUTOMOC to emit the vtable
+    # entries its Q_OBJECT declares.
+    set_target_properties(suspend_inhibitor_probe PROPERTIES AUTOMOC ON)
 
     target_include_directories(suspend_inhibitor_probe PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -2326,6 +2332,7 @@ if(TARGET Qt6::DBus)
     # under dbus-run-session so the bus is private to the case.
     add_executable(gnome_inhibitor_probe
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.cpp
         ${PLATFORM_QUIRKS_SRC}
         gnome_inhibitor_probe.cpp
     )
