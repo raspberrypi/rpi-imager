@@ -42,6 +42,9 @@ done
 # Validate common inputs
 validate_common_inputs
 
+# Honour --compiler= before anything reads CC/CXX
+apply_compiler_choice
+
 # Set architecture-specific prefix suffix
 set_arch_prefix_suffix
 

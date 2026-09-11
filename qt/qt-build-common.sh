@@ -26,6 +26,8 @@ CLEAN_BUILD_DEFAULT=1          # Clean the build directory by default
 SKIP_DEPENDENCIES_DEFAULT=0    # Don't skip installing dependencies by default
 VERBOSE_BUILD_DEFAULT=0        # By default, don't show verbose build output
 UNPRIVILEGED_DEFAULT=0         # By default, allow sudo usage
+SANITIZE_DEFAULT=""            # No sanitiser in the shipping build
+COMPILER_DEFAULT=""            # Use whatever configure picks
 
 # Platform Detection
 PLATFORM=$(uname -s)
@@ -68,6 +70,8 @@ init_common_variables() {
     SKIP_DEPENDENCIES="${SKIP_DEPENDENCIES:-$SKIP_DEPENDENCIES_DEFAULT}"
     VERBOSE_BUILD="${VERBOSE_BUILD:-$VERBOSE_BUILD_DEFAULT}"
     UNPRIVILEGED="${UNPRIVILEGED:-$UNPRIVILEGED_DEFAULT}"
+    SANITIZE="${SANITIZE:-$SANITIZE_DEFAULT}"
+    COMPILER="${COMPILER:-$COMPILER_DEFAULT}"
     
     # macOS-specific defaults
     UNIVERSAL_BUILD="${UNIVERSAL_BUILD:-0}"
@@ -124,6 +128,12 @@ parse_common_args() {
                 ;;
             --verbose)
                 VERBOSE_BUILD=1
+                ;;
+            --sanitize=*)
+                SANITIZE="${1#*=}"
+                ;;
+            --compiler=*)
+                COMPILER="${1#*=}"
                 ;;
             --unprivileged)
                 UNPRIVILEGED=1
@@ -212,6 +222,13 @@ print_common_config() {
 # Function to create common build directories
 create_build_directories() {
     build_dir_suffix="${1:-}"
+
+    # A sanitiser build gets a directory of its own. It uses a different
+    # compiler and different flags from the shipping build, and CMake caches
+    # both -- so sharing a directory silently reuses whichever came first.
+    if [ -n "$SANITIZE" ]; then
+        build_dir_suffix="${build_dir_suffix:+$build_dir_suffix-}$SANITIZE"
+    fi
     
     if [ -n "$build_dir_suffix" ]; then
         BUILD_DIR="$PWD/qt-build-$build_dir_suffix"
@@ -327,7 +344,42 @@ clean_build_directory() {
 # Usage: get_base_config_opts
 # Returns the common base options used by all builds
 get_base_config_opts() {
-    echo "-prefix \"$PREFIX\" -opensource -confirm-license"
+    _sanitize_opt=""
+    if [ -n "$SANITIZE" ]; then
+        _sanitize_opt=" -sanitize $SANITIZE"
+    fi
+    echo "-prefix \"$PREFIX\" -opensource -confirm-license$_sanitize_opt"
+}
+
+# Point the build at a named compiler, if one was asked for.
+# Usage: apply_compiler_choice
+apply_compiler_choice() {
+    [ -n "$COMPILER" ] || return 0
+    case "$COMPILER" in
+        clang*)
+            CC="$COMPILER"
+            CXX="$(echo "$COMPILER" | sed 's/^clang/clang++/')"
+            ;;
+        gcc*)
+            CC="$COMPILER"
+            CXX="$(echo "$COMPILER" | sed 's/^gcc/g++/')"
+            ;;
+        *)
+            CC="$COMPILER"
+            CXX="$COMPILER"
+            ;;
+    esac
+    command -v "$CC" > /dev/null 2>&1 || { echo "No such compiler: $CC" >&2; exit 1; }
+    command -v "$CXX" > /dev/null 2>&1 || { echo "No such compiler: $CXX" >&2; exit 1; }
+    export CC CXX
+
+    # Qt's configure does not take CC/CXX from the environment, so the choice
+    # has to reach CMake as cache entries or the build silently uses the
+    # system compiler. Which matters: a ThreadSanitizer build made with the
+    # wrong compiler still links, and then refuses to run.
+    COMPILER_CMAKE_OPTS="-DCMAKE_C_COMPILER=$(command -v "$CC") -DCMAKE_CXX_COMPILER=$(command -v "$CXX")"
+    export COMPILER_CMAKE_OPTS
+    echo "Building with $CC / $CXX"
 }
 
 # Function to get build type options
@@ -358,7 +410,7 @@ get_cmake_opts() {
             _link_extra="-DCMAKE_EXE_LINKER_FLAGS=-latomic -DCMAKE_SHARED_LINKER_FLAGS=-latomic"
             ;;
     esac
-    echo "-- -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=$build_examples -DCMAKE_BUILD_PARALLEL_LEVEL=$CORES $_link_extra"
+    echo "-- -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=$build_examples -DCMAKE_BUILD_PARALLEL_LEVEL=$CORES $_link_extra ${COMPILER_CMAKE_OPTS:-}"
 }
 
 # Function to get common module skip options
@@ -647,6 +699,14 @@ Common options:
   --skip-dependencies  Skip installing build dependencies
   --verbose            Show verbose build output
   --unprivileged       Run without sudo (skips dependency installation)
+  --sanitize=WHICH     Build Qt with a sanitiser (address, thread, undefined).
+                       Only useful for testing the application against an
+                       instrumented Qt: without it, a sanitiser sees no
+                       synchronisation inside Qt and reports races that are
+                       not there. Needs a compiler whose runtime supports
+                       this kernel -- on a 47-bit VMA, ThreadSanitizer needs
+                       clang 24 or newer.
+  --compiler=CC        Compiler basename to build with, e.g. clang-24.
   -h, --help           Show this help message
 EOF
 
