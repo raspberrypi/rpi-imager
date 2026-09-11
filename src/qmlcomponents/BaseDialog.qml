@@ -21,6 +21,11 @@ Dialog {
     
     // Standard dialog properties
     modal: true
+
+    // Dismiss only via Escape or the dialog's own buttons. The Popup default also
+    // closes on a press outside, so the click that re-activates a buried window
+    // would silently discard the message (#1693).
+    closePolicy: Popup.CloseOnEscape
     
     // Reset Dialog's built-in padding - we use our own margins in contentLayout
     padding: 0
