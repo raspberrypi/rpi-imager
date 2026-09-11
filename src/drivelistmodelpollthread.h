@@ -9,6 +9,10 @@
 #include <atomic>
 #include <map>
 #include <QThread>
+
+#include <memory>
+
+namespace rpiboot { class IUsbContext; }
 #include <QMutex>
 #include <QWaitCondition>
 #include "drivelist/drivelist.h"
@@ -58,6 +62,14 @@ public:
      * @return Current mode
      */
     ScanMode scanMode() const;
+
+    /**
+     * @brief Whether fastboot storage devices are being scanned for
+     *
+     * Turned on once a board has been bootstrapped into fastboot mode, so
+     * the poll finds the storage it now exposes.
+     */
+    bool fastbootScanEnabled() const { return _fastbootScanEnabled.load(); }
     
     /**
      * @brief Convenience method to pause scanning
@@ -111,6 +123,15 @@ protected:
     std::map<std::string, FastbootDeviceCache> _fastbootCache; // key = port path string
 
     virtual void run() override;
+
+    // Where the USB bus comes from. Behind a factory so the fastboot scan
+    // can be driven against a bus a test describes -- the identification
+    // below decides whether a device is offered as somewhere to write.
+    virtual std::unique_ptr<rpiboot::IUsbContext> makeUsbContext();
+
+    // The fastboot half of a scan: enumerate, identify, cache, and append
+    // whatever storage the genuine Pi gadgets report.
+    void appendFastbootDevices(std::vector<Drivelist::DeviceDescriptor> &driveList);
 
 signals:
     void newDriveList(std::vector<Drivelist::DeviceDescriptor> list);

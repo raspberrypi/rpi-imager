@@ -17,262 +17,12 @@
 #include <QRegularExpression>
 #include <QUrl>
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QElapsedTimer>
 
-namespace {
+#include "model_row_diff.h"
+#include "oslistparser.h"
 
-    // Valid init_format values according to schema
-    static const QStringList VALID_INIT_FORMATS = {
-        QStringLiteral(""),
-        QStringLiteral("systemd"),
-        QStringLiteral("cloudinit"),
-        QStringLiteral("cloudinit-rpi"),
-        QStringLiteral("rpi-preseed"),
-        QStringLiteral("none")
-    };
-
-    // Validate init_format value and return true if valid
-    bool isValidInitFormat(const QString &initFormat) {
-        return VALID_INIT_FORMATS.contains(initFormat);
-    }
-
-    // Recursively filter OS entries with invalid init_format values
-    QJsonArray filterInvalidInitFormats(const QJsonArray &list) {
-        QJsonArray filtered;
-        
-        for (const auto &value : list) {
-            QJsonObject entry = value.toObject();
-            QString initFormat = entry["init_format"].toString();
-            
-            // Validate init_format if present (empty string is valid, means no customization)
-            if (!isValidInitFormat(initFormat)) {
-                QString name = entry["name"].toString();
-                qWarning() << "OSListModel: Pruning OS entry with invalid init_format '" 
-                           << initFormat << "':" << name
-                           << "(valid values: '', 'systemd', 'cloudinit', 'cloudinit-rpi', 'rpi-preseed', 'none')";
-                continue;
-            }
-            
-            // Check if this entry has subitems and process them recursively
-            if (entry.contains(QLatin1String("subitems"))) {
-                QJsonArray subitems = entry["subitems"].toArray();
-                QJsonArray filteredSubitems = filterInvalidInitFormats(subitems);
-                
-                // Only include parent entry if it has valid subitems
-                if (!filteredSubitems.isEmpty()) {
-                    entry["subitems"] = filteredSubitems;
-                    filtered.append(entry);
-                } else {
-                    // Parent has no valid subitems, skip it
-                    QString name = entry["name"].toString();
-                    qWarning() << "OSListModel: Pruning OS entry with no valid subitems:" << name;
-                }
-            } else {
-                // Leaf entry with valid init_format
-                filtered.append(entry);
-            }
-        }
-        
-        return filtered;
-    }
-
-    QJsonArray getListForLocale(QJsonObject root) {
-        // "os_list_<locale>" has priority
-
-        QString localeName = QLocale::system().name();
-        QString candidateKey = QStringLiteral("os_list_%1").arg(localeName);
-
-        QJsonArray list;
-        if (root.contains(candidateKey)) {
-            list = root[candidateKey].toArray();
-        } else if (localeName.contains(QLatin1Char('_'))) {
-            localeName = localeName.section('_', 0, 0);
-            candidateKey = QStringLiteral("os_list_%1").arg(localeName);
-            if (root.contains(candidateKey)) {
-                list = root[candidateKey].toArray();
-            }
-        }
-
-        // fallback to "os_list"
-        if (list.isEmpty() && root.contains(QLatin1String("os_list"))) {
-            list = root["os_list"].toArray();
-        }
-
-        return list;
-    }
-
-    QJsonArray parseOSJson(QJsonObject root) {
-        QJsonArray list = getListForLocale(root);
-        if (list.isEmpty()) {
-            qWarning() << Q_FUNC_INFO << "Expected to find os_list key" << root.keys();
-            return {};
-        }
-
-        // Filter out entries with invalid init_format values
-        list = filterInvalidInitFormats(list);
-
-        // Apply random shuffling to arrays containing 'random' flag
-        std::function<void(QJsonArray&)> shuffleIfRandom = [&](QJsonArray &lst) {
-            for (int i = 0; i < lst.size(); i++) {
-                QJsonObject entry = lst[i].toObject();
-                
-                if (entry.contains(QLatin1String("subitems"))) {
-                    QJsonArray subitems = entry["subitems"].toArray();
-                    shuffleIfRandom(subitems);
-                    
-                    // Shuffle if random flag is set
-                    if (entry.contains(QLatin1String("random")) && entry["random"].toBool()) {
-                        // Fisher-Yates shuffle - properly handle QJsonArray
-                        for (int j = subitems.size() - 1; j > 0; j--) {
-                            int k = QRandomGenerator::global()->bounded(j + 1);
-                            if (j != k) {
-                                // Properly swap QJsonArray elements by storing values, not references
-                                QJsonValue tempValue = subitems[j];
-                                QJsonValue kValue = subitems[k];
-                                subitems[j] = kValue;
-                                subitems[k] = tempValue;
-                            }
-                        }
-                    }
-                    entry["subitems"] = subitems;
-                    lst[i] = entry;
-                }
-            }
-        };
-
-        shuffleIfRandom(list);
-
-        // Flatten, since GUI doesn't support a tree model
-        for (int i = 0; i < list.size(); i++) {
-            QJsonObject entry = list[i].toObject();
-            if (entry.contains("subitems")) {
-                QJsonDocument subitemsDoc(entry["subitems"].toArray());
-                entry["subitems_json"] = QString::fromUtf8(subitemsDoc.toJson());
-                entry.remove("subitems");
-                list[i] = entry;
-            }
-        }
-
-        return list;
-    }
-
-    // Apply architecture-based sorting to subitems in a JSON array
-    void applyArchitectureSorting(QJsonArray &list, const QString &preferredArchitecture) {
-        if (preferredArchitecture.isEmpty()) {
-            return; // No preferred architecture, no sorting needed
-        }
-
-        // First, sort the top-level array itself
-        QJsonArray sortedList;
-        QJsonArray otherItems;
-        
-        // Collect items that match preferred architecture first
-        for (int i = 0; i < list.size(); i++) {
-            QJsonObject item = list[i].toObject();
-            QString itemArch = item["architecture"].toString();
-            
-            if (itemArch == preferredArchitecture) {
-                sortedList.append(list[i]);
-            } else {
-                otherItems.append(list[i]);
-            }
-        }
-        
-        // Append all non-matching items
-        for (int i = 0; i < otherItems.size(); i++) {
-            sortedList.append(otherItems[i]);
-        }
-        
-        // Replace the original list with the sorted one
-        list = sortedList;
-
-        // Then recursively process subitems within each entry
-        for (int i = 0; i < list.size(); i++) {
-            QJsonObject entry = list[i].toObject();
-            
-            if (entry.contains(QLatin1String("subitems"))) {
-                QJsonArray subitems = entry["subitems"].toArray();
-                
-                // Recursively apply to nested subitems
-                applyArchitectureSorting(subitems, preferredArchitecture);
-                
-                // Manual stable sort: move items matching preferred architecture to the front
-                // We'll build a new array with preferred items first, then others
-                QJsonArray sortedSubitems;
-                QJsonArray otherSubitems;
-                
-                // First pass: collect items that match preferred architecture
-                for (int j = 0; j < subitems.size(); j++) {
-                    QJsonObject subitem = subitems[j].toObject();
-                    QString itemArch = subitem["architecture"].toString();
-                    
-                    if (itemArch == preferredArchitecture) {
-                        sortedSubitems.append(subitems[j]);
-                    } else {
-                        otherSubitems.append(subitems[j]);
-                    }
-                }
-                
-                // Second pass: append all non-matching items
-                for (int j = 0; j < otherSubitems.size(); j++) {
-                    sortedSubitems.append(otherSubitems[j]);
-                }
-                
-                entry["subitems"] = sortedSubitems;
-                list[i] = entry;
-            }
-        }
-    }
-
-    // Sanitize icon source: allow known-good forms and drop malformed URLs to avoid runtime fetch errors
-    static QString sanitizeIconSource(const QString &raw)
-    {
-        if (raw.isEmpty()) return QString();
-
-        // Common local relative path used by repository JSON
-        if (raw.startsWith("icons/")) {
-            return QStringLiteral("../") + raw;
-        }
-
-        // Allow qrc resources
-        if (raw.startsWith("qrc:/") || raw.startsWith("qrc://")) {
-            return raw;
-        }
-
-        // For explicit URLs, validate scheme and host as appropriate
-        const QUrl url(raw);
-        if (url.isValid() && !url.scheme().isEmpty()) {
-            const QString scheme = url.scheme().toLower();
-
-            if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
-                if (!url.host().isEmpty()) {
-                    return raw; // looks well-formed; allow
-                } else {
-                    qWarning() << "OSListModel: dropping icon with missing host:" << raw;
-                    return QString();
-                }
-            } else if (scheme == QLatin1String("file")) {
-                // Allow local file URLs without filesystem validation - exists()/isFile()
-                // calls can be slow on iCloud-synced directories or network volumes,
-                // and this function is called for every icon during model population.
-                // QML's Image component handles missing files gracefully.
-                if (url.isLocalFile()) {
-                    return raw;
-                }
-                // Non-local file URL; drop
-                qWarning() << "OSListModel: dropping non-local file URL icon:" << raw;
-                return QString();
-            } else {
-                // Unknown scheme; pass through (QML may support it) but log once
-                qWarning() << "OSListModel: icon uses unrecognized scheme, passing through:" << raw;
-                return raw;
-            }
-        }
-
-        // No scheme: treat as relative path; allow as-is (QML will resolve relative to QML file)
-        return raw;
-    }
-}
 
 OSListModel::OSListModel(ImageWriter &imageWriter)
     : QAbstractListModel(&imageWriter), _imageWriter(imageWriter) {}
@@ -285,7 +35,7 @@ bool OSListModel::reload()
     QJsonDocument doc = _imageWriter.getFilteredOSlistDocument();
     QJsonObject root = doc.object();
 
-    QJsonArray list = parseOSJson(root);
+    QJsonArray list = oslist::parseOSJson(root);
     if (list.isEmpty()) {
         emit eventOsListParse(static_cast<quint32>(parseTimer.elapsed()), false);
         return false;
@@ -295,11 +45,10 @@ bool OSListModel::reload()
     QString preferredArchitecture = _imageWriter.getHWList()->currentArchitecture();
     
     // Apply architecture-based sorting if device has a preference
-    applyArchitectureSorting(list, preferredArchitecture);
+    oslist::applyArchitectureSorting(list, preferredArchitecture);
 
-    beginResetModel();
-    _osList.clear();
-    _osList.reserve(list.count());
+    QVector<OS> next;
+    next.reserve(list.count());
 
     for (const auto value : list) {
         const QJsonObject obj = value.toObject();
@@ -330,7 +79,7 @@ bool OSListModel::reload()
         // Icon source: rewrite to image provider to avoid network head-of-line blocking
         {
             const QString rawIcon = obj["icon"].toString();
-            const QString sanitized = sanitizeIconSource(rawIcon);
+            const QString sanitized = oslist::sanitizeIconSource(rawIcon);
             if (!sanitized.isEmpty()) {
                 // If already qrc or local relative, keep as-is. For http(s), route via image://icons/
                 if (sanitized.startsWith("http://") || sanitized.startsWith("https://")) {
@@ -349,17 +98,93 @@ bool OSListModel::reload()
         os.architecture = obj["architecture"].toString();
         os.enableRPiConnect = obj.value("enable_rpi_connect").toBool(false);
 
-        _osList.append(os);
+        next.append(os);
     }
 
-    // Mark the first OS as recommended after architecture sorting
-    markFirstAsRecommended();
+    // Mark the first OS as recommended after architecture sorting. Done on
+    // the new rows before they are compared, so the label is part of what
+    // the comparison sees rather than a change applied afterwards.
+    markRecommendedIn(next);
 
-    endResetModel();
-    
+    applyRows(std::move(next));
+
     emit eventOsListParse(static_cast<quint32>(parseTimer.elapsed()), true);
 
     return true;
+}
+
+namespace {
+
+// What makes two rows the same row rather than the same contents. The unit
+// separator cannot appear in either field, so it cannot merge two keys that
+// differ.
+QString rowKey(const OSListModel::OS &os)
+{
+    return os.url + QChar(0x1F) + os.name;
+}
+
+bool sameContents(const OSListModel::OS &a, const OSListModel::OS &b)
+{
+    return a.name == b.name
+        && a.description == b.description
+        && a.devices == b.devices
+        && a.capabilities == b.capabilities
+        && a.icon == b.icon
+        && a.initFormat == b.initFormat
+        && a.releaseDate == b.releaseDate
+        && a.url == b.url
+        && a.subitemsJson == b.subitemsJson
+        && a.subitemsUrl == b.subitemsUrl
+        && a.tooltip == b.tooltip
+        && a.website == b.website
+        && a.extractSha256 == b.extractSha256
+        && a.bmapUrl == b.bmapUrl
+        && a.architecture == b.architecture
+        && a.imageDownloadSize == b.imageDownloadSize
+        && a.extractSize == b.extractSize
+        && a.random == b.random
+        && a.enableRPiConnect == b.enableRPiConnect;
+}
+
+} // namespace
+
+void OSListModel::applyRows(QVector<OS> &&next)
+{
+    QStringList currentKeys;
+    currentKeys.reserve(_osList.size());
+    for (const OS &os : _osList)
+        currentKeys << rowKey(os);
+
+    QStringList nextKeys;
+    nextKeys.reserve(next.size());
+    for (const OS &os : next)
+        nextKeys << rowKey(os);
+
+    const rpi_model::RowDiff diff = rpi_model::planRowDiff(currentKeys, nextKeys);
+
+    if (diff.removed > 0) {
+        beginRemoveRows(QModelIndex(), diff.at, diff.at + diff.removed - 1);
+        _osList.remove(diff.at, diff.removed);
+        endRemoveRows();
+    }
+
+    if (diff.inserted > 0) {
+        beginInsertRows(QModelIndex(), diff.at, diff.at + diff.inserted - 1);
+        for (int i = 0; i < diff.inserted; ++i)
+            _osList.insert(diff.at + i, next.at(diff.at + i));
+        endInsertRows();
+    }
+
+    // The rows that stayed may still have new contents -- a cache status, a
+    // size, the recommended label moving to a different entry.
+    for (int i = 0; i < _osList.size(); ++i) {
+        if (i >= diff.at && i < diff.at + diff.inserted)
+            continue;  // just inserted, already current
+        if (!sameContents(_osList.at(i), next.at(i))) {
+            _osList[i] = next.at(i);
+            emit dataChanged(index(i), index(i));
+        }
+    }
 }
 
 void OSListModel::softRefresh()
@@ -449,11 +274,16 @@ QVariant OSListModel::data(const QModelIndex &index, int role) const {
 }
 
 void OSListModel::markFirstAsRecommended() {
-    const QString recommendedString = QStringLiteral(" (%1)").arg(tr("Recommended"));
+    markRecommendedIn(_osList);
+}
+
+void OSListModel::markRecommendedIn(QVector<OS> &rows) {
+    const QString recommendedString =
+        QStringLiteral(" (%1)").arg(QCoreApplication::translate("OSListModel", "Recommended"));
 
     // First pass: Remove any existing "(Recommended)" labels from all items
-    for (int i = 0; i < _osList.size(); i++) {
-        OS &os = _osList[i];
+    for (int i = 0; i < rows.size(); i++) {
+        OS &os = rows[i];
         // Remove any variant of the recommended string (handles different locales)
         if (os.description.contains(QRegularExpression(R"( \([^)]*\bRecommended\b[^)]*\))"))) {
             os.description.remove(QRegularExpression(R"( \([^)]*\bRecommended\b[^)]*\))"));
@@ -466,8 +296,8 @@ void OSListModel::markFirstAsRecommended() {
 
     // Second pass: Add the localized "(Recommended)" to the first item if appropriate
     // Skip internal items (Erase, Use custom) - these are fallbacks when OS list download fails
-    for (int i = 0; i < _osList.size(); i++) {
-        OS &candidate = _osList[i];
+    for (int i = 0; i < rows.size(); i++) {
+        OS &candidate = rows[i];
 
         // Skip internal items (e.g., "internal://format", "internal://custom")
         if (candidate.url.startsWith(QLatin1String("internal://"))) {
