@@ -7853,12 +7853,17 @@ Drivelist::DeviceDescriptor removableWithChildren(
     return d;
 }
 
+// The model keys a board on its USB port path, so a caller that means two
+// separate boards has to give them separate ports -- two nodes on one port
+// are one board that turned up twice.
 Drivelist::DeviceDescriptor rpibootDevice(const std::string &device,
-                                          const std::string &chip)
+                                          const std::string &chip,
+                                          const std::vector<uint8_t> &portPath = {})
 {
     Drivelist::DeviceDescriptor d = removable(device, "A board in USB boot");
     d.isRpiboot = true;
     d.rpibootChipName = chip;
+    d.usbPortPath = portPath;
     return d;
 }
 
@@ -7923,8 +7928,8 @@ TEST_CASE("The same board seen twice is still one chip", "[drivelist]")
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList().size() == 1);
@@ -7969,16 +7974,16 @@ TEST_CASE("Two different boards are both reported, in a settled order",
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712"),
-                              rpibootDevice("/dev/sdb", "BCM2711") });
+    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdb", "BCM2711", {1, 3}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList()
           == QStringList{QStringLiteral("BCM2711"), QStringLiteral("BCM2712")});
 
     // The same pair the other way round is not a change.
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711", {1, 3}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
     CHECK(chips.count() == 1);
 }
 

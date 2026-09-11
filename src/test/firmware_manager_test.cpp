@@ -169,7 +169,7 @@ TEST_CASE("FirmwareManager builds a fastboot manifest", "[firmware]")
     }
 }
 
-TEST_CASE("FirmwareManager downloads the same fastboot payload for either chip",
+TEST_CASE("FirmwareManager downloads each chip's own fastboot gadget",
           "[firmware]")
 {
     TestableFirmwareManager fm;
@@ -180,18 +180,29 @@ TEST_CASE("FirmwareManager downloads the same fastboot payload for either chip",
     REQUIRE_FALSE(for2711.empty());
     REQUIRE_FALSE(for2712.empty());
 
-    // The manifest is deliberately chip-independent here: both CM4 and CM5
-    // pull the same fastboot bootfiles.bin, and the chip only decides which
-    // member is pulled out of that TAR afterwards -- bootcode4.bin for
-    // BCM2711, bootcode5.bin for BCM2712. So the download list matching is
-    // the correct answer, and validateCacheForDevice() is what actually keeps
-    // one chip from using the other's extracted bootcode.
+    // Only the gadget is chip-specific: rpi-sb-provisioner ships one per
+    // device family, and we know the family from the USB PID we enumerated
+    // on, so there is no reason to pull the other family's device trees.
+    // Everything else -- config.txt and bootfiles.bin -- stays shared, and
+    // the chip only decides which bootcode is extracted from that TAR
+    // afterwards, which validateCacheForDevice() is what enforces.
     REQUIRE(for2711.size() == for2712.size());
+
+    std::vector<std::size_t> differing;
     for (std::size_t i = 0; i < for2711.size(); ++i) {
-        INFO("entry " << i);
-        CHECK(for2711[i].url == for2712[i].url);
-        CHECK(for2711[i].localPath == for2712[i].localPath);
+        if (for2711[i].url != for2712[i].url
+            || for2711[i].localPath != for2712[i].localPath)
+            differing.push_back(i);
     }
+    REQUIRE(differing.size() == 1);
+
+    const auto &gadget2711 = for2711[differing.front()];
+    const auto &gadget2712 = for2712[differing.front()];
+
+    CHECK(gadget2711.url.find("fastboot-gadget-pi4-family.img") != std::string::npos);
+    CHECK(gadget2711.localPath == "fastboot/fastboot-gadget-pi4-family.img");
+    CHECK(gadget2712.url.find("fastboot-gadget-pi5-family.img") != std::string::npos);
+    CHECK(gadget2712.localPath == "fastboot/fastboot-gadget-pi5-family.img");
 }
 
 TEST_CASE("FirmwareManager builds a secure-boot recovery manifest", "[firmware]")
@@ -820,6 +831,11 @@ void layOutFirmware(const QString &root)
         {"mass-storage-gadget64/config.txt",  "gadget config"},
         // firmware/bootfiles.bin is written separately below: it has to be a
         // real tar, because the bootcode is extracted from inside it.
+        // One gadget per device family, plus the unsuffixed image the
+        // provisioner keeps as the fallback for a station that cannot tell
+        // what it has connected.
+        {"host-support/fastboot-gadget-pi4-family.img", "pi4 fastboot gadget"},
+        {"host-support/fastboot-gadget-pi5-family.img", "pi5 fastboot gadget"},
         {"host-support/fastboot-gadget.img",  "fastboot gadget"},
         {"host-support/fastboot-gadget.2710-bootfiles-bin", "2710 bootfiles"},
         {"firmware-2711/versions.txt",        "2024-09-23  1727086800  abc  latest\n"},
@@ -1488,6 +1504,10 @@ TEST_CASE("A CM3 fastboot manifest uses the self-contained bundle", "[firmware]"
 
     // No separate gadget kernel and no separate config: the bundle carries
     // both, and asking for them would 404.
+    // No gadget image of any name: not a family one, and not the unsuffixed
+    // fallback either. The self-contained fastboot-gadget.2710-bootfiles-bin
+    // is the bundle itself, checked above, and is meant to be here.
+    CHECK(manifestJoined(m).find("fastboot-gadget-") == std::string::npos);
     CHECK_FALSE(manifestHas(m, "fastboot/fastboot-gadget.img"));
     CHECK_FALSE(manifestHas(m, "fastboot/config.txt"));
 
@@ -1735,7 +1755,7 @@ TEST_CASE("Fetching firmware reports progress the whole way", "[firmware][fetch]
     // the within-file fraction is computed the right way round.
     {
         QFile big(QDir(served.path()).filePath(
-            QStringLiteral("host-support/fastboot-gadget.img")));
+            QStringLiteral("host-support/fastboot-gadget-pi5-family.img")));
         REQUIRE(big.open(QIODevice::WriteOnly | QIODevice::Truncate));
         const QByteArray chunk(1 << 20, 'g');
         for (int i = 0; i < 24; ++i)
@@ -2389,7 +2409,8 @@ TEST_CASE("A fastboot firmware set is fetched, cached and validated",
     ScratchDir served;
     // Laid out as the upstream repositories are, because the manifest builds
     // its URLs from those paths.
-    writeFile(served.path() / "host-support" / "fastboot-gadget.img", "gadget bytes");
+    writeFile(served.path() / "host-support" / "fastboot-gadget-pi5-family.img",
+              "gadget bytes");
     writeFile(served.path() / "mass-storage-gadget64" / "config.txt", "arm_64bit=1\n");
     writeBootfilesTar(served.path() / "firmware" / "bootfiles.bin", "2712/bootcode5.bin");
 
@@ -2408,7 +2429,7 @@ TEST_CASE("A fastboot firmware set is fetched, cached and validated",
     REQUIRE_FALSE(dir.empty());
 
     // Every manifest file landed where the file server will look for it.
-    CHECK(fs::exists(dir / "fastboot" / "fastboot-gadget.img"));
+    CHECK(fs::exists(dir / "fastboot" / "fastboot-gadget-pi5-family.img"));
     CHECK(fs::exists(dir / "fastboot" / "config.txt"));
     CHECK(fs::exists(dir / "fastboot" / "bootfiles.bin"));
 
@@ -2435,7 +2456,8 @@ TEST_CASE("A fastboot set is counter-signed and re-packed for a fused board",
         SKIP("openssl is not installed, so no key can be generated");
 
     ScratchDir served;
-    writeFile(served.path() / "host-support" / "fastboot-gadget.img", "gadget bytes");
+    writeFile(served.path() / "host-support" / "fastboot-gadget-pi5-family.img",
+              "gadget bytes");
     writeFile(served.path() / "mass-storage-gadget64" / "config.txt", "arm_64bit=1\n");
     writeBootfilesTar(served.path() / "firmware" / "bootfiles.bin", "2712/bootcode5.bin");
 
