@@ -22,34 +22,34 @@ AsyncCacheWriter::AsyncCacheWriter(QObject *parent)
     _initializeQueueLimits();
 }
 
-void AsyncCacheWriter::_initializeQueueLimits()
+AsyncCacheWriter::QueueLimits AsyncCacheWriter::queueLimitsFor(qint64 totalMemMB)
 {
-    qint64 totalMemMB = SystemMemoryManager::instance().getTotalMemoryMB();
-    
     // Adaptive queue sizing based on system memory
     // Cache writing is less critical than main I/O, so we use conservative memory allocation
     if (totalMemMB < 1024) {
         // Very low memory (< 1GB): Minimal caching to preserve RAM
-        _maxQueueSize = 8;
-        _maxQueueMemory = 8 * 1024 * 1024;  // 8MB max
+        return { 8, 8 * 1024 * 1024 };
     } else if (totalMemMB < 2048) {
         // Low memory (1-2GB): Small cache buffer
-        _maxQueueSize = 16;
-        _maxQueueMemory = 16 * 1024 * 1024;  // 16MB max
+        return { 16, 16 * 1024 * 1024 };
     } else if (totalMemMB < 4096) {
         // Medium memory (2-4GB): Moderate cache buffer
-        _maxQueueSize = 24;
-        _maxQueueMemory = 32 * 1024 * 1024;  // 32MB max
+        return { 24, 32 * 1024 * 1024 };
     } else if (totalMemMB < 8192) {
         // High memory (4-8GB): Comfortable cache buffer
-        _maxQueueSize = 32;
-        _maxQueueMemory = 64 * 1024 * 1024;  // 64MB max
-    } else {
-        // Very high memory (> 8GB): Large cache buffer for best performance
-        _maxQueueSize = 48;
-        _maxQueueMemory = 128 * 1024 * 1024;  // 128MB max
+        return { 32, 64 * 1024 * 1024 };
     }
-    
+    // Very high memory (> 8GB): Large cache buffer for best performance
+    return { 48, 128 * 1024 * 1024 };
+}
+
+void AsyncCacheWriter::_initializeQueueLimits()
+{
+    const qint64 totalMemMB = SystemMemoryManager::instance().getTotalMemoryMB();
+    const QueueLimits limits = queueLimitsFor(totalMemMB);
+    _maxQueueSize = limits.maxChunks;
+    _maxQueueMemory = limits.maxBytes;
+
     qDebug() << "AsyncCacheWriter: Queue limits set to" << _maxQueueSize << "chunks,"
              << (_maxQueueMemory / (1024 * 1024)) << "MB for" << totalMemMB << "MB system";
 }

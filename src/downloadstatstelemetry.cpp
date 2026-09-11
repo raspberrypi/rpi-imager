@@ -15,8 +15,8 @@
 #include <QFile>
 #include <QRegularExpression>
 
-DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByteArray &parentcategory, const QByteArray &osname, bool embedded, const QString &imagerLang, QObject *parent)
-    : QThread(parent), _url(TELEMETRY_URL)
+DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByteArray &parentcategory, const QByteArray &osname, bool embedded, const QString &imagerLang, QObject *parent, const QByteArray &endpoint)
+    : QThread(parent), _url(endpoint)
 {
     QLocale locale;
     
@@ -56,6 +56,28 @@ DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByt
         }
     }
 #endif
+}
+
+DownloadStatsTelemetry::~DownloadStatsTelemetry()
+{
+    // QThread's destructor calls qFatal() if the thread is still running, so
+    // a telemetry POST still in flight when the owning ImageWriter goes away
+    // takes the whole process down with it. That is reachable on any quit
+    // that follows a download, and on the error paths where the report is
+    // sent and the writer is torn down immediately afterwards.
+    //
+    // The request is a single curl_easy_perform() on the FireAndForget
+    // profile, so it is already short-timeout bounded; waiting is normally
+    // instant. If it somehow is not, killing one fire-and-forget telemetry
+    // thread is a better outcome than aborting.
+    if (!isRunning())
+        return;
+
+    if (wait(10000))
+        return;
+
+    terminate();
+    wait(2000);
 }
 
 void DownloadStatsTelemetry::run()

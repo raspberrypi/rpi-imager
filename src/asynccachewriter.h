@@ -31,6 +31,15 @@ class AsyncCacheWriter : public QThread
     Q_OBJECT
 
 public:
+
+    // The queue limits chosen for a machine of this size. Static and public
+    // because the ladder cannot otherwise be checked: a test runs on one
+    // machine, and every rung but that machine's own goes unexercised.
+    struct QueueLimits {
+        int maxChunks;
+        qint64 maxBytes;
+    };
+    static QueueLimits queueLimitsFor(qint64 totalMemMB);
     /**
      * @brief Constructor
      * @param parent Parent QObject
