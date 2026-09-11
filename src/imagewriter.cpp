@@ -5,6 +5,9 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "network_poll_action.h"
+#include "eeprom_repo_override.h"
+#include "imagesizeparser.h"
 #include "imager_version.h"
 #include "writeprogresswatchdog.h"
 #include "embedded_config.h"
@@ -28,11 +31,6 @@
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #endif
-#include <archive.h>
-#include <archive_entry.h>
-#include <lzma.h>
-#define ZSTD_STATIC_LINKING_ONLY  // for ZSTD_FRAMEHEADERSIZE_MAX
-#include <zstd.h>
 #include <qjsondocument.h>
 #include <QJsonArray>
 #include <random>
@@ -91,6 +89,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <limits>
 #endif
 
 using namespace ImageOptions;
@@ -262,15 +261,14 @@ ImageWriter::ImageWriter(QObject *parent)
                 if (blconfig_of_dir.cdUp()) {
                     QFile blconfig_file = QFile(blconfig_of_dir.path() + QDir::separator() + "nvmem");
                     if (blconfig_file.exists() && blconfig_file.open(blconfig_file.ReadOnly)) {
-                        const QByteArrayList eepromSettings = blconfig_file.readAll().split('\n');
+                        const QByteArray blconfigBytes = blconfig_file.readAll();
                         blconfig_file.close();
-                        for (const QByteArray &setting : eepromSettings)
+                        const QString fromEeprom =
+                            rpi_eeprom::repoUrlFromBlconfig(blconfigBytes);
+                        if (!fromEeprom.isEmpty())
                         {
-                            if (setting.startsWith("IMAGER_REPO_URL="))
-                            {
-                                _repo = setting.mid(16).trimmed();
-                                qDebug() << "Repository from EEPROM:" << _repo;
-                            }
+                            _repo = fromEeprom;
+                            qDebug() << "Repository from EEPROM:" << _repo;
                         }
                     }
                 }
@@ -647,6 +645,15 @@ void ImageWriter::setRpibootDevice(const QString &deviceId,
     _rpibootDeviceId = deviceId;
     _rpibootStorageTarget = storageTarget;
     _isRpibootDevice = true;
+    // And no longer the other kind. setFastbootDevice() clears this flag's
+    // counterpart for the same reason: choosePath() asks the fastboot
+    // question first, so a board selected here while that was still set
+    // would be sent down the fastboot path -- the imager talking fastboot to
+    // something that is not listening for it, having skipped the bootstrap
+    // that would have made it listen. Both states can be in the storage list
+    // at once, and the step that fills it in calls one setter per selection
+    // with no reset in between.
+    _isFastbootDevice = false;
     _selectedDeviceValid = true;
     // Set _dst to the rpiboot ID so readyToWrite() passes
     _dst = deviceId;
@@ -810,6 +817,53 @@ void ImageWriter::onBootstrapError(const QString &portPathKey, const QString &ms
     }
 }
 
+QUrl ImageWriter::resolveFlashSource() const
+{
+    // The regular write path substitutes a file:// URL for _src when a
+    // verified cache exists, so libcurl reads off disk instead of going to
+    // the network. The fastboot handoff did not, which meant a fastboot
+    // write always hit the network even with the image fully cached -- and
+    // showed up as "Recv failure: Connection reset by peer" to a user who
+    // could see the download had already happened.
+    //
+    // Verified is the condition, not merely present: an unverified cache
+    // file may be a partial download, and writing that to a board is worse
+    // than fetching it again.
+    if (!_cacheManager || _expectedHash.isEmpty())
+        return _src;
+    if (!_cacheManager->hasPotentialCache(_expectedHash))
+        return _src;
+
+    const auto cacheStatus = _cacheManager->getCacheStatus();
+    if (!cacheStatus.verificationComplete || !cacheStatus.isValid) {
+        qDebug() << "FastbootFlashThread: cached file present but not yet"
+                    " verified — falling back to network download";
+        return _src;
+    }
+
+    qDebug() << "FastbootFlashThread: using verified cache file"
+             << cacheStatus.cacheFileName;
+    return QUrl::fromLocalFile(cacheStatus.cacheFileName);
+}
+
+QString ImageWriter::resolveFastbootStorageTarget() const
+{
+    // Drives both where the image is written and the BOOT_ORDER nibble set
+    // in the EEPROM afterwards. Empty means the rpiboot selection did not
+    // carry one through; eMMC is the only storage every compute module is
+    // guaranteed to have, so it is the safe fallback -- but the mismatch is
+    // logged, because the resulting BOOT_ORDER will not be what the user
+    // picked.
+    if (!_rpibootStorageTarget.isEmpty())
+        return _rpibootStorageTarget;
+
+    qWarning() << "rpiboot fastboot handoff: no storage target carried"
+                  " through selection --- defaulting to mmcblk0;"
+                  " EEPROM BOOT_ORDER will reflect SD/eMMC, not the"
+                  " user's intended target";
+    return QStringLiteral("mmcblk0");
+}
+
 void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
 {
     qDebug() << "rpiboot fastboot device ready:" << fastbootId;
@@ -827,19 +881,7 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     // hit the network even when the OS image is fully cached locally,
     // which is what produced the "Recv failure: Connection reset by peer"
     // we just saw despite the user reporting a cached image.
-    QUrl flashSrc = _src;
-    if (_cacheManager && !_expectedHash.isEmpty() &&
-        _cacheManager->hasPotentialCache(_expectedHash)) {
-        auto cacheStatus = _cacheManager->getCacheStatus();
-        if (cacheStatus.verificationComplete && cacheStatus.isValid) {
-            qDebug() << "FastbootFlashThread: using verified cache file"
-                     << cacheStatus.cacheFileName;
-            flashSrc = QUrl::fromLocalFile(cacheStatus.cacheFileName);
-        } else {
-            qDebug() << "FastbootFlashThread: cached file present but not yet"
-                        " verified — falling back to network download";
-        }
-    }
+    const QUrl flashSrc = resolveFlashSource();
 
     // Start FastbootFlashThread.  Use the storage target the user picked
     // in the wizard --- this drives both where the image is written and
@@ -848,71 +890,9 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     // in which case fall back to the eMMC (the only storage every CM is
     // guaranteed to have) and log a warning so the mismatch is visible
     // in support logs.
-    QString storageTarget = _rpibootStorageTarget;
-    if (storageTarget.isEmpty()) {
-        qWarning() << "rpiboot fastboot handoff: no storage target carried"
-                      " through selection --- defaulting to mmcblk0;"
-                      " EEPROM BOOT_ORDER will reflect SD/eMMC, not the"
-                      " user's intended target";
-        storageTarget = QStringLiteral("mmcblk0");
-    }
+    const QString storageTarget = resolveFastbootStorageTarget();
     _fastbootFlashThread = new FastbootFlashThread(fastbootId, storageTarget, flashSrc, _downloadLen, _extrLen, _expectedHash, this);
-    _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
-    if (!_bmapUrl.isEmpty())
-        _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
-
-    // Propagate Raspberry Pi Connect organisation registration.
-    // The API key is persisted in QSettings but never handed back to
-    // QML; read it directly here and forward to the flash thread.
-    // Only applies when "Raspberry Pi Connect for Organisations" is
-    // enabled in App Options.
-    if (_settings.value(QStringLiteral("connect_org_enabled")).toBool()) {
-        const QString orgKey =
-            _settings.value(QStringLiteral("connect_org_api_key")).toString();
-        if (!orgKey.isEmpty()) {
-            const QString orgDesc =
-                _settings.value(QStringLiteral("connect_org_description")).toString();
-            _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
-        }
-    }
-    connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
-    connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
-    connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
-    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
-        emit downloadProgress(QVariant(now), QVariant(total));
-    });
-    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
-        emit writeProgress(QVariant(now), QVariant(total));
-    });
-    connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
-    connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
-        setWriteState(WriteState::Writing);
-        startProgressPolling();
-    });
-
-    // Clean up thread pointer when finished
-    connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
-        if (_fastbootFlashThread) {
-            _fastbootFlashThread->deleteLater();
-            _fastbootFlashThread = nullptr;
-        }
-    });
-
-    // Wire fastboot timing events and progress to PerformanceStats
-    connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
-            this, [this](quint32 ms, bool ok, QString meta){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
-            });
-    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
-            this, [this](quint64 now, quint64 total){
-                _performanceStats->recordDownloadProgress(now, total);
-            });
-    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
-            this, [this](quint64 now, quint64 total){
-                _performanceStats->recordWriteProgress(now, total);
-            });
-
-    _fastbootFlashThread->start();
+    _configureAndStartFastbootFlash();
 }
 
 void ImageWriter::onRpibootError(const QString &msg)
@@ -971,214 +951,106 @@ QString ImageWriter::getHardwareName()
 }
 
 /* Start writing */
-void ImageWriter::startWrite()
+// Configure the fastboot flash thread and start it.
+//
+// Two paths reach this with a device already in fastboot mode: the one that
+// has just sideloaded it there, and the one where the user picked a fastboot
+// storage device directly. Both configured the thread with the same
+// forty-five lines -- customisation, the bmap URL, the Connect organisation
+// registration, ten signal connections and the telemetry -- differing only in
+// indentation and the wording of two comments.
+void ImageWriter::_configureAndStartFastbootFlash()
 {
-    // Refuse re-entry while a write is already in progress.  The deferred-watchdog
-    // fix (#1511) prevents false stall timeouts during macOS auth, so users should
-    // no longer reach this path.  The guard remains as defence-in-depth. (#1511)
-    if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing ||
-        _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing ||
-        _writeState == WriteState::Cancelling) {
-        qDebug() << "startWrite: ignoring — write already in progress, state:" << _writeState;
-        return;
-    }
+    _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    if (!_bmapUrl.isEmpty())
+        _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
 
-    // Clean up a finished-but-not-yet-collected thread (deleteLater timing gap).
-    // A *running* thread here is a bug — our exit paths (onError, onCancelled,
-    // QThread::finished handler) should have cleaned up already.
-    if (_thread) {
-        Q_ASSERT(!_thread->isRunning());
-        _thread->deleteLater();
-        _thread = nullptr;
-    }
+    // Propagate Raspberry Pi Connect organisation registration.
+    // The API key is persisted in QSettings but never handed back to
+    // QML; read it directly here and forward to the flash thread.
+    // Only applies when "Raspberry Pi Connect for Organisations" is
+    // enabled in App Options.
+    QString orgKey, orgDesc;
+    if (_connectOrgRegistrationForWrite(orgKey, orgDesc))
+        _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
+    connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
+    connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
+        emit downloadProgress(QVariant(now), QVariant(total));
+    });
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
+        emit writeProgress(QVariant(now), QVariant(total));
+    });
+    connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+    connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
+        setWriteState(WriteState::Writing);
+        startProgressPolling();
+    });
 
-    // Same for the rpiboot thread — if a previous attempt finished or was
-    // cancelled, the handler sets _rpibootThread = nullptr via deleteLater(),
-    // but the deletion may still be pending in the event queue.
-    if (_rpibootThread) {
-        if (_rpibootThread->isRunning()) {
-            _rpibootThread->cancel();
-            _rpibootThread->wait(5000);
+    // Clean up thread pointer when finished
+    connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
+        if (_fastbootFlashThread) {
+            _fastbootFlashThread->deleteLater();
+            _fastbootFlashThread = nullptr;
         }
-        delete _rpibootThread;
-        _rpibootThread = nullptr;
-    }
+    });
 
-    // Same for the fastboot flash thread.
-    if (_fastbootFlashThread) {
-        if (_fastbootFlashThread->isRunning()) {
-            _fastbootFlashThread->cancel();
-            _fastbootFlashThread->wait(5000);
-        }
-        delete _fastbootFlashThread;
-        _fastbootFlashThread = nullptr;
-    }
+    // Wire fastboot timing events and progress to PerformanceStats
+    connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
+            this, [this](quint32 ms, bool ok, QString meta){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
+            });
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordDownloadProgress(now, total);
+            });
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordWriteProgress(now, total);
+            });
 
-    if (!readyToWrite())
+    _fastbootFlashThread->start();
+}
+
+// Point the thread at a cache file for this download, if caching is on.
+//
+// Both write paths did this identically; only the condition guarding it
+// differs between them, which is why the condition stays with each caller.
+void ImageWriter::_attachDownloadCache()
+{
+    // Use CacheManager to setup cache for download
+    QString cacheFilePath;
+    if (_cacheManager->setupCacheForDownload(_expectedHash, _downloadLen, cacheFilePath))
     {
-        // Provide a user-visible error rather than silently returning, so the UI can recover
-        // Check all conditions and provide comprehensive error messages
-        QStringList missingItems;
-        
-        if (_src.isEmpty())
-            missingItems.append(tr("image"));
-        if (_dst.isEmpty())
-            missingItems.append(tr("storage device"));
-        else if (!_selectedDeviceValid)
-            missingItems.append(tr("valid storage device (device no longer available)"));
-        
-        QString reason;
-        if (!missingItems.isEmpty())
-        {
-            if (missingItems.size() == 1)
-                reason = tr("No %1 selected.").arg(missingItems.first());
-            else
-                reason = tr("No %1 selected.").arg(missingItems.join(tr(" or ")));
-        }
-        else
-        {
-            reason = tr("Unknown precondition failure.");
-        }
-
-        emit error(tr("Cannot start write. %1").arg(reason));
-        return;
+        qDebug() << "Setting up cache file for download:" << cacheFilePath;
+        _thread->setCacheFile(cacheFilePath, _downloadLen);
+        // Connect to CacheManager for cache updates (extract uncompressed hash from signal)
+        connect(_thread, &DownloadThread::cacheFileHashUpdated,
+                this, [this](const QByteArray& cacheFileHash, const QByteArray& imageHash) {
+                    qDebug() << "DownloadThread cache update - cacheFileHash:" << cacheFileHash << "imageHash:" << imageHash;
+                    // Update cache with both uncompressed hash (imageHash) and compressed hash (cacheFileHash)
+                    _cacheManager->updateCacheFile(imageHash, cacheFileHash);
+                });
     }
-
-    setWriteState(WriteState::Preparing);
-    setEjectState(EjectState::EjectIdle);
-
-    if (_isFastbootDevice)
+    else
     {
-        // Already in fastboot mode — go directly to flash
-        emit preparationStatusUpdate(tr("Starting fastboot flash..."));
-        _fastbootFlashThread = new FastbootFlashThread(
-            _fastbootId, _fastbootBlockDevice, _src, _downloadLen, _extrLen, _expectedHash, this);
-        _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
-        if (!_bmapUrl.isEmpty())
-            _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
-        // Same Connect-org wire-up as the rpiboot path: when the user
-        // picked a fastboot storage device directly, register the
-        // device's firmware identity with the organisation before
-        // reboot.
-        if (_settings.value(QStringLiteral("connect_org_enabled")).toBool()) {
-            const QString orgKey =
-                _settings.value(QStringLiteral("connect_org_api_key")).toString();
-            if (!orgKey.isEmpty()) {
-                const QString orgDesc =
-                    _settings.value(QStringLiteral("connect_org_description")).toString();
-                _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
-            }
-        }
-        connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
-        connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
-        connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
-        connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
-            emit downloadProgress(QVariant(now), QVariant(total));
-        });
-        connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
-            emit writeProgress(QVariant(now), QVariant(total));
-        });
-        connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
-        connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
-            setWriteState(WriteState::Writing);
-            startProgressPolling();
-        });
-        connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
-            if (_fastbootFlashThread) {
-                _fastbootFlashThread->deleteLater();
-                _fastbootFlashThread = nullptr;
-            }
-        });
-        connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
-                this, [this](quint32 ms, bool ok, QString meta){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
-                });
-        connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDownloadProgress(now, total);
-                });
-        connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                });
-        _fastbootFlashThread->start();
-        return;
+        qDebug() << "Cache setup failed or disabled - proceeding without caching";
     }
+}
 
-    if (_isRpibootDevice)
+// Start the configured thread and begin reporting progress.
+//
+// A multi-file archive is unpacked onto a filesystem rather than written as
+// an image, so the card is formatted first and the write starts from that
+// thread's success signal instead of directly.
+void ImageWriter::_startConfiguredWrite()
+{
+    if (_multipleFilesInZip)
     {
-        emit preparationStatusUpdate(tr("Preparing device for imaging..."));
-
-        // Parse the rpiboot device ID to extract USB bus/address/port info
-        RpibootThread::DeviceInfo devInfo;
-
-        // Parse "rpiboot://bus:addr:port1.port2..."
-        QString devPath = _rpibootDeviceId;
-        if (devPath.startsWith("rpiboot://"))
-            devPath = devPath.mid(10);
-        QStringList parts = devPath.split(':');
-        if (parts.size() >= 2) {
-            devInfo.busNumber = static_cast<uint8_t>(parts[0].toUInt());
-            devInfo.deviceAddress = static_cast<uint8_t>(parts[1].toUInt());
-        }
-        if (parts.size() >= 3) {
-            for (const auto& p : parts[2].split('.'))
-                if (!p.isEmpty())
-                    devInfo.portPath.push_back(static_cast<uint8_t>(p.toUInt()));
-        }
-
-        // Part 4 is the USB PID, which encodes the chip generation.
-        // Format added in rpiboot_scanner.cpp: rpiboot://bus:addr:portpath:pid
-        devInfo.chipGeneration = rpiboot::ChipGeneration::BCM2711;  // safe default
-        if (parts.size() >= 4) {
-            auto pid = static_cast<uint16_t>(parts[3].toUInt());
-            if (auto gen = rpiboot::chipGenerationFromPid(pid))
-                devInfo.chipGeneration = *gen;
-        }
-
-        _rpibootThread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
-        if (!_debugCustomFastbootGadget.isEmpty())
-            _rpibootThread->setCustomFastbootGadget(_debugCustomFastbootGadget);
-        if (_debugSignFastbootGadget) {
-            QString rsaKey = _settings.value("secureboot_rsa_key").toString();
-            if (rsaKey.isEmpty()) {
-                qWarning() << "Debug: Re-provisioning requested, but no secure boot RSA key is configured; signing will be skipped";
-            } else {
-                _rpibootThread->setSignFastbootGadgetKey(rsaKey);
-            }
-            _rpibootThread->setReprovisionDevice(true);
-        }
-
-        // After sideload, start FastbootFlashThread
-        connect(_rpibootThread, &RpibootThread::fastbootDeviceReady, this, &ImageWriter::onRpibootFastbootReady);
-
-        connect(_rpibootThread, &RpibootThread::error, this, &ImageWriter::onRpibootError);
-        connect(_rpibootThread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
-
-        // Wire rpiboot timing events to PerformanceStats
-        connect(_rpibootThread, &RpibootThread::eventFirmwareSetup,
-                this, [this](quint32 ms, bool ok, QString meta){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFirmwareSetup, ms, ok, meta);
-                });
-        connect(_rpibootThread, &RpibootThread::eventRpibootProtocol,
-                this, [this](quint32 ms, bool ok, QString meta){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootProtocol, ms, ok, meta);
-                });
-        connect(_rpibootThread, &RpibootThread::eventFastbootWait,
-                this, [this](quint32 ms, bool ok){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFastbootWait, ms, ok);
-                });
-
-        _rpibootThread->start();
-        return;
-    }
-
-    if (_src.toString() == "internal://format")
-    {
-        // For formatting operations, skip all cache operations since we don't need cached files
-        qDebug() << "Starting format operation - skipping cache operations";
+        static_cast<DownloadExtractThread *>(_thread)->enableMultipleFileExtraction();
         DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
-        connect(dft, SIGNAL(success()), SLOT(onSuccess()));
+        connect(dft, SIGNAL(success()), _thread, SLOT(start()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
         connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
         connect(dft, &DriveFormatThread::eventDriveFormat,
@@ -1186,234 +1058,36 @@ void ImageWriter::startWrite()
                     _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
                 });
         dft->start();
-        return;
+        setWriteState(WriteState::Writing);
     }
-
-    QByteArray urlstr = _src.toString(_src.FullyEncoded).toLatin1();
-
-    // Proactive validation for local sources before spawning threads
-    if (_src.isLocalFile())
+    else
     {
-        const QString localPath = _src.toLocalFile();
-        QFileInfo localFi(localPath);
-        if (!localFi.exists())
-        {
-            onError(tr("Source file not found: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isFile())
-        {
-            onError(tr("Source is not a regular file: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isReadable())
-        {
-            onError(tr("Source file is not readable: %1").arg(localPath));
-            return;
-        }
+        _thread->start();
+        setWriteState(WriteState::Writing);
     }
 
-    if (_devLen && _extrLen > _devLen)
-    {
-        emit error(tr("Storage capacity is not large enough.\n\n"
-                      "The image requires at least %1 of storage.")
-                   .arg(formatSize(_extrLen)));
-        return;
-    }
+    startProgressPolling();
+}
 
-    if (_extrLen && !_multipleFilesInZip && _extrLen % 512 != 0)
-    {
-        qDebug() << "Image size" << _extrLen << "is not a multiple of 512 bytes. The last sector will be zero-padded.";
-    }
+// Wire up the freshly constructed DownloadThread.
+//
+// startWrite() and the continuation that resumes after cache verification
+// both built a thread and then configured it with the same three hundred
+// lines: the extract total, roughly thirty signal connections, the telemetry
+// events, verification, the user agent, the customisation payloads and every
+// debug switch. The two copies differed by a comment and the prefix on one
+// qDebug line, and nothing kept them in step -- which is how the empty-source
+// check came to exist on one write path and not the other.
+// Where the download counter is reported, if anywhere.
+static QByteArray telemetryEndpoint()
+{
+    if (!qEnvironmentVariableIsSet("RPI_IMAGER_TELEMETRY_URL"))
+        return QByteArray(TELEMETRY_URL);
+    return qgetenv("RPI_IMAGER_TELEMETRY_URL");
+}
 
-    // Start performance stats session early so cache lookup is captured
-    // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
-    QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
-    _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
-                                    _extrLen > 0 ? _extrLen : _downloadLen, 
-                                    writeDevicePath);
-
-    // Populate system info for performance analysis
-    {
-        PerformanceStats::SystemInfo sysInfo;
-        auto &memMgr = SystemMemoryManager::instance();
-        
-        // Memory info
-        sysInfo.totalMemoryBytes = static_cast<quint64>(memMgr.getTotalMemoryMB()) * 1024 * 1024;
-        sysInfo.availableMemoryBytes = static_cast<quint64>(memMgr.getAvailableMemoryMB()) * 1024 * 1024;
-        
-        // Device info - use platform-specific write device path
-        sysInfo.devicePath = writeDevicePath;
-        sysInfo.deviceSizeBytes = _devLen;
-        sysInfo.deviceDescription = "";  // Would need DriveListItem lookup
-        sysInfo.deviceIsUsb = true;      // Assume USB for now
-        sysInfo.deviceIsRemovable = true;
-        
-        // Platform info
-#ifdef Q_OS_MACOS
-        sysInfo.osName = "macOS";
-#elif defined(Q_OS_LINUX)
-        sysInfo.osName = "Linux";
-#elif defined(Q_OS_WIN)
-        sysInfo.osName = "Windows";
-#else
-        sysInfo.osName = "Unknown";
-#endif
-        sysInfo.osVersion = QSysInfo::productVersion();
-        sysInfo.cpuArchitecture = QSysInfo::currentCpuArchitecture();
-        sysInfo.cpuCoreCount = QThread::idealThreadCount();
-        
-        // Imager version
-        sysInfo.imagerVersion = IMAGER_VERSION_STR;
-#ifdef QT_DEBUG
-        sysInfo.imagerBuildType = "Debug";
-#else
-        sysInfo.imagerBuildType = "Release";
-#endif
-        sysInfo.qtVersion = qVersion();
-        sysInfo.qtBuildVersion = QT_VERSION_STR;
-        
-        // Write configuration - not known yet, will be set later when file is opened
-        // These will be set via the DirectIOAttempt event metadata
-        sysInfo.directIOEnabled = false;  // Default, actual value set when file opens
-        sysInfo.periodicSyncEnabled = true;  // Default
-        
-        auto syncConfig = memMgr.calculateSyncConfiguration();
-        sysInfo.syncIntervalBytes = syncConfig.syncIntervalBytes;
-        sysInfo.syncIntervalMs = syncConfig.syncIntervalMs;
-        sysInfo.memoryTier = syncConfig.memoryTier;
-        
-        // Buffer configuration
-        sysInfo.writeBufferSize = memMgr.getOptimalWriteBufferSize();
-        sysInfo.inputBufferSize = memMgr.getOptimalInputBufferSize();
-        sysInfo.inputRingBufferSlots = memMgr.getOptimalRingBufferSlots(sysInfo.inputBufferSize);
-        // Write ring buffer is dynamically sized based on optimal queue depth
-        // Report the max configurable depth (512) + headroom for logging purposes
-        // Actual allocation may be smaller based on available memory
-        sysInfo.writeRingBufferSlots = 512 + 4;
-        
-        _performanceStats->setSystemInfo(sysInfo);
-    }
-
-    // Time cache lookup for performance tracking
-    // Use hasPotentialCache() which doesn't require verification to be complete
-    // This allows us to start verification for cached files that haven't been verified yet
-    QElapsedTimer cacheLookupTimer;
-    cacheLookupTimer.start();
-    bool potentialCacheHit = !_expectedHash.isEmpty() && _cacheManager->hasPotentialCache(_expectedHash);
-    _performanceStats->recordEvent(PerformanceStats::EventType::CacheLookup,
-        static_cast<quint32>(cacheLookupTimer.elapsed()), true,
-        potentialCacheHit ? "potential_hit" : (_expectedHash.isEmpty() ? "no_hash" : "miss"));
-    
-    if (potentialCacheHit)
-    {
-        // Use background cache manager to check cache file integrity
-        CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
-        qDebug() << "Cache status: verificationComplete=" << cacheStatus.verificationComplete
-                 << "isValid=" << cacheStatus.isValid
-                 << "file=" << cacheStatus.cacheFileName;
-
-        if (cacheStatus.verificationComplete && cacheStatus.isValid)
-        {
-            qDebug() << "Using verified cache file (background verified):" << cacheStatus.cacheFileName;
-            // Use cached file
-            urlstr = QUrl::fromLocalFile(cacheStatus.cacheFileName).toString(_src.FullyEncoded).toLatin1();
-        }
-        else if (cacheStatus.verificationComplete && !cacheStatus.isValid)
-        {
-            qDebug() << "Cache file failed background integrity check, invalidating and proceeding with download";
-            _cacheManager->invalidateCache();
-            // Continue with original URL - cache will be recreated during download
-        }
-        else
-        {
-            // Background verification not yet complete
-            qDebug() << "Cache verification needed - waiting for completion";
-
-            // Connect to cache verification progress and completion signals
-            connect(_cacheManager, &CacheManager::cacheVerificationProgress,
-                    this, &ImageWriter::onCacheVerificationProgress);
-            connect(_cacheManager, &CacheManager::cacheVerificationComplete,
-                    this, &ImageWriter::onCacheVerificationComplete);
-
-            // Start timing cache verification
-            _cacheVerificationTimer.start();
-            
-            if (!cacheStatus.verificationComplete)
-            {
-                qDebug() << "Starting cache verification";
-                _cacheManager->startVerification(_expectedHash);
-            }
-            else
-            {
-                qDebug() << "Verification is already in progress. Waiting for it to complete.";
-            }
-
-            // Set flag to indicate we're waiting for cache verification
-            _waitingForCacheVerification = true;
-
-            // Emit signal to update UI for cache verification
-            emit cacheVerificationStarted();
-
-            // Don't proceed with write yet - wait for cache verification to complete
-            return;
-        }
-    }
-
-    try {
-        if (QUrl(urlstr).isLocalFile())
-        {
-            _thread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
-        }
-        else
-        {
-            _thread = new DownloadExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
-            if (_repo.toString() == OSLIST_URL)
-            {
-                DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
-                connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
-                tele->start();
-            }
-        }
-    } catch (const std::bad_alloc& e) {
-        // Memory allocation failed during thread/buffer creation
-        qDebug() << "Memory allocation failed during write setup:" << e.what();
-        
-        // Log the failure to performance stats
-        _performanceStats->recordEvent(
-            PerformanceStats::EventType::MemoryAllocationFailure,
-            0,  // No duration - immediate failure
-            false,
-            QString("Failed to allocate memory for write operation: %1").arg(e.what())
-        );
-        
-        // Provide a clear, actionable error message to the user
-        QString errorMsg = tr("Failed to start write operation: insufficient memory.\n\n"
-                              "The system does not have enough available memory to perform this operation. "
-                              "Try closing other applications to free up memory, then try again.\n\n"
-                              "Technical details: %1").arg(e.what());
-        
-        setWriteState(WriteState::Failed);
-        _performanceStats->endSession(false, "Memory allocation failure");
-        emit error(errorMsg);
-        return;
-    } catch (const std::exception& e) {
-        // Other exception during thread creation
-        qDebug() << "Exception during write setup:" << e.what();
-        
-        _performanceStats->recordEvent(
-            PerformanceStats::EventType::MemoryAllocationFailure,
-            0,
-            false,
-            QString("Exception during write setup: %1").arg(e.what())
-        );
-        
-        setWriteState(WriteState::Failed);
-        _performanceStats->endSession(false, QString("Setup exception: %1").arg(e.what()));
-        emit error(tr("Failed to start write operation: %1").arg(e.what()));
-        return;
-    }
-
+void ImageWriter::_configureWriteThread()
+{
     // Set the extract size for accurate write progress (compressed images have larger extracted size)
     _thread->setExtractTotal(_extrLen > 0 ? _extrLen : _downloadLen);
 
@@ -1423,13 +1097,21 @@ void ImageWriter::startWrite()
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
     connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
     connect(_thread, &DownloadThread::ejectFinished, this, &ImageWriter::onEjectFinished);
-    // Ensure cleanup of thread pointer on finish in all paths
-    connect(_thread, &QThread::finished, this, [this]() {
-        if (_thread)
-        {
-            _thread->deleteLater();
+    // Clean up the thread that finished, held through a QPointer, and clear
+    // the member only if it still names that thread.
+    //
+    // finished() is queued, and a caller writing a second card is already
+    // inside the next write by the time the previous thread's arrives. The
+    // member is then the new, running thread: deleting that killed the write
+    // outright, leaving the state machine in Finalizing with nothing left to
+    // end it. A raw captured pointer is no better, because startWrite() has
+    // already called deleteLater() on the old thread; the QPointer is what
+    // makes a late arrival harmless either way.
+    connect(_thread, &QThread::finished, this, [this, finished = QPointer<DownloadThread>(_thread)]() {
+        if (finished)
+            finished->deleteLater();
+        if (_thread == finished)
             _thread = nullptr;
-        }
     });
 
     // Connect to progress signals if this is a DownloadExtractThread
@@ -1697,32 +1379,15 @@ void ImageWriter::startWrite()
     // Forward bottleneck state to QML for UI feedback
     connect(_thread, &DownloadThread::bottleneckStateChanged,
             this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
-                QString statusText;
-                switch (state) {
-                    case DownloadThread::BottleneckState::None:
-                        statusText = "";
-                        break;
-                    case DownloadThread::BottleneckState::Network:
-                        statusText = tr("Limited by download speed");
-                        break;
-                    case DownloadThread::BottleneckState::Decompression:
-                        statusText = tr("Limited by decompression speed");
-                        break;
-                    case DownloadThread::BottleneckState::Storage:
-                        statusText = tr("Limited by storage device speed");
-                        break;
-                    case DownloadThread::BottleneckState::Verifying:
-                        statusText = tr("Verifying written data");
-                        break;
-                }
-                emit bottleneckStatusChanged(statusText, throughputKBps);
+                emit bottleneckStatusChanged(
+                    DownloadThread::bottleneckStatusText(state), throughputKBps);
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);
     // Single source of truth for the User-Agent: CurlNetworkConfig (also used by
     // all the libcurl fetch paths via applyCurlSettings) so it can never drift.
     _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
-    qDebug() << "startWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
+    qDebug() << "configureWriteThread: passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
     
     // Pass debug options to the thread
@@ -1738,39 +1403,207 @@ void ImageWriter::startWrite()
     _thread->setDebugIPv4Only(_debugIPv4Only);
     _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
     _thread->setDebugIgnoreDeviceLimits(_debugIgnoreDeviceLimits);
+}
 
-    // Only set up cache operations for remote downloads, not when using cached files as source
-    if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
+// Which kind of write this is going to be.
+//
+// Extracted from the head of startWrite() so the precedence can be tested.
+// The order matters and is not obvious: a device already in fastboot mode
+// takes the fastboot path even when the erase sentinel is the selected
+// source, because erasing a Compute Module means talking to it over USB
+// rather than writing a partition table to a block device.
+ImageWriter::WritePath ImageWriter::choosePath() const
+{
+    if (_isFastbootDevice)
+        return WritePath::FastbootDevice;
+    if (_isRpibootDevice)
+        return WritePath::RpibootDevice;
+    if (_src.toString() == QStringLiteral("internal://format"))
+        return WritePath::Erase;
+    return WritePath::Normal;
+}
+
+// Why a local source cannot be written, or an empty string if it can.
+//
+// Two callers ask this: startWrite(), and the continuation that resumes
+// after cache verification. They had a copy each, and the copies had already
+// drifted -- the empty-file case was added to one and not the other. One
+// definition means the next check added lands on both paths.
+QString ImageWriter::_localSourceError(const QString &localPath) const
+{
+    const QFileInfo fi(localPath);
+
+    if (!fi.exists())
+        return tr("Source file not found: %1").arg(localPath);
+    if (!fi.isFile())
+        return tr("Source is not a regular file: %1").arg(localPath);
+    if (!fi.isReadable())
+        return tr("Source file is not readable: %1").arg(localPath);
+    if (fi.size() == 0)
     {
-        // Use CacheManager to setup cache for download
-        QString cacheFilePath;
-        if (_cacheManager->setupCacheForDownload(_expectedHash, _downloadLen, cacheFilePath))
+        // An interrupted copy or a failed download saved to disk. It passes
+        // the capacity check, extracts to nothing, and the write finishes
+        // reporting success -- leaving the user with a card they believe is
+        // imaged and no indication otherwise.
+        return tr("Source file is empty: %1").arg(localPath);
+    }
+
+    return QString();
+}
+
+void ImageWriter::startWrite()
+{
+    // Refuse re-entry while a write is already in progress.  The deferred-watchdog
+    // fix (#1511) prevents false stall timeouts during macOS auth, so users should
+    // no longer reach this path.  The guard remains as defence-in-depth. (#1511)
+    if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing ||
+        _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing ||
+        _writeState == WriteState::Cancelling) {
+        qDebug() << "startWrite: ignoring — write already in progress, state:" << _writeState;
+        return;
+    }
+
+    // Clean up a finished-but-not-yet-collected thread (deleteLater timing gap).
+    // A *running* thread here is a bug — our exit paths (onError, onCancelled,
+    // QThread::finished handler) should have cleaned up already.
+    if (_thread) {
+        Q_ASSERT(!_thread->isRunning());
+        // Cut it off before letting go. deleteLater() only schedules the
+        // deletion, so without this the previous write's queued signals are
+        // still delivered afterwards -- finished(), but equally a late
+        // success() or error() -- and get answered as though they belonged
+        // to the write now starting.
+        disconnect(_thread, nullptr, this, nullptr);
+        _thread->deleteLater();
+        _thread = nullptr;
+    }
+
+    // Same for the rpiboot thread — if a previous attempt finished or was
+    // cancelled, the handler sets _rpibootThread = nullptr via deleteLater(),
+    // but the deletion may still be pending in the event queue.
+    if (_rpibootThread) {
+        if (_rpibootThread->isRunning()) {
+            _rpibootThread->cancel();
+            _rpibootThread->wait(5000);
+        }
+        delete _rpibootThread;
+        _rpibootThread = nullptr;
+    }
+
+    // Same for the fastboot flash thread.
+    if (_fastbootFlashThread) {
+        if (_fastbootFlashThread->isRunning()) {
+            _fastbootFlashThread->cancel();
+            _fastbootFlashThread->wait(5000);
+        }
+        delete _fastbootFlashThread;
+        _fastbootFlashThread = nullptr;
+    }
+
+    if (!readyToWrite())
+    {
+        // Provide a user-visible error rather than silently returning, so the UI can recover
+        // Check all conditions and provide comprehensive error messages
+        QStringList missingItems;
+        
+        if (_src.isEmpty())
+            missingItems.append(tr("image"));
+        if (_dst.isEmpty())
+            missingItems.append(tr("storage device"));
+        else if (!_selectedDeviceValid)
+            missingItems.append(tr("valid storage device (device no longer available)"));
+        
+        QString reason;
+        if (!missingItems.isEmpty())
         {
-            qDebug() << "Setting up cache file for download:" << cacheFilePath;
-            _thread->setCacheFile(cacheFilePath, _downloadLen);
-            // Connect to CacheManager for cache updates (extract uncompressed hash from signal)
-            connect(_thread, &DownloadThread::cacheFileHashUpdated,
-                    this, [this](const QByteArray& cacheFileHash, const QByteArray& imageHash) {
-                        qDebug() << "DownloadThread cache update - cacheFileHash:" << cacheFileHash << "imageHash:" << imageHash;
-                        // Update cache with both uncompressed hash (imageHash) and compressed hash (cacheFileHash)
-                        _cacheManager->updateCacheFile(imageHash, cacheFileHash);
-                    });
+            if (missingItems.size() == 1)
+                reason = tr("No %1 selected.").arg(missingItems.first());
+            else
+                reason = tr("No %1 selected.").arg(missingItems.join(tr(" or ")));
         }
         else
         {
-            qDebug() << "Cache setup failed or disabled - proceeding without caching";
+            reason = tr("Unknown precondition failure.");
         }
-    }
-    else if (!_expectedHash.isEmpty() && QUrl(urlstr).isLocalFile())
-    {
-        qDebug() << "Using cached file as source - skipping cache setup";
+
+        emit error(tr("Cannot start write. %1").arg(reason));
+        return;
     }
 
-    if (_multipleFilesInZip)
+    setWriteState(WriteState::Preparing);
+    setEjectState(EjectState::EjectIdle);
+
+    if (choosePath() == WritePath::FastbootDevice)
     {
-        static_cast<DownloadExtractThread *>(_thread)->enableMultipleFileExtraction();
+        // Already in fastboot mode — go directly to flash
+        emit preparationStatusUpdate(tr("Starting fastboot flash..."));
+        _fastbootFlashThread = new FastbootFlashThread(
+            _fastbootId, _fastbootBlockDevice, _src, _downloadLen, _extrLen, _expectedHash, this);
+        _configureAndStartFastbootFlash();
+        return;
+    }
+
+    if (choosePath() == WritePath::RpibootDevice)
+    {
+        emit preparationStatusUpdate(tr("Preparing device for imaging..."));
+
+        // Parse the rpiboot device ID to extract USB bus/address/port info
+        RpibootThread::DeviceInfo devInfo;
+
+        // rpiboot://bus:addr:port.path:pid -- see rpiboot_types.h
+        const rpiboot::DeviceUri parsed =
+            rpiboot::parseDeviceUri(_rpibootDeviceId.toStdString());
+        devInfo.busNumber = parsed.busNumber;
+        devInfo.deviceAddress = parsed.deviceAddress;
+        devInfo.portPath = parsed.portPath;
+        // Absent or unrecognised, the generation stays at DeviceInfo's own
+        // default of BCM2711, which is what this did before.
+        if (parsed.chipGeneration)
+            devInfo.chipGeneration = *parsed.chipGeneration;
+
+        _rpibootThread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
+        if (!_debugCustomFastbootGadget.isEmpty())
+            _rpibootThread->setCustomFastbootGadget(_debugCustomFastbootGadget);
+        if (_debugSignFastbootGadget) {
+            QString rsaKey = _settings.value("secureboot_rsa_key").toString();
+            if (rsaKey.isEmpty()) {
+                qWarning() << "Debug: Re-provisioning requested, but no secure boot RSA key is configured; signing will be skipped";
+            } else {
+                _rpibootThread->setSignFastbootGadgetKey(rsaKey);
+            }
+            _rpibootThread->setReprovisionDevice(true);
+        }
+
+        // After sideload, start FastbootFlashThread
+        connect(_rpibootThread, &RpibootThread::fastbootDeviceReady, this, &ImageWriter::onRpibootFastbootReady);
+
+        connect(_rpibootThread, &RpibootThread::error, this, &ImageWriter::onRpibootError);
+        connect(_rpibootThread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+
+        // Wire rpiboot timing events to PerformanceStats
+        connect(_rpibootThread, &RpibootThread::eventFirmwareSetup,
+                this, [this](quint32 ms, bool ok, QString meta){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFirmwareSetup, ms, ok, meta);
+                });
+        connect(_rpibootThread, &RpibootThread::eventRpibootProtocol,
+                this, [this](quint32 ms, bool ok, QString meta){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootProtocol, ms, ok, meta);
+                });
+        connect(_rpibootThread, &RpibootThread::eventFastbootWait,
+                this, [this](quint32 ms, bool ok){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFastbootWait, ms, ok);
+                });
+
+        _rpibootThread->start();
+        return;
+    }
+
+    if (choosePath() == WritePath::Erase)
+    {
+        // For formatting operations, skip all cache operations since we don't need cached files
+        qDebug() << "Starting format operation - skipping cache operations";
         DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
-        connect(dft, SIGNAL(success()), _thread, SLOT(start()));
+        connect(dft, SIGNAL(success()), SLOT(onSuccess()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
         connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
         connect(dft, &DriveFormatThread::eventDriveFormat,
@@ -1778,20 +1611,233 @@ void ImageWriter::startWrite()
                     _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
                 });
         dft->start();
-        setWriteState(WriteState::Writing);
-    }
-    else
-    {
-        _thread->start();
-        setWriteState(WriteState::Writing);
+        return;
     }
 
-    startProgressPolling();
+    QByteArray urlstr = _src.toString(_src.FullyEncoded).toLatin1();
+
+    // Proactive validation for local sources before spawning threads
+    if (_src.isLocalFile())
+    {
+        const QString err = _localSourceError(_src.toLocalFile());
+        if (!err.isEmpty())
+        {
+            onError(err);
+            return;
+        }
+    }
+
+    if (_devLen && _extrLen > _devLen)
+    {
+        emit error(tr("Storage capacity is not large enough.\n\n"
+                      "The image requires at least %1 of storage.")
+                   .arg(formatSize(_extrLen)));
+        return;
+    }
+
+    if (_extrLen && !_multipleFilesInZip && _extrLen % 512 != 0)
+    {
+        qDebug() << "Image size" << _extrLen << "is not a multiple of 512 bytes. The last sector will be zero-padded.";
+    }
+
+    // Start performance stats session early so cache lookup is captured
+    // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
+    QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
+    _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
+                                    _extrLen > 0 ? _extrLen : _downloadLen, 
+                                    writeDevicePath);
+
+    // Populate system info for performance analysis
+    {
+        PerformanceStats::SystemInfo sysInfo;
+        auto &memMgr = SystemMemoryManager::instance();
+        
+        // Memory info
+        sysInfo.totalMemoryBytes = static_cast<quint64>(memMgr.getTotalMemoryMB()) * 1024 * 1024;
+        sysInfo.availableMemoryBytes = static_cast<quint64>(memMgr.getAvailableMemoryMB()) * 1024 * 1024;
+        
+        // Device info - use platform-specific write device path
+        sysInfo.devicePath = writeDevicePath;
+        sysInfo.deviceSizeBytes = _devLen;
+        sysInfo.deviceDescription = "";  // Would need DriveListItem lookup
+        sysInfo.deviceIsUsb = true;      // Assume USB for now
+        sysInfo.deviceIsRemovable = true;
+        
+        // Platform info
+#ifdef Q_OS_MACOS
+        sysInfo.osName = "macOS";
+#elif defined(Q_OS_LINUX)
+        sysInfo.osName = "Linux";
+#elif defined(Q_OS_WIN)
+        sysInfo.osName = "Windows";
+#else
+        sysInfo.osName = "Unknown";
+#endif
+        sysInfo.osVersion = QSysInfo::productVersion();
+        sysInfo.cpuArchitecture = QSysInfo::currentCpuArchitecture();
+        sysInfo.cpuCoreCount = QThread::idealThreadCount();
+        
+        // Imager version
+        sysInfo.imagerVersion = IMAGER_VERSION_STR;
+#ifdef QT_DEBUG
+        sysInfo.imagerBuildType = "Debug";
+#else
+        sysInfo.imagerBuildType = "Release";
+#endif
+        sysInfo.qtVersion = qVersion();
+        sysInfo.qtBuildVersion = QT_VERSION_STR;
+        
+        // Write configuration - not known yet, will be set later when file is opened
+        // These will be set via the DirectIOAttempt event metadata
+        sysInfo.directIOEnabled = false;  // Default, actual value set when file opens
+        sysInfo.periodicSyncEnabled = true;  // Default
+        
+        auto syncConfig = memMgr.calculateSyncConfiguration();
+        sysInfo.syncIntervalBytes = syncConfig.syncIntervalBytes;
+        sysInfo.syncIntervalMs = syncConfig.syncIntervalMs;
+        sysInfo.memoryTier = syncConfig.memoryTier;
+        
+        // Buffer configuration
+        sysInfo.writeBufferSize = memMgr.getOptimalWriteBufferSize();
+        sysInfo.inputBufferSize = memMgr.getOptimalInputBufferSize();
+        sysInfo.inputRingBufferSlots = memMgr.getOptimalRingBufferSlots(sysInfo.inputBufferSize);
+        // Write ring buffer is dynamically sized based on optimal queue depth
+        // Report the max configurable depth (512) + headroom for logging purposes
+        // Actual allocation may be smaller based on available memory
+        sysInfo.writeRingBufferSlots = 512 + 4;
+        
+        _performanceStats->setSystemInfo(sysInfo);
+    }
+
+    // Time cache lookup for performance tracking
+    // Use hasPotentialCache() which doesn't require verification to be complete
+    // This allows us to start verification for cached files that haven't been verified yet
+    QElapsedTimer cacheLookupTimer;
+    cacheLookupTimer.start();
+    bool potentialCacheHit = !_expectedHash.isEmpty() && _cacheManager->hasPotentialCache(_expectedHash);
+    _performanceStats->recordEvent(PerformanceStats::EventType::CacheLookup,
+        static_cast<quint32>(cacheLookupTimer.elapsed()), true,
+        potentialCacheHit ? "potential_hit" : (_expectedHash.isEmpty() ? "no_hash" : "miss"));
+    
+    if (potentialCacheHit)
+    {
+        // Use background cache manager to check cache file integrity
+        CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
+        qDebug() << "Cache status: verificationComplete=" << cacheStatus.verificationComplete
+                 << "isValid=" << cacheStatus.isValid
+                 << "file=" << cacheStatus.cacheFileName;
+
+        if (cacheStatus.verificationComplete && cacheStatus.isValid)
+        {
+            qDebug() << "Using verified cache file (background verified):" << cacheStatus.cacheFileName;
+            // Use cached file
+            urlstr = QUrl::fromLocalFile(cacheStatus.cacheFileName).toString(_src.FullyEncoded).toLatin1();
+        }
+        else if (cacheStatus.verificationComplete && !cacheStatus.isValid)
+        {
+            qDebug() << "Cache file failed background integrity check, invalidating and proceeding with download";
+            _cacheManager->invalidateCache();
+            // Continue with original URL - cache will be recreated during download
+        }
+        else
+        {
+            // Background verification not yet complete
+            qDebug() << "Cache verification needed - waiting for completion";
+
+            // Connect to cache verification progress and completion signals
+            connect(_cacheManager, &CacheManager::cacheVerificationProgress,
+                    this, &ImageWriter::onCacheVerificationProgress);
+            connect(_cacheManager, &CacheManager::cacheVerificationComplete,
+                    this, &ImageWriter::onCacheVerificationComplete);
+
+            // Start timing cache verification
+            _cacheVerificationTimer.start();
+            
+            if (!cacheStatus.verificationComplete)
+            {
+                qDebug() << "Starting cache verification";
+                _cacheManager->startVerification(_expectedHash);
+            }
+            else
+            {
+                qDebug() << "Verification is already in progress. Waiting for it to complete.";
+            }
+
+            // Set flag to indicate we're waiting for cache verification
+            _waitingForCacheVerification = true;
+
+            // Emit signal to update UI for cache verification
+            emit cacheVerificationStarted();
+
+            // Don't proceed with write yet - wait for cache verification to complete
+            return;
+        }
+    }
+
+    try {
+        if (QUrl(urlstr).isLocalFile())
+        {
+            _thread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
+        }
+        else
+        {
+            _thread = new DownloadExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
+            const QByteArray endpoint = telemetryEndpoint();
+            if (_repo.toString() == OSLIST_URL && !endpoint.isEmpty())
+            {
+                DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this, endpoint);
+                connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
+                tele->start();
+            }
+        }
+    } catch (const std::bad_alloc& e) {
+        // Memory allocation failed during thread/buffer creation
+        qDebug() << "Memory allocation failed during write setup:" << e.what();
+        
+        // Both of these were written out again here, identically to the
+        // handlers below. _localSourceError has the same note: two copies of
+        // a message drift, and the one that gets the next fix is whichever
+        // the author happened to be looking at.
+        _handleMemoryAllocationFailure(e.what());
+        return;
+    } catch (const std::exception& e) {
+        _handleSetupException(e.what());
+        return;
+    }
+
+    _configureWriteThread();
+
+    // Only set up cache operations for remote downloads, not when using cached files as source
+    if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
+    {
+        _attachDownloadCache();
+    }
+    else if (!_expectedHash.isEmpty() && QUrl(urlstr).isLocalFile())
+    {
+        qDebug() << "Using cached file as source - skipping cache setup";
+    }
+
+    _startConfiguredWrite();
 }
 
 // Cache file update methods removed - now handled by connecting DownloadThread directly to CacheManager
 
 /* Cancel write - for user-initiated cancellation only */
+void ImageWriter::_emitCancelled()
+{
+    // Which of the two the UI hears decides what the user is told: that they
+    // cancelled, or that the card was taken out from under the write. The
+    // reason is cleared either way -- left set, the next write the user
+    // cancels themselves would be reported as a card removal, on a card
+    // sitting right there.
+    if (_cancelledDueToDeviceRemoval) {
+        _cancelledDueToDeviceRemoval = false;
+        emit writeCancelledDueToDeviceRemoval();
+    } else {
+        emit cancelled();
+    }
+}
+
 void ImageWriter::cancelWrite()
 {
     setWriteState(WriteState::Cancelling);
@@ -1811,7 +1857,7 @@ void ImageWriter::cancelWrite()
                 _rpibootThread = nullptr;
             }
             setWriteState(WriteState::Cancelled);
-            emit cancelled();
+            _emitCancelled();
         });
         return;
     }
@@ -1825,7 +1871,7 @@ void ImageWriter::cancelWrite()
                 _fastbootFlashThread = nullptr;
             }
             setWriteState(WriteState::Cancelled);
-            emit cancelled();
+            _emitCancelled();
         });
         return;
     }
@@ -1838,7 +1884,14 @@ void ImageWriter::cancelWrite()
 
     if (!_thread || !_thread->isRunning())
     {
-        emit cancelled();
+        // Nothing is running, so no thread will ever finish and call
+        // onCancelled() to move the state on. Without this the state stays
+        // at Cancelling for good, and startWrite()'s re-entry guard -- which
+        // rejects Cancelling -- then silently ignores every write from here
+        // on: no error, no progress, nothing on screen. Reached whenever
+        // Cancel lands after the write has already finished.
+        setWriteState(WriteState::Cancelled);
+        _emitCancelled();
     }
 }
 
@@ -1899,13 +1952,7 @@ void ImageWriter::onCancelled()
     // End performance stats session
     _performanceStats->endSession(false, _cancelledDueToDeviceRemoval ? "Device removed" : "Cancelled by user");
 
-    // If cancellation was due to device removal, emit a dedicated signal
-    if (_cancelledDueToDeviceRemoval) {
-        _cancelledDueToDeviceRemoval = false;
-        emit writeCancelledDueToDeviceRemoval();
-    } else {
-        emit cancelled();
-    }
+    _emitCancelled();
 }
 
 /* Return true if url is in our local disk cache */
@@ -2031,17 +2078,67 @@ namespace {
         for (auto ositem : parent_list) {
             auto ositemObject = ositem.toObject();
 
-            if (ositemObject.contains("subitems")) {
+            // subitems_url first, because after a refresh an entry can carry
+            // both: the previous contents, kept so the category does not
+            // empty while the new sublist is on its way, and the URL the new
+            // one is coming from. Recursing on the stale contents instead
+            // would leave the arriving sublist with nowhere to land.
+            if (ositemObject.contains("subitems_url")
+                && !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
+                ositemObject.insert("subitems", incomingBody);
+                ositemObject.remove("subitems_url");
+            } else if (ositemObject.contains("subitems")) {
                 // Recurse!
                 ositemObject["subitems"] = findAndInsertJsonResult(ositemObject["subitems"].toArray(), incomingBody, referenceUrl, count + 1);
-            } else if (ositemObject.contains("subitems_url")) {
-                if ( !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
-                    ositemObject.insert("subitems", incomingBody);
-                    ositemObject.remove("subitems_url");
-                }
             }
 
             returnArray += ositemObject;
+        }
+
+        return returnArray;
+    }
+
+    // Bring a refreshed top-level list up to date without emptying its
+    // categories.
+    //
+    // A category arrives from the repository as a name and a subitems_url,
+    // and its contents are fetched separately; once they land, subitems_url
+    // is replaced by subitems. So a refreshed list has categories that are
+    // once again nothing but a URL, and dropping the previous contents on
+    // the floor would blank every category until its sublist came back --
+    // or for good, if that fetch then failed, because a category with
+    // nothing in it is pruned from the chooser entirely.
+    QJsonArray carryOverSubitems(const QJsonArray &previous, const QJsonArray &incoming,
+                                 uint8_t count) {
+        if (count > MAX_SUBITEMS_DEPTH)
+            return incoming;
+
+        QHash<QString, QJsonArray> known;
+        for (const auto &entry : previous) {
+            const QJsonObject obj = entry.toObject();
+            const QString name = obj["name"].toString();
+            if (!name.isEmpty() && obj.contains("subitems"))
+                known.insert(name, obj["subitems"].toArray());
+        }
+
+        QJsonArray returnArray = {};
+        for (const auto &entry : incoming) {
+            QJsonObject obj = entry.toObject();
+            const auto found = known.constFind(obj["name"].toString());
+            if (found != known.constEnd()) {
+                if (obj.contains("subitems")) {
+                    // Both sides have contents: the new list is authoritative
+                    // for what is there, and the old one only for categories
+                    // nested inside it that have not been refetched yet.
+                    obj["subitems"] = carryOverSubitems(*found, obj["subitems"].toArray(),
+                                                        count + 1);
+                } else if (obj.contains("subitems_url")) {
+                    // Kept alongside subitems_url, not instead of it: the
+                    // refetch is queued and will replace these.
+                    obj.insert("subitems", *found);
+                }
+            }
+            returnArray += obj;
         }
 
         return returnArray;
@@ -2150,17 +2247,23 @@ bool ImageWriter::checkHWAndSWCapability(const QString &cap, const QString &diff
     return this->checkHWCapability(cap) && this->checkSWCapability(differentSWCap.isEmpty() ? cap : differentSWCap);
 }
 
+// Both sides trimmed, deliberately. The capability lists arrive from a
+// repository file, and the three routes into them did not agree: the
+// comma-separated and QVariantList setters trim each entry, the JSON ones
+// store what they were given. A list written ["i2c ", "spi"] therefore lost
+// i2c, and losing one takes a customisation option off the screen with
+// nothing to say why it is missing.
 bool ImageWriter::checkHWCapability(const QString &cap) {
     const auto needle = cap.trimmed().toLower();
     for (const auto &v : _hwCapabilities)
-        if (v.toString().toLower() == needle) return true;
+        if (v.toString().trimmed().toLower() == needle) return true;
     return false;
 }
 
 bool ImageWriter::checkSWCapability(const QString &cap) {
     const auto needle = cap.trimmed().toLower();
     for (const auto &v : _swCapabilities)
-        if (v.toString().toLower() == needle) return true;
+        if (v.toString().trimmed().toLower() == needle) return true;
     return false;
 }
 
@@ -2208,6 +2311,27 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url,
             _completeOsList = QJsonDocument(response_object);
             // Notify UI that OS list is now available (was unavailable, now has data)
             emit osListUnavailableChanged();
+        } else if (isTopLevelRequest) {
+            /* A refresh of the whole list, which is a replacement and not an
+               insertion. The repository asks to be refetched through
+               imager.refresh_interval_minutes and scheduleOsListRefresh()
+               obliges, so this is the reply to that -- but sending it through
+               findAndInsertJsonResult() below looks for an entry whose
+               subitems_url is this URL, finds none at the top level, and
+               hands back the list exactly as it was. A new release, a changed
+               download URL or a corrected checksum therefore never appeared
+               in a session that stayed open; only a restart picked it up.
+
+               Contents already fetched for a category are carried across so
+               it does not empty while its sublist is refetched below. */
+            QJsonObject imager_meta = response_object.contains("imager")
+                                          ? response_object["imager"].toObject()
+                                          : _completeOsList["imager"].toObject();
+            _completeOsList = QJsonDocument(QJsonObject({
+                {"imager", imager_meta},
+                {"os_list", carryOverSubitems(_completeOsList["os_list"].toArray(),
+                                              response_object["os_list"].toArray(), 1)}
+            }));
         } else {
             // Preserve latest top-level imager metadata if present in the top-level fetch
             auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), url, 1);
@@ -2468,7 +2592,11 @@ void ImageWriter::scheduleOsListRefresh()
     int jitterMinutes = 0;
 
     // CLI overrides take precedence when set (>= 0)
-    if (_refreshIntervalOverrideMinutes >= 0) {
+    // A negative override means "not set". Zero means "switch refresh off",
+    // so it must not fall through to the list's value below -- otherwise
+    // there is no way to disable a refresh the repository has asked for.
+    const bool intervalOverridden = (_refreshIntervalOverrideMinutes >= 0);
+    if (intervalOverridden) {
         baseMinutes = _refreshIntervalOverrideMinutes;
     }
     if (_refreshJitterOverrideMinutes >= 0) {
@@ -2480,7 +2608,7 @@ void ImageWriter::scheduleOsListRefresh()
         if (root.contains("imager")) {
             QJsonObject imager = root.value("imager").toObject();
             // New optional fields
-            if (baseMinutes <= 0 && imager.contains("refresh_interval_minutes")) {
+            if (!intervalOverridden && baseMinutes <= 0 && imager.contains("refresh_interval_minutes")) {
                 baseMinutes = imager.value("refresh_interval_minutes").toInt(0);
             }
             if (jitterMinutes <= 0 && imager.contains("refresh_jitter_minutes")) {
@@ -2506,11 +2634,17 @@ void ImageWriter::scheduleOsListRefresh()
     const int extraSeconds = (jitterSeconds > 0) ? QRandomGenerator::global()->bounded(jitterSeconds + 1) : 0;
     qint64 msec = baseMs + static_cast<qint64>(extraSeconds) * 1000;
 
-    // Cap to a reasonable max to avoid overflow (e.g., ~30 days)
-    const qint64 maxMs = static_cast<qint64>(30) * 24 * 60 * 60 * 1000;
+    // Cap to a reasonable max to avoid overflow. QTimer's interval is an int,
+    // so the ceiling is INT_MAX milliseconds -- about 24.8 days. The previous
+    // cap of 30 days was itself above that: a list asking for a long interval
+    // wrapped to a negative int and the timer then fired every millisecond,
+    // re-fetching the OS list in a tight loop.
+    constexpr qint64 maxMs = static_cast<qint64>(24) * 24 * 60 * 60 * 1000;
+    static_assert(maxMs <= std::numeric_limits<int>::max(),
+                  "refresh cap must fit in QTimer's int interval");
     if (msec > maxMs) msec = maxMs;
 
-    _osListRefreshTimer.start(msec);
+    _osListRefreshTimer.start(static_cast<int>(msec));
     qDebug() << "Scheduled OS list refresh in" << (msec/1000) << "seconds (base" << (baseMs/1000) << "+ jitter" << extraSeconds << ")";
 }
 
@@ -2839,7 +2973,7 @@ void ImageWriter::onPreparationStatusUpdate(QString msg)
     emit preparationStatusUpdate(msg);
 }
 
-void ImageWriter::openFileDialog(const QString &title, const QString &filter)
+void ImageWriter::openFileDialog(const QString &title, const QString &filter, const QString &purpose)
 {
 #ifndef CLI_ONLY_BUILD
     QSettings settings;
@@ -2853,7 +2987,10 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
         path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
     // Use native file dialog with modal behavior to main window
-    QString filename = NativeFileDialog::getOpenFileName(tr("Select image"),
+    // The caller's title, not a fixed one: this dialog is also used to pick a
+    // repository file, and titling that window "Select image" tells the user
+    // to choose the wrong kind of file.
+    QString filename = NativeFileDialog::getOpenFileName(title.isEmpty() ? tr("Select image") : title,
                                                         path,
                                                         filter,
                                                         _mainWindow);
@@ -2861,15 +2998,16 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
     // Process the selected file if one was chosen
     if (!filename.isEmpty())
     {
-        onFileSelected(filename);
+        onFileSelected(filename, purpose);
     }
 #else
     Q_UNUSED(title);
+    Q_UNUSED(purpose);
     Q_UNUSED(filter);
 #endif
 }
 
-void ImageWriter::onFileSelected(QString filename)
+void ImageWriter::onFileSelected(QString filename, const QString &purpose)
 {
     QFileInfo fi(filename);
     QSettings settings;
@@ -2883,7 +3021,7 @@ void ImageWriter::onFileSelected(QString filename)
             settings.sync();
         }
 
-        emit fileSelected(QUrl::fromLocalFile(filename));
+        emit fileSelected(QUrl::fromLocalFile(filename), purpose);
     }
     else
     {
@@ -2900,180 +3038,25 @@ void ImageWriter::onFileSelected(QString filename)
 
 void ImageWriter::_parseCompressedFile()
 {
-    struct archive *a = archive_read_new();
-    struct archive_entry *entry;
-    QByteArray fn = _src.toLocalFile().toLatin1();
-    int numFiles = 0;
-    _extrLen = 0;
-
-    archive_read_support_filter_all(a);
-    archive_read_support_format_all(a);
-
-    if (archive_read_open_filename(a, fn.data(), 10240) == ARCHIVE_OK)
-    {
-        while ( (archive_read_next_header(a, &entry)) == ARCHIVE_OK)
-        {
-            if (archive_entry_size(entry) > 0)
-            {
-              _extrLen += archive_entry_size(entry);
-              numFiles++;
-            }
-        }
-    }
-
-    if (numFiles > 1)
+    const auto info = imagesize::parseArchive(_src.toLocalFile());
+    _extrLen = info.uncompressedSize;
+    if (info.fileCount > 1)
         _multipleFilesInZip = true;
-
-    qDebug() << "Parsed .zip file containing" << numFiles << "files, uncompressed size:" << _extrLen;
 }
 
 void ImageWriter::_parseXZFile()
 {
-    QFile f(_src.toLocalFile());
-    lzma_stream_flags opts = { 0 };
-    _extrLen = 0;
-
-    if (f.size() > LZMA_STREAM_HEADER_SIZE && f.open(f.ReadOnly))
-    {
-        f.seek(f.size()-LZMA_STREAM_HEADER_SIZE);
-        QByteArray footer = f.read(LZMA_STREAM_HEADER_SIZE);
-        lzma_ret ret = lzma_stream_footer_decode(&opts, (const uint8_t *) footer.constData());
-
-        if (ret == LZMA_OK && opts.backward_size < 1000000 && opts.backward_size < f.size()-LZMA_STREAM_HEADER_SIZE)
-        {
-            f.seek(f.size()-LZMA_STREAM_HEADER_SIZE-opts.backward_size);
-            QByteArray buf = f.read(opts.backward_size+LZMA_STREAM_HEADER_SIZE);
-            lzma_index *idx;
-            uint64_t memlimit = UINT64_MAX;
-            size_t pos = 0;
-
-            ret = lzma_index_buffer_decode(&idx, &memlimit, NULL, (const uint8_t *) buf.constData(), &pos, buf.size());
-            if (ret == LZMA_OK)
-            {
-                _extrLen = lzma_index_uncompressed_size(idx);
-                qDebug() << "Parsed .xz file. Uncompressed size:" << _extrLen;
-            }
-            else
-            {
-                qDebug() << "Unable to parse index of .xz file";
-            }
-            lzma_index_end(idx, NULL);
-        }
-        else
-        {
-            qDebug() << "Unable to parse footer of .xz file";
-        }
-
-        f.close();
-    }
+    _extrLen = imagesize::parseXz(_src.toLocalFile());
 }
 
 void ImageWriter::_parseGzFile()
 {
-    QFile f(_src.toLocalFile());
-    _extrLen = 0;
-
-    // Gzip trailer format (last 8 bytes):
-    // - CRC32 (4 bytes, little-endian)
-    // - ISIZE (4 bytes, little-endian) - original file size modulo 2^32
-    //
-    // ISIZE is only 32 bits so this is a best-effort estimate for capacity
-    // checks.  The caller (setSrc) owns the _extractSizeKnown flag that
-    // controls whether the UI trusts this value for progress display.
-    const qint64 GZIP_TRAILER_SIZE = 8;
-
-    if (f.size() > GZIP_TRAILER_SIZE && f.open(QIODevice::ReadOnly))
-    {
-        f.seek(f.size() - 4);  // Seek to ISIZE field (last 4 bytes)
-        QByteArray isizeData = f.read(4);
-
-        if (isizeData.size() == 4)
-        {
-            // ISIZE is stored as little-endian 32-bit unsigned integer
-            quint32 isize = static_cast<quint8>(isizeData[0]) |
-                           (static_cast<quint8>(isizeData[1]) << 8) |
-                           (static_cast<quint8>(isizeData[2]) << 16) |
-                           (static_cast<quint8>(isizeData[3]) << 24);
-
-            _extrLen = isize;
-
-            // Handle files larger than 4GB where ISIZE wraps around
-            // If the uncompressed size appears smaller than the compressed size,
-            // the original file was likely > 4GB. This is a heuristic for storage
-            // space checks but NOT reliable for progress calculation.
-            qint64 compressedSize = f.size();
-            while (_extrLen < static_cast<quint64>(compressedSize))
-            {
-                _extrLen += Q_UINT64_C(0x100000000);  // Add 4GB
-            }
-
-            qDebug() << "Parsed .gz file. Estimated uncompressed size:" << _extrLen
-                     << "(ISIZE field:" << isize << ") - size unreliable for progress";
-        }
-        else
-        {
-            qDebug() << "Unable to read ISIZE from .gz file";
-        }
-
-        f.close();
-    }
-    else
-    {
-        qDebug() << "Unable to open .gz file for parsing";
-    }
+    _extrLen = imagesize::parseGz(_src.toLocalFile());
 }
 
 void ImageWriter::_parseZstdFile()
 {
-    QFile f(_src.toLocalFile());
-    _extrLen = 0;
-
-    if (!f.open(QIODevice::ReadOnly))
-    {
-        qDebug() << "Unable to open .zst file for parsing";
-        return;
-    }
-
-    // ZSTD_findDecompressedSize() iterates through all concatenated frames
-    // to compute the total decompressed size. It requires the full compressed
-    // data in memory, but this is acceptable for custom file size estimates.
-    QByteArray data = f.readAll();
-    f.close();
-
-    if (data.isEmpty())
-    {
-        qDebug() << "Empty .zst file";
-        return;
-    }
-
-    unsigned long long fcs = ZSTD_findDecompressedSize(data.constData(), data.size());
-
-    // The failure sentinels are (0ULL - 2) and (0ULL - 1), not 0, so they have to
-    // be tested by name: comparing against 0 alone lets ZSTD_CONTENTSIZE_UNKNOWN
-    // through as _extrLen = ULLONG_MAX, and startWrite() then rejects a perfectly
-    // good local image with "Storage capacity is not large enough".
-    if (fcs == ZSTD_CONTENTSIZE_ERROR)
-    {
-        qDebug() << "Unable to parse .zst file (invalid or truncated frames)";
-        return;
-    }
-
-    if (fcs == ZSTD_CONTENTSIZE_UNKNOWN)
-    {
-        // Size not recorded in the frame headers (streaming-compressed input).
-        // Leave _extrLen unknown and let progress fall back to the download size.
-        qDebug() << "Parsed .zst file. Uncompressed size: unknown (FCS not present)";
-        return;
-    }
-
-    if (fcs == 0)
-    {
-        qDebug() << "Unable to determine decompressed size of .zst file";
-        return;
-    }
-
-    _extrLen = fcs;
-    qDebug() << "Parsed .zst file. Uncompressed size:" << _extrLen;
+    _extrLen = imagesize::parseZstd(_src.toLocalFile());
 }
 
 bool ImageWriter::isOnline()
@@ -3100,8 +3083,27 @@ bool ImageWriter::isOnline()
             bool networkReady = PlatformQuirks::isNetworkReady();
             if (networkReady) {
                 _networkchecktimer.stop();
-                beginOSListFetch();
-                emit networkOnline();
+
+                // Decided by the same state machine as the desktop branch
+                // below. This arm had no state at all: it fetched and emitted
+                // on every call, so a second caller -- isOnline() is
+                // Q_INVOKABLE -- abandoned the fetch in flight and started it
+                // again, and a list already in hand was fetched a second time.
+                // Embedded is the only mode that polls this, ten times a
+                // second, which is where the guard was most needed.
+                switch (rpi_net::planPollAction(true, _online,
+                                                !_completeOsList.isEmpty())) {
+                case rpi_net::PollAction::ComeOnlineAndFetch:
+                    _online = true;
+                    beginOSListFetch();
+                    emit networkOnline();
+                    break;
+                case rpi_net::PollAction::ComeOnline:
+                    _online = true;
+                    break;
+                default:
+                    break;
+                }
             }
             return networkReady;
         }
@@ -3112,22 +3114,30 @@ bool ImageWriter::isOnline()
     // unavailable, and we never successfully fetched the OS list, trigger a retry.
     // This handles the case where the initial fetch failed due to a firewall blocking
     // access, and the user later grants permission (fixes GitHub issue #1212).
-    if (hasBasicConnectivity && !_online && _completeOsList.isEmpty()) {
+    switch (rpi_net::planPollAction(hasBasicConnectivity, _online,
+                                    !_completeOsList.isEmpty())) {
+    case rpi_net::PollAction::ComeOnlineAndFetch:
         qDebug() << "Network now available and OS list empty - retrying fetch";
         _online = true;
         beginOSListFetch();
         emit networkOnline();
-    } else if (hasBasicConnectivity && !_online) {
+        break;
+
+    case rpi_net::PollAction::ComeOnline:
         // Network came online but we already have OS list data
         _online = true;
-    } else if (!hasBasicConnectivity && _online) {
+        break;
+
+    case rpi_net::PollAction::GoOffline:
         // Network went offline
         _online = false;
-    } else if (!hasBasicConnectivity && _completeOsList.isEmpty()) {
+        break;
+
+    case rpi_net::PollAction::ReportUnavailable:
         // No network and no OS list - notify UI so it can show offline state
         // This handles startup without network (fixes GitHub issue #809)
         emit osListUnavailableChanged();
-        
+
         // Start monitoring for network availability so we can auto-retry
         PlatformQuirks::startNetworkMonitoring([this](bool available) {
             if (available && _completeOsList.isEmpty()) {
@@ -3136,6 +3146,10 @@ bool ImageWriter::isOnline()
                 QMetaObject::invokeMethod(this, "beginOSListFetch", Qt::QueuedConnection);
             }
         });
+        break;
+
+    case rpi_net::PollAction::Nothing:
+        break;
     }
     
     return hasBasicConnectivity;
@@ -3204,21 +3218,39 @@ bool ImageWriter::hasWindowDecorations() const
 }
 
 /* Mount any USB sticks that can contain source images under /media */
+QString ImageWriter::sysBlockRoot() const
+{
+    return QStringLiteral("/sys/class/block");
+}
+
+int ImageWriter::mountReadOnly(const QString &devicePath, const QString &mountPoint)
+{
+    const QStringList args = { QStringLiteral("-o"), QStringLiteral("ro"),
+                               devicePath, mountPoint };
+    return QProcess::execute(QStringLiteral("mount"), args);
+}
+
 bool ImageWriter::mountUsbSourceMedia()
 {
     int devices = 0;
 #ifdef Q_OS_LINUX
-    QDir dir("/sys/class/block");
+    const QString blockRoot = sysBlockRoot();
+    const QString mediaRoot = usbMediaRoot();
+
+    QDir dir(blockRoot);
     const QStringList list = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
 
-    if (!dir.exists("/media"))
-        dir.mkdir("/media");
+    if (!dir.exists(mediaRoot))
+        dir.mkdir(mediaRoot);
 
     for (const QString &devname : list)
     {
-        if (!devname.startsWith("mmcblk0") && !QFile::symLinkTarget("/sys/class/block/"+devname).contains("/devices/virtual/"))
+        // mmcblk0 is the card the machine is running from, and anything
+        // under devices/virtual is not real storage. Mounting either would
+        // be reaching for the wrong disk entirely.
+        if (!devname.startsWith("mmcblk0") && !QFile::symLinkTarget(blockRoot+"/"+devname).contains("/devices/virtual/"))
         {
-            QString mntdir = "/media/"+devname;
+            QString mntdir = mediaRoot+"/"+devname;
 
             if (dir.exists(mntdir))
             {
@@ -3227,9 +3259,8 @@ bool ImageWriter::mountUsbSourceMedia()
             }
 
             dir.mkdir(mntdir);
-            QStringList args = { "-o", "ro", QString("/dev/")+devname, mntdir };
 
-            if ( QProcess::execute("mount", args) == 0 )
+            if ( mountReadOnly(QStringLiteral("/dev/")+devname, mntdir) == 0 )
                 devices++;
             else
                 dir.rmdir(mntdir);
@@ -3239,21 +3270,27 @@ bool ImageWriter::mountUsbSourceMedia()
     return devices > 0;
 }
 
+QString ImageWriter::usbMediaRoot() const
+{
+    return QStringLiteral("/media");
+}
+
 QByteArray ImageWriter::getUsbSourceOSlist()
 {
 #ifdef Q_OS_LINUX
     QJsonArray oslist;
-    QDir dir("/media");
+    const QString root = usbMediaRoot();
+    QDir dir(root);
     const QStringList medialist = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz", "*.zst", "*.wic"};
 
     for (const QString &devname : medialist)
     {
-        QDir subdir("/media/"+devname);
+        QDir subdir(root+"/"+devname);
         const QStringList files = subdir.entryList(namefilters, QDir::Files, QDir::Name);
         for (const QString &file : files)
         {
-            QString path = "/media/"+devname+"/"+file;
+            QString path = root+"/"+devname+"/"+file;
             QFileInfo fi(path);
 
             QJsonObject f = {
@@ -3359,7 +3396,11 @@ QStringList ImageWriter::getTimezoneList()
     QStringList timezones;
     QFile f(":/timezones.txt");
     if (f.open(QFile::ReadOnly | QFile::Text)) {
-        timezones = QString::fromUtf8(f.readAll()).split('\n');
+        // SkipEmptyParts, as getCountryList() and getKeymapLayoutList()
+        // already do: the resource ends with a newline, so splitting without
+        // it left a blank entry at the end of the timezone dropdown that set
+        // no timezone at all when picked.
+        timezones = QString::fromUtf8(f.readAll()).split('\n', Qt::SkipEmptyParts);
         for (QString &s : timezones)
             s = s.trimmed();
         f.close();
@@ -4444,13 +4485,6 @@ bool ImageWriter::isValidRepoUrl(const QString &url) const
     // a SAS token: ".../manifest.json?sv=...&sig=...") are accepted. The path
     // portion excludes '?' and '#' so the extension must appear before any
     // query/fragment rather than merely somewhere in the URL.
-    //
-    // Anchored with \A..\z rather than ^..$: PCRE2 lets '$' match immediately
-    // before a newline at the end of the subject, so "...repo.json\n" matched
-    // despite '\n' being excluded from every character class above. That is
-    // exactly what a URL copied out of a browser looks like, and it reached
-    // refreshOsListFrom() as a %0A-suffixed URL (issue #1687). This also guards
-    // the deep-link "repo=" path, which never passes through a text field.
     static const QRegularExpression repoUrlRe(
         QRegularExpression::anchoredPattern(
             QStringLiteral("https?://[^ \\t\\r\\n?#]+\\.(json|" MANIFEST_EXTENSION ")([?#][^ \\t\\r\\n]*)?")),
@@ -4557,21 +4591,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     // Proactive validation for local sources before spawning threads
     if (QUrl(urlstr).isLocalFile())
     {
-        const QString localPath = QUrl(urlstr).toLocalFile();
-        QFileInfo localFi(localPath);
-        if (!localFi.exists())
+        const QString err = _localSourceError(QUrl(urlstr).toLocalFile());
+        if (!err.isEmpty())
         {
-            onError(tr("Source file not found: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isFile())
-        {
-            onError(tr("Source is not a regular file: %1").arg(localPath));
-            return;
-        }
-        if (!localFi.isReadable())
-        {
-            onError(tr("Source file is not readable: %1").arg(localPath));
+            onError(err);
             return;
         }
 
@@ -4594,9 +4617,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
         try {
             _thread = new DownloadExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
-            if (_repo.toString() == OSLIST_URL)
+            const QByteArray endpoint = telemetryEndpoint();
+            if (_repo.toString() == OSLIST_URL && !endpoint.isEmpty())
             {
-                DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
+                DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this, endpoint);
                 connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
                 tele->start();
             }
@@ -4609,352 +4633,21 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         }
     }
 
-    // Set the extract size for accurate write progress (compressed images have larger extracted size)
-    _thread->setExtractTotal(_extrLen > 0 ? _extrLen : _downloadLen);
-
-    connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
-    connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
-    connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
-    connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
-    connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
-    connect(_thread, &DownloadThread::ejectFinished, this, &ImageWriter::onEjectFinished);
-    // Ensure cleanup of thread pointer on finish in all paths
-    connect(_thread, &QThread::finished, this, [this]() {
-        if (_thread)
-        {
-            _thread->deleteLater();
-            _thread = nullptr;
-        }
-    });
-
-    // Connect to progress signals if this is a DownloadExtractThread
-    DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
-    if (downloadThread) {
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
-                this, &ImageWriter::downloadProgress);
-        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
-                this, &ImageWriter::writeProgress);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, &ImageWriter::verifyProgress);
-        
-        // Connect async write progress signal for event-driven UI updates during WaitForPendingWrites
-        // This signal is emitted from IOCP completion callbacks, providing real-time progress
-        connect(downloadThread, &DownloadThread::asyncWriteProgress,
-                this, &ImageWriter::writeProgress, Qt::QueuedConnection);
-        
-        // Capture progress for performance stats (lightweight - just stores raw samples)
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDownloadProgress(now, total);
-                });
-        connect(downloadThread, &DownloadExtractThread::decompressProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordDecompressProgress(now, total);
-                });
-        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                });
-        connect(downloadThread, &DownloadThread::asyncWriteProgress,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordWriteProgress(now, total);
-                }, Qt::QueuedConnection);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, [this](quint64 now, quint64 total){
-                    _performanceStats->recordVerifyProgress(now, total);
-                });
-        
-        // Also transition state to Verifying when verify progress first arrives
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
-                this, [this](quint64 /*now*/, quint64 /*total*/){
-                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
-                        _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
-                        setWriteState(WriteState::Verifying);
-                });
-        
-        // Capture ring buffer stall events for time-series correlation
-        connect(downloadThread, &DownloadExtractThread::eventRingBufferStats,
-                this, [this](qint64 timestampMs, quint32 durationMs, QString metadata){
-                    // Record as an event with explicit startMs from the stall timestamp
-                    PerformanceStats::TimedEvent event;
-                    event.type = PerformanceStats::EventType::RingBufferStarvation;
-                    event.startMs = static_cast<uint32_t>(timestampMs);
-                    event.durationMs = durationMs;
-                    event.metadata = metadata;
-                    event.success = true;
-                    event.bytesTransferred = 0;
-                    _performanceStats->addEvent(event);
-                });
-        
-        // Pipeline timing summary events (emitted at end of extraction)
-        connect(downloadThread, &DownloadExtractThread::eventPipelineDecompressionTime,
-                this, [this](quint32 totalMs, quint64 bytesDecompressed){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineDecompressionTime,
-                        totalMs, bytesDecompressed, true,
-                        QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
-                });
-        connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
-                this, [this](quint32 totalMs, quint64 bytesRead){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineRingBufferWaitTime,
-                        totalMs, bytesRead, true,
-                        QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
-                });
-        connect(downloadThread, &DownloadExtractThread::eventWriteRingBufferStats,
-                this, [this](quint64 producerStalls, quint64 consumerStalls, 
-                             quint64 producerWaitMs, quint64 consumerWaitMs){
-                    QString metadata = QString("producer_stalls: %1 (%2 ms); consumer_stalls: %3 (%4 ms)")
-                        .arg(producerStalls).arg(producerWaitMs)
-                        .arg(consumerStalls).arg(consumerWaitMs);
-                    // Use combined wait time as duration for the event
-                    quint32 totalWaitMs = static_cast<quint32>(producerWaitMs + consumerWaitMs);
-                    _performanceStats->recordEvent(
-                        PerformanceStats::EventType::WriteRingBufferStats,
-                        totalWaitMs, true, metadata);
-                });
-    }
-    
-    // Connect performance event signals from DownloadThread
-    connect(_thread, &DownloadThread::eventDriveUnmount,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmount, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveUnmountVolumes,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmountVolumes, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveDiskClean,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveDiskClean, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveRescan,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDriveOpen,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventDriveAuthorization,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
-                // Start the progress watchdog only after device authorization completes.
-                // On macOS, authorization shows system dialogs (passkey + removable media access)
-                // that can take an indeterminate amount of time. Starting the watchdog earlier
-                // would cause false stall detection during this auth period. (#1511)
-                if (success && _progressWatchdog && _thread) {
-                    _progressWatchdog->start(_thread);
-                }
-            });
-    // Stop the watchdog before the post-write sync. The fdatasync/fsync can
-    // block for minutes on slow cards and no progress indicators advance during
-    // it, so the watchdog would otherwise fire a false stall timeout.
-    // BlockingQueuedConnection ensures the watchdog is stopped before the
-    // download thread enters fdatasync (safe — main thread never waits on
-    // the download thread during normal operation).
-    connect(_thread, &DownloadThread::finalSyncStarting,
-            this, [this](){
-                if (_progressWatchdog) {
-                    _progressWatchdog->stop();
-                }
-            }, Qt::BlockingQueuedConnection);
-    connect(_thread, &DownloadThread::eventDriveMbrZeroing,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventDirectIOAttempt,
-            this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
-                QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
-                    .arg(attempted ? "yes" : "no")
-                    .arg(succeeded ? "yes" : "no")
-                    .arg(currentlyEnabled ? "yes" : "no")
-                    .arg(errorCode)
-                    .arg(errorMessage.isEmpty() ? "none" : errorMessage);
-                _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
-                // Update systemInfo with actual direct I/O state now that we know it
-                _performanceStats->updateDirectIOEnabled(currentlyEnabled);
-            });
-    connect(_thread, &DownloadThread::eventCustomisation,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventCustomisationVerify,
-            this, [this](quint32 durationMs, bool success, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::CustomisationVerify, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventFinalSync,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventVerify,
-            this, [this](quint32 durationMs, bool success, QByteArray writeHash, QByteArray verifyHash){
-                QString metadata = QString("Post-write verification; writeHash: %1; verifyHash: %2")
-                    .arg(QString::fromLatin1(writeHash), QString::fromLatin1(verifyHash));
-                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventPeriodicSync,
-            this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
-                QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
-                _performanceStats->recordEvent(PerformanceStats::EventType::PeriodicSync, durationMs, success, metadata);
-            });
-    connect(_thread, &DownloadThread::eventImageExtraction,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::ImageExtraction, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventPartitionTableWrite,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::PartitionTableWrite, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventFatPartitionSetup,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::FatPartitionSetup, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDeviceClose,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
-            });
-    connect(_thread, &DownloadThread::eventDeviceIOTimeout,
-            this, [this](quint32 pendingWrites, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
-                    30000, false, QString("pending=%1; %2").arg(pendingWrites).arg(metadata));
-            });
-    connect(_thread, &DownloadThread::eventQueueDepthReduction,
-            this, [this](int oldDepth, int newDepth, int pendingWrites){
-                _performanceStats->recordEvent(PerformanceStats::EventType::QueueDepthReduction, 0, true,
-                    QString("depth=%1->%2; pending=%3").arg(oldDepth).arg(newDepth).arg(pendingWrites));
-            });
-    connect(_thread, &DownloadThread::eventDrainAndHotSwap,
-            this, [this](quint32 durationMs, int pendingBefore, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DrainAndHotSwap, durationMs, success,
-                    QString("pending=%1").arg(pendingBefore));
-            });
-    connect(_thread, &DownloadThread::syncFallbackActivated,
-            this, [this](QString reason){
-                _performanceStats->recordEvent(PerformanceStats::EventType::SyncFallbackActivated, 0, true, reason);
-                emit operationWarning(reason);
-            });
-    connect(_thread, &DownloadThread::requestWriteRestart,
-            this, &ImageWriter::restartWrite);
-    connect(_thread, &DownloadThread::eventNetworkRetry,
-            this, [this](quint32 sleepMs, QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventNetworkConnectionStats,
-            this, [this](QString metadata){
-                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
-            });
-    
-    // Write timing breakdown signals (for detailed hypothesis testing)
-    connect(_thread, &DownloadThread::eventWriteTimingBreakdown,
-            this, [this](quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
-                         quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount){
-                QString metadata = QString("writeOps: %1; syscallMs: %2; preHashWaitMs: %3; postHashWaitMs: %4; syncMs: %5; syncCount: %6")
-                    .arg(totalWriteOps).arg(totalSyscallMs).arg(totalPreHashWaitMs)
-                    .arg(totalPostHashWaitMs).arg(totalSyncMs).arg(syncCount);
-                // Use total time (syscall + hash waits) as duration
-                quint32 totalMs = static_cast<quint32>(totalSyscallMs + totalPreHashWaitMs + totalPostHashWaitMs);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteTimingBreakdown, totalMs, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventWriteSizeDistribution,
-            this, [this](quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount){
-                QString metadata = QString("minKB: %1; maxKB: %2; avgKB: %3; totalBytes: %4; count: %5")
-                    .arg(minSizeKB).arg(maxSizeKB).arg(avgSizeKB).arg(totalBytes).arg(writeCount);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteSizeDistribution, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventWriteAfterSyncImpact,
-            this, [this](quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount){
-                QString metadata = QString("beforeSyncKBps: %1; afterSyncKBps: %2; samples: %3")
-                    .arg(avgThroughputBeforeSyncKBps).arg(avgThroughputAfterSyncKBps).arg(sampleCount);
-                // Calculate the impact percentage (positive = degradation after sync)
-                int impactPercent = 0;
-                if (avgThroughputBeforeSyncKBps > 0) {
-                    impactPercent = static_cast<int>(100 * (static_cast<int>(avgThroughputBeforeSyncKBps) - static_cast<int>(avgThroughputAfterSyncKBps)) / static_cast<int>(avgThroughputBeforeSyncKBps));
-                }
-                metadata += QString("; impactPercent: %1").arg(impactPercent);
-                _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventAsyncIOConfig,
-            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
-                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
-                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
-                _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
-            });
-    connect(_thread, &DownloadThread::eventAsyncIOTiming,
-            this, [this](quint32 totalMs, quint64 bytesWritten, quint32 writeCount){
-                QString metadata = QString("wallClockMs: %1; bytesWritten: %2 MB; writeCount: %3")
-                    .arg(totalMs).arg(bytesWritten / (1024*1024)).arg(writeCount);
-                _performanceStats->recordTransferEvent(
-                    PerformanceStats::EventType::AsyncIOTiming,
-                    totalMs, bytesWritten, true, metadata);
-            });
-    
-    // Forward bottleneck state to QML for UI feedback
-    connect(_thread, &DownloadThread::bottleneckStateChanged,
-            this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
-                QString statusText;
-                switch (state) {
-                    case DownloadThread::BottleneckState::None:
-                        statusText = "";
-                        break;
-                    case DownloadThread::BottleneckState::Network:
-                        statusText = tr("Limited by download speed");
-                        break;
-                    case DownloadThread::BottleneckState::Decompression:
-                        statusText = tr("Limited by decompression speed");
-                        break;
-                    case DownloadThread::BottleneckState::Storage:
-                        statusText = tr("Limited by storage device speed");
-                        break;
-                    case DownloadThread::BottleneckState::Verifying:
-                        statusText = tr("Verifying written data");
-                        break;
-                }
-                emit bottleneckStatusChanged(statusText, throughputKBps);
-            });
-
-    _thread->setVerifyEnabled(_verifyEnabled);
-    // Single source of truth for the User-Agent (see startWrite).
-    _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
-    qDebug() << "_continueStartWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
-    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
-    
-    // Pass debug options to the thread
-    _thread->setDebugDirectIO(_debugDirectIO);
-    _thread->setDebugPeriodicSync(_debugPeriodicSync);
-    _thread->setDebugVerboseLogging(_debugVerboseLogging);
-    // Disable async I/O if forced to sync mode (due to previous recovery)
-    _thread->setDebugAsyncIO(_debugAsyncIO && !_forceSyncMode);
-    if (_forceSyncMode) {
-        qDebug() << "Compatibility mode active - using synchronous I/O";
-    }
-    _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
-    _thread->setDebugIPv4Only(_debugIPv4Only);
-    _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
-    _thread->setDebugIgnoreDeviceLimits(_debugIgnoreDeviceLimits);
+    _configureWriteThread();
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)
+    //
+    // startWrite() asks this differently -- !QUrl(urlstr).isLocalFile() rather
+    // than !cacheIsValid -- and the two disagree in one reachable case: a
+    // local source with an expected hash, which the CLI allows
+    // (`--sha256 <hash> /path/image.img`), where a stale cache for that hash
+    // sends us here with cacheIsValid false and urlstr still pointing at the
+    // user's own file. This branch then sets up a download cache for a file
+    // already on disk and copies it into the cache for nothing.
     if (!_expectedHash.isEmpty() && !cacheIsValid)
     {
-        // Use CacheManager to setup cache for download
-        QString cacheFilePath;
-        if (_cacheManager->setupCacheForDownload(_expectedHash, _downloadLen, cacheFilePath))
-        {
-            qDebug() << "Setting up cache file for download:" << cacheFilePath;
-            _thread->setCacheFile(cacheFilePath, _downloadLen);
-            // Connect to CacheManager for cache updates (pass both hashes correctly)
-            connect(_thread, &DownloadThread::cacheFileHashUpdated,
-                    this, [this](const QByteArray& cacheFileHash, const QByteArray& imageHash) {
-                        qDebug() << "DownloadThread cache update - cacheFileHash:" << cacheFileHash << "imageHash:" << imageHash;
-                        // Update cache with both uncompressed hash (imageHash) and compressed hash (cacheFileHash)
-                        _cacheManager->updateCacheFile(imageHash, cacheFileHash);
-                    });
-        }
-        else
-        {
-            qDebug() << "Cache setup failed or disabled - proceeding without caching";
-        }
+        _attachDownloadCache();
     }
     else if (cacheIsValid)
     {
@@ -4962,27 +4655,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     }
 
     // Start the actual write operation
-    if (_multipleFilesInZip)
-    {
-        static_cast<DownloadExtractThread *>(_thread)->enableMultipleFileExtraction();
-        DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
-        connect(dft, SIGNAL(success()), _thread, SLOT(start()));
-        connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
-        connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
-        connect(dft, &DriveFormatThread::eventDriveFormat,
-                this, [this](quint32 durationMs, bool success){
-                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
-                });
-        dft->start();
-        setWriteState(WriteState::Writing);
-    }
-    else
-    {
-        _thread->start();
-        setWriteState(WriteState::Writing);
-    }
-
-    startProgressPolling();
+    _startConfiguredWrite();
 }
 
 void ImageWriter::reboot()
@@ -5268,6 +4941,34 @@ bool ImageWriter::exportPerformanceDataToFile(const QString &filePath)
     qDebug() << "Performance data export not available in CLI build";
     return false;
 #endif
+}
+
+// The Raspberry Pi Connect organisation credentials this write should
+// register the device under, or false when it should register none.
+//
+// Both conditions have to hold. The key alone is not enough: someone who
+// turned "Raspberry Pi Connect for Organisations" off in App Options has
+// said they do not want devices registered, and the stored key is still
+// there because turning the feature off does not erase it. Registering
+// anyway would enrol a device with an organisation the person holding the
+// card did not choose.
+bool ImageWriter::_connectOrgRegistrationForWrite(QString &apiKey,
+                                                  QString &description) const
+{
+    apiKey.clear();
+    description.clear();
+
+    if (!_settings.value(QStringLiteral("connect_org_enabled")).toBool())
+        return false;
+
+    const QString storedKey =
+        _settings.value(QStringLiteral("connect_org_api_key")).toString();
+    if (storedKey.isEmpty())
+        return false;
+
+    apiKey = storedKey;
+    description = _settings.value(QStringLiteral("connect_org_description")).toString();
+    return true;
 }
 
 void ImageWriter::_handleMemoryAllocationFailure(const char* what)

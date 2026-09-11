@@ -4,6 +4,7 @@
  */
 
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QFile>
 #include <QDebug>
 #include <QTextStream>
@@ -25,6 +26,7 @@
 #include <QQmlContext>
 #include <QIcon>
 #include "imagewriter.h"
+#include "settings_permissions.h"
 #include "nativefiledialog.h"
 #include <QQuickWindow>
 #include <QScreen>
@@ -261,6 +263,34 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(ImageWriter::staticVersion());
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
 
+    // Before anything reads or writes a setting. The file holds the crypt
+    // hash of the Pi's account password, the derived WPA PSK, and in
+    // organisation mode a Connect API key -- and QSettings would create it
+    // world-readable. Narrows an existing one too, which is what carries the
+    // fix onto an installation that already has the file.
+    {
+        const QString settingsFile = QSettings().fileName();
+        const rpi_imager::SettingsPermissions perms =
+            rpi_imager::secureSettingsFile(settingsFile);
+        if (perms.foreignOwner) {
+            // Left readable on purpose: it is not ours to narrow, and
+            // narrowing it would be worse than leaving it -- see
+            // secureSettingsFile.
+            qWarning() << "The settings file" << settingsFile
+                       << "belongs to another account and is left as it is;"
+                       << "run Imager once with the privileges that created it"
+                       << "to have it handed back";
+        } else if (!perms.secured) {
+            qWarning() << "Could not restrict permissions on the settings file"
+                       << settingsFile
+                       << "-- it may be readable by other accounts on this machine";
+        } else if (perms.reowned) {
+            qDebug() << "Handed the settings file back to the invoking user";
+        } else if (perms.tightened) {
+            qDebug() << "Restricted permissions on the existing settings file";
+        }
+    }
+
     // Log text scaling factor for debugging (all modes)
     qDebug() << "Text scale factor:" << PlatformQuirks::detectTextScaleFactor();
     PlatformQuirks::logFontEngine();
@@ -318,6 +348,42 @@ int main(int argc, char *argv[])
     {
         PlatformQuirks::registerUriScheme();
     }
+
+    // Everything an elevated run leaves in the user's home, handed back.
+    //
+    // Imager elevates itself to write to a disk and applyQuirks() then points
+    // HOME and the XDG directories at the invoking user, so from that point
+    // root is writing into somebody else's home: the rpi-imager:// handler,
+    // the mimeinfo.cache and mimeapps.list that update-desktop-database and
+    // xdg-mime rewrite, and the OS list cache. Left root-owned, the two MIME
+    // files stop *any* application registering a file association, and a
+    // stale handler cannot be rewritten unelevated -- so after the AppImage
+    // moves, the Connect callback keeps launching the old path.
+    const auto handBackUserFiles = []() {
+        const QString applications =
+            QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+            + QStringLiteral("/applications");
+        const QString config =
+            QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+
+        int changed = 0;
+        // Named individually rather than sweeping the applications directory:
+        // other applications' entries live there too and are not ours to touch.
+        for (const QString& path : {
+                 applications + QStringLiteral("/com.raspberrypi.rpi-imager-uri-handler.desktop"),
+                 applications + QStringLiteral("/mimeinfo.cache"),
+                 config + QStringLiteral("/mimeapps.list"),
+                 QSettings().fileName(),
+                 QFileInfo(QSettings().fileName()).absolutePath(),
+                 QStandardPaths::writableLocation(QStandardPaths::CacheLocation),
+             }) {
+            changed += rpi_imager::restoreUserOwnership(path);
+        }
+        if (changed > 0)
+            qDebug() << "Handed" << changed << "file(s) back to the invoking user";
+    };
+    handBackUserFiles();
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, handBackUserFiles);
 #ifdef Q_OS_LINUX
     if (imageWriter.isEmbeddedMode()) {
         // Font and locale setup only needed for embedded Linux systems
