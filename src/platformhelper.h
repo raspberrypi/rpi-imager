@@ -86,6 +86,28 @@ public:
      */
     Q_PROPERTY(bool prefersReducedMotion READ prefersReducedMotion CONSTANT)
     bool prefersReducedMotion() const;
+
+    /**
+     * @brief Whether an assistive technology is attached to this process
+     *
+     * True once an accessibility client -- a screen reader, a switch access
+     * device, a magnifier -- has connected. Qt reports this uniformly across
+     * platforms: AT-SPI on Linux, UI Automation on Windows, NSAccessibility
+     * on macOS. It can turn on partway through a session, when the user
+     * starts one, so this is a notifying property rather than a constant.
+     */
+    Q_PROPERTY(bool assistiveTechnologyActive
+               READ assistiveTechnologyActive
+               NOTIFY assistiveTechnologyActiveChanged)
+    bool assistiveTechnologyActive() const;
+
+signals:
+    void assistiveTechnologyActiveChanged();
+
+private:
+    // Registers with QAccessible on first read of the property above, so a
+    // build that never asks does not pay for the observer.
+    void ensureAccessibilityObserver() const;
 };
 
 #endif // PLATFORMHELPER_H
