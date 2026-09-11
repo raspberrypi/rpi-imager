@@ -6,8 +6,10 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include "fastboot/sparse_encoder.h"
+#include "sparse_decode.h"
 
 #include <algorithm>
 #include <cstring>
@@ -16,113 +18,11 @@
 #include <vector>
 
 using namespace fastboot;
+using rpi_test::applySparse;
+using rpi_test::decodeSparse;
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-// Parse a sparse image and return the decoded raw image
-static std::vector<uint8_t> decodeSparse(std::span<const uint8_t> sparse)
-{
-    REQUIRE(sparse.size() >= sizeof(SparseFileHeader));
-    SparseFileHeader fhdr;
-    std::memcpy(&fhdr, sparse.data(), sizeof(fhdr));
-    REQUIRE(fhdr.magic == SPARSE_MAGIC);
-    REQUIRE(fhdr.major_version == SPARSE_MAJOR_VER);
-    REQUIRE(fhdr.file_hdr_sz == SPARSE_FILE_HDR_SZ);
-    REQUIRE(fhdr.chunk_hdr_sz == SPARSE_CHUNK_HDR_SZ);
-    REQUIRE(fhdr.blk_sz == SPARSE_BLK_SZ);
-
-    std::vector<uint8_t> out(static_cast<size_t>(fhdr.total_blks) * SPARSE_BLK_SZ, 0);
-    size_t pos = SPARSE_FILE_HDR_SZ;
-    size_t outOff = 0;
-
-    for (uint32_t i = 0; i < fhdr.total_chunks; ++i) {
-        REQUIRE(pos + sizeof(SparseChunkHeader) <= sparse.size());
-        SparseChunkHeader chdr;
-        std::memcpy(&chdr, sparse.data() + pos, sizeof(chdr));
-        pos += sizeof(SparseChunkHeader);
-
-        size_t blockBytes = static_cast<size_t>(chdr.chunk_sz) * SPARSE_BLK_SZ;
-
-        switch (chdr.chunk_type) {
-        case CHUNK_TYPE_RAW:
-            REQUIRE(pos + blockBytes <= sparse.size());
-            std::memcpy(out.data() + outOff, sparse.data() + pos, blockBytes);
-            pos += blockBytes;
-            break;
-
-        case CHUNK_TYPE_FILL: {
-            REQUIRE(pos + 4 <= sparse.size());
-            uint32_t fillVal;
-            std::memcpy(&fillVal, sparse.data() + pos, 4);
-            pos += 4;
-            for (size_t j = 0; j < blockBytes; j += 4)
-                std::memcpy(out.data() + outOff + j, &fillVal, 4);
-            break;
-        }
-
-        case CHUNK_TYPE_DONT_CARE:
-            // Leave as zeros
-            break;
-
-        default:
-            FAIL("Unknown chunk type: " << chdr.chunk_type);
-        }
-
-        outOff += blockBytes;
-    }
-
-    REQUIRE(outOff == out.size());
-    return out;
-}
-
-// Apply a sparse image onto an existing buffer (RAW/FILL overwrite, DONT_CARE skips)
-static void applySparse(std::span<const uint8_t> sparse, std::vector<uint8_t>& out)
-{
-    REQUIRE(sparse.size() >= sizeof(SparseFileHeader));
-    SparseFileHeader fhdr;
-    std::memcpy(&fhdr, sparse.data(), sizeof(fhdr));
-    REQUIRE(fhdr.magic == SPARSE_MAGIC);
-    REQUIRE(out.size() >= static_cast<size_t>(fhdr.total_blks) * SPARSE_BLK_SZ);
-
-    size_t pos = SPARSE_FILE_HDR_SZ;
-    size_t outOff = 0;
-
-    for (uint32_t i = 0; i < fhdr.total_chunks; ++i) {
-        REQUIRE(pos + sizeof(SparseChunkHeader) <= sparse.size());
-        SparseChunkHeader chdr;
-        std::memcpy(&chdr, sparse.data() + pos, sizeof(chdr));
-        pos += sizeof(SparseChunkHeader);
-
-        size_t blockBytes = static_cast<size_t>(chdr.chunk_sz) * SPARSE_BLK_SZ;
-
-        switch (chdr.chunk_type) {
-        case CHUNK_TYPE_RAW:
-            REQUIRE(pos + blockBytes <= sparse.size());
-            std::memcpy(out.data() + outOff, sparse.data() + pos, blockBytes);
-            pos += blockBytes;
-            break;
-
-        case CHUNK_TYPE_FILL: {
-            REQUIRE(pos + 4 <= sparse.size());
-            uint32_t fillVal;
-            std::memcpy(&fillVal, sparse.data() + pos, 4);
-            pos += 4;
-            for (size_t j = 0; j < blockBytes; j += 4)
-                std::memcpy(out.data() + outOff + j, &fillVal, 4);
-            break;
-        }
-
-        case CHUNK_TYPE_DONT_CARE:
-            // Leave existing content untouched (skip)
-            break;
-
-        default:
-            FAIL("Unknown chunk type: " << chdr.chunk_type);
-        }
-
-        outOff += blockBytes;
-    }
-}
 
 // Decode multiple self-positioning sparse segments by overlaying them onto
 // a single output buffer.  Each segment covers the full image range: a
@@ -371,6 +271,12 @@ TEST_CASE("Each segment has a valid sparse file header", "[sparse]")
     SparseEncoder enc(MAX_SEG, IMAGE_SIZE);
     auto segments = feedAndCollect(enc, image);
 
+    // The loop is the whole of this case, so without this the encoder
+    // producing nothing at all would satisfy every assertion below by never
+    // reaching one. Every other case in this file checks the count first;
+    // this one did not.
+    REQUIRE_FALSE(segments.empty());
+
     uint32_t expectedBlocks = static_cast<uint32_t>(IMAGE_SIZE / SPARSE_BLK_SZ);
     for (const auto& seg : segments) {
         REQUIRE(seg.size() >= sizeof(SparseFileHeader));
@@ -385,6 +291,11 @@ TEST_CASE("Each segment has a valid sparse file header", "[sparse]")
         // a leading DONT_CARE prefix for previously-written blocks).
         REQUIRE(fhdr.total_blks == expectedBlocks);
     }
+
+    // And the headers describe segments that actually carry the image. Valid
+    // headers over the wrong payload would satisfy everything above, and the
+    // device would be flashed with whatever they framed.
+    REQUIRE(decodeSegments(segments) == image);
 }
 
 TEST_CASE("Empty image produces no segments", "[sparse]")
@@ -487,6 +398,62 @@ TEST_CASE("Feeding data in odd chunk sizes works correctly", "[sparse]")
             break;
         segments.emplace_back(seg.begin(), seg.end());
     }
+
+    auto decoded = decodeSegments(segments);
+    REQUIRE(decoded == image);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Segment size floor
+//
+// The segment size is whatever the device answered to max-download-size.
+// It used to be taken at face value behind an assert, which compiles out of
+// release builds -- so on a shipped binary a device reporting something
+// uselessly small handed the encoder a segment that could not hold even one
+// block, and the encode loop had no way to make progress.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A segment size below the floor is raised to it", "[sparse][limits]")
+{
+    const uint32_t tiny = GENERATE(uint32_t{0}, uint32_t{1}, uint32_t{4095},
+                                   SparseEncoder::MIN_SEGMENT_SIZE - 1);
+    CAPTURE(tiny);
+
+    SparseEncoder enc(tiny, 64 * 1024);
+    CHECK(enc.maxSegmentSize() == SparseEncoder::MIN_SEGMENT_SIZE);
+}
+
+TEST_CASE("A segment size at or above the floor is taken as given", "[sparse][limits]")
+{
+    const uint32_t asked = GENERATE(SparseEncoder::MIN_SEGMENT_SIZE,
+                                    uint32_t{64 * 1024},
+                                    uint32_t{16 * 1024 * 1024});
+    CAPTURE(asked);
+
+    SparseEncoder enc(asked, 64 * 1024);
+    CHECK(enc.maxSegmentSize() == asked);
+}
+
+TEST_CASE("An encoder given a zero segment size still encodes the whole image",
+          "[sparse][limits]")
+{
+    // The floor guarantees forward progress: every segment carries at least
+    // one block, so the image completes rather than the feed loop spinning.
+    constexpr size_t IMAGE_SIZE = 32 * SPARSE_BLK_SZ;
+    std::vector<uint8_t> image(IMAGE_SIZE);
+    std::mt19937 rng(4160);
+    for (auto& b : image)
+        b = static_cast<uint8_t>(rng() % 254 + 1);   // never uniform: forces RAW
+
+    SparseEncoder enc(0, IMAGE_SIZE);
+    REQUIRE(enc.maxSegmentSize() == SparseEncoder::MIN_SEGMENT_SIZE);
+
+    auto segments = feedAndCollect(enc, image);
+
+    // One block per segment is all the floor leaves room for.
+    CHECK(segments.size() == IMAGE_SIZE / SPARSE_BLK_SZ);
+    for (const auto& seg : segments)
+        CHECK(seg.size() <= SparseEncoder::MIN_SEGMENT_SIZE);
 
     auto decoded = decodeSegments(segments);
     REQUIRE(decoded == image);
