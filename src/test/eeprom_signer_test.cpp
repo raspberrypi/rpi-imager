@@ -272,3 +272,93 @@ TEST_CASE("buildEepromSig (signed) bytes match rpi-eeprom-digest -k output",
     INFO("ref:  " << std::string(ref.constData(), ref.size()));
     CHECK(r.sigBytes == refVec);
 }
+
+// ---------------------------------------------------------------------------
+// The three ways signing is refused.
+//
+// buildEepromSig() either returns a signature block or an error string, and
+// the caller writes whatever comes back. Each of these refusals exists so a
+// bad key produces a message rather than an EEPROM image the board will not
+// accept -- and none of them had ever been taken.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("A key path that is not there is refused before anything is signed",
+          "[eeprom-signer]")
+{
+    // The commonest way to get this wrong: a key moved, renamed, or typed in
+    // by hand. Signing has to stop here, because everything downstream treats
+    // an empty signature as "unsigned" rather than "failed".
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    EepromSignerConfig config;
+    config.pemKeyPath = dir.filePath(QStringLiteral("no-such-key.pem")).toStdString();
+    config.sourceDateEpoch = 1700000000;
+
+    const auto input = asBytes("pieeprom contents");
+    const EepromSignResult r = buildEepromSig(input, config);
+
+    CHECK_FALSE(r.error.empty());
+    CHECK_THAT(r.error, Catch::Matchers::ContainsSubstring("not readable"));
+    CHECK(r.sigBytes.empty());
+}
+
+TEST_CASE("A key file that is not a key is refused", "[eeprom-signer]")
+{
+    // The file is there and readable, so the check above passes; openssl is
+    // what discovers it is not a key, and it reports that by handing back
+    // nothing. Treating an empty signature as success would write an image
+    // whose rsa2048 line is missing entirely.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString bogus = dir.filePath(QStringLiteral("not-a-key.pem"));
+    {
+        QFile f(bogus);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("-----BEGIN RSA PRIVATE KEY-----\nnot base64 at all\n"
+                "-----END RSA PRIVATE KEY-----\n");
+    }
+
+    EepromSignerConfig config;
+    config.pemKeyPath = bogus.toStdString();
+    config.sourceDateEpoch = 1700000000;
+
+    const EepromSignResult r = buildEepromSig(asBytes("pieeprom contents"), config);
+
+    CHECK_FALSE(r.error.empty());
+    CHECK_THAT(r.error, Catch::Matchers::ContainsSubstring("signing failed"));
+    CHECK(r.sigBytes.empty());
+}
+
+TEST_CASE("A key of the wrong size is refused rather than signed with",
+          "[eeprom-signer]")
+{
+    // A 1024-bit key signs perfectly well and produces 256 hex characters
+    // where the bootloader expects 512. Nothing about that fails until the
+    // board rejects the EEPROM, by which point the user has a device that
+    // will not boot and no indication why -- so the length is checked here.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString tool = QStandardPaths::findExecutable(QStringLiteral("openssl"));
+    if (tool.isEmpty())
+        SKIP("openssl is not available, so no short key can be made");
+
+    const QString shortKey = dir.filePath(QStringLiteral("rsa1024.pem"));
+    QProcess p;
+    p.start(tool, QStringList() << "genpkey" << "-algorithm" << "RSA"
+                                << "-pkeyopt" << "rsa_keygen_bits:1024"
+                                << "-out" << shortKey);
+    if (!p.waitForStarted(5000) || !p.waitForFinished(15000) || p.exitCode() != 0)
+        SKIP("openssl would not generate a 1024-bit key");
+
+    EepromSignerConfig config;
+    config.pemKeyPath = shortKey.toStdString();
+    config.sourceDateEpoch = 1700000000;
+
+    const EepromSignResult r = buildEepromSig(asBytes("pieeprom contents"), config);
+
+    INFO("error: " << r.error);
+    CHECK_FALSE(r.error.empty());
+    CHECK_THAT(r.error, Catch::Matchers::ContainsSubstring("signature length"));
+    CHECK(r.sigBytes.empty());
+}

@@ -253,3 +253,119 @@ TEST_CASE("non-AB image reports false and has no bootsys to update",
     CHECK_FALSE(img.isABImage());
     CHECK_FALSE(img.updateBootsys(QByteArray(2000, '\x5A')));
 }
+
+// ── Refusing an image that is not what it claims ─────────────────────────
+//
+// This editor rewrites the EEPROM of a Compute Module whose customer key is
+// already fused. Everything it does is driven by lengths and offsets read
+// out of the image, so every one of them is data and has to be treated as
+// such. A refusal here stops provisioning with a reason; the alternative is
+// an EEPROM written from something malformed, on a board that will only
+// accept what it is given once.
+
+TEST_CASE("an image that cannot be opened is reported, not assumed",
+          "[bootloader_image][refuse]")
+{
+    // The recovery directory without its pieeprom.original.bin -- a partial
+    // download, or a firmware version that never finished unpacking.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    BootloaderImage img;
+    CHECK_FALSE(img.load(dir.filePath("not-here.bin")));
+    // Named, so the operator knows which file to go and find.
+    CHECK(img.lastError().contains("not-here.bin"));
+}
+
+TEST_CASE("an image with a corrupt section header is refused",
+          "[bootloader_image][refuse]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    auto bytes = makeNonABImage();
+    // Not 0x00 or 0xff: those are unwritten flash and legitimately end the
+    // walk. This is a value in between, which means the offset arithmetic
+    // has landed somewhere that is not a section header at all.
+    putBE32(bytes, 0, 0x12345678u);
+
+    BootloaderImage img;
+    // load() parses as it reads, so the refusal comes back from load itself.
+    CHECK_FALSE(img.load(writeTemp(dir, bytes)));
+    INFO("error: " << img.lastError().toStdString());
+    CHECK(img.lastError().contains("corrupted"));
+    // The offset is in the message: an operator comparing two images needs
+    // to know *where* they diverge, not just that one of them is bad.
+    CHECK(img.lastError().contains(QStringLiteral("offset 0")));
+}
+
+TEST_CASE("a file too large for its slot is refused before it overwrites the next",
+          "[bootloader_image][refuse]")
+{
+    // Sections sit end to end, so an oversized payload does not merely fail
+    // to fit -- it runs into whatever follows. On a fused board that is an
+    // EEPROM assembled from two half-written sections, and there is no
+    // second attempt.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    // An AB image, because its file sections are contiguous from the read-only
+    // boundary onwards: bootconf.txt in the non-AB fixture sits past a run of
+    // unwritten flash and parse() stops before ever reaching it.
+    BootloaderImage img;
+    REQUIRE(img.load(writeTemp(dir, makeABImage(QByteArray(64, '\xAA')))));
+    REQUIRE_FALSE(img.getFile(QStringLiteral("bootconf.txt")).isEmpty());
+
+    const QByteArray tooBig(BootloaderImage::MAX_FILE_SIZE + 1, 'X');
+    CHECK_FALSE(img.updateFile(QStringLiteral("bootconf.txt"), tooBig));
+    INFO("error: " << img.lastError().toStdString());
+    CHECK(img.lastError().contains("too large"));
+
+    // And the boundary the other side of it still fits, so the limit is a
+    // limit rather than a refusal of everything.
+    const QByteArray atLimit(BootloaderImage::MAX_FILE_SIZE, 'X');
+    CHECK(img.updateFile(QStringLiteral("bootconf.txt"), atLimit));
+}
+
+TEST_CASE("a section that is not in the image is reported rather than invented",
+          "[bootloader_image][refuse]")
+{
+    // updateFile is handed a name by the caller. A name the image does not
+    // carry has to come back as a refusal: silently doing nothing and
+    // returning true would have the caller sign and flash an EEPROM that
+    // still holds the old configuration.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    BootloaderImage img;
+    REQUIRE(img.load(writeTemp(dir, makeABImage(QByteArray(64, '\xAA')))));
+
+    CHECK_FALSE(img.updateFile(QStringLiteral("no-such-section.txt"),
+                               QByteArray("BOOT_ORDER=0xf1\n")));
+    INFO("error: " << img.lastError().toStdString());
+    CHECK(img.lastError().contains(QStringLiteral("not found")));
+    CHECK(img.lastError().contains(QStringLiteral("no-such-section.txt")));
+}
+
+TEST_CASE("a payload that outgrows its own section is refused before the next one",
+          "[bootloader_image][refuse]")
+{
+    // Under MAX_FILE_SIZE, so the size limit does not catch it -- but bootsys
+    // is followed immediately by bootconf.txt, and growing into it would
+    // leave an EEPROM assembled from one whole section and one truncated.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    BootloaderImage img;
+    REQUIRE(img.load(writeTemp(dir, makeABImage(QByteArray(64, '\xAA')))));
+
+    const QByteArray tooBigForSlot(2048, 'Z');
+    REQUIRE(tooBigForSlot.size() < BootloaderImage::MAX_FILE_SIZE);
+
+    CHECK_FALSE(img.updateFile(QStringLiteral("bootsys"), tooBigForSlot));
+    INFO("error: " << img.lastError().toStdString());
+    CHECK(img.lastError().contains(QStringLiteral("fit")));
+
+    // bootconf.txt is intact: the refusal happened before anything was written.
+    CHECK(img.getFile(QStringLiteral("bootconf.txt")).contains("BOOT_ORDER"));
+}
