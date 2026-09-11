@@ -13869,8 +13869,9 @@ TEST_CASE("The main window is taken from whatever QML hands over",
     SECTION("a QQuickWindow, which is what the QML root actually is") {
         QQuickWindow window;
         CHECK_NOTHROW(w.setMainWindow(&window));
-        // Asking to come forward now reaches the platform rather than
-        // returning at the guard.
+        // Under the offscreen plugin this stops at the headless guard:
+        // winId() is a counter here, not an NSView, and handing it to the
+        // platform segfaulted.
         CHECK_NOTHROW(w.bringWindowToForeground());
     }
 
