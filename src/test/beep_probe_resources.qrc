@@ -1,0 +1,14 @@
+<!--
+  The bundled fallback chime, and only that.
+
+  findSoundFile() falls back to extracting :/sounds/chime.wav when the
+  machine has no system sound file. The probe could not reach that arm:
+  the chime lives in src/qml.qrc, which a probe has no business pulling in
+  wholesale. This carries the one file, under the same resource path the
+  application uses.
+-->
+<RCC>
+    <qresource prefix="/">
+        <file alias="sounds/chime.wav">../sounds/chime.wav</file>
+    </qresource>
+</RCC>
