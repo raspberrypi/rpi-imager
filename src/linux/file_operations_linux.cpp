@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>   // major(), minor()
 #include <sys/ioctl.h>
 #include <linux/fs.h>
 #include <errno.h>
@@ -214,6 +215,12 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
                 if (first_async_error_ == FileError::kSuccess) {
                     first_async_error_ = error;
                 }
+                // io_uring hands the error back as -errno in the completion
+                // rather than through errno itself. Keep it: it is the only
+                // record of *why* a write failed, and the message the user
+                // reads is built from it. Without this an out-of-space card
+                // reads as "Error writing to device." and nothing more.
+                last_error_code_ = -result;
                 std::ostringstream oss;
                 oss << "io_uring write failed: " << strerror(-result);
                 Log(oss.str());
@@ -355,6 +362,7 @@ FileError LinuxFileOperations::WriteAtOffset(
     ssize_t result = pwrite(fd_, data + bytes_written, size - bytes_written,
                             static_cast<off_t>(offset + bytes_written));
     if (result <= 0) {
+      last_error_code_ = errno;
       return FileError::kWriteError;
     }
     bytes_written += static_cast<std::size_t>(result);
@@ -539,6 +547,7 @@ FileError LinuxFileOperations::ReadSequential(std::uint8_t* data, std::size_t si
 
   ssize_t result = read(fd_, data, size);
   if (result < 0) {
+    last_error_code_ = errno;
     bytes_read = 0;
     return FileError::kReadError;
   }
@@ -556,6 +565,7 @@ FileError LinuxFileOperations::Seek(std::uint64_t position) {
   WaitForPendingWrites();
 
   if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
+    last_error_code_ = errno;
     return FileError::kSeekError;
   }
 
@@ -589,6 +599,7 @@ FileError LinuxFileOperations::ForceSync() {
   WaitForPendingWrites();
   
   if (fsync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kSyncError;
   }
 
@@ -604,6 +615,7 @@ FileError LinuxFileOperations::Flush() {
   WaitForPendingWrites();
   
   if (fdatasync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kFlushError;
   }
 
@@ -743,6 +755,9 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
     std::ostringstream oss;
     oss << "io_uring_submit failed: " << strerror(-ret);
     Log(oss.str());
+    // io_uring reports -errno in the return value rather than through errno
+    // itself, so take it from there.
+    last_error_code_ = -ret;
     if (callback) callback(FileError::kWriteError, 0);
     return FileError::kWriteError;
   }
@@ -902,20 +917,45 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
   }
   pending_writes_.store(0);
   
+  // A descriptor that outlives the frame which gave up on it.
+  //
+  // ThreadSanitizer reports a data race between close() in the timeout
+  // handler and pwrite() on the worker: the handler was closing the
+  // descriptor while the abandoned worker was still inside a write on it.
+  struct AbandonedDescriptor {
+    explicit AbandonedDescriptor(int f) : fd(f) {}
+    ~AbandonedDescriptor() { if (armed.load()) ::close(fd); }
+    AbandonedDescriptor(const AbandonedDescriptor&) = delete;
+    AbandonedDescriptor& operator=(const AbandonedDescriptor&) = delete;
+    const int fd;
+    std::atomic<bool> armed{false};
+  };
+
   // Replay pending writes synchronously with timeout protection
   for (const auto& pw : pendingWrites) {
-    ssize_t written = -1;
-    
+    // Everything the worker touches is owned by the worker.
+    //
+    // runWithTimeout() detaches its worker when it times out, so a worker
+    // still inside pwrite() outlives this frame. Storing through &written
+    // wrote into a stack slot that had gone, and reading pw read an element
+    // of a vector that had been destroyed -- both fixed by the shared_ptr
+    // and the by-value copies below.
+    auto written = std::make_shared<ssize_t>(-1);
+    auto payload = std::make_shared<std::vector<std::uint8_t>>(pw.data, pw.data + pw.size);
+    const std::uint64_t offset = pw.offset;
+    auto descriptor = std::make_shared<AbandonedDescriptor>(fd_);
+
     auto result = runWithTimeout(
-        [this, &pw, &written]() {
-          written = pwrite(fd_, pw.data, pw.size, static_cast<off_t>(pw.offset));
+        [descriptor, payload, offset, written]() {
+          *written = pwrite(descriptor->fd, payload->data(), payload->size(),
+                            static_cast<off_t>(offset));
         },
         TimeoutConfig(kSyncWriteTimeoutSeconds)
-            .withOnTimeout([this, &pw]() {
-              Log("Timeout: write at offset " + std::to_string(pw.offset) + " - closing fd");
-              int fd_copy = fd_;
+            .withOnTimeout([this, &pw, descriptor]() {
+              Log("Timeout: write at offset " + std::to_string(pw.offset) +
+                  " - shutting the handle and letting the write go");
               fd_ = -1;
-              close(fd_copy);
+              descriptor->armed.store(true);
             })
     );
     
@@ -924,7 +964,7 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
       return FileError::kTimeout;
     }
     
-    if (written < 0 || static_cast<std::size_t>(written) != pw.size) {
+    if (*written < 0 || static_cast<std::size_t>(*written) != pw.size) {
       Log("Sync fallback: write failed at offset " + std::to_string(pw.offset));
       return FileError::kWriteError;
     }
@@ -940,15 +980,19 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
   }
   
   // Sync to device with timeout protection
-  int syncResult = -1;
+  // Shared for the same reason as the replay above: an abandoned worker
+  // still inside fsync() must not store into a frame that has returned --
+  // and must not read fd_ back through a `this` that has been destroyed
+  // either, so the descriptor goes in by value.
+  auto syncResult = std::make_shared<int>(-1);
+  auto syncDescriptor = std::make_shared<AbandonedDescriptor>(fd_);
   auto fsyncResult = runWithTimeout(
-      [this, &syncResult]() { syncResult = fsync(fd_); },
+      [syncDescriptor, syncResult]() { *syncResult = fsync(syncDescriptor->fd); },
       TimeoutConfig(kSyncFsyncTimeoutSeconds)
-          .withOnTimeout([this]() {
-            Log("Timeout: fsync - closing fd");
-            int fd_copy = fd_;
+          .withOnTimeout([this, syncDescriptor]() {
+            Log("Timeout: fsync - shutting the handle and letting the sync go");
             fd_ = -1;
-            close(fd_copy);
+            syncDescriptor->armed.store(true);
           })
   );
   
@@ -957,7 +1001,7 @@ FileError LinuxFileOperations::AttemptSyncFallback() {
     return FileError::kTimeout;
   }
   
-  if (syncResult != 0) {
+  if (*syncResult != 0) {
     Log("Sync fallback: fsync failed");
     return FileError::kSyncError;
   }
@@ -1068,14 +1112,25 @@ void LinuxFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
 FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
   FileOperations::DeviceIOLimits limits;
 
-  // Extract device name from path (e.g. "/dev/sda" -> "sda")
-  if (path.find("/dev/") != 0)
-    return limits;
-  std::string devname = path.substr(5);
-  if (devname.empty())
+  // Resolve the device by its major:minor rather than by trimming "/dev/"
+  // off the path.
+  //
+  // The previous form took everything after "/dev/" as the sysfs node name,
+  // which only works for a device sitting directly in /dev. Anything one
+  // level down -- "/dev/mapper/foo" (LVM, LUKS), "/dev/disk/by-id/usb-...",
+  // "/dev/md/0" -- became "/sys/block/mapper/foo/queue/", which does not
+  // exist, so every limit silently stayed zero and the caller sized its
+  // writes off nothing.
+  //
+  // /sys/dev/block/<major>:<minor> is a symlink the kernel maintains for
+  // every block device, so this works for all of them and follows symlinked
+  // paths for free.
+  struct stat st{};
+  if (stat(path.c_str(), &st) != 0 || !S_ISBLK(st.st_mode))
     return limits;
 
-  std::string queueDir = "/sys/block/" + devname + "/queue/";
+  const std::string queueDir = "/sys/dev/block/" + std::to_string(major(st.st_rdev)) + ":" +
+                               std::to_string(minor(st.st_rdev)) + "/queue/";
 
   // Read nr_requests — block layer scheduler queue depth
   {

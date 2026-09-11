@@ -94,14 +94,19 @@ signals:
 private slots:
     void check();
 
+protected:
+    // Configuration - defaults come from the centralized constants in
+    // timeout_utils.h. These are instance fields rather than constants so a
+    // subclass can shorten them; the stall ladder is minutes long by design,
+    // which is untestable otherwise.
+    int CHECK_INTERVAL_MS = rpi_imager::TimeoutDefaults::kWatchdogCheckIntervalMs;
+    int STALL_TIMEOUT_MS = rpi_imager::TimeoutDefaults::kWatchdogStallTimeoutMs;
+    int ASYNC_TIMEOUT_MS = rpi_imager::TimeoutDefaults::kWatchdogAsyncTimeoutMs;
+    int REDUCE_DEPTH_THRESHOLD_MS = rpi_imager::TimeoutDefaults::kWatchdogReduceDepthThresholdMs;
+    int DRAIN_STALL_TIMEOUT_SECONDS = rpi_imager::TimeoutDefaults::kAsyncDrainStallTimeoutSeconds;
+    int RESTART_THRESHOLD_MS = rpi_imager::TimeoutDefaults::kWatchdogRestartThresholdMs;
+
 private:
-    // Configuration - uses centralized constants from timeout_utils.h
-    static constexpr int CHECK_INTERVAL_MS = rpi_imager::TimeoutDefaults::kWatchdogCheckIntervalMs;
-    static constexpr int STALL_TIMEOUT_MS = rpi_imager::TimeoutDefaults::kWatchdogStallTimeoutMs;
-    static constexpr int ASYNC_TIMEOUT_MS = rpi_imager::TimeoutDefaults::kWatchdogAsyncTimeoutMs;
-    static constexpr int REDUCE_DEPTH_THRESHOLD_MS = rpi_imager::TimeoutDefaults::kWatchdogReduceDepthThresholdMs;
-    static constexpr int DRAIN_STALL_TIMEOUT_SECONDS = rpi_imager::TimeoutDefaults::kAsyncDrainStallTimeoutSeconds;
-    static constexpr int RESTART_THRESHOLD_MS = rpi_imager::TimeoutDefaults::kWatchdogRestartThresholdMs;
     
     // State
     DownloadThread* _thread = nullptr;
