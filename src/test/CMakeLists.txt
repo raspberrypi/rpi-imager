@@ -7,8 +7,12 @@ include(FetchContent)
 FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.5.2
-    FIND_PACKAGE_ARGS NAMES Catch2
+    GIT_TAG v3.16.0
+    # Version floor, or find_package matches a system Catch2 v2 -- still the
+    # packaged one on Debian/Ubuntu -- and FetchContent skips the fetch. The
+    # suite is v3: catch_test_macros.hpp and Catch2WithMain are v3-only, so
+    # that build fails at the first #include rather than at configure time.
+    FIND_PACKAGE_ARGS 3 NAMES Catch2
 )
 
 FetchContent_MakeAvailable(Catch2)
