@@ -7,6 +7,7 @@
 #define FILE_OPERATIONS_MACOS_H_
 
 #include "../file_operations.h"
+#include "../posix_write_error.h"
 #include <dispatch/dispatch.h>
 #include <atomic>
 #include <chrono>
@@ -60,6 +61,13 @@ class MacOSFileOperations : public FileOperations {
   // Get the last errno error code
   int GetLastErrorCode() const override;
 
+  // Turn that errno into something the user can act on. Shared with the
+  // other POSIX platform, because the mapping is the kernel's rather than
+  // either system's.
+  WriteErrorClass ClassifyLastWriteError() const override {
+    return ClassifyPosixWriteErrno(last_error_code_);
+  }
+
   // Check if direct I/O is enabled
   bool IsDirectIOEnabled() const override { return using_direct_io_; }
   
@@ -90,6 +98,9 @@ class MacOSFileOperations : public FileOperations {
   // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
+  // Shared tail of OpenDevice, for a device fd however it was obtained.
+  FileError FinishOpeningDevice();
+
   int fd_;
   std::string current_path_;
   int last_error_code_;
