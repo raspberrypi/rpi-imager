@@ -3,8 +3,10 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#include "model_row_diff.h"
 #include "hwlistmodel.h"
 #include "imagewriter.h"
+#include "oslistparser.h"
 
 #include <QJsonObject>
 #include <QJsonDocument>
@@ -38,10 +40,7 @@ bool HWListModel::reload()
         return false;
     }
 
-    beginResetModel();
-    _currentIndex = -1;
-    // Replace contents on reload to avoid duplicate entries when re-entering the step
-    _hwDevices.clear();
+    QVector<HardwareDevice> next;
 
     const QJsonArray deviceArray = devices.toArray();
     _hwDevices.reserve(deviceArray.size());
@@ -54,11 +53,17 @@ bool HWListModel::reload()
             deviceObj["tags"].toArray(),
             deviceObj["capabilities"].toArray(),
             [&]() {
-                QString iconPath = deviceObj["icon"].toString();
-                // Adjust icon path for wizard directory structure
-                if (iconPath.startsWith("icons/")) {
-                    iconPath = "../" + iconPath;
-                }
+                // Through the same sanitiser the OS list icons go through,
+                // which rebases a repository-relative "icons/..." for the
+                // wizard directory and drops the forms that would turn a
+                // board icon into a fetch of somewhere else -- a file URL
+                // naming a host being the one that matters, since its local
+                // path is a UNC path. This list is filled from the same
+                // repository json as the OS list and was not going through
+                // it, so the same entry was checked in one list and not the
+                // other.
+                QString iconPath =
+                    oslist::sanitizeIconSource(deviceObj["icon"].toString());
                 // Route remote icons via image provider to avoid HTTP/2 errors
                 if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
                     iconPath = QStringLiteral("image://icons/") + iconPath;
@@ -69,17 +74,78 @@ bool HWListModel::reload()
             deviceObj["matching_type"].toString(),
             deviceObj["architecture"].toString()
         };
-        _hwDevices.append(hwDevice);
+        next.append(hwDevice);
 
         if (deviceObj["default"].isBool() && deviceObj["default"].toBool())
-            indexOfDefault = _hwDevices.size() - 1;
+            indexOfDefault = next.size() - 1;
     }
 
-    endResetModel();
+    applyRows(std::move(next));
 
     setCurrentIndex(indexOfDefault);
 
     return true;
+}
+
+namespace {
+
+// What makes two boards the same board. The name is what the chooser is
+// keyed on everywhere else -- currentName() is how the selection is reported
+// -- and two entries never share one.
+QString rowKey(const HWListModel::HardwareDevice &device)
+{
+    return device.name;
+}
+
+bool sameContents(const HWListModel::HardwareDevice &a,
+                  const HWListModel::HardwareDevice &b)
+{
+    return a.name == b.name
+        && a.tags == b.tags
+        && a.capabilities == b.capabilities
+        && a.icon == b.icon
+        && a.description == b.description
+        && a.matchingType == b.matchingType
+        && a.architecture == b.architecture;
+}
+
+} // namespace
+
+void HWListModel::applyRows(QVector<HardwareDevice> &&next)
+{
+    QStringList currentKeys;
+    currentKeys.reserve(_hwDevices.size());
+    for (const HardwareDevice &device : _hwDevices)
+        currentKeys << rowKey(device);
+
+    QStringList nextKeys;
+    nextKeys.reserve(next.size());
+    for (const HardwareDevice &device : next)
+        nextKeys << rowKey(device);
+
+    const rpi_model::RowDiff diff = rpi_model::planRowDiff(currentKeys, nextKeys);
+
+    if (diff.removed > 0) {
+        beginRemoveRows(QModelIndex(), diff.at, diff.at + diff.removed - 1);
+        _hwDevices.remove(diff.at, diff.removed);
+        endRemoveRows();
+    }
+
+    if (diff.inserted > 0) {
+        beginInsertRows(QModelIndex(), diff.at, diff.at + diff.inserted - 1);
+        for (int i = 0; i < diff.inserted; ++i)
+            _hwDevices.insert(diff.at + i, next.at(diff.at + i));
+        endInsertRows();
+    }
+
+    for (int i = 0; i < _hwDevices.size(); ++i) {
+        if (i >= diff.at && i < diff.at + diff.inserted)
+            continue;
+        if (!sameContents(_hwDevices.at(i), next.at(i))) {
+            _hwDevices[i] = next.at(i);
+            emit dataChanged(index(i), index(i));
+        }
+    }
 }
 
 int HWListModel::rowCount(const QModelIndex &) const

@@ -83,6 +83,20 @@ public:
     // Adds "(Recommended)" to the description of the first OS
     Q_INVOKABLE void markFirstAsRecommended();
 
+    // The same, on rows that are not in the model yet.
+    static void markRecommendedIn(QVector<OS> &rows);
+
+    // Replace the rows with `next`, reporting the difference rather than a
+    // reset.
+    //
+    // A reset destroys every delegate in the view, which costs more than the
+    // rebuilding: it drops the scroll position and the highlight, and it
+    // loses whatever click was in progress. Qt delivers a click only when
+    // the press and the release reach the same item, so a list rebuilt
+    // between the two swallows it -- the user presses, the list refills,
+    // nothing is selected, and they click a second time. That is reachable:
+    void applyRows(QVector<OS> &&next);
+
 signals:
     void eventOsListParse(quint32 durationMs, bool success);
 
