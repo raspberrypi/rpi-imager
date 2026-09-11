@@ -5,6 +5,8 @@
 
 #include "disk_formatter.h"
 
+#include "platform_file_operations.h"
+
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -12,6 +14,12 @@
 #include <cstdlib>
 #include <cassert>
 #include <cstring>
+#include <cstddef>
+#include <utility>
+#include <tuple>
+#include <vector>
+#include <memory>
+#include <algorithm>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -58,6 +66,118 @@ ScratchDir& scratch() {
   return dir;
 }
 
+// A device that answers a format entirely from memory.
+//
+// Every existing case here formats a real file that succeeds, so nothing had
+// ever driven DiskFormatter's error handling: the whole of ConvertFileError
+// and the failure branch of all seven writes were unexecuted. This stands in
+// for the device so a failure can be injected at a chosen step, without going
+// near a real block device.
+//
+// Deriving from LinuxFileOperations rather than FileOperations avoids
+// implementing the other two dozen pure virtuals; DiskFormatter only ever
+// calls these four, and each is overridden, so the base's file descriptor is
+// never opened.
+class ScriptedDevice : public rpi_imager::PlatformFileOperations {
+ public:
+  explicit ScriptedDevice(std::uint64_t size_bytes) : size_bytes_(size_bytes) {}
+
+  // Which write to fail, counting from 1. Zero fails none.
+  void FailWrite(int index, FileError error) {
+    fail_write_ = index;
+    write_error_ = error;
+  }
+  void FailOpen(FileError error) { open_result_ = error; }
+  void FailCreate(FileError error) { create_result_ = error; }
+  void FailGetSize(FileError error) { size_result_ = error; }
+
+  // Every write the formatter made: where it went, how long it was, and its
+  // first sector. Only the head is kept -- a FAT copy for a large device runs
+  // to hundreds of megabytes, and the fields a test wants are all in sector 0.
+  struct Write {
+    std::uint64_t offset;
+    std::size_t size;
+    std::array<std::uint8_t, 512> head;
+  };
+
+  int writes() const { return writes_; }
+  const std::vector<Write>& writeLog() const { return write_log_; }
+
+  // The write that landed exactly at `offset`, or nullptr if there was none.
+  const Write* writeAt(std::uint64_t offset) const {
+    for (const auto& w : write_log_)
+      if (w.offset == offset) return &w;
+    return nullptr;
+  }
+
+  FileError OpenDevice(const std::string&) override { return open_result_; }
+
+  FileError CreateTestFile(const std::string&, std::uint64_t size) override {
+    if (create_result_ == FileError::kSuccess) size_bytes_ = size;
+    return create_result_;
+  }
+
+  FileError GetSize(std::uint64_t& size) override {
+    size = size_bytes_;
+    return size_result_;
+  }
+
+  FileError WriteAtOffset(std::uint64_t offset, const std::uint8_t* data,
+                          std::size_t size) override {
+    ++writes_;
+    if (writes_ == fail_write_) return write_error_;
+    Write w{offset, size, {}};
+    std::copy_n(data, std::min(size, w.head.size()), w.head.begin());
+    write_log_.push_back(w);
+    return FileError::kSuccess;
+  }
+
+  FileError Close() override { return FileError::kSuccess; }
+  bool IsOpen() const override { return true; }
+  FileError ForceSync() override { return FileError::kSuccess; }
+  FileError Flush() override { return FileError::kSuccess; }
+
+ private:
+  std::uint64_t size_bytes_;
+  FileError open_result_ = FileError::kSuccess;
+  FileError create_result_ = FileError::kSuccess;
+  FileError size_result_ = FileError::kSuccess;
+  FileError write_error_ = FileError::kWriteError;
+  int fail_write_ = 0;
+  int writes_ = 0;
+  std::vector<Write> write_log_;
+};
+
+// Read a little-endian 32-bit field out of a captured sector.
+std::uint32_t le32(const std::array<std::uint8_t, 512>& sector, std::size_t at) {
+  std::uint32_t v = 0;
+  for (std::size_t i = 0; i < 4; ++i)
+    v |= static_cast<std::uint32_t>(sector[at + i]) << (8 * i);
+  return v;
+}
+
+// The MBR's single partition entry lives at byte 446; within it first_lba is
+// 8 bytes in and num_sectors 12, per MbrPartitionEntry.
+constexpr std::size_t kPartitionEntry = 446;
+constexpr std::size_t kFirstLbaField = kPartitionEntry + 8;
+constexpr std::size_t kNumSectorsField = kPartitionEntry + 12;
+
+// A CHS address as MBR packs it: the cylinder's top two bits are carried in
+// the top of the sector byte, and sector numbers count from 1.
+struct Chs {
+  unsigned cylinder;
+  unsigned head;
+  unsigned sector;
+};
+
+Chs readChs(const std::array<std::uint8_t, 512>& mbr, std::size_t at) {
+  const unsigned head = mbr[at];
+  const unsigned sector_byte = mbr[at + 1];
+  const unsigned cylinder_byte = mbr[at + 2];
+  return Chs{((sector_byte & 0xC0u) << 2) | cylinder_byte, head,
+             sector_byte & 0x3Fu};
+}
+
 }  // namespace
 
 class DiskFormatterTest {
@@ -70,6 +190,11 @@ class DiskFormatterTest {
     all_passed &= TestMbrStructure();
     all_passed &= TestFat32Structure();
     all_passed &= TestSystemToolValidation();
+    all_passed &= TestWriteFailureIsReported();
+    all_passed &= TestDeviceErrorsReachTheUser();
+    all_passed &= TestPartitionTableAndFilesystemAgree();
+    all_passed &= TestAcceptedDevicesGetAValidFat32();
+    all_passed &= TestFatIsWrittenInBoundedPieces();
     
     if (all_passed) {
       std::cout << "All tests passed!\n";
@@ -245,6 +370,37 @@ class DiskFormatterTest {
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
   }
 
+  // As runCommand(), but hands back what the tool printed. Some tools answer
+  // by describing what they found rather than by their exit status -- file(1)
+  // succeeds on anything readable, so its verdict is in its output.
+  static int runCommandCapture(const char *path, const std::vector<const char*> &argv,
+                               std::string &output) {
+    int fds[2];
+    if (pipe(fds) != 0) return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) { close(fds[0]); close(fds[1]); return -1; }
+    if (pid == 0) {
+      close(fds[0]);
+      dup2(fds[1], 1);
+      dup2(fds[1], 2);
+      close(fds[1]);
+      execv(path, const_cast<char *const *>(argv.data()));
+      _exit(127);
+    }
+
+    close(fds[1]);
+    char buf[4096];
+    ssize_t n;
+    while ((n = read(fds[0], buf, sizeof(buf))) > 0)
+      output.append(buf, static_cast<size_t>(n));
+    close(fds[0]);
+
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  }
+
   // Run a privileged command: directly when we are already root, via sudo -n
   // otherwise.
   //
@@ -326,22 +482,65 @@ class DiskFormatterTest {
     bool all_passed = true;
 
     // Test with fdisk to check partition table (safe: test_file is a hardcoded constant)
+    //
+    // A rejected partition table used to be reported as "tool may not be
+    // available" and ignored. execv() answers 127 when the binary is not
+    // there, which tells the two apart.
     {
+      // Which fdisk is this? Only util-linux's takes `-l` and lists a table
+      // from a file. macOS ships the BSD one, which has no such option and
+      // answers "illegal option" -- a statement about the tool, not about our
+      // partition table, and it was being counted as a failed test. Ask for a
+      // version string first: the BSD one has no --version either, so it says
+      // the same thing again and the check below simply does not run.
+      std::string version;
+      runCommandCapture("/usr/sbin/fdisk", {"fdisk", "--version", nullptr}, version);
+      const bool utilLinuxFdisk = version.find("util-linux") != std::string::npos;
+
       std::vector<const char*> argv = {"fdisk", "-l", test_file.c_str(), nullptr};
-      if (runCommand("/usr/sbin/fdisk", argv) != 0) {
-        std::cout << "fdisk validation failed (tool may not be available)\n";
+      std::string listing;
+      const int rc = utilLinuxFdisk
+                         ? runCommandCapture("/usr/sbin/fdisk", argv, listing)
+                         : 127;
+      if (!utilLinuxFdisk) {
+        std::cout << "fdisk here does not list partition tables from a file, "
+                     "partition table not checked\n";
+      } else if (rc == 127) {
+        std::cout << "fdisk is not installed, partition table not checked\n";
+      } else if (rc != 0) {
+        std::cout << "fdisk could not read the image (exit " << rc << ")\n";
+        all_passed = false;
+      } else if (listing.find("FAT32") == std::string::npos) {
+        // The exit status alone proves nothing: fdisk -l answers 0 for an
+        // image of zeroes with no partition table at all. What it prints is
+        // the verdict, and a FAT32 entry is what this formatter is for.
+        std::cout << "fdisk lists no FAT32 partition:\n" << listing;
+        all_passed = false;
       } else {
         std::cout << "fdisk validation passed\n";
       }
     }
 
     // Test with file command to detect filesystem
+    //
+    // Its exit status says whether it could read the file, not whether the
+    // file is what we meant to write -- file(1) succeeds on a directory of
+    // zeroes just as happily. The verdict is in what it prints, so that is
+    // what gets checked.
     {
       std::vector<const char*> argv = {"file", test_file.c_str(), nullptr};
-      if (runCommand("/usr/bin/file", argv) != 0) {
-        std::cout << "file command validation failed\n";
+      std::string described;
+      const int rc = runCommandCapture("/usr/bin/file", argv, described);
+      if (rc == 127) {
+        std::cout << "file(1) is not installed, image not identified\n";
+      } else if (rc != 0) {
+        std::cout << "file(1) could not read the image (exit " << rc << ")\n";
+        all_passed = false;
+      } else if (described.find("boot sector") == std::string::npos) {
+        std::cout << "file(1) does not see a boot sector: " << described;
+        all_passed = false;
       } else {
-        std::cout << "file command validation passed\n";
+        std::cout << "file command validation passed (" << described.substr(0, 120) << ")\n";
       }
     }
 
@@ -401,17 +600,672 @@ class DiskFormatterTest {
       }
     }
 
-    // Verify filesystem with fsck.fat if available
+    // Verify the filesystem with an independent checker.
+    //
+    // This used to report a rejected filesystem as "skipped (tool may not be
+    // available)" and leave all_passed alone, so the strongest check of what
+    // the formatter produces could not fail the test -- a corrupt FAT32 and a
+    // missing fsck.fat looked identical. The two are now told apart, and only
+    // the genuinely missing tool is a skip.
     {
-      std::vector<const char*> argv = {"fsck.fat", "-v", test_file.c_str(), nullptr};
-      if (runCommand("/usr/sbin/fsck.fat", argv) == 0) {
-        std::cout << "fsck.fat validation passed\n";
+      const char* fsck = "/usr/sbin/fsck.fat";
+      if (!std::filesystem::exists(fsck)) {
+        std::cout << "fsck.fat is not installed, filesystem not independently checked\n";
       } else {
-        std::cout << "fsck.fat validation skipped (tool may not be available)\n";
+        // fsck.fat has to be given the filesystem, not the disk holding it.
+        // Pointed at the image it reads the MBR as a boot sector and answers
+        // "Logical sector size is zero" -- which is what it had always been
+        // doing, since the result was discarded and reported as a skip.
+        //
+        // The partition is copied out rather than loop-mounted so this needs
+        // no privileges, and the offset is read from the image's own
+        // partition table rather than assumed.
+        std::vector<std::uint8_t> mbr(512);
+        std::ifstream in(test_file, std::ios::binary);
+        in.read(reinterpret_cast<char*>(mbr.data()), 512);
+        const bool signature_ok = in.gcount() == 512 && mbr[510] == 0x55 && mbr[511] == 0xAA;
+        std::uint32_t first_lba = 0;
+        for (int i = 0; i < 4; ++i)
+          first_lba |= static_cast<std::uint32_t>(mbr[0x1BE + 8 + i]) << (8 * i);
+
+        if (!signature_ok || first_lba == 0) {
+          std::cout << "could not read a partition offset from the image\n";
+          all_passed = false;
+        } else {
+          const std::string part_file = scratch().file("partition.img");
+          std::ifstream src(test_file, std::ios::binary);
+          std::ofstream dst(part_file, std::ios::binary | std::ios::trunc);
+          src.seekg(static_cast<std::streamoff>(first_lba) * 512);
+          dst << src.rdbuf();
+          dst.close();
+
+          // -n answers no to every question, so it reports without repairing:
+          // a filesystem it wanted to fix is one this test should fail.
+          std::vector<const char*> argv = {"fsck.fat", "-n", "-v", part_file.c_str(), nullptr};
+          const int rc = runCommand(fsck, argv);
+          if (rc == 0) {
+            std::cout << "fsck.fat validation passed\n";
+          } else {
+            std::cout << "fsck.fat rejected the filesystem (exit " << rc << ")\n";
+            all_passed = false;
+          }
+        }
       }
     }
 
     std::cout << "System tool validation completed\n";
+    return all_passed;
+  }
+
+
+  // A format lays down seven things in order. If any one of them fails the
+  // whole format has to fail: a card carrying a partition table but no FAT,
+  // or one FAT copy of two, mounts on some hosts and corrupts on others. The
+  // user would be told the erase completed.
+  //
+  // The step names are here so a failure says which write was refused rather
+  // than just "write 5". If a step is added to WriteFat32 and its result is
+  // not checked, the count assertion below catches it.
+  static bool TestWriteFailureIsReported() {
+    std::cout << "Testing that a device refusing a write fails the format...\n";
+
+    struct Step {
+      int write_index;
+      const char* what;
+    };
+    static constexpr Step kSteps[] = {
+      {1, "the partition table"},
+      {2, "the boot sector"},
+      {3, "the FSInfo sector"},
+      {4, "the backup boot sector"},
+      {5, "the first FAT copy"},
+      {6, "the second FAT copy"},
+      {7, "the root directory"},
+    };
+    static constexpr int kExpectedWrites =
+        static_cast<int>(std::size(kSteps));
+    const std::uint64_t device_size = 64 * 1024 * 1024;
+
+    bool all_passed = true;
+
+    // First, a device that refuses nothing, to pin the number of writes the
+    // table above is describing.
+    {
+      auto device = std::make_unique<ScriptedDevice>(device_size);
+      auto* raw = device.get();
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatDrive("/dev/fake");
+      if (!result) {
+        std::cout << "❌ a device that refuses nothing failed to format\n";
+        all_passed = false;
+      }
+      if (raw->writes() != kExpectedWrites) {
+        std::cout << "❌ a clean format made " << raw->writes()
+                  << " writes, not the " << kExpectedWrites
+                  << " the step table describes -- if a format step was added,"
+                     " add it to kSteps and check its result\n";
+        all_passed = false;
+      }
+    }
+
+    for (const auto& step : kSteps) {
+      auto device = std::make_unique<ScriptedDevice>(device_size);
+      auto* raw = device.get();
+      device->FailWrite(step.write_index, FileError::kWriteError);
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatDrive("/dev/fake");
+
+      if (result) {
+        std::cout << "❌ the device refused to write " << step.what
+                  << " and the format reported success\n";
+        all_passed = false;
+        continue;
+      }
+      if (result.error() != FormatError::kFileWriteError) {
+        std::cout << "❌ a refused write of " << step.what << " reported error "
+                  << static_cast<int>(result.error()) << ", not kFileWriteError\n";
+        all_passed = false;
+      }
+      // Nothing may be written after the failure: the formatter has to give up
+      // there rather than carry on laying down the rest of the filesystem.
+      if (raw->writes() != step.write_index) {
+        std::cout << "❌ the device refused to write " << step.what
+                  << " and the formatter carried on: " << raw->writes()
+                  << " writes attempted, expected to stop at "
+                  << step.write_index << "\n";
+        all_passed = false;
+      }
+    }
+
+    if (all_passed) std::cout << "✅ every refused write fails the format\n";
+    return all_passed;
+  }
+
+  // Each FormatError becomes a different sentence in the UI --
+  // DriveFormatThread::formatErrorToString turns them into "Error opening
+  // device", "Error seeking", "Formatting cancelled" and so on. So the mapping
+  // from the device's error to that decides which of those a user reads. None
+  // of it had ever been executed.
+  static bool TestDeviceErrorsReachTheUser() {
+    std::cout << "Testing which error a failing device produces...\n";
+
+    struct Case {
+      FileError from;
+      FormatError to;
+      const char* why;
+    };
+    static constexpr Case kCases[] = {
+      {FileError::kOpenError,  FormatError::kFileOpenError,  "cannot open"},
+      {FileError::kWriteError, FormatError::kFileWriteError, "write refused"},
+      {FileError::kReadError,  FormatError::kFileOpenError,  "read refused"},
+      {FileError::kSeekError,  FormatError::kFileSeekError,  "cannot seek"},
+      {FileError::kSizeError,  FormatError::kFileOpenError,  "size unknown"},
+      {FileError::kCloseError, FormatError::kFileOpenError,  "close failed"},
+      {FileError::kLockError,  FormatError::kFileOpenError,  "already in use"},
+      {FileError::kSyncError,  FormatError::kFileWriteError, "sync failed"},
+      {FileError::kFlushError, FormatError::kFileWriteError, "flush failed"},
+      {FileError::kTimeout,    FormatError::kFileWriteError, "device stopped responding"},
+      {FileError::kCancelled,  FormatError::kCancelled,      "user cancelled"},
+    };
+
+    bool all_passed = true;
+    for (const auto& c : kCases) {
+      // Through the open, which is the first thing a format does.
+      {
+        auto device = std::make_unique<ScriptedDevice>(64 * 1024 * 1024);
+        device->FailOpen(c.from);
+        DiskFormatter formatter(std::move(device));
+        auto result = formatter.FormatDrive("/dev/fake");
+        if (result) {
+          std::cout << "❌ opening a device that reported " << c.why
+                    << " was treated as success\n";
+          all_passed = false;
+        } else if (result.error() != c.to) {
+          std::cout << "❌ a device that reported " << c.why
+                    << " on open produced error " << static_cast<int>(result.error())
+                    << ", expected " << static_cast<int>(c.to) << "\n";
+          all_passed = false;
+        }
+      }
+      // And through a write, which reaches the same mapping from deeper in.
+      {
+        auto device = std::make_unique<ScriptedDevice>(64 * 1024 * 1024);
+        device->FailWrite(1, c.from);
+        DiskFormatter formatter(std::move(device));
+        auto result = formatter.FormatDrive("/dev/fake");
+        if (result) {
+          std::cout << "❌ a write that reported " << c.why
+                    << " was treated as success\n";
+          all_passed = false;
+        } else if (result.error() != c.to) {
+          std::cout << "❌ a write that reported " << c.why
+                    << " produced error " << static_cast<int>(result.error())
+                    << ", expected " << static_cast<int>(c.to) << "\n";
+          all_passed = false;
+        }
+      }
+    }
+
+    // A device whose size cannot be read is a distinct step from opening it.
+    {
+      auto device = std::make_unique<ScriptedDevice>(64 * 1024 * 1024);
+      device->FailGetSize(FileError::kSizeError);
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatDrive("/dev/fake");
+      if (result || result.error() != FormatError::kFileOpenError) {
+        std::cout << "❌ a device whose size could not be read did not report "
+                     "kFileOpenError\n";
+        all_passed = false;
+      }
+    }
+
+    // FormatFile reaches the same writes as FormatDrive but has its own
+    // returns on the way, so a refused write has to fail it too.
+    {
+      auto device = std::make_unique<ScriptedDevice>(64 * 1024 * 1024);
+      device->FailWrite(1, FileError::kWriteError);
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatFile("unused.img", 64 * 1024 * 1024);
+      if (result || result.error() != FormatError::kFileWriteError) {
+        std::cout << "❌ FormatFile reported success when the partition table "
+                     "could not be written\n";
+        all_passed = false;
+      }
+    }
+
+    // FormatFile's own first step, which has its own error return.
+    {
+      auto device = std::make_unique<ScriptedDevice>(64 * 1024 * 1024);
+      device->FailCreate(FileError::kOpenError);
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatFile("unused.img", 64 * 1024 * 1024);
+      if (result || result.error() != FormatError::kFileOpenError) {
+        std::cout << "❌ a file that could not be created did not report "
+                     "kFileOpenError\n";
+        all_passed = false;
+      }
+    }
+
+    if (all_passed) std::cout << "✅ device errors map to the intended report\n";
+    return all_passed;
+  }
+
+  // MBR cannot describe more than 2^32 sectors, so a device larger than 2 TiB
+  // has to be capped. WriteMbr caps; FormatDrive and FormatFile computed the
+  // partition size for the filesystem separately, by truncating the same
+  // 64-bit sector count into 32 bits. The two then disagree:
+  static bool TestPartitionTableAndFilesystemAgree() {
+    std::cout << "Testing that the partition table and the filesystem in it "
+                 "describe the same partition...\n";
+
+    constexpr std::uint64_t kTiB = 1024ULL * 1024 * 1024 * 1024;
+    struct Case {
+      const char* name;
+      std::uint64_t size_bytes;
+    };
+    const Case kCases[] = {
+      {"64 MB",  64ULL * 1024 * 1024},
+      {"32 GB",  32ULL * 1024 * 1024 * 1024},
+      {"2 TiB",  2 * kTiB},   // exactly on the MBR limit
+      {"3 TiB",  3 * kTiB},
+      {"4 TiB",  4 * kTiB},
+      {"5 TiB",  5 * kTiB},
+      {"8 TiB",  8 * kTiB},
+    };
+
+    constexpr std::uint32_t kStartSector = 8192;  // DiskFormatter's 4 MB offset
+    bool all_passed = true;
+
+    for (const auto& c : kCases) {
+      auto device = std::make_unique<ScriptedDevice>(c.size_bytes);
+      auto* raw = device.get();
+      // Stop after the boot sector. Both numbers under test have been written
+      // by then, and the FAT copies for a 2 TiB partition are half a gigabyte
+      // each -- this test does not need them laid down to read the geometry.
+      device->FailWrite(3, FileError::kWriteError);
+      DiskFormatter formatter(std::move(device));
+      formatter.FormatDrive("/dev/fake");
+
+      const auto* mbr = raw->writeAt(0);
+      const auto* boot = raw->writeAt(std::uint64_t{kStartSector} * 512);
+      if (mbr == nullptr || boot == nullptr) {
+        std::cout << "❌ " << c.name
+                  << ": formatting wrote no partition table or no boot sector\n";
+        all_passed = false;
+        continue;
+      }
+
+      const std::uint32_t table_sectors = le32(mbr->head, kNumSectorsField);
+      const std::uint32_t table_start = le32(mbr->head, kFirstLbaField);
+      const std::uint32_t fs_sectors =
+          le32(boot->head, offsetof(Fat32BootSector, total_sectors_32));
+
+      if (table_start != kStartSector) {
+        std::cout << "❌ " << c.name << ": partition table starts the partition at "
+                  << table_start << ", expected " << kStartSector << "\n";
+        all_passed = false;
+      }
+      if (table_sectors != fs_sectors) {
+        std::cout << "❌ " << c.name << ": partition table describes "
+                  << table_sectors << " sectors but the filesystem inside it "
+                     "describes " << fs_sectors << "\n";
+        all_passed = false;
+      }
+      // And whichever they agree on must actually be on the device.
+      const std::uint64_t device_sectors = c.size_bytes / 512;
+      const std::uint64_t claimed_end =
+          std::uint64_t{table_start} + table_sectors;
+      if (claimed_end > device_sectors) {
+        std::cout << "❌ " << c.name << ": the partition ends at sector "
+                  << claimed_end << ", past the end of a device of "
+                  << device_sectors << " sectors\n";
+        all_passed = false;
+      }
+      if (std::uint64_t{table_start} + fs_sectors > device_sectors) {
+        std::cout << "❌ " << c.name << ": the filesystem ends at sector "
+                  << (std::uint64_t{table_start} + fs_sectors)
+                  << ", past the end of a device of " << device_sectors
+                  << " sectors\n";
+        all_passed = false;
+      }
+
+      // The CHS end address, which some firmware still reads. Computing it as
+      // start + count - 1 in 32-bit arithmetic wrapped on a large device --
+      // 8192 + 4294967295 - 1 came out as 8190 -- and described a partition
+      // ending before it began, with a sector number of 0 that CHS cannot
+      // express at all.
+      const Chs first = readChs(mbr->head, kPartitionEntry + 1);
+      const Chs last = readChs(mbr->head, kPartitionEntry + 5);
+      if (last.sector < 1 || last.sector > 63) {
+        std::cout << "❌ " << c.name << ": the partition's last CHS sector is "
+                  << last.sector << ", outside the 1-63 CHS allows\n";
+        all_passed = false;
+      }
+      const auto chs_order = [](const Chs& a) {
+        return std::make_tuple(a.cylinder, a.head, a.sector);
+      };
+      if (chs_order(last) < chs_order(first)) {
+        std::cout << "❌ " << c.name << ": the partition's CHS end ("
+                  << last.cylinder << "/" << last.head << "/" << last.sector
+                  << ") is before its CHS start (" << first.cylinder << "/"
+                  << first.head << "/" << first.sector << ")\n";
+        all_passed = false;
+      }
+
+      // Agreement alone is not enough: two numbers that agree on a tiny
+      // partition would satisfy every check above while throwing the card
+      // away. The partition has to cover everything after the start offset,
+      // or -- where the device is larger than a 32-bit sector count can
+      // describe -- as much of it as MBR can reach.
+      const std::uint64_t reachable =
+          std::min<std::uint64_t>(device_sectors - kStartSector, 0xFFFFFFFFULL);
+      if (table_sectors != reachable) {
+        std::cout << "❌ " << c.name << ": the partition covers "
+                  << table_sectors << " sectors, but " << reachable
+                  << " of the device are reachable through an MBR\n";
+        all_passed = false;
+      }
+    }
+
+    // Below the 4 MB start offset plus a usable minimum there is nothing to
+    // format, and both entry points have to say so rather than write a table
+    // over a card that cannot hold it. FormatFile had no such check.
+    const std::uint64_t kTooSmall[] = {0, 64 * 1024, 4 * 1024 * 1024,
+                                       5 * 1024 * 1024 - 1};
+    for (std::uint64_t size : kTooSmall) {
+      {
+        auto device = std::make_unique<ScriptedDevice>(size);
+        auto* raw = device.get();
+        DiskFormatter formatter(std::move(device));
+        auto result = formatter.FormatDrive("/dev/fake");
+        if (result || result.error() != FormatError::kInsufficientSpace) {
+          std::cout << "❌ FormatDrive on a " << size
+                    << " byte device did not report insufficient space\n";
+          all_passed = false;
+        }
+        if (raw->writes() != 0) {
+          std::cout << "❌ FormatDrive wrote to a " << size
+                    << " byte device before refusing it\n";
+          all_passed = false;
+        }
+      }
+      {
+        auto device = std::make_unique<ScriptedDevice>(size);
+        auto* raw = device.get();
+        DiskFormatter formatter(std::move(device));
+        auto result = formatter.FormatFile("unused.img", size);
+        if (result || result.error() != FormatError::kInsufficientSpace) {
+          std::cout << "❌ FormatFile of a " << size
+                    << " byte file did not report insufficient space\n";
+          all_passed = false;
+        }
+        if (raw->writes() != 0) {
+          std::cout << "❌ FormatFile wrote to a " << size
+                    << " byte file before refusing it\n";
+          all_passed = false;
+        }
+      }
+    }
+
+    if (all_passed)
+      std::cout << "✅ the partition table and the filesystem agree at every size\n";
+    return all_passed;
+  }
+
+  // FAT32 is defined by how many clusters the volume has, not by what its boot
+  // sector claims. Below 65525 the specification says the volume is FAT16, and
+  // a driver that enforces that will reject or misread one labelled FAT32.
+  // Linux's vfat driver does not enforce it -- which is why the 64 MB image the
+  // cases above format mounted cleanly, passed fsck.fat, and still held only
+  // 60,944 clusters. It was not a filesystem Windows would accept.
+  static bool TestAcceptedDevicesGetAValidFat32() {
+    std::cout << "Testing that an accepted device gets a real FAT32...\n";
+
+    constexpr std::uint32_t kMinimumClusters = 65525;
+    constexpr std::uint32_t kMaximumClusters = 268435444;  // FAT32's ceiling
+    constexpr std::uint64_t kMiB = 1024ULL * 1024;
+    constexpr std::uint64_t kGiB = 1024ULL * kMiB;
+    constexpr std::uint64_t kStartSector = 8192;
+
+    const std::uint64_t kSizes[] = {
+      64 * 1024, 1 * kMiB, 4 * kMiB, 5 * kMiB, 16 * kMiB, 32 * kMiB,
+      36 * kMiB, 37 * kMiB, 40 * kMiB, 48 * kMiB, 64 * kMiB, 96 * kMiB,
+      128 * kMiB, 256 * kMiB, 260 * kMiB, 512 * kMiB,
+      1 * kGiB, 2 * kGiB, 4 * kGiB, 8 * kGiB, 16 * kGiB, 32 * kGiB,
+      64 * kGiB, 128 * kGiB, 256 * kGiB, 1024 * kGiB, 2048 * kGiB,
+    };
+
+    bool all_passed = true;
+    int accepted = 0;
+    int refused = 0;
+
+    for (std::uint64_t size : kSizes) {
+      auto device = std::make_unique<ScriptedDevice>(size);
+      auto* raw = device.get();
+      // Stop after the boot sector: every field read below is in it, and the
+      // FAT copies for a large card run to hundreds of megabytes.
+      device->FailWrite(3, FileError::kWriteError);
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatDrive("/dev/fake");
+
+      const auto* boot = raw->writeAt(kStartSector * 512);
+      if (!result && result.error() == FormatError::kInsufficientSpace) {
+        ++refused;
+        if (boot != nullptr) {
+          std::cout << "❌ " << (size / kMiB)
+                    << " MB was refused but a boot sector was written anyway\n";
+          all_passed = false;
+        }
+        continue;
+      }
+      if (boot == nullptr) {
+        std::cout << "❌ " << (size / kMiB)
+                  << " MB was neither refused nor given a boot sector\n";
+        all_passed = false;
+        continue;
+      }
+      ++accepted;
+
+      // Read the volume back the way a FAT32 driver computes its cluster
+      // count: total sectors, less the reserved region and both FATs, divided
+      // by the cluster size.
+      const std::uint32_t total_sectors =
+          le32(boot->head, offsetof(Fat32BootSector, total_sectors_32));
+      const std::uint32_t sectors_per_fat =
+          le32(boot->head, offsetof(Fat32BootSector, sectors_per_fat_32));
+      const unsigned sectors_per_cluster =
+          boot->head[offsetof(Fat32BootSector, sectors_per_cluster)];
+      const unsigned num_fats = boot->head[offsetof(Fat32BootSector, num_fats)];
+      const unsigned reserved =
+          boot->head[offsetof(Fat32BootSector, reserved_sectors)] |
+          (boot->head[offsetof(Fat32BootSector, reserved_sectors) + 1] << 8);
+
+      if (sectors_per_cluster == 0 || num_fats == 0 || reserved == 0) {
+        std::cout << "❌ " << (size / kMiB) << " MB: boot sector describes "
+                  << sectors_per_cluster << " sectors per cluster, " << num_fats
+                  << " FATs, " << reserved << " reserved sectors\n";
+        all_passed = false;
+        continue;
+      }
+      // A cluster size has to be a power of two for FAT32.
+      if ((sectors_per_cluster & (sectors_per_cluster - 1)) != 0) {
+        std::cout << "❌ " << (size / kMiB) << " MB: " << sectors_per_cluster
+                  << " sectors per cluster is not a power of two\n";
+        all_passed = false;
+      }
+
+      const std::uint64_t overhead =
+          reserved + std::uint64_t{num_fats} * sectors_per_fat;
+      if (overhead >= total_sectors) {
+        std::cout << "❌ " << (size / kMiB) << " MB: the reserved region and "
+                     "FATs (" << overhead << " sectors) fill the whole "
+                  << total_sectors << " sector partition\n";
+        all_passed = false;
+        continue;
+      }
+      const std::uint64_t clusters =
+          (total_sectors - overhead) / sectors_per_cluster;
+
+      if (clusters < kMinimumClusters) {
+        std::cout << "❌ " << (size / kMiB) << " MB was accepted but holds only "
+                  << clusters << " clusters, under the " << kMinimumClusters
+                  << " FAT32 requires -- what was written is not a FAT32\n";
+        all_passed = false;
+      }
+      if (clusters > kMaximumClusters) {
+        std::cout << "❌ " << (size / kMiB) << " MB holds " << clusters
+                  << " clusters, over the " << kMaximumClusters
+                  << " FAT32 can address\n";
+        all_passed = false;
+      }
+      // The FAT has to be long enough to hold an entry for every cluster it
+      // claims, or the last clusters have nowhere to record their chain.
+      const std::uint64_t fat_capacity =
+          std::uint64_t{sectors_per_fat} * 512 / 4;
+      if (fat_capacity < clusters + 2) {
+        std::cout << "❌ " << (size / kMiB) << " MB: each FAT holds "
+                  << fat_capacity << " entries but the volume has " << clusters
+                  << " clusters to track\n";
+        all_passed = false;
+      }
+    }
+
+    // Both outcomes have to actually occur, or this test is only exercising
+    // one of them.
+    if (accepted == 0 || refused == 0) {
+      std::cout << "❌ the sizes tried produced " << accepted << " accepted and "
+                << refused << " refused; both are meant to be covered\n";
+      all_passed = false;
+    }
+
+    if (all_passed)
+      std::cout << "✅ every accepted device gets a valid FAT32 (" << accepted
+                << " accepted, " << refused << " refused)\n";
+    return all_passed;
+  }
+
+  // The FAT is written in bounded pieces, so peak memory does not scale with
+  // the card.
+  static bool TestFatIsWrittenInBoundedPieces() {
+    std::cout << "Testing that the FAT is written in bounded pieces...\n";
+
+    constexpr std::uint64_t kStartSector = 8192;
+    constexpr std::size_t kMaxPiece = 1024 * 1024;  // the 1 MB chunk
+    constexpr std::uint64_t kGiB = 1024ULL * 1024 * 1024;
+
+    struct Case {
+      const char* name;
+      std::uint64_t size_bytes;
+    };
+    const Case kCases[] = {
+      {"64 MB", 64ULL * 1024 * 1024},   // one piece per copy
+      {"32 GB", 32 * kGiB},             // a handful of pieces
+      {"2 TiB", 2048 * kGiB},           // the largest an MBR can describe
+    };
+
+    bool all_passed = true;
+
+    for (const auto& c : kCases) {
+      auto device = std::make_unique<ScriptedDevice>(c.size_bytes);
+      auto* raw = device.get();
+      DiskFormatter formatter(std::move(device));
+      auto result = formatter.FormatDrive("/dev/fake");
+      if (!result) {
+        std::cout << "❌ " << c.name << ": the format failed\n";
+        all_passed = false;
+        continue;
+      }
+
+      const auto* boot = raw->writeAt(kStartSector * 512);
+      if (boot == nullptr) {
+        std::cout << "❌ " << c.name << ": no boot sector was written\n";
+        all_passed = false;
+        continue;
+      }
+      const std::uint32_t sectors_per_fat =
+          le32(boot->head, offsetof(Fat32BootSector, sectors_per_fat_32));
+      const unsigned num_fats = boot->head[offsetof(Fat32BootSector, num_fats)];
+      const unsigned reserved =
+          boot->head[offsetof(Fat32BootSector, reserved_sectors)] |
+          (boot->head[offsetof(Fat32BootSector, reserved_sectors) + 1] << 8);
+
+      for (unsigned fat = 0; fat < num_fats; ++fat) {
+        const std::uint64_t start =
+            (kStartSector + reserved +
+             std::uint64_t{fat} * sectors_per_fat) * 512;
+        const std::uint64_t length = std::uint64_t{sectors_per_fat} * 512;
+
+        // Every write that landed inside this copy, in the order it was made.
+        std::vector<const ScriptedDevice::Write*> pieces;
+        for (const auto& w : raw->writeLog())
+          if (w.offset >= start && w.offset < start + length)
+            pieces.push_back(&w);
+
+        if (pieces.empty()) {
+          std::cout << "❌ " << c.name << ": FAT copy " << fat
+                    << " was never written\n";
+          all_passed = false;
+          continue;
+        }
+
+        std::uint64_t cursor = start;
+        bool tiled = true;
+        for (std::size_t i = 0; i < pieces.size(); ++i) {
+          const auto* w = pieces[i];
+          if (w->offset != cursor) {
+            std::cout << "❌ " << c.name << ": FAT copy " << fat << " piece "
+                      << i << " starts at " << w->offset << ", expected "
+                      << cursor << " -- the pieces leave a gap or overlap\n";
+            all_passed = false;
+            tiled = false;
+            break;
+          }
+          if (w->size > kMaxPiece) {
+            std::cout << "❌ " << c.name << ": FAT copy " << fat
+                      << " was written in a piece of " << w->size
+                      << " bytes, over the " << kMaxPiece << " byte bound\n";
+            all_passed = false;
+          }
+          // The three entries belong at the start of the copy and nowhere
+          // else; every later piece begins as zeros.
+          if (i == 0) {
+            if (le32(w->head, 0) != 0x0FFFFFF8u ||
+                le32(w->head, 4) != 0x0FFFFFFFu ||
+                le32(w->head, 8) != 0x0FFFFFFFu) {
+              std::cout << "❌ " << c.name << ": FAT copy " << fat
+                        << " does not start with the three reserved entries\n";
+              all_passed = false;
+            }
+          } else if (le32(w->head, 0) != 0 || le32(w->head, 4) != 0) {
+            std::cout << "❌ " << c.name << ": FAT copy " << fat << " piece "
+                      << i << " does not begin as zeros\n";
+            all_passed = false;
+          }
+          cursor += w->size;
+        }
+
+        if (tiled && cursor != start + length) {
+          std::cout << "❌ " << c.name << ": FAT copy " << fat
+                    << " was written up to " << cursor << ", but the boot "
+                       "sector says it runs to " << (start + length) << "\n";
+          all_passed = false;
+        }
+      }
+
+      // And a large card really is written in more than one piece, or the
+      // bound above is not being exercised at all.
+      if (c.size_bytes >= 32 * kGiB) {
+        const std::uint64_t fat_bytes = std::uint64_t{sectors_per_fat} * 512;
+        if (fat_bytes <= kMaxPiece) {
+          std::cout << "❌ " << c.name << ": each FAT is only " << fat_bytes
+                    << " bytes, so this size does not exercise chunking\n";
+          all_passed = false;
+        }
+      }
+    }
+
+    if (all_passed)
+      std::cout << "✅ the FAT is written in bounded pieces that tile it exactly\n";
     return all_passed;
   }
 };
