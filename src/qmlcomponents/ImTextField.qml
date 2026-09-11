@@ -130,6 +130,7 @@ TextField {
     
     Menu {
         id: contextMenu
+        objectName: "textFieldContextMenu"
 
         // On Linux (X11/Wayland), QClipboard::dataChanged is not reliably
         // emitted for external clipboard changes, so force a fresh check
@@ -138,6 +139,7 @@ TextField {
 
         MenuItem {
             text: qsTr("Cut")
+            objectName: "textFieldCutItem"
             enabled: root.selectedText.length > 0 && !root.readOnly && root.echoMode === TextInput.Normal
             Accessible.role: Accessible.MenuItem
             Accessible.name: text
@@ -149,6 +151,7 @@ TextField {
         }
         MenuItem {
             text: qsTr("Copy")
+            objectName: "textFieldCopyItem"
             enabled: root.selectedText.length > 0 && root.echoMode === TextInput.Normal
             Accessible.role: Accessible.MenuItem
             Accessible.name: text
@@ -158,6 +161,7 @@ TextField {
         }
         MenuItem {
             text: qsTr("Paste")
+            objectName: "textFieldPasteItem"
             enabled: !root.readOnly && ClipboardHelper.hasText
             Accessible.role: Accessible.MenuItem
             Accessible.name: text
@@ -166,6 +170,7 @@ TextField {
         MenuSeparator {}
         MenuItem {
             text: qsTr("Select All")
+            objectName: "textFieldSelectAllItem"
             enabled: root.text.length > 0
             Accessible.role: Accessible.MenuItem
             Accessible.name: text

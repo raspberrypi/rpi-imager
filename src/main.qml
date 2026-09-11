@@ -107,6 +107,7 @@ ApplicationWindow {
 
         WizardContainer {
             id: wizardContainer
+            objectName: "mainWizardContainer"
             anchors.fill: parent
             overlayRootRef: overlayRoot
             // Show Language step if C++ requested it
@@ -137,6 +138,10 @@ ApplicationWindow {
     // Modern error dialog (replaces legacy MsgPopup for error/info cases)
     BaseDialog {
         id: errorDialog
+        // Named so a test can reach it: every failure the writer reports is
+        // put in front of the user through this one dialog, and a Popup is
+        // not an Item child, so an id is not enough to find it from outside.
+        objectName: "errorDialog"
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -204,6 +209,7 @@ ApplicationWindow {
     // Specific dialog for storage removal during write
     BaseDialog {
         id: storageRemovedDialog
+        objectName: "storageRemovedDialog"
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -266,6 +272,7 @@ ApplicationWindow {
     // Quit dialog (modern style)
     BaseDialog {
         id: quitDialog
+        objectName: "quitWhileWritingDialog"
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -338,6 +345,7 @@ ApplicationWindow {
 
     KeychainPermissionDialog {
         id: keychainpopup
+        objectName: "keychainPermissionDialog"
         parent: overlayRoot
         onAccepted: {
             ImageWriterSingleton.keychainPermissionResponse(true);
@@ -361,6 +369,7 @@ ApplicationWindow {
     // Permission warning dialog for when not running with elevated privileges
     BaseDialog {
         id: permissionWarningDialog
+        objectName: "permissionWarningDialog"
         parent: overlayRoot
         anchors.centerIn: parent
         closePolicy: Popup.NoAutoClose  // Prevent closing with escape or clicking outside
@@ -458,6 +467,7 @@ ApplicationWindow {
         id: appOptionsLoader
         active: false
         sourceComponent: AppOptionsDialog {
+            objectName: "appOptionsDialog"
             parent: overlayRoot
             wizardContainer: wizardContainer
         }
@@ -467,6 +477,7 @@ ApplicationWindow {
         id: debugOptionsLoader
         active: false
         sourceComponent: DebugOptionsDialog {
+            objectName: "debugOptionsDialog"
             parent: overlayRoot
             wizardContainer: wizardContainer
         }
@@ -477,6 +488,7 @@ ApplicationWindow {
     // QML fallback save dialog for performance data export
     ImSaveFileDialog {
         id: performanceSaveDialog
+        objectName: "performanceSaveDialog"
         parent: overlayRoot
         anchors.centerIn: parent
         dialogTitle: qsTr("Save Performance Data")

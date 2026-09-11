@@ -51,6 +51,7 @@ WizardStepBase {
                 
                 ImTextField {
                     id: fieldUsername
+                    objectName: "userNameField"
                     Layout.fillWidth: true
                     placeholderText: qsTr("Enter your username")
                     font.pointSize: Style.fontSizeInput
@@ -69,6 +70,7 @@ WizardStepBase {
                 
                 ImPasswordField {
                     id: fieldPassword
+                    objectName: "userPasswordField"
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Enter password")
                     font.pointSize: Style.fontSizeInput
@@ -82,6 +84,7 @@ WizardStepBase {
                 
                 ImPasswordField {
                     id: fieldPasswordConfirm
+                    objectName: "userPasswordConfirmField"
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                     font.pointSize: Style.fontSizeInput
@@ -107,13 +110,25 @@ WizardStepBase {
 
                 ImCheckBox {
                     id: checkPasswordlessSudo
+                    objectName: "passwordlessSudoCheck"
                     text: qsTr("Enable passwordless sudo")
                     checked: false
-                    Accessible.description: qsTr("Allow this user to run sudo commands without entering a password.")
+                    // Carries the risk the dialog explains, because when the
+                    // dialog is skipped this is read in its place. Shared with
+                    // the info icon below so there is one wording, not two.
+                    Accessible.description: sudoInfoIcon.infoText
                     onCheckedChanged: {
-                        if (checked) {
+                        if (!checked)
+                            return
+                        // Skipped for the same two reasons as the storage
+                        // step's filter warning: the deployment-wide opt-out,
+                        // and an assistive technology having already read the
+                        // description above aloud. See StorageSelectionStep
+                        // for why the second one is the right way round.
+                        var warningsOff = root.wizardContainer
+                                       && root.wizardContainer.disableWarnings
+                        if (ConfirmationPolicy.shouldConfirm(warningsOff))
                             passwordlessSudoWarningDialog.askForConfirmation()
-                        }
                     }
                 }
 
@@ -150,6 +165,7 @@ WizardStepBase {
 
     PasswordlessSudoWarningDialog {
         id: passwordlessSudoWarningDialog
+        objectName: "passwordlessSudoWarning"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -265,15 +281,6 @@ WizardStepBase {
     }
     
     // Handle skip button
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 } 

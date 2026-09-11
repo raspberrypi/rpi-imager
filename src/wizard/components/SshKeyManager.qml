@@ -25,38 +25,73 @@ ColumnLayout {
     
     spacing: Style.spacingSmall
     
+    // Which algorithm a key blob is for.
+    //
+    // RFC 4716 -- the "---- BEGIN SSH2 PUBLIC KEY ----" format PuTTY exports
+    // -- carries no algorithm in its headers, but the blob itself does:
+    function sshAlgorithmFromBlob(base64Body) {
+        try {
+            var raw = Qt.atob(base64Body)
+            if (!raw || raw.length < 4)
+                return ""
+            // Masked to a byte each: Qt.atob returns a string, and Qt warns
+            // that its output differs from the Web API's. Every byte read
+            // here is in the ASCII range for a well-formed blob -- three
+            // zeroes and a small length, then the name -- and the bounds
+            // below reject anything that is not, but the mask means a
+            // surprising code point cannot become a large length.
+            var len = ((raw.charCodeAt(0) & 0xFF) << 24) | ((raw.charCodeAt(1) & 0xFF) << 16)
+                    | ((raw.charCodeAt(2) & 0xFF) << 8) | (raw.charCodeAt(3) & 0xFF)
+            // A sane algorithm name. The bound rejects a body that decoded to
+            // something else entirely rather than trusting its first word.
+            if (len <= 0 || len > 64 || raw.length < 4 + len)
+                return ""
+            var name = raw.substr(4, len)
+            return /^[A-Za-z0-9@._-]+$/.test(name) ? name : ""
+        } catch (e) {
+            return ""
+        }
+    }
+
     // Helper function to split text by newlines and filter empty lines
     function splitKeys(text) {
         if (!text || text.length === 0) return []
         var lines = text.split(/\r?\n/)
         var result = []
-        var puttyKey = ""
+        var inPutty = false
+        var puttyBody = ""
         for (var i = 0; i < lines.length; i++) {
             var trimmed = lines[i].trim()
             // State 1 of PuTTY key (key begins)
             if (trimmed.startsWith("---- BEGIN SSH")) {
-                puttyKey = "ssh-rsa " // Add the required prefix
+                inPutty = true
+                puttyBody = ""
                 continue
             }
             // Optional(?) state 2 of PuTTY key (comment)
-            if (puttyKey.length > 0 && trimmed.startsWith("Comment:")) {
+            if (inPutty && trimmed.startsWith("Comment:")) {
                 continue
             }
             // Final state (4) of PuTTY key (end of key)
             if (trimmed.startsWith("---- END SSH")) {
                 // FIXME: put comment text after the key?
-                if (puttyKey.length > 0) {
-                    result.push(puttyKey)
+                if (inPutty && puttyBody.length > 0) {
+                    // ssh-rsa only as a fallback for a blob we could not
+                    // read; naming the algorithm after the blob is what
+                    // keeps a non-RSA PuTTY key working.
+                    var algorithm = sshAlgorithmFromBlob(puttyBody) || "ssh-rsa"
+                    result.push(algorithm + " " + puttyBody)
                 }
-                puttyKey = ""
+                inPutty = false
+                puttyBody = ""
                 continue
             }
             // We'll be in state 3 of PuTTY key (the key itself) for a few lines.
-            if (puttyKey.length > 0) {
-                puttyKey += trimmed
+            if (inPutty) {
+                puttyBody += trimmed
                 continue
             }
-            if (trimmed.length > 0 && puttyKey.length == 0) {
+            if (trimmed.length > 0) {
                 result.push(trimmed)
             }
         }
@@ -65,7 +100,12 @@ ColumnLayout {
     
     // Helper function to deduplicate keys
     function deduplicateKeys(keyList) {
-        var seen = {}
+        // Object.create(null) rather than {}: a plain object inherits
+        // Object.prototype, so `seen["constructor"]` is truthy before
+        // anything has been seen and the line is dropped as a duplicate of
+        // nothing. Every key in the file is attacker-chosen text as far as
+        // this loop is concerned.
+        var seen = Object.create(null)
         var result = []
         for (var i = 0; i < keyList.length; i++) {
             var key = keyList[i]
@@ -115,6 +155,35 @@ ColumnLayout {
     function getAllKeysAsString() {
         return root.keys.join("\n")
     }
+
+    // What this component contributes to the wizard step's focus ring, in
+    // reading order.
+    //
+    // WizardStepBase builds the ring from the groups a step registers, and it
+    // does not walk into nested components -- so a control that is not
+    // returned here cannot be reached from the keyboard at all. That is what
+    // had happened to the Show button: with keys already configured the step
+    // opens with this whole component on screen and none of it in the ring,
+    // so keyboard and screen-reader users could see the keys and reach
+    // nothing to do with them.
+    function focusItems() {
+        var items = [summaryText, expandButton]
+        if (!root.expanded)
+            return items
+        for (var i = 0; i < keysRepeater.count; i++) {
+            var row = keysRepeater.itemAt(i)
+            if (row && row.removeButton)
+                items.push(row.removeButton)
+        }
+        items.push(addKeyField)
+        items.push(addOrBrowseButton)
+        return items
+    }
+
+    signal focusItemsUpdated()
+
+    onExpandedChanged: root.focusItemsUpdated()
+    onKeysChanged: root.focusItemsUpdated()
     
     // Summary row (always visible)
     RowLayout {
@@ -140,6 +209,7 @@ ColumnLayout {
         
         ImButton {
             id: expandButton
+            objectName: "sshShowKeysButton"
             text: root.expanded ? qsTr("Hide") : qsTr("Show")
             Layout.minimumWidth: 80
             onClicked: root.expanded = !root.expanded
@@ -239,8 +309,15 @@ ColumnLayout {
                     Accessible.ignored: true  // Parent row provides accessibility
                 }
                 
+                // Named and aliased so focusItems() below can hand it to the
+                // step: a Repeater's delegates are only reachable through
+                // itemAt(), and the focus ring has to be told about each one.
+                property alias removeButton: removeKeyButton
+
                 // Remove button
                 ImButton {
+                    id: removeKeyButton
+                    objectName: "sshRemoveKeyButton"
                     text: qsTr("Remove")
                     Layout.minimumWidth: 80
                     onClicked: root.removeKey(keyRow.index)
@@ -263,6 +340,7 @@ ColumnLayout {
             
             ImTextField {
                 id: addKeyField
+                objectName: "sshAddKeyField"
                 Layout.fillWidth: true
                 placeholderText: qsTr("Paste key or click BROWSE to select file")
                 font.pointSize: Style.fontSizeInput
@@ -279,6 +357,7 @@ ColumnLayout {
             
             ImButton {
                 id: addOrBrowseButton
+                objectName: "sshAddOrBrowseButton"
                 text: addKeyField.value.length > 0 ? qsTr("Add") : CommonStrings.browse
                 Layout.minimumWidth: 80
                 onClicked: {
@@ -312,6 +391,7 @@ ColumnLayout {
     // File dialog for browsing keys
     ImFileDialog {
         id: browseKeyFileDialog
+        objectName: "sshBrowseKeyFileDialog"
         parent: root.parent
         anchors.centerIn: parent
         dialogTitle: qsTr("Select SSH Public Key")

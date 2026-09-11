@@ -19,6 +19,20 @@ BaseDialog {
     property url url
     property string version: ""
 
+    // Sending the user to the download page, in one place -- the same
+    // arrangement as the help links on the option rows and the Connect
+    // sign-in button, so a test can watch the button being pressed without
+    // launching a browser on the machine running the suite.
+    function openDownloadPage() {
+        if (root.url && root.url.toString && root.url.toString().length > 0) {
+            if (ImageWriterSingleton) {
+                ImageWriterSingleton.openUrl(root.url)
+            } else {
+                Qt.openUrlExternally(root.url)
+            }
+        }
+    }
+
     // Custom escape handling
     function escapePressed() {
         root.reject()
@@ -69,6 +83,7 @@ BaseDialog {
 
         ImButton {
             id: noButton
+            objectName: "updateNoButton"
             text: CommonStrings.no
             accessibleDescription: qsTr("Continue using the current version of Raspberry Pi Imager")
             activeFocusOnTab: true
@@ -79,6 +94,7 @@ BaseDialog {
 
         ImButtonRed {
             id: yesButton
+            objectName: "updateYesButton"
             text: qsTr("Update")
             // Make the primary action button wider to encourage clicking
             Layout.minimumWidth: Style.buttonWidthMinimum * 1.5
@@ -86,13 +102,7 @@ BaseDialog {
             accessibleDescription: qsTr("Open the Raspberry Pi website in your browser to download the latest version")
             activeFocusOnTab: true
             onClicked: {
-                if (root.url && root.url.toString && root.url.toString().length > 0) {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(root.url)
-                    } else {
-                        Qt.openUrlExternally(root.url)
-                    }
-                }
+                root.openDownloadPage()
                 root.accept()
             }
         }

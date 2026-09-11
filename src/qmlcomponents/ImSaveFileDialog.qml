@@ -6,6 +6,7 @@
 pragma ComponentBehavior: Bound
 
 import QtCore
+import RpiImager
 
 /**
  * Save file dialog - a thin wrapper around ImFileDialog in save mode.

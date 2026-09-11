@@ -27,6 +27,19 @@ Item {
     property alias focusItem: sw
     // Expose the help link for tab navigation (when visible)
     property alias helpLinkItem: helpText
+
+    // Opening the help link, in one place. The pointer, the three keyboard
+    // routes and the accessibility press action all arrive here, so no route
+    // can quietly drift from the others or be left off a new one. A test
+    // shadows this method to see which routes arrive, rather than launching a
+    // browser on the machine running the suite.
+    function openHelpLink() {
+        if (ImageWriterSingleton) {
+            ImageWriterSingleton.openUrl(pill.helpUrl)
+        } else {
+            Qt.openUrlExternally(pill.helpUrl)
+        }
+    }
     
     // Single source of truth for label font (used by both label and TextMetrics)
     readonly property font labelFont: Qt.font({
@@ -83,7 +96,9 @@ Item {
                 id: helpText
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
-                visible: pill.helpLabel !== "" && pill.helpUrl !== ""
+                // See ImOptionButton: a url property is a JS object in Qt 6,
+                // so a strict comparison against "" is always true.
+                visible: pill.helpLabel !== "" && String(pill.helpUrl) !== ""
                 text: pill.helpLabel
                 font.family: Style.fontFamily
                 font.pointSize: Style.fontSizeDescription
@@ -101,13 +116,7 @@ Item {
                 
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onTapped: {
-                        if (ImageWriterSingleton) {
-                            ImageWriterSingleton.openUrl(pill.helpUrl)
-                        } else {
-                            Qt.openUrlExternally(pill.helpUrl)
-                        }
-                    }
+                    onTapped: { pill.openHelpLink() }
                 }
                 HoverHandler {
                     id: helpHover
@@ -116,35 +125,11 @@ Item {
                 }
                 
                 // Keyboard activation
-                Keys.onEnterPressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
-                Keys.onReturnPressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
-                Keys.onSpacePressed: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
+                Keys.onEnterPressed: { pill.openHelpLink() }
+                Keys.onReturnPressed: { pill.openHelpLink() }
+                Keys.onSpacePressed: { pill.openHelpLink() }
                 
-                Accessible.onPressAction: {
-                    if (ImageWriterSingleton) {
-                        ImageWriterSingleton.openUrl(pill.helpUrl)
-                    } else {
-                        Qt.openUrlExternally(pill.helpUrl)
-                    }
-                }
+                Accessible.onPressAction: { pill.openHelpLink() }
             }
         }
 
@@ -210,7 +195,7 @@ Item {
             Accessible.description: ""
             Accessible.checkable: true
             Accessible.checked: pill.checked
-            Accessible.onToggleAction: toggle()
+            Accessible.onToggleAction: pill.activate()
             
             onToggled: {
                 pill.checked = checked
@@ -219,12 +204,22 @@ Item {
             
             // Focus styling handled by Material.accent color change only
 
-            Keys.onReturnPressed: toggle()
-            Keys.onEnterPressed: toggle()
+            // Not toggle(): it moves the switch without emitting toggled(),
+            // so the step is never told and pill.checked stays behind what
+            // is drawn. See ImCheckBox for the same mistake and its cost.
+            Keys.onReturnPressed: pill.activate()
+            Keys.onEnterPressed: pill.activate()
         }
 
     }
 
     function forceActiveFocus() { sw.forceActiveFocus() }
+
+    // Flip the pill the way a click does: sw.checked is bound to this, so the
+    // switch follows, and the step hears about it.
+    function activate() {
+        pill.checked = !pill.checked
+        pill.toggled(pill.checked)
+    }
 }
 

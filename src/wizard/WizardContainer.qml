@@ -239,8 +239,32 @@ Item {
     
     readonly property int firstCustomizationStep: stepHostnameCustomization
 
+    // The sidebar row the customisation group occupies.
+    //
+    // Not a constant, which is what four places used to assume by writing 3.
+    // The board row is absent when there is no OS list to have boards for,
+    // and every row below it moves up one -- so with no network the
+    // customisation substeps were drawn under "Writing", the Customisation
+    // heading had none, and an OS that cannot be customised greyed out the
+    // Writing row instead. Offline is exactly when that happens, because an
+    // OS list that never arrived is what removes the board row.
+    readonly property int customizationSidebarIndex: getSidebarIndex(firstCustomizationStep)
+
     function clampSidebarWidth(width) {
-        return Math.max(Style.sidebarMinWidth, Math.min(Style.sidebarMaxWidth, width))
+        // Anything that is not a finite number goes through Math.min/max
+        // untouched and lands in sidebarWidthValue -- an int property, where
+        // it becomes 0. A sidebar of no width takes the whole navigation off
+        // the screen and the splitter that would reset it with it, so there is
+        // nothing left to drag back; and since the value comes from a
+        // persisted setting, it happens again on every launch. The application
+        // only ever writes a clamped integer here, but a corrupted or
+        // hand-edited settings file does not have to.
+        const asNumber = Number(width)
+        if (!isFinite(asNumber)) {
+            return Style.sidebarWidth
+        }
+        return Math.max(Style.sidebarMinWidth,
+                        Math.min(Style.sidebarMaxWidth, asNumber))
     }
 
     function saveSidebarWidth(width) {
@@ -470,6 +494,7 @@ Item {
                 // Step list
                 Repeater {
                     id: stepRepeater
+                    objectName: "sidebarStepRepeater"
                     model: root.stepNames
 
                     Rectangle {
@@ -490,7 +515,7 @@ Item {
                         property bool isClickable: {
                             if (root.isWriting) return false
                             // If customization not supported, do not allow navigating back to customization group
-                            if (!root.customizationSupported && stepItem.index === 3) return false
+                            if (!root.customizationSupported && stepItem.index === root.customizationSidebarIndex) return false
 
                             // Read permissibleStepsBitmap directly to create a reactive dependency
                             var bit = 1 << _targetStep
@@ -501,6 +526,7 @@ Item {
                         // Header band with active background/border
                         Rectangle {
                             id: headerRect
+                            objectName: "sidebarStepHeader"
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.top: parent.top
@@ -520,7 +546,7 @@ Item {
                                 onClicked: {
                                     var targetStep = root.getWizardStepFromSidebarIndex(stepItem.index)
                                     // Guard: skip customization group when unsupported
-                                    if (!root.customizationSupported && stepItem.index === 3) {
+                                    if (!root.customizationSupported && stepItem.index === root.customizationSidebarIndex) {
                                         return
                                     }
                                     // Allow navigation to any permissible step or backward navigation
@@ -539,7 +565,7 @@ Item {
                                     text: stepItem.modelData
                                     font.pointSize: Style.fontSizeSidebarItem
                                     font.family: Style.fontFamily
-                                    color: (stepItem.index > root.getSidebarIndex(root.currentStep) || (stepItem.index === 3 && !root.customizationSupported))
+                                    color: (stepItem.index > root.getSidebarIndex(root.currentStep) || (stepItem.index === root.customizationSidebarIndex && !root.customizationSupported))
                                                ? Style.formLabelDisabledColor
                                                : (stepItem.index === root.getSidebarIndex(root.currentStep)
                                                    ? Style.sidebarTextOnActiveColor
@@ -558,12 +584,16 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep > root.stepOSSelection
+                            visible: stepItem.index === root.customizationSidebarIndex && root.customizationSupported && root.currentStep > root.stepOSSelection
 
                             Repeater {
                                 model: root.getCustomizationSubstepLabels()
                                 Rectangle {
                                     id: subItem
+                                    // Named so a test can find one row of the
+                                    // customisation sublist. There is one per
+                                    // label, so callers match on modelData.
+                                    objectName: "sidebarSubstep"
                                     required property int index
                                     required property var modelData
                                     width: sublistContainer ? sublistContainer.width : 0
@@ -1164,6 +1194,7 @@ Item {
     // Token conflict dialog — based on your BaseDialog pattern
     BaseDialog {
         id: tokenConflictDialog
+        objectName: "tokenConflictDialog"
         parent: root
         anchors.centerIn: parent
 
@@ -1297,6 +1328,7 @@ Item {
     // Repository URL confirmation dialog — shown when a deep link contains a custom repo URL
     BaseDialog {
         id: repositoryUrlDialog
+        objectName: "repositoryUrlDialog"
         parent: root
         anchors.centerIn: parent
 
@@ -1564,6 +1596,28 @@ Item {
         currentStep = stepStorageSelection
         wizardStack.clear()
         wizardStack.push(storageSelectionStep)
+    }
+
+    // "Skip customisation", from whichever customisation step it is pressed on.
+    //
+    // The button is labelled "Skip customisation" rather than "skip this step",
+    // so the answer has to be the same everywhere: nothing the user configured
+    // is configured any more, and the wizard goes straight to the write.
+    function skipAllCustomisation() {
+        hostnameConfigured = false
+        localeConfigured = false
+        userConfigured = false
+        wifiConfigured = false
+        sshEnabled = false
+        secureBootEnabled = false
+        piConnectEnabled = false
+        ifI2cEnabled = false
+        ifSpiEnabled = false
+        if1WireEnabled = false
+        ifSerial = ""
+        featUsbGadgetEnabled = false
+
+        jumpToStep(stepWriting)
     }
 
     // Detect device selection changes and invalidate dependent steps
