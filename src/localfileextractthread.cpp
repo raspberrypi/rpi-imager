@@ -6,6 +6,7 @@
 #include "localfileextractthread.h"
 #include "config.h"
 #include "systemmemorymanager.h"
+#include "archive_kind.h"
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -34,13 +35,15 @@ LocalFileExtractThread::LocalFileExtractThread(const QByteArray &url, const QByt
 LocalFileExtractThread::~LocalFileExtractThread()
 {
     _cancelled = true;
-    
-    // Ensure input file is always closed to prevent file handle leaks
+
+    wait();
+
+    // Only now: closing it before wait() closed a descriptor run() could
+    // still be reading from.
     if (_inputfile.isOpen()) {
         _inputfile.close();
     }
-    
-    wait();
+
     qFreeAligned(_inputBuf);
 
     // Release the inhibition on suspending the system.
@@ -51,9 +54,13 @@ LocalFileExtractThread::~LocalFileExtractThread()
 
 void LocalFileExtractThread::_cancelExtract()
 {
+    // Runs on whichever thread called cancelDownload(), not on this one, so
+    // the input file is left alone: closing a QFile the running extraction
+    // is reading from hands it a descriptor the kernel may already have
+    // given to something else. The flag is what stops it; the destructor
+    // closes the file once the thread has actually finished.
     _cancelled = true;
-    if (_inputfile.isOpen())
-        _inputfile.close();
+    DownloadExtractThread::_cancelExtract();
 }
 
 void LocalFileExtractThread::run()
@@ -79,6 +86,21 @@ void LocalFileExtractThread::run()
     if (isImage())
     {
         canUseArchive = _testArchiveFormat();
+
+        // _testArchiveFormat() answers "can libarchive extract this?", and a
+        // no is treated below as "then it must be a raw disk image". That is
+        // right for a .img or an .iso. It is wrong for a file whose name says
+        // it is a compressed container: the only way libarchive fails to
+        // extract one of those is that it is corrupt or incomplete, and
+        // falling through would copy the compressed bytes onto the card
+        // verbatim and report the write as successful.
+        if (!canUseArchive && _nameClaimsCompression())
+        {
+            _onDownloadError(tr("Image file is incomplete or corrupt, and could not be extracted.\n\n"
+                                "Download it again and retry."));
+            _closeFiles();
+            return;
+        }
     }
     
     if (isImage() && canUseArchive)
@@ -140,11 +162,20 @@ void LocalFileExtractThread::extractRawImageRun()
             break;
         }
         
-        // Write the data directly to the output device
-        size_t written = _writeFile(_inputBuf, len);
-        if (written != (size_t)len)
+        // Write the data directly to the output device, padding the last
+        // block out to a whole sector.
+        size_t toWrite = static_cast<size_t>(len);
+        if (toWrite % 512 != 0 && toWrite + (512 - (toWrite % 512)) <= _inputBufSize)
         {
-            _onDownloadError(tr("Error writing to device"));
+            const size_t padding = 512 - (toWrite % 512);
+            memset(_inputBuf + toWrite, 0, padding);
+            toWrite += padding;
+        }
+
+        size_t written = _writeFile(_inputBuf, toWrite);
+        if (written != toWrite)
+        {
+            _onDownloadError(_writeFailureReason());
             break;
         }
         
@@ -166,9 +197,29 @@ void LocalFileExtractThread::extractRawImageRun()
     }
 }
 
+// Does the file name claim to be a compressed container? Only unambiguous
+// container suffixes count -- notably not .cache, which is whatever the last
+// download happened to be.
+bool LocalFileExtractThread::_nameClaimsCompression() const
+{
+    static const QLatin1String containers[] = {
+        QLatin1String(".zip"), QLatin1String(".xz"),  QLatin1String(".bz2"),
+        QLatin1String(".gz"),  QLatin1String(".7z"),  QLatin1String(".zst"),
+        QLatin1String(".tar"), QLatin1String(".tgz"), QLatin1String(".txz"),
+        QLatin1String(".tbz2"),
+    };
+
+    const QString name = QUrl(QString::fromLatin1(_url)).toLocalFile().toLower();
+    for (const QLatin1String &ext : containers)
+        if (name.endsWith(ext))
+            return true;
+    return false;
+}
+
 bool LocalFileExtractThread::_testArchiveFormat()
 {
-    // Test if libarchive can handle this file format AND actually extract data from it
+    // What has the user handed us: the disk image itself, or a container
+    // holding one?
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
     bool canUseArchive = false;
@@ -188,22 +239,21 @@ bool LocalFileExtractThread::_testArchiveFormat()
         int r = archive_read_next_header(a, &entry);
         if (r == ARCHIVE_OK)
         {
-            // Header can be read, but now test if we can actually read meaningful data
-            // Try to read some data from the first entry
-            char testBuf[1024];
-            ssize_t dataSize = archive_read_data(a, testBuf, sizeof(testBuf));
-            
-            if (dataSize > 0)
-            {
-                // libarchive can both read the header AND extract data
-                canUseArchive = true;
-                qDebug() << "File can be handled by libarchive as archive format";
-            }
-            else
-            {
-                // libarchive can read the header but can't extract data (likely ISO/raw disk image)
-                qDebug() << "File recognized by libarchive but no extractable data found, treating as raw disk image";
-            }
+            // Decided on what libarchive recognised, not on whether the
+            // first entry yielded any bytes.
+            //
+            // The bytes-read test that used to be here read the first entry
+            // and called an empty read "no extractable data, so a raw disk
+            // image". The first entry of an archive made by zipping a folder
+            // -- which is how a folder normally gets zipped -- is the folder,
+            // and a directory entry has no data. So a valid .zip or .tar.gz
+            // holding an image was classified as a raw image, and run() then
+            // refused it as corrupt because its name says it is a container.
+            canUseArchive = !archivekind::bytesAreTheDiskImage(
+                archive_format(a), archive_filter_code(a, 0));
+            qDebug() << "libarchive probe: format" << archive_format(a)
+                     << "filter" << archive_filter_code(a, 0)
+                     << (canUseArchive ? "-> extract" : "-> direct copy");
         }
         else
         {

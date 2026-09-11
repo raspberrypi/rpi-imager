@@ -8,6 +8,7 @@
 #include "config.h"
 #include "platformquirks.h"
 #include "systemmemorymanager.h"
+#include "timeout_utils.h"
 #include "drivelist/drivelist.h"
 #include <iostream>
 #include <archive.h>
@@ -62,8 +63,10 @@ protected:
     DownloadExtractThread *_de;
 };
 
-DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
+DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent,
+                                             uint32_t stallTimeoutMs)
     : DownloadThread(url, localfilename, expectedHash, parent), 
+      _stallTimeoutMs(stallTimeoutMs),
       _writeBufferSize(SystemMemoryManager::instance().getOptimalWriteBufferSize()), 
       _currentReadSlot(nullptr),
       _currentWriteSlot(nullptr),
@@ -128,10 +131,10 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     }
     
     // Create zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
-    _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
+    _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize, _stallTimeoutMs);
     
     // Create ring buffer for decompress -> write path (decompressed data)
-    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize);
+    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize, _stallTimeoutMs);
     
     qDebug() << "Using buffer size:" << _writeBufferSize << "bytes with page size:" << pageSize << "bytes";
     qDebug() << "Input ring buffer:" << inputSlots << "slots of" << actualInputSize << "bytes";
@@ -188,8 +191,8 @@ void DownloadExtractThread::_onDevicePrepared()
         actualInputSize, actualWriteSize);
 
     _writeBufferSize = actualWriteSize;
-    _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
-    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize);
+    _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize, _stallTimeoutMs);
+    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize, _stallTimeoutMs);
 
     qDebug() << "Reallocated ring buffers:"
              << "input" << inputSlots << "x" << actualInputSize
@@ -354,16 +357,21 @@ void DownloadExtractThread::cancelDownload()
 }
 
 // Raise exception on libarchive errors
+//
+// The line is drawn where libarchive draws it. ARCHIVE_WARN and
+// ARCHIVE_RETRY mean the operation got there in the end and the caller may
+// carry on; ARCHIVE_FAILED means this operation did not happen; ARCHIVE_FATAL
+// means the archive is finished with.
 static inline void _checkResult(int r, struct archive *a)
 {
-    if (r == ARCHIVE_FATAL)
+    if (r <= ARCHIVE_FAILED)
     {
-        // Fatal
-        throw runtime_error(archive_error_string(a));
+        const char *why = archive_error_string(a);
+        throw runtime_error(why ? why : "libarchive operation failed");
     }
     if (r < ARCHIVE_OK)
     {
-        // Non-fatal (e.g., WARN, RETRY): log but do not abort
+        // WARN or RETRY: worth knowing about, not worth abandoning the write.
         qDebug() << archive_error_string(a);
     }
 }
@@ -392,7 +400,29 @@ void DownloadExtractThread::extractImageRun()
     {
         r = archive_read_next_header(a, &entry);
         _checkResult(r, a);
-        
+
+        // Walk past entries that are known to hold nothing, to reach the one
+        // that holds the image.
+        //
+        // An archive built by zipping a folder -- which is how a folder
+        // normally gets zipped, from Finder, Explorer or the command line --
+        // begins with an entry for the folder itself, and a directory entry
+        // has no contents. Reading straight from the first entry therefore
+        // read nothing, and the write finished reporting success having put
+        // not one byte on the card.
+        while (r == ARCHIVE_OK && archive_entry_size_is_set(entry)
+               && archive_entry_size(entry) == 0)
+        {
+            r = archive_read_next_header(a, &entry);
+            _checkResult(r, a);
+        }
+
+        // Nothing in the archive holds anything. Writing an empty card and
+        // calling it a success is the one outcome the user cannot recover
+        // from, because nothing tells them to try again.
+        if (r != ARCHIVE_OK)
+            throw runtime_error(tr("This archive does not contain an image to write.").toStdString());
+
         // Log the compression filter(s) being used for diagnostics
         _logCompressionFilters(a);
         
@@ -427,11 +457,11 @@ void DownloadExtractThread::extractImageRun()
                     // Emit a ring buffer stall event
                     qint64 timestampMs = _sessionTimer.isValid() ? _sessionTimer.elapsed() : 0;
                     QString metadata = QString("buffer: write; type: stall_timeout; stall_type: %1").arg(RingBuffer::stallTypeToString(stallType));
-                    emit eventRingBufferStats(timestampMs, 30000, metadata);  // 30s stall timeout
+                    emit eventRingBufferStats(timestampMs, rpi_imager::TimeoutDefaults::kRingBufferStallTimeoutMs, metadata);
                     
                     // Convert stall type to user-facing message
                     QString errorMsg = tr("The write operation has stalled.\n\n"
-                                         "No data has been written for 30 seconds. "
+                                         "No data has been written for 90 seconds. "
                                          "This could be caused by:\n"
                                          "• Storage device disconnected or unresponsive\n"
                                          "• Device has failed or is faulty\n"
@@ -453,9 +483,28 @@ void DownloadExtractThread::extractImageRun()
                 // Release the slot we acquired but won't use
                 _writeRingBuffer->releaseReadSlot(slot);
                 
-                // Check if this is the expected "No progress is possible" error after download completion
-                if (size == ARCHIVE_FATAL && errorStr && strstr(errorStr, "No progress is possible")) {
-                    break;
+                // libarchive says "No progress is possible" when it wants
+                // more input and the callback has none left. For a download
+                // that has just finished, that is the tail of a race between
+                // the producer signalling completion and the last bytes
+                // being consumed, and treating it as the end of the stream
+                // is what stops every download failing at 100%.
+                if (size == ARCHIVE_FATAL && errorStr
+                    && strstr(errorStr, "No progress is possible")) {
+                    if (!inputWasCompleteBeforeExtracting())
+                        break;
+
+                    // Say what happened rather than passing libarchive's
+                    // words on. "Lzma library error: No progress is
+                    // possible" is true and tells the reader nothing they
+                    // can act on; what they need to know is that the file is
+                    // short, so they can fetch it again.
+                    throw runtime_error(
+                        tr("The image file is incomplete.\n\n"
+                           "It ended before the compressed data did, which "
+                           "usually means the download or the copy did not "
+                           "finish. Fetch the image again and retry.")
+                            .toStdString());
                 }
                 
                 throw runtime_error(errorStr);
@@ -577,8 +626,13 @@ inline bool isMountPoint(const QString &folder)
 {
     struct stat statFolder, statParent;
     QFileInfo fi(folder);
-    QByteArray folderAscii = folder.toLatin1();
-    QByteArray parentDir   = fi.dir().path().toLatin1();
+    // encodeName() rather than toLatin1(), for the same reason as in the
+    // archive size parser: these are filesystem paths, and a mount point
+    // under a username in any script outside Latin-1 becomes question marks.
+    // stat() then fails and a partition that did mount is reported as not
+    // mounted.
+    QByteArray folderAscii = QFile::encodeName(folder);
+    QByteArray parentDir   = QFile::encodeName(fi.dir().path());
 
     if ( ::stat(folderAscii.constData(), &statFolder) == -1
          || ::stat(parentDir.constData(), &statParent) == -1)
@@ -796,6 +850,8 @@ void DownloadExtractThread::extractMultiFileRun()
 
               while ( (r = archive_read_data_block(a, &buff, &size, &offset)) != ARCHIVE_EOF)
               {
+                  // A CRC mismatch arrives here as ARCHIVE_FAILED, which
+                  // _checkResult() now treats as terminal.
                   _checkResult(r, a);
 
                   ++blockCount;
@@ -965,11 +1021,11 @@ ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
         // Emit a ring buffer stall event
         qint64 timestampMs = _sessionTimer.isValid() ? _sessionTimer.elapsed() : 0;
         QString metadata = QString("buffer: input; type: stall_timeout; stall_type: %1").arg(RingBuffer::stallTypeToString(stallType));
-        emit eventRingBufferStats(timestampMs, 30000, metadata);  // 30s stall timeout
+        emit eventRingBufferStats(timestampMs, rpi_imager::TimeoutDefaults::kRingBufferStallTimeoutMs, metadata);
         
         // Set error message for user - this is a consumer stall (waiting for download data)
         _stallErrorMessage = tr("The download has stalled.\n\n"
-                               "No data received for 30 seconds. "
+                               "No data received for 90 seconds. "
                                "This could be caused by:\n"
                                "• Network connection lost or unstable\n"
                                "• Remote server became unresponsive\n"

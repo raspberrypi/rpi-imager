@@ -7,6 +7,7 @@
  */
 
 #include "downloadthread.h"
+#include "timeout_utils.h"
 #include "ringbuffer.h"
 #include <condition_variable>
 #include <memory>
@@ -23,7 +24,12 @@ public:
      * - url: URL to download
      * - localfolder: Folder to extract archive to
      */
-    explicit DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename = "", const QByteArray &expectedHash = "", QObject *parent = nullptr);
+    // The trailing stall timeout is a testing seam. The ring buffers are
+    // built in this constructor, so a subclass assigning the member in its
+    // own body is already too late -- which is how a case asking for 300 ms
+    // silently got the shipped ninety seconds.
+    explicit DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename = "", const QByteArray &expectedHash = "", QObject *parent = nullptr,
+                                   uint32_t stallTimeoutMs = rpi_imager::TimeoutDefaults::kRingBufferStallTimeoutMs);
 
     virtual ~DownloadExtractThread();
     virtual void cancelDownload() override;
@@ -47,6 +53,12 @@ signals:
 
 protected:
     size_t _writeBufferSize;
+
+    // How long a ring buffer waits before calling itself stalled. The
+    // shipped value by default; a test lowers it because the stall arms are
+    // ninety seconds of real waiting each, which no suite can sit through.
+    // RingBuffer's constructor already takes this -- nothing here passed it.
+    uint32_t _stallTimeoutMs;
     _extractThreadClass *_extractThread;
     
     // Zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
@@ -83,7 +95,17 @@ protected:
     QString _stallErrorMessage;
 
     void _pushQueue(const char *data, size_t len);
-    void _cancelExtract();
+    // Virtual because LocalFileExtractThread has more to stop than the ring
+    // buffer. It declared an override and the base did not declare the
+    // method virtual, so cancelDownload() bound to this one and the
+    // subclass's never ran at all.
+    virtual void _cancelExtract();
+    // Whether the whole compressed input was on hand before extraction
+    // started. False for a download, which arrives as it arrives; true for a
+    // file already on disk. It decides how to read libarchive running out of
+    // input -- see the "No progress is possible" case in extractImageRun().
+    virtual bool inputWasCompleteBeforeExtracting() const { return false; }
+
     virtual void _onDevicePrepared() override;
     virtual size_t _writeData(const char *buf, size_t len) override;
     virtual void _onDownloadSuccess() override;
