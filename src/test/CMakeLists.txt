@@ -2315,6 +2315,27 @@ add_dependencies(device_info_test device_info_probe)
 
 rpi_discover_tests(device_info_test)
 
+# ── screenshot page list ────────────────────────────────────────────────────
+# The runner itself is a custom target below, but the list it is driven from
+# names steps in WizardContainer.qml and published names in the metainfo, and
+# is silently wrong when either moves. Reading three files costs nothing.
+add_executable(screenshot_pages_test screenshot_pages_test.cpp)
+
+target_link_libraries(screenshot_pages_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_definitions(screenshot_pages_test PRIVATE
+    SCREENSHOT_PAGES_FILE="${CMAKE_CURRENT_SOURCE_DIR}/screenshots/pages.txt"
+    WIZARD_CONTAINER_QML="${CMAKE_CURRENT_SOURCE_DIR}/../wizard/WizardContainer.qml"
+    METAINFO_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml.in"
+)
+
+target_compile_features(screenshot_pages_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(screenshot_pages_test)
+
 # ── suspend inhibition ──────────────────────────────────────────────────────
 # The machine must not go to sleep while a card is being written, and letting
 # go of the inhibit must not hold the application open afterwards. The FIFO it
