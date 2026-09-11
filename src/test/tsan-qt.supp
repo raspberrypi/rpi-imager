@@ -1,0 +1,27 @@
+# ThreadSanitizer suppressions for an uninstrumented Qt.
+#
+# TSan cannot see synchronisation inside a library it did not instrument, so
+# every QThread::wait() and every implicitly-shared QString refcount looks
+# like a race. Building Qt with -fsanitize=thread removes the need for this
+# file, and qt/build-qt.sh --sanitize=thread will do it -- but that is a
+# ~50-hour build on four cores, so these suppressions are what makes a TSan
+# run of the suite readable in the meantime.
+#
+# Deliberately narrow: each entry names Qt's own frames, never ours. If a
+# report goes through our code it is still reported.
+
+# Refcount traffic on implicitly-shared Qt containers.
+race:QArrayDataPointer
+race:QBasicAtomicInteger
+race:QtPrivate::RefCount
+
+# Thread teardown: QThread::wait() joins, but TSan cannot observe the edge.
+race:QThreadPrivate
+race:QThread::wait
+race:QWaitCondition
+race:QMutex
+
+# Qt's event dispatcher and object machinery.
+race:QCoreApplicationPrivate
+race:QObjectPrivate
+race:QEventDispatcher
