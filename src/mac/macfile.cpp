@@ -8,9 +8,105 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <security/Authorization.h>
 #include <QDebug>
 #include <QCoreApplication>
+
+namespace rpi_imager::mac {
+
+int openViaHelper(const char *program, const char *const argv[],
+                  const QByteArray &stdinData)
+{
+    // Unchecked before, which left the descriptors below uninitialised on a
+    // machine that had run out.
+    int sock[2];
+    int stdinpipe[2];
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, sock) != 0)
+        return -1;
+    if (::pipe(stdinpipe) != 0)
+    {
+        ::close(sock[0]);
+        ::close(sock[1]);
+        return -1;
+    }
+
+    pid_t pid = ::fork();
+    if (pid < 0)
+    {
+        ::close(sock[0]);
+        ::close(sock[1]);
+        ::close(stdinpipe[0]);
+        ::close(stdinpipe[1]);
+        return -1;
+    }
+    if (pid == 0)
+    {
+        // child
+        ::close(sock[0]);
+        ::close(stdinpipe[1]);
+        ::dup2(sock[1], STDOUT_FILENO);
+        ::dup2(stdinpipe[0], STDIN_FILENO);
+        ::execv(program, const_cast<char *const *>(argv));
+        ::_exit(-1);
+    }
+
+    ::close(sock[1]);
+    ::close(stdinpipe[0]);
+    if (!stdinData.isEmpty())
+        (void)::write(stdinpipe[1], stdinData.constData(), stdinData.size());
+    ::close(stdinpipe[1]);
+
+    const size_t bufSize = CMSG_SPACE(sizeof(int));
+    char buf[bufSize];
+    struct iovec io_vec[1];
+    io_vec[0].iov_base = buf;
+    io_vec[0].iov_len = bufSize;
+    const size_t cmsgSize = CMSG_SPACE(sizeof(int));
+    char cmsg[cmsgSize];
+
+    struct msghdr msg = {};
+    msg.msg_iov = io_vec;
+    msg.msg_iovlen = 1;
+    msg.msg_control = cmsg;
+    msg.msg_controllen = cmsgSize;
+
+    ssize_t size;
+    do {
+        size = ::recvmsg(sock[0], &msg, 0);
+    } while (size == -1 && errno == EINTR);
+
+    int fd = -1;
+    if (size > 0)
+    {
+        struct cmsghdr *chdr = CMSG_FIRSTHDR(&msg);
+        if (chdr && chdr->cmsg_type == SCM_RIGHTS)
+            fd = *((int *)(CMSG_DATA(chdr)));
+        else
+            qDebug() << "helper sent data but no descriptor";
+    }
+    ::close(sock[0]);  // Leaked on every path before, success included.
+
+    pid_t wpid;
+    int status;
+    do {
+        wpid = ::waitpid(pid, &status, 0);
+    } while (wpid == -1 && errno == EINTR);
+
+    // A descriptor arriving from a helper that then failed is not one to use,
+    // and WEXITSTATUS is meaningless unless the child actually exited.
+    const bool ok = wpid != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    if (!ok)
+    {
+        qDebug() << "helper failed:" << program << "status" << status;
+        if (fd >= 0)
+            ::close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+}  // namespace rpi_imager::mac
 
 MacFile::MacFile(QObject *parent)
     : QFile(parent)
@@ -58,82 +154,17 @@ MacFile::authOpenResult MacFile::authOpen(const QByteArray &filename)
 
     const char *cmd = "/usr/libexec/authopen";
     QByteArray mode = QByteArray::number(O_RDWR);
-    int pipe[2];
-    int stdinpipe[2];
-    ::socketpair(AF_UNIX, SOCK_STREAM, 0, pipe);
-    ::pipe(stdinpipe);
-    pid_t pid = ::fork();
-    if (pid == 0)
-    {
-        // child
-        ::close(pipe[0]);
-        ::close(stdinpipe[1]);
-        ::dup2(pipe[1], STDOUT_FILENO);
-        ::dup2(stdinpipe[0], STDIN_FILENO);
-        ::execl(cmd, cmd, "-stdoutpipe", "-extauth", "-o", mode.data(), filename.data(), NULL);
-        ::exit(-1);
-    }
-    else
-    {
-        ::close(pipe[1]);
-        ::close(stdinpipe[0]);
-        ::write(stdinpipe[1], externalForm.bytes, sizeof(externalForm.bytes));
-        ::close(stdinpipe[1]);
+    const char *argv[] = { cmd, "-stdoutpipe", "-extauth", "-o", mode.data(),
+                           filename.data(), nullptr };
+    fd = rpi_imager::mac::openViaHelper(
+        cmd, argv,
+        QByteArray(reinterpret_cast<const char *>(externalForm.bytes),
+                   sizeof(externalForm.bytes)));
 
-        const size_t bufSize = CMSG_SPACE(sizeof(int));
-        char buf[bufSize];
-        struct iovec io_vec[1];
-        io_vec[0].iov_base = buf;
-        io_vec[0].iov_len = bufSize;
-        const size_t cmsgSize = CMSG_SPACE(sizeof(int));
-        char cmsg[cmsgSize];
-
-        struct msghdr msg = {0};
-        msg.msg_iov = io_vec;
-        msg.msg_iovlen = 1;
-        msg.msg_control = cmsg;
-        msg.msg_controllen = cmsgSize;
-
-        ssize_t size;
-        do {
-            size = recvmsg(pipe[0], &msg, 0);
-        } while (size == -1 && errno == EINTR);
-
-        qDebug() << "RECEIVED SIZE:" << size;
-
-        if (size > 0) {
-            struct cmsghdr *chdr = CMSG_FIRSTHDR(&msg);
-            if (chdr && chdr->cmsg_type == SCM_RIGHTS) {
-                qDebug() << "SCMRIGHTS";
-                fd = *( (int*) (CMSG_DATA(chdr)) );
-            }
-            else
-            {
-                qDebug() << "NOT SCMRIGHTS";
-            }
-        }
-
-        pid_t wpid;
-        int status;
-
-        do {
-            wpid = ::waitpid(pid, &status, 0);
-        } while (wpid == -1 && errno == EINTR);
-
-        if (wpid == -1)
-        {
-            qDebug() << "waitpid() failed executing authopen";
-            return authOpenError;
-        }
-        if (WEXITSTATUS(status))
-        {
-            qDebug() << "authopen returned failure code" << WEXITSTATUS(status);
-            return authOpenError;
-        }
-
-        qDebug() << "fd received:" << fd;
-    }
     AuthorizationFree(authRef, 0);
+
+    if (fd < 0)
+        return authOpenError;
 
     return open(fd, QIODevice::ReadWrite | QIODevice::ExistingOnly | QIODevice::Unbuffered, QFileDevice::AutoCloseHandle) ? authOpenSuccess : authOpenError;
 }

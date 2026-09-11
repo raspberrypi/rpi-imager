@@ -114,15 +114,77 @@ void MacOSFileOperations::InitAsyncIO() {
 void MacOSFileOperations::CleanupAsyncIO() {
   // Wait for pending writes before cleanup
   WaitForPendingWrites();
-  
+
+  // ...and then wait for them again, because the wait above gives up as soon
+  // as the write is cancelled -- by design, so a user who has pressed cancel
+  // is not made to sit through the rest of the queue. What it leaves behind
+  // is blocks still running on the queue, each holding a slot of the
+  // semaphore and each still touching this object.
+  if (pending_writes_.load() > 0) {
+    constexpr auto kDrainLimit = std::chrono::seconds(30);
+    const auto deadline = std::chrono::steady_clock::now() + kDrainLimit;
+    std::unique_lock<std::mutex> lock(completion_mutex_);
+    completion_cv_.wait_until(lock, deadline,
+                              [this] { return pending_writes_.load() == 0; });
+  }
+
   if (queue_semaphore_ != nullptr) {
-    dispatch_release(queue_semaphore_);
+    if (pending_writes_.load() == 0) {
+      dispatch_release(queue_semaphore_);
+    } else {
+      // Still not drained. Leaking one semaphore costs a few bytes for the
+      // life of the process; releasing this one would take the process with
+      // it, and take the user's cancelled write with that.
+      Log("CleanupAsyncIO: " + std::to_string(pending_writes_.load()) +
+          " write(s) still in flight after draining; leaking the queue "
+          "semaphore rather than tripping libdispatch");
+    }
     queue_semaphore_ = nullptr;
   }
   if (async_queue_ != nullptr) {
     dispatch_release(async_queue_);
     async_queue_ = nullptr;
   }
+}
+
+// Direct I/O, the transfer limits and the block size, for a device fd however
+// it was obtained.
+FileError MacOSFileOperations::FinishOpeningDevice() {
+  // Enable direct I/O via F_NOCACHE for block devices
+  // This bypasses the unified buffer cache for:
+  // 1. Better performance by avoiding double-buffering
+  // 2. More accurate verification (reads from actual device, not cache)
+  // 3. Reduced memory pressure on the system
+  if (!EnableDirectIO()) {
+    std::cout << "Warning: Could not enable direct I/O, continuing with buffered I/O" << std::endl;
+  }
+
+  // Query device I/O limits via ioctl now that we have an open fd.
+  // DKIOCGETMAXBYTECOUNTWRITE returns the maximum single write size the driver accepts.
+#ifdef DKIOCGETMAXBYTECOUNTWRITE
+  {
+    uint64_t maxWriteBytes = 0;
+    if (ioctl(fd_, DKIOCGETMAXBYTECOUNTWRITE, &maxWriteBytes) == 0 && maxWriteBytes > 0) {
+      device_io_limits_.max_transfer_bytes = static_cast<size_t>(maxWriteBytes);
+      std::cout << "Device max write transfer: " << maxWriteBytes << " bytes" << std::endl;
+    }
+  }
+#endif
+  // Cache the logical block size so the alignment fix-up doesn't ioctl on
+  // every write. /dev/rdisk* requires pwrite/pread lengths to be a multiple
+  // of this value.
+  {
+    uint32_t bs = 512;
+    if (ioctl(fd_, DKIOCGETBLOCKSIZE, &bs) == 0 && bs > 0) {
+      logical_block_size_ = bs;
+    }
+    tail_bytes_.reserve(logical_block_size_);
+  }
+  // macOS doesn't expose queue depth directly; leave suggested_queue_depth as 0
+
+  std::cout << "Successfully opened device, fd=" << fd_
+            << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
+  return FileError::kSuccess;
 }
 
 FileError MacOSFileOperations::OpenDevice(const std::string& path) {
@@ -133,6 +195,24 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
   // For raw device access on macOS, we need to use the authorization mechanism
   // Similar to how MacFile::authOpen() works
   if (isBlockDevice) {
+    // Ask the kernel before asking the user. A node this user can already
+    // write to -- one hdiutil attached, or a card whose permissions allow it
+    // -- needs no authorisation, and prompting for it is a dialog the user
+    // has to dismiss to get what they already had. Only a refusal is worth
+    // escalating: ENOENT or ENXIO means there is nothing there to authorise.
+    int direct = ::open(path.c_str(), O_RDWR);
+    if (direct < 0 && errno != EACCES && errno != EPERM) {
+      last_error_code_ = errno;
+      std::cout << "Device open failed, errno=" << errno << std::endl;
+      return FileError::kOpenError;
+    }
+    if (direct >= 0) {
+      std::cout << "Device opened directly, no authorization needed" << std::endl;
+      fd_ = direct;
+      current_path_ = path;
+      return FinishOpeningDevice();
+    }
+
     std::cout << "Device path detected, using macOS authorization..." << std::endl;
     
     // Create a MacFile instance to handle authorization
@@ -169,41 +249,7 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
     fd_ = duplicated_fd;
     current_path_ = path;
     
-    // Enable direct I/O via F_NOCACHE for block devices
-    // This bypasses the unified buffer cache for:
-    // 1. Better performance by avoiding double-buffering
-    // 2. More accurate verification (reads from actual device, not cache)
-    // 3. Reduced memory pressure on the system
-    if (!EnableDirectIO()) {
-      std::cout << "Warning: Could not enable direct I/O, continuing with buffered I/O" << std::endl;
-    }
-    
-    // Query device I/O limits via ioctl now that we have an open fd.
-    // DKIOCGETMAXBYTECOUNTWRITE returns the maximum single write size the driver accepts.
-#ifdef DKIOCGETMAXBYTECOUNTWRITE
-    {
-      uint64_t maxWriteBytes = 0;
-      if (ioctl(fd_, DKIOCGETMAXBYTECOUNTWRITE, &maxWriteBytes) == 0 && maxWriteBytes > 0) {
-        device_io_limits_.max_transfer_bytes = static_cast<size_t>(maxWriteBytes);
-        std::cout << "Device max write transfer: " << maxWriteBytes << " bytes" << std::endl;
-      }
-    }
-#endif
-    // Cache the logical block size so the alignment fix-up below
-    // doesn't ioctl on every write. /dev/rdisk* requires pwrite/pread
-    // lengths to be a multiple of this value.
-    {
-      uint32_t bs = 512;
-      if (ioctl(fd_, DKIOCGETBLOCKSIZE, &bs) == 0 && bs > 0) {
-        logical_block_size_ = bs;
-      }
-      tail_bytes_.reserve(logical_block_size_);
-    }
-    // macOS doesn't expose queue depth directly; leave suggested_queue_depth as 0
-
-    std::cout << "Successfully opened device with authorization, fd=" << fd_
-              << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
-    return FileError::kSuccess;
+    return FinishOpeningDevice();
   }
 
   // For regular files, use standard POSIX open
@@ -465,6 +511,7 @@ FileError MacOSFileOperations::ReadSequential(std::uint8_t* data, std::size_t si
   }
   ssize_t result = ::pread(fd_, dst, aligned_size, (off_t)async_write_offset_);
   if (result < 0) {
+    last_error_code_ = errno;
     bytes_read = 0;
     return FileError::kReadError;
   }
@@ -490,6 +537,7 @@ FileError MacOSFileOperations::Seek(std::uint64_t position) {
   WaitForPendingWrites();
 
   if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
+    last_error_code_ = errno;
     return FileError::kSeekError;
   }
 
@@ -528,6 +576,7 @@ FileError MacOSFileOperations::ForceSync() {
 
   // Force filesystem sync using fsync - same logic as MacFile::forceSync()
   if (::fsync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kSyncError;
   }
 
@@ -546,6 +595,7 @@ FileError MacOSFileOperations::Flush() {
 
   // On macOS, use fsync for both flush and sync operations
   if (::fsync(fd_) != 0) {
+    last_error_code_ = errno;
     return FileError::kFlushError;
   }
 
