@@ -99,9 +99,22 @@ inline bool isBlockFill(const uint8_t* data, uint32_t* fillValue)
 
 class SparseEncoder {
 public:
+    // Smallest workable segment: file header + a leading DONT_CARE chunk +
+    // one data chunk header + one block + a trailing DONT_CARE chunk. Below
+    // this a segment cannot carry even a single block, so the encoder can
+    // never make progress.
+    static constexpr uint32_t MIN_SEGMENT_SIZE =
+        SPARSE_FILE_HDR_SZ + 3 * SPARSE_CHUNK_HDR_SZ + SPARSE_BLK_SZ;
+
     // maxSegmentSize: max bytes per sparse segment (fastboot max-download-size).
+    //   Raised to MIN_SEGMENT_SIZE if smaller -- the value originates with the
+    //   device, and a device that reports a uselessly small one must not be
+    //   able to wedge the encoder.
     // totalImageSize: uncompressed image size in bytes (0 if unknown).
     SparseEncoder(uint32_t maxSegmentSize, uint64_t totalImageSize);
+
+    // The segment size actually in use, after the floor is applied.
+    uint32_t maxSegmentSize() const { return _maxSegmentSize; }
     ~SparseEncoder();
 
     // Set a block map for DONT_CARE optimisation.  When set, blocks that

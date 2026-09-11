@@ -6,6 +6,7 @@
 #include "fastbootflashthread.h"
 #include "rpiboot/libusb_transport.h"
 #include "fastboot/fastboot_protocol.h"
+#include "config_txt_merge.h"
 #include "fastboot/sparse_encoder.h"
 #include "fastboot/bmap.h"
 #include "fastboot/pieeprom.h"
@@ -28,6 +29,9 @@
 #include <archive_entry.h>
 #include <curl/curl.h>
 
+#include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <cstring>
 #include <thread>
 
@@ -37,6 +41,68 @@ using rpiboot::FASTBOOT_PID;
 
 // Default max-download-size if the device doesn't report one
 static constexpr uint32_t DEFAULT_MAX_DOWNLOAD_SIZE = 256 * 1024 * 1024;  // 256 MB
+
+// Ceiling on the segment size we will honour regardless of what the device
+// asks for. SparseEncoder reserves two buffers of this size, so the real cost
+// is double. Beyond the default there is nothing to gain: segments are already
+// large enough that per-segment overhead has vanished.
+static constexpr uint32_t MAX_HONOURED_DOWNLOAD_SIZE = DEFAULT_MAX_DOWNLOAD_SIZE;
+
+uint32_t FastbootFlashThread::resolveMaxDownloadSize(const std::string *reported,
+                                                     quint64 availableBytes)
+{
+    quint64 size = DEFAULT_MAX_DOWNLOAD_SIZE;
+
+    if (reported) {
+        const std::string &val = *reported;
+        const bool hex = val.starts_with("0x") || val.starts_with("0X");
+        const size_t digitsFrom = hex ? 2 : 0;
+
+        bool parsed = false;
+        // stoull is too forgiving on its own: "0x" yields 0, "0x10zz" yields
+        // 16, and "-1" yields ULLONG_MAX rather than throwing. Anything the
+        // device sends that is not wholly a number is not a number.
+        if (val.size() > digitsFrom) {
+            const auto isDigit = [hex](unsigned char c) {
+                return hex ? std::isxdigit(c) != 0 : std::isdigit(c) != 0;
+            };
+            if (std::all_of(val.begin() + digitsFrom, val.end(), isDigit)) {
+                try {
+                    // stoull, not stoul-into-uint32_t: a device reporting
+                    // 0x100000000 used to narrow to 0, below the floor.
+                    size = std::stoull(val, nullptr, hex ? 16 : 10);
+                    parsed = true;
+                } catch (const std::out_of_range &) {
+                    // Larger than a uint64. It is getting clamped regardless.
+                    size = MAX_HONOURED_DOWNLOAD_SIZE;
+                    parsed = true;
+                } catch (...) {
+                }
+            }
+        }
+
+        if (!parsed) {
+            qDebug() << "FastbootFlashThread: could not parse max-download-size:"
+                     << QString::fromStdString(val)
+                     << "using default" << DEFAULT_MAX_DOWNLOAD_SIZE;
+            size = DEFAULT_MAX_DOWNLOAD_SIZE;
+        }
+    }
+
+    // Two buffers of this size are reserved for the duration of the flash,
+    // alongside the ring buffers the memory manager has already budgeted.
+    // Give the encoder at most an eighth of what is free, so a device that
+    // asks for a lot cannot push the machine into swap on its own say-so.
+    if (availableBytes > 0) {
+        const quint64 memoryCeiling = std::max<quint64>(
+            availableBytes / 8, fastboot::SparseEncoder::MIN_SEGMENT_SIZE);
+        size = std::min(size, memoryCeiling);
+    }
+
+    size = std::min<quint64>(size, MAX_HONOURED_DOWNLOAD_SIZE);
+    size = std::max<quint64>(size, fastboot::SparseEncoder::MIN_SEGMENT_SIZE);
+    return static_cast<uint32_t>(size);
+}
 
 FastbootFlashThread::FastbootFlashThread(const QString& fastbootId,
                                            const QString& blockDevice,
@@ -97,10 +163,12 @@ void FastbootFlashThread::setImageCustomisation(const QByteArray &config,
 }
 
 void FastbootFlashThread::setConnectRegistration(const QString &apiKey,
-                                                   const QString &descriptionPrefix)
+                                                  const QString &descriptionPrefix,
+                                                  const QString &baseUrl)
 {
     _connectApiKey = apiKey;
     _connectDescriptionPrefix = descriptionPrefix;
+    _connectBaseUrl = baseUrl;
 }
 
 namespace {
@@ -126,6 +194,36 @@ blockDeviceToBootSource(const QString& blockDevice)
 }
 
 } // namespace
+
+void FastbootFlashThread::registerWithConnect(fastboot::FastbootProtocol& fb,
+                                               rpiboot::IUsbTransport& transport)
+{
+    if (_connectApiKey.isEmpty())
+        return;
+
+    emit preparationStatusUpdate(tr("Registering device identity with Raspberry Pi Connect..."));
+
+    // Gather board identifiers for the Connect description field.
+    QString boardDescription;
+    if (auto boardVar = fb.getVar(transport, "product")) {
+        boardDescription = QString::fromStdString(*boardVar);
+    }
+    QString serial;
+    if (auto serialVar = fb.getVar(transport, "serialno")) {
+        serial = QString::fromStdString(*serialVar);
+    }
+
+    ConnectDeviceRegistrar registrar(_connectApiKey, _connectDescriptionPrefix,
+                                     _connectBaseUrl);
+    auto result = registrar.registerDevice(fb, transport, boardDescription, serial);
+    if (result.ok) {
+        qDebug() << "Connect: device identity registered, id="
+                 << result.deviceId;
+    } else {
+        qWarning() << "Connect: registration failed:"
+                   << result.errorMessage;
+    }
+}
 
 void FastbootFlashThread::applyBootOrderUpdate(fastboot::FastbootProtocol& fb,
                                                 rpiboot::IUsbTransport& transport)
@@ -314,15 +412,8 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
 
         auto items = _config.split('\n');
         items.removeAll("");
-        for (const QByteArray& item : std::as_const(items)) {
-            if (config.contains("#" + item)) {
-                config.replace("#" + item, item);
-            } else if (!config.contains("\n" + item)) {
-                if (config.right(1) != "\n")
-                    config += "\n";
-                config += item + "\n";
-            }
-        }
+        for (const QByteArray& item : std::as_const(items))
+            config = mergeConfigTxtItem(config, item);
 
         if (!fb.writeDeviceFile(transport, BOOT + "config.txt", toSpan(config), _cancelled)) {
             emit error(tr("Failed to write config.txt: %1")
@@ -536,7 +627,7 @@ struct ArchiveReadContext {
     RingBuffer::Slot* currentSlot;
 };
 
-static ssize_t archiveReadFromRing(struct archive *, void *clientData, const void **buffer)
+static ssize_t archiveReadFromRing(struct archive *a, void *clientData, const void **buffer)
 {
     auto *ctx = static_cast<ArchiveReadContext*>(clientData);
 
@@ -548,12 +639,22 @@ static ssize_t archiveReadFromRing(struct archive *, void *clientData, const voi
 
     // Acquire next slot
     ctx->currentSlot = ctx->ring->acquireReadSlot(100);
-    while (!ctx->currentSlot && !ctx->ring->isCancelled() && !ctx->ring->isComplete()) {
+    while (!ctx->currentSlot && !ctx->ring->isCancelled() && !ctx->ring->isComplete()
+           && !ctx->ring->isStallTimeoutExceeded()) {
         ctx->currentSlot = ctx->ring->acquireReadSlot(100);
     }
 
     if (!ctx->currentSlot) {
         *buffer = nullptr;
+        // A stall is not the end of the archive. Reporting EOF would hand
+        // libarchive a truncated image and let the flash run on to the hash
+        // check with no idea the download had stopped -- and a stalled buffer
+        // refuses without waiting, so the loop above would spin flat out
+        // rather than block.
+        if (ctx->ring->isStallTimeoutExceeded()) {
+            archive_set_error(a, EIO, "Download stalled: no data received for 90 seconds");
+            return -1;
+        }
         return 0;  // EOF or cancelled
     }
 
@@ -601,7 +702,8 @@ void FastbootFlashThread::decompressConsumerProducer()
     const void *buff;
     size_t size;
     la_int64_t offset;
-    while (archive_read_data_block(a, &buff, &size, &offset) == ARCHIVE_OK) {
+    int readResult;
+    while ((readResult = archive_read_data_block(a, &buff, &size, &offset)) == ARCHIVE_OK) {
         if (_cancelled.load())
             break;
 
@@ -612,6 +714,15 @@ void FastbootFlashThread::decompressConsumerProducer()
             if (!slot) {
                 if (_decompressedRing->isCancelled() || _cancelled.load())
                     break;
+                if (_decompressedRing->isStallTimeoutExceeded()) {
+                    // The consumer has not freed a slot in the stall window.
+                    // Spinning here would burn a core for as long as the flash
+                    // ran; carrying on would decompress into nothing.
+                    _decompressError = tr("Writing stalled: the device stopped "
+                                          "accepting data.");
+                    _decompressedRing->cancel();
+                    break;
+                }
                 continue;
             }
 
@@ -620,6 +731,24 @@ void FastbootFlashThread::decompressConsumerProducer()
             _decompressedRing->commitWriteSlot(slot, chunk);
             pos += chunk;
         }
+    }
+
+    // Only ARCHIVE_EOF means the image ended; anything else means it stopped.
+    //
+    // The loop exited on the first non-OK return whatever it was, and
+    // producerDone() then told the consumer the stream had finished
+    // normally. A truncated download or a zip whose CRC does not match was
+    // therefore flashed as far as it went and the write completed. An image
+    // from the catalogue is caught afterwards by the hash, but one supplied
+    // without a hash is not, and even with one the user is told the hash
+    // mismatched rather than that the download was corrupt.
+    if (!_cancelled.load() && readResult != ARCHIVE_EOF) {
+        const char *why = archive_error_string(a);
+        _decompressError = why ? QString::fromUtf8(why)
+                               : tr("The image data ended unexpectedly.");
+        archive_read_free(a);
+        _decompressedRing->cancel();
+        return;
     }
 
     archive_read_free(a);
@@ -732,6 +861,12 @@ bool FastbootFlashThread::performErase(fastboot::FastbootProtocol& fb,
     return true;
 }
 
+std::unique_ptr<rpiboot::IUsbTransport> FastbootFlashThread::openFastbootTransport(
+    rpiboot::LibusbContext& ctx, const rpiboot::UsbDeviceInfo& target)
+{
+    return ctx.openDevice(target);
+}
+
 void FastbootFlashThread::runImpl()
 {
     emit preparationStatusUpdate(tr("Connecting to fastboot device..."));
@@ -741,7 +876,7 @@ void FastbootFlashThread::runImpl()
     deviceOpenTimer.start();
 
     rpiboot::LibusbContext ctx;
-    std::unique_ptr<rpiboot::LibusbTransport> transport;
+    std::unique_ptr<rpiboot::IUsbTransport> transport;
 
     rpiboot::UsbDeviceInfo targetInfo{};
     targetInfo.vendorId = FASTBOOT_VID;
@@ -754,7 +889,7 @@ void FastbootFlashThread::runImpl()
         targetInfo.deviceAddress = static_cast<uint8_t>(parts[1].toUInt());
     }
 
-    transport = ctx.openDevice(targetInfo);
+    transport = openFastbootTransport(ctx, targetInfo);
     if (!transport || !transport->isOpen()) {
         emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), false, _fastbootId);
         emit error(tr("Failed to open fastboot device: %1").arg(_fastbootId));
@@ -793,21 +928,15 @@ void FastbootFlashThread::runImpl()
 
     // 2. Query max-download-size
     auto maxDlSizeStr = fb.getVar(*transport, "max-download-size");
-    uint32_t maxDownloadSize = DEFAULT_MAX_DOWNLOAD_SIZE;
-    if (maxDlSizeStr) {
-        try {
-            std::string val = *maxDlSizeStr;
-            if (val.starts_with("0x") || val.starts_with("0X"))
-                maxDownloadSize = static_cast<uint32_t>(std::stoul(val, nullptr, 16));
-            else
-                maxDownloadSize = static_cast<uint32_t>(std::stoul(val));
-        } catch (...) {
-            qDebug() << "FastbootFlashThread: could not parse max-download-size:"
-                     << QString::fromStdString(*maxDlSizeStr)
-                     << "using default" << maxDownloadSize;
-        }
-    }
-    qDebug() << "FastbootFlashThread: max-download-size =" << maxDownloadSize;
+    const quint64 availableBytes =
+        static_cast<quint64>(std::max<qint64>(
+            SystemMemoryManager::instance().getAvailableMemoryMB(), 0)) * 1024 * 1024;
+    const uint32_t maxDownloadSize = resolveMaxDownloadSize(
+        maxDlSizeStr ? &*maxDlSizeStr : nullptr, availableBytes);
+    qDebug() << "FastbootFlashThread: max-download-size ="
+             << (maxDlSizeStr ? QString::fromStdString(*maxDlSizeStr)
+                              : QStringLiteral("(not reported)"))
+             << "-> using" << maxDownloadSize;
     emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), true,
                                  QStringLiteral("max-download-size=%1").arg(maxDownloadSize));
 
@@ -819,6 +948,11 @@ void FastbootFlashThread::runImpl()
         inputSlots, writeSlots,
         inputSlotSize, writeSlotSize);
 
+    // Both rings go idle for as long as one sparse segment takes to send: the
+    // consumer holds its slot across the whole fastboot download and the
+    // device's commit of it, and the decompressor backs up behind that. See
+    // TimeoutDefaults::kRingBufferStallTimeoutMs for why the window allows for
+    // it.
     _compressedRing = std::make_unique<RingBuffer>(inputSlots, inputSlotSize);
     _decompressedRing = std::make_unique<RingBuffer>(writeSlots, writeSlotSize);
 
@@ -933,6 +1067,19 @@ void FastbootFlashThread::runImpl()
                 break;
             if (_decompressedRing->isComplete())
                 break;
+            if (_decompressedRing->isStallTimeoutExceeded()) {
+                // Same reasoning as the archive callback: continuing here
+                // would spin, and breaking quietly would finish the sparse
+                // stream as though the image ended where the stall began.
+                emit error(tr("Writing has stalled.\n\n"
+                              "No progress for 90 seconds. This could be caused by:\n"
+                              "\u2022 The USB connection to the device being interrupted\n"
+                              "\u2022 The device becoming unresponsive\n"
+                              "\u2022 Network connection lost while downloading\n\n"
+                              "Please check the connection and try again."));
+                flashError = true;
+                break;
+            }
             continue;
         }
 
@@ -1061,30 +1208,7 @@ void FastbootFlashThread::runImpl()
     //     non-fatal).  Must happen while the device is still in fastboot
     //     mode so we can query its public key and ask it to sign the
     //     request via the firmware crypto engine.
-    if (!_connectApiKey.isEmpty()) {
-        emit preparationStatusUpdate(tr("Registering device identity with Raspberry Pi Connect..."));
-
-        // Gather board identifiers for the Connect description field.
-        QString boardDescription;
-        if (auto boardVar = fb.getVar(*transport, "product")) {
-            boardDescription = QString::fromStdString(*boardVar);
-        }
-        QString serial;
-        if (auto serialVar = fb.getVar(*transport, "serialno")) {
-            serial = QString::fromStdString(*serialVar);
-        }
-
-        ConnectDeviceRegistrar registrar(_connectApiKey, _connectDescriptionPrefix);
-        auto result = registrar.registerDevice(fb, *transport,
-                                                boardDescription, serial);
-        if (result.ok) {
-            qDebug() << "Connect: device identity registered, id="
-                     << result.deviceId;
-        } else {
-            qWarning() << "Connect: registration failed:"
-                       << result.errorMessage;
-        }
-    }
+    registerWithConnect(fb, *transport);
 
     // 11. Best-effort: nudge BOOT_ORDER so the device boots from the
     //     storage we just wrote. Logs and continues on failure --- the
