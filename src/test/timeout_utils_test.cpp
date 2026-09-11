@@ -4,45 +4,14 @@
  *
  * Hazard tests for runWithTimeout() in timeout_utils.h.
  *
- * runWithTimeout() spawns a worker thread whose lambda captures the promise and
- * the completion flag BY REFERENCE. Those objects live on runWithTimeout's own
- * stack frame. On the two exit paths that call detach() -- timeout and external
- * cancellation -- the function returns while the worker is still inside the
- * operation, so the frame dies underneath it. When the operation finally
- * unblocks, the worker writes `completed` and calls promise.set_value() through
- * references to a frame that no longer exists, and into a promise shared state
- * that both the promise and the future have already released.
- *
- * That is undefined behaviour on a path the header documents as expected
- * ("the operation thread is detached and may continue running"). These cases
- * make it happen deliberately and on demand, so a sanitiser can be pointed at
- * it rather than waiting for it to surface as a field crash.
- *
- * THESE CASES DELIBERATELY PROVOKE UNDEFINED BEHAVIOUR. They are tagged [.]
- * (hidden) so neither Catch2's default run nor CTest picks them up -- an
- * uninstrumented build is likely to corrupt memory or segfault, which is the
- * point but is not a useful CI signal. Run them explicitly:
- *
- *   cmake -B build-asan -DBUILD_TESTING=ON -DRPI_IMAGER_TEST_SANITIZER=address
- *   cmake --build build-asan --target timeout_utils_test
- *   ASAN_OPTIONS=detect_stack_use_after_return=1 \
- *       ./build-asan/src/test/timeout_utils_test "[timeout-hazard]"
- *
- *   cmake -B build-tsan -DBUILD_TESTING=ON -DRPI_IMAGER_TEST_SANITIZER=thread
- *   cmake --build build-tsan --target timeout_utils_test
- *   ./build-tsan/src/test/timeout_utils_test "[timeout-hazard]"
- *
- * ASan stops at its first report, so pass a single case name rather than the
- * tag to see both. TSan runs on and reports all four (two per case).
- *
- * As of writing, ASan reports stack-use-after-return on `completed` at
- * timeout_utils.h:100, and TSan reports heap-use-after-free between
- * set_value() at timeout_utils.h:101 and ~promise() at timeout_utils.h:129.
- * Uninstrumented, the timeout case segfaults outright.
- *
- * A clean run means the sanitiser did NOT see the bug, not that the bug is
- * absent. Once runWithTimeout keeps its state in a shared_ptr captured by
- * value, these cases become well defined and should fall silent.
+ * On the timeout and cancellation paths the worker is detached and the
+ * function returns, so anything it reaches by reference dies underneath it.
+ * These cases provoke that deliberately, for a sanitiser to catch rather
+ * than the field. They were hidden behind [.timeout-hazard] because an
+ * uninstrumented build segfaults on them, which is the point but is no use
+ * as a CI signal. Run them explicitly against build-asan or build-tsan with
+ * the "[timeout-hazard]" filter; ASan stops at its first report, so name one
+ * case at a time.
  */
 
 #include <catch2/catch_test_macros.hpp>
@@ -110,8 +79,8 @@ constexpr auto kWorkerSettleTime = std::chrono::milliseconds(500);
 
 }  // namespace
 
-TEST_CASE("timed-out operation writes into runWithTimeout's dead frame",
-          "[.timeout-hazard]") {
+TEST_CASE("timed-out operation does not write into runWithTimeout's dead frame",
+          "[timeout-hazard]") {
   auto gate = std::make_shared<Gate>();
   std::atomic<bool> onTimeoutFired{false};
 
@@ -140,8 +109,8 @@ TEST_CASE("timed-out operation writes into runWithTimeout's dead frame",
   SUCCEED("reached the end without the worker taking the process down");
 }
 
-TEST_CASE("cancelled operation writes into runWithTimeout's dead frame",
-          "[.timeout-hazard]") {
+TEST_CASE("cancelled operation does not write into runWithTimeout's dead frame",
+          "[timeout-hazard]") {
   auto gate = std::make_shared<Gate>();
   std::atomic<bool> cancel{false};
 
@@ -171,6 +140,49 @@ TEST_CASE("cancelled operation writes into runWithTimeout's dead frame",
   SUCCEED("reached the end without the worker taking the process down");
 }
 
+// The overload that captures a result has a second thing to keep alive: the
+// operation itself. It used to hand the worker a reference to the caller's
+// lambda, which at every call site here is a temporary that dies at the end
+// of the full expression -- long before a cancelled worker gets round to
+// calling it. DownloadThread::_openAndPrepareDevice() hit this when a write
+// was cancelled while the end of the card was being zeroed, and took the
+// process down about one run in three.
+__attribute__((noinline))
+static TimeoutResult prepareWithResult(const std::shared_ptr<Gate> &gate,
+                                       std::atomic<bool> *cancel, int &out) {
+  int local = 0;
+  const TimeoutResult outcome = runWithTimeout(
+      [gate]() { gate->wait(); return 7; },
+      local,
+      TimeoutConfig(600).withCancelFlag(cancel));
+  out = local;
+  return outcome;
+}
+
+TEST_CASE("cancelled operation with a result leaves it untouched",
+          "[timeout-utils]") {
+  auto gate = std::make_shared<Gate>();
+  std::atomic<bool> cancel{false};
+  std::thread canceller([&cancel]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    cancel.store(true);
+  });
+
+  int result = -1;
+  const TimeoutResult outcome = prepareWithResult(gate, &cancel, result);
+  canceller.join();
+
+  REQUIRE(outcome == TimeoutResult::Cancelled);
+  // The abandoned operation must not reach the caller's variable either.
+  CHECK(result == 0);
+
+  // Reuse the stack the returned frame occupied, then let the worker run.
+  clobberDeadFrame();
+  gate->release();
+  std::this_thread::sleep_for(kWorkerSettleTime);
+  SUCCEED("the abandoned worker ran its own copy of the operation");
+}
+
 // Control case. Exercises the same machinery on the path where the worker is
 // joined, so its state is still alive when it writes. A sanitiser firing here
 // would mean the harness above is at fault rather than runWithTimeout.
@@ -186,4 +198,60 @@ TEST_CASE("completed operation is clean", "[timeout-utils]") {
 
   REQUIRE(result == TimeoutResult::Completed);
   REQUIRE(sideEffect == 42);
+}
+
+// ── Abandoning is now the exception, not the rule ───────────────────────
+//
+// A cancellation usually arrives while a perfectly healthy operation is in
+// flight; the operation is not stuck, it is simply not finished. Detaching
+// unconditionally threw away a thread that was about to complete, and left
+// it running against the caller's dying frame. Waiting briefly instead
+// means the common case is joined and nothing outlives the call.
+
+TEST_CASE("a cancelled operation that finishes is joined, not abandoned",
+          "[timeout-utils]") {
+    std::atomic<bool> cancelled{true};          // cancelled before it starts
+    auto finished = std::make_shared<std::atomic<bool>>(false);
+
+    const auto result = rpi_imager::runWithTimeout(
+        [finished]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            finished->store(true);
+        },
+        rpi_imager::TimeoutConfig(5).withCancelFlag(&cancelled));
+
+    CHECK(result == rpi_imager::TimeoutResult::Cancelled);
+    // The point: by the time the call returns the worker is done and gone,
+    // so anything it captured is safe to destroy.
+    CHECK(finished->load());
+}
+
+TEST_CASE("an operation that will not finish is still abandoned",
+          "[timeout-utils]") {
+    // The grace period has to stay bounded. A worker wedged in a syscall
+    // that never returns must not hold the caller here -- that would be the
+    // hang this class exists to escape, moved somewhere worse.
+    auto release = std::make_shared<std::atomic<bool>>(false);
+    auto started = std::make_shared<std::atomic<bool>>(false);
+
+    const auto begin = std::chrono::steady_clock::now();
+    const auto result = rpi_imager::runWithTimeout(
+        [release, started]() {
+            started->store(true);
+            while (!release->load())
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        },
+        rpi_imager::TimeoutConfig(1).withJoinGrace(std::chrono::milliseconds(150)));
+    const auto took = std::chrono::steady_clock::now() - begin;
+
+    CHECK(result == rpi_imager::TimeoutResult::TimedOut);
+    CHECK(started->load());
+    // Returned rather than waiting for a worker that never finishes: the
+    // one second timeout plus the grace, not for ever.
+    CHECK(took < std::chrono::seconds(5));
+
+    // Let the abandoned worker go. Its state is shared, so this is safe
+    // whether it has been joined or detached -- which is the contract.
+    release->store(true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
