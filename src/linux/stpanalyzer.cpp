@@ -70,6 +70,14 @@ void StpAnalyzer::startListening(const QByteArray &ifname)
 
     iface = if_nametoindex(ifname.constData());
     if (!iface) {
+        /* No interface by that name -- a board whose wired port comes up as
+         * something other than eth0, or one with no wired port at all.
+         * Closing the socket matters twice over: it would otherwise be held
+         * for the life of the application, and leaving _s set with no
+         * notifier behind it makes stopListening() dereference a null
+         * pointer, which is a crash on the way out rather than a warning. */
+        close(_s);
+        _s = -1;
         return;
     }
 
@@ -84,11 +92,16 @@ void StpAnalyzer::startListening(const QByteArray &ifname)
 
 void StpAnalyzer::stopListening()
 {
-    if (_s != -1)
+    /* The two are taken down separately because they are not always both
+     * there: startListening() can leave a socket with no notifier. */
+    if (_qsn)
     {
         _qsn->setEnabled(false);
         _qsn->deleteLater();
         _qsn = nullptr;
+    }
+    if (_s != -1)
+    {
         close(_s);
         _s = -1;
     }
