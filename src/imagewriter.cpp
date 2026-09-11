@@ -428,6 +428,15 @@ void ImageWriter::bringWindowToForeground()
         return;
     }
 
+    // winId() is a native handle only under a windowing plugin. The headless
+    // ones return a counter, which the macOS code then messages as an NSView:
+    // EXC_BAD_ACCESS on 0x1. Non-null is not enough of a test.
+    const QString platform = QGuiApplication::platformName();
+    if (platform.compare(QLatin1String("offscreen"), Qt::CaseInsensitive) == 0
+        || platform.compare(QLatin1String("minimal"), Qt::CaseInsensitive) == 0) {
+        return;
+    }
+
     // Get the native window handle and pass it to the platform-specific implementation
     void* windowHandle = reinterpret_cast<void*>(_mainWindow->winId());
     if (windowHandle) {
