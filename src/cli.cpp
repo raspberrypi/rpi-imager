@@ -4,6 +4,8 @@
  */
 
 #include "cli.h"
+
+#include <QRegularExpression>
 #include "imagewriter.h"
 #include <iostream>
 #include <QCoreApplication>
@@ -35,6 +37,111 @@ Cli::~Cli()
 {
     delete _imageWriter;
     delete _app;
+}
+
+Cli::SourceKind Cli::classifySource(const QString &src)
+{
+    if (src.startsWith(QLatin1String("http:"), Qt::CaseInsensitive)
+        || src.startsWith(QLatin1String("https:"), Qt::CaseInsensitive))
+        return SourceKind::Remote;
+
+    const QFileInfo fi(src);
+    if (fi.isFile())
+        return SourceKind::LocalFile;
+    if (!fi.exists())
+        return SourceKind::Missing;
+    return SourceKind::NotRegular;
+}
+
+QString Cli::validateCacheOptions(const QString &cacheFile, const QString &sha256)
+{
+    if (cacheFile.isEmpty())
+        return {};
+
+    if (sha256.isEmpty()) {
+        return QStringLiteral("--cache-file requires --sha256: without a hash "
+                              "the cached file is written without being checked "
+                              "against the image that was asked for.");
+    }
+
+    return {};
+}
+
+QString Cli::validateSecureBootKey(const QString &path)
+{
+    const QFileInfo keyFile(path);
+    if (!keyFile.exists())
+        return QStringLiteral("Error: secure boot key file does not exist: ") + path;
+    if (!keyFile.isFile())
+        return QStringLiteral("Error: secure boot key path is not a regular file: ") + path;
+    return {};
+}
+
+namespace {
+
+// A row the CLI will write to without being told to.
+bool rowIsOrdinaryTarget(DriveListModel &drives, int row)
+{
+    const QModelIndex idx = drives.index(row, 0);
+    return !idx.data(DriveListModel::isSystemRole).toBool();
+}
+
+} // namespace
+
+bool Cli::destinationIsRemovable(DriveListModel &drives, const QString &destination)
+{
+    const int numDrives = drives.rowCount(QModelIndex());
+    for (int i = 0; i < numDrives; i++)
+    {
+        if (!rowIsOrdinaryTarget(drives, i))
+            continue;
+        if (drives.index(i, 0).data(DriveListModel::deviceRole).toString() == destination)
+            return true;
+    }
+    return false;
+}
+
+QStringList Cli::removableDestinations(DriveListModel &drives)
+{
+    QStringList out;
+    const int numDrives = drives.rowCount(QModelIndex());
+    out.reserve(numDrives);
+    for (int i = 0; i < numDrives; i++)
+    {
+        // Same rule as the check above: a drive the refusal would not accept
+        // has no business being offered as one the operator could have
+        // written instead.
+        if (!rowIsOrdinaryTarget(drives, i))
+            continue;
+        const QModelIndex idx = drives.index(i, 0);
+        out << idx.data(DriveListModel::deviceRole).toString()
+                + QStringLiteral(" (")
+                + idx.data(DriveListModel::descriptionRole).toString()
+                + QStringLiteral(")");
+    }
+    return out;
+}
+
+bool Cli::readCustomisationFile(const QString &path, const QString &what,
+                                QByteArray &contents, QString &error)
+{
+    QFile f(path);
+
+    if (!f.exists())
+    {
+        error = QStringLiteral("Error: ") + what
+              + QStringLiteral(" does not exist: ") + path;
+        return false;
+    }
+    if (!f.open(QIODevice::ReadOnly))
+    {
+        error = QStringLiteral("Error: opening ") + what;
+        return false;
+    }
+
+    contents = f.readAll();
+    f.close();
+    return true;
 }
 
 int Cli::run()
@@ -125,15 +232,10 @@ int Cli::run()
     if (!parser.value("secure-boot-key").isEmpty())
     {
         QString keyPath = parser.value("secure-boot-key");
-        QFileInfo keyFile(keyPath);
-        if (!keyFile.exists())
+        const QString keyError = validateSecureBootKey(keyPath);
+        if (!keyError.isEmpty())
         {
-            std::cerr << "Error: secure boot key file does not exist: " << keyPath.toStdString() << std::endl;
-            return 1;
-        }
-        if (!keyFile.isFile())
-        {
-            std::cerr << "Error: secure boot key path is not a regular file: " << keyPath.toStdString() << std::endl;
+            std::cerr << keyError.toStdString() << std::endl;
             return 1;
         }
         
@@ -147,7 +249,17 @@ int Cli::run()
         }
     }
 
-    if (args[0].startsWith("http:", Qt::CaseInsensitive) || args[0].startsWith("https:", Qt::CaseInsensitive))
+    const QString cacheProblem = validateCacheOptions(parser.value("cache-file"),
+                                                      parser.value("sha256"));
+    if (!cacheProblem.isEmpty())
+    {
+        std::cerr << "ERROR: " << cacheProblem.toStdString() << std::endl;
+        return 1;
+    }
+
+    switch (classifySource(args[0]))
+    {
+    case SourceKind::Remote:
     {
         _imageWriter->setSrc(args[0], 0, 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
 
@@ -155,25 +267,24 @@ int Cli::run()
         {
             _imageWriter->setCustomCacheFile(parser.value("cache-file"), parser.value("sha256").toLatin1() );
         }
+        break;
     }
-    else
+    case SourceKind::LocalFile:
     {
         QFileInfo fi(args[0]);
-
-        if (fi.isFile())
-        {
-            _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
-        }
-        else if (!fi.exists())
-        {
-            std::cerr << "Error: source file does not exists" << std::endl;
-            return 1;
-        }
-        else
-        {
-            std::cerr << "Error: source is not a regular file" << std::endl;
-            return 1;
-        }
+        _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
+        break;
+    }
+    case SourceKind::Missing:
+        // Named, because the usual reason for landing here is a typo in a
+        // long path, and a message that does not echo it leaves the reader
+        // comparing what they meant to type against nothing.
+        std::cerr << "Error: source file does not exist: "
+                  << args[0].toStdString() << std::endl;
+        return 1;
+    case SourceKind::NotRegular:
+        std::cerr << "Error: source is not a regular file" << std::endl;
+        return 1;
     }
 
     if (parser.isSet("enable-writing-system-drives"))
@@ -184,31 +295,28 @@ int Cli::run()
     {
         DriveListModel dlm;
         dlm.processDriveList(Drivelist::ListStorageDevices() );
-        bool foundDrive = false;
-        int numDrives = dlm.rowCount( QModelIndex() );
 
-        for (int i = 0; i < numDrives; i++)
+        if (!destinationIsRemovable(dlm, args[1]))
         {
-            if (dlm.index(i, 0).data(dlm.deviceRole) == args[1])
+            const QStringList choices = removableDestinations(dlm);
+            if (choices.isEmpty())
             {
-                foundDrive = true;
-                break;
+                // Inviting a choice from a list that is then empty reads as a
+                // fault in the message rather than a fact about the machine.
+                // With no drive plugged in -- the common way to arrive here --
+                // the operator needs to be told that, not shown a blank.
+                std::cerr << "Destination drive is not in list of removable volumes, and no removable volume was found." << std::endl;
+                std::cerr << "Attach one, or use --enable-writing-system-drives to overrule." << std::endl;
             }
-        }
-
-        if (!foundDrive)
-        {
-            std::cerr << "Destination drive is not in list of removable volumes. Choose one of the following:" << std::endl << std::endl;
-
-            for (int i = 0; i < numDrives; i++)
+            else
             {
-                QModelIndex idx = dlm.index(i, 0);
-                QByteArray line = idx.data(dlm.deviceRole).toByteArray()+" ("+idx.data(dlm.descriptionRole).toByteArray()+")";
+                std::cerr << "Destination drive is not in list of removable volumes. Choose one of the following:" << std::endl << std::endl;
 
-                std::cerr << line.constData() << std::endl;
+                for (const QString &line : choices)
+                    std::cerr << line.toStdString() << std::endl;
+
+                std::cerr << std::endl << "Or use --enable-writing-system-drives to overrule." << std::endl;
             }
-
-            std::cerr << std::endl << "Or use --enable-writing-system-drives to overrule." << std::endl;
             return 1;
         }
     }
@@ -218,42 +326,22 @@ int Cli::run()
         QByteArray userData, networkConfig;
         if (!parser.value("cloudinit-userdata").isEmpty())
         {
-            QFile f(parser.value("cloudinit-userdata"));
-
-            if (!f.exists())
+            QString err;
+            if (!readCustomisationFile(parser.value("cloudinit-userdata"),
+                                       QStringLiteral("user-data file"), userData, err))
             {
-                std::cerr << "Error: user-data file does not exists" << std::endl;
-                return 1;
-            }
-            if (f.open(f.ReadOnly))
-            {
-                userData = f.readAll();
-                f.close();
-            }
-            else
-            {
-                std::cerr << "Error: opening user-data file" << std::endl;
+                std::cerr << err.toStdString() << std::endl;
                 return 1;
             }
         }
 
         if (!parser.value("cloudinit-networkconfig").isEmpty())
         {
-            QFile f(parser.value("cloudinit-networkconfig"));
-
-            if (!f.exists())
+            QString err;
+            if (!readCustomisationFile(parser.value("cloudinit-networkconfig"),
+                                       QStringLiteral("network-config file"), networkConfig, err))
             {
-                std::cerr << "Error: network-config file does not exists" << std::endl;
-                return 1;
-            }
-            if (f.open(f.ReadOnly))
-            {
-                networkConfig = f.readAll();
-                f.close();
-            }
-            else
-            {
-                std::cerr << "Error: opening network-config file" << std::endl;
+                std::cerr << err.toStdString() << std::endl;
                 return 1;
             }
         }
@@ -263,20 +351,11 @@ int Cli::run()
     else if (!parser.value("first-run-script").isEmpty())
     {
         QByteArray firstRunScript;
-        QFile f(parser.value("first-run-script"));
-        if (!f.exists())
+        QString err;
+        if (!readCustomisationFile(parser.value("first-run-script"),
+                                   QStringLiteral("firstrun script"), firstRunScript, err))
         {
-            std::cerr << "Error: firstrun script does not exists" << std::endl;
-            return 1;
-        }
-        if (f.open(f.ReadOnly))
-        {
-            firstRunScript = f.readAll();
-            f.close();
-        }
-        else
-        {
-            std::cerr << "Error: opening firstrun script" << std::endl;
+            std::cerr << err.toStdString() << std::endl;
             return 1;
         }
 
@@ -313,9 +392,27 @@ void Cli::_clearLine()
     std::cerr << "\e[0K";
 }
 
+// Messages come from the writer, which is written for the GUI: its dialogs
+// render rich text, so anything with more than one line separates them with
+// <br>. A terminal prints that literally, in the middle of the sentence
+// somebody reads when their image has turned out to be corrupt:
+//
+//   Error: Local file is corrupt or has incorrect SHA256 hash.<br>Expected: ...
+//
+// Render it for the medium actually being printed to. Only <br> occurs in
+// these strings today -- checked -- and handling just that keeps the
+// substitution honest rather than pretending to be an HTML renderer.
+static QByteArray forTerminal(QString msg)
+{
+    static const QRegularExpression lineBreak(
+        QStringLiteral("<br\\s*/?>"), QRegularExpression::CaseInsensitiveOption);
+    msg.replace(lineBreak, QStringLiteral("\n"));
+    return msg.toUtf8();
+}
+
 void Cli::onError(QVariant msg)
 {
-    QByteArray m = msg.toByteArray();
+    const QByteArray m = forTerminal(msg.toString());
 
     if (!_quiet)
     {
