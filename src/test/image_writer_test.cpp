@@ -8243,7 +8243,11 @@ QString listImage(const QString &image, const QString &dir = QString())
     return QString::fromUtf8(p.readAllStandardOutput());
 }
 
-constexpr qint64 kBootImgSize = 8 * 1024 * 1024;
+// Matches the floor SecureBoot::createBootImg applies. Below it mkfs.vfat
+// still builds a FAT32, with a warning and fewer than the 65525 clusters the
+// spec requires, and mtools then refuses to read what it made -- so a smaller
+// image tests a shape the application never asks for and cannot be read back.
+constexpr qint64 kBootImgSize = 33 * 1024 * 1024;
 
 } // namespace
 
