@@ -256,6 +256,7 @@ WizardStepBase {
 
                     ImToggleTab {
                         id: tabSecure
+                        objectName: "wifiSecureTab"
                         text: qsTr("Secure network")
                         accessibleDescription: qsTr("Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption")
                         active: root.wifiMode === "secure"
@@ -268,6 +269,7 @@ WizardStepBase {
 
                     ImToggleTab {
                         id: tabOpen
+                        objectName: "wifiOpenTab"
                         text: qsTr("Open network")
                         accessibleDescription: qsTr("Configure Wi-Fi for an unencrypted network without password protection")
                         active: root.wifiMode === "open"
@@ -293,6 +295,7 @@ WizardStepBase {
 
                     ImTextField {
                         id: fieldWifiSSID
+                        objectName: "wifiSsidField"
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         trimWhitespace: true
@@ -317,6 +320,7 @@ WizardStepBase {
 
                     ImPasswordField {
                         id: fieldWifiPassword
+                        objectName: "wifiPasswordField"
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         visible: root.showPw
@@ -346,6 +350,7 @@ WizardStepBase {
 
                     ImPasswordField {
                         id: fieldWifiPasswordConfirm
+                        objectName: "wifiPasswordConfirmField"
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         placeholderText: {
@@ -384,6 +389,7 @@ WizardStepBase {
 
                     ImCheckBox {
                         id: chkWifiHidden
+                        objectName: "wifiHiddenToggle"
                         text: qsTr("Hidden SSID")
                         Accessible.description: qsTr("Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.")
 
@@ -549,15 +555,6 @@ WizardStepBase {
     }
     
     // Handle skip button
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 } 

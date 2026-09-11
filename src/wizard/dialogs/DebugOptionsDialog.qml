@@ -97,6 +97,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkDirectIO
+                objectName: "debugDirectIO"
                 text: qsTr("Enable Direct I/O (F_NOCACHE / O_DIRECT)")
                 accessibleDescription: qsTr("Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.")
                 Layout.fillWidth: true
@@ -107,6 +108,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkAsyncIO
+                objectName: "debugAsyncIO"
                 text: qsTr("Enable Async I/O")
                 accessibleDescription: qsTr("Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.")
                 Layout.fillWidth: true
@@ -131,6 +133,7 @@ BaseDialog {
                 
                 Slider {
                     id: asyncQueueDepthSlider
+                    objectName: "debugQueueDepthSlider"
                     Layout.fillWidth: true
                     from: 1
                     to: 512  // Max supported by ring buffer - high values mainly benefit NVMe/USB4
@@ -182,6 +185,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkIgnoreDeviceLimits
+                objectName: "debugIgnoreDeviceLimits"
                 text: qsTr("Ignore Device I/O Limits")
                 accessibleDescription: qsTr("Ignore the device-reported queue depth and transfer size limits. Useful for USB-NVMe enclosures that under-report their capabilities.")
                 Layout.fillWidth: true
@@ -193,6 +197,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkPeriodicSync
+                objectName: "debugPeriodicSync"
                 text: qsTr("Enable Periodic Sync")
                 accessibleDescription: qsTr("Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.")
                 Layout.fillWidth: true
@@ -218,6 +223,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkVerboseLogging
+                objectName: "debugVerboseLogging"
                 text: qsTr("Verbose Performance Logging")
                 accessibleDescription: qsTr("Log detailed timing information for each write operation to help diagnose performance issues.")
                 Layout.fillWidth: true
@@ -243,6 +249,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkIPv4Only
+                objectName: "debugIPv4Only"
                 text: qsTr("Force IPv4-only Downloads")
                 accessibleDescription: qsTr("Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.")
                 Layout.fillWidth: true
@@ -268,6 +275,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkSkipEndOfDevice
+                objectName: "debugSkipEndOfDevice"
                 text: qsTr("Counterfeit Card Mode (skip end-of-device checks)")
                 accessibleDescription: qsTr("Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card's real capacity.")
                 Layout.fillWidth: true
@@ -305,6 +313,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkRpiboot
+                objectName: "debugRpiboot"
                 text: qsTr("Enable Rpiboot/Fastboot Support")
                 accessibleDescription: qsTr("Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.")
                 Layout.fillWidth: true
@@ -344,6 +353,7 @@ BaseDialog {
 
                 ImButton {
                     id: browseGadgetButton
+                    objectName: "debugBrowseGadgetButton"
                     text: qsTr("Browse...")
                     accessibleDescription: qsTr("Select a local fastboot gadget boot.img file")
                     Layout.minimumWidth: 80
@@ -354,6 +364,7 @@ BaseDialog {
                 }
 
                 ImButton {
+                    objectName: "debugClearGadgetButton"
                     text: qsTr("Clear")
                     accessibleDescription: qsTr("Revert to the default fastboot gadget from GitHub")
                     Layout.minimumWidth: 60
@@ -367,11 +378,21 @@ BaseDialog {
 
             ImFileDialog {
                 id: gadgetFileDialog
+                objectName: "debugGadgetFileDialog"
                 parent: popup.parent
                 dialogTitle: qsTr("Select Fastboot Gadget Image")
                 nameFilters: [qsTr("Boot images (*.img *.bin)"), qsTr("All files (*)")]
                 onAccepted: {
-                    gadgetPathText.gadgetPath = selectedFile
+                    // Shown as a path rather than a url. What reaches the
+                    // writer is a path either way -- setDebugCustomFastbootGadget()
+                    // converts one -- but the label reads back
+                    // gadgetPathText.gadgetPath directly, so without this it
+                    // showed "file:///home/..." until the dialog was closed
+                    // and reopened, and a plain path after. The same setting
+                    // rendered two ways depending on how recently it was
+                    // chosen.
+                    gadgetPathText.gadgetPath =
+                        selectedFile.toString().replace(/^file:\/\//, "")
                 }
             }
 
@@ -392,6 +413,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkForceSecureBoot
+                objectName: "debugForceSecureBoot"
                 text: qsTr("Force Secure Boot Available")
                 accessibleDescription: qsTr("Show secure boot customisation regardless of OS capabilities. Equivalent to the --enable-secure-boot CLI flag.")
                 Layout.fillWidth: true
@@ -402,6 +424,7 @@ BaseDialog {
 
             ImOptionPill {
                 id: chkSignFastbootGadget
+                objectName: "debugSignFastbootGadget"
                 text: qsTr("CM5 re-provisioning mode (special-reprovision-device)")
                 accessibleDescription: qsTr("Match rpi-sb-provisioner's special-reprovision-device: run secure-boot recovery (re-sign recovery.bin from upstream, reuse cached pieeprom) then fastboot (sign bootfiles and gadget). Requires the RSA key in App Options. Only for Compute Modules whose secure-boot OTP is already fused.")
                 Layout.fillWidth: true
@@ -502,6 +525,7 @@ BaseDialog {
 
             ImButton {
                 id: cancelButton
+                objectName: "debugCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Close the debug options dialog without saving any changes")
                 Layout.minimumWidth: Style.buttonWidthMinimum
@@ -513,6 +537,7 @@ BaseDialog {
 
             ImButtonRed {
                 id: applyButton
+                objectName: "debugApplyButton"
                 text: qsTr("Apply")
                 accessibleDescription: qsTr("Apply the selected debug options")
                 Layout.minimumWidth: Style.buttonWidthMinimum

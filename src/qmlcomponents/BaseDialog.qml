@@ -157,9 +157,16 @@ Dialog {
                 }
             }
 
-            // Set initial focus item to first focusable item (respecting focus group order)
-            var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
-            if (!initialFocusItem) initialFocusItem = firstField
+            // Keep the landing point in step with the ring. Seeding it only
+            // once leaves a dialog whose first control is conditional --
+            // shown for one target and not another, revealed after a
+            // countdown, replaced once a key is saved -- pointing at an item
+            // that is no longer in the ring. focusInitialItem() then calls
+            // forceActiveFocus() on it and Qt grants focus to an invisible
+            // item: no focus ring anywhere on screen, and Tab starting from
+            // somewhere that is not in the order.
+            if (!initialFocusItem || _focusableItems.indexOf(initialFocusItem) === -1)
+                initialFocusItem = firstField
         }
         
         // Main content layout

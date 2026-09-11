@@ -20,6 +20,9 @@ WizardStepBase {
              ? qsTr("Register this device with your Raspberry Pi Connect organisation")
              : qsTr("Sign in to receive a token and enable Raspberry Pi Connect")
     showSkipButton: true
+    // This page is one switch and what follows from it, so the switch comes
+    // straight after Next rather than behind Back, Skip and App Options.
+    fieldsFollowNextButton: true
     nextButtonAccessibleDescription: qsTr("Save Raspberry Pi Connect settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
@@ -141,6 +144,7 @@ WizardStepBase {
             // Enable/disable Connect
             ImOptionPill {
                 id: useTokenPill
+                objectName: "connectUseTokenToggle"
                 Layout.fillWidth: true
                 visible: !root.orgModeEnabled
                 text: qsTr("Enable Raspberry Pi Connect")
@@ -158,17 +162,13 @@ WizardStepBase {
             // Request token button (only when enabled and no token present)
             ImButton {
                 id: btnOpenConnect
+                objectName: "connectOpenSignInButton"
                 Layout.fillWidth: true
                 text: qsTr("Open Raspberry Pi Connect")
                 accessibleDescription: qsTr("Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token")
                 enabled: useTokenPill.checked
                 visible: !root.orgModeEnabled && useTokenPill.checked && !root.connectTokenReceived
-                onClicked: {
-                    if (ImageWriterSingleton) {
-                        var authUrl = Qt.resolvedUrl("https://connect.raspberrypi.com/imager/")
-                        ImageWriterSingleton.openUrl(authUrl)
-                    }
-                }
+                onClicked: root.openConnectSignIn()
             }
 
             // Token input field label and field (only when enabled)
@@ -181,6 +181,7 @@ WizardStepBase {
 
             ImTextField {
                 id: fieldConnectToken
+                objectName: "connectTokenField"
                 Layout.fillWidth: true
                 font.pointSize: Style.fontSizeInput
                 visible: !root.orgModeEnabled && useTokenPill.checked
@@ -213,6 +214,20 @@ WizardStepBase {
         }
     }
     ]
+
+    // Sending the user off to sign in, in one place.
+    //
+    // The button that does it carries a second handler, in a Connections
+    // block further down, which starts the hold on the token field. Both
+    // run on the same click, so a test cannot press the button without
+    // also launching a browser on the machine running the suite -- unless
+    // the launching is a method it can shadow, which is what this is.
+    function openConnectSignIn() {
+        if (ImageWriterSingleton) {
+            ImageWriterSingleton.openUrl(
+                Qt.resolvedUrl("https://connect.raspberrypi.com/imager/"))
+        }
+    }
 
     // Token state and parsing helpers
     property bool connectTokenReceived: false
@@ -257,6 +272,7 @@ WizardStepBase {
     // Countdown timer
     Timer {
         id: countdownTimer
+        objectName: "connectCountdownTimer"
         interval: 1000
         repeat: true
         running: false
@@ -497,6 +513,7 @@ WizardStepBase {
     // Invalid token dialog
     BaseDialog {
         id: invalidTokenDialog
+        objectName: "connectInvalidTokenDialog"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -549,6 +566,7 @@ WizardStepBase {
             
             ImButton {
                 id: okBtn
+                objectName: "connectInvalidTokenOkButton"
                 text: qsTr("OK")
                 accessibleDescription: qsTr("Close this dialog and return to the token field")
                 activeFocusOnTab: true
@@ -566,6 +584,7 @@ WizardStepBase {
     // Auth-key minting failure dialog (non-fastboot org mode).
     BaseDialog {
         id: authKeyErrorDialog
+        objectName: "connectAuthKeyErrorDialog"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -639,17 +658,7 @@ WizardStepBase {
     }
 
     // Handle skip button
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        wizardContainer.piConnectEnabled = false
-
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 }
 

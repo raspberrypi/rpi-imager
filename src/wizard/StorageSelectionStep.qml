@@ -115,6 +115,7 @@ WizardStepBase {
         // Error banner for drive enumeration failures
         Rectangle {
             id: enumerationErrorBanner
+            objectName: "storageEnumerationErrorBanner"
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? errorBannerContent.implicitHeight + Style.spacingMedium * 2 : 0
             visible: root.enumerationErrorMessage.length > 0
@@ -151,6 +152,12 @@ WizardStepBase {
         // Storage device list fills available space
         SelectionListView {
             id: dstlist
+            objectName: "storageDeviceList"
+            // Backed by drive polling rather than a one-off fetch, so the
+            // first card appearing is an event and not a page loading.
+            announceFirstPopulation: true
+            itemNoun: qsTr("storage device")
+            itemNounPlural: qsTr("storage devices")
             Layout.fillWidth: true
             Layout.fillHeight: true
             model: ImageWriterSingleton.getDriveList()
@@ -289,14 +296,35 @@ WizardStepBase {
             
             ImCheckBox {
                 id: filterSystemDrives
+                // Named so a test can reach it: getStorageStatusMessage()
+                // branches on this, and an id is not visible from outside
+                // the component.
+                objectName: "filterSystemDrives"
                 checked: true
                 text: qsTr("Exclude system drives")
-                Accessible.description: qsTr("When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.")
+                // Carries what the confirmation dialog would have said, because
+                // for a screen reader user this is read instead of it.
+                Accessible.description: qsTr("When checked, system drives are hidden from the list. Unchecking shows system drives, including the one this computer is running from, and writing to one of those will destroy the installed operating system.")
 
                 onToggled: {
                     if (!checked) {
-                        // If warnings are disabled, bypass the confirmation dialog
-                        if (root.wizardContainer && root.wizardContainer.disableWarnings) {
+                        // Two ways past the confirmation.
+                        //
+                        // disableWarnings is the deployment-wide opt-out.
+                        //
+                        // The other is an assistive technology being attached.
+                        // This dialog exists to slow down someone who has not
+                        // registered what the toggle does; a screen reader has
+                        // already read the label and the description above
+                        // aloud, which is more than a sighted mouse user is
+                        // ever shown. Interrupting the user who was told the
+                        // most, to protect the one who was told the least, is
+                        // the wrong way round -- so the warning lives in the
+                        // description, where it is spoken, rather than behind
+                        // a prompt.
+                        var warningsOff = root.wizardContainer
+                                       && root.wizardContainer.disableWarnings
+                        if (!ConfirmationPolicy.shouldConfirm(warningsOff)) {
                             // Leave checkbox unchecked and continue showing system drives
                             dstlist.forceActiveFocus()
                         } else {
@@ -652,6 +680,7 @@ WizardStepBase {
     // Stern confirmation when disabling system drive filtering
     ConfirmUnfilterDialog {
         id: confirmUnfilterPopup
+        objectName: "confirmUnfilterPopup"
         overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         onConfirmed: {
             // user chose to disable filter; leave checkbox unchecked
@@ -674,6 +703,7 @@ WizardStepBase {
     // Confirmation when selecting a system drive: type the exact name
     ConfirmSystemDriveDialog {
         id: systemDriveConfirm
+        objectName: "systemDriveConfirmDialog"
         overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         onConfirmed: {
             ImageWriterSingleton.setDst(systemDriveConfirm.device, systemDriveConfirm.deviceSize)

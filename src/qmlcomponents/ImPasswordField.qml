@@ -109,6 +109,7 @@ Item {
     // Eye icon toggle button - using Button for proper accessibility
     Button {
         id: eyeButton
+        objectName: "passwordRevealButton"
         
         anchors.right: textField.right
         anchors.rightMargin: 4

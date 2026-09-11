@@ -233,6 +233,7 @@ WizardStepBase {
                 }
                 contentItem: Flickable {
                     id: customizationsFlickable
+                    objectName: "writeSummaryFlickable"
                     contentWidth: width
                     contentHeight: customizationsColumn.implicitHeight
                     interactive: contentHeight > height
@@ -284,6 +285,7 @@ WizardStepBase {
 
             FocusableText {
                 id: progressText
+                objectName: "writeProgressText"
                 text: qsTr("Starting write process...")
                 font.pointSize: Style.fontSizeHeading
                 font.family: Style.fontFamilyBold
@@ -296,6 +298,7 @@ WizardStepBase {
 
             ProgressBar {
                 id: progressBar
+                objectName: "writeProgressBar"
                 Layout.fillWidth: true
                 Layout.preferredHeight: Style.spacingLarge
                 value: 0
@@ -360,7 +363,9 @@ WizardStepBase {
             } else {
                 // Cancel the actual write operation
                 progressBar.value = 100
-                progressText.text = qsTr("Finalising…")
+                // The ASCII form, as in the two handlers below: one
+                // user-visible state, one translatable string.
+                progressText.text = qsTr("Finalising...")
                 ImageWriterSingleton.cancelWrite()
             }
         } else if (!root.isComplete) {
@@ -385,6 +390,7 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
+        objectName: "confirmWriteDialog"
         parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
 
@@ -480,6 +486,7 @@ WizardStepBase {
 
             ImButton {
                 id: cancelButton
+                objectName: "confirmWriteCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Cancel and return to the write summary without erasing the storage device")
                 activeFocusOnTab: true
@@ -488,6 +495,7 @@ WizardStepBase {
 
             ImButtonRed {
                 id: acceptBtn
+                objectName: "confirmWriteAcceptButton"
                 text: confirmDialog.allowAccept ? qsTr("I understand, erase and write") : qsTr("Please wait...")
                 accessibleDescription: qsTr("Confirm erasure and begin writing the image to the storage device")
                 enabled: confirmDialog.allowAccept
@@ -498,9 +506,6 @@ WizardStepBase {
                 }
             }
         }
-
-        // Bottom spacer to balance the dialog's internal top padding
-        Item { Layout.preferredHeight: Style.cardPadding }
     }
 
     // Delay accept for 2 seconds - moved outside dialog content
@@ -526,6 +531,7 @@ WizardStepBase {
     // to avoid OS authentication prompts being cancelled by focus changes.
     Timer {
         id: beginWriteDelay
+        objectName: "beginWriteDelayTimer"
         interval: 300
         running: false
         repeat: false
@@ -592,7 +598,14 @@ WizardStepBase {
 
         function onFinalizing() {
             if (root.isWriting) {
-                progressText.text = qsTr("Finalising…")
+                // Same string as onFinalizing() above, deliberately. It used
+                // to differ by its ellipsis -- "Finalising…" here against
+                // "Finalising..." there -- which made one user-visible state
+                // into two translatable strings. Translators duly did both,
+                // and German ended up with "Finalisiere..." for one and
+                // "Finalisiere...." for the other. The ASCII form is kept
+                // because more locales have already translated it.
+                progressText.text = qsTr("Finalising...")
                 progressBar.value = 100
             }
         }

@@ -159,7 +159,15 @@ WizardStepBase {
             }
         }
         // Handle native file selection for "Use custom"
-        function onFileSelected(fileUrl) {
+        function onFileSelected(fileUrl, purpose) {
+            // The dialog is shared and its result is broadcast, so a
+            // selection made for something else -- the custom repository
+            // file, chosen from the options dialog while this step is the
+            // one on screen -- is not a custom image. Taking it as one
+            // replaced the chosen OS with a repository json file and threw
+            // away the user's staged customisation with it.
+            if (purpose !== "customImage")
+                return
             // Ensure ImageWriter src is set to the chosen file explicitly
             ImageWriterSingleton.setSrc(fileUrl)
             // OS swapped — drop any stale org-minted auth key so it
@@ -247,6 +255,7 @@ WizardStepBase {
         // Offline banner (shown when OS list fetch failed)
         Rectangle {
             id: offlineBanner
+            objectName: "osListOfflineBanner"
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? bannerContent.implicitHeight + Style.spacingMedium * 2 : 0
             visible: root.osListUnavailable
@@ -281,6 +290,7 @@ WizardStepBase {
                 
                 ImButton {
                     id: retryButton
+                    objectName: "osListRetryButton"
                     text: qsTr("Retry")
                     accessibleDescription: qsTr("Retry downloading the OS list")
                     onClicked: {
@@ -298,6 +308,7 @@ WizardStepBase {
             // OS SwipeView for navigation between categories
             SwipeView {
                 id: osswipeview
+                objectName: "osCategorySwipeView"
                 anchors.fill: parent
                 interactive: false
                 clip: true
@@ -319,7 +330,14 @@ WizardStepBase {
                     
                     // Main OS list
                     OSSelectionListView {
+                        // Population changes here are navigation, not
+                        // arrival: descending into a category replaces the
+                        // rows. "A device was connected" would be wrong, and
+                        // the swipe view already moves focus, which is what
+                        // announces the new list.
+                        announcePopulationChanges: false
                         id: oslist
+                        objectName: "osList"
                         model: root.osmodel
                         delegate: osdelegate
                         accessibleName: {
@@ -545,7 +563,14 @@ WizardStepBase {
         id: suboslist
         
         OSSelectionListView {
+            // Population changes here are navigation, not
+            // arrival: descending into a category replaces the
+            // rows. "A device was connected" would be wrong, and
+            // the swipe view already moves focus, which is what
+            // announces the new list.
+            announcePopulationChanges: false
             id: sublistview
+            objectName: "osSublistView"
             model: ListModel {
                 id: sublistModel
                 
@@ -671,7 +696,8 @@ WizardStepBase {
                     Qt.callLater(function() {
                         ImageWriterSingleton.openFileDialog(
                             qsTr("Select image"),
-                            CommonStrings.imageFiltersString)
+                            CommonStrings.imageFiltersString,
+                            "customImage")
                     })
                 } else if (root.hasOwnProperty("customImageFileDialog")) {
                     // Ensure reasonable defaults

@@ -94,6 +94,7 @@ WizardStepBase {
                         // Interface toggles
                         ImOptionPill {
                             id: chkEnableI2C
+                            objectName: "enableI2CToggle"
                             Layout.fillWidth: true
                             text: qsTr("Enable I2C")
                             accessibleDescription: qsTr("Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals")
@@ -172,9 +173,13 @@ WizardStepBase {
 
                             ImOptionPill {
                                 id: chkEnableUsbGadget
+                                objectName: "enableUsbGadgetToggle"
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
-                                accessibleDescription: qsTr("Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage")
+                                // Carries what the confirmation dialog says, so
+                                // that skipping the dialog relocates the warning
+                                // rather than dropping it.
+                                accessibleDescription: qsTr("Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage. This can change how your device behaves and may affect connectivity and host interaction; only enable it if you are sure you know what you are doing.")
                                 helpLabel: ImageWriterSingleton.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
                                 helpUrl: ImageWriterSingleton.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-usb-gadget?tab=readme-ov-file"
                                 checked: false
@@ -196,7 +201,14 @@ WizardStepBase {
             wizardContainer.ifI2cEnabled     = false
             wizardContainer.ifSpiEnabled     = false
             wizardContainer.if1WireEnabled   = false
-            wizardContainer.ifSerial         = false
+            // "Disabled", not false. ifSerial is a string, so a boolean here
+            // became the string "false" -- which is neither "" nor "Disabled",
+            // the two values every reader treats as unconfigured. The sidebar
+            // then marked this step done, and both the pre-erase summary and
+            // the completion screen listed a serial console the user had never
+            // been offered, on any OS without interface support. The sibling
+            // block below gets it right.
+            wizardContainer.ifSerial         = "Disabled"
             wizardContainer.featUsbGadgetEnabled = false
             // skip page
             wizardContainer.nextStep()
@@ -325,7 +337,10 @@ WizardStepBase {
         wizardContainer.ifSerial         = supportsSerial ? comboSerial.editText : "Disabled"
         wizardContainer.featUsbGadgetEnabled = usbGadgetVal
 
-        if (usbGadgetVal && !wizardContainer.disableWarnings) {
+        // As on the storage and user steps: the deployment-wide opt-out, or
+        // an assistive technology having already read the toggle's
+        // description -- which carries this warning -- aloud.
+        if (usbGadgetVal && ConfirmationPolicy.shouldConfirm(wizardContainer.disableWarnings)) {
             confirmDialog.open()
         } else {
             root.isConfirmed = true
@@ -335,6 +350,7 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
+        objectName: "usbGadgetWarningDialog"
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
@@ -414,6 +430,7 @@ WizardStepBase {
 
             ImButton {
                 id: cancelBtn
+                objectName: "usbGadgetCancelButton"
                 text: CommonStrings.cancel
                 accessibleDescription: qsTr("Cancel and return to the interfaces and features settings without enabling USB Gadget Mode")
                 activeFocusOnTab: true
@@ -422,6 +439,7 @@ WizardStepBase {
 
             ImButtonRed {
                 id: acceptBtn
+                objectName: "usbGadgetAcceptButton"
                 text: qsTr("I understand, continue")
                 accessibleDescription: confirmDialog.allowAccept ? qsTr("Confirm that you understand the risks and continue with USB Gadget Mode enabled") : qsTr("This button will be enabled after 2 seconds")
                 enabled: confirmDialog.allowAccept
@@ -449,22 +467,8 @@ WizardStepBase {
         }
     }
 
-    onSkipClicked: {
-        // Clear all customization flags
-        wizardContainer.hostnameConfigured = false
-        wizardContainer.localeConfigured = false
-        wizardContainer.userConfigured = false
-        wizardContainer.wifiConfigured = false
-        wizardContainer.sshEnabled = false
-        wizardContainer.piConnectEnabled = false
-        wizardContainer.ifI2cEnabled = false
-        wizardContainer.ifSpiEnabled = false
-        wizardContainer.ifSerial = "Disabled"
-        wizardContainer.featUsbGadgetEnabled = false
-
-        // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
+    // Skipping means skipping all of it, wherever the button is pressed.
+    onSkipClicked: wizardContainer.skipAllCustomisation()
 
     Connections {
         // Recompute caps if the selected device changes elsewhere

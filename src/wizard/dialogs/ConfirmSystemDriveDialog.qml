@@ -127,6 +127,7 @@ BaseDialog {
 
     TextField {
         id: nameInput
+        objectName: "systemDriveNameInput"
         Layout.fillWidth: true
         font.family: Style.fontFamily
         font.pointSize: Style.fontSizeInput
@@ -161,6 +162,7 @@ BaseDialog {
 
         ImButtonRed {
             id: cancelButton
+            objectName: "systemDriveCancelButton"
             text: qsTr("CANCEL")
             accessibleDescription: qsTr("Cancel operation and return to storage selection to choose a different device")
             activeFocusOnTab: true
@@ -172,6 +174,7 @@ BaseDialog {
 
         ImButton {
             id: continueButton
+            objectName: "systemDriveContinueButton"
             text: qsTr("CONTINUE")
             accessibleDescription: qsTr("Proceed to write the image to this system drive after confirming the drive name")
             enabled: root.driveName.length > 0 && nameInput.text === root.driveName
