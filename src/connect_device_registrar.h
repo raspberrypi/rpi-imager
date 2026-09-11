@@ -40,6 +40,11 @@ public:
 
     bool isEnabled() const { return !_apiKey.isEmpty(); }
 
+    // Where this instance will post. Readable so a caller -- or a test --
+    // can tell a redirected registrar from one talking to production
+    // without having to watch the wire.
+    const QString &baseUrl() const { return _baseUrl; }
+
     // Perform the full registration flow against the given fastboot
     // device.  Reads the public key, asks the device to sign the
     // request, POSTs to the Connect management API, and parses the

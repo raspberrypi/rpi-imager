@@ -95,13 +95,33 @@ size_t curlWriteToByteArray(char *ptr, size_t size, size_t nmemb, void *userdata
 
 } // namespace
 
+namespace {
+
+// The caller's base URL, else RPI_IMAGER_CONNECT_URL, else production.
+//
+// Two callers construct this without a base URL of their own --
+// ImageWriter::requestOrgAuthKey() and the fastboot registration -- so
+// without the environment step there is no way to point either at a stub,
+// and the only test that could be written for them is one that posts to
+// the real management API. A staging deployment wants the same door.
+QString resolveBaseUrl(const QString &baseUrl)
+{
+    if (!baseUrl.isEmpty())
+        return baseUrl;
+    const QByteArray fromEnv = qgetenv("RPI_IMAGER_CONNECT_URL");
+    if (!fromEnv.isEmpty())
+        return QString::fromUtf8(fromEnv);
+    return QString::fromLatin1(DEFAULT_CONNECT_BASE_URL);
+}
+
+} // namespace
+
 ConnectDeviceRegistrar::ConnectDeviceRegistrar(const QString &apiKey,
                                                  const QString &descriptionPrefix,
                                                  const QString &baseUrl)
     : _apiKey(apiKey.trimmed())
     , _descriptionPrefix(descriptionPrefix.trimmed())
-    , _baseUrl(baseUrl.isEmpty() ? QString::fromLatin1(DEFAULT_CONNECT_BASE_URL)
-                                 : baseUrl)
+    , _baseUrl(resolveBaseUrl(baseUrl))
 {
 }
 
@@ -261,6 +281,15 @@ ConnectDeviceRegistrar::AuthKeyResult ConnectDeviceRegistrar::requestAuthKey(
     CurlNetworkConfig::instance().applyCurlSettings(
         c, CurlNetworkConfig::FetchProfile::FireAndForget);
 
+    // The shared configuration turns FAILONERROR on, which is right for a
+    // download -- a 404 there is nothing but a failure. Here it threw away
+    // the part that matters: curl returned CURLE_HTTP_RETURNED_ERROR before
+    // the status could be looked at, so every refusal read "Network error:
+    // The requested URL returned error: 401", and the body carrying the
+    // API's own explanation was discarded with it. The code below is written
+    // to read the status and the body, and could never reach either.
+    curl_easy_setopt(c, CURLOPT_FAILONERROR, 0L);
+
     QByteArray responseBody;
     struct curl_slist *headers = nullptr;
     const QByteArray authHeader =
@@ -374,6 +403,11 @@ ConnectDeviceRegistrar::HttpResult ConnectDeviceRegistrar::httpPost(
     // FireAndForget profile — registration is a short one-shot request.
     CurlNetworkConfig::instance().applyCurlSettings(
         c, CurlNetworkConfig::FetchProfile::FireAndForget);
+
+    // As in requestAuthKey above: FAILONERROR would fail this request before
+    // the status and body could be read, and both are what the caller
+    // reports.
+    curl_easy_setopt(c, CURLOPT_FAILONERROR, 0L);
 
     struct curl_slist *headers = nullptr;
     const QByteArray authHeader = QByteArrayLiteral("Authorization: ") + bearerToken;

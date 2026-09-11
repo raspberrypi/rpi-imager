@@ -36,23 +36,38 @@ struct UsbDeviceInfo {
     uint8_t  serialNumberIndex = 0;      // bSerialNumber from USB descriptor (0 = ROM mode)
 };
 
+// The USB bus as its callers use it.
+//
+// LibusbContext below is the real one. The sideload sequence in
+// RpibootThread is written entirely against this interface, so a test can
+// supply a bus with whatever devices it wants on it and drive the sequence
+// without hardware -- which is the only way that code is reachable at all.
+class IUsbContext {
+public:
+    virtual ~IUsbContext();
+
+    // Scan for Broadcom devices in USB boot mode
+    virtual std::vector<UsbDeviceInfo> scanBootDevices() const = 0;
+
+    // Scan for devices in fastboot mode (Google VID 0x18d1, PID 0x4e40)
+    virtual std::vector<UsbDeviceInfo> scanFastbootDevices() const = 0;
+
+    // Open a specific device for communication
+    virtual std::unique_ptr<IUsbTransport> openDevice(const UsbDeviceInfo& info) const = 0;
+};
+
 // RAII wrapper around libusb_context
-class LibusbContext {
+class LibusbContext : public IUsbContext {
 public:
     LibusbContext();
-    ~LibusbContext();
+    ~LibusbContext() override;
 
     LibusbContext(const LibusbContext&) = delete;
     LibusbContext& operator=(const LibusbContext&) = delete;
 
-    // Scan for Broadcom devices in USB boot mode
-    std::vector<UsbDeviceInfo> scanBootDevices() const;
-
-    // Scan for devices in fastboot mode (Google VID 0x18d1, PID 0x4e40)
-    std::vector<UsbDeviceInfo> scanFastbootDevices() const;
-
-    // Open a specific device for communication
-    std::unique_ptr<class LibusbTransport> openDevice(const UsbDeviceInfo& info) const;
+    std::vector<UsbDeviceInfo> scanBootDevices() const override;
+    std::vector<UsbDeviceInfo> scanFastbootDevices() const override;
+    std::unique_ptr<IUsbTransport> openDevice(const UsbDeviceInfo& info) const override;
 
     // Raw context for advanced usage (hotplug registration, etc.)
     libusb_context* raw() const { return _ctx; }
@@ -96,7 +111,7 @@ public:
 
     // Diagnostic string built during construction (set_configuration result,
     // claim_interface result).  Included in performance-capture metadata.
-    const QString& initDiagnostics() const { return _initDiag; }
+    QString initDiagnostics() const override { return _initDiag; }
 
     // Read the USB interface string descriptor (iInterface) for the active
     // interface, decoded as ASCII.  Returns an empty string on failure or if

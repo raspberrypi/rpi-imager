@@ -11,10 +11,14 @@
 
 #include <cstdint>
 #include <span>
+
+#include <QString>
 #include <string>
 
 namespace rpiboot {
 
+// Abstract USB transport: the operations rpiboot and fastboot need from a
+// device, with no libusb in the signature so both can be driven by a test.
 class IUsbTransport {
 public:
     virtual ~IUsbTransport() = default;
@@ -45,6 +49,14 @@ public:
 
     // True if the underlying device handle is still valid
     virtual bool isOpen() const = 0;
+
+    // What happened while the transport was being brought up: which
+    // configuration and interface were claimed, and anything that had to be
+    // retried.  Carried into the telemetry and the error message when a
+    // sideload fails, since by then the device is usually gone from the bus
+    // and this is the only account of it.  Empty by default, for transports
+    // with nothing to say.
+    virtual QString initDiagnostics() const { return {}; }
 
     // Bulk OUT endpoint address (e.g. 0x01).  Determined from the device's
     // active configuration descriptor; falls back to EP 1 if unknown.

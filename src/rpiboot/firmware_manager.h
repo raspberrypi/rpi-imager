@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <istream>
 #include <optional>
 #include <string>
 #include <vector>
@@ -26,18 +27,24 @@ namespace rpiboot {
 class FirmwareManager {
 public:
     FirmwareManager();
+    virtual ~FirmwareManager() = default;
 
     // Ensure that firmware for the given mode and chip generation is
     // available in the local cache.  Downloads on first use; subsequent
     // calls return the cached path.
     // Returns the path to the firmware directory, or empty on failure.
-    std::filesystem::path ensureAvailable(SideloadMode mode,
+    // Virtual for the same reason cacheRoot() is: RpibootThread's sequence
+    // begins here, and a test that cannot get past the download cannot
+    // reach any of it.
+    virtual std::filesystem::path ensureAvailable(SideloadMode mode,
                                            ChipGeneration chip,
                                            ProgressCallback progress,
                                            std::atomic<bool>& cancelled);
 
-    // Return the cache root (platform-appropriate app data directory)
-    std::filesystem::path cacheRoot() const;
+    // Return the cache root (platform-appropriate app data directory).
+    // Virtual so a test can point an instance somewhere disposable rather
+    // than at the developer's real cache -- see usbbootBase() and friends.
+    virtual std::filesystem::path cacheRoot() const;
 
     // Set a local fastboot gadget image (boot.img) to use instead of
     // downloading from GitHub.  When non-empty, ensureAvailable() copies
@@ -56,7 +63,10 @@ public:
     // Clear all cached firmware
     void clearCache();
 
-    const std::string& lastError() const { return _lastError; }
+    // Virtual alongside ensureAvailable(): the pair is what a caller reports
+    // to the user when firmware cannot be had, so a stand-in has to be able
+    // to supply both.
+    virtual const std::string& lastError() const { return _lastError; }
 
     // usbboot hosts the rpiboot USB-protocol scaffolding — gadget kernels
     // (fastboot-gadget.img, mass-storage-gadget64), the fastboot bootfiles
@@ -82,7 +92,33 @@ public:
     static constexpr const char* PROVISIONER_RAW_BASE =
         "https://github.com/raspberrypi/rpi-sb-provisioner/raw/refs/heads/main/";
 
-private:
+    // Where the firmware comes from, as overridable accessors rather than
+    // the constants directly.
+    //
+    // ensureAvailable() is the largest untested thing in this class, and the
+    // only reason is that these are compile-time constants pointing at
+    // github.com: nothing short of real network access could reach it.
+    // Reading them through virtuals lets a test point the whole download and
+    // cache path at a local server. Production behaviour is unchanged --
+    // these return exactly the constants above.
+protected:
+    virtual std::string usbbootBase() const { return USBBOOT_RAW_BASE; }
+    virtual std::string eepromBase() const { return EEPROM_RAW_BASE; }
+    virtual std::string provisionerBase() const { return PROVISIONER_RAW_BASE; }
+
+
+// Protected rather than private so a test can subclass and drive the cache
+// logic directly.
+//
+// buildManifest(), findCachedVersion(), validateCacheForDevice() and
+// clearCache()'s helpers are pure filesystem work -- they decide which
+// firmware files are needed, whether what is already on disk can be trusted
+// for a given board, and what to throw away. That is worth testing on its
+// own, but the only public way in is ensureAvailable(), which downloads from
+// the network first. Widening the access from private to protected changes
+// nothing for existing callers and keeps the class's public surface exactly
+// as it was.
+protected:
     struct ManifestEntry {
         std::string url;
         std::string localPath;  // relative to the version dir
@@ -101,6 +137,14 @@ private:
     // Fetch rpi-eeprom's firmware-271X/versions.txt and return the first
     // (newest) version it lists.  Returns std::nullopt on network failure;
     // caller falls back to the cached version sidecar.
+    // Choose the version to use from the body of rpi-eeprom's versions.txt.
+    // Split out from the fetch so it can be tested against hand-written
+    // files: the choice matters because an archived ("old") row is not
+    // guaranteed to exist under the latest/ channel we download from, so
+    // selecting one yields a URL that 404s and the device gets no firmware.
+    static std::optional<std::string> selectLatestVersion(std::istream& in,
+                                                          const std::string& firmwareDir);
+
     std::optional<std::string> resolveLatestEepromVersion(ChipGeneration chip,
                                                            std::atomic<bool>& cancelled);
 
