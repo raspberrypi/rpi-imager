@@ -11,12 +11,15 @@
 
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 
 #include <archive.h>
 #include <archive_entry.h>
 #include <lzma.h>
 #define ZSTD_STATIC_LINKING_ONLY  // for ZSTD_findDecompressedSize
 #include <zstd.h>
+
+#include "archive_kind.h"
 
 namespace imagesize {
 
@@ -206,6 +209,83 @@ ArchiveInfo parseArchive(const QString &path)
     qDebug() << "Parsed archive containing" << info.fileCount
              << "files, uncompressed size:" << info.uncompressedSize;
     return info;
+}
+
+SourceFormat probeFormat(const QString &path)
+{
+    struct archive *a = archive_read_new();
+    struct archive_entry *entry;
+    SourceFormat out;
+    // encodeName() for the same reason parseArchive() uses it.
+    QByteArray fn = QFile::encodeName(path);
+
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    // format_all excludes raw: without it a plain .img matches nothing.
+    archive_read_support_format_raw(a);
+
+    if (archive_read_open_filename(a, fn.data(), 10240) == ARCHIVE_OK
+        && archive_read_next_header(a, &entry) == ARCHIVE_OK)
+    {
+        out.format = archive_format(a);
+        out.filterCode = archive_filter_code(a, 0);
+        out.readable = true;
+    }
+
+    archive_read_free(a);
+    return out;
+}
+
+SourceSize measureLocalFile(const QString &path)
+{
+    SourceSize out;
+    const SourceFormat probed = probeFormat(path);
+
+    // Unreadable, or the bytes are the image: either way the write copies the
+    // file verbatim, so the file's own size is the answer.
+    if (!probed.readable
+        || archivekind::bytesAreTheDiskImage(probed.format, probed.filterCode))
+    {
+        const qint64 onDisk = QFileInfo(path).size();
+        out.uncompressedSize = onDisk > 0 ? quint64(onDisk) : 0;
+        out.sizeIsReliable = out.uncompressedSize > 0;
+        qDebug() << "Sized as a raw image:" << out.uncompressedSize;
+        return out;
+    }
+
+    if (archivekind::formatIsASingleImage(probed.format))
+    {
+        // A compressed image. The write emits the whole decompressed stream,
+        // so its length is the answer and entry sizes are not -- a .iso.xz
+        // must not be measured, or written, as the ISO's file list.
+        switch (probed.filterCode)
+        {
+        case ARCHIVE_FILTER_XZ:
+            out.uncompressedSize = parseXz(path);
+            out.sizeIsReliable = out.uncompressedSize > 0;
+            break;
+        case ARCHIVE_FILTER_GZIP:
+            // ISIZE is the original size modulo 2^32: good enough to refuse a
+            // card that is plainly too small, never a progress divisor.
+            out.uncompressedSize = parseGz(path);
+            break;
+        case ARCHIVE_FILTER_ZSTD:
+            out.uncompressedSize = parseZstd(path);
+            out.sizeIsReliable = out.uncompressedSize > 0;
+            break;
+        default:
+            qDebug() << "Compressed with filter" << probed.filterCode
+                     << "- size unknown";
+            break;
+        }
+        return out;
+    }
+
+    const ArchiveInfo info = parseArchive(path);
+    out.uncompressedSize = info.uncompressedSize;
+    out.fileCount = info.fileCount;
+    out.sizeIsReliable = info.uncompressedSize > 0;
+    return out;
 }
 
 } // namespace imagesize

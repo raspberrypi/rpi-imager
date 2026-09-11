@@ -40,6 +40,31 @@ struct ArchiveInfo {
 // entries, and how many there were.
 ArchiveInfo parseArchive(const QString &path);
 
+// What libarchive makes of the first header, so callers can ask what a file
+// is rather than what it is called.
+struct SourceFormat {
+    int format = 0;
+    int filterCode = 0;
+    bool readable = false;
+};
+
+SourceFormat probeFormat(const QString &path);
+
+struct SourceSize {
+    quint64 uncompressedSize = 0;  // 0 when unknown
+    int fileCount = 0;
+    bool sizeIsReliable = false;   // false also bars it as a progress divisor
+};
+
+// How many bytes writing this file will put on the card, chosen by content.
+//
+// Sizing must reach the same verdict the write does, and the write sniffs
+// (see archivekind::bytesAreTheDiskImage). Going by extension instead let a
+// mislabelled file -- xz bytes named .img -- be sized as raw then written
+// decompressed: progress past 400%, and a capacity check against a fraction
+// of what the card needed.
+SourceSize measureLocalFile(const QString &path);
+
 } // namespace imagesize
 
 #endif // IMAGESIZEPARSER_H
