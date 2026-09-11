@@ -590,36 +590,24 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
         _downloadLen = fi.size();
     }
 
-    // Parse local compressed files to estimate _extrLen for capacity checks.
+    // Size local files by what they contain, not by what they are called. A
+    // mislabelled download -- xz bytes under a .img name -- took the "not
+    // compressed" branch here and was sized at its compressed length, while
+    // the write path sniffed the same file and decompressed it. Progress ran
+    // past 400%, and the capacity check passed on a card far too small to
+    // hold the result.
     if (!extrLen && _src.isLocalFile())
     {
-        QString lowercaseurl = _src.toLocalFile().toLower();
-        bool compressed = lowercaseurl.endsWith(".zip") ||
-                          lowercaseurl.endsWith(".xz") ||
-                          lowercaseurl.endsWith(".bz2") ||
-                          lowercaseurl.endsWith(".gz") ||
-                          lowercaseurl.endsWith(".7z") ||
-                          lowercaseurl.endsWith(".zst") ||
-                          lowercaseurl.endsWith(".cache");
-
-        if (!compressed)
-            _extrLen = _downloadLen;
-        else if (lowercaseurl.endsWith(".xz"))
-            _parseXZFile();
-        else if (lowercaseurl.endsWith(".gz"))
-            _parseGzFile();
-        else if (lowercaseurl.endsWith(".zst"))
-            _parseZstdFile();
-        else
-            _parseCompressedFile();
+        const auto measured = imagesize::measureLocalFile(_src.toLocalFile());
+        _extrLen = measured.uncompressedSize;
+        _extractSizeKnown = measured.sizeIsReliable;
+        if (measured.fileCount > 1)
+            _multipleFilesInZip = true;
     }
-
-    // Gzip ISIZE is 32-bit, so uncompressed size is unreliable for files >4GB.
-    // The only extract size we can trust when calculating progress for gzipped
-    // images is the size provided by the manifest.
-    if (extrLen
-        || (_extrLen && !url.toString().toLower().endsWith(".gz")))
+    else if (extrLen)
+    {
         _extractSizeKnown = true;
+    }
 }
 
 /* Set device to write to */
@@ -3034,29 +3022,6 @@ void ImageWriter::onFileSelected(QString filename, const QString &purpose)
     {
         senderObj->deleteLater();
     }
-}
-
-void ImageWriter::_parseCompressedFile()
-{
-    const auto info = imagesize::parseArchive(_src.toLocalFile());
-    _extrLen = info.uncompressedSize;
-    if (info.fileCount > 1)
-        _multipleFilesInZip = true;
-}
-
-void ImageWriter::_parseXZFile()
-{
-    _extrLen = imagesize::parseXz(_src.toLocalFile());
-}
-
-void ImageWriter::_parseGzFile()
-{
-    _extrLen = imagesize::parseGz(_src.toLocalFile());
-}
-
-void ImageWriter::_parseZstdFile()
-{
-    _extrLen = imagesize::parseZstd(_src.toLocalFile());
 }
 
 bool ImageWriter::isOnline()

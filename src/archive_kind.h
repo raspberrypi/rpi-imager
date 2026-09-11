@@ -19,12 +19,13 @@ namespace archivekind {
 //
 // libarchive is asked with format_raw enabled, which matches any file at all,
 // so "did it recognise something" is always yes and cannot be the question.
-// The question is what it recognised:
-inline bool bytesAreTheDiskImage(int format, int filterCode)
-{
-    if (filterCode != ARCHIVE_FILTER_NONE)
-        return false;
+// The question is what it recognised.
 
+// Half of that question, asked of the format alone, so it still holds with
+// compression wrapped around it: a .iso.xz is an image to write, not a bundle
+// of the ISO's contents to unpack. Sizing needs this half on its own.
+inline bool formatIsASingleImage(int format)
+{
     switch (format & ARCHIVE_FORMAT_BASE_MASK) {
     case ARCHIVE_FORMAT_RAW:
     case ARCHIVE_FORMAT_ISO9660:
@@ -32,6 +33,12 @@ inline bool bytesAreTheDiskImage(int format, int filterCode)
     default:
         return false;
     }
+}
+
+// The whole question: an image, and nothing wrapped around it.
+inline bool bytesAreTheDiskImage(int format, int filterCode)
+{
+    return filterCode == ARCHIVE_FILTER_NONE && formatIsASingleImage(format);
 }
 
 } // namespace archivekind

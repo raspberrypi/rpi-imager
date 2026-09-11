@@ -739,10 +739,6 @@ protected:
     QSet<QString> _bootstrappingDevices;           // port path keys in progress
     QMap<QString, RpibootThread*> _activeBootstrapThreads;
 
-    void _parseCompressedFile();
-    void _parseXZFile();
-    void _parseGzFile();
-    void _parseZstdFile();
     QString _pubKeyFileName();
     QString _privKeyFileName();
     // Virtual so the key handling can be exercised against a directory a
