@@ -1,0 +1,1469 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Raspberry Pi Ltd
+
+// SecureBootProvisioner is what burns a customer key hash into a Compute
+// Module's OTP and signs the firmware it will accept afterwards. OTP is
+// write-once: a wrong key hash bricks the module permanently, and there is no
+// recovery. It had no tests.
+//
+// provision() itself needs a device on the USB bus, but the four static
+// functions around it do not -- key generation, the OTP hash, boot-image
+// signing and signed-recovery preparation all work on files. Those are also
+// the ones where a wrong answer is unrecoverable, so they are worth pinning
+// even without hardware.
+
+#include "rpiboot/test/mock_usb_transport.h"
+#include <atomic>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+
+#include "rpiboot/secure_boot_provisioner.h"
+#include "rpiboot/bootloader_image.h"
+#include "secureboot_crypto.h"
+#include "bootimgcreator.h"
+
+#include <QByteArray>
+#include <QCryptographicHash>
+#include <QDir>
+#include <QStandardPaths>
+#include <QFile>
+#include <QFileInfo>
+#include <QProcess>
+#include <QUuid>
+
+#include <array>
+#include <cstring>
+#include <filesystem>
+#include <vector>
+#include <optional>
+
+#include "fixture_process.h"
+
+namespace fs = std::filesystem;
+
+// The provisioner and the chip enum both live in namespace rpiboot.
+using rpiboot::SecureBootProvisioner;
+using rpiboot::ChipGeneration;
+
+namespace {
+
+bool haveOpenssl() { return QFileInfo::exists(QStringLiteral("/usr/bin/openssl")); }
+
+class ScratchDir
+{
+public:
+    ScratchDir()
+        : _path(QDir::temp().filePath(QStringLiteral("rpi-imager-sbp-%1")
+                                          .arg(QUuid::createUuid().toString(QUuid::WithoutBraces))))
+    {
+        QDir().mkpath(_path);
+    }
+    ~ScratchDir() { QDir(_path).removeRecursively(); }
+
+    ScratchDir(const ScratchDir &) = delete;
+    ScratchDir &operator=(const ScratchDir &) = delete;
+
+    fs::path path(const QString &name) const
+    {
+        return fs::path(QDir(_path).filePath(name).toStdString());
+    }
+
+    // The directory itself, for cases that need to put something on PATH.
+    QString dir() const { return _path; }
+
+private:
+    QString _path;
+};
+
+bool writeFile(const fs::path &path, const QByteArray &contents)
+{
+    QFile f(QString::fromStdString(path.string()));
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    const bool ok = f.write(contents) == contents.size();
+    f.close();
+    return ok;
+}
+
+QByteArray readFile(const fs::path &path)
+{
+    QFile f(QString::fromStdString(path.string()));
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    const QByteArray data = f.readAll();
+    f.close();
+    return data;
+}
+
+// Ask openssl for the DER of the public key, so the OTP hash can be checked
+// against something other than the code under test.
+QByteArray publicKeyDerViaOpenssl(const fs::path &publicKeyPath)
+{
+    QProcess proc;
+    proc.start(QStringLiteral("/usr/bin/openssl"),
+               {QStringLiteral("rsa"), QStringLiteral("-pubin"), QStringLiteral("-in"),
+                QString::fromStdString(publicKeyPath.string()), QStringLiteral("-outform"),
+                QStringLiteral("DER")});
+    proc.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+    if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0)
+        return {};
+    return proc.readAllStandardOutput();
+}
+
+} // namespace
+
+#define REQUIRE_OPENSSL()                                                                          \
+    if (!haveOpenssl())                                                                            \
+    SKIP("openssl is not installed, so no key pair can be generated")
+
+// ---------------------------------------------------------------------------
+// Key generation
+// ---------------------------------------------------------------------------
+
+TEST_CASE("SecureBootProvisioner generates a usable key pair", "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    REQUIRE(fs::exists(priv));
+    REQUIRE(fs::exists(pub));
+
+    // Both halves must be PEM, and the private one must actually be private:
+    // writing the public key to both paths would silently produce a device
+    // that can never be signed for.
+    const QByteArray privBytes = readFile(priv);
+    const QByteArray pubBytes = readFile(pub);
+    CHECK(privBytes.contains("PRIVATE KEY"));
+    CHECK(pubBytes.contains("PUBLIC KEY"));
+    CHECK_FALSE(pubBytes.contains("PRIVATE KEY"));
+
+    // And openssl has to accept the private key, not just the file shape.
+    QProcess check;
+    check.start(QStringLiteral("/usr/bin/openssl"),
+                {QStringLiteral("rsa"), QStringLiteral("-in"),
+                 QString::fromStdString(priv.string()), QStringLiteral("-noout"),
+                 QStringLiteral("-check")});
+    check.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+    CHECK(check.exitCode() == 0);
+}
+
+TEST_CASE("SecureBootProvisioner key generation fails on an unwritable path",
+          "[secureboot-otp]")
+{
+    const fs::path priv{"/nonexistent-rpi-imager-dir/deeper/private.pem"};
+    const fs::path pub{"/nonexistent-rpi-imager-dir/deeper/public.pem"};
+
+    // Reporting success without writing a key would leave the caller about
+    // to fuse a hash of nothing.
+    CHECK_FALSE(SecureBootProvisioner::generateKeyPair(priv, pub));
+}
+
+TEST_CASE("SecureBootProvisioner generates a different key each time", "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path privA = scratch.path(QStringLiteral("a.pem"));
+    const fs::path pubA = scratch.path(QStringLiteral("a.pub"));
+    const fs::path privB = scratch.path(QStringLiteral("b.pem"));
+    const fs::path pubB = scratch.path(QStringLiteral("b.pub"));
+
+    REQUIRE(SecureBootProvisioner::generateKeyPair(privA, pubA));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(privB, pubB));
+
+    // A fixed or seeded key would mean every device provisioned by this tool
+    // shares one signing key.
+    CHECK(readFile(privA) != readFile(privB));
+}
+
+// ---------------------------------------------------------------------------
+// OTP key hash
+// ---------------------------------------------------------------------------
+
+TEST_CASE("SecureBootProvisioner computes the OTP key hash", "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    const auto hash = SecureBootProvisioner::calculateOtpKeyHash(pub);
+    REQUIRE(hash.has_value());
+
+    // This value is burned into one-time-programmable memory. It must be a
+    // real 32-byte SHA-256, not zeroes or a truncated buffer.
+    std::array<uint8_t, 32> zeroes{};
+    CHECK(hash.value() != zeroes);
+
+    // Stable across calls: a hash that varies per invocation would fuse
+    // something the signer can never match.
+    const auto again = SecureBootProvisioner::calculateOtpKeyHash(pub);
+    REQUIRE(again.has_value());
+    CHECK(hash.value() == again.value());
+}
+
+TEST_CASE("SecureBootProvisioner OTP hash differs between keys", "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path privA = scratch.path(QStringLiteral("a.pem"));
+    const fs::path pubA = scratch.path(QStringLiteral("a.pub"));
+    const fs::path privB = scratch.path(QStringLiteral("b.pem"));
+    const fs::path pubB = scratch.path(QStringLiteral("b.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(privA, pubA));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(privB, pubB));
+
+    const auto hashA = SecureBootProvisioner::calculateOtpKeyHash(pubA);
+    const auto hashB = SecureBootProvisioner::calculateOtpKeyHash(pubB);
+    REQUIRE(hashA.has_value());
+    REQUIRE(hashB.has_value());
+
+    // Two keys hashing the same would let a module accept firmware signed by
+    // the wrong one.
+    CHECK(hashA.value() != hashB.value());
+}
+
+TEST_CASE("SecureBootProvisioner OTP hash rejects a missing key", "[secureboot-otp]")
+{
+    const auto hash =
+        SecureBootProvisioner::calculateOtpKeyHash(fs::path{"/nonexistent/public.pem"});
+
+    // std::nullopt rather than a hash of nothing: an all-zero hash is a
+    // legitimate-looking value that would be fused permanently.
+    CHECK_FALSE(hash.has_value());
+}
+
+TEST_CASE("SecureBootProvisioner OTP hash rejects a key that is not a key", "[secureboot-otp]")
+{
+    ScratchDir scratch;
+    const fs::path junk = scratch.path(QStringLiteral("junk.pem"));
+    REQUIRE(writeFile(junk, "-----BEGIN PUBLIC KEY-----\nnot base64 at all\n"));
+
+    CHECK_FALSE(SecureBootProvisioner::calculateOtpKeyHash(junk).has_value());
+}
+
+// ---------------------------------------------------------------------------
+// Boot image signing
+// ---------------------------------------------------------------------------
+
+TEST_CASE("SecureBootProvisioner signs a boot image", "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    const fs::path bootImg = scratch.path(QStringLiteral("boot.img"));
+    REQUIRE(writeFile(bootImg, QByteArray(64 * 1024, '\x5A')));
+
+    const fs::path sig = scratch.path(QStringLiteral("boot.sig"));
+    REQUIRE(SecureBootProvisioner::signBootImage(bootImg, priv, sig));
+
+    REQUIRE(fs::exists(sig));
+    const QByteArray sigBytes = readFile(sig);
+    REQUIRE_FALSE(sigBytes.isEmpty());
+
+    // boot.sig is text: the image digest and a timestamp. The bootloader
+    // rejects it outright if either is missing.
+    const QString text = QString::fromUtf8(sigBytes);
+    INFO("boot.sig: " << text.toStdString());
+    CHECK(text.contains(QStringLiteral("ts:")));
+
+    // The digest recorded must be of the image actually signed.
+    const QByteArray expected =
+        QCryptographicHash::hash(readFile(bootImg), QCryptographicHash::Sha256).toHex();
+    CHECK(text.contains(QString::fromUtf8(expected)));
+}
+
+TEST_CASE("SecureBootProvisioner refuses to sign a missing image", "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    CHECK_FALSE(SecureBootProvisioner::signBootImage(
+        fs::path{"/nonexistent/boot.img"}, priv, scratch.path(QStringLiteral("out.sig"))));
+}
+
+TEST_CASE("SecureBootProvisioner refuses to sign without a key", "[secureboot-otp]")
+{
+    ScratchDir scratch;
+    const fs::path bootImg = scratch.path(QStringLiteral("boot.img"));
+    REQUIRE(writeFile(bootImg, QByteArray(1024, '\x11')));
+
+    CHECK_FALSE(SecureBootProvisioner::signBootImage(
+        bootImg, fs::path{"/nonexistent/private.pem"},
+        scratch.path(QStringLiteral("out.sig"))));
+}
+
+// ---------------------------------------------------------------------------
+// Signed recovery preparation
+// ---------------------------------------------------------------------------
+
+TEST_CASE("SecureBootProvisioner rejects a recovery directory that is empty",
+          "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    const fs::path recoveryDir = scratch.path(QStringLiteral("recovery"));
+    fs::create_directories(recoveryDir);
+
+    // pieeprom.original.bin is required and absent. Producing a "signed"
+    // recovery from nothing would be flashed to a module and brick it.
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recoveryDir, priv, false, err));
+    CHECK_FALSE(err.empty());
+}
+
+TEST_CASE("SecureBootProvisioner rejects a recovery directory that is not there",
+          "[secureboot-otp]")
+{
+    REQUIRE_OPENSSL();
+    ScratchDir scratch;
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, fs::path{"/nonexistent/recovery"}, priv, true, err));
+    CHECK_FALSE(err.empty());
+}
+
+TEST_CASE("SecureBootProvisioner rejects signed recovery without a key", "[secureboot-otp]")
+{
+    ScratchDir scratch;
+    const fs::path recoveryDir = scratch.path(QStringLiteral("recovery"));
+    fs::create_directories(recoveryDir);
+    REQUIRE(writeFile(recoveryDir / "pieeprom.original.bin", QByteArray(4096, '\x00')));
+
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recoveryDir, fs::path{"/nonexistent/key.pem"}, false, err));
+    CHECK_FALSE(err.empty());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// prepareSignedRecovery: the success path
+//
+// The rejection paths above stop bad input reaching the device. These cover
+// what happens when it *does* succeed, which is where the unrecoverable
+// mistake lives: the firmware written here embeds the public key whose hash
+// gets burned into OTP. Embed the wrong one -- a stale key, a hardcoded key,
+// the same key regardless of input -- and the module will only ever accept
+// images signed by a key the user does not hold. It is then scrap.
+
+
+namespace {
+
+constexpr uint32_t kMagic     = 0x55aaf00f;   // bootcode section
+constexpr uint32_t kPadMagic  = 0x55aafeef;   // filler
+constexpr uint32_t kFileMagic = 0x55aaf11f;   // named file section
+constexpr size_t   kImageSize = 2 * 1024 * 1024;
+constexpr size_t   kReadOnly  = 64 * 1024;    // end of the read-only region
+
+void putBe32(std::vector<uint8_t> &b, size_t off, uint32_t v)
+{
+    b[off + 0] = uint8_t((v >> 24) & 0xff);
+    b[off + 1] = uint8_t((v >> 16) & 0xff);
+    b[off + 2] = uint8_t((v >>  8) & 0xff);
+    b[off + 3] = uint8_t( v        & 0xff);
+}
+
+// Write a named section holding `reserve` bytes, so a later in-place update
+// with a payload up to that size has somewhere to go.
+size_t writeSection(std::vector<uint8_t> &img, size_t off,
+                    const char *name, size_t reserve)
+{
+    const uint32_t length = uint32_t(reserve + 12 + 4);   // filename + meta + payload
+    putBe32(img, off + 0, kFileMagic);
+    putBe32(img, off + 4, length);
+    std::memset(&img[off + 8], 0, 16);
+    std::memcpy(&img[off + 8], name, std::strlen(name));
+    std::memset(&img[off + 24], 0, reserve);
+    size_t end = off + 8 + length;
+    while (end % 8 != 0)
+        img[end++] = 0xff;
+    return end;
+}
+
+// A minimal image in the format BootloaderImage understands: a bootcode blob,
+// padding out to the read-only boundary, then the three sections
+// prepareSignedRecovery rewrites.
+std::vector<uint8_t> makeSyntheticEeprom()
+{
+    std::vector<uint8_t> img(kImageSize, 0xff);
+
+    const std::vector<uint8_t> bootcode(4096, 0xAA);
+    putBe32(img, 0, kMagic);
+    putBe32(img, 4, uint32_t(bootcode.size()));
+    std::memcpy(&img[8], bootcode.data(), bootcode.size());
+    size_t off = 8 + bootcode.size();
+    while (off % 8 != 0)
+        img[off++] = 0xff;
+
+    putBe32(img, off, kPadMagic);
+    putBe32(img, off + 4, uint32_t(kReadOnly - (off + 8)));
+    off = kReadOnly;
+
+    // Reserves are comfortably larger than what gets written back, so an
+    // update failing here would mean a real regression rather than a
+    // fixture that was cut too fine.
+    off = writeSection(img, off, "bootconf.txt", 4096);
+    off = writeSection(img, off, "bootconf.sig", 4096);
+    off = writeSection(img, off, "pubkey.bin",   1024);
+    return img;
+}
+
+// Lay out a recovery directory containing just the synthetic original.
+void seedRecoveryDir(const fs::path &dir)
+{
+    fs::create_directories(dir);
+    const auto img = makeSyntheticEeprom();
+    QFile f(QString::fromStdString((dir / "pieeprom.original.bin").string()));
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(reinterpret_cast<const char *>(img.data()), qint64(img.size()));
+    f.close();
+}
+
+// Read one named section back out of a produced image.
+QByteArray sectionOf(const fs::path &image, const QString &name)
+{
+    rpiboot::BootloaderImage img;
+    REQUIRE(img.load(QString::fromStdString(image.string())));
+    return img.getFile(name);
+}
+
+} // namespace
+
+TEST_CASE("SecureBootProvisioner prepares a signed recovery image", "[secureboot-otp]")
+{
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, key, /*counterSignFirmware=*/false, err));
+    INFO("error: " << err);
+
+    CHECK(fs::exists(recovery / "pieeprom.bin"));
+    CHECK(fs::exists(recovery / "pieeprom.sig"));
+    // The original must survive: re-provisioning starts from it again.
+    CHECK(fs::exists(recovery / "pieeprom.original.bin"));
+}
+
+TEST_CASE("Signed recovery turns secure boot on and self-update off", "[secureboot-otp]")
+{
+    // ENABLE_SELF_UPDATE=1 on a secure-boot device lets the bootloader
+    // replace itself with an image the customer key has not signed, which
+    // is how a provisioned module stops booting.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, key, false, err));
+
+    const QByteArray conf = sectionOf(recovery / "pieeprom.bin",
+                                      QStringLiteral("bootconf.txt"));
+    INFO("bootconf.txt: " << conf.toStdString());
+    CHECK(conf.contains("SIGNED_BOOT=1"));
+    CHECK(conf.contains("ENABLE_SELF_UPDATE=0"));
+}
+
+TEST_CASE("Signed recovery embeds the public key of the key it was given",
+          "[secureboot-otp]")
+{
+    // The brick condition. The hash burned into OTP comes from this embedded
+    // key, so if it does not track the private key passed in -- if it were
+    // stale, cached, or hardcoded -- the user ends up holding a key the
+    // module will never accept.
+    ScratchDir scratch;
+
+    const auto keyA = scratch.path(QStringLiteral("a.pem"));
+    const auto pubA = scratch.path(QStringLiteral("a.pub"));
+    const auto keyB = scratch.path(QStringLiteral("b.pem"));
+    const auto pubB = scratch.path(QStringLiteral("b.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(keyA, pubA));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(keyB, pubB));
+
+    auto embeddedKeyFor = [&](const fs::path &privateKey, const char *dirName) {
+        const fs::path recovery = scratch.path(QString::fromLatin1(dirName));
+        seedRecoveryDir(recovery);
+        std::string err;
+        REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+            ChipGeneration::BCM2711, recovery, privateKey, false, err));
+        INFO("error: " << err);
+        return sectionOf(recovery / "pieeprom.bin", QStringLiteral("pubkey.bin"));
+    };
+
+    const QByteArray embeddedA = embeddedKeyFor(keyA, "recA");
+    const QByteArray embeddedB = embeddedKeyFor(keyB, "recB");
+
+    // RSA-2048 modulus (256) + exponent (8).
+    CHECK(embeddedA.size() == 264);
+    CHECK(embeddedB.size() == 264);
+
+    // Different key in, different key embedded.
+    CHECK(embeddedA != embeddedB);
+
+    // Same key in, same key embedded -- the output tracks the input rather
+    // than anything left over from the previous run.
+    CHECK(embeddedKeyFor(keyA, "recA2") == embeddedA);
+}
+
+TEST_CASE("Signed recovery signature carries hash, timestamp and RSA proof",
+          "[secureboot-otp]")
+{
+    // The recovery binary verifies pieeprom.sig before flashing on a
+    // secure-boot device, so all three lines have to be there. Dropping the
+    // rsa2048 line would leave the image unflashable on exactly the devices
+    // this path exists to serve -- and the header used to claim it was
+    // deliberately absent, which is what this pins down.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, key, false, err));
+
+    QFile sig(QString::fromStdString((recovery / "pieeprom.sig").string()));
+    REQUIRE(sig.open(QIODevice::ReadOnly));
+    const QByteArray text = sig.readAll();
+    INFO("pieeprom.sig: " << text.toStdString());
+
+    CHECK(text.contains("ts: "));
+    CHECK(text.contains("rsa2048:"));
+    // First line is 64 hex characters of SHA-256 over pieeprom.bin.
+    const QByteArray hash = text.left(64);
+    CHECK(hash.size() == 64);
+    CHECK(QByteArray::fromHex(hash).size() == 32);
+}
+
+TEST_CASE("Signed recovery rejects an unsupported chip generation", "[secureboot-otp]")
+{
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2836_7, recovery, key, false, err));
+    CHECK_FALSE(err.empty());
+    CHECK(fs::exists(recovery / "pieeprom.bin") == false);
+}
+
+TEST_CASE("Signed recovery rejects a corrupt original image", "[secureboot-otp]")
+{
+    // A truncated or non-EEPROM file must be refused rather than patched
+    // into something that gets flashed.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    fs::create_directories(recovery);
+
+    QFile bad(QString::fromStdString((recovery / "pieeprom.original.bin").string()));
+    REQUIRE(bad.open(QIODevice::WriteOnly));
+    bad.write(QByteArray(4096, '\x01'));
+    bad.close();
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, key, false, err));
+    CHECK_FALSE(err.empty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// The boot configuration written into a re-provisioned board.
+//
+// prepareSignedRecovery replaces bootconf.txt inside pieeprom.bin with one
+// of these two, signs it, and the result goes into the EEPROM of a Compute
+// Module whose customer key hash is already fused. Whatever is in here is
+// what that board will obey afterwards, and there is no second attempt: the
+// OTP is written once.
+
+namespace rpiboot::TestAPI {
+QByteArray defaultBootConf2712();
+QByteArray defaultBootConf2711();
+}
+
+namespace {
+// bootconf.txt is read as key=value lines under a section header.
+bool bootConfHas(const QByteArray& conf, const char* line)
+{
+    for (const QByteArray& l : conf.split('\n')) {
+        if (l.trimmed() == QByteArray(line))
+            return true;
+    }
+    return false;
+}
+} // namespace
+
+TEST_CASE("Both generations are configured to demand signed boot",
+          "[secureboot][bootconf]")
+{
+    const QByteArray cm5 = rpiboot::TestAPI::defaultBootConf2712();
+    const QByteArray cm4 = rpiboot::TestAPI::defaultBootConf2711();
+
+    INFO("2712:\n" << cm5.toStdString() << "\n2711:\n" << cm4.toStdString());
+
+    // The point of the exercise. A board provisioned without this accepts
+    // unsigned images for ever and nothing says so.
+    CHECK(bootConfHas(cm5, "SIGNED_BOOT=1"));
+    CHECK(bootConfHas(cm4, "SIGNED_BOOT=1"));
+
+    // And cannot quietly replace its own bootloader with one that does not.
+    CHECK(bootConfHas(cm5, "ENABLE_SELF_UPDATE=0"));
+    CHECK(bootConfHas(cm4, "ENABLE_SELF_UPDATE=0"));
+
+    // Under a section header, or the bootloader does not apply any of it.
+    CHECK(cm5.startsWith("[all]\n"));
+    CHECK(cm4.startsWith("[all]\n"));
+}
+
+TEST_CASE("Each generation gets the settings that belong to it",
+          "[secureboot][bootconf]")
+{
+    const QByteArray cm5 = rpiboot::TestAPI::defaultBootConf2712();
+    const QByteArray cm4 = rpiboot::TestAPI::defaultBootConf2711();
+
+    // Not the same file with a different name. Handing one generation the
+    // other's configuration is a misconfigured board that has already had
+    // its key fused.
+    CHECK(cm5 != cm4);
+
+    // BCM2712: the boot order and halt behaviour from
+    // usbboot/secure-boot-recovery5/boot.conf.
+    CHECK(bootConfHas(cm5, "BOOT_ORDER=0xf2461"));
+    CHECK(bootConfHas(cm5, "POWER_OFF_ON_HALT=1"));
+
+    // BCM2711 has its own, and does not carry the 2712 boot order.
+    CHECK(bootConfHas(cm4, "WAKE_ON_GPIO=1"));
+    CHECK(bootConfHas(cm4, "POWER_OFF_ON_HALT=0"));
+    CHECK(bootConfHas(cm4, "HDMI_DELAY=0"));
+    CHECK_FALSE(bootConfHas(cm4, "BOOT_ORDER=0xf2461"));
+
+    // Both keep the UART on, which is the only way to see why a board that
+    // will now only take signed images is not booting.
+    CHECK(bootConfHas(cm5, "BOOT_UART=1"));
+    CHECK(bootConfHas(cm4, "BOOT_UART=1"));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Counter-signing the firmware inside the EEPROM
+//
+// On a BCM2712 whose customer key is already fused, the boot ROM verifies
+// not only the EEPROM's configuration but the bootcode inside it, against
+// the same key. An AB-capable image carries a second such blob -- "bootsys",
+// the bulk bootloader in the first partition -- and the ROM checks that one
+// too.
+
+namespace {
+
+size_t writePad(std::vector<uint8_t> &img, size_t off, size_t bytes)
+{
+    putBe32(img, off + 0, kPadMagic);
+    putBe32(img, off + 4, uint32_t(bytes));
+    return off + 8 + bytes;
+}
+
+// As makeSyntheticEeprom(), but laid out so counter-signing can succeed:
+//
+//  - the named sections start past 128 KiB, which is the reservation the
+//    editor enforces for a non-AB image's bootcode, so a bootcode that has
+//    grown by a signature still fits;
+//  - a "bootsys" section can be included, which is what makes an image
+//    AB-capable, followed by slack so its own signed form fits too.
+std::vector<uint8_t> makeCounterSignableEeprom(int bootsysReserve = -1,
+                                               size_t bootcodeBytes = 4096)
+{
+    constexpr size_t kSectionsAt = 192 * 1024;
+    std::vector<uint8_t> img(kImageSize, 0xff);
+
+    const std::vector<uint8_t> bootcode(bootcodeBytes, 0xAA);
+    putBe32(img, 0, kMagic);
+    putBe32(img, 4, uint32_t(bootcode.size()));
+    if (!bootcode.empty())
+        std::memcpy(&img[8], bootcode.data(), bootcode.size());
+    size_t off = 8 + bootcode.size();
+    while (off % 8 != 0)
+        img[off++] = 0xff;
+
+    off = writePad(img, off, kSectionsAt - (off + 8));
+
+    if (bootsysReserve >= 0) {
+        off = writeSection(img, off, "bootsys", size_t(bootsysReserve));
+        // Room for the 532 bytes counter-signing adds, and then some.
+        off = writePad(img, off, 4096);
+    }
+    off = writeSection(img, off, "bootconf.txt", 4096);
+    off = writeSection(img, off, "bootconf.sig", 4096);
+    off = writeSection(img, off, "pubkey.bin",   1024);
+    return img;
+}
+
+void seedRecoveryDirWith(const fs::path &dir, const std::vector<uint8_t> &img)
+{
+    fs::create_directories(dir);
+    QFile f(QString::fromStdString((dir / "pieeprom.original.bin").string()));
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(reinterpret_cast<const char *>(img.data()), qint64(img.size()));
+    f.close();
+}
+
+} // namespace
+
+TEST_CASE("Counter-signing appends a signature to the bootcode in the EEPROM",
+          "[secureboot-otp][countersign]")
+{
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom());
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err));
+    INFO("error: " << err);
+
+    const QByteArray before = sectionOf(recovery / "pieeprom.original.bin",
+                                        QStringLiteral("bootcode.bin"));
+    const QByteArray after  = sectionOf(recovery / "pieeprom.bin",
+                                        QStringLiteral("bootcode.bin"));
+    REQUIRE_FALSE(before.isEmpty());
+
+    // The signature goes on the end; the firmware itself is untouched.
+    CHECK(after.size() > before.size());
+    CHECK(after.left(before.size()) == before);
+    // len(4) + keynum(4) + version(4) + 256-byte RSA-2048 signature +
+    // 264-byte pubkey.
+    CHECK(after.size() - before.size() == 532);
+}
+
+TEST_CASE("Counter-signing without it asked for leaves the bootcode alone",
+          "[secureboot-otp][countersign]")
+{
+    // The counterpart: a CM4, or a CM5 whose OTP is not fused, must not have
+    // its firmware rewritten. Signing unconditionally would change what gets
+    // written to every board, not just the ones that need it.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom());
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/false, err));
+    INFO("error: " << err);
+
+    CHECK(sectionOf(recovery / "pieeprom.bin", QStringLiteral("bootcode.bin"))
+          == sectionOf(recovery / "pieeprom.original.bin", QStringLiteral("bootcode.bin")));
+}
+
+TEST_CASE("An AB image has its bootsys counter-signed as well",
+          "[secureboot-otp][countersign]")
+{
+    // bootsys is the second blob the ROM checks. Signing bootcode.bin and
+    // stopping there produces an image the imager considers finished and the
+    // board refuses, with nothing to say which of the two was wrong.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom(/*bootsysReserve=*/1024));
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    // The fixture is genuinely AB-capable, or the branch under test is not
+    // the one being reached.
+    {
+        rpiboot::BootloaderImage probe;
+        REQUIRE(probe.load(QString::fromStdString(
+            (recovery / "pieeprom.original.bin").string())));
+        REQUIRE(probe.isABImage());
+    }
+
+    std::string err;
+    REQUIRE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err));
+    INFO("error: " << err);
+
+    const QByteArray before = sectionOf(recovery / "pieeprom.original.bin",
+                                        QStringLiteral("bootsys"));
+    const QByteArray after  = sectionOf(recovery / "pieeprom.bin",
+                                        QStringLiteral("bootsys"));
+    REQUIRE_FALSE(before.isEmpty());
+    CHECK(after.left(before.size()) == before);
+    CHECK(after.size() - before.size() == 532);
+
+    // And bootcode.bin is still signed too -- one is not done instead of
+    // the other.
+    const QByteArray bcBefore = sectionOf(recovery / "pieeprom.original.bin",
+                                          QStringLiteral("bootcode.bin"));
+    const QByteArray bcAfter  = sectionOf(recovery / "pieeprom.bin",
+                                          QStringLiteral("bootcode.bin"));
+    CHECK(bcAfter.size() - bcBefore.size() == 532);
+}
+
+TEST_CASE("An AB image with an empty bootsys is refused rather than half-signed",
+          "[secureboot-otp][countersign]")
+{
+    // A bootsys section that is there but carries nothing. Signing what is
+    // not there and writing the result would produce an image the board
+    // rejects; refusing leaves the original where it can be looked at.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    // The section header and name are present, so the image is AB-capable,
+    // but there is no payload behind them.
+    seedRecoveryDirWith(recovery, makeCounterSignableEeprom(/*bootsysReserve=*/0));
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    // Only meaningful if the fixture really has an empty bootsys.
+    {
+        rpiboot::BootloaderImage probe;
+        REQUIRE(probe.load(QString::fromStdString(
+            (recovery / "pieeprom.original.bin").string())));
+        REQUIRE(probe.isABImage());
+    }
+
+    std::string err;
+    const bool ok = SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err);
+    INFO("error: " << err);
+    REQUIRE_FALSE(ok);
+    // The wording is the whole of it. Signing an empty blob fails too, and
+    // reports the signature as the problem -- which sends the operator to
+    // their key and their openssl when what is wrong is the image they
+    // downloaded. Naming the content says where to look.
+    CHECK(err.find("no bootsys content") != std::string::npos);
+    // Nothing half-written left behind for the next run to pick up.
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.bin"));
+}
+
+TEST_CASE("An original with no bootcode is refused before anything is signed",
+          "[secureboot-otp][countersign]")
+{
+    // A truncated download, or an image built for a different chip. There is
+    // nothing to counter-sign, and proceeding would write an EEPROM with an
+    // empty first stage.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
+    seedRecoveryDirWith(recovery,
+                        makeCounterSignableEeprom(/*bootsysReserve=*/-1,
+                                                  /*bootcodeBytes=*/0));
+
+    const auto key = scratch.path(QStringLiteral("customer.pem"));
+    const auto pub = scratch.path(QStringLiteral("customer.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err));
+    INFO("error: " << err);
+    // As with bootsys: signing nothing fails anyway, but blames the
+    // signature. This names the original image instead.
+    CHECK(err.find("Failed to extract bootcode.bin") != std::string::npos);
+    CHECK(err.find("pieeprom.original.bin") != std::string::npos);
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.bin"));
+}
+
+// ---------------------------------------------------------------------------
+// When openssl is not there, or does not do what it is asked
+//
+// Key generation shells out to openssl by name, so it is found on PATH. That
+// makes three failures possible on a real machine, and all three end with the
+// user holding something that is not a key pair:
+
+namespace {
+
+// Points PATH at one directory for the life of the object and puts it back
+// afterwards. A directory rather than an empty string: with PATH unset,
+// execvp falls back to a built-in default and finds the real openssl.
+class PathOverride
+{
+public:
+    explicit PathOverride(const QString &directory)
+        : _previous(qgetenv("PATH"))
+    {
+        qputenv("PATH", directory.toLocal8Bit());
+    }
+    ~PathOverride() { qputenv("PATH", _previous); }
+
+    PathOverride(const PathOverride &) = delete;
+    PathOverride &operator=(const PathOverride &) = delete;
+
+private:
+    QByteArray _previous;
+};
+
+// Write an executable stand-in for openssl into `directory`.
+bool plantFakeOpenssl(const QString &directory, const QByteArray &body)
+{
+    const QString path = QDir(directory).filePath(QStringLiteral("openssl"));
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    f.write(QByteArray("#!/bin/sh\n") + body);
+    f.close();
+    return f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner);
+}
+
+} // namespace
+
+TEST_CASE("Key generation with no openssl installed fails rather than pretending",
+          "[secureboot-otp]")
+{
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+
+    {
+        PathOverride only(toolDir.dir());
+        CHECK_FALSE(SecureBootProvisioner::generateKeyPair(priv, pub));
+    }
+
+    // Nothing was left behind to be mistaken for a key later.
+    CHECK_FALSE(fs::exists(priv));
+    CHECK_FALSE(fs::exists(pub));
+}
+
+TEST_CASE("A private key is not left behind when the public half cannot be made",
+          "[secureboot-otp]")
+{
+    // openssl generated the private key and then failed on the second call.
+    // Leaving the private key is the trap: it is a real RSA key, Imager's
+    // file chooser will offer it, and secure boot signed with a key whose
+    // public half was never derived produces a card the board will not boot.
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const QString tools = toolDir.dir();
+
+    // genrsa writes the file it was asked for; every other subcommand fails.
+    REQUIRE(plantFakeOpenssl(tools,
+                             "if [ \"$1\" = genrsa ]; then\n"
+                             "  : > \"$3\"\n"
+                             "  exit 0\n"
+                             "fi\n"
+                             "echo 'fake openssl: refusing' >&2\n"
+                             "exit 1\n"));
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+
+    {
+        PathOverride only(tools);
+        CHECK_FALSE(SecureBootProvisioner::generateKeyPair(priv, pub));
+    }
+
+    CHECK_FALSE(fs::exists(priv));
+    CHECK_FALSE(fs::exists(pub));
+}
+
+TEST_CASE("An openssl that reports success but writes nothing is not believed",
+          "[secureboot-otp]")
+{
+    // A wrapper script that swallows its arguments, or a disk that filled up
+    // between the two calls. Both openssl runs say they worked and there is
+    // no key pair at the end of it, so the caller has to check rather than
+    // take the exit codes at their word.
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const QString tools = toolDir.dir();
+
+    REQUIRE(plantFakeOpenssl(tools, "exit 0\n"));
+
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+
+    {
+        PathOverride only(tools);
+        CHECK_FALSE(SecureBootProvisioner::generateKeyPair(priv, pub));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// What signing does when openssl is not there, or does not co-operate.
+//
+// Both the provisioner and the Linux crypto layer shell out to openssl, and
+// each refusal below exists so a missing or broken tool produces nothing --
+// rather than an empty signature that the callers above would write into an
+// EEPROM as though it were real. None of them had ever been taken.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Signing refuses a digest that is not a SHA-256", "[secureboot-otp]")
+{
+    // Caught before openssl is involved at all. The digest is wrapped in a
+    // fixed-size PKCS#1 DigestInfo, so a short one would be signed into a
+    // structure whose length prefix lies about its contents -- valid RSA over
+    // meaningless bytes, which the board rejects with no explanation.
+    const QByteArray tooShort(16, '\xAB');
+    CHECK(SecureBootCrypto::rsaSignSha256(tooShort, QStringLiteral("/nonexistent.pem")).isEmpty());
+
+    const QByteArray tooLong(64, '\xCD');
+    CHECK(SecureBootCrypto::rsaSignSha256(tooLong, QStringLiteral("/nonexistent.pem")).isEmpty());
+}
+
+TEST_CASE("With no openssl installed, nothing is signed and nothing is claimed",
+          "[secureboot-otp]")
+{
+    ScratchDir toolDir;
+    const QByteArray digest(32, '\x5A');
+
+    PathOverride only(toolDir.dir());
+    // Signing, and reading a public key back out: both shell out, and both
+    // have to come back empty rather than with a partial answer.
+    CHECK(SecureBootCrypto::rsaSignSha256(digest, QStringLiteral("/nonexistent.pem")).isEmpty());
+    CHECK(SecureBootCrypto::extractRsaPubkeyBin(QStringLiteral("/nonexistent.pem")).isEmpty());
+}
+
+TEST_CASE("An openssl that succeeds but prints nothing is not believed",
+          "[secureboot-otp]")
+{
+    // A wrapper script that swallows its arguments, or a tool that writes to
+    // a file instead of stdout. The exit code says everything worked and
+    // there is no key material at the end of it, so the emptiness is what has
+    // to be checked rather than the status.
+    ScratchDir toolDir;
+    const QString tools = toolDir.dir();
+    REQUIRE(plantFakeOpenssl(tools, "exit 0\n"));
+
+    PathOverride only(tools);
+    CHECK(SecureBootCrypto::extractRsaPubkeyBin(QStringLiteral("/any.pem")).isEmpty());
+}
+
+TEST_CASE("The OTP key hash is not computed without openssl", "[secureboot-otp]")
+{
+    // This hash is what gets fused into the device, permanently. Producing a
+    // wrong one -- or a zero one -- burns a board to a key nobody holds, so
+    // the only safe answer when the tool is missing is no answer.
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    {
+        QFile f(QString::fromStdString(pub.string()));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("-----BEGIN PUBLIC KEY-----\nnot a key\n-----END PUBLIC KEY-----\n");
+    }
+
+    PathOverride only(toolDir.dir());
+    CHECK_FALSE(SecureBootProvisioner::calculateOtpKeyHash(pub).has_value());
+}
+
+TEST_CASE("An OTP key hash is not made from an empty DER", "[secureboot-otp]")
+{
+    // openssl exits happily and prints nothing. Hashing that would give the
+    // SHA-256 of the empty string -- a perfectly well-formed 32-byte value,
+    // identical for every user, and fused into the device for good.
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const QString tools = toolDir.dir();
+    REQUIRE(plantFakeOpenssl(tools, "exit 0\n"));
+
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    {
+        QFile f(QString::fromStdString(pub.string()));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("-----BEGIN PUBLIC KEY-----\nx\n-----END PUBLIC KEY-----\n");
+    }
+
+    PathOverride only(tools);
+    CHECK_FALSE(SecureBootProvisioner::calculateOtpKeyHash(pub).has_value());
+}
+
+TEST_CASE("A boot image is not claimed when the filesystem cannot be made",
+          "[secureboot-otp]")
+{
+    // createBootImg shells out to mkfs.vfat and then to mtools. The file it
+    // was asked for is created and sized *first*, so a failure here leaves a
+    // correctly-sized file full of nothing -- and a caller that took the
+    // return value on trust would sign that and hand it to the board.
+    ScratchDir scratch;
+    ScratchDir toolDir;
+    const QString out = QDir(scratch.dir()).filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), QByteArray("arm_64bit=1\n"));
+
+    bool created = true;
+    {
+        // Nothing on PATH: mkfs.vfat cannot even start.
+        PathOverride only(toolDir.dir());
+        created = BootImgCreator::createBootImg(files, out, 4 * 1024 * 1024);
+    }
+
+    CHECK_FALSE(created);
+}
+
+TEST_CASE("A boot image too small for its files is refused rather than handed over",
+          "[secureboot-otp]")
+{
+    // mcopy failing is not a warning to carry on from. The image is created
+    // and sized before anything is copied into it, so a swallowed failure
+    // returns a correctly-sized image with a file missing -- and a board
+    // will not come up from that. Here the payload simply does not fit.
+    if (QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
+                                       {QStringLiteral("/sbin"), QStringLiteral("/usr/sbin")})
+            .isEmpty() ||
+        QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+
+    ScratchDir scratch;
+    const QString out = QDir(scratch.dir()).filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), QByteArray("arm_64bit=1\n"));
+    // Comfortably larger than the image it is being packed into.
+    files.insert(QStringLiteral("big.bin"), QByteArray(6 * 1024 * 1024, 'x'));
+
+    CHECK_FALSE(BootImgCreator::createBootImg(files, out, 4 * 1024 * 1024));
+}
+
+TEST_CASE("A boot image is not claimed when there is nowhere to stage its files",
+          "[secureboot-otp]")
+{
+    // Each file is written to a temporary directory before mcopy copies it
+    // in. With no writable temp directory there is nowhere to stage, and the
+    // image must be refused rather than returned empty but correctly sized.
+    //
+    // Deleting the isValid() check does not make this fail: the file-open
+    // guard below it refuses too. The check is defence in depth, so what is
+    // pinned here is the refusal, not which of the two produced it.
+    if (QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
+                                       {QStringLiteral("/sbin"), QStringLiteral("/usr/sbin")})
+            .isEmpty())
+        SKIP("mkfs.vfat is needed to build a boot image");
+
+    // Built before TMPDIR is moved, since it wants a real temp directory.
+    ScratchDir scratch;
+    const QString out = QDir(scratch.dir()).filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), QByteArray("arm_64bit=1\n"));
+
+    const bool hadTmpdir = qEnvironmentVariableIsSet("TMPDIR");
+    const QByteArray savedTmpdir = qgetenv("TMPDIR");
+    qputenv("TMPDIR", QByteArray("/nonexistent-rpi-imager-staging"));
+
+    const bool created = BootImgCreator::createBootImg(files, out, 4 * 1024 * 1024);
+
+    if (hadTmpdir)
+        qputenv("TMPDIR", savedTmpdir);
+    else
+        qunsetenv("TMPDIR");
+
+    CHECK_FALSE(created);
+}
+
+TEST_CASE("A recovery image is not built with a key that cannot sign",
+          "[secureboot-otp]")
+{
+    // The file is there, is readable, and is not a key. Everything up to the
+    // signature succeeds -- the EEPROM image is parsed, the boot config is
+    // built -- and then bootconf.txt cannot be signed.
+    //
+    // Stopping here is what matters. A recovery image carrying an unsigned or
+    // half-signed bootconf is one a fused board refuses at boot, and the user
+    // meets that as a Pi that will not start with no way back: the whole
+    // point of writing it was to provision secure boot in the first place.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const fs::path notAKey = scratch.path(QStringLiteral("not-a-key.pem"));
+    {
+        QFile f(QString::fromStdString(notAKey.string()));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("-----BEGIN RSA PRIVATE KEY-----\nnope\n-----END RSA PRIVATE KEY-----\n");
+    }
+
+    std::string err;
+    CHECK_FALSE(SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, notAKey, /*counterSignFirmware=*/false, err));
+
+    // Named, so the user is told which key was refused rather than that
+    // "provisioning failed".
+    INFO("error: " << err);
+    CHECK(err.find("not-a-key.pem") != std::string::npos);
+
+    // And nothing half-made is left where the writer would pick it up.
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.sig"));
+}
+
+TEST_CASE("A recovery image that cannot be written down is reported",
+          "[secureboot-otp]")
+{
+    // Signing succeeds and then the result cannot be saved -- a read-only
+    // volume, or a directory whose permissions changed under a long
+    // provisioning run. Reporting success here would leave the caller
+    // pointing at a recovery directory holding the *original* unsigned
+    // image, which is the one the board already has: the user would flash it,
+    // see nothing change, and have nothing to go on.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    // Readable and searchable, but nothing new may be created in it.
+    REQUIRE(QFile::setPermissions(QString::fromStdString(recovery.string()),
+                                  QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+
+    std::string err;
+    const bool ok = SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, key, /*counterSignFirmware=*/false, err);
+
+    // Put it back before any assertion can leave the directory unremovable.
+    QFile::setPermissions(QString::fromStdString(recovery.string()),
+                          QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                          QFileDevice::ExeOwner);
+
+    INFO("error: " << err);
+    CHECK_FALSE(ok);
+    CHECK_FALSE(err.empty());
+}
+
+TEST_CASE("A provisioning run that fails says what the device said", "[secureboot-otp]")
+{
+    // provision() is the outermost step: it hands the recovery directory to
+    // the rpiboot protocol and reports back. Nothing drove it, so a failure
+    // arriving from the device had no test saying it reaches the caller --
+    // and a provisioning failure reported as success leaves a board fused
+    // against firmware that was never written.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    // Nothing queued, so the device answers nothing and the protocol fails.
+    rpiboot::testing::MockUsbTransport mock;
+    std::atomic<bool> cancelled{false};
+
+    SecureBootProvisioner provisioner;
+    CHECK_FALSE(provisioner.provision(mock, rpiboot::ChipGeneration::BCM2712, recovery,
+                                      nullptr, cancelled));
+
+    // The protocol's own account of it is carried through rather than
+    // replaced by a generic message.
+    INFO("error: " << provisioner.lastError());
+    CHECK_FALSE(provisioner.lastError().empty());
+    CHECK(provisioner.lastError().find("Provisioning failed") != std::string::npos);
+}
+
+namespace {
+
+// The same synthetic image, minus one of the sections the provisioner has
+// to rewrite. An EEPROM without the section is what an image from a
+// different firmware release looks like to this code.
+std::vector<uint8_t> makeSyntheticEepromWithout(const char *omit)
+{
+    std::vector<uint8_t> img(kImageSize, 0xff);
+
+    const std::vector<uint8_t> bootcode(4096, 0xAA);
+    putBe32(img, 0, kMagic);
+    putBe32(img, 4, uint32_t(bootcode.size()));
+    std::memcpy(&img[8], bootcode.data(), bootcode.size());
+    size_t off = 8 + bootcode.size();
+    while (off % 8 != 0)
+        img[off++] = 0xff;
+
+    putBe32(img, off, kPadMagic);
+    putBe32(img, off + 4, uint32_t(kReadOnly - (off + 8)));
+    off = kReadOnly;
+
+    for (const auto &[name, reserve] : std::initializer_list<std::pair<const char *, size_t>>{
+             {"bootconf.txt", 4096}, {"bootconf.sig", 4096}, {"pubkey.bin", 1024}}) {
+        if (std::strcmp(name, omit) == 0)
+            continue;
+        off = writeSection(img, off, name, reserve);
+    }
+    return img;
+}
+
+void seedRecoveryDirWithout(const fs::path &dir, const char *omit)
+{
+    fs::create_directories(dir);
+    const auto img = makeSyntheticEepromWithout(omit);
+    QFile f(QString::fromStdString((dir / "pieeprom.original.bin").string()));
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(reinterpret_cast<const char *>(img.data()), qint64(img.size()));
+    f.close();
+}
+
+} // namespace
+
+TEST_CASE("An EEPROM missing a section the provisioner must rewrite is refused",
+          "[secureboot-otp]")
+{
+    // The three sections are spliced in one after another, and each has its
+    // own report. Which one is missing is the whole diagnostic: an image
+    // without pubkey.bin cannot carry the customer key, and an image
+    // without bootconf.sig cannot be verified at boot -- two different
+    // problems with the firmware the user was given, not with their key.
+    //
+    // Writing the image anyway would be the bad outcome: a fused board
+    // fed a half-patched EEPROM does not boot, and there is no way back.
+    const auto omitted = GENERATE(as<const char *>{},
+                                  "bootconf.txt", "bootconf.sig", "pubkey.bin");
+
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDirWithout(recovery, omitted);
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    const bool ok = SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, key, /*counterSignFirmware=*/false, err);
+
+    INFO("omitted " << omitted << ", error: " << err);
+    CHECK_FALSE(ok);
+    CHECK(err.find(omitted) != std::string::npos);
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.sig"));
+}
+
+TEST_CASE("Counter-signing an EEPROM whose bootcode will not take it is refused",
+          "[secureboot-otp]")
+{
+    // The BCM2712 arm: once the OTP hash is fused the boot ROM checks the
+    // second-stage bootcode against the customer key too, so it is
+    // re-signed and spliced back in. The signed blob is larger than what it
+    // replaces, and an image whose bootcode section has no room for it
+    // cannot be patched -- which has to stop the run rather than produce an
+    // EEPROM the ROM will reject on a board with no way back.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    const bool ok = SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2712, recovery, key, /*counterSignFirmware=*/true, err);
+
+    INFO("error: " << err);
+    CHECK_FALSE(ok);
+    CHECK_FALSE(err.empty());
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.sig"));
+}
+
+TEST_CASE("A signature file that cannot be created is reported", "[secureboot-otp]")
+{
+    // Everything up to the signature succeeds and then pieeprom.sig cannot
+    // be written -- here because something is already in its way. The
+    // recovery verifies that file before flashing, so an image saved
+    // without it is one the board refuses; reporting success would send
+    // the user off to write a card that cannot work.
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    // A directory where the signature goes: the open fails, and nothing
+    // about the earlier steps changes.
+    fs::create_directories(recovery / "pieeprom.sig");
+
+    const auto key = scratch.path(QStringLiteral("key.pem"));
+    const auto pub = scratch.path(QStringLiteral("key.pub"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
+
+    std::string err;
+    const bool ok = SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, key, /*counterSignFirmware=*/false, err);
+
+    INFO("error: " << err);
+    CHECK_FALSE(ok);
+    CHECK(err.find("pieeprom.sig") != std::string::npos);
+}
+
+TEST_CASE("A key of the wrong size is refused before anything is written",
+          "[secureboot-otp]")
+{
+    // The EEPROM carries the customer public key as exactly 264 bytes:
+    // a 256-byte modulus and an 8-byte exponent, both little-endian. Only
+    // RSA-2048 fits. A larger key signs perfectly well -- bootconf.sig is
+    // produced without complaint -- so the size check is the only thing
+    // between a user who generated a 4096-bit key "to be safe" and an
+    // EEPROM image with a truncated key in it, on a board that has already
+    // had its OTP fused.
+    if (!haveOpenssl())
+        SKIP("openssl is not installed");
+
+    ScratchDir scratch;
+    const fs::path recovery = scratch.path(QStringLiteral("recovery"));
+    seedRecoveryDir(recovery);
+
+    const auto bigKey = scratch.path(QStringLiteral("rsa4096.pem"));
+    QProcess gen;
+    gen.start(QStringLiteral("/usr/bin/openssl"),
+              {QStringLiteral("genrsa"), QStringLiteral("-out"),
+               QString::fromStdString(bigKey.string()), QStringLiteral("4096")});
+    REQUIRE(gen.waitForFinished(60000));
+    REQUIRE(gen.exitCode() == 0);
+
+    std::string err;
+    const bool ok = SecureBootProvisioner::prepareSignedRecovery(
+        ChipGeneration::BCM2711, recovery, bigKey, /*counterSignFirmware=*/false, err);
+
+    INFO("error: " << err);
+    CHECK_FALSE(ok);
+    // Named, so the user is sent to the key rather than to the firmware.
+    CHECK(err.find("rsa4096.pem") != std::string::npos);
+    CHECK_FALSE(fs::exists(recovery / "pieeprom.bin"));
+}

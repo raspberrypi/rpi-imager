@@ -34,6 +34,8 @@
 #include <filesystem>
 #include <fstream>
 
+#include "fixture_process.h"
+
 using namespace fastboot::pieeprom;
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -247,6 +249,84 @@ TEST_CASE("parseBootOrder extracts hex value from bootconf.txt", "[pieeprom][boo
     CHECK_FALSE(parseBootOrder("BOOT_ORDER=garbage\n").has_value());
 }
 
+// composeBootOrder decides what the board tries to boot from after a flash.
+// BOOT_ORDER is read a nibble at a time from the least significant end, so
+// the *lowest* nibble is what is attempted first. Getting this wrong is the
+// "I flashed the NVMe and it still came up off the SD card" bug: the write
+// succeeded, nothing reported an error, and the board booted the wrong OS.
+
+TEST_CASE("composeBootOrder puts the flashed device first", "[pieeprom][boot_order]")
+{
+    // 0xf41 is restart / USB / SD. After flashing NVMe it must be tried
+    // before either, with both kept as fallbacks behind it.
+    CHECK(composeBootOrder(0xf41u, BootSource::Nvme) == 0xf416u);
+}
+
+TEST_CASE("composeBootOrder does not leave the device listed twice",
+          "[pieeprom][boot_order]")
+{
+    // 0xf461 already contains NVMe in second place. Moving it to the front
+    // must remove it from where it was, not leave a duplicate that shifts
+    // every later entry along.
+    CHECK(composeBootOrder(0xf461u, BootSource::Nvme) == 0xf416u);
+}
+
+TEST_CASE("composeBootOrder keeps restart at the end", "[pieeprom][boot_order]")
+{
+    // The restart nibble makes the bootloader loop round once it has run out
+    // of entries. It has to stay above everything else; anywhere earlier and
+    // the entries beyond it are never reached.
+    const uint32_t out = composeBootOrder(0xf41u, BootSource::Nvme);
+
+    uint32_t v = out;
+    uint8_t highest = 0;
+    while (v) { highest = v & 0xfu; v >>= 4; }
+    CHECK(highest == static_cast<uint8_t>(BootSource::Restart));
+}
+
+TEST_CASE("composeBootOrder starts a fresh order from nothing", "[pieeprom][boot_order]")
+{
+    // A blank BOOT_ORDER still has to produce something bootable: the chosen
+    // device, then restart.
+    CHECK(composeBootOrder(0x0u, BootSource::SdCard) == 0xf1u);
+}
+
+TEST_CASE("composeBootOrder is idempotent for a device already first",
+          "[pieeprom][boot_order]")
+{
+    // Re-flashing the same device must not keep growing the order.
+    const uint32_t once  = composeBootOrder(0xf41u, BootSource::Nvme);
+    const uint32_t twice = composeBootOrder(once, BootSource::Nvme);
+    CHECK(once == twice);
+}
+
+TEST_CASE("composeBootOrder drops zero padding", "[pieeprom][boot_order]")
+{
+    // Zero means "stop", so a padded value like 0x1004 must not carry those
+    // zeroes into the middle of the rebuilt order and halt the sequence
+    // before the later entries are tried.
+    const uint32_t out = composeBootOrder(0x1004u, BootSource::Nvme);
+    CHECK(out == 0xf146u);
+
+    // No interior zero nibble below the top.
+    uint32_t v = out;
+    while (v > 0xfu) {
+        CHECK((v & 0xfu) != 0u);
+        v >>= 4;
+    }
+}
+
+TEST_CASE("composeBootOrder handles every boot source", "[pieeprom][boot_order]")
+{
+    for (BootSource src : {BootSource::SdCard, BootSource::Network, BootSource::Rpiboot,
+                           BootSource::UsbMsd, BootSource::Nvme, BootSource::Http}) {
+        const uint32_t out = composeBootOrder(0xf41u, src);
+        INFO("source: " << static_cast<int>(src) << " -> " << std::hex << out);
+        // Whatever was chosen is what gets tried first.
+        CHECK((out & 0xfu) == static_cast<uint32_t>(src));
+    }
+}
+
 TEST_CASE("setBootOrderLine replaces existing line in place", "[pieeprom][boot_order]")
 {
     auto out = setBootOrderLine("[all]\nBOOT_ORDER=0xf41\nFOO=1\n", 0xf416u);
@@ -383,7 +463,7 @@ TEST_CASE("real pieeprom fixture: changing BOOT_ORDER round-trips through rpi-ee
         << "--out"    << refOutPath
         << QString::fromStdString(path));
     REQUIRE(p.waitForStarted(5000));
-    REQUIRE(p.waitForFinished(30000));
+    REQUIRE(p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
     INFO("rpi-eeprom-config stderr: " << p.readAllStandardError().toStdString());
     REQUIRE(p.exitCode() == 0);
 
@@ -400,4 +480,68 @@ TEST_CASE("real pieeprom fixture: changing BOOT_ORDER round-trips through rpi-ee
     }
     INFO("first divergence at offset 0x" << std::hex << firstDiff);
     CHECK(ours == ref);
+}
+
+// ── A malformed image must be refused, not walked off the end ──────────
+//
+// pieeprom.bin arrives as a firmware download and is then walked
+// section-by-section using lengths taken from the image itself. Every one of
+// those lengths is data, so the walk has to treat them as data: a section
+// declaring more bytes than the file holds is the shape of a truncated
+// download, and reading it would run past the buffer.
+
+TEST_CASE("a section running past the end of the image is refused",
+          "[pieeprom][parse]")
+{
+    auto img = makeSyntheticImage("[all]\nBOOT_ORDER=0xf41\n");
+
+    // Same image, with the first section's length claiming far more than the
+    // file contains -- what a download cut short looks like once the header
+    // has arrived and the body has not.
+    putBE32(img, 4, static_cast<uint32_t>(img.size() + 4096));
+
+    Image image(std::move(img));
+    const std::string err = image.parse();
+    INFO("parse said: " << err);
+    CHECK_FALSE(err.empty());
+    CHECK(err.find("runs past image end") != std::string::npos);
+}
+
+TEST_CASE("a section whose magic is not a section is refused",
+          "[pieeprom][parse]")
+{
+    // Not 0x00 or 0xff either, which are the fill values that legitimately
+    // end the walk -- this is a value in the middle, which means the offset
+    // arithmetic has landed somewhere that is not a section header.
+    auto img = makeSyntheticImage("[all]\nBOOT_ORDER=0xf41\n");
+    putBE32(img, 0, 0x12345678u);
+
+    Image image(std::move(img));
+    const std::string err = image.parse();
+    INFO("parse said: " << err);
+    CHECK_FALSE(err.empty());
+    CHECK(err.find("corrupt section") != std::string::npos);
+}
+
+TEST_CASE("an image too small to hold a header is refused",
+          "[pieeprom][parse]")
+{
+    Image image(std::vector<uint8_t>(SECTION_HDR_LEN - 1, 0xff));
+    CHECK_FALSE(image.parse().empty());
+}
+
+TEST_CASE("fill at the end of the image ends the walk rather than failing",
+          "[pieeprom][parse]")
+{
+    // The bootloader scratch page is 0x00 or 0xff, and both mean "no more
+    // sections". Reading either as a corrupt header would refuse every real
+    // image there is.
+    for (uint32_t fill : {0x00000000u, 0xffffffffu}) {
+        auto img = makeSyntheticImage("[all]\nBOOT_ORDER=0xf41\n");
+        // Terminate immediately: the first thing in the image is fill.
+        putBE32(img, 0, fill);
+        Image image(std::move(img));
+        INFO("fill word 0x" << std::hex << fill);
+        CHECK(image.parse().empty());
+    }
 }
