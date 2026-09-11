@@ -4,6 +4,10 @@ set(ZLIB_VERSION "1.3.2")
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
+# The option zlib 1.3.2 actually reads is ZLIB_BUILD_TESTING; ZLIB_BUILD_TESTS
+# and ZLIB_BUILD_EXAMPLES above are names from an older zlib and set nothing.
+# Left in place for the vendored-tree fallback, which may be an older version.
+set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 rpi_imager_fetch_git_or_vendor(zlib

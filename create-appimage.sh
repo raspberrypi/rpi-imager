@@ -323,7 +323,17 @@ export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
 else
     echo "Manual Qt deployment for $ARCH..."
     mkdir -p "$APPDIR/usr/lib" "$APPDIR/usr/plugins" "$APPDIR/usr/qml"
-    cp -d "$QT_DIR/lib/libQt6"*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    # Deliberately not a blanket glob: the Qt build now includes testlib so
+    # the suite can use QtTest/QtQuickTest, and nothing in the application
+    # links it. linuxdeploy resolves libraries from the binary and so never
+    # picks it up; this path copies whatever is present, so it has to say
+    # what it does not want.
+    for _lib in "$QT_DIR/lib/libQt6"*.so*; do
+        case "$(basename "$_lib")" in
+            libQt6Test.so*|libQt6QuickTest.so*) continue ;;
+        esac
+        cp -d "$_lib" "$APPDIR/usr/lib/" 2>/dev/null || true
+    done
     cp -d "$QT_DIR/lib/libicu"*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     for _plug in platforms imageformats tls iconengines xcbglintegrations; do
         if [ -d "$QT_DIR/plugins/$_plug" ]; then

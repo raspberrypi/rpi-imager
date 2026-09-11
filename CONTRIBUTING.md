@@ -64,6 +64,102 @@ cmake --build build
 [qt/qt-build-common.sh](./qt/qt-build-common.sh) says — the single place the Qt
 version is selected.
 
+#### Run the tests under a sanitiser
+
+Worth doing before touching anything that owns a buffer or a file handle
+across threads. The write path hands work to threads that outlive the call
+that started them, and the ordinary suite passes clean through mistakes that
+AddressSanitizer catches at once.
+
+```sh
+cmake -B build-asan -G Ninja src \
+    -DQt6_ROOT=$PWD/.debian/qt/amd64/<version>/gcc_64 \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DBUILD_TESTING=ON \
+    -DXZ_SANDBOX=no \
+    -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+cmake --build build-asan --target generate_version
+cmake --build build-asan
+cd build-asan && ASAN_OPTIONS=detect_leaks=0 ctest -j3
+```
+
+Three of those are not obvious and each stops the build dead:
+
+- `-DXZ_SANDBOX=no` — the bundled xz refuses to configure with `-fsanitize=`
+  in the flags, because it is incompatible with Landlock sandboxing. It says
+  so, and names this option.
+- `-DBUILD_TESTING=ON` — without it no test target exists and
+  `--build --target <something>_test` fails with "unknown target".
+- `generate_version` first — the generated `imager_version.h` is a byproduct
+  of a custom target that the test targets do not depend on, so a fresh
+  sanitiser tree fails on the missing header until it has been made once.
+
+`detect_leaks=0` keeps Qt's static initialisers from burying the report.
+Leave leak detection on if that is what you are looking for.
+
+A race is a different question and wants `-fsanitize=thread` in place of
+`address`, in its own build directory — the two cannot be combined.
+
+ThreadSanitizer will not start on every machine. It supports 39-, 42- and
+48-bit virtual address spaces only, and an arm64 kernel with 16 KB pages
+gives 47, so every binary dies immediately with:
+
+```
+FATAL: ThreadSanitizer: unsupported VMA range
+FATAL: Found 47 - Supported 39, 42 and 48
+```
+
+`getconf PAGESIZE` returning 16384 on aarch64 is the tell — the build
+succeeds and then CMake's test discovery fails, because it runs each
+executable to enumerate its cases. A 4 KB-page kernel is the way round it.
+AddressSanitizer has no such restriction and runs fine there.
+
+#### Run the Compute Module tests without a Compute Module
+
+`rpiboot_usb_device_test` exercises the real libusb transport
+(`src/rpiboot/libusb_transport.cpp`) against a USB device that does not
+exist. Two in-tree kernel modules make that possible:
+
+- `usbip-vudc` is a USB device controller implemented in software. A gadget
+  bound to it behaves like a device plugged into a port that is not there.
+- `vhci-hcd` is a USB host controller implemented in software, which attaches
+  a usbip-exported device to this machine's USB tree.
+
+Pointing the second at the first loops the emulated device back to the host
+that created it. It then appears in `lsusb`, in `/dev/bus/usb`, and to libusb
+as an ordinary device — the USB stack is not pretending, from its point of
+view the device is real. The descriptors come from configfs, so the vendor ID,
+product ID and interface count are ours to set, which is the part that matters:
+it makes the code that decides *which Compute Module this is*, and therefore
+which firmware to send it, testable at all.
+
+`src/test/data/usb_gadget_emulator.sh` does the setup and the tests call it.
+It needs root and the usbip tools:
+
+```
+sudo apt install usbip
+```
+
+The tests skip with a reason when it cannot run — not root, no usbip, modules
+unavailable — so an ordinary unprivileged `ctest` run stays green and simply
+does not cover that file. To run them:
+
+```
+sudo ctest --test-dir build -R "Compute Module|interface descriptor"
+```
+
+They hold a `RESOURCE_LOCK`, so `ctest -j` runs them one at a time while the
+rest of the suite continues in parallel. Each case brings the gadget up and
+takes it down again; a run that is interrupted partway can leave one behind,
+and `sudo src/test/data/usb_gadget_emulator.sh down` clears it.
+
+Nothing here touches a block device. The gadget's function is `Loopback`,
+chosen because it is the one in-tree function that presents bulk endpoints
+without also pretending to be storage — and because it echoes what it is
+sent, which is what lets the bulk transfer tests check a real round trip.
+
 ### Windows
 
 #### Get dependencies
