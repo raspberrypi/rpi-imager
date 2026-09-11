@@ -321,14 +321,25 @@ bool NativeFileDialog::areNativeDialogsAvailablePlatform()
         return false;
     }
 
-    // Check if xdg-desktop-portal is available
-    QDBusInterface interface("org.freedesktop.portal.Desktop",
-                             "/org/freedesktop/portal/desktop",
-                             "org.freedesktop.portal.FileChooser",
-                             bus);
-    
-    if (!interface.isValid()) {
-        qDebug() << "NativeFileDialog: XDG Desktop Portal not available";
+    // Ask the portal a question it can answer quickly, rather than
+    // constructing a QDBusInterface. That introspects the service, and on a
+    // session where the portal cannot start the daemon tries to start one
+    // anyway and the call sits for its full 25-second timeout -- on the GUI
+    // thread, because this runs when the user clicks Choose OS or saves a
+    // report. Every one of those clicks froze the window for 25 seconds
+    // before falling back to the QML dialog.
+    QDBusMessage probe = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.portal.Desktop"),
+        QStringLiteral("/org/freedesktop/portal/desktop"),
+        QStringLiteral("org.freedesktop.DBus.Properties"),
+        QStringLiteral("Get"));
+    probe << QStringLiteral("org.freedesktop.portal.FileChooser")
+          << QStringLiteral("version");
+
+    const QDBusMessage reply = bus.call(probe, QDBus::Block, 2000);
+    if (reply.type() != QDBusMessage::ReplyMessage) {
+        qDebug() << "NativeFileDialog: XDG Desktop Portal not available:"
+                 << reply.errorName();
         return false;
     }
 

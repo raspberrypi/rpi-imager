@@ -291,6 +291,21 @@ void IconMultiFetcher::processPendingRequests()
                 }
                 locker.relock();
             }
+        } else {
+            // No handle: the scheme is one we will not speak, or curl would
+            // not give us one. Without this the request was dropped in
+            // silence, and QQuickImageResponse::finished never fired -- so
+            // the Image element waited on it for the life of the window and
+            // the response was never collected. Report it the same way a
+            // failed add does.
+            locker.unlock();
+            if (req.response) {
+                QMetaObject::invokeMethod(req.response.data(), "onFetchComplete",
+                                          Qt::QueuedConnection,
+                                          Q_ARG(QString, QString()),
+                                          Q_ARG(QString, QStringLiteral("Unsupported URL")));
+            }
+            locker.relock();
         }
     }
     
