@@ -92,7 +92,16 @@ bool BlockMap::parse(std::string_view xml, std::string* errorMsg)
         }
     }
 
-    if (reader.hasError() && reader.error() != QXmlStreamReader::PrematureEndOfDocumentError) {
+    // A premature end of document is treated as an error here, unlike in
+    // incremental parsing where it just means "feed me more". parse() is
+    // handed the whole document at once, so hitting the end early means it
+    // was truncated -- most likely a bmap download that was cut short.
+    //
+    // Accepting it silently is the dangerous option: the ranges past the
+    // truncation point are missing, every block in them looks unmapped, and
+    // the encoder emits DONT_CARE for data that should have been written.
+    // The card comes back with holes in it and nothing reports a problem.
+    if (reader.hasError()) {
         if (errorMsg)
             *errorMsg = reader.errorString().toStdString();
         _ranges.clear();

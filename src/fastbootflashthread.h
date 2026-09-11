@@ -17,12 +17,16 @@
 #include <QString>
 #include <QUrl>
 
+#include <string>
+
 #include <memory>
 
 class RingBuffer;
 class AcceleratedCryptographicHash;
 namespace fastboot { class FastbootProtocol; }
 namespace rpiboot { class IUsbTransport; }
+
+namespace rpiboot { class IUsbTransport; class LibusbContext; struct UsbDeviceInfo; }
 
 class FastbootFlashThread : public QThread
 {
@@ -56,8 +60,28 @@ public:
     // When apiKey is non-empty, the device will be registered with
     // the Connect management API after flashing and before reboot.
     // Failures are non-fatal and will not block successful flash.
+    // baseUrl overrides the Connect API address, and defaults to the
+    // production one. Without it this path can only be exercised against the
+    // live API: ConnectDeviceRegistrar takes an injectable base URL, but the
+    // caller below did not pass one through.
     void setConnectRegistration(const QString &apiKey,
-                                 const QString &descriptionPrefix);
+                                 const QString &descriptionPrefix,
+                                 const QString &baseUrl = QString());
+
+    // Turn the device's reported max-download-size into a segment size we are
+    // willing to allocate against.
+    //
+    // The value arrives as a decimal or 0x-prefixed string from the device, so
+    // it is attacker-shaped in the same sense any USB descriptor is: whatever
+    // happens to be plugged in chooses it. Two buffers of this size are
+    // reserved up front by SparseEncoder, so an absurd value is an absurd
+    // allocation.
+    //
+    // `reported` is null when the device answered nothing, in which case the
+    // default is used. `availableBytes` is the memory budget to size against;
+    // pass 0 to skip the memory-derived ceiling.
+    static uint32_t resolveMaxDownloadSize(const std::string *reported,
+                                           quint64 availableBytes);
 
 signals:
     void writing();   // Emitted when download+flash pipeline starts
@@ -72,7 +96,9 @@ signals:
 protected:
     void run() override;
 
-private:
+// Protected rather than private so a test can subclass and drive the parts
+// that already take their transport as a parameter.
+protected:
     void runImpl();
     void downloadProducer();
     void decompressConsumerProducer();
@@ -92,6 +118,20 @@ private:
     bool performErase(class fastboot::FastbootProtocol& fb,
                       class rpiboot::IUsbTransport& transport);
 
+    // How the fastboot device is opened.
+    //
+    // Everything past this point drives the device through IUsbTransport,
+    // which is why the individual steps -- erase, customisation, boot order
+    // -- were already testable against the mock. Constructing a concrete
+    // LibusbTransport was the single thing that kept runImpl(), the whole
+    // flash sequence, reachable only with hardware attached. Behind a
+    // virtual it is reachable without.
+    //
+    // The context is passed in rather than created here so its lifetime
+    // stays exactly where it was: it has to outlive the transport.
+    virtual std::unique_ptr<class rpiboot::IUsbTransport> openFastbootTransport(
+        class rpiboot::LibusbContext& ctx, const struct rpiboot::UsbDeviceInfo& target);
+
     // Best-effort: after the OS image has been flashed, set the
     // EEPROM's BOOT_ORDER so the chosen storage device boots first on
     // the next power cycle. Reads the device's existing EEPROM, edits
@@ -103,6 +143,16 @@ private:
     // with no key configured, etc.).
     void applyBootOrderUpdate(class fastboot::FastbootProtocol& fb,
                                class rpiboot::IUsbTransport& transport);
+
+    // Best-effort: register the device's identity with Raspberry Pi Connect
+    // while it is still in fastboot mode, which is the only time its public
+    // key can be queried and signed by the firmware crypto engine. Failures
+    // are logged and swallowed: the image is already written.
+    //
+    // Split out of runImpl() so it can be driven against the mock transport
+    // and a stub API, in the same way as applyBootOrderUpdate() above.
+    void registerWithConnect(class fastboot::FastbootProtocol& fb,
+                              class rpiboot::IUsbTransport& transport);
 
     QString _fastbootId;
     QString _blockDevice;
@@ -139,6 +189,7 @@ private:
     // Raspberry Pi Connect Device Identity registration (optional)
     QString _connectApiKey;
     QString _connectDescriptionPrefix;
+    QString _connectBaseUrl;
 };
 
 #endif // FASTBOOTFLASHTHREAD_H
