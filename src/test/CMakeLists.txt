@@ -1358,6 +1358,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             COMMENT "Rendering the embedded UI at each display profile"
         )
     endif()
+
+    # The desktop counterpart, sharing the same screenshot hook but none of the
+    # display fixtures: it photographs the published UI rather than judging a
+    # scale factor, so it wants the desktop layout and needs nothing synthesised
+    # about the panel. Its output is what the AppStream metainfo and the store
+    # listings point at, which is why it is a target you run and look at rather
+    # than a CTest test.
+    if(TARGET rpi-imager AND NOT BUILD_EMBEDDED AND ENABLE_TEST_HOOKS)
+        add_custom_target(screenshots_desktop
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/screenshots/shots.sh
+                    $<TARGET_FILE:rpi-imager>
+                    ${CMAKE_CURRENT_BINARY_DIR}/desktop_screenshots
+            DEPENDS rpi-imager
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Rendering the desktop UI, one PNG per wizard page"
+        )
+    endif()
 endif()
 
 # ============================================================================

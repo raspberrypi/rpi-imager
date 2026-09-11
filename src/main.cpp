@@ -110,6 +110,13 @@ static constexpr quint16 kPort =
 
 
 #ifdef IMAGER_ENABLE_TEST_HOOKS
+#include <QElapsedTimer>
+#include <QHash>
+#include <QTimer>
+#include <QUrl>
+#include <functional>
+#include <memory>
+
 /*
  * Find the wizard container in a loaded QML tree, for the screenshot hook's
  * step jumping. QML ids are not object names, so the container is identified by
@@ -127,6 +134,135 @@ static QObject *findWizardStepHost(QObject *root)
             return found;
     }
     return nullptr;
+}
+
+/*
+ * Stage a write for the screenshot hook. The writing and completion pages are
+ * the only two a step jump cannot reach honestly: both are drawn from a
+ * source, a destination and the wizard's own summary strings, and a jump
+ * supplies none of them, so the pages come out reporting that nothing was
+ * selected. Given those three, the write is the production path -- the same
+ * setSrc()/setDst()/startWrite() a click drives -- so what the pages then show
+ * is a real run rather than staged widgets.
+ *
+ * spec is a comma-separated key=value list: src, a local image file; dst, the
+ * file or device to write it to; size, the destination's size, defaulting to
+ * what dst already measures; and device, os and storage for the summary.
+ */
+static bool stageScreenshotWrite(QObject *wizard, ImageWriter &imageWriter, const QByteArray &spec)
+{
+    QHash<QString, QString> field;
+    const QStringList parts =
+        QString::fromLocal8Bit(spec).split(QLatin1Char(','), Qt::SkipEmptyParts);
+    for (const QString &part : parts)
+    {
+        const qsizetype eq = part.indexOf(QLatin1Char('='));
+        if (eq <= 0)
+        {
+            qWarning() << "Screenshot: ignoring malformed write field" << part;
+            continue;
+        }
+        field.insert(part.left(eq).trimmed(), part.mid(eq + 1).trimmed());
+    }
+
+    const QFileInfo src(field.value(QStringLiteral("src")));
+    const QString dst = field.value(QStringLiteral("dst"));
+    if (src.filePath().isEmpty() || dst.isEmpty())
+    {
+        qWarning() << "Screenshot: a staged write needs both src= and dst=";
+        return false;
+    }
+    if (!src.isReadable())
+    {
+        qWarning() << "Screenshot: cannot read the source image" << src.filePath();
+        return false;
+    }
+
+    // Only a click through the earlier steps ever sets these, and the summary
+    // and completion pages read them straight off the wizard.
+    wizard->setProperty("selectedDeviceName", field.value(QStringLiteral("device")));
+    wizard->setProperty("selectedOsName", field.value(QStringLiteral("os")));
+    wizard->setProperty("selectedStorageName", field.value(QStringLiteral("storage")));
+
+    const quint64 srcLen = static_cast<quint64>(src.size());
+    quint64 dstLen = field.value(QStringLiteral("size")).toULongLong();
+    if (dstLen == 0)
+        dstLen = static_cast<quint64>(QFileInfo(dst).size());
+    if (dstLen < srcLen)
+    {
+        // Left to itself the write fails somewhere mid-copy, and the page is
+        // photographed reporting that instead of the progress it was asked
+        // for. A destination that does not exist yet measures zero, which is
+        // the likeliest way to arrive here.
+        qWarning() << "Screenshot: the destination holds" << dstLen
+                   << "bytes, which will not take the" << srcLen << "byte source";
+        return false;
+    }
+
+    imageWriter.setSrc(QUrl::fromLocalFile(src.absoluteFilePath()), srcLen, srcLen, QByteArray(),
+                       false, QString(), field.value(QStringLiteral("os")));
+    imageWriter.setDst(dst, dstLen);
+    return true;
+}
+
+/*
+ * Grab the writing page once the run is a given fraction through it. A fixed
+ * delay photographs a different point on every machine -- and on a fast
+ * destination, the finished page -- because how long a write takes is a
+ * property of the disk rather than of the UI. This listens to the same
+ * progress signal the page itself draws from.
+ */
+static void grabAtWriteProgress(ImageWriter &imageWriter, QObject *context, int percent,
+                                int timeoutMs, const std::function<void()> &grab)
+{
+    const auto grabbed = std::make_shared<bool>(false);
+    QObject::connect(&imageWriter, &ImageWriter::writeProgress, context,
+                     [percent, grabbed, grab](QVariant now, QVariant total) {
+        const double written = now.toDouble();
+        const double size = total.toDouble();
+        if (*grabbed || size <= 0.0 || (written / size) * 100.0 < percent)
+            return;
+        *grabbed = true;
+        grab();
+    });
+    QTimer::singleShot(timeoutMs, context, [percent, grabbed]() {
+        if (*grabbed)
+            return;
+        qWarning() << "Screenshot: the write never reported" << percent << "% written";
+        QCoreApplication::exit(1);
+    });
+}
+
+/*
+ * Grab once the wizard has navigated to a step by itself. The completion page
+ * arrives because the write succeeded, so waiting on the step is both the
+ * honest signal and a shorter wait than any fixed delay long enough to be safe
+ * for a write of unknown length.
+ */
+static void grabWhenWizardReaches(QObject *wizard, QObject *context, int step, int timeoutMs,
+                                  const std::function<void()> &grab)
+{
+    auto *poll = new QTimer(context);
+    const auto since = std::make_shared<QElapsedTimer>();
+    since->start();
+    poll->setInterval(250);
+    QObject::connect(poll, &QTimer::timeout, context,
+                     [poll, wizard, context, step, timeoutMs, since, grab]() {
+        if (wizard->property("currentStep").toInt() == step)
+        {
+            poll->stop();
+            // Let the page lay out before photographing it.
+            QTimer::singleShot(1000, context, grab);
+            return;
+        }
+        if (since->elapsed() >= timeoutMs)
+        {
+            poll->stop();
+            qWarning() << "Screenshot: the wizard never reached step" << step;
+            QCoreApplication::exit(1);
+        }
+    });
+    poll->start();
 }
 #endif // IMAGER_ENABLE_TEST_HOOKS
 
@@ -939,6 +1075,20 @@ int main(int argc, char *argv[])
             // e.g. "WifiCustomization" for stepWifiCustomization.
             const QByteArray stepRequest = qgetenv("RPI_IMAGER_SCREENSHOT_STEP");
 
+            // A staged write turns the writing and completion pages from
+            // placeholders into photographs of a real run. See
+            // stageScreenshotWrite() for the spec, and src/test/screenshots
+            // for the file-backed destination it is meant to be pointed at.
+            // The writing page is caught at a percentage rather than a delay;
+            // the completion page, at the step the wizard moves itself to.
+            const QByteArray writeSpec = qgetenv("RPI_IMAGER_SCREENSHOT_WRITE");
+            const int writeAtPercent = qEnvironmentVariableIsSet("RPI_IMAGER_SCREENSHOT_WRITE_AT")
+                                           ? qEnvironmentVariableIntValue("RPI_IMAGER_SCREENSHOT_WRITE_AT")
+                                           : 45;
+            const int writeTimeoutMs = qEnvironmentVariableIsSet("RPI_IMAGER_SCREENSHOT_WRITE_TIMEOUT_MS")
+                                           ? qEnvironmentVariableIntValue("RPI_IMAGER_SCREENSHOT_WRITE_TIMEOUT_MS")
+                                           : 300000;
+
             const QString path = QString::fromLocal8Bit(screenshotPath);
             const auto grabAndQuit = [grabTarget, path]() {
                 const QImage frame = grabTarget->grabWindow();
@@ -953,8 +1103,10 @@ int main(int argc, char *argv[])
                 QCoreApplication::quit();
             };
 
-            QTimer::singleShot(delayMs, grabTarget, [grabTarget, stepRequest, grabAndQuit]() {
-                if (stepRequest.isEmpty())
+            QTimer::singleShot(delayMs, grabTarget, [grabTarget, stepRequest, writeSpec,
+                                                      writeAtPercent, writeTimeoutMs, &imageWriter,
+                                                      grabAndQuit]() {
+                if (stepRequest.isEmpty() && writeSpec.isEmpty())
                 {
                     grabAndQuit();
                     return;
@@ -969,20 +1121,31 @@ int main(int argc, char *argv[])
                     return;
                 }
 
-                bool isIndex = false;
-                int step = QString::fromLatin1(stepRequest).toInt(&isIndex);
-                if (!isIndex)
+                int step = wizard->property("stepWriting").toInt();
+                if (!stepRequest.isEmpty())
                 {
-                    const QByteArray property = QByteArray("step") + stepRequest;
-                    const QVariant named = wizard->property(property.constData());
-                    if (!named.isValid())
+                    bool isIndex = false;
+                    step = QString::fromLatin1(stepRequest).toInt(&isIndex);
+                    if (!isIndex)
                     {
-                        qWarning() << "Screenshot: wizard has no step named" << property;
-                        QCoreApplication::exit(1);
-                        return;
+                        const QByteArray property = QByteArray("step") + stepRequest;
+                        const QVariant named = wizard->property(property.constData());
+                        if (!named.isValid())
+                        {
+                            qWarning() << "Screenshot: wizard has no step named" << property;
+                            QCoreApplication::exit(1);
+                            return;
+                        }
+                        step = named.toInt();
                     }
-                    step = named.toInt();
                 }
+
+                // A staged write always opens on the writing page. The
+                // completion page is then reached the way a real run reaches
+                // it -- by the write finishing -- rather than by a second jump
+                // onto a page with nothing behind it.
+                const int jumpTarget =
+                    writeSpec.isEmpty() ? step : wizard->property("stepWriting").toInt();
 
                 // Steps normally unlock as their prerequisites are met, and a
                 // screenshot run has satisfied none of them. Marking them all
@@ -995,18 +1158,43 @@ int main(int argc, char *argv[])
                 // jumpToStep() is what a sidebar click calls: it moves the
                 // stack as well as the highlight. Setting currentStep alone
                 // repaints the sidebar and leaves the page behind.
-                if (!QMetaObject::invokeMethod(wizard, "jumpToStep", Q_ARG(QVariant, step)))
+                if (!QMetaObject::invokeMethod(wizard, "jumpToStep", Q_ARG(QVariant, jumpTarget)))
                 {
-                    qWarning() << "Screenshot: wizard refused jumpToStep" << step;
+                    qWarning() << "Screenshot: wizard refused jumpToStep" << jumpTarget;
                     QCoreApplication::exit(1);
                     return;
                 }
-                qInfo().nospace() << "Screenshot: jumped to wizard step " << step
-                                  << " (" << stepRequest.constData() << ")";
+                // A staged write opens the writing page whatever was asked
+                // for, so name both rather than let the log claim the wizard
+                // jumped somewhere it did not.
+                const QByteArray requested =
+                    stepRequest.isEmpty() ? QByteArray("Writing") : stepRequest;
+                qInfo().nospace() << "Screenshot: jumped to wizard step " << jumpTarget
+                                  << ", for " << requested.constData();
 
-                // Let the step lay out, and its own deferred work settle,
-                // before grabbing.
-                QTimer::singleShot(1000, grabTarget, grabAndQuit);
+                if (writeSpec.isEmpty())
+                {
+                    // Let the step lay out, and its own deferred work settle,
+                    // before grabbing.
+                    QTimer::singleShot(1000, grabTarget, grabAndQuit);
+                    return;
+                }
+
+                if (!stageScreenshotWrite(wizard, imageWriter, writeSpec))
+                {
+                    QCoreApplication::exit(1);
+                    return;
+                }
+                imageWriter.startWrite();
+
+                if (step == wizard->property("stepDone").toInt())
+                {
+                    grabWhenWizardReaches(wizard, grabTarget, step, writeTimeoutMs, grabAndQuit);
+                    return;
+                }
+
+                grabAtWriteProgress(imageWriter, grabTarget, writeAtPercent, writeTimeoutMs,
+                                    grabAndQuit);
             });
         }
     }
