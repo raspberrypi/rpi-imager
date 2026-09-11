@@ -1811,11 +1811,11 @@ void ImageWriter::startWrite()
     try {
         if (QUrl(urlstr).isLocalFile())
         {
-            _thread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
+            _thread = createLocalFileThread(urlstr, writeDevicePath.toLatin1(), _expectedHash);
         }
         else
         {
-            _thread = new DownloadExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
+            _thread = createDownloadThread(urlstr, writeDevicePath.toLatin1(), _expectedHash);
             const QByteArray endpoint = telemetryEndpoint();
             if (_repo.toString() == OSLIST_URL && !endpoint.isEmpty())
             {
@@ -1870,6 +1870,20 @@ void ImageWriter::_emitCancelled()
     } else {
         emit cancelled();
     }
+}
+
+DownloadExtractThread *ImageWriter::createLocalFileThread(const QByteArray &url,
+                                                          const QByteArray &dst,
+                                                          const QByteArray &expectedHash)
+{
+    return new LocalFileExtractThread(url, dst, expectedHash, this);
+}
+
+DownloadExtractThread *ImageWriter::createDownloadThread(const QByteArray &url,
+                                                         const QByteArray &dst,
+                                                         const QByteArray &expectedHash)
+{
+    return new DownloadExtractThread(url, dst, expectedHash, this);
 }
 
 void ImageWriter::cancelWrite()
@@ -4718,7 +4732,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
         QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
         try {
-            _thread = new LocalFileExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
+            _thread = createLocalFileThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash);
         } catch (const std::bad_alloc& e) {
             _handleMemoryAllocationFailure(e.what());
             return;
@@ -4732,7 +4746,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
         QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
         try {
-            _thread = new DownloadExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
+            _thread = createDownloadThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash);
             const QByteArray endpoint = telemetryEndpoint();
             if (_repo.toString() == OSLIST_URL && !endpoint.isEmpty())
             {

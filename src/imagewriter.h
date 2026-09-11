@@ -672,6 +672,20 @@ private:
     QString parseTokenFromUrl(const QUrl &url, bool strictAuthKey = false) const;
 
 protected:
+    /*
+     * How the write thread is built. Overridden by tests that need the write
+     * to run against a scripted device -- a paced one, so that a case about
+     * what happens *during* a write does not depend on how quickly the host
+     * happens to finish it. The application never overrides these; the
+     * defaults return the same threads the two call sites always built.
+     */
+    virtual DownloadExtractThread *createLocalFileThread(const QByteArray &url,
+                                                         const QByteArray &dst,
+                                                         const QByteArray &expectedHash);
+    virtual DownloadExtractThread *createDownloadThread(const QByteArray &url,
+                                                        const QByteArray &dst,
+                                                        const QByteArray &expectedHash);
+
     QUrl _src, _repo;
     QString _dst, _parentCategory, _osName, _osReleaseDate, _currentLang, _currentLangcode, _currentKeyboard, _bmapUrl;
     QByteArray _expectedHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
