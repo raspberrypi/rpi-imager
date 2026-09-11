@@ -165,6 +165,19 @@ struct longfn_entry {
 #define ATTR_DIRECTORY  0x10
 #define ATTR_ARCHIVE    0x20
 #define ATTR_LONG_NAME  (ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME_ID)
+/* Mask of the attribute bits that participate in the long-name signature.
+ * ATTR_DIRECTORY and ATTR_ARCHIVE are deliberately outside it. */
+#define ATTR_LONG_NAME_MASK (ATTR_LONG_NAME | ATTR_DIRECTORY | ATTR_ARCHIVE)
+
+/* True only for a VFAT long-filename fragment.
+ *
+ * ATTR_LONG_NAME is a *combination* of four bits, so `attr & ATTR_LONG_NAME`
+ * is true for anything carrying any one of them -- a volume label (0x08), or
+ * a read-only, hidden or system file. Every FAT filesystem has a volume label
+ * as its first root entry, so testing it that way decodes eleven bytes of
+ * label as UTF-16 and prepends the resulting mojibake to the name of the next
+ * real file. The signature has to be matched exactly. */
+#define IS_LONG_NAME_ENTRY(attr) (((attr) & ATTR_LONG_NAME_MASK) == ATTR_LONG_NAME)
 
 struct FSInfo {
     uint8_t  FSI_LeadSig[4];  /* 0x52 0x52 0x61 0x41 */

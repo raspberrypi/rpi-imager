@@ -233,6 +233,14 @@ bool DeviceWrapperFatPartition::fileExists(const QString &filename)
     return getDirEntry(filename, &entry);
 }
 
+qint64 DeviceWrapperFatPartition::fileSize(const QString &filename)
+{
+    struct dir_entry entry;
+    if (!getDirEntry(filename, &entry))
+        return -1;
+    return static_cast<qint64>(entry.DIR_FileSize);
+}
+
 bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
 {
     struct dir_entry entry;
@@ -270,35 +278,122 @@ bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
         _currentDirClusters.clear();
         _currentDirClusters.append(dirCluster);
         
-        // Get the file entry in subdirectory
-        QString fileNameOnly = parts[parts.size() - 1];
-        qDebug() << "DeviceWrapperFatPartition::deleteFile: searching for file" << fileNameOnly << "in subdirectory";
-        bool found = getDirEntry(fileNameOnly, &entry);
-        qDebug() << "DeviceWrapperFatPartition::deleteFile: getDirEntry returned" << found;
-        
-        // Restore directory state
-        _fat32_currentRootDirCluster = savedRootDirCluster;
-        _currentDirClusters = savedDirClusters;
-        
-        if (!found) {
-            qDebug() << "DeviceWrapperFatPartition::deleteFile: file not found in directory:" << filename;
+        // Scan the subdirectory here rather than calling getDirEntry().
+        //
+        // getDirEntry() and updateDirEntry() both begin with openDir(), which
+        // unconditionally seeks back to the root directory -- so the cluster
+        // set up above was discarded and the search ran in the root, found
+        // nothing, and returned false. The whole subdirectory branch was dead
+        // code: nothing under overlays/ could ever be deleted, and
+        // DownloadThread::_clearFatPartition() logged "failed to delete" for
+        // every one of them and carried on.
+        const QString fileNameOnly = parts[parts.size() - 1];
+        const QString fileNameLower = fileNameOnly.toLower();
+
+        seekCluster(dirCluster);
+
+        bool found = false;
+        quint64 entryOffset = 0;
+        QString longFilename;
+
+        // Step to the directory's next cluster when the read has just crossed
+        // a cluster boundary. Returns false when the chain ends or turns back
+        // on itself, which is the caller's signal to stop looking.
+        //
+        // This has to be consulted after *every* entry, long-name fragments
+        // included. It used to be checked only after a short-name entry, and
+        // a directory holding long names does not put its boundaries there:
+        auto followChain = [&]() -> bool {
+            if (_type != FAT32 || (pos() - _clusterOffset) % _bytesPerCluster != 0)
+                return true;
+            uint32_t nextCluster = getFAT(_fat32_currentRootDirCluster);
+            if (nextCluster >= 0xFFFFFF8)
+                return false;
+            if (_currentDirClusters.contains(nextCluster))
+            {
+                qDebug() << "DeviceWrapperFatPartition::deleteFile: circular cluster "
+                            "reference in" << dirName;
+                return false;
+            }
+            _currentDirClusters.append(nextCluster);
+            _fat32_currentRootDirCluster = nextCluster;
+            seekCluster(nextCluster);
+            return true;
+        };
+
+        while (true)
+        {
+            const quint64 thisEntryOffset = _offset;
+            read((char *) &entry, sizeof(entry));
+
+            if (entry.DIR_Name[0] == 0)
+                break;  /* end of directory */
+
+            if (IS_LONG_NAME_ENTRY(entry.DIR_Attr))
+            {
+                struct longfn_entry *l = (struct longfn_entry *) &entry;
+                char lnamePartStr[26] = {0};
+                memcpy(lnamePartStr, l->LDIR_Name1, 10);
+                memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
+                memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
+                QString lnamePart((QChar *) lnamePartStr, 13);
+                longFilename = lnamePart + longFilename;
+                if (!followChain())
+                    break;
+                continue;
+            }
+
+            if (entry.DIR_Name[0] != 0xE5 && !(entry.DIR_Attr & ATTR_VOLUME_ID))
+            {
+                if (longFilename.indexOf(QChar::Null) >= 0)
+                    longFilename.truncate(longFilename.indexOf(QChar::Null));
+
+                QString shortName;
+                for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++)
+                    shortName += QChar(entry.DIR_Name[i]).toLower();
+                if (entry.DIR_Name[8] != ' ')
+                {
+                    shortName += '.';
+                    for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++)
+                        shortName += QChar(entry.DIR_Name[i]).toLower();
+                }
+
+                const QString candidate =
+                    longFilename.isEmpty() ? shortName : longFilename.toLower();
+
+                if (candidate == fileNameLower)
+                {
+                    found = true;
+                    entryOffset = thisEntryOffset;
+                    break;
+                }
+            }
+
+            longFilename.clear();
+
+            /* Follow the directory's cluster chain on FAT32 */
+            if (!followChain())
+                break;
+        }
+
+        if (!found)
+        {
+            _fat32_currentRootDirCluster = savedRootDirCluster;
+            _currentDirClusters = savedDirClusters;
+            qDebug() << "DeviceWrapperFatPartition::deleteFile: file not found in directory:"
+                     << filename;
             return false;
         }
-        
-        // Mark as deleted and update
+
+        /* Mark the short entry deleted in place, matching what the
+           root-directory path does. */
         entry.DIR_Name[0] = 0xE5;
-        
-        // Switch back to subdirectory to update
-        _fat32_currentRootDirCluster = dirCluster;
-        _currentDirClusters.clear();
-        _currentDirClusters.append(dirCluster);
-        
-        updateDirEntry(&entry);
-        
-        // Restore directory state again
+        seek(entryOffset);
+        write((char *) &entry, sizeof(entry));
+
         _fat32_currentRootDirCluster = savedRootDirCluster;
         _currentDirClusters = savedDirClusters;
-        
+
         qDebug() << "DeviceWrapperFatPartition::deleteFile: deleted" << filename;
         return true;
     }
@@ -417,7 +512,7 @@ QByteArray DeviceWrapperFatPartition::readFile(const QString &filename)
                 continue;
             }
             
-            if (entry.DIR_Attr & ATTR_LONG_NAME) {
+            if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
                 // Process long filename entry
                 struct longfn_entry *l = (struct longfn_entry *) &entry;
                 char lnamePartStr[26] = {0};
@@ -547,7 +642,7 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
     openDir();
     while (readDir(&entry))
     {
-        if (entry.DIR_Attr & ATTR_LONG_NAME)
+        if (IS_LONG_NAME_ENTRY(entry.DIR_Attr))
         {
             // Long filename entry
             struct longfn_entry *l = (struct longfn_entry *) &entry;
@@ -567,13 +662,26 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
                 if (longFilename.indexOf(QChar::Null) >= 0)
                     longFilename.truncate(longFilename.indexOf(QChar::Null));
                 
-                // Get short filename as fallback
+                // Get short filename as fallback.
+                //
+                // DIR_Name is a fixed 11-byte field: an 8-byte base and a
+                // 3-byte extension, each space-padded, with no separator
+                // stored. Walking all 11 bytes and stopping at the first
+                // space therefore ends at the padding after the base, and
+                // the extension is never reached -- "CONFIG  TXT" came back
+                // as "CONFIG". The `i == 8` test that was meant to insert the
+                // dot could only fire when the base filled all 8 bytes.
+                // readFile() and listFilesInDirectory() already do this the
+                // way below; these two loops had not been kept in step.
                 QString shortName;
-                for (int i = 0; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                    if (i == 8 && entry.DIR_Name[i] != ' ') {
-                        shortName += '.';
-                    }
+                for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++) {
                     shortName += QChar(entry.DIR_Name[i]);
+                }
+                if (entry.DIR_Name[8] != ' ') {
+                    shortName += '.';
+                    for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
+                        shortName += QChar(entry.DIR_Name[i]);
+                    }
                 }
                 shortName = shortName.trimmed();
                 
@@ -638,7 +746,7 @@ void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uin
             break;
         }
         
-        if (entry.DIR_Attr & ATTR_LONG_NAME) {
+        if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
             // Long filename entry
             struct longfn_entry *l = (struct longfn_entry *) &entry;
             char lnamePartStr[26] = {0};
@@ -763,7 +871,7 @@ QStringList DeviceWrapperFatPartition::listAllFilesRecursive()
         
         openDir(); // Opens root directory
         while (readDir(&entry)) {
-            if (entry.DIR_Attr & ATTR_LONG_NAME) {
+            if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
                 struct longfn_entry *l = (struct longfn_entry *) &entry;
                 char lnamePartStr[26] = {0};
                 memcpy(lnamePartStr, l->LDIR_Name1, 10);
@@ -776,12 +884,22 @@ QStringList DeviceWrapperFatPartition::listAllFilesRecursive()
                     if (longFilename.indexOf(QChar::Null) >= 0)
                         longFilename.truncate(longFilename.indexOf(QChar::Null));
                     
+                    // Same fixed 8+3 field as in listAllFiles() above: stop
+                    // at the padding after the base and the extension is
+                    // lost. This one matters most -- SecureBoot's
+                    // extractFatPartitionFiles() lists through here and then
+                    // calls readFile() on each name, so a truncated "CONFIG"
+                    // simply failed to resolve and the file was left out of
+                    // the signed boot image without a word.
                     QString shortName;
-                    for (int i = 0; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                        if (i == 8 && entry.DIR_Name[i] != ' ') {
-                            shortName += '.';
-                        }
+                    for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++) {
                         shortName += QChar(entry.DIR_Name[i]);
+                    }
+                    if (entry.DIR_Name[8] != ' ') {
+                        shortName += '.';
+                        for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
+                            shortName += QChar(entry.DIR_Name[i]);
+                        }
                     }
                     shortName = shortName.trimmed();
                     
@@ -841,6 +959,17 @@ void DeviceWrapperFatPartition::writeFile(const QString &filename, const QByteAr
             throw std::runtime_error("Path component is not a directory");
         }
         
+        // Refuse rather than write to the wrong directory.
+        //
+        // Setting the traversal state below and then calling getDirEntry()
+        // does not work: getDirEntry() begins with openDir(), which seeks
+        // unconditionally back to the root and discards it. The entry is
+        // created in the root instead, so a file the caller asked to place in
+        // a subdirectory silently appears at the top level -- readable at
+        // "added.dtbo" and absent from "overlays/added.dtbo".
+        throw std::runtime_error(
+            "Writing to a subdirectory is not supported: " + filename.toStdString());
+
         // Save current directory context
         uint32_t savedRootDirCluster = _fat32_currentRootDirCluster;
         QList<uint32_t> savedDirClusters = _currentDirClusters;
@@ -1076,7 +1205,7 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
     openDir();
     while (readDir(entry))
     {
-        if (entry->DIR_Attr & ATTR_LONG_NAME)
+        if (IS_LONG_NAME_ENTRY(entry->DIR_Attr))
         {
             struct longfn_entry *l = (struct longfn_entry *) entry;
             /* A part can have 13 UTF-16 characters */
@@ -1234,7 +1363,7 @@ bool DeviceWrapperFatPartition::dirNameExists(const QByteArray dirname)
     openDir();
     while (readDir(&entry))
     {
-        if (!(entry.DIR_Attr & ATTR_LONG_NAME)
+        if (!IS_LONG_NAME_ENTRY(entry.DIR_Attr)
                 && dirname == QByteArray((char *) entry.DIR_Name, sizeof(entry.DIR_Name)))
         {
             return true;
@@ -1258,7 +1387,7 @@ void DeviceWrapperFatPartition::updateDirEntry(struct dir_entry *dirEntry)
     while (readDir(&iterEntry))
     {
         /* Look for existing entry with same short filename */
-        if (!(iterEntry.DIR_Attr & ATTR_LONG_NAME))
+        if (!IS_LONG_NAME_ENTRY(iterEntry.DIR_Attr))
         {
             bool matches = false;
             if (searchingForDeleted)
