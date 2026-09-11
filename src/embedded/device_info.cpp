@@ -60,15 +60,27 @@ public:
                             {0x19, "Raspberry Pi 5"},       // 500
                             {0x1a, "Raspberry Pi 5"}        // CM5 Lite
                         };
-                        auto revision_str = pi_revision_map.at(extracted_value);
-                        if (revision_str.length() > 0){
+                        // find(), not at(). The table stops at the newest
+                        // board known when it was written, and it skips
+                        // several codes in the middle -- so at() throws
+                        // std::out_of_range for the next Pi and for anything
+                        // in a gap. Nothing here catches it, and this runs
+                        // during startup on the embedded build, so what a
+                        // user meets on new hardware is the imager not
+                        // appearing at all. An unrecognised board is a board
+                        // we do not know, which is what the else branch was
+                        // always for.
+                        const auto found = pi_revision_map.find(extracted_value);
+                        if (found != pi_revision_map.end() && !found->second.empty()){
                             qDebug() << "Hardware Type Detected as: ";
-                            _hardware_name = QString::fromStdString(revision_str);
+                            _hardware_name = QString::fromStdString(found->second);
                             qDebug() << _hardware_name;
                             _is_raspberry_pi = true;
                         }
                         else {
-                            qDebug() << "Could not decipher revision code";
+                            qDebug() << "Could not decipher revision code"
+                                     << _revision << "(device type"
+                                     << Qt::hex << extracted_value << Qt::dec << ")";
                             _hardware_name = {};
                             _is_raspberry_pi = false;
                         }
