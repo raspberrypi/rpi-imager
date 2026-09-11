@@ -854,6 +854,64 @@ static QString xmlEscape(const QString& input) {
     return result;
 }
 
+// Test API for unit testing internal functions
+//
+// These two decide the content and the name of a polkit policy file, which is
+// what grants pkexec the right to run this binary as root. They are pure and
+// worth pinning: an escaping mistake puts attacker-influenced text into a
+// privilege-granting document, and a filename mistake either collides with
+// another AppImage's policy or writes outside the actions directory.
+// Defined further down, beside unmountDisk which is its only caller.
+static bool mountIsOnDevice(const char* devicePath, const char* mountSource);
+
+// Defined beside tryElevate, its only caller.
+static QStringList buildElevationCommand(const QString& bundlePath,
+                                         const QStringList& userArgs);
+
+// Defined beside openUrlAsOriginalUser, their only caller.
+static uid_t resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
+                                uid_t realUid, uid_t effectiveUid);
+static QStringList buildOpenUrlAsUserArgs(const QString& username,
+                                          const QProcessEnvironment& env,
+                                          const QString& url,
+                                          const QString& userHome);
+
+#ifdef PLATFORMQUIRKS_ENABLE_TEST_API
+namespace TestAPI {
+    QString xmlEscape(const QString& input) { return ::PlatformQuirks::xmlEscape(input); }
+
+    bool generatePolkitPolicyFilename(const char* appImagePath, char* buffer, size_t bufferSize)
+    {
+        return ::PlatformQuirks::generatePolkitPolicyFilename(appImagePath, buffer, bufferSize);
+    }
+
+    bool mountIsOnDevice(const char* devicePath, const char* mountSource)
+    {
+        return ::PlatformQuirks::mountIsOnDevice(devicePath, mountSource);
+    }
+
+    QStringList buildElevationCommand(const QString& bundlePath,
+                                      const QStringList& userArgs)
+    {
+        return ::PlatformQuirks::buildElevationCommand(bundlePath, userArgs);
+    }
+
+    unsigned int resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
+                                    unsigned int realUid, unsigned int effectiveUid)
+    {
+        return ::PlatformQuirks::resolveOriginalUid(pkexecUid, sudoUid, realUid, effectiveUid);
+    }
+
+    QStringList buildOpenUrlAsUserArgs(const QString& username,
+                                       const QProcessEnvironment& env,
+                                       const QString& url,
+                                       const QString& userHome)
+    {
+        return ::PlatformQuirks::buildOpenUrlAsUserArgs(username, env, url, userHome);
+    }
+}
+#endif
+
 // Polkit action directories in order of preference:
 // - /etc/polkit-1/actions/ is the local override location (writable on immutable distros)
 // - /usr/share/polkit-1/actions/ is the vendor location (read-only on immutable distros)
@@ -1265,25 +1323,113 @@ static bool openUriViaPortal(const QString& uri) {
 // Run xdg-open as the original (non-root) user when the GUI is itself elevated,
 // so it can reach that user's desktop session. Returns true if a launcher
 // process started.
-static bool openUrlAsOriginalUser(const QString& url) {
-    uid_t targetUid = 0;
-    QString targetUsername;
+// Whose desktop session a link should be opened on, given that this process
+// is running as root.
+//
+// pkexec and sudo each record the invoking user in the environment, and a
+// setuid launch shows as a real uid differing from the effective one. Zero
+// means nobody was found: root asked for this directly, and there is no
+// other session to hand the link to.
+static uid_t resolveOriginalUid(const char* pkexecUid, const char* sudoUid,
+                                uid_t realUid, uid_t effectiveUid) {
+    if (pkexecUid)
+        return static_cast<uid_t>(::atoi(pkexecUid));
+    if (sudoUid)
+        return static_cast<uid_t>(::atoi(sudoUid));
+    if (realUid != effectiveUid)
+        return realUid;
+    return 0;
+}
 
-    // Recover the invoking user from the elevation wrapper's environment.
-    const char* pkexecUid = ::getenv("PKEXEC_UID");
-    const char* sudoUid = ::getenv("SUDO_UID");
-    if (pkexecUid) {
-        targetUid = static_cast<uid_t>(::atoi(pkexecUid));
-    } else if (sudoUid) {
-        targetUid = static_cast<uid_t>(::atoi(sudoUid));
-    } else if (::getuid() != ::geteuid()) {
-        targetUid = ::getuid();
+// Where xdg-open looks for the .desktop files that say which browser to run.
+//
+// pkexec replaces the environment with "a minimal known and safe" one, and
+// XDG_DATA_DIRS is not in it -- so by the time Imager is elevated the value
+// is simply gone, and runuser does not put it back either. xdg-open then
+// falls back to the specification's default of /usr/local/share:/usr/share.
+static QString sessionDataDirs(const QString& userHome, const QProcessEnvironment& env) {
+    const QString inherited = env.value(QStringLiteral("XDG_DATA_DIRS"));
+    if (!inherited.isEmpty())
+        return inherited;
+
+    QStringList candidates;
+    if (!userHome.isEmpty())
+        candidates << userHome + QStringLiteral("/.local/share/flatpak/exports/share");
+    candidates << QStringLiteral("/var/lib/flatpak/exports/share")
+               << QStringLiteral("/var/lib/snapd/desktop")
+               << QStringLiteral("/usr/local/share")
+               << QStringLiteral("/usr/share");
+
+    QStringList present;
+    for (const QString& dir : candidates) {
+        if (QFileInfo(dir).isDir())
+            present << dir;
     }
+    return present.join(QLatin1Char(':'));
+}
+
+// The arguments for: runuser -u <user> -- env VAR=value ... xdg-open <url>
+//
+// runuser preserves more of the environment than `pkexec --user` and needs no
+// authentication when already root. Only the handful of variables xdg-open
+// needs to find the user's session are named; the rest of root's environment
+// is not something to hand to a browser. A variable that is not set is left
+// out entirely rather than passed as an empty assignment, which would tell
+// xdg-open a display exists when it does not.
+static QStringList buildOpenUrlAsUserArgs(const QString& username,
+                                          const QProcessEnvironment& env,
+                                          const QString& url,
+                                          const QString& userHome) {
+    static const char* const sessionVars[] = {
+        "DBUS_SESSION_BUS_ADDRESS",
+        "XDG_RUNTIME_DIR",
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "XAUTHORITY",
+        // Which xdg-open backend to use -- gio, kde-open, exo-open. Without
+        // it xdg-open takes its generic path, which ignores the desktop's own
+        // opener. Carried when pkexec happened to leave it.
+        "XDG_CURRENT_DESKTOP",
+    };
+
+    QStringList envArgs;
+    envArgs << QStringLiteral("env");
+    for (const char* name : sessionVars) {
+        const QString key = QString::fromLatin1(name);
+        const QString value = env.value(key);
+        if (!value.isEmpty())
+            envArgs << QStringLiteral("%1=%2").arg(key, value);
+    }
+
+    const QString dataDirs = sessionDataDirs(userHome, env);
+    if (!dataDirs.isEmpty())
+        envArgs << QStringLiteral("XDG_DATA_DIRS=%1").arg(dataDirs);
+
+    envArgs << QStringLiteral("xdg-open") << url;
+
+    // The -- keeps a username or a URL beginning with a dash from being read
+    // as an option to runuser.
+    QStringList runuserArgs;
+    runuserArgs << QStringLiteral("-u") << username << QStringLiteral("--") << envArgs;
+    return runuserArgs;
+}
+
+static bool openUrlAsOriginalUser(const QString& url) {
+    QString targetUsername;
+    QString targetHome;
+
+    const uid_t targetUid = resolveOriginalUid(::getenv("PKEXEC_UID"),
+                                               ::getenv("SUDO_UID"),
+                                               ::getuid(), ::geteuid());
 
     if (targetUid != 0) {
         struct passwd* pw = ::getpwuid(targetUid);
         if (pw && pw->pw_name) {
             targetUsername = QString::fromUtf8(pw->pw_name);
+            // For the per-user Flatpak export directory. runuser sets HOME
+            // for the browser itself; this is only used to name that path.
+            if (pw->pw_dir)
+                targetHome = QString::fromUtf8(pw->pw_dir);
         }
     }
 
@@ -1292,32 +1438,8 @@ static bool openUrlAsOriginalUser(const QString& url) {
         return false;
     }
 
-    // Carry the env vars xdg-open needs to reach the user's desktop session.
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    const QString dbusSessionAddress = env.value(QStringLiteral("DBUS_SESSION_BUS_ADDRESS"));
-    const QString xdgRuntimeDir = env.value(QStringLiteral("XDG_RUNTIME_DIR"));
-    const QString display = env.value(QStringLiteral("DISPLAY"));
-    const QString waylandDisplay = env.value(QStringLiteral("WAYLAND_DISPLAY"));
-    const QString xauthority = env.value(QStringLiteral("XAUTHORITY"));
-
-    // runuser -u <user> -- env VAR=value ... xdg-open <url>
-    // runuser preserves more than `pkexec --user` and needs no auth when root.
-    QStringList envArgs;
-    envArgs << QStringLiteral("env");
-    if (!dbusSessionAddress.isEmpty())
-        envArgs << QStringLiteral("DBUS_SESSION_BUS_ADDRESS=%1").arg(dbusSessionAddress);
-    if (!xdgRuntimeDir.isEmpty())
-        envArgs << QStringLiteral("XDG_RUNTIME_DIR=%1").arg(xdgRuntimeDir);
-    if (!display.isEmpty())
-        envArgs << QStringLiteral("DISPLAY=%1").arg(display);
-    if (!waylandDisplay.isEmpty())
-        envArgs << QStringLiteral("WAYLAND_DISPLAY=%1").arg(waylandDisplay);
-    if (!xauthority.isEmpty())
-        envArgs << QStringLiteral("XAUTHORITY=%1").arg(xauthority);
-    envArgs << QStringLiteral("xdg-open") << url;
-
-    QStringList runuserArgs;
-    runuserArgs << QStringLiteral("-u") << targetUsername << QStringLiteral("--") << envArgs;
+    const QStringList runuserArgs = buildOpenUrlAsUserArgs(
+        targetUsername, QProcessEnvironment::systemEnvironment(), url, targetHome);
 
     if (launchDetached(QStringLiteral("runuser"), runuserArgs)) {
         qDebug() << "Started runuser xdg-open";
@@ -1360,6 +1482,27 @@ bool openUrlExternally(const QUrl& url) {
     return false;
 }
 
+// The command line pkexec is given to re-run this application as root.
+//
+// Pure, and exposed through TestAPI, because what ends up here is what runs
+// with root's authority. Two things in particular: the program is the
+// resolved bundle path rather than argv[0], which a caller controls and
+// which the installed policy would otherwise be lent to; and the user's own
+// arguments are forwarded one element each, never joined into a string for
+// something else to split again.
+//
+// --disable-internal-agent stops pkexec spawning its own text-mode polkit
+// agent, which fights the desktop's and produces duplicate prompts or hangs.
+static QStringList buildElevationCommand(const QString& bundlePath,
+                                         const QStringList& userArgs) {
+    QStringList command;
+    command << QStringLiteral("/usr/bin/pkexec")
+            << QStringLiteral("--disable-internal-agent")
+            << bundlePath;
+    command += userArgs;
+    return command;
+}
+
 bool tryElevate(int argc, char** argv) {
     // Only attempt elevation if not already root, have a bundle path, and have a polkit policy
     const char* bundlePath = getBundlePath();
@@ -1371,19 +1514,20 @@ bool tryElevate(int argc, char** argv) {
         return false;
     }
 
-    // --disable-internal-agent prevents pkexec from spawning its own polkit agent.
-    // We rely on the desktop environment's agent (e.g., gnome-shell, kde-polkit)
-    // to show the auth dialog. Without this flag, pkexec's built-in text-mode agent
-    // can interfere with the GUI agent, causing duplicate prompts or hangs.
-    char** newArgv = new char*[argc + 3];
-    int newArgc = 0;
+    QStringList forwarded;
+    for (int i = 1; i < argc; i++)
+        forwarded << QString::fromLocal8Bit(argv[i]);
 
-    newArgv[newArgc++] = strdup("/usr/bin/pkexec");
-    newArgv[newArgc++] = strdup("--disable-internal-agent");
-    newArgv[newArgc++] = strdup(bundlePath);
-    
-    for (int i = 1; i < argc; i++) {
-        newArgv[newArgc++] = strdup(argv[i]);
+    const QStringList elevated = buildElevationCommand(
+        QString::fromUtf8(bundlePath), forwarded);
+
+    const int newArgc = elevated.size();
+    char** newArgv = new char*[newArgc + 1];
+    QList<QByteArray> held;
+    held.reserve(newArgc);
+    for (int i = 0; i < newArgc; i++) {
+        held << elevated[i].toLocal8Bit();
+        newArgv[i] = strdup(held[i].constData());
     }
     newArgv[newArgc] = nullptr;
     
@@ -1531,17 +1675,22 @@ bool prefersReducedMotion() {
         QFile gtkSettings(gtkSettingsPath);
         if (gtkSettings.open(QIODevice::ReadOnly | QIODevice::Text)) {
             while (!gtkSettings.atEnd()) {
-                QString line = gtkSettings.readLine().trimmed();
-                if (line.startsWith("gtk-enable-animations")) {
-                    int eq = line.indexOf('=');
-                    if (eq >= 0) {
-                        QString value = line.mid(eq + 1).trimmed();
-                        if (value == "0" || value == "false") {
-                            return true;
-                        }
-                    }
-                    break;
+                const QString line = gtkSettings.readLine().trimmed();
+                const int eq = line.indexOf('=');
+                if (eq < 0)
+                    continue;   // section header, comment, or a malformed line
+                // Compared whole rather than by prefix. startsWith() also
+                // matched any longer key beginning the same way, and the stop
+                // below then ended the search -- so such a line placed above
+                // the real one made a user who had asked for reduced motion
+                // read as not having asked.
+                if (line.left(eq).trimmed() != QLatin1String("gtk-enable-animations"))
+                    continue;
+                const QString value = line.mid(eq + 1).trimmed();
+                if (value == "0" || value == "false") {
+                    return true;
                 }
+                break;   // the key is set and says animations are wanted
             }
         }
     }
@@ -1558,6 +1707,39 @@ QString getWriteDevicePath(const QString& devicePath) {
 QString getEjectDevicePath(const QString& devicePath) {
     // No path transformation needed on Linux.
     return devicePath;
+}
+
+// Whether a /proc/mounts entry belongs to `devicePath` -- either the whole
+// disk or one of its partitions. Pure, and exposed through TestAPI, because
+// getting it wrong means unmounting a filesystem on some other device.
+static bool mountIsOnDevice(const char* devicePath, const char* mountSource) {
+    if (!devicePath || !mountSource)
+        return false;
+
+    const size_t deviceLen = strlen(devicePath);
+    if (deviceLen == 0)
+        return false;
+    if (strncmp(mountSource, devicePath, deviceLen) != 0)
+        return false;
+
+    const char* suffix = mountSource + deviceLen;
+    if (*suffix == '\0')
+        return true;                    // the whole disk is mounted
+
+    if (devicePath[deviceLen - 1] >= '0' && devicePath[deviceLen - 1] <= '9') {
+        if (*suffix != 'p')
+            return false;
+        ++suffix;
+    }
+
+    // Whatever remains has to be the partition number and nothing else, so
+    // that sda_backup, mmcblk0boot0 and loop11 are all left alone.
+    if (*suffix == '\0')
+        return false;
+    for (const char* c = suffix; *c != '\0'; ++c)
+        if (*c < '0' || *c > '9')
+            return false;
+    return true;
 }
 
 DiskResult unmountDisk(const QString& device) {
@@ -1591,20 +1773,9 @@ DiskResult unmountDisk(const QString& device) {
     char mntBuf[4096 + 1024];  // Buffer for getmntent_r
     
     while ((mnt = getmntent_r(procMounts, &data, mntBuf, sizeof(mntBuf)))) {
-        // Check if this mount is on the device or any of its partitions
-        // Match exact device path or device path followed by a partition number (digit)
-        // This prevents matching /dev/sda when we have /dev/sda_backup or similar
-        size_t devicePathLen = strlen(devicePath);
-        if (strncmp(mnt->mnt_fsname, devicePath, devicePathLen) == 0) {
-            char nextChar = mnt->mnt_fsname[devicePathLen];
-            // Accept exact match, partition number (digit), or 'p' followed by digit (nvme style)
-            if (nextChar == '\0' || 
-                (nextChar >= '0' && nextChar <= '9') ||
-                (nextChar == 'p' && mnt->mnt_fsname[devicePathLen + 1] >= '0' && 
-                 mnt->mnt_fsname[devicePathLen + 1] <= '9')) {
-                qDebug() << "unmountDisk: found mount" << mnt->mnt_dir << "for" << mnt->mnt_fsname;
-                mountDirs.push_back(mnt->mnt_dir);
-            }
+        if (mountIsOnDevice(devicePath, mnt->mnt_fsname)) {
+            qDebug() << "unmountDisk: found mount" << mnt->mnt_dir << "for" << mnt->mnt_fsname;
+            mountDirs.push_back(mnt->mnt_dir);
         }
     }
     endmntent(procMounts);
