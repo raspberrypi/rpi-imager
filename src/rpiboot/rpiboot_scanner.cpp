@@ -22,10 +22,21 @@ std::string portPathToString(const std::vector<uint8_t>& portPath)
 
 std::vector<Drivelist::DeviceDescriptor> scanRpibootDevices()
 {
+    try {
+        LibusbContext ctx;
+        return scanRpibootDevices(ctx);
+    } catch (...) {
+        // libusb would not initialise -- no USB support, no permissions.
+        // An empty list is the honest answer; there is nothing to offer.
+        return {};
+    }
+}
+
+std::vector<Drivelist::DeviceDescriptor> scanRpibootDevices(const IUsbContext& ctx)
+{
     std::vector<Drivelist::DeviceDescriptor> result;
 
     try {
-        LibusbContext ctx;
         auto usbDevices = ctx.scanBootDevices();
 
         for (const auto& dev : usbDevices) {
@@ -35,10 +46,8 @@ std::vector<Drivelist::DeviceDescriptor> scanRpibootDevices()
             // Format: rpiboot://bus:addr:port1.port2:pid
             // The PID encodes the chip generation and is needed by RpibootThread
             // to select the correct bootcode binary (bootcode4.bin vs bootcode5.bin).
-            std::string portStr = portPathToString(dev.portPath);
-            dd.device = "rpiboot://" + std::to_string(dev.busNumber) + ":"
-                      + std::to_string(dev.deviceAddress) + ":" + portStr
-                      + ":" + std::to_string(static_cast<uint16_t>(dev.chipGeneration));
+            dd.device = formatDeviceUri(dev.busNumber, dev.deviceAddress,
+                                        dev.portPath, dev.chipGeneration);
 
             dd.description = deviceDescription(dev.chipGeneration);
             dd.size = 0;           // Not a block device yet

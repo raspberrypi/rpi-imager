@@ -34,6 +34,24 @@ RpibootThread::~RpibootThread()
     }
 }
 
+std::unique_ptr<rpiboot::FirmwareManager> RpibootThread::makeFirmwareManager()
+{
+    return std::make_unique<rpiboot::FirmwareManager>();
+}
+
+std::unique_ptr<rpiboot::IUsbContext> RpibootThread::makeUsbContext()
+{
+    // LibusbContext's constructor throws if libusb will not initialise --
+    // no permissions, no usbfs. Callers get nullptr and report it rather
+    // than the exception escaping into a QThread::run().
+    try {
+        return std::make_unique<rpiboot::LibusbContext>();
+    } catch (const std::exception &e) {
+        qWarning() << "RpibootThread: cannot open the USB bus:" << e.what();
+        return nullptr;
+    }
+}
+
 void RpibootThread::cancel()
 {
     _cancelled.store(true);
@@ -51,7 +69,13 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
     QElapsedTimer phaseTimer;
     phaseTimer.start();
 
-    FirmwareManager fwMgr;
+    auto fwMgrOwned = makeFirmwareManager();
+    if (!fwMgrOwned) {
+        emit error(tr("Failed to obtain rpiboot firmware: %1")
+                   .arg(tr("no firmware source available")));
+        return false;
+    }
+    FirmwareManager &fwMgr = *fwMgrOwned;
     if (!_customFastbootGadget.isEmpty())
         fwMgr.setCustomFastbootGadget(_customFastbootGadget.toStdString());
     if (!_signFastbootGadgetKey.isEmpty())
@@ -97,8 +121,17 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
         fileServerDevice.portPath       = _device.portPath;
         fileServerDevice.chipGeneration = _device.chipGeneration;
 
-        LibusbContext ctx;
-        for (const auto& dev : ctx.scanBootDevices()) {
+        auto ctx = makeUsbContext();
+        if (!ctx) {
+            // Every other way out of runPhase() says why. Returning quietly
+            // here leaves run() with nothing to emit and the wizard waiting
+            // on a device that is never coming.
+            emit error(tr("Could not open the USB bus to reach the device. "
+                          "On Linux this usually means the application does "
+                          "not have permission to access it."));
+            return false;
+        }
+        for (const auto& dev : ctx->scanBootDevices()) {
             bool matches = (!_device.portPath.empty())
                 ? (dev.portPath == _device.portPath)
                 : (dev.busNumber == _device.busNumber &&
@@ -119,8 +152,8 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
 
     if (needsBootcode) {
         try {
-            LibusbContext ctx;
-            auto transport = ctx.openDevice(fileServerDevice);
+            auto ctx = makeUsbContext();
+            auto transport = ctx ? ctx->openDevice(fileServerDevice) : nullptr;
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device"));
@@ -184,8 +217,8 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
     {
         bool fileServerOk = false;
         try {
-            LibusbContext ctx;
-            auto transport = ctx.openDevice(fileServerDevice);
+            auto ctx = makeUsbContext();
+            auto transport = ctx ? ctx->openDevice(fileServerDevice) : nullptr;
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device after re-enumeration"));
@@ -253,7 +286,11 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             emit error(tr("Timed out waiting for fastboot device to appear."));
             return false;
         }
-        emit eventFastbootWait(static_cast<quint32>(phaseTimer.elapsed()), true);
+        // Only when the device actually turned up. Cancelling reaches here
+        // too, and recording that as a successful wait put a wait that never
+        // completed into the report as one that did.
+        if (_nextStageFound.load())
+            emit eventFastbootWait(static_cast<quint32>(phaseTimer.elapsed()), true);
         break;
 
     case SideloadMode::SecureBootRecovery:
@@ -319,7 +356,12 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
         return true;
     };
 
-    LibusbContext pollCtx;
+    auto pollCtx = makeUsbContext();
+    if (!pollCtx) {
+        emit error(tr("Could not open the USB bus while waiting for the "
+                      "device to reconnect."));
+        return false;
+    }
 
     constexpr int DISCONNECT_POLLS = 6;
     for (int i = 0; i < DISCONNECT_POLLS; ++i) {
@@ -329,7 +371,7 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
         QThread::msleep(500);
 
         try {
-            auto devices = pollCtx.scanBootDevices();
+            auto devices = pollCtx->scanBootDevices();
             bool stillPresent = false;
             for (const auto& dev : devices) {
                 if (matchesPort(dev) &&
@@ -358,7 +400,7 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
                                          .arg((i + 1) / 2).arg(RECONNECT_POLLS / 2));
 
         try {
-            auto devices = pollCtx.scanBootDevices();
+            auto devices = pollCtx->scanBootDevices();
             for (const auto& dev : devices) {
                 if (!matchesPort(dev))
                     continue;
@@ -386,7 +428,9 @@ bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fas
 {
     using namespace rpiboot;
 
-    LibusbContext pollCtx;
+    auto pollCtx = makeUsbContext();
+    if (!pollCtx)
+        return false;
 
     constexpr int FB_POLLS = 120;
     for (int attempt = 0; attempt < FB_POLLS; ++attempt) {
@@ -395,7 +439,7 @@ bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fas
         QThread::msleep(500);
 
         try {
-            auto devices = pollCtx.scanFastbootDevices();
+            auto devices = pollCtx->scanFastbootDevices();
 
             for (const auto& dev : devices) {
                 if (!_device.portPath.empty() && dev.portPath == _device.portPath) {
@@ -434,7 +478,9 @@ bool RpibootThread::pollForRpibootReturn(std::atomic<bool>& found,
 {
     using namespace rpiboot;
 
-    LibusbContext pollCtx;
+    auto pollCtx = makeUsbContext();
+    if (!pollCtx)
+        return false;
 
     constexpr int POLLS = 120;
     for (int attempt = 0; attempt < POLLS; ++attempt) {
@@ -443,7 +489,7 @@ bool RpibootThread::pollForRpibootReturn(std::atomic<bool>& found,
         QThread::msleep(500);
 
         try {
-            auto devices = pollCtx.scanBootDevices();
+            auto devices = pollCtx->scanBootDevices();
             for (const auto& dev : devices) {
                 const bool portMatches = !_device.portPath.empty() &&
                                          dev.portPath == _device.portPath;

@@ -10,9 +10,13 @@
 #define RPIBOOTTHREAD_H
 
 #include <QThread>
+
+#include <memory>
 #include <QString>
 
 #include "rpiboot/rpiboot_types.h"
+
+namespace rpiboot { class IUsbContext; class FirmwareManager; }
 
 namespace rpiboot { struct UsbDeviceInfo; }
 
@@ -53,7 +57,22 @@ signals:
 protected:
     void run() override;
 
-private:
+    // The whole sideload sequence talks to the bus through this. Each step
+    // used to construct a LibusbContext inline, which is what kept every
+    // line below unreachable without a Pi in boot mode on the bus; behind a
+    // factory, a test supplies its own bus and drives the sequence.
+    virtual std::unique_ptr<rpiboot::IUsbContext> makeUsbContext();
+
+    // Where the firmware comes from. Constructed inline the same way the bus
+    // was, so the first thing runPhase() did was reach for the network --
+    // which is as far as a test could follow it.
+    virtual std::unique_ptr<rpiboot::FirmwareManager> makeFirmwareManager();
+
+// Protected rather than private for the same reason FastbootFlashThread's
+// are: these decide whether a board is about to be reflashed and what is
+// sent to it, and every one of them already takes or returns plain data.
+// The only thing standing in the way was the access specifier.
+protected:
     bool pollForFastbootDevice(std::atomic<bool>& found, QString& fastbootId);
     // SBR equivalent of pollForFastbootDevice: watches for the original
     // rpiboot device returning on the same port path after the EEPROM
@@ -63,11 +82,16 @@ private:
     // "device hasn't disappeared yet".
     bool pollForRpibootReturn(std::atomic<bool>& found, uint8_t priorDeviceAddress);
     bool waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice);
-    bool runPhase(rpiboot::SideloadMode mode,
+    // Virtual so run()'s decision about which phases to run, and in what
+    // order, can be checked without running them.
+    virtual bool runPhase(rpiboot::SideloadMode mode,
                   QString& fastbootId,
                   QString& bootcodeDiag,
                   QString& fileServeDiag);
 
+// State stays private. Widening the sequence above is what makes it
+// testable; the members it works on are nobody else's business.
+private:
     DeviceInfo _device;
     rpiboot::SideloadMode _mode;
     std::atomic<bool> _cancelled{false};

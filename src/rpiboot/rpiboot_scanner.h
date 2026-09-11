@@ -16,6 +16,13 @@
 
 namespace rpiboot {
 
+class IUsbContext;
+
+// Turn the boot-mode devices on a bus into DeviceDescriptor structs for the
+// drive list. The bus is a parameter so this can be run against one a test
+// describes; the overload below scans the real one.
+std::vector<Drivelist::DeviceDescriptor> scanRpibootDevices(const IUsbContext& ctx);
+
 // Scan the USB bus for Broadcom boot-mode devices and return them
 // as DeviceDescriptor structs suitable for the drive list model.
 std::vector<Drivelist::DeviceDescriptor> scanRpibootDevices();
