@@ -67,7 +67,19 @@ qint64 SystemMemoryManager::getAvailableMemoryMB()
 
 SystemMemoryManager::SyncConfiguration SystemMemoryManager::calculateSyncConfiguration()
 {
-    qint64 totalMemMB = getTotalMemoryMB();
+    const SyncConfiguration config = syncConfigurationFor(getTotalMemoryMB());
+
+    qDebug() << "Adaptive sync configuration:"
+             << config.memoryTier
+             << "- Sync interval:" << (config.syncIntervalBytes / 1024 / 1024) << "MB"
+             << "- Time interval:" << config.syncIntervalMs << "ms";
+
+    return config;
+}
+
+SystemMemoryManager::SyncConfiguration
+SystemMemoryManager::syncConfigurationFor(qint64 totalMemMB)
+{
     SyncConfiguration config;
     
     qint64 syncIntervalMB;
@@ -93,12 +105,6 @@ SystemMemoryManager::SyncConfiguration SystemMemoryManager::calculateSyncConfigu
     config.syncIntervalBytes = syncIntervalMB * 1024 * 1024;
     config.syncIntervalBytes = qMax(MIN_SYNC_INTERVAL_BYTES, 
                                    qMin(MAX_SYNC_INTERVAL_BYTES, config.syncIntervalBytes));
-    
-    qDebug() << "Adaptive sync configuration:"
-             << config.memoryTier
-             << "- Sync interval:" << (config.syncIntervalBytes / 1024 / 1024) << "MB"
-             << "- Time interval:" << config.syncIntervalMs << "ms"
-             << "- Platform:" << getPlatformName();
     
     return config;
 }
@@ -192,22 +198,29 @@ qint64 SystemMemoryManager::getPlatformTotalMemoryMB()
     // Method 2: Fallback to /proc/meminfo
     QFile meminfo("/proc/meminfo");
     if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&meminfo);
-        QString line;
-        while (!(line = in.readLine()).isNull()) {
-            if (line.startsWith("MemTotal:")) {
-                QStringList parts = line.split(QRegularExpression("\\s+"));
-                if (parts.size() >= 2) {
-                    bool ok;
-                    qint64 memKB = parts[1].toLongLong(&ok);
-                    if (ok) {
-                        return memKB / 1024; // Convert KB to MB
-                    }
-                }
-                break;
-            }
-        }
+        const QString contents = QString::fromUtf8(meminfo.readAll());
         meminfo.close();
+        return totalMemoryFromMeminfo(contents);
+    }
+    
+    return 0; // Detection failed
+}
+
+qint64 SystemMemoryManager::totalMemoryFromMeminfo(const QString &contents)
+{
+    const QStringList lines = contents.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        if (line.startsWith("MemTotal:")) {
+            QStringList parts = line.split(QRegularExpression("\\s+"));
+            if (parts.size() >= 2) {
+                bool ok;
+                qint64 memKB = parts[1].toLongLong(&ok);
+                if (ok) {
+                    return memKB / 1024; // Convert KB to MB
+                }
+            }
+            break;
+        }
     }
     
     return 0; // Detection failed
@@ -226,44 +239,50 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
     // Method 2: Parse /proc/meminfo for more detailed info
     QFile meminfo("/proc/meminfo");
     if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&meminfo);
-        QString line;
-        qint64 memAvailableKB = 0, memFreeKB = 0, buffersKB = 0, cachedKB = 0;
-        
-        while (!(line = in.readLine()).isNull()) {
-            if (line.startsWith("MemAvailable:")) {
-                QStringList parts = line.split(QRegularExpression("\\s+"));
-                if (parts.size() >= 2) {
-                    memAvailableKB = parts[1].toLongLong();
-                }
-            } else if (line.startsWith("MemFree:")) {
-                QStringList parts = line.split(QRegularExpression("\\s+"));
-                if (parts.size() >= 2) {
-                    memFreeKB = parts[1].toLongLong();
-                }
-            } else if (line.startsWith("Buffers:")) {
-                QStringList parts = line.split(QRegularExpression("\\s+"));
-                if (parts.size() >= 2) {
-                    buffersKB = parts[1].toLongLong();
-                }
-            } else if (line.startsWith("Cached:")) {
-                QStringList parts = line.split(QRegularExpression("\\s+"));
-                if (parts.size() >= 2) {
-                    cachedKB = parts[1].toLongLong();
-                }
-            }
-        }
+        const QString contents = QString::fromUtf8(meminfo.readAll());
         meminfo.close();
-        
-        // Use MemAvailable if available (kernel 3.14+), otherwise estimate
-        if (memAvailableKB > 0) {
-            return memAvailableKB / 1024;
-        } else if (memFreeKB > 0) {
-            // Rough estimate: free + buffers + cached
-            return (memFreeKB + buffersKB + cachedKB) / 1024;
-        }
+        return availableMemoryFromMeminfo(contents);
     }
     
+    return 0; // Detection failed
+}
+
+qint64 SystemMemoryManager::availableMemoryFromMeminfo(const QString &contents)
+{
+    qint64 memAvailableKB = 0, memFreeKB = 0, buffersKB = 0, cachedKB = 0;
+
+    for (const QString &line : contents.split(QLatin1Char('\n'))) {
+        if (line.startsWith("MemAvailable:")) {
+            QStringList parts = line.split(QRegularExpression("\\s+"));
+            if (parts.size() >= 2) {
+                memAvailableKB = parts[1].toLongLong();
+            }
+        } else if (line.startsWith("MemFree:")) {
+            QStringList parts = line.split(QRegularExpression("\\s+"));
+            if (parts.size() >= 2) {
+                memFreeKB = parts[1].toLongLong();
+            }
+        } else if (line.startsWith("Buffers:")) {
+            QStringList parts = line.split(QRegularExpression("\\s+"));
+            if (parts.size() >= 2) {
+                buffersKB = parts[1].toLongLong();
+            }
+        } else if (line.startsWith("Cached:")) {
+            QStringList parts = line.split(QRegularExpression("\\s+"));
+            if (parts.size() >= 2) {
+                cachedKB = parts[1].toLongLong();
+            }
+        }
+    }
+
+    // Use MemAvailable if available (kernel 3.14+), otherwise estimate
+    if (memAvailableKB > 0) {
+        return memAvailableKB / 1024;
+    } else if (memFreeKB > 0) {
+        // Rough estimate: free + buffers + cached
+        return (memFreeKB + buffersKB + cachedKB) / 1024;
+    }
+
     return 0; // Detection failed
 }
 
@@ -285,6 +304,16 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
 size_t SystemMemoryManager::getOptimalWriteBufferSize()
 {
     qint64 totalMemMB = getTotalMemoryMB();
+    const size_t bufferSize = writeBufferSizeFor(totalMemMB);
+
+    qDebug() << "Optimal write buffer size:" << (bufferSize / 1024) << "KB for"
+             << totalMemMB << "MB system";
+
+    return bufferSize;
+}
+
+size_t SystemMemoryManager::writeBufferSizeFor(qint64 totalMemMB)
+{
     size_t pageSize = getSystemPageSize();
     
     // Base buffer size calculation based on available memory
@@ -314,17 +343,17 @@ size_t SystemMemoryManager::getOptimalWriteBufferSize()
     const size_t minBufferSize = 256 * 1024;  // 256KB minimum
     const size_t maxBufferSize = 16 * 1024 * 1024;  // 16MB maximum
     bufferSize = qMax(minBufferSize, qMin(maxBufferSize, bufferSize));
-    
-    qDebug() << "Optimal write buffer size:" << (bufferSize / 1024) << "KB for" 
-             << totalMemMB << "MB system";
-    
+
     return bufferSize;
 }
 
 size_t SystemMemoryManager::getAdaptiveVerifyBufferSize(qint64 fileSize)
 {
-    qint64 totalMemMB = getTotalMemoryMB();
-    
+    return verifyBufferSizeFor(fileSize, getTotalMemoryMB());
+}
+
+size_t SystemMemoryManager::verifyBufferSizeFor(qint64 fileSize, qint64 totalMemMB)
+{
     // Base verification buffer size based on file size
     size_t baseBufferSize;
     if (fileSize < 100LL * 1024 * 1024) {        // < 100MB: use 256KB
@@ -365,8 +394,11 @@ size_t SystemMemoryManager::getAdaptiveVerifyBufferSize(qint64 fileSize)
 
 size_t SystemMemoryManager::getOptimalInputBufferSize()
 {
-    qint64 totalMemMB = getTotalMemoryMB();
-    
+    return inputBufferSizeFor(getTotalMemoryMB());
+}
+
+size_t SystemMemoryManager::inputBufferSizeFor(qint64 totalMemMB)
+{
     // Input buffer (ring buffer slot size) for downloads/streams.
     // Larger buffers reduce per-chunk overhead and improve throughput,
     // especially for decompression which works more efficiently on larger blocks.
@@ -487,9 +519,11 @@ void SystemMemoryManager::logConfigurationSummary()
 
 int SystemMemoryManager::getOptimalAsyncQueueDepth(size_t writeBlockSize)
 {
-    qint64 totalMemMB = getTotalMemoryMB();
-    qint64 availableMemMB = getAvailableMemoryMB();
-    
+    return asyncQueueDepthFor(getAvailableMemoryMB(), writeBlockSize);
+}
+
+int SystemMemoryManager::asyncQueueDepthFor(qint64 availableMemMB, size_t writeBlockSize)
+{
     // Async I/O queue depth strategy:
     //
     // With zero-copy async I/O, the ring buffer slots serve as async buffers.

@@ -50,6 +50,56 @@ public:
      */
     SyncConfiguration calculateSyncConfiguration();
 
+    /*
+     * The same decision, on a memory figure rather than this machine's.
+     *
+     * How often the writer syncs is what decides how much written data is
+     * in flight at once. Too much on a small machine and the kernel starts
+     * reclaiming during a write -- or kills the application outright; too
+     * little on a large one and the write is slowed down for nothing. The
+     * tiers are the whole of that policy, and separating them from reading
+     * /proc/meminfo is what lets each be checked rather than only whichever
+     * one the machine running the tests happens to fall into.
+     */
+    static SyncConfiguration syncConfigurationFor(qint64 totalMemMB);
+
+    /*
+     * The other three memory ladders, on a figure rather than this machine's,
+     * for the same reason syncConfigurationFor() exists.
+     *
+     * Each is a policy decision the user feels: the write buffer is how much
+     * of a small machine the writer is willing to occupy, the input buffer is
+     * what the download hands the decompressor in one go, and the queue depth
+     * is how many writes a card is asked to hold at once. A machine with
+     * 512MB and one with 32GB take opposite ends of every one of them, and a
+     * test can only ever be run on one machine.
+     */
+    static size_t writeBufferSizeFor(qint64 totalMemMB);
+    static size_t inputBufferSizeFor(qint64 totalMemMB);
+    static size_t verifyBufferSizeFor(qint64 fileSize, qint64 totalMemMB);
+    static int asyncQueueDepthFor(qint64 availableMemMB, size_t writeBlockSize);
+
+    /*
+     * The /proc/meminfo half of memory detection, given the text rather than
+     * the file.
+     *
+     * On Linux both figures come from sysinfo(), and sysinfo() does not fail
+     * on a working kernel -- its only documented error is a bad pointer. So
+     * the fallback underneath it had never once been executed, which is a
+     * poor state for the code that runs where sysinfo() is unavailable: a
+     * sandbox that filters the syscall, or a kernel too old for it. Reading
+     * the file and parsing it are separate here so the parsing can be.
+     */
+    //
+    // Linux only, and declared that way rather than everywhere: /proc/meminfo
+    // is a Linux interface, the definitions live in this file's Q_OS_LINUX
+    // branch, and a declaration visible on the other two platforms is one a
+    // test can call and the linker cannot satisfy.
+#ifdef Q_OS_LINUX
+    static qint64 totalMemoryFromMeminfo(const QString &contents);
+    static qint64 availableMemoryFromMeminfo(const QString &contents);
+#endif
+
     /**
      * @brief Get platform name for logging
      * @return Platform identifier string
@@ -79,7 +129,9 @@ public:
      * @brief Get system page size for memory alignment
      * @return System page size in bytes
      */
-    size_t getSystemPageSize();
+    // Static: it reads the machine's page size and nothing of this object's,
+    // so the ladder helpers above can align without an instance.
+    static size_t getSystemPageSize();
 
     /**
      * @brief Calculate optimal ring buffer slot count based on available memory

@@ -182,47 +182,39 @@ class FileOperations {
   
   // Configure async I/O queue depth (1 = synchronous, >1 = async with that many in-flight)
   // Must be called before writes. Returns false if async I/O is not supported.
-  virtual bool SetAsyncQueueDepth(int depth) { (void)depth; return false; }
+  virtual bool SetAsyncQueueDepth(int depth) = 0;
   
   // Get current queue depth setting
-  virtual int GetAsyncQueueDepth() const { return 1; }
+  virtual int GetAsyncQueueDepth() const = 0;
   
   // Check if async I/O is supported on this platform
-  virtual bool IsAsyncIOSupported() const { return false; }
+  virtual bool IsAsyncIOSupported() const = 0;
   
   // Queue an async write. May block if queue is full.
   // The buffer must remain valid until the write completes (callback is called or WaitForPendingWrites returns).
   // If callback is null, completion is silent (just check for errors in WaitForPendingWrites).
   // Returns immediately with kSuccess if queued, or error if queueing failed.
   virtual FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
-                                          AsyncWriteCallback callback = nullptr) {
-    // Default implementation: fall back to sync write
-    FileError result = WriteSequential(data, size);
-    if (callback) callback(result, result == FileError::kSuccess ? size : 0);
-    return result;
-  }
+                                          AsyncWriteCallback callback = nullptr) = 0;
   
   // Get number of writes currently in flight
-  virtual int GetPendingWriteCount() const { return 0; }
+  virtual int GetPendingWriteCount() const = 0;
   
   // Poll for async write completions without blocking. 
   // This should be called periodically to ensure callbacks fire promptly.
-  virtual void PollAsyncCompletions() {}
+  virtual void PollAsyncCompletions() = 0;
   
   // Wait for all pending async writes to complete. Returns first error encountered, or kSuccess.
-  virtual FileError WaitForPendingWrites() { return FileError::kSuccess; }
+  virtual FileError WaitForPendingWrites() = 0;
   
   // Cancel pending async I/O and wake up any blocking waits.
   // After calling this, WaitForPendingWrites and AsyncWriteSequential will return quickly.
-  virtual void CancelAsyncIO() {}
+  virtual void CancelAsyncIO() = 0;
   
   // Attempt to recover from async I/O stall by switching to sync mode.
   // Cancels pending async writes and replays them synchronously.
   // Returns kSuccess if recovery succeeded, error code otherwise.
-  virtual FileError AttemptSyncFallback() { 
-    sync_fallback_mode_ = true; 
-    return FileError::kSuccess; 
-  }
+  virtual FileError AttemptSyncFallback() = 0;
   
   // Information about a pending async write (for sync fallback)
   struct PendingWriteInfo {
@@ -234,17 +226,22 @@ class FileOperations {
   
   // Get list of pending async writes, sorted by offset.
   // Used for sync fallback when async I/O stalls.
-  virtual std::vector<PendingWriteInfo> GetPendingWritesSorted() const { return {}; }
+  virtual std::vector<PendingWriteInfo> GetPendingWritesSorted() const = 0;
   
   // Check if we're in sync fallback mode (async timed out, now using sync)
+  //
+  // Implemented here rather than left to the platforms, and the only one of
+  // these that is: it reads the flag they all set, and no implementation
+  // overrides it. Everything around it is pure because a default would be
+  // inherited silently by a platform that forgot to write one -- and a
+  // WaitForPendingWrites() that answered kSuccess for writes still in flight
+  // would report a finished, verified card that had not been written.
   virtual bool IsInSyncFallbackMode() const { return sync_fallback_mode_; }
   
   // Reduce queue depth for recovery (can be called mid-operation)
   // This allows the system to adapt when initial settings prove too aggressive.
   // Pending writes continue, but new writes will wait until pending count drops below new depth.
-  virtual void ReduceQueueDepthForRecovery(int newDepth) {
-    (void)newDepth;  // Default: no-op for sync implementations
-  }
+  virtual void ReduceQueueDepthForRecovery(int newDepth) = 0;
   
   // Drain pending async writes and switch to sync mode.
   // Uses a per-completion stall timeout: if ANY write completes, the timer resets.
@@ -267,11 +264,7 @@ class FileOperations {
   // and sleep primitives. The logic is intentionally duplicated rather than
   // abstracted because the abstraction would require exposing pending_writes_
   // and platform-specific sleep/log functions, adding more complexity than saved.
-  virtual bool DrainAndSwitchToSync(int stallTimeoutSeconds) {
-    (void)stallTimeoutSeconds;
-    sync_fallback_mode_ = true;
-    return true;  // Default: no async to drain
-  }
+  virtual bool DrainAndSwitchToSync(int stallTimeoutSeconds) = 0;
   
   // Get async I/O timing statistics
   // - wallClockMs: total time from first submit to last completion
@@ -323,7 +316,7 @@ class FileOperations {
   // Classify the last write error into a platform-agnostic category so callers
   // can render localized user messages. The default maps everything to
   // kUnknown; platform implementations override to inspect OS state.
-  virtual WriteErrorClass ClassifyLastWriteError() const { return WriteErrorClass::kUnknown; }
+  virtual WriteErrorClass ClassifyLastWriteError() const = 0;
 
   // Check if direct I/O (bypassing page cache) is enabled
   virtual bool IsDirectIOEnabled() const = 0;

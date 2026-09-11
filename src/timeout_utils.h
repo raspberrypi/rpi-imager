@@ -22,6 +22,7 @@
 #include <chrono>
 #include <functional>
 #include <future>
+#include <memory>
 #include <thread>
 #include <atomic>
 #include <type_traits>
@@ -53,6 +54,16 @@ struct TimeoutConfig {
     
     /// How often to check for cancellation/completion (default: 100ms)
     std::chrono::milliseconds checkInterval = std::chrono::milliseconds(100);
+
+    /// How long to wait for the worker to finish before abandoning it, on
+    /// the timeout and cancellation paths (default: 2s).
+    ///
+    /// Most operations reaching those paths are not wedged at all -- a
+    /// cancellation usually arrives while a perfectly healthy write is in
+    /// flight, and it finishes in milliseconds. Waiting briefly lets the
+    /// thread be joined and everything it touched freed safely, instead of
+    /// being abandoned to run on against the caller's dying frame.
+    std::chrono::milliseconds joinGrace = std::chrono::milliseconds(2000);
     
     // Constructors
     TimeoutConfig() = default;
@@ -72,6 +83,10 @@ struct TimeoutConfig {
         cancelFlag = flag;
         return *this;
     }
+    TimeoutConfig& withJoinGrace(std::chrono::milliseconds grace) {
+        joinGrace = grace;
+        return *this;
+    }
     
 };
 
@@ -85,29 +100,44 @@ struct TimeoutConfig {
  * 
  * @note On TimedOut, the operation thread is detached and may continue running.
  *       Use onTimeout to trigger an abort (e.g., close fd to unblock syscall).
+ * @warning THE OPERATION MUST OWN EVERYTHING IT TOUCHES.
  */
 template<typename Func>
 TimeoutResult runWithTimeout(
     Func&& operation,
     const TimeoutConfig& config = {}
 ) {
-    std::atomic<bool> completed{false};
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    
-    std::thread worker([&completed, &promise, op = std::forward<Func>(operation)]() {
+    // The shared state lives on the heap and the worker holds a strong
+    // reference to it.
+    struct SharedState {
+        std::atomic<bool> completed{false};
+        std::promise<void> promise;
+    };
+    auto state = std::make_shared<SharedState>();
+    auto future = state->promise.get_future();
+
+    std::thread worker([state, op = std::forward<Func>(operation)]() mutable {
         op();
-        completed.store(true);
-        promise.set_value();
+        state->completed.store(true);
+        state->promise.set_value();
     });
     
     auto startTime = std::chrono::steady_clock::now();
     
+    // Give up on the worker, but try to take it with us first.
+    auto stopWaiting = [&worker, &future, &config](TimeoutResult outcome) {
+        if (future.wait_for(config.joinGrace) == std::future_status::ready) {
+            worker.join();
+        } else {
+            worker.detach();
+        }
+        return outcome;
+    };
+
     while (true) {
         // Check for external cancellation
         if (config.cancelFlag && config.cancelFlag->load()) {
-            worker.detach();
-            return TimeoutResult::Cancelled;
+            return stopWaiting(TimeoutResult::Cancelled);
         }
         
         // Check if operation completed
@@ -122,8 +152,7 @@ TimeoutResult runWithTimeout(
             if (config.onTimeout) {
                 config.onTimeout();
             }
-            worker.detach();
-            return TimeoutResult::TimedOut;
+            return stopWaiting(TimeoutResult::TimedOut);
         }
     }
 }
@@ -143,9 +172,23 @@ TimeoutResult runWithTimeout(
     ResultType& result,
     const TimeoutConfig& config = {}
 ) {
-    return runWithTimeout([&]() {
-        result = operation();
-    }, config);
+    // Same hazard as the void overload, one level up: `result` is the
+    // caller's variable, and a detached worker assigning to it after this
+    // function has returned writes into a dead frame. The worker fills a
+    // heap-allocated slot instead, and the value is copied out only when the
+    // operation actually completed -- so a timed-out or cancelled operation
+    // that finishes later cannot scribble over the caller's result either.
+    auto slot = std::make_shared<ResultType>(result);
+
+    const TimeoutResult outcome = runWithTimeout(
+        [slot, op = std::forward<Func>(operation)]() mutable {
+            *slot = op();
+        }, config);
+
+    if (outcome == TimeoutResult::Completed)
+        result = *slot;
+
+    return outcome;
 }
 
 /**
@@ -173,7 +216,8 @@ namespace TimeoutDefaults {
     constexpr int kWatchdogRestartThresholdMs = 120000;    // Restart only if drain fails (120s)
     
     // === Ring buffer stall detection ===
-    constexpr int kRingBufferStallTimeoutMs = 30000;  // Cumulative wait = stall timeout
+    // Cumulative wait with nothing moving = stall timeout.
+    constexpr int kRingBufferStallTimeoutMs = 90000;
     constexpr int kRingBufferStallEventThresholdMs = 50; // Minimum stall to record as event
     
     // === Adaptive recovery thresholds ===
