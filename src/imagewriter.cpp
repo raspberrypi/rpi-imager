@@ -1460,18 +1460,24 @@ void ImageWriter::startWrite()
         return;
     }
 
-    // Clean up a finished-but-not-yet-collected thread (deleteLater timing gap).
-    // A *running* thread here is a bug — our exit paths (onError, onCancelled,
-    // QThread::finished handler) should have cleaned up already.
+    // Clean up the previous write's thread, which is routinely still running:
+    // the exit paths cannot have collected it yet.
     if (_thread) {
-        Q_ASSERT(!_thread->isRunning());
         // Cut it off before letting go. deleteLater() only schedules the
         // deletion, so without this the previous write's queued signals are
         // still delivered afterwards -- finished(), but equally a late
         // success() or error() -- and get answered as though they belonged
         // to the write now starting.
         disconnect(_thread, nullptr, this, nullptr);
-        _thread->deleteLater();
+        // success() is emitted from inside run(), so a caller acting on it is
+        // ahead of the thread ending: with eject on, run() still has a 500 ms
+        // sleep and the eject itself to go. Deleting a running QThread is
+        // fatal, so let it delete itself once it finishes. The direct call
+        // stays for a thread that has already finished, whose finished() has
+        // fired and will not fire again; twice is harmless, never is a leak.
+        connect(_thread, &QThread::finished, _thread, &QObject::deleteLater);
+        if (_thread->isFinished())
+            _thread->deleteLater();
         _thread = nullptr;
     }
 
