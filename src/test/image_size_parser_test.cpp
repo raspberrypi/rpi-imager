@@ -23,6 +23,8 @@
 #include <QProcess>
 #include <QTemporaryDir>
 
+#include <archive.h>
+
 #include "fixture_process.h"
 #include "platform_tools.h"
 
@@ -313,4 +315,188 @@ TEST_CASE("A file that is not an archive reports nothing", "[imagesize]")
     const auto info = imagesize::parseArchive(path);
     CHECK(info.fileCount == 0);
     CHECK(info.uncompressedSize == 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Sizing by content
+//
+// The write path decides what a file holds by sniffing it, so sizing has to
+// reach the same verdict the same way. Where the two disagree, the card is
+// written by one and measured by the other.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("An xz image named .img is sized decompressed, not by its file length",
+          "[imagesize][mislabelled]")
+{
+    // The regression. Sized by extension, a download served as xz under a
+    // .img name took the "not compressed" branch and was measured at its
+    // compressed length, while the write sniffed the same bytes and
+    // decompressed them: progress ran past 400%, and the capacity check was
+    // made against a fraction of what the card actually needed.
+    if (!haveTool("xz"))
+        SKIP("xz is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("payload.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("xz -k -f '%1'").arg(raw)));
+
+    // The name says raw image; the bytes say xz.
+    const QString mislabelled = scratch.path("latest_image.img");
+    REQUIRE(runShell(QStringLiteral("mv '%1.xz' '%2'").arg(raw, mislabelled)));
+
+    const quint64 onDisk = quint64(QFileInfo(mislabelled).size());
+    const auto measured = imagesize::measureLocalFile(mislabelled);
+    INFO("on disk: " << onDisk << ", reported: " << measured.uncompressedSize);
+    CHECK(measured.uncompressedSize == quint64(kRawSize));
+    CHECK(measured.uncompressedSize > onDisk);
+    CHECK(measured.sizeIsReliable);
+    CHECK(measured.fileCount == 0);
+}
+
+TEST_CASE("A raw image is sized at its own length", "[imagesize]")
+{
+    Scratch scratch;
+    const QString raw = scratch.path("image.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+
+    const auto measured = imagesize::measureLocalFile(raw);
+    CHECK(measured.uncompressedSize == quint64(kRawSize));
+    CHECK(measured.sizeIsReliable);
+    CHECK(measured.fileCount == 0);
+}
+
+TEST_CASE("A zip named .img is still measured as a container",
+          "[imagesize][mislabelled]")
+{
+    if (!haveTool("zip"))
+        SKIP("zip is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("image.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    const QString zipPath = scratch.path("bundle.zip");
+    REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q '%2' image.img")
+                         .arg(QFileInfo(raw).path(), zipPath)));
+
+    const QString mislabelled = scratch.path("bundle.img");
+    REQUIRE(runShell(QStringLiteral("mv '%1' '%2'").arg(zipPath, mislabelled)));
+
+    const auto measured = imagesize::measureLocalFile(mislabelled);
+    CHECK(measured.fileCount == 1);
+    CHECK(measured.uncompressedSize == quint64(kRawSize));
+    CHECK(measured.sizeIsReliable);
+}
+
+TEST_CASE("A gzip image is sized for capacity but barred from progress",
+          "[imagesize]")
+{
+    if (!haveTool("gzip"))
+        SKIP("gzip is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("image.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("gzip -k -f '%1'").arg(raw)));
+
+    const auto measured = imagesize::measureLocalFile(raw + ".gz");
+    CHECK(measured.uncompressedSize == quint64(kRawSize));
+    CHECK_FALSE(measured.sizeIsReliable);
+}
+
+TEST_CASE("A gzip image named .img is still barred from progress",
+          "[imagesize][mislabelled]")
+{
+    // What makes gzip untrustworthy is ISIZE wrapping at 4 GB, not the
+    // suffix. The old flag tested the name for ".gz", so a mislabelled one
+    // earned a determinate bar off a size that may have wrapped.
+    if (!haveTool("gzip"))
+        SKIP("gzip is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("payload.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("gzip -k -f '%1'").arg(raw)));
+    const QString mislabelled = scratch.path("sneaky.img");
+    REQUIRE(runShell(QStringLiteral("mv '%1.gz' '%2'").arg(raw, mislabelled)));
+
+    const auto measured = imagesize::measureLocalFile(mislabelled);
+    CHECK(measured.uncompressedSize == quint64(kRawSize));
+    CHECK_FALSE(measured.sizeIsReliable);
+}
+
+TEST_CASE("A zstd image named .img is sized decompressed",
+          "[imagesize][mislabelled]")
+{
+    if (!haveTool("zstd"))
+        SKIP("zstd is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("payload.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("zstd -q -k -f '%1'").arg(raw)));
+    const QString mislabelled = scratch.path("zstd_as_img.img");
+    REQUIRE(runShell(QStringLiteral("mv '%1.zst' '%2'").arg(raw, mislabelled)));
+
+    const auto measured = imagesize::measureLocalFile(mislabelled);
+    CHECK(measured.uncompressedSize == quint64(kRawSize));
+    CHECK(measured.sizeIsReliable);
+}
+
+TEST_CASE("A bzip2 image reports unknown rather than its compressed length",
+          "[imagesize][mislabelled]")
+{
+    // No cheap way to read the decompressed length out of bzip2, so the
+    // answer is "unknown". Wrong answers here are worse than none: the
+    // compressed length would pass a capacity check the write then fails.
+    if (!haveTool("bzip2"))
+        SKIP("bzip2 is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("payload.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("bzip2 -k -f '%1'").arg(raw)));
+    const QString mislabelled = scratch.path("bz2_as_img.img");
+    REQUIRE(runShell(QStringLiteral("mv '%1.bz2' '%2'").arg(raw, mislabelled)));
+
+    const auto measured = imagesize::measureLocalFile(mislabelled);
+    CHECK(measured.uncompressedSize == 0);
+    CHECK_FALSE(measured.sizeIsReliable);
+}
+
+TEST_CASE("A file that is not there is unreadable and unsized", "[imagesize]")
+{
+    const auto measured =
+        imagesize::measureLocalFile(QStringLiteral("/nonexistent-9f2a/x.img"));
+    CHECK(measured.uncompressedSize == 0);
+    CHECK_FALSE(measured.sizeIsReliable);
+}
+
+TEST_CASE("probeFormat reports no filter for a raw image", "[imagesize]")
+{
+    Scratch scratch;
+    const QString raw = scratch.path("image.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+
+    const auto probed = imagesize::probeFormat(raw);
+    CHECK(probed.readable);
+    CHECK(probed.filterCode == ARCHIVE_FILTER_NONE);
+}
+
+TEST_CASE("probeFormat reports the xz filter whatever the file is called",
+          "[imagesize][mislabelled]")
+{
+    if (!haveTool("xz"))
+        SKIP("xz is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("payload.img");
+    REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE(runShell(QStringLiteral("xz -k -f '%1'").arg(raw)));
+    const QString mislabelled = scratch.path("named_wrong.img");
+    REQUIRE(runShell(QStringLiteral("mv '%1.xz' '%2'").arg(raw, mislabelled)));
+
+    const auto probed = imagesize::probeFormat(mislabelled);
+    CHECK(probed.readable);
+    CHECK(probed.filterCode == ARCHIVE_FILTER_XZ);
 }

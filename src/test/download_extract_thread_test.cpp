@@ -833,31 +833,37 @@ TEST_CASE("What libarchive recognised decides how the file is written",
     // The filter half matters most: a compressed image reports RAW exactly as
     // a plain one does, and the decompression filter is the only thing telling
     // them apart. Miss it and .img.xz goes to the card still compressed.
+    // isASingleImage is the format half on its own, which is what sizing asks:
+    // a .iso.xz is not the bytes to copy, but it is still one image, and
+    // measuring it by the ISO's entry sizes would both under-size the card and
+    // flip the write into multi-file mode.
     struct Case {
         const char *what;
         int format;
         int filter;
         bool isTheImage;
+        bool isASingleImage;
     };
 
     const Case cases[] = {
-        {".img",            ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_NONE,  true},
-        {".iso",            ARCHIVE_FORMAT_ISO9660,           ARCHIVE_FILTER_NONE,  true},
-        {".iso, Rock Ridge", ARCHIVE_FORMAT_ISO9660_ROCKRIDGE, ARCHIVE_FILTER_NONE,  true},
-        {".img.xz",         ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_XZ,    false},
-        {".img.gz",         ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_GZIP,  false},
-        {".img.zst",        ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_ZSTD,  false},
-        {".zip",            ARCHIVE_FORMAT_ZIP,               ARCHIVE_FILTER_NONE,  false},
-        {".tar",            ARCHIVE_FORMAT_TAR_GNUTAR,        ARCHIVE_FILTER_NONE,  false},
-        {".tar.gz",         ARCHIVE_FORMAT_TAR_GNUTAR,        ARCHIVE_FILTER_GZIP,  false},
-        {".7z",             ARCHIVE_FORMAT_7ZIP,              ARCHIVE_FILTER_NONE,  false},
+        {".img",            ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_NONE,  true,  true},
+        {".iso",            ARCHIVE_FORMAT_ISO9660,           ARCHIVE_FILTER_NONE,  true,  true},
+        {".iso, Rock Ridge", ARCHIVE_FORMAT_ISO9660_ROCKRIDGE, ARCHIVE_FILTER_NONE,  true,  true},
+        {".img.xz",         ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_XZ,    false, true},
+        {".img.gz",         ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_GZIP,  false, true},
+        {".img.zst",        ARCHIVE_FORMAT_RAW,               ARCHIVE_FILTER_ZSTD,  false, true},
+        {".zip",            ARCHIVE_FORMAT_ZIP,               ARCHIVE_FILTER_NONE,  false, false},
+        {".tar",            ARCHIVE_FORMAT_TAR_GNUTAR,        ARCHIVE_FILTER_NONE,  false, false},
+        {".tar.gz",         ARCHIVE_FORMAT_TAR_GNUTAR,        ARCHIVE_FILTER_GZIP,  false, false},
+        {".7z",             ARCHIVE_FORMAT_7ZIP,              ARCHIVE_FILTER_NONE,  false, false},
         // A compressed ISO is still something to decompress first.
-        {".iso.xz",         ARCHIVE_FORMAT_ISO9660,           ARCHIVE_FILTER_XZ,    false},
+        {".iso.xz",         ARCHIVE_FORMAT_ISO9660,           ARCHIVE_FILTER_XZ,    false, true},
     };
 
     for (const Case &c : cases) {
         INFO(c.what);
         CHECK(archivekind::bytesAreTheDiskImage(c.format, c.filter) == c.isTheImage);
+        CHECK(archivekind::formatIsASingleImage(c.format) == c.isASingleImage);
     }
 }
 
