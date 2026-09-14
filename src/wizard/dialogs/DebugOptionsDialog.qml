@@ -392,7 +392,7 @@ BaseDialog {
                     // rendered two ways depending on how recently it was
                     // chosen.
                     gadgetPathText.gadgetPath =
-                        selectedFile.toString().replace(/^file:\/\//, "")
+                        ImageWriterSingleton.localPathFromUrl(selectedFile)
                 }
             }
 

@@ -495,11 +495,7 @@ ApplicationWindow {
         nameFilters: [qsTr("JSON files (*.json)"), qsTr("All files (*)")]
         
         onAccepted: {
-            var filePath = String(selectedFile)
-            // Strip file:// prefix for the C++ call
-            if (filePath.indexOf("file://") === 0) {
-                filePath = filePath.substring(7)
-            }
+            var filePath = ImageWriterSingleton.localPathFromUrl(selectedFile)
             if (filePath.length > 0) {
                 console.log("Saving performance data to:", filePath)
                 ImageWriterSingleton.exportPerformanceDataToFile(filePath)

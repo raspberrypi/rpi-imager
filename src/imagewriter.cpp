@@ -482,6 +482,12 @@ QString ImageWriter::readFileContents(const QString &filePath)
     return content.trimmed();
 }
 
+QString ImageWriter::localPathFromUrl(const QUrl &url) const
+{
+    // Anything that is not a local file url is returned as it came
+    return url.toString(QUrl::PreferLocalFile);
+}
+
 ImageWriter::~ImageWriter()
 {
     // Stop network monitoring first - the callback captures 'this' pointer
