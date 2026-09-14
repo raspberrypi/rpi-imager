@@ -17,6 +17,8 @@
 
 #include <functional>
 
+#include <cmath>
+
 namespace oslist {
 
 
@@ -40,12 +42,28 @@ QJsonArray filterInvalidInitFormats(const QJsonArray &list) {
     QJsonArray filtered;
     
     for (const auto &value : list) {
+        // toObject() answers an empty object for anything that is not one,
+        // and an empty object has no init_format, which is valid -- so a
+        // stray null, number or string in the list became a nameless entry
+        // and was drawn as a blank row. Pruning is what this function is
+        // for, and it says so about everything else it prunes.
+        if (!value.isObject()) {
+            qWarning() << "OSListModel: Pruning OS list member that is not an entry";
+            continue;
+        }
+
         QJsonObject entry = value.toObject();
-        QString initFormat = entry["init_format"].toString();
+        // value(), not operator[]. On a non-const QJsonObject the subscript
+        // returns a mutable reference and *reading* a key that is not there
+        // inserts it, so every entry without an init_format came out of here
+        // carrying "init_format": null -- a field the repository never sent,
+        // added to untrusted data by the function whose job is to take
+        // things out of it.
+        QString initFormat = entry.value(QLatin1String("init_format")).toString();
         
         // Validate init_format if present (empty string is valid, means no customization)
         if (!isValidInitFormat(initFormat)) {
-            QString name = entry["name"].toString();
+            QString name = entry.value(QLatin1String("name")).toString();
             qWarning() << "OSListModel: Pruning OS entry with invalid init_format '" 
                        << initFormat << "':" << name
                        << "(valid values: '', 'systemd', 'cloudinit', 'cloudinit-rpi', 'rpi-preseed', 'none')";
@@ -54,7 +72,7 @@ QJsonArray filterInvalidInitFormats(const QJsonArray &list) {
         
         // Check if this entry has subitems and process them recursively
         if (entry.contains(QLatin1String("subitems"))) {
-            QJsonArray subitems = entry["subitems"].toArray();
+            QJsonArray subitems = entry.value(QLatin1String("subitems")).toArray();
             QJsonArray filteredSubitems = filterInvalidInitFormats(subitems);
             
             // Only include parent entry if it has valid subitems
@@ -63,7 +81,7 @@ QJsonArray filterInvalidInitFormats(const QJsonArray &list) {
                 filtered.append(entry);
             } else {
                 // Parent has no valid subitems, skip it
-                QString name = entry["name"].toString();
+                QString name = entry.value(QLatin1String("name")).toString();
                 qWarning() << "OSListModel: Pruning OS entry with no valid subitems:" << name;
             }
         } else {
@@ -100,6 +118,27 @@ QJsonArray getListForLocale(const QJsonObject &root, const QString &systemLocale
     return list;
 }
 
+namespace {
+
+// Depth matters: OSSelectionStep re-stringifies any deeper "subitems" it
+// finds, so a rule applied only to the first level would leak at the second.
+void routeIcons(QJsonArray &list)
+{
+    for (int i = 0; i < list.size(); i++) {
+        QJsonObject entry = list[i].toObject();
+        if (entry.contains("icon"))
+            entry["icon"] = iconSourceFor(entry["icon"].toString());
+        if (entry.contains("subitems")) {
+            QJsonArray nested = entry["subitems"].toArray();
+            routeIcons(nested);
+            entry["subitems"] = nested;
+        }
+        list[i] = entry;
+    }
+}
+
+} // namespace
+
 QJsonArray parseOSJson(const QJsonObject &root) {
     QJsonArray list = getListForLocale(root);
     if (list.isEmpty()) {
@@ -116,7 +155,7 @@ QJsonArray parseOSJson(const QJsonObject &root) {
             QJsonObject entry = lst[i].toObject();
             
             if (entry.contains(QLatin1String("subitems"))) {
-                QJsonArray subitems = entry["subitems"].toArray();
+                QJsonArray subitems = entry.value(QLatin1String("subitems")).toArray();
                 shuffleIfRandom(subitems);
                 
                 // Shuffle if random flag is set
@@ -145,7 +184,30 @@ QJsonArray parseOSJson(const QJsonObject &root) {
     for (int i = 0; i < list.size(); i++) {
         QJsonObject entry = list[i].toObject();
         if (entry.contains("subitems")) {
-            QJsonDocument subitemsDoc(entry["subitems"].toArray());
+            // Routed here, on the document as the picker will read it.
+            // Past this line the subitems are a string OSSelectionStep
+            // parses in JavaScript, rebasing a relative "icons/..." and
+            // nothing else, so a nested remote icon reached Image.source raw
+            // -- skipping the sanitiser, the scheme allow-list and the
+            // cache. 254 of the production list's 257 remote icons are
+            // nested; the three that are not are the flagship Raspberry Pi
+            // OS builds, which is why the routing looked to be working. The
+            // round-trip matters too, since a key
+            // differing only by a byte-order mark is a different key to
+            // contains("icon") and the same one after toJson and back.
+            const QJsonArray original = entry["subitems"].toArray();
+            QJsonArray routed =
+                QJsonDocument::fromJson(QJsonDocument(original).toJson()).array();
+            // If the round-trip ever came back empty against a non-empty
+            // original, every OS under this category would vanish silently.
+            // It should not: the document parsed once already and this is a
+            // shallower sub-tree. Keeping the data is the better failure, so
+            // the original is routed in place instead -- everything except
+            // the byte-order-mark case still works on it.
+            if (routed.isEmpty() && !original.isEmpty())
+                routed = original;
+            routeIcons(routed);
+            QJsonDocument subitemsDoc(routed);
             entry["subitems_json"] = QString::fromUtf8(subitemsDoc.toJson());
             entry.remove("subitems");
             list[i] = entry;
@@ -190,7 +252,7 @@ void applyArchitectureSorting(QJsonArray &list, const QString &preferredArchitec
         QJsonObject entry = list[i].toObject();
         
         if (entry.contains(QLatin1String("subitems"))) {
-            QJsonArray subitems = entry["subitems"].toArray();
+            QJsonArray subitems = entry.value(QLatin1String("subitems")).toArray();
             
             // Recursively apply to nested subitems
             applyArchitectureSorting(subitems, preferredArchitecture);
@@ -270,9 +332,50 @@ QString sanitizeIconSource(const QString &raw)
     // No scheme: treat as relative path; allow as-is (QML will resolve relative to QML file)
     return raw;
 }
+
+QString iconSourceFor(const QString &raw)
+{
+    const QString sanitized = sanitizeIconSource(raw);
+    if (sanitized.isEmpty())
+        return sanitized;
+    // The scheme is read rather than matched with startsWith(). Both models
+    // tested "https://" case-sensitively while sanitizeIconSource() lowered
+    // the scheme only to check it and returned the original, so
+    // "HTTPS://host/i.png" passed validation and then missed the routing.
+    const QString scheme = QUrl(sanitized).scheme().toLower();
+    if (scheme == QLatin1String("http") || scheme == QLatin1String("https"))
+        return QStringLiteral("image://icons/") + sanitized;
+    return sanitized;
+}
+
 QJsonArray getListForLocale(const QJsonObject &root)
 {
-    return getListForLocale(root, QLocale::system().name());
+    /* The locale the reader chose, not the one the machine was installed
+       with. QLocale() is the default locale, and changeLanguage() sets it
+       alongside loading the translator -- so picking Deutsch in the
+       application now selects os_list_de, where before it left the list in
+       whatever language the machine happened to be in while translating
+       everything around it.
+     *
+     * replaceTranslator() already emits osListPrepared() for this reason,
+     * so the list is rebuilt on the change rather than only at startup. */
+    return getListForLocale(root, QLocale().name());
+}
+
+quint64 byteCountFromJson(const QJsonValue &value)
+{
+    if (!value.isDouble())
+        return 0;
+    const double d = value.toDouble();
+    // Rejected in this order on purpose: a NaN fails every comparison, so
+    // testing it last would let it through.
+    if (!std::isfinite(d) || d < 0.0)
+        return 0;
+    // 2^64 exactly. A double cannot hold UINT64_MAX, so comparing against
+    // the maximum itself rounds up to this and lets the top value past.
+    if (d >= 18446744073709551616.0)
+        return 0;
+    return static_cast<quint64>(d);
 }
 
 } // namespace oslist

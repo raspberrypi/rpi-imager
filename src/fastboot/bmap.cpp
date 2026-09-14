@@ -8,6 +8,7 @@
 #include <QXmlStreamReader>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 
 namespace fastboot {
 
@@ -59,10 +60,31 @@ bool BlockMap::parse(std::string_view xml, std::string* errorMsg)
         auto name = reader.name();
 
         if (name == u"BlockSize") {
-            _blockSize = reader.readElementText().toULongLong();
+            // Checked, like the ranges below. toULongLong() answers zero for
+            // anything it cannot read, and a block size of zero turns every
+            // block number into byte offset zero.
+            bool ok = false;
+            _blockSize = reader.readElementText().toULongLong(&ok);
+            if (!ok || _blockSize == 0) {
+                if (errorMsg)
+                    *errorMsg = "bmap: unreadable BlockSize";
+                _ranges.clear();
+                return false;
+            }
         } else if (name == u"BlocksCount") {
-            _blockCount = reader.readElementText().toULongLong();
+            bool ok = false;
+            _blockCount = reader.readElementText().toULongLong(&ok);
+            if (!ok) {
+                if (errorMsg)
+                    *errorMsg = "bmap: unreadable BlocksCount";
+                _ranges.clear();
+                return false;
+            }
         } else if (name == u"MappedBlocksCount") {
+            // Unchecked, unlike the two above, and deliberately: nothing acts
+            // on this figure -- it reaches a debug line -- so a bmap whose
+            // other counts are sound stays usable. The conversion is
+            // all-or-nothing, so an unreadable one is nought either way.
             _mappedBlockCount = reader.readElementText().toULongLong();
         } else if (name == u"BlockMap") {
             inBlockMap = true;
@@ -80,13 +102,35 @@ bool BlockMap::parse(std::string_view xml, std::string* errorMsg)
             }
 
             // Format: "begin-end" (inclusive) or just "begin" (single block)
+            //
+            // Both conversions are checked. toULongLong() answers zero for
+            // anything it cannot read, so a damaged range became block 0 --
+            // and a damaged *end* became one, leaving begin past end. A
+            // range like that is stepped over by both lookups, the encoder
+            // is told those blocks are unmapped, and it writes nothing where
+            // their data should have gone. That is the hole in the card the
+            // truncation check below exists to prevent, arrived at by
+            // another road.
             auto text = reader.readElementText();
             auto parts = text.split('-');
 
-            range.begin = parts[0].trimmed().toULongLong();
-            range.end = (parts.size() > 1)
-                ? parts[1].trimmed().toULongLong() + 1  // convert inclusive to exclusive
-                : range.begin + 1;
+            bool beginOk = false;
+            bool endOk = true;
+            range.begin = parts[0].trimmed().toULongLong(&beginOk);
+            if (parts.size() > 1) {
+                const quint64 last = parts[1].trimmed().toULongLong(&endOk);
+                range.end = last + 1;   // convert inclusive to exclusive
+            } else {
+                range.end = range.begin + 1;
+            }
+
+            if (!beginOk || !endOk || range.begin >= range.end) {
+                if (errorMsg)
+                    *errorMsg = "bmap: unreadable block range \""
+                                + text.toStdString() + "\"";
+                _ranges.clear();
+                return false;
+            }
 
             _ranges.push_back(std::move(range));
         }
@@ -113,6 +157,44 @@ bool BlockMap::parse(std::string_view xml, std::string* errorMsg)
               [](const BlockRange& a, const BlockRange& b) {
                   return a.begin < b.begin;
               });
+
+    // Both lookups assume the ranges do not overlap: isMapped() binary
+    // searches for the last range beginning at or before the block and asks
+    // only that one, while isMappedSequential() walks to the first whose end
+    // is past it. Given two ranges covering the same block they answer
+    // differently, and a bmap saying a block is mapped twice says nothing a
+    // bmap is for.
+    for (size_t i = 1; i < _ranges.size(); ++i) {
+        if (_ranges[i].begin < _ranges[i - 1].end) {
+            if (errorMsg)
+                *errorMsg = "bmap: overlapping block ranges";
+            _ranges.clear();
+            return false;
+        }
+    }
+
+    // The format handed to the device has 32-bit fields, and serialize()
+    // wrote them with a plain cast. A block number past four billion came
+    // out as a different block, so the device was told to write somebody
+    // else's data there and to leave the real blocks alone -- with nothing
+    // said. Refused here instead, where there is still somewhere to say it.
+    constexpr quint64 kMaxWireBlock = std::numeric_limits<uint32_t>::max();
+    if (_blockSize > kMaxWireBlock || _ranges.size() > kMaxWireBlock) {
+        if (errorMsg)
+            *errorMsg = "bmap: does not fit the device's block map format";
+        _ranges.clear();
+        return false;
+    }
+    for (const auto &r : _ranges) {
+        // end is exclusive here and inclusive on the wire, so it is the
+        // block before it that has to fit.
+        if (r.begin > kMaxWireBlock || (r.end - 1) > kMaxWireBlock) {
+            if (errorMsg)
+                *errorMsg = "bmap: block number past what the device's format holds";
+            _ranges.clear();
+            return false;
+        }
+    }
 
     return true;
 }

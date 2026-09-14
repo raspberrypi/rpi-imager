@@ -9,6 +9,7 @@
 #include "devicewrapperpartition.h"
 #include <QObject>
 #include <QDate>
+#include <QSet>
 #include <QTime>
 
 enum fatType { FAT12, FAT16, FAT32, EXFAT };
@@ -54,7 +55,15 @@ protected:
     void writeDirEntryAtCurrentPos(struct dir_entry *dirEntry);
     void openDir();
     bool readDir(struct dir_entry *result);
-    void listFilesInDirectory(const QString &dirPath, uint32_t dirCluster, QStringList &fileList); // Helper for recursive listing
+    // Helper for recursive listing.
+    //
+    // visitedDirClusters carries the directories already on the walk. A
+    // subdirectory entry names the cluster its contents begin at, and
+    // nothing on the card stops that naming one an ancestor already used:
+    // the chain inside a single directory is guarded, the tree was not, so
+    // a card claiming a loop was walked forever.
+    void listFilesInDirectory(const QString &dirPath, uint32_t dirCluster, QStringList &fileList,
+                              QSet<uint32_t> &visitedDirClusters, int depth = 0);
     void updateFSinfo(int deltaClusters, uint32_t nextFreeClusterHint);
     uint16_t QTimeToFATtime(const QTime &time);
     uint16_t QDateToFATdate(const QDate &date);

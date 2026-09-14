@@ -177,6 +177,14 @@ public:
     /* Function to return current OS list URL (may be customized) */
     Q_INVOKABLE QUrl osListUrl() const;
 
+    // Where the repository starts, and where refreshOsListFromDefaultUrl()
+    // returns to. RPI_IMAGER_OSLIST_URL overrides it, as
+    // RPI_IMAGER_TELEMETRY_URL and RPI_IMAGER_CONNECT_URL override theirs and
+    // for the same reason: a suite driving the real writer should not reach
+    // production. The telemetry guards still compare the built-in constant,
+    // so a redirected list reports nothing.
+    static QUrl defaultOsListUrl();
+
     /* Function to return version (for QML - C++ code should use staticVersion()) */
     Q_INVOKABLE QString constantVersion() const;
 
@@ -471,7 +479,16 @@ public:
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
+    // An ordinary web address: http or https, with a host. Used wherever a
+    // URL arrives from somewhere that is not us -- an OS list entry, the
+    // update check, the bootloader's own flash -- before it is opened or
+    // fetched from.
+    static bool isHttpUrl(const QUrl &url);
     Q_INVOKABLE bool isScreenReaderActive() const;
+    // Have a screen reader speak a message now. A label that changes on
+    // screen is not announced -- readers speak what the user moved to, and
+    // during a write nothing moves.
+    Q_INVOKABLE void announceToScreenReader(const QString &message);
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
     Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;

@@ -6,8 +6,10 @@
 #include "fastboot_protocol.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cstdio>
 #include <cstring>
+#include <system_error>
 
 namespace fastboot {
 
@@ -43,10 +45,35 @@ Response FastbootProtocol::readResponse(rpiboot::IUsbTransport& transport, int t
     } else if (prefix == "FAIL") {
         resp.type = Response::Fail;
     } else if (prefix == "DATA") {
-        resp.type = Response::Data;
-        // Parse 8-char hex size
-        if (message.size() >= 8) {
-            resp.dataSize = static_cast<uint32_t>(std::stoul(message.substr(0, 8), nullptr, 16));
+        // The eight characters after DATA are the length in hex, and they
+        // come off the wire like everything else here. std::stoul threw on
+        // anything that was not a number, and the throw was caught far
+        // enough up that the user was shown the standard library's own word
+        // for it: "Fastboot error: stoul". A truncated read, a cable
+        // dropping bytes or a gadget with its own ideas is enough.
+        //
+        // from_chars neither throws nor accepts what stoul would have: no
+        // leading sign, no "0x", no whitespace. Requiring it to finish on
+        // the eighth character is what rejects a short or padded field.
+        uint32_t size = 0;
+        const char *begin = message.data();
+        const char *end = begin + 8;
+        const auto parsed = message.size() >= 8
+                                ? std::from_chars(begin, end, size, 16)
+                                : std::from_chars(begin, begin, size, 16);
+        if (message.size() >= 8 && parsed.ec == std::errc() && parsed.ptr == end) {
+            resp.type = Response::Data;
+            resp.dataSize = size;
+        } else {
+            // Say what arrived, with anything unprintable replaced: this
+            // goes into a message the user sees.
+            std::string shown = message.substr(0, std::min<size_t>(message.size(), 8));
+            for (char &c : shown) {
+                if (static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) > 0x7E)
+                    c = '?';
+            }
+            resp.type = Response::Fail;
+            resp.message = "Device sent a malformed DATA length: \"" + shown + "\"";
         }
     } else if (prefix == "INFO") {
         resp.type = Response::Info;
@@ -224,6 +251,21 @@ std::vector<uint8_t> FastbootProtocol::upload(rpiboot::IUsbTransport& transport,
     auto resp = readResponse(transport, 10000);
     if (resp.type != Response::Data) {
         _lastError = "Expected DATA response for upload, got: " + resp.message;
+        return {};
+    }
+
+    // A DATA response is the device saying how much memory to set aside,
+    // and it can say up to 0xFFFFFFFF -- four gigabytes reserved before a
+    // byte has arrived, on a machine that may have less than that. Found by
+    // fuzzing, in twenty-four bytes: OKAY then DATA93550679.
+    //
+    // What really comes back this way is a boot-partition text file, which
+    // is kilobytes, or an EEPROM image, which is 2 MiB on a Pi 5. Sixty-four
+    // megabytes is far above both and far below a denial of service.
+    constexpr size_t kMaxUploadBytes = 64u * 1024 * 1024;
+    if (resp.dataSize > kMaxUploadBytes) {
+        _lastError = "upload declared " + std::to_string(resp.dataSize)
+            + " bytes, more than this reads";
         return {};
     }
 

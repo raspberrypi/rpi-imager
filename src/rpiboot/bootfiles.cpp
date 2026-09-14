@@ -3,6 +3,7 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
+#include <algorithm>
 #include "bootfiles.h"
 
 #include <archive.h>
@@ -179,16 +180,28 @@ bool Bootfiles::extractFromArchive(::archive* a)
             continue;
         }
 
-        std::vector<uint8_t> data(static_cast<size_t>(entrySize));
+        // Grown as the data arrives rather than sized from the header.
+        //
+        // entrySize is the size the archive claims for the entry, and it was
+        // used to allocate before a byte had been read -- so a bootfiles.bin
+        // whose header said four gigabytes asked for four gigabytes, whatever
+        // the entry actually held. The file arrives with a downloaded firmware
+        // release, and a truncated or damaged one is enough. Nothing is lost
+        // by waiting: the old code trimmed to what it had read anyway.
+        std::vector<uint8_t> data;
 
         if (entrySize > 0) {
             // Read in chunks to handle large files without requiring
             // the entire file in a single read call
+            constexpr size_t kChunk = 256 * 1024;
             size_t offset = 0;
             size_t remaining = static_cast<size_t>(entrySize);
 
             while (remaining > 0) {
-                la_ssize_t bytesRead = archive_read_data(a, data.data() + offset, remaining);
+                const size_t want = std::min(remaining, kChunk);
+                data.resize(offset + want);
+
+                la_ssize_t bytesRead = archive_read_data(a, data.data() + offset, want);
                 if (bytesRead < 0) {
                     _lastError = std::string("Error reading archive entry '") + name + "': " + archive_error_string(a);
                     return false;

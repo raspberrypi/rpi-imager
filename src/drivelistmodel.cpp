@@ -31,7 +31,7 @@ DriveListModel::DriveListModel(QObject *parent)
 
     // Enumerate drives in separate thread, but process results in UI thread
     connect(&_thread, &DriveListModelPollThread::newDriveList,
-            this, &DriveListModel::processDriveList);
+            this, &DriveListModel::onPolledDriveList);
     
     // Forward performance event signal
     connect(&_thread, &DriveListModelPollThread::eventDriveListPoll,
@@ -286,13 +286,22 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
     }
 }
 
+void DriveListModel::onPolledDriveList(std::vector<Drivelist::DeviceDescriptor> l)
+{
+    if (!_polling)
+        return;
+    processDriveList(std::move(l));
+}
+
 void DriveListModel::startPolling()
 {
+    _polling = true;
     _thread.start();
 }
 
 void DriveListModel::stopPolling()
 {
+    _polling = false;
     _thread.stop();
 }
 

@@ -3,6 +3,54 @@
 #include <QDebug>
 #include <QStringList>
 
+namespace {
+// Largest sector the FAT specification permits, and so the largest a
+// conforming boot sector may ask for.
+constexpr uint16_t kMaxBytesPerSector = 4096;
+
+// The 8.3 short name, assembled once instead of in ten places.
+//
+// Ten copies is how one came to stop at a NUL and nothing narrower, and how
+// two came to disagree with the other three about case. DIR_Name is a fixed
+// 11-byte field -- an 8-byte base and a 3-byte extension, each space-padded,
+// with no separator stored -- so the dot is inserted rather than read.
+//
+// Lowered, because FAT stores 8.3 upper-cased: handing it back as stored made
+// one file "CONFIG.TXT" through one entry point and "config.txt" through
+// another. A long filename keeps its case; that one is the user's.
+//
+// Empty when there is nothing to give. A byte below 0x20 is not a name.
+QString shortNameFromEntry(const struct dir_entry &entry)
+{
+    QString name;
+    for (int i = 0; i < 8 && entry.DIR_Name[i] != ' ' && entry.DIR_Name[i] >= 0x20; i++)
+        name += QChar(entry.DIR_Name[i]).toLower();
+    if (entry.DIR_Name[8] != ' ')
+    {
+        name += '.';
+        for (int i = 8; i < 11 && entry.DIR_Name[i] != ' ' && entry.DIR_Name[i] >= 0x20; i++)
+            name += QChar(entry.DIR_Name[i]).toLower();
+    }
+    return name;
+}
+
+// One part of a long filename: 13 UTF-16 code units the entry splits across
+// three fields, which is the on-disk layout rather than a choice. memcpy
+// because those fields are unaligned inside the packed entry.
+//
+// Six identical copies of this is why a control character a directory puts in
+// a long name is still passed through -- deciding what to do about it meant
+// finding all six first. One place now.
+QString longNamePartFromEntry(const struct longfn_entry *l)
+{
+    char part[26] = {0};
+    memcpy(part, l->LDIR_Name1, 10);
+    memcpy(part + 10, l->LDIR_Name2, 12);
+    memcpy(part + 22, l->LDIR_Name3, 4);
+    return QString((QChar *) part, 13);
+}
+} // namespace
+
 /*
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2022 Raspberry Pi Ltd
@@ -32,6 +80,43 @@ DeviceWrapperFatPartition::DeviceWrapperFatPartition(DeviceWrapper *dw, quint64 
 
     /* Determine FAT type as per p. 14 https://academy.cba.mit.edu/classes/networking_communications/SD/FAT.pdf */
     _bytesPerSector = bpb.fat16.BPB_BytsPerSec;
+
+    // Both divisors below are fields read off the disk, so they are refused
+    // before they are divided by rather than after. exFAT stores zero in
+    // BPB_BytsPerSec by definition, and a corrupt image can store zero in
+    // either. x86 raises SIGFPE on an integer division by zero and takes the
+    // application down mid-write; AArch64 quietly yields zero, which is why
+    // the exFAT case still reached its error message and looked correct.
+    if (!_bytesPerSector)
+    {
+        _type = EXFAT;
+        throw std::runtime_error("exFAT file system not supported");
+    }
+    // The format allows four sector sizes and no others; the old test was "a
+    // multiple of four", which believed anything up to 65532. It has to hold
+    // here rather than after the type is decided, because allocateCluster()
+    // reads a whole sector into a buffer fixed at the largest of the four.
+    if (_bytesPerSector != 512 && _bytesPerSector != 1024
+        && _bytesPerSector != 2048 && _bytesPerSector != kMaxBytesPerSector)
+        throw std::runtime_error("FAT file system: invalid bytes per sector");
+    if (!bpb.fat16.BPB_SecPerClus)
+        throw std::runtime_error("FAT file system: invalid sectors per cluster");
+
+    /* Every figure below is a sector count read off the disk, and every
+     * offset is one of them multiplied by the sector size. In uint32_t that
+     * product wraps a little over four gigabytes -- and a wrapped offset is
+     * not a failure, it is a seek to the wrong place on somebody's card.
+     * Worked out in 64 bits and held to the partition, so a boot sector that
+     * does not describe this partition is refused instead.
+     */
+    const quint64 partitionBytes = _partLen;
+    const auto within = [partitionBytes](quint64 value, const char *what) -> quint64 {
+        if (value > partitionBytes)
+            throw std::runtime_error(std::string("FAT file system: ") + what
+                                     + " lies outside the partition");
+        return value;
+    };
+
     uint32_t totalSectors, dataSectors, countOfClusters;
     _fat16_rootDirSectors = ((bpb.fat16.BPB_RootEntCnt * 32) + (_bytesPerSector - 1)) / _bytesPerSector;
 
@@ -45,15 +130,37 @@ DeviceWrapperFatPartition::DeviceWrapperFatPartition(DeviceWrapper *dw, quint64 
     else
         totalSectors = bpb.fat32.BPB_TotSec32;
 
-    dataSectors = totalSectors - (bpb.fat16.BPB_RsvdSecCnt + (bpb.fat16.BPB_NumFATs * _fatSize) + _fat16_rootDirSectors);
+    // Taken in 64 bits: the three terms are disk figures and their sum can
+    // pass what the partition holds, at which point the subtraction wraps
+    // and a tiny file system reads as an enormous one.
+    const quint64 metaSectors = quint64(bpb.fat16.BPB_RsvdSecCnt)
+                                + (quint64(bpb.fat16.BPB_NumFATs) * _fatSize)
+                                + _fat16_rootDirSectors;
+    if (metaSectors > totalSectors)
+        throw std::runtime_error("FAT file system: more reserved sectors than sectors");
+    dataSectors = uint32_t(quint64(totalSectors) - metaSectors);
     countOfClusters = dataSectors / bpb.fat16.BPB_SecPerClus;
-    _bytesPerCluster = bpb.fat16.BPB_SecPerClus * _bytesPerSector;
-    _fat16_firstRootDirSector = bpb.fat16.BPB_RsvdSecCnt + (bpb.fat16.BPB_NumFATs * bpb.fat16.BPB_FATSz16);
+    _bytesPerCluster = uint32_t(within(quint64(bpb.fat16.BPB_SecPerClus) * _bytesPerSector,
+                                       "a cluster"));
+    _fat16_firstRootDirSector = uint32_t(quint64(bpb.fat16.BPB_RsvdSecCnt)
+                                         + (quint64(bpb.fat16.BPB_NumFATs) * bpb.fat16.BPB_FATSz16));
     _fat32_firstRootDirCluster = bpb.fat32.BPB_RootClus;
+    // The 8.3 name stops at any byte below 0x20, not only at a NUL. FAT
+    // forbids all of them, and a corrupt entry produced names like a single
+    // 0x01 -- which reach SecureBoot's extraction, keyed into a map, and
+    // qDebug lines that may land in a terminal. No exception is made for the
+    // 0x05 that FAT substitutes for a leading 0xE5: such a name is non-ASCII
+    // and therefore always carries a long filename entry, which every one of
+    // these callers prefers when it is present.
+    // "Current" starts where "first" is. It was the one member of this class
+    // the constructor never set, so a freshly built partition read it
+    // uninitialised -- in getDirEntry()'s log line, and in the save-and-
+    // restore around a directory walk. Valgrind reports a branch on an
+    // uninitialised value 380 times over the image tests; ASan cannot see
+    // this class of fault and MSan needs an instrumented Qt, which is gone.
+    _fat32_currentRootDirCluster = _fat32_firstRootDirCluster;
 
-    if (!_bytesPerSector)
-        _type = EXFAT;
-    else if (countOfClusters < 4085)
+    if (countOfClusters < 4085)
         _type = FAT12;
     else if (countOfClusters < 65525)
         _type = FAT16;
@@ -62,32 +169,40 @@ DeviceWrapperFatPartition::DeviceWrapperFatPartition(DeviceWrapper *dw, quint64 
 
     if (_type == FAT12)
         throw std::runtime_error("FAT12 file system not supported");
-    if (_type == EXFAT)
-        throw std::runtime_error("exFAT file system not supported");
-    if (_bytesPerSector % 4)
-        throw std::runtime_error("FAT file system: invalid bytes per sector");
 
-    _firstFatStartOffset = bpb.fat16.BPB_RsvdSecCnt * _bytesPerSector;
+    _firstFatStartOffset = uint32_t(within(quint64(bpb.fat16.BPB_RsvdSecCnt) * _bytesPerSector,
+                                           "the first file allocation table"));
     for (int i = 0; i < bpb.fat16.BPB_NumFATs; i++)
     {
-        _fatStartOffset.append(_firstFatStartOffset + (i * _fatSize * _bytesPerSector));
+        const quint64 start = quint64(_firstFatStartOffset)
+                              + (quint64(i) * _fatSize * _bytesPerSector);
+        _fatStartOffset.append(uint32_t(within(start, "a file allocation table")));
     }
 
     if (_type == FAT16)
     {
         _fat32_fsinfoSector = 0;
-        _clusterOffset = (_fat16_firstRootDirSector+_fat16_rootDirSectors) * _bytesPerSector;
+        _clusterOffset = uint32_t(within((quint64(_fat16_firstRootDirSector)
+                                          + _fat16_rootDirSectors) * _bytesPerSector,
+                                         "the first cluster"));
     }
     else
     {
         _fat32_fsinfoSector = bpb.fat32.BPB_FSInfo;
-        _clusterOffset = _firstFatStartOffset + (bpb.fat16.BPB_NumFATs * _fatSize * _bytesPerSector);
+        _clusterOffset = uint32_t(within(quint64(_firstFatStartOffset)
+                                         + (quint64(bpb.fat16.BPB_NumFATs) * _fatSize
+                                            * _bytesPerSector),
+                                         "the first cluster"));
     }
 }
 
 uint32_t DeviceWrapperFatPartition::allocateCluster()
 {
-    char sector[_bytesPerSector];
+    // Fixed at the format's maximum rather than sized from the disk: this
+    // is a stack buffer, and _bytesPerSector arrives from the boot sector.
+    // The constructor refuses anything larger, so only the first
+    // _bytesPerSector bytes are ever read or examined.
+    char sector[kMaxBytesPerSector];
     int bytesPerEntry = (_type == FAT16 ? 2 : 4);
     int entriesPerSector = _bytesPerSector/bytesPerEntry;
     uint32_t cluster;
@@ -98,7 +213,7 @@ uint32_t DeviceWrapperFatPartition::allocateCluster()
 
     for (int i = 0; i < _fatSize; i++)
     {
-        read(sector, sizeof(sector));
+        read(sector, _bytesPerSector);
 
         for (int j=0; j < entriesPerSector; j++)
         {
@@ -224,7 +339,21 @@ QList<uint32_t> DeviceWrapperFatPartition::getClusterChain(uint32_t firstCluster
 
 void DeviceWrapperFatPartition::seekCluster(uint32_t cluster)
 {
-    seek(_clusterOffset + (cluster-2)*_bytesPerCluster);
+    /* Clusters 0 and 1 are reserved and name no data, so a chain arriving at
+     * one is corrupt -- and subtracting two from it wraps, putting the seek
+     * somewhere arbitrary on a card that is being written. The offset is
+     * taken in 64 bits for the same reason: a cluster number times a cluster
+     * size passes four gigabytes on any card worth writing to.
+     */
+    if (cluster < 2)
+        throw std::runtime_error("Corrupt file system. Cluster number below the first");
+
+    const quint64 offset = quint64(_clusterOffset)
+                           + (quint64(cluster - 2) * _bytesPerCluster);
+    if (offset > _partLen)
+        throw std::runtime_error("Corrupt file system. Cluster outside the partition");
+
+    seek(qint64(offset));
 }
 
 bool DeviceWrapperFatPartition::fileExists(const QString &filename)
@@ -332,11 +461,7 @@ bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
             if (IS_LONG_NAME_ENTRY(entry.DIR_Attr))
             {
                 struct longfn_entry *l = (struct longfn_entry *) &entry;
-                char lnamePartStr[26] = {0};
-                memcpy(lnamePartStr, l->LDIR_Name1, 10);
-                memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
-                memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
-                QString lnamePart((QChar *) lnamePartStr, 13);
+                const QString lnamePart = longNamePartFromEntry(l);
                 longFilename = lnamePart + longFilename;
                 if (!followChain())
                     break;
@@ -348,15 +473,7 @@ bool DeviceWrapperFatPartition::deleteFile(const QString &filename)
                 if (longFilename.indexOf(QChar::Null) >= 0)
                     longFilename.truncate(longFilename.indexOf(QChar::Null));
 
-                QString shortName;
-                for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++)
-                    shortName += QChar(entry.DIR_Name[i]).toLower();
-                if (entry.DIR_Name[8] != ' ')
-                {
-                    shortName += '.';
-                    for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++)
-                        shortName += QChar(entry.DIR_Name[i]).toLower();
-                }
+                const QString shortName = shortNameFromEntry(entry);
 
                 const QString candidate =
                     longFilename.isEmpty() ? shortName : longFilename.toLower();
@@ -515,11 +632,7 @@ QByteArray DeviceWrapperFatPartition::readFile(const QString &filename)
             if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
                 // Process long filename entry
                 struct longfn_entry *l = (struct longfn_entry *) &entry;
-                char lnamePartStr[26] = {0};
-                memcpy(lnamePartStr, l->LDIR_Name1, 10);
-                memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
-                memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
-                QString lnamePart((QChar *) lnamePartStr, 13);
+                const QString lnamePart = longNamePartFromEntry(l);
                 longFilename = lnamePart + longFilename;
                 // Check for cluster boundary after LFN entry
                 if (_type == FAT32 && (pos() - _clusterOffset) % _bytesPerCluster == 0) {
@@ -542,17 +655,8 @@ QByteArray DeviceWrapperFatPartition::readFile(const QString &filename)
                 longFilename.truncate(longFilename.indexOf(QChar::Null));
             }
             
-            // Get short filename as fallback
-            QString shortName;
-            for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++) {
-                shortName += QChar(entry.DIR_Name[i]).toLower();
-            }
-            if (entry.DIR_Name[8] != ' ') {
-                shortName += '.';
-                for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                    shortName += QChar(entry.DIR_Name[i]).toLower();
-                }
-            }
+            // Short filename as fallback.
+            const QString shortName = shortNameFromEntry(entry);
             
             QString actualFilename = longFilename.isEmpty() ? shortName : longFilename.toLower();
             entriesChecked++;
@@ -617,6 +721,23 @@ QByteArray DeviceWrapperFatPartition::readFile(const QString &filename)
     }
     
     QList<uint32_t> clusterList = getClusterChain(firstCluster);
+
+    /* The declared size is a 32-bit field read off the card, and until here
+       nothing has weighed it against the clusters the file actually owns. An
+       entry claiming 4 GB otherwise allocates 4 GB before a byte is read, and
+       returns the shortfall as zeroes. Take the smallest of the declared
+       size, the chain's capacity and the partition. */
+    const quint64 chainCapacity = static_cast<quint64>(clusterList.size()) * _bytesPerCluster;
+    const quint64 cappedLen = qMin(static_cast<quint64>(len), qMin(chainCapacity, _partLen));
+    if (cappedLen < len)
+    {
+        qDebug() << "DeviceWrapperFatPartition::readFile: file" << filename
+                 << "declares" << len << "bytes but holds" << cappedLen << "- truncating";
+        len = static_cast<uint32_t>(cappedLen);
+        if (len == 0)
+            return QByteArray();
+    }
+
     uint32_t pos = 0;
     QByteArray result(len, 0);
 
@@ -646,11 +767,7 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
         {
             // Long filename entry
             struct longfn_entry *l = (struct longfn_entry *) &entry;
-            char lnamePartStr[26] = {0};
-            memcpy(lnamePartStr, l->LDIR_Name1, 10);
-            memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
-            memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
-            QString lnamePart((QChar *) lnamePartStr, 13);
+            const QString lnamePart = longNamePartFromEntry(l);
             longFilename = lnamePart + longFilename;
         }
         else
@@ -662,28 +779,11 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
                 if (longFilename.indexOf(QChar::Null) >= 0)
                     longFilename.truncate(longFilename.indexOf(QChar::Null));
                 
-                // Get short filename as fallback.
-                //
-                // DIR_Name is a fixed 11-byte field: an 8-byte base and a
-                // 3-byte extension, each space-padded, with no separator
-                // stored. Walking all 11 bytes and stopping at the first
-                // space therefore ends at the padding after the base, and
-                // the extension is never reached -- "CONFIG  TXT" came back
-                // as "CONFIG". The `i == 8` test that was meant to insert the
-                // dot could only fire when the base filled all 8 bytes.
-                // readFile() and listFilesInDirectory() already do this the
-                // way below; these two loops had not been kept in step.
-                QString shortName;
-                for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++) {
-                    shortName += QChar(entry.DIR_Name[i]);
-                }
-                if (entry.DIR_Name[8] != ' ') {
-                    shortName += '.';
-                    for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                        shortName += QChar(entry.DIR_Name[i]);
-                    }
-                }
-                shortName = shortName.trimmed();
+                // Short filename as fallback. This loop is where the
+                // extension used to be lost -- "CONFIG  TXT" came back as
+                // "CONFIG" -- and where the case diverged from the other
+                // three walkers. Both are the helper's business now.
+                const QString shortName = shortNameFromEntry(entry);
                 
                 QString filename = longFilename.isEmpty() ? shortName : longFilename;
                 
@@ -698,7 +798,7 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
                         // For full recursive support, we'd need to enhance it to change directories
                         qDebug() << "SecureBoot: found directory" << filename << "(skipping recursion - not yet supported)";
                     }
-                    else
+                    else if (!filename.isEmpty())
                     {
                         // Regular file
                         fileList.append(filename);
@@ -713,8 +813,30 @@ QStringList DeviceWrapperFatPartition::listAllFiles()
     return fileList;
 }
 
-void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uint32_t dirCluster, QStringList &fileList)
+void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uint32_t dirCluster,
+                                                     QStringList &fileList,
+                                                     QSet<uint32_t> &visitedDirClusters, int depth)
 {
+    /* Refuse a directory already on the walk. A subdirectory entry carries
+       the cluster its contents start at, and that is a number off the card:
+       nothing stops it naming a directory further up. The chain within one
+       directory is guarded further down, the tree was not, so such a card
+       recursed until the process ran out of memory -- 88 bytes of table was
+       enough to reach 2.2 GB. The depth cap is for a loop long enough to
+       pass for a deep tree; no real card is anywhere near it. */
+    constexpr int kMaxDirectoryDepth = 64;
+    if (depth > kMaxDirectoryDepth) {
+        qDebug() << "FAT directory tree deeper than" << kMaxDirectoryDepth
+                 << "at" << dirPath << "- not descending further";
+        return;
+    }
+    if (visitedDirClusters.contains(dirCluster)) {
+        qDebug() << "FAT directory" << dirPath << "points back at cluster"
+                 << dirCluster << "- already walked, not descending";
+        return;
+    }
+    visitedDirClusters.insert(dirCluster);
+
     // Save current directory state
     uint32_t savedCurrentCluster = _fat32_currentRootDirCluster;
     QList<uint32_t> savedDirClusters = _currentDirClusters;
@@ -749,11 +871,7 @@ void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uin
         if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
             // Long filename entry
             struct longfn_entry *l = (struct longfn_entry *) &entry;
-            char lnamePartStr[26] = {0};
-            memcpy(lnamePartStr, l->LDIR_Name1, 10);
-            memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
-            memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
-            QString lnamePart((QChar *) lnamePartStr, 13);
+            const QString lnamePart = longNamePartFromEntry(l);
             longFilename = lnamePart + longFilename;
             
             // Capture the checksum from the LFN entry
@@ -766,20 +884,8 @@ void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uin
                 if (longFilename.indexOf(QChar::Null) >= 0)
                     longFilename.truncate(longFilename.indexOf(QChar::Null));
                 
-                // Get short filename as fallback
-                QString shortName;
-                int nameLen = 8;
-                for (int i = 0; i < nameLen && entry.DIR_Name[i] != ' '; i++) {
-                    shortName += QChar(entry.DIR_Name[i]).toLower();  // Convert to lowercase for FAT case-insensitivity
-                }
-                // Check for extension
-                if (entry.DIR_Name[8] != ' ') {
-                    shortName += '.';
-                    for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                        shortName += QChar(entry.DIR_Name[i]).toLower();  // Convert to lowercase
-                    }
-                }
-                shortName = shortName.trimmed();
+                // Short filename as fallback.
+                const QString shortName = shortNameFromEntry(entry);
                 
                 // Choose filename: validate LFN checksum if we have an LFN
                 QString filename;
@@ -803,7 +909,12 @@ void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uin
                 }
                 
                 // Skip volume labels and current/parent directory markers
-                if (!(entry.DIR_Attr & ATTR_VOLUME_ID) && 
+                // An entry with no usable name is skipped, not listed. A
+                // short name is eight bytes of whatever the directory holds,
+                // and a corrupt one can be all NULs, which stops the name at
+                // nothing; listing that hands the caller an empty string to
+                // open. Found by fuzz_fatdir.
+                if (!(entry.DIR_Attr & ATTR_VOLUME_ID) && !filename.isEmpty() &&
                     filename != "." && filename != "..") {
                     
                     QString fullPath = dirPath.isEmpty() ? filename : dirPath + "/" + filename;
@@ -851,17 +962,19 @@ void DeviceWrapperFatPartition::listFilesInDirectory(const QString &dirPath, uin
     
     // Now recursively process subdirectories
     for (const auto &subdir : subdirs) {
-        listFilesInDirectory(subdir.first, subdir.second, fileList);
+        listFilesInDirectory(subdir.first, subdir.second, fileList,
+                             visitedDirClusters, depth + 1);
     }
 }
 
 QStringList DeviceWrapperFatPartition::listAllFilesRecursive()
 {
     QStringList fileList;
+    QSet<uint32_t> visitedDirClusters;
     
     if (_type == FAT32) {
         // Start from root directory cluster
-        listFilesInDirectory("", _fat32_firstRootDirCluster, fileList);
+        listFilesInDirectory("", _fat32_firstRootDirCluster, fileList, visitedDirClusters);
     } else if (_type == FAT16) {
         // FAT16 has special root directory handling
         // First, list files in root using the original method
@@ -873,39 +986,24 @@ QStringList DeviceWrapperFatPartition::listAllFilesRecursive()
         while (readDir(&entry)) {
             if (IS_LONG_NAME_ENTRY(entry.DIR_Attr)) {
                 struct longfn_entry *l = (struct longfn_entry *) &entry;
-                char lnamePartStr[26] = {0};
-                memcpy(lnamePartStr, l->LDIR_Name1, 10);
-                memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
-                memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
-                QString lnamePart((QChar *) lnamePartStr, 13);
+                const QString lnamePart = longNamePartFromEntry(l);
                 longFilename = lnamePart + longFilename;
             } else {
                 if (entry.DIR_Name[0] != 0xE5) {
                     if (longFilename.indexOf(QChar::Null) >= 0)
                         longFilename.truncate(longFilename.indexOf(QChar::Null));
                     
-                    // Same fixed 8+3 field as in listAllFiles() above: stop
-                    // at the padding after the base and the extension is
-                    // lost. This one matters most -- SecureBoot's
-                    // extractFatPartitionFiles() lists through here and then
-                    // calls readFile() on each name, so a truncated "CONFIG"
-                    // simply failed to resolve and the file was left out of
-                    // the signed boot image without a word.
-                    QString shortName;
-                    for (int i = 0; i < 8 && entry.DIR_Name[i] != ' '; i++) {
-                        shortName += QChar(entry.DIR_Name[i]);
-                    }
-                    if (entry.DIR_Name[8] != ' ') {
-                        shortName += '.';
-                        for (int i = 8; i < 11 && entry.DIR_Name[i] != ' '; i++) {
-                            shortName += QChar(entry.DIR_Name[i]);
-                        }
-                    }
-                    shortName = shortName.trimmed();
+                    // Short filename as fallback. This walk matters most:
+                    // SecureBoot's extractFatPartitionFiles() lists through
+                    // here and then calls readFile() on each name, so a name
+                    // this returns and readFile() cannot resolve is a file
+                    // left out of the signed boot image without a word. They
+                    // now build the name from the same function.
+                    const QString shortName = shortNameFromEntry(entry);
                     
                     QString filename = longFilename.isEmpty() ? shortName : longFilename;
                     
-                    if (!(entry.DIR_Attr & ATTR_VOLUME_ID) && 
+                    if (!(entry.DIR_Attr & ATTR_VOLUME_ID) && !filename.isEmpty() &&
                         filename != "." && filename != "..") {
                         
                         if (entry.DIR_Attr & ATTR_DIRECTORY) {
@@ -922,7 +1020,8 @@ QStringList DeviceWrapperFatPartition::listAllFilesRecursive()
         
         // Recursively process subdirectories
         for (const auto &subdir : subdirs) {
-            listFilesInDirectory(subdir.first, subdir.second, fileList);
+            listFilesInDirectory(subdir.first, subdir.second, fileList,
+                                 visitedDirClusters);
         }
     }
     
@@ -961,124 +1060,17 @@ void DeviceWrapperFatPartition::writeFile(const QString &filename, const QByteAr
         
         // Refuse rather than write to the wrong directory.
         //
-        // Setting the traversal state below and then calling getDirEntry()
-        // does not work: getDirEntry() begins with openDir(), which seeks
-        // unconditionally back to the root and discards it. The entry is
-        // created in the root instead, so a file the caller asked to place in
-        // a subdirectory silently appears at the top level -- readable at
-        // "added.dtbo" and absent from "overlays/added.dtbo".
+        // An implementation stood here once and did not work: setting the
+        // traversal state and then calling getDirEntry() gets nowhere,
+        // because getDirEntry() begins with openDir(), which seeks
+        // unconditionally back to the root and discards it. The entry was
+        // created in the root instead, so a file the caller asked to place
+        // in a subdirectory silently appeared at the top level -- readable
+        // at "added.dtbo" and absent from "overlays/added.dtbo". A hundred
+        // and ten lines of it sat behind this throw, unreachable and
+        // entirely plausible to anyone reading downwards.
         throw std::runtime_error(
             "Writing to a subdirectory is not supported: " + filename.toStdString());
-
-        // Save current directory context
-        uint32_t savedRootDirCluster = _fat32_currentRootDirCluster;
-        QList<uint32_t> savedDirClusters = _currentDirClusters;
-        
-        // Switch to subdirectory
-        uint32_t dirCluster = (dirEntry.DIR_FstClusHI << 16) | dirEntry.DIR_FstClusLO;
-        _fat32_currentRootDirCluster = dirCluster;
-        _currentDirClusters.clear();
-        _currentDirClusters.append(dirCluster);
-        
-        // Get the file entry in subdirectory (create if doesn't exist)
-        QString fileNameOnly = parts[parts.size() - 1];
-        getDirEntry(fileNameOnly, &entry, true);
-        firstCluster = entry.DIR_FstClusLO;
-        if (_type == FAT32)
-            firstCluster |= (entry.DIR_FstClusHI << 16);
-
-        if (firstCluster)
-            clusterList = getClusterChain(firstCluster);
-
-        if (clusterList.length() < clustersNeeded)
-        {
-            /* We need to allocate more clusters */
-            uint32_t lastCluster = 0;
-            int extraClustersNeeded = clustersNeeded - clusterList.length();
-
-            if (!clusterList.isEmpty())
-                lastCluster = clusterList.last();
-
-            for (int i = 0; i < extraClustersNeeded; i++)
-            {
-                lastCluster = allocateCluster(lastCluster);
-                clusterList.append(lastCluster);
-            }
-        }
-        else if (clusterList.length() > clustersNeeded)
-        {
-            /* We need to remove excess clusters */
-            int clustersToRemove = clusterList.length() - clustersNeeded;
-            uint32_t clusterToRemove = 0;
-            QByteArray zeroes(_bytesPerCluster, 0);
-
-            for (int i=0; i < clustersToRemove; i++)
-            {
-                clusterToRemove = clusterList.takeLast();
-
-                /* Zero out previous data in excess clusters,
-                   just in case someone wants to take a disk image later */
-                seekCluster(clusterToRemove);
-                write(zeroes.data(), zeroes.length());
-
-                /* Mark cluster available again in FAT */
-                setFAT(clusterToRemove, 0);
-            }
-            updateFSinfo(clustersToRemove, clusterToRemove);
-
-            if (!clusterList.isEmpty())
-            {
-                if (_type == FAT16)
-                    setFAT16(clusterList.last(), 0xFFFF);
-                else
-                    setFAT32(clusterList.last(), 0xFFFFFFF);
-            }
-        }
-
-        //qDebug() << "First cluster:" << firstCluster << "Clusters:" << clusterList;
-
-        /* Write file data */
-        for (uint32_t cluster : std::as_const(clusterList))
-        {
-            seekCluster(cluster);
-            write(contents.data()+pos, qMin((qsizetype)_bytesPerCluster, (qsizetype)(contents.length()-pos)));
-
-            pos += _bytesPerCluster;
-            if (pos >= contents.length())
-                break;
-        }
-
-        if (clustersNeeded && contents.length() % _bytesPerCluster)
-        {
-            /* Zero out last cluster tip */
-            uint32_t extraBytesAtEndOfCluster = _bytesPerCluster - (contents.length() % _bytesPerCluster);
-            if (extraBytesAtEndOfCluster)
-            {
-                QByteArray zeroes(extraBytesAtEndOfCluster, 0);
-                write(zeroes.data(), zeroes.length());
-            }
-        }
-
-        /* Update directory entry */
-        if (clusterList.isEmpty())
-            firstCluster = (_type == FAT16 ? 0xFFFF : 0xFFFFFFF);
-        else
-            firstCluster = clusterList.first();
-
-        entry.DIR_FstClusLO = (firstCluster & 0xFFFF);
-        entry.DIR_FstClusHI = (firstCluster >> 16);
-        entry.DIR_WrtDate = QDateToFATdate( QDate::currentDate() );
-        entry.DIR_WrtTime = QTimeToFATtime( QTime::currentTime() );
-        entry.DIR_LstAccDate = entry.DIR_WrtDate;
-        entry.DIR_FileSize = contents.length();
-        updateDirEntry(&entry);
-        
-        // Restore directory context
-        _fat32_currentRootDirCluster = savedRootDirCluster;
-        _currentDirClusters = savedDirClusters;
-        
-        qDebug() << "DeviceWrapperFatPartition::writeFile: wrote" << filename;
-        return;
     }
 
     // Simple case: file in root directory
@@ -1208,13 +1200,7 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
         if (IS_LONG_NAME_ENTRY(entry->DIR_Attr))
         {
             struct longfn_entry *l = (struct longfn_entry *) entry;
-            /* A part can have 13 UTF-16 characters */
-            char lnamePartStr[26] = {0};
-             /* Using memcpy() because it has no problems accessing unaligned struct members */
-            memcpy(lnamePartStr, l->LDIR_Name1, 10);
-            memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
-            memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
-            QString lnamePart( (QChar *) lnamePartStr, 13);
+            const QString lnamePart = longNamePartFromEntry(l);
             filenameRead = lnamePart + filenameRead;
             
             // Capture checksum from LFN entry
@@ -1460,7 +1446,9 @@ void DeviceWrapperFatPartition::openDir()
     /* Seek to start of root directory */
     if (_type == FAT16)
     {
-        seek(_fat16_firstRootDirSector * _bytesPerSector);
+        // Held to 64 bits: the constructor refused a root directory outside
+        // the partition, but the product itself wraps in uint32_t.
+        seek(qint64(quint64(_fat16_firstRootDirSector) * _bytesPerSector));
     }
     else
     {
@@ -1538,7 +1526,15 @@ void DeviceWrapperFatPartition::updateFSinfo(int deltaClusters, uint32_t nextFre
 
     if (deltaClusters != 0 && fsinfo.FSI_Free_Count != 0xFFFFFFFF)
     {
-        fsinfo.FSI_Free_Count += deltaClusters;
+        // Widened before it is added to. The count is a field read off the
+        // card and the delta can be negative, so a card claiming three free
+        // clusters while ten are released wrapped to about four billion and
+        // that was written back. The format has a value for "not known", and
+        // saying so is better than a number that cannot be true.
+        const qint64 updated = qint64(fsinfo.FSI_Free_Count) + deltaClusters;
+        fsinfo.FSI_Free_Count = (updated < 0 || updated > 0xFFFFFFFELL)
+                                    ? 0xFFFFFFFFu
+                                    : quint32(updated);
     }
 
     if (nextFreeClusterHint)
