@@ -61,11 +61,19 @@ class FakeApiServer
 {
 public:
     FakeApiServer(int status, const QByteArray &body)
+        : FakeApiServer(status, body, 1)
+    {
+    }
+
+    // The body repeated, for the sizes argv cannot carry: a single argument
+    // is capped well below a megabyte, and what a hostile endpoint can send
+    // is not.
+    FakeApiServer(int status, const QByteArray &body, int repeat)
     {
         static const char *kScript =
             "import http.server, socketserver, sys\n"
             "status = int(sys.argv[1])\n"
-            "body = sys.argv[2].encode()\n"
+            "body = sys.argv[2].encode() * int(sys.argv[3])\n"
             "class H(http.server.BaseHTTPRequestHandler):\n"
             "    def do_POST(self):\n"
             "        n = int(self.headers.get('content-length', 0))\n"
@@ -83,7 +91,8 @@ public:
 
         _process.start(QStringLiteral("/usr/bin/python3"),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
-                        QString::number(status), QString::fromUtf8(body)});
+                        QString::number(status), QString::fromUtf8(body),
+                        QString::number(repeat)});
         if (!_process.waitForStarted(10000))
             return;
         if (_process.waitForReadyRead(10000))
@@ -249,6 +258,50 @@ TEST_CASE("Registrar reports a malformed API response", "[connect]")
     // as success would write an empty secret into the image.
     CHECK_FALSE(result.ok);
     CHECK(result.secret.isEmpty());
+}
+
+TEST_CASE("Registrar refuses an endless response body", "[connect]")
+{
+    // The endpoint is named by a setting, and what it returns is whatever it
+    // chooses to return. The write callback appended every byte of it to a
+    // QByteArray with nothing weighing the total, and the non-object branch
+    // then put the whole thing into a message the interface shows.
+    //
+    // Eight megabytes here, which is small for a server that means it; the
+    // shape is what matters.
+    FakeApiServer server(201, QByteArray(64 * 1024, 'x'), 128);
+    REQUIRE_SERVER(server);
+
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.requestAuthKey(QStringLiteral("flood"), 1);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.secret.isEmpty());
+    // Bounded, and small enough to put in front of somebody.
+    CHECK(result.errorMessage.size() < 4096);
+    INFO("message: " << result.errorMessage.toStdString());
+    CHECK_FALSE(result.errorMessage.isEmpty());
+}
+
+TEST_CASE("Registrar quotes only the head of a body it cannot parse",
+          "[connect]")
+{
+    // Under the cap, so it arrives whole -- but the message that quotes it
+    // is read by a person, and four kilobytes of proxy HTML is not a message.
+    FakeApiServer server(201, QByteArray(4096, 'y'));
+    REQUIRE_SERVER(server);
+
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.requestAuthKey(QStringLiteral("verbose"), 1);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.errorMessage.size() < 1024);
+    // And it says how much there was, so the figure is not simply lost.
+    CHECK(result.errorMessage.contains(QStringLiteral("4096 bytes")));
 }
 
 TEST_CASE("Registrar reports a response missing the secret", "[connect]")

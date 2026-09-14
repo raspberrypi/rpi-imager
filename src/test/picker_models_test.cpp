@@ -21,6 +21,7 @@
 #include "model_row_diff.h"
 #include "oslistmodel.h"
 #include "signal_log.h"
+#include "test_scratch.h"
 
 #include <QByteArray>
 #include <QGuiApplication>
@@ -175,6 +176,58 @@ TEST_CASE("Every OS role QML binds to is present", "[models][oslist]")
     }
 }
 
+TEST_CASE("Every OS role is either drawn or knowingly carried",
+          "[models][oslist]")
+{
+    // A role nobody reads is a field the repository fills in and the user
+    // never sees. Nothing catches that on its own: every other test here
+    // asks whether what is drawn is right, and none asks whether what is
+    // offered is drawn. Two of these are in the second list today.
+    //
+    // Adding a role means adding it to one list or the other, which is the
+    // point: the choice is made once, on purpose, rather than by omission.
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+
+    const QSet<QString> drawn = {
+        QStringLiteral("name"), QStringLiteral("description"),
+        QStringLiteral("icon"), QStringLiteral("url"),
+        QStringLiteral("release_date"), QStringLiteral("image_download_size"),
+        QStringLiteral("extract_size"), QStringLiteral("extract_sha256"),
+        QStringLiteral("init_format"), QStringLiteral("capabilities"),
+        QStringLiteral("devices"), QStringLiteral("architecture"),
+        QStringLiteral("subitems_json"), QStringLiteral("bmap_url"),
+        QStringLiteral("random"), QStringLiteral("enable_rpi_connect"),
+        QStringLiteral("website"), QStringLiteral("tooltip"),
+    };
+
+    // Carried through the parser and the model, and drawn by nothing. Empty
+    // today: 'website' and 'tooltip' were the two, and the delegate now shows
+    // both. A role added without a home belongs here with a reason, or in the
+    // list above with somewhere to appear.
+    const QSet<QString> carriedButNotDrawn = {};
+
+    const QStringList names = roleNameList(*model);
+    REQUIRE_FALSE(names.isEmpty());
+
+    for (const QString &role : names) {
+        INFO("role: " << role.toStdString());
+        CHECK((drawn.contains(role) || carriedButNotDrawn.contains(role)));
+    }
+
+    // And neither list names a role the model no longer has.
+    for (const QString &listed : drawn) {
+        INFO("listed as drawn: " << listed.toStdString());
+        CHECK(names.contains(listed));
+    }
+    for (const QString &listed : carriedButNotDrawn) {
+        INFO("listed as carried: " << listed.toStdString());
+        CHECK(names.contains(listed));
+    }
+}
+
 TEST_CASE("Role names are unique", "[models][oslist]")
 {
     // Two roles sharing a name means one of them is unreachable from QML.
@@ -205,6 +258,44 @@ TEST_CASE("Asking the OS list for a row that is not there is harmless",
     CHECK_FALSE(view->data(QModelIndex(), Qt::DisplayRole).isValid());
     CHECK_FALSE(view->data(view->index(9999, 0), Qt::DisplayRole).isValid());
     CHECK_FALSE(view->data(view->index(-1, 0), Qt::DisplayRole).isValid());
+}
+
+TEST_CASE("A row can be read without a delegate to read it from",
+          "[models][oslist]")
+{
+    // The views normally take a row from the delegate that draws it, and
+    // fall back to asking the model when there is no delegate -- the current
+    // item scrolled out of view and recycled, or a row nothing has drawn
+    // yet. That fallback went through roleNames(), which is a plain virtual
+    // and so invisible to QML: it returned an object with no fields, and the
+    // OS selection step read it as an entry with no url.
+    TestableImageWriter writer;
+    writer.feedOsList(osListJson());
+    OSListModel *model = writer.getOSList();
+    REQUIRE(model->reload());
+    QAbstractItemModel *view = model;
+    REQUIRE(view->rowCount(QModelIndex()) > 0);
+
+    const QVariantMap row = model->get(0);
+    const auto roles = view->roleNames();
+    REQUIRE_FALSE(roles.isEmpty());
+
+    for (auto it = roles.cbegin(); it != roles.cend(); ++it) {
+        const QString key = QString::fromUtf8(it.value());
+        INFO("role: " << key.toStdString());
+        REQUIRE(row.contains(key));
+        CHECK(row.value(key) == view->data(view->index(0, 0), it.key()));
+    }
+
+    // The field the selection path hands to setSrc(), which takes a QUrl.
+    CHECK(row.value(QStringLiteral("name")).toString().isEmpty() == false);
+    CHECK(row.contains(QStringLiteral("url")));
+
+    // The same out-of-range answers data() gives, so a row asked for during
+    // teardown is empty rather than a read past the end.
+    CHECK(model->get(-1).isEmpty());
+    CHECK(model->get(view->rowCount(QModelIndex())).isEmpty());
+    CHECK(model->get(9999).isEmpty());
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1078,10 +1169,7 @@ int main(int argc, char *argv[])
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     initAppResources();
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("picker_models_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("picker_models_test"));
     return Catch::Session().run(argc, argv);
 }
 
@@ -1153,6 +1241,43 @@ TEST_CASE("A plugged-in drive appears in the chooser", "[models][drivelist]")
 
     CHECK(rowsOf(view) == 1);
     CHECK(devicePathsIn(view).contains(QStringLiteral("/dev/sdz")));
+}
+
+TEST_CASE("A drive list arriving after polling stopped is not applied",
+          "[models][drivelist]")
+{
+    // stop() only raises a flag. A poll already under way finishes and emits,
+    // and that emission is queued to this thread, so it lands after
+    // stopPolling() has returned -- refilling a list that was deliberately
+    // emptied. It showed up as a chaos suite's safety check failing at the
+    // first step: the drive list it had just cleared was not empty any more.
+    //
+    // A bare model rather than one belonging to an ImageWriter, whose
+    // constructor starts polling.
+    DriveListModel model;
+    QAbstractItemModel *view = &model;
+
+    const std::vector<Drivelist::DeviceDescriptor> one{
+        makeDevice("/dev/sdz", "SanDisk Cruzer", 32000000000ull)};
+    const std::vector<Drivelist::DeviceDescriptor> none{};
+
+    model.startPolling();
+    REQUIRE(QMetaObject::invokeMethod(
+        &model, "onPolledDriveList", Qt::DirectConnection,
+        Q_ARG(std::vector<Drivelist::DeviceDescriptor>, one)));
+    CHECK(devicePathsIn(view).contains(QStringLiteral("/dev/sdz")));
+
+    model.stopPolling();
+    REQUIRE(QMetaObject::invokeMethod(
+        &model, "onPolledDriveList", Qt::DirectConnection,
+        Q_ARG(std::vector<Drivelist::DeviceDescriptor>, none)));
+    INFO("after stopping: " << devicePathsIn(view).join(QStringLiteral(", ")).toStdString());
+    CHECK(devicePathsIn(view).contains(QStringLiteral("/dev/sdz")));
+
+    // A direct call is not the thread, and is still applied: that is how a
+    // test puts drives in front of a case, and how it takes them away again.
+    model.processDriveList(none);
+    CHECK(rowsOf(view) == 0);
 }
 
 TEST_CASE("A zero-sized device is not offered", "[models][drivelist]")
