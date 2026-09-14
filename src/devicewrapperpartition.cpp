@@ -6,9 +6,21 @@
 #include "devicewrapperpartition.h"
 #include "devicewrapper.h"
 
+#include <limits>
+#include <stdexcept>
+
 DeviceWrapperPartition::DeviceWrapperPartition(DeviceWrapper *dw, quint64 partStart, quint64 partLen, QObject *parent)
     : QObject{parent}, _dw(dw), _partStart(partStart), _partLen(partLen), _offset(partStart)
 {
+    // Weighed before it is added. read() deliberately rewrites its bounds
+    // check as (size > _partEnd - _offset) to avoid wrapping -- and that
+    // rewrite is defeated if _partEnd wrapped here, because the subtraction
+    // then yields a value near UINT64_MAX and every size passes it. The GPT
+    // path can reach that: it bounds StartingLBA and the sector count
+    // separately against UINT64_MAX/512 and never their sum. Found by
+    // fuzz_parttable, in two UBSan lines a target exited 0 on.
+    if (partLen > std::numeric_limits<quint64>::max() - partStart)
+        throw std::runtime_error("Partition extends past the addressable range");
     _partEnd = _partStart + _partLen;
 }
 
