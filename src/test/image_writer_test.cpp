@@ -8244,6 +8244,48 @@ TEST_CASE("Reading a file the user picked", "[imagewriter][files]")
     }
 }
 
+TEST_CASE("The url a file picker hands back becomes the path it names",
+          "[imagewriter][files]")
+{
+    // The QML pickers return urls. Cutting "file://" off one is not a path:
+    // on Windows it leaves "/C:/Users/...", which does not open, and on every
+    // platform it keeps the url's escaping, so "id#1.pub" became "id%231.pub".
+    ImageWriter w(nullptr);
+
+    SECTION("the path comes back, whatever is in the name") {
+        QTemporaryDir dir;
+        REQUIRE(dir.isValid());
+
+        for (const QString &name : {QStringLiteral("id_ed25519.pub"),
+                                    QStringLiteral("id#1.pub"),
+                                    QStringLiteral("100% key.pub"),
+                                    QStringLiteral("clé.pub")}) {
+            INFO("name: " << name.toStdString());
+            const QString path = QDir(dir.path()).filePath(name);
+            QFile f(path);
+            REQUIRE(f.open(QIODevice::WriteOnly));
+            f.write("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 user@host");
+            f.close();
+
+            // Through a string, the way a url property reaches C++ from QML
+            const QString url = QUrl::fromLocalFile(path).toString();
+            const QString back = w.localPathFromUrl(QUrl(url));
+            CHECK(back == path);
+            CHECK(w.readFileContents(back)
+                  == QStringLiteral("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 user@host"));
+        }
+    }
+
+    SECTION("nothing chosen is no path") {
+        CHECK(w.localPathFromUrl(QUrl()).isEmpty());
+    }
+
+    SECTION("a url that is not a local file is left alone") {
+        CHECK(w.localPathFromUrl(QUrl(QStringLiteral("https://example.com/key.pub")))
+              == QStringLiteral("https://example.com/key.pub"));
+    }
+}
+
 // ══════════════════════════════════════════════════════════════
 // The diagnostics file
 //

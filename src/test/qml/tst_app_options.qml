@@ -331,6 +331,19 @@ TestCase {
 
         compare(child("rsaKeyPathField").text, "/home/pi/.ssh/secureboot.pem")
     }
+
+    function test_a_chosen_signing_key_is_recorded_as_the_path_it_names() {
+        // Not the url with its scheme cut off: that kept the url's escaping,
+        // so a '#' in the name was recorded as "%23".
+        var picker = findChild(dialog, "rsaKeyFileDialog")
+        verify(picker, "found the key picker")
+        child("rsaKeyPathField").text = ""
+
+        picker.selectedFile = "file:///home/pi/.ssh/secure%23boot.pem"
+        picker.accepted()
+
+        compare(child("rsaKeyPathField").text, "/home/pi/.ssh/secure#boot.pem")
+    }
     function test_the_key_button_opens_the_picker() {
         // How a user reaches the picker the case above drives directly.
         // There is no other way to a signing key from this dialog, so a

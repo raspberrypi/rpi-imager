@@ -404,7 +404,7 @@ ColumnLayout {
         }
         onAccepted: {
             if (selectedFile && selectedFile.toString().length > 0) {
-                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
+                var filePath = ImageWriterSingleton.localPathFromUrl(selectedFile)
                 var contents = ImageWriterSingleton.readFileContents(filePath)
                 if (contents && contents.length > 0) {
                     root.addKeysFromFile(contents)

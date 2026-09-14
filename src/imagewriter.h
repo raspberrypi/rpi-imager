@@ -269,6 +269,11 @@ public:
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
+    /* The path of a file the QML file dialogs hand back as a url. Cutting
+       "file://" off the url is not the same thing: that leaves "/C:/..." on
+       Windows, and "%23" for a '#' in the name everywhere. */
+    Q_INVOKABLE QString localPathFromUrl(const QUrl &url) const;
+
     /// Which kind of write startWrite() is about to start.
     ///
     /// The three special targets are decided in a fixed order and the order is

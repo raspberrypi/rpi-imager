@@ -270,7 +270,7 @@ WizardStepBase {
         }
         onAccepted: {
             if (selectedFile && selectedFile.toString().length > 0) {
-                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
+                var filePath = ImageWriterSingleton.localPathFromUrl(selectedFile)
                 ImageWriterSingleton.setSetting("secureboot_rsa_key", filePath)
                 // Update tracked property and wizard container state
                 root.rsaKeyPath = filePath

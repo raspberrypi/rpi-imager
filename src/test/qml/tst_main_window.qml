@@ -766,10 +766,15 @@ TestCase {
         const name = "perf-export.json"
         // Written and removed again, so the export is what creates it and the
         // assertion cannot pass on a file that was already there.
-        verify(TestFiles.write(name, "placeholder") !== "", "the scratch file works")
+        //
+        // Its url is the one the dialog would hand back. "file://" put in
+        // front of a path is only a url when the path starts with a slash: on
+        // Windows it makes the drive letter the host.
+        const url = TestFiles.write(name, "placeholder")
+        verify(url !== "", "the scratch file works")
 
         const d = performanceSave()
-        d.selectedFile = "file://" + TestFiles.localPath(name)
+        d.selectedFile = url
         d.accepted()
 
         tryVerify(function () { return TestFiles.sizeOf(name) > 0 }, 5000,
