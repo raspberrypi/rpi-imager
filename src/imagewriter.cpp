@@ -137,7 +137,6 @@ ImageWriter::ImageWriter(QObject *parent)
       _verifyEnabled(true), _multipleFilesInZip(false), _online(false), _extractSizeKnown(true),
       _settings(),
       _translations(),
-      _trans(nullptr),
       _refreshIntervalOverrideMinutes(-1),
       _refreshJitterOverrideMinutes(-1),
 #ifndef CLI_ONLY_BUILD
@@ -342,11 +341,7 @@ ImageWriter::ImageWriter(QObject *parent)
 
     QDir dir(":/i18n", "rpi-imager_*.qm");
     const QStringList transFiles = dir.entryList();
-    QLocale currentLocale;
-    QStringList localeComponents = currentLocale.name().split('_');
-    QString currentlangcode;
-    if (!localeComponents.isEmpty())
-        currentlangcode = localeComponents.first();
+    QMap<QString, QString> langnames;  // langcode -> name in the menu
 
     for (const QString &tf : transFiles)
     {
@@ -354,14 +349,25 @@ ImageWriter::ImageWriter(QObject *parent)
 
         QLocale loc(langcode);
         /* Use "English" for "en" and not "American English" */
-        QString langname = (langcode == "en" ? "English" : loc.nativeLanguageName() );
-        _translations.insert(langname, langcode);
-        if (langcode == currentlangcode)
-        {
-            _currentLang = langname;
-            _currentLangcode = currentlangcode;
-        }
+        langnames.insert(langcode, langcode == "en" ? "English" : loc.nativeLanguageName());
     }
+
+    /* A regional translation can have the same name as its language's: "pt"
+       and "pt-BR" are both "português". Keyed by name, one would replace the
+       other in the menu, so name the regional one after its region too. */
+    QHash<QString, int> nameUses;
+    for (const QString &langname : std::as_const(langnames))
+        nameUses[langname]++;
+    for (auto it = langnames.begin(); it != langnames.end(); ++it)
+    {
+        if (nameUses.value(it.value()) > 1 && it.key().contains('-'))
+            it.value() += QStringLiteral(" (%1)").arg(QLocale(it.key()).nativeTerritoryName());
+    }
+    for (auto it = langnames.cbegin(); it != langnames.cend(); ++it)
+        _translations.insert(it.value(), it.key());
+
+    _currentLangcode = translationForLocale(QLocale(), langnames.keys());
+    _currentLang = langnames.value(_currentLangcode);
 
     // Connect to CacheManager signals
     connect(_cacheManager, &CacheManager::cacheFileUpdated,
@@ -599,15 +605,15 @@ ImageWriter::~ImageWriter()
         _suspendInhibitor = nullptr;
     }
 
-    if (_trans)
+    for (QTranslator *trans : std::as_const(_translators))
     {
         // The application may already be gone: this is destroyed before it
         // in the GUI, but a test binary holding the writer in a static
         // outlives it, and removeTranslator() then warns about an instance
         // that is not there rather than doing anything.
         if (QCoreApplication::instance())
-            QCoreApplication::removeTranslator(_trans);
-        delete _trans;
+            QCoreApplication::removeTranslator(trans);
+        delete trans;
     }
 }
 
@@ -4469,10 +4475,8 @@ void ImageWriter::changeLanguage(const QString &newLanguageName)
     QString langcode = _translations[newLanguageName];
     qDebug() << "Changing language to" << langcode;
 
-    QTranslator *trans = new QTranslator();
-    if (trans->load(":/i18n/rpi-imager_"+langcode+".qm"))
+    if (installTranslation(langcode))
     {
-        replaceTranslator(trans);
         _currentLang = newLanguageName;
         _currentLangcode = langcode;
         /* Numbers as well as words. Only startup set the default locale, so
@@ -4485,8 +4489,93 @@ void ImageWriter::changeLanguage(const QString &newLanguageName)
     else
     {
         qDebug() << "Failed to load translation file";
-        delete trans;
     }
+}
+
+void ImageWriter::setLanguageForLocale(const QLocale &locale)
+{
+    const QString langcode = translationForLocale(locale, _translations.values());
+    if (langcode.isEmpty())
+        return;
+
+    qDebug() << "Language for locale" << locale.name() << "is" << langcode;
+    if (installTranslation(langcode))
+    {
+        _currentLang = _translations.key(langcode);
+        _currentLangcode = langcode;
+    }
+}
+
+QString ImageWriter::translationForLocale(const QLocale &locale, const QStringList &langcodes)
+{
+    /* The translations are named with BCP 47 tags ("pt-BR"), the form
+       uiLanguages() gives. QTranslator::load(QLocale, ...) would look for
+       "pt_BR" instead, and settle for "pt". */
+    auto find = [&langcodes](const QString &tag) -> QString {
+        for (const QString &langcode : langcodes)
+        {
+            if (langcode.compare(tag, Qt::CaseInsensitive) == 0)
+                return langcode;
+        }
+        return QString();
+    };
+
+    const QStringList uiLanguages = locale.uiLanguages();
+
+    // Whole tags first, most preferred first: "pt-BR" is tried before "pt"
+    for (const QString &tag : uiLanguages)
+    {
+        const QString langcode = find(tag);
+        if (!langcode.isEmpty())
+            return langcode;
+    }
+
+    // Then each cut back a subtag at a time, for a list without the bare
+    // language in it: "de-AT" gets "de"
+    for (QString tag : uiLanguages)
+    {
+        for (qsizetype dash = tag.lastIndexOf('-'); dash > 0; dash = tag.lastIndexOf('-'))
+        {
+            tag.truncate(dash);
+            const QString langcode = find(tag);
+            if (!langcode.isEmpty())
+                return langcode;
+        }
+    }
+
+    return QString();
+}
+
+bool ImageWriter::installTranslation(const QString &langcode)
+{
+    QList<QTranslator *> translators;
+    auto load = [&translators](const QString &code) {
+        QTranslator *trans = new QTranslator();
+        if (trans->load(":/i18n/rpi-imager_"+code+".qm"))
+        {
+            translators.append(trans);
+            return true;
+        }
+        delete trans;
+        return false;
+    };
+
+    /* A regional translation goes over its language's, so what it has not
+       translated yet comes out in that language rather than in English:
+       pt-BR falls back on pt, zh-TW on zh. Qt searches the translator
+       installed last first. */
+    const qsizetype dash = langcode.indexOf('-');
+    if (dash > 0)
+        load(langcode.left(dash));
+
+    if (!load(langcode))
+    {
+        qDeleteAll(translators);
+        return false;
+    }
+
+    replaceTranslators(translators);
+    return true;
 }
 
 void ImageWriter::changeKeyboard(const QString &newKeymapLayout)
@@ -4500,14 +4589,20 @@ void ImageWriter::changeKeyboard(const QString &newKeymapLayout)
 
 void ImageWriter::replaceTranslator(QTranslator *trans)
 {
-    if (_trans)
+    replaceTranslators({trans});
+}
+
+void ImageWriter::replaceTranslators(const QList<QTranslator *> &translators)
+{
+    for (QTranslator *trans : std::as_const(_translators))
     {
-        QCoreApplication::removeTranslator(_trans);
-        delete _trans;
+        QCoreApplication::removeTranslator(trans);
+        delete trans;
     }
 
-    _trans = trans;
-    QCoreApplication::installTranslator(_trans);
+    _translators = translators;
+    for (QTranslator *trans : std::as_const(_translators))
+        QCoreApplication::installTranslator(trans);
 
 #ifndef CLI_ONLY_BUILD
     if (_engine)
