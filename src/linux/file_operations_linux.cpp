@@ -691,7 +691,10 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
     if (callback) callback(first_async_error_, 0);
     return first_async_error_;
   }
-  
+
+  // This thread is the completion queue's consumer: see PollAsyncCompletions().
+  cq_owner_thread_.store(std::this_thread::get_id(), std::memory_order_relaxed);
+
   // Process any completed writes first (non-blocking)
   ProcessCompletions(false);
   
@@ -772,19 +775,27 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
 }
 
 void LinuxFileOperations::PollAsyncCompletions() {
-  // Intentionally a no-op on Linux.
-  //
+#ifdef HAVE_LIBURING
   // Unlike Windows IOCP, io_uring's CQ is not thread-safe for multiple
-  // consumers. The extract thread is the sole CQ consumer — it polls via
-  // ProcessCompletions() inside AsyncWriteSequential() and
-  // WaitForPendingWrites(). External callers (watchdog timer, download
-  // thread's _updateBottleneckState) must not touch the CQ directly, as
-  // concurrent peek/cqe_seen calls cause double-processing or skipped
-  // completions.
+  // consumers: concurrent peek/cqe_seen calls cause double-processing or
+  // skipped completions. The thread that submits the writes (the extract
+  // thread) is the sole CQ consumer, so a call from any other thread -- the
+  // progress watchdog, or the download thread feeding the input ring buffer --
+  // is a no-op.
   //
-  // This is safe because the extract thread's blocking wait uses 100ms
-  // timeouts with cancellation checks, so completions are always drained
-  // promptly without external prodding.
+  // The submitting thread itself must be able to reap here, though. With
+  // zero-copy writes each in-flight write holds a write ring buffer slot until
+  // its completion callback runs. When the ring buffer has no more slots than
+  // the queue is deep, the extract thread runs out of slots before it reaches
+  // the queue-full wait in AsyncWriteSequential(), and waits for a free slot
+  // in a loop whose only way to make progress is this call. If it reaped
+  // nothing, no callback would run and no slot would ever be freed: the write
+  // stalls at 0% until the ring buffer stall timeout. See #1731.
+  if (io_uring_available_ && ring_ != nullptr && pending_writes_.load() > 0 &&
+      cq_owner_thread_.load(std::memory_order_relaxed) == std::this_thread::get_id()) {
+    ProcessCompletions(false);  // Non-blocking poll
+  }
+#endif
 }
 
 void LinuxFileOperations::CancelAsyncIO() {

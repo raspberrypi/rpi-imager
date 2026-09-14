@@ -440,8 +440,10 @@ void DownloadExtractThread::extractImageRun()
             while (!slot && !_cancelled && !_writeRingBuffer->isCancelled() && !_writeRingBuffer->isStallTimeoutExceeded()) {
                 // CRITICAL: Poll for async I/O completions while waiting for ring buffer slots!
                 // Without this, we deadlock: slots are freed by async write callbacks,
-                // but callbacks only fire when we poll IOCP. If we're blocked here not
-                // polling, completions pile up and slots never get freed.
+                // but callbacks only fire when we poll IOCP or reap io_uring. If we're
+                // blocked here not polling, completions pile up and slots never get freed.
+                // On Linux this works only because this thread is the one submitting the
+                // writes -- io_uring's single completion consumer (see #1731).
                 if (_file && _file->IsAsyncIOSupported()) {
                     _file->PollAsyncCompletions();
                 }
