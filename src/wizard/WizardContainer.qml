@@ -475,7 +475,9 @@ Item {
                     width: parent.width
                     spacing: Style.spacingXSmall
                     // Add right margin when scrollbar is visible to prevent overlap
-                    anchors.rightMargin: (sidebarScroll.contentHeight > sidebarScroll.height ? Style.scrollBarWidth : 0)
+                    // Unconditional: SelectionListView.qml records why the
+                    // conditional form fed back into the layout.
+                    anchors.rightMargin: Style.scrollBarWidth
                 
                 // Header
                 Text {

@@ -19,6 +19,12 @@ import QtQuick
 import RpiImager
 
 Text {
+    // Plain unless a caller says otherwise. AutoText reads markup in a string
+    // as rich text and fetches what an <img> in it names, and several of these
+    // quote back a repository's words, a device's firmware, or a settings file
+    // written by hand. The few that really are markup set StyledText here.
+    textFormat: Text.PlainText
+
     Accessible.role: Accessible.StaticText
     Accessible.name: text
     Accessible.focusable: ImageWriterSingleton.screenReaderActive

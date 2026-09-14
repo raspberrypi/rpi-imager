@@ -87,6 +87,7 @@ WizardStepBase {
             
             // Show key status if configured
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 visible: root.rsaKeyPath && root.rsaKeyPath.length > 0
                 text: qsTr("Selected: %1").arg(root.rsaKeyPath)
@@ -146,6 +147,7 @@ WizardStepBase {
                     spacing: Style.spacingXSmall
                     
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         text: qsTr("Public Key Fingerprint: %1").arg(root.getRsaKeyFingerprint() || qsTr("(unavailable)"))
                         font.family: Style.fontFamily
