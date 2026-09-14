@@ -304,6 +304,63 @@ TEST_CASE("CurlFetcher reports the effective URL", "[curl-fetcher]")
     CHECK(result.effectiveUrl.toString().contains(QStringLiteral("doc.json")));
 }
 
+TEST_CASE("A local file is reported as fetched from where it was asked for",
+          "[curl-fetcher]")
+{
+    // A file: url is not redirected, but curl writes it back in its own form:
+    // on Windows "file:///C:/..." comes back as "file://C:/...", where the
+    // drive letter parses as a host. Reported as a redirect, it replaced a
+    // local custom repository with a URL that no longer loads.
+    ScratchDir scratch;
+    const QString path = scratch.filePath(QStringLiteral("os_list.json"));
+    REQUIRE(writeFile(path, "{}"));
+
+    CurlFetcher fetcher;
+    const QUrl requested = QUrl::fromLocalFile(path);
+    const FetchResult result = fetchAndWait(fetcher, requested);
+
+    REQUIRE(result.finished);
+    CHECK(result.data == QByteArray("{}"));
+    CHECK(result.effectiveUrl == requested);
+}
+
+TEST_CASE("A URL curl only tidies is not reported as a redirect", "[curl-fetcher]")
+{
+    // curl drops a "./" from the path before fetching. That is the same file
+    // reached the same way, and the URL the repository was given stands.
+    ScratchDir scratch;
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("os_list.json")), "{}"));
+
+    CurlFetcher fetcher;
+    const QUrl requested =
+        QUrl::fromLocalFile(scratch.path() + QStringLiteral("/./os_list.json"));
+    REQUIRE(requested.toString().contains(QStringLiteral("/./")));
+    const FetchResult result = fetchAndWait(fetcher, requested);
+
+    REQUIRE(result.finished);
+    CHECK(result.effectiveUrl == requested);
+}
+
+TEST_CASE("A redirect that is followed is reported", "[curl-fetcher]")
+{
+    // What the effective URL is for: after a redirect, the title bar names
+    // the server the list really came from.
+    ScratchDir scratch;
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("doc.json")), "{}"));
+    LocalHttpServer target(scratch.path());
+    REQUIRE_SERVER(target);
+    const QUrl destination = target.urlFor(QStringLiteral("doc.json"));
+    RedirectingHttpServer redirector(destination.toString());
+    REQUIRE_SERVER(redirector);
+
+    CurlFetcher fetcher;
+    const FetchResult result = fetchAndWait(fetcher, redirector.url());
+
+    REQUIRE(result.finished);
+    CHECK(result.data == QByteArray("{}"));
+    CHECK(result.effectiveUrl == destination);
+}
+
 // ---------------------------------------------------------------------------
 // Failures
 // ---------------------------------------------------------------------------

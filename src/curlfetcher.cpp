@@ -88,16 +88,20 @@ public:
             }
             qDebug() << "CurlFetcher: fetch failed for" << _url.toString() << "-" << error;
         } else {
-            // Success - get the effective URL after any redirects
+            // Success - get the effective URL after any redirects.
+            //
+            // Only a redirect counts. curl also writes back a URL it followed
+            // nowhere in its own form -- "file:///C:/os.json" comes back as
+            // "file://C:/os.json" on Windows, where the drive letter then
+            // parses as a host -- and taking that for a redirect replaced a
+            // working local repository with one that no longer loads.
+            long redirectCount = 0;
+            curl_easy_getinfo(curl, CURLINFO_REDIRECT_COUNT, &redirectCount);
             char *effectiveUrl = nullptr;
             curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl);
-            if (effectiveUrl) {
-                // Compare raw C strings first to avoid QString construction when no redirect occurred
-                QByteArray originalUrlBytes = _url.toEncoded();
-                if (strcmp(effectiveUrl, originalUrlBytes.constData()) != 0) {
-                    effectiveUrlStr = QString::fromUtf8(effectiveUrl);
-                    qDebug() << "CurlFetcher: URL was redirected from" << _url.toString() << "to" << effectiveUrlStr;
-                }
+            if (redirectCount > 0 && effectiveUrl) {
+                effectiveUrlStr = QString::fromUtf8(effectiveUrl);
+                qDebug() << "CurlFetcher: URL was redirected from" << _url.toString() << "to" << effectiveUrlStr;
             }
             
             // Collect CURL connection timing metrics for performance analysis
