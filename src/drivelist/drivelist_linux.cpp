@@ -63,6 +63,17 @@ void walkStorageChildren(DeviceDescriptor& device, QStringList& labels, const QJ
 }
 
 /**
+ * @brief Match an eMMC hardware boot partition, e.g. /dev/mmcblk0boot0
+ *
+ * Captures the device the boot partition belongs to.
+ */
+const QRegularExpression& emmcBootPartition()
+{
+    static const QRegularExpression bootPartition(QStringLiteral("^(/dev/mmcblk\\d+)boot\\d+$"));
+    return bootPartition;
+}
+
+/**
  * @brief Find the MMC devices that are eMMC rather than SD cards
  *
  * eMMC has hardware boot partitions, which the kernel lists as disks of their
@@ -71,12 +82,10 @@ void walkStorageChildren(DeviceDescriptor& device, QStringList& labels, const QJ
  */
 QSet<QString> findEmmcDevices(const QJsonArray& blockDevices)
 {
-    static const QRegularExpression bootPartition(QStringLiteral("^(/dev/mmcblk\\d+)boot\\d+$"));
-
     QSet<QString> emmcDevices;
     for (const auto& item : blockDevices) {
         const QRegularExpressionMatch match =
-            bootPartition.match(item.toObject()["kname"].toString());
+            emmcBootPartition().match(item.toObject()["kname"].toString());
         if (match.hasMatch()) {
             emmcDevices.insert(match.captured(1));
         }
@@ -107,7 +116,7 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     }
 
     // Skip eMMC boot partitions (special hardware boot areas)
-    if (name.contains("boot") && name.contains("mmcblk")) {
+    if (emmcBootPartition().match(name).hasMatch()) {
         return std::nullopt;
     }
 
@@ -189,10 +198,12 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     // to the board, often as the system drive, so it must not be passed off
     // as a card reader: that invites overwriting it.
     static const QRegularExpression mmcDevice(QStringLiteral("^/dev/mmcblk\\d+$"));
-    if (emmcDevices.contains(name) && descParts.isEmpty()) {
-        descParts.append(QObject::tr("Internal eMMC storage"));
-    } else if (mmcDevice.match(name).hasMatch() && descParts.isEmpty()) {
-        descParts.append(QObject::tr("Internal SD card reader"));
+    if (mmcDevice.match(name).hasMatch() && descParts.isEmpty()) {
+        if (emmcDevices.contains(name)) {
+            descParts.append(QObject::tr("Internal eMMC storage"));
+        } else {
+            descParts.append(QObject::tr("Internal SD card reader"));
+        }
     }
 
     // Fallback for loop devices with no label/vendor/model
