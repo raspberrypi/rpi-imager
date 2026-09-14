@@ -902,6 +902,23 @@ TEST_CASE("A file request that climbs out of the firmware directory is refused",
     }
 }
 
+TEST_CASE("A file whose name only starts with two dots is served",
+          "[rpiboot][fileserver]")
+{
+    // Climbing out takes a ".." component. A name that begins with two dots
+    // is an ordinary file in the firmware directory.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::filesystem::path base = dir.path().toStdString();
+    {
+        std::ofstream f(base / "..bootcode.bin", std::ios::binary);
+        f << "firmware-bytes";
+    }
+
+    const auto data = rpiboot::FileServer::readFileFromDisk(base, "..bootcode.bin");
+    CHECK(std::string(data.begin(), data.end()) == "firmware-bytes");
+}
+
 TEST_CASE("An absolute file request is refused", "[rpiboot][fileserver]")
 {
     // std::filesystem::path's operator/ throws away the base when the right

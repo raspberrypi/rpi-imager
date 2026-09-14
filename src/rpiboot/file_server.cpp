@@ -529,8 +529,10 @@ std::vector<uint8_t> FileServer::readFileFromDisk(const std::filesystem::path& d
     if (ec)
         return {};
 
+    // Compared a component at a time: native() is a std::wstring on Windows,
+    // and a name that merely starts with two dots does not climb out.
     const auto relative = resolved.lexically_relative(base);
-    if (relative.empty() || relative.native().rfind("..", 0) == 0) {
+    if (relative.empty() || *relative.begin() == "..") {
         qWarning() << "rpiboot: refusing file request that escapes the firmware"
                       " directory:" << QString::fromStdString(filename);
         return {};
