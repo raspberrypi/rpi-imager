@@ -87,6 +87,7 @@ Item {
             // Optional help link under the label
             Text {
                 id: helpText
+                textFormat: Text.PlainText
                 Layout.alignment: Qt.AlignVCenter
                 // String(): a QML url property is a JS object in Qt 6, not a
                 // string, so `helpUrl !== ""` compares an object to a string

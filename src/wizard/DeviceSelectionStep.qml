@@ -38,7 +38,10 @@ WizardStepBase {
         
         // Register the ListView for keyboard navigation
         root.registerFocusGroup("device_list", function(){
-            return [hwlist]
+            // When the list could not be fetched, Retry is the only control
+            // on the screen that does anything -- and a ring holding an
+            // empty list holds nothing a keyboard can reach at all.
+            return offlinePlaceholder.visible ? [retryButton] : [hwlist]
         }, 0)
         
         // Initial focus will automatically go to title, then first control (handled by WizardStepBase)
@@ -96,6 +99,9 @@ WizardStepBase {
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: hwlist.count === 0 && root.osListUnavailable
+            // The ring is composed once and asked again only when something
+            // says so. Appearing or going is exactly such a moment.
+            onVisibleChanged: root.rebuildFocusOrder()
             
             ColumnLayout {
                 anchors.centerIn: parent
@@ -271,7 +277,9 @@ WizardStepBase {
                 color: (hwlist.currentIndex === hwitem.index) ? Style.listViewHighlightColor :
                        (hwMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
-                anchors.rightMargin: (hwlist.contentHeight > hwlist.height ? Style.scrollBarWidth : 0)
+                // Unconditional: SelectionListView.qml records why the
+                // conditional form fed back into the layout.
+                anchors.rightMargin: Style.scrollBarWidth
                 Accessible.ignored: true
                 
                 MouseArea {
@@ -329,6 +337,7 @@ WizardStepBase {
                         spacing: Style.spacingXXSmall
                         
                         Text {
+                            textFormat: Text.PlainText
                             text: hwitem.name
                             font.pointSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
@@ -339,6 +348,7 @@ WizardStepBase {
                         }
                         
                         Text {
+                            textFormat: Text.PlainText
                             text: hwitem.description
                             font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
