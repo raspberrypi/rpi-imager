@@ -649,6 +649,63 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[1].description == "Internal eMMC storage");
     }
 
+    SECTION("Names an SD card reader after eMMC at mmcblk0")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "31268536320",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk0boot0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": true,
+                "rm": false,
+                "hotplug": false,
+                "size": "4194304",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk1",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+
+        REQUIRE(devices.size() == 2);
+        CHECK(devices[0].device == "/dev/mmcblk0");
+        CHECK(devices[0].description == "Internal eMMC storage");
+        CHECK(devices[1].device == "/dev/mmcblk1");
+        CHECK(devices[1].description == "Internal SD card reader");
+    }
+
     SECTION("Marks loop devices as virtual")
     {
         const std::string json = R"({

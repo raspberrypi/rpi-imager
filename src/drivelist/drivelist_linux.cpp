@@ -188,9 +188,10 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     // Internal MMC devices have no vendor or model to go by. eMMC is soldered
     // to the board, often as the system drive, so it must not be passed off
     // as a card reader: that invites overwriting it.
+    static const QRegularExpression mmcDevice(QStringLiteral("^/dev/mmcblk\\d+$"));
     if (emmcDevices.contains(name) && descParts.isEmpty()) {
         descParts.append(QObject::tr("Internal eMMC storage"));
-    } else if (name == "/dev/mmcblk0" && descParts.isEmpty()) {
+    } else if (mmcDevice.match(name).hasMatch() && descParts.isEmpty()) {
         descParts.append(QObject::tr("Internal SD card reader"));
     }
 
