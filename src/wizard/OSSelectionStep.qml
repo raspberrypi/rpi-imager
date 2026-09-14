@@ -114,9 +114,15 @@ WizardStepBase {
 
         // Register the OS list for keyboard navigation
         root.registerFocusGroup("os_list", function(){
+            var items = []
+            // The banner's Retry is the only control offered when the fetch
+            // failed, and it sat outside the ring entirely.
+            if (offlineBanner.visible)
+                items.push(retryButton)
             // Only include the currently active list view
             var currentPage = osswipeview.itemAt(osswipeview.currentIndex)
-            return currentPage ? [currentPage] : [oslist]
+            items.push(currentPage ? currentPage : oslist)
+            return items
         }, 0)
 
         // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
@@ -259,6 +265,9 @@ WizardStepBase {
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? bannerContent.implicitHeight + Style.spacingMedium * 2 : 0
             visible: root.osListUnavailable
+            // The ring is composed once and asked again only when something
+            // says so. Appearing or going is exactly such a moment.
+            onVisibleChanged: root.rebuildFocusOrder()
             color: Style.titleBackgroundColor
             
             RowLayout {
@@ -352,7 +361,10 @@ WizardStepBase {
                                 name += ". " + qsTr("%1 operating systems").arg(count)
                             }
                             
-                            name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select")
+                            // The sublist says how to come back out of a
+                            // category; this said nothing about how to get
+                            // into one, though Right does it here.
+                            name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select, Right arrow to open a category, Control and Enter to open the entry's web page")
                             return name
                         }
                         accessibleDescription: ""
@@ -362,6 +374,11 @@ WizardStepBase {
                         
                         onRightPressed: function(index, item, modelData) {
                             root.handleOSNavigation(modelData)
+                        }
+
+                        onWebPressed: function(index, item) {
+                            if (item && typeof item.openWebsite === "function")
+                                item.openWebsite()
                         }
                         
                         Component.onCompleted: {
@@ -394,6 +411,33 @@ WizardStepBase {
             required property QtObject model
             required property double image_download_size
             required property var devices
+            // Both come off the repository and both were carried this far and
+            // drawn by nothing: the tooltip below, and the link at the end of
+            // the row, are where they arrive.
+            required property string website
+            required property string tooltip
+
+            // The address is repository text, and opening one hands it to the
+            // desktop, where a scheme the browser does not own reaches some
+            // other handler entirely. Only a page is offered, and an entry
+            // naming anything else shows no link at all rather than a link
+            // that refuses.
+            readonly property bool websiteOpenable:
+                typeof(delegateItem.website) === "string"
+                && /^https?:\/\/./i.test(delegateItem.website)
+
+            // Opening the page, in one place. The pointer and the
+            // accessibility press action both arrive here, so neither can
+            // drift from the other, and a test can shadow it rather than
+            // launching a browser on the machine running the suite.
+            function openWebsite() {
+                if (!delegateItem.websiteOpenable)
+                    return
+                if (ImageWriterSingleton)
+                    ImageWriterSingleton.openUrl(delegateItem.website)
+                else
+                    Qt.openUrlExternally(delegateItem.website)
+            }
             
             // Get reference to the containing ListView
             // IMPORTANT: Cache ListView.view in a property for reliable access.
@@ -423,8 +467,9 @@ WizardStepBase {
                 color: (delegateItem.parentListView && delegateItem.parentListView.currentIndex === delegateItem.index) ? Style.listViewHighlightColor :
                        (osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
-                anchors.rightMargin: (
-                    (delegateItem.parentListView && delegateItem.parentListView.contentHeight > delegateItem.parentListView.height) ? Style.scrollBarWidth : 0)
+                // Unconditional: SelectionListView.qml records why the
+                // conditional form fed back into the layout.
+                anchors.rightMargin: Style.scrollBarWidth
                 Accessible.ignored: true
                 
                 MouseArea {
@@ -457,6 +502,15 @@ WizardStepBase {
                             delegateItem.parentListView.itemDoubleClicked(delegateItem.index, delegateItem)
                         }
                     }
+
+                    // What the repository wrote about this entry, shown where
+                    // it costs no room: on the row, on hover, only when there
+                    // is one.
+                    ToolTip.visible: osMouseArea.containsMouse
+                                     && typeof(delegateItem.tooltip) === "string"
+                                     && delegateItem.tooltip.length > 0
+                    ToolTip.text: CommonStrings.plainText(delegateItem.tooltip)
+                    ToolTip.delay: 600
                 }
                 
                 RowLayout {
@@ -499,6 +553,7 @@ WizardStepBase {
                         
                         Text {
                             text: delegateItem.name
+                            textFormat: Text.PlainText
                             font.pointSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
@@ -509,6 +564,7 @@ WizardStepBase {
                         
                         Text {
                             text: delegateItem.description
+                            textFormat: Text.PlainText
                             font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: Style.textDescriptionColor
@@ -518,6 +574,7 @@ WizardStepBase {
                         }
                         // Cache/local/online status line
                         Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                             color: Style.textMetadataColor
@@ -539,11 +596,21 @@ WizardStepBase {
                                     ? qsTr("Cached on your computer")
                                     : (delegateItem.url.startsWith("file://")
                                        ? qsTr("Local file")
-                                       : qsTr("Online - %1 download").arg(ImageWriterSingleton.formatSize(delegateItem.image_download_size)))))
+                                       // No figure when there is none to
+                                       // give. A repository that declares an
+                                       // unusable size leaves nought here,
+                                       // and "Online - 0 B download" states
+                                       // something untrue -- the local
+                                       // branch above already omits an
+                                       // unknown size rather than assert one.
+                                       : (delegateItem.image_download_size > 0
+                                          ? qsTr("Online - %1 download").arg(ImageWriterSingleton.formatSize(delegateItem.image_download_size))
+                                          : qsTr("Online")))))
                             Accessible.ignored: true
                         }
                         
                         Text {
+                            textFormat: Text.PlainText
                             text: delegateItem.release_date !== "" ? qsTr("Released: %1").arg(delegateItem.release_date) : ""
                             font.pointSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
@@ -551,6 +618,53 @@ WizardStepBase {
                             Layout.fillWidth: true
                             visible: delegateItem.release_date !== ""
                             Accessible.ignored: true
+                        }
+                    }
+
+                    // The entry's own page. Sixteen points at the end of the
+                    // row, and no room taken at all on the entries that have
+                    // no page -- which is most of them -- because an invisible
+                    // item is given no space by the layout.
+                    Image {
+                        id: websiteLink
+                        objectName: "osWebsiteLink"
+                        source: "../icons/ic_info_16px.png"
+                        visible: delegateItem.websiteOpenable
+                        opacity: websiteMouseArea.containsMouse ? 1.0 : 0.55
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        Layout.alignment: Qt.AlignVCenter
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
+                        sourceSize: Qt.size(Math.round(16 * Screen.devicePixelRatio),
+                                            Math.round(16 * Screen.devicePixelRatio))
+
+                        // Announced and pressable, so it is not mouse-only for
+                        // anyone driving this with an assistive technology.
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("About %1").arg(delegateItem.name)
+                        Accessible.description: qsTr("Open this operating system's web page in your browser")
+                        Accessible.ignored: !visible
+                        Accessible.onPressAction: delegateItem.openWebsite()
+
+                        MouseArea {
+                            id: websiteMouseArea
+                            anchors.fill: parent
+                            anchors.margins: -4     // easier to hit than 16 points
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            // Consumed here: clicking the link is not choosing
+                            // the operating system, and the row beneath would
+                            // otherwise select on the same press.
+                            onClicked: function (mouse) {
+                                mouse.accepted = true
+                                delegateItem.openWebsite()
+                            }
+                            ToolTip.visible: containsMouse
+                            ToolTip.text: qsTr("Open %1's web page")
+                                              .arg(CommonStrings.plainText(delegateItem.name))
+                            ToolTip.delay: 400
                         }
                     }
                 }
@@ -585,7 +699,15 @@ WizardStepBase {
                             if (parent) {
                                 parent.forceActiveFocus()
                                 Qt.callLater(function() {
-                                    sublistview.forceActiveFocus()
+                                    // Checked again: two deferred hops
+                                    // separate this from the count change,
+                                    // and navigating away in between tears
+                                    // the view down. A reference to a
+                                    // destroyed object reads as null, so
+                                    // the outer guard says nothing about
+                                    // whether it is still here now.
+                                    if (sublistview)
+                                        sublistview.forceActiveFocus()
                                 })
                             }
                         })
@@ -606,7 +728,7 @@ WizardStepBase {
                     name += ". " + qsTr("%1 operating systems").arg(osCount)
                 }
                 
-                name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select, Left arrow to go back")
+                name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select, Left arrow to go back, Control and Enter to open the entry's web page")
                 return name
             }
             accessibleDescription: ""
@@ -617,7 +739,12 @@ WizardStepBase {
             onRightPressed: function(index, item, modelData) {
                 root.handleOSNavigation(modelData)
             }
-            
+
+            onWebPressed: function(index, item) {
+                if (item && typeof item.openWebsite === "function")
+                    item.openWebsite()
+            }
+
             onLeftPressed: {
                 console.log("Sublist onLeftPressed handler called")
                 root.handleBackNavigation()
@@ -739,6 +866,13 @@ WizardStepBase {
                 if (fromMouse) {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
                 }
+            } else if (typeof(model.url) !== "string" || model.url === "") {
+                // An entry with no url is not something to select. setSrc()
+                // takes a QUrl, and handing it undefined throws part-way
+                // through this branch: the source is never set, but neither
+                // is the name or the next button, so the wizard is left
+                // describing a selection it does not hold.
+                console.warn("OSSelectionStep: entry has no url, ignoring")
             } else {
                 // Normal OS selection
                 ImageWriterSingleton.setSrc(
@@ -886,6 +1020,7 @@ WizardStepBase {
                 entry.icon = String(entry.icon || "")
                 entry.subitems_url = String(entry.subitems_url || "")
                 entry.website = String(entry.website || "")
+                entry.tooltip = String(entry.tooltip || "")
 
                 if (typeof entry.capabilities === "string") {
                     // keep it

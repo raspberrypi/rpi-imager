@@ -68,7 +68,14 @@ WizardStepBase {
         // Register focus group for locale controls in proper tab order
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("locale_controls", function(){ 
-            return [labelCapitalCity, comboCapitalCity, labelTimezone, comboTimezone, labelKeyboard, comboKeyboard] 
+            // The information icon joins only when a screen reader is
+            // running, which is the only time it has anything to add that
+            // hovering would not.
+            var items = [labelCapitalCity, comboCapitalCity]
+            if (capitalCityInfoIcon.activeFocusOnTab)
+                items.push(capitalCityInfoIcon)
+            return items.concat([labelTimezone, comboTimezone,
+                                 labelKeyboard, comboKeyboard]) 
         }, 0)
     }
     
@@ -129,6 +136,7 @@ WizardStepBase {
                     ImComboBox {
                         id: comboCapitalCity
                         objectName: "localeCapitalCityCombo"
+                        accessiblePurpose: labelCapitalCity.text
                         Layout.fillWidth: true
                         editable: false
                         selectTextByMouse: true
@@ -140,24 +148,35 @@ WizardStepBase {
                     }
                     Text {
                         id: capitalCityInfoIcon
+                        readonly property string infoText: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
+
                         text: "ⓘ"
                         font.pointSize: Style.fontSizeFormLabel
-                        color: capitalCityInfoArea.containsMouse ? Style.textDescriptionColor : Style.textMetadataColor
+                        color: capitalCityInfoArea.containsMouse || activeFocus
+                               ? Style.textDescriptionColor : Style.textMetadataColor
                         Layout.alignment: Qt.AlignVCenter
 
-                        Accessible.role: Accessible.Button
-                        Accessible.name: qsTr("Why am I being asked this?")
-                        Accessible.description: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
+                        // The same shape as the sudo note on the user step.
+                        // This called itself a Button, which is not true --
+                        // its pointer area takes no buttons and pressing it
+                        // does nothing -- and it joined no tab ring, so what
+                        // it says reached whoever could hover and nobody
+                        // else.
+                        activeFocusOnTab: ImageWriterSingleton ? ImageWriterSingleton.screenReaderActive : false
+                        focusPolicy: (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) ? Qt.TabFocus : Qt.NoFocus
 
-                        ToolTip.text: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
-                        ToolTip.visible: capitalCityInfoArea.containsMouse
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: qsTr("Capital city information: ") + infoText
+
+                        ToolTip.text: infoText
+                        ToolTip.visible: capitalCityInfoArea.containsMouse || activeFocus
                         ToolTip.delay: 300
 
                         MouseArea {
                             id: capitalCityInfoArea
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
+                            cursorShape: Qt.WhatsThisCursor
                             acceptedButtons: Qt.NoButton
                         }
                     }
@@ -171,6 +190,7 @@ WizardStepBase {
                 ImComboBox {
                     id: comboTimezone
                     objectName: "localeTimezoneCombo"
+                    accessiblePurpose: labelTimezone.text
                     Layout.fillWidth: true
                     editable: false
                     selectTextByMouse: true
@@ -188,6 +208,7 @@ WizardStepBase {
                 ImComboBox {
                     id: comboKeyboard
                     objectName: "localeKeyboardCombo"
+                    accessiblePurpose: labelKeyboard.text
                     Layout.fillWidth: true
                     editable: false
                     selectTextByMouse: true

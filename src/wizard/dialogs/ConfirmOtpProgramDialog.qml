@@ -89,6 +89,7 @@ BaseDialog {
         Layout.fillWidth: true
 
         Text {
+            textFormat: Text.PlainText
             text: qsTr("Device: %1").arg(root.deviceModel)
             font.family: Style.fontFamily
             font.pointSize: Style.fontSizeDescription
@@ -98,6 +99,7 @@ BaseDialog {
         }
 
         Text {
+            textFormat: Text.PlainText
             text: qsTr("Serial: %1").arg(root.deviceSerial)
             font.family: Style.fontFamily
             font.pointSize: Style.fontSizeDescription
@@ -108,6 +110,7 @@ BaseDialog {
         }
 
         Text {
+            textFormat: Text.PlainText
             text: qsTr("Key fingerprint: %1").arg(root.keyFingerprint)
             font.family: Style.fontFamily
             font.pointSize: Style.fontSizeSm
@@ -144,6 +147,7 @@ BaseDialog {
     }
 
     Text {
+        textFormat: Text.PlainText
         font.family: Style.fontFamily
         font.pointSize: Style.fontSizeSm
         font.bold: true
