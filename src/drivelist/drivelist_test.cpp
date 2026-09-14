@@ -821,6 +821,82 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
     }
 }
 
+
+// ============================================================================
+// Sizes lsblk reports
+//
+// Two branches, because lsblk gives the size as a number on some versions and
+// a string on others. Neither said what it would do with an answer it could
+// not use: toULongLong() drops its ok flag, and a double outside the range of
+// a uint64_t converts undefined. Both now land on nought, which the caller
+// already treats as a size it does not know.
+// ============================================================================
+
+namespace {
+
+std::string oneDeviceWithSize(const std::string &sizeLiteral)
+{
+    return R"({"blockdevices":[{
+        "kname": "/dev/sda",
+        "subsystems": "block:scsi:usb",
+        "size": )" + sizeLiteral + R"(,
+        "ro": false,
+        "rm": true,
+        "mountpoint": null
+    }]})";
+}
+
+} // namespace
+
+TEST_CASE("A size lsblk gives as a number is taken", "[drivelist][linux][size]")
+{
+    auto devices = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("32010928128"), false);
+    REQUIRE(devices.size() == 1);
+    CHECK(devices[0].size == 32010928128ULL);
+}
+
+TEST_CASE("A size lsblk gives as a string is taken", "[drivelist][linux][size]")
+{
+    auto devices = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("\"32010928128\""), false);
+    REQUIRE(devices.size() == 1);
+    CHECK(devices[0].size == 32010928128ULL);
+}
+
+TEST_CASE("A size that cannot be used reads as unknown, not as rubbish",
+          "[drivelist][linux][size]")
+{
+    // Worth being exact about which of these the old code got wrong on this
+    // machine: only the second. Reverting the fix and running this case
+    // fails on 1e30 alone.
+    //
+    // A string that is not a number already answered nought, because
+    // toULongLong() returns nought when it fails and Qt does not do partial
+    // parses. Below zero already answered nought too, because aarch64
+    // saturates a negative double to nought on conversion. Both are pinned
+    // anyway: they are nought by accident of this architecture rather than
+    // by decision, and the conversion is undefined, so another target is
+    // free to answer differently.
+    auto text = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("\"not-a-size\""), false);
+    REQUIRE(text.size() == 1);
+    CHECK(text[0].size == 0);
+
+    // This is the one that was wrong: past what a uint64_t holds, aarch64
+    // saturates upward instead, so the drive list carried a capacity nobody
+    // reported and nothing downstream could tell it was invented.
+    auto huge = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("1e30"), false);
+    REQUIRE(huge.size() == 1);
+    CHECK(huge[0].size == 0);
+
+    auto negative = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("-1"), false);
+    REQUIRE(negative.size() == 1);
+    CHECK(negative[0].size == 0);
+}
+
 #endif // Q_OS_LINUX
 
 // ============================================================================

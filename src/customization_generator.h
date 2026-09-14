@@ -128,6 +128,11 @@ public:
      */
     static QString stripLineTerminators(const QString& secret);
 
+    // A country code, or nothing. It reaches the kernel command line, where
+    // a space starts another parameter -- so anything that is not two ASCII
+    // letters is not a country and does not go.
+    static QString sanitisedCountryCode(const QString& value);
+
     /**
      * @brief Derive a WPA PSK from a passphrase (PBKDF2-HMAC-SHA1, 4096 iters).
      *

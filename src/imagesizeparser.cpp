@@ -42,8 +42,15 @@ quint64 parseXz(const QString &path)
     {
         f.seek(f.size() - LZMA_STREAM_HEADER_SIZE - opts.backward_size);
         QByteArray buf = f.read(opts.backward_size + LZMA_STREAM_HEADER_SIZE);
-        lzma_index *idx;
-        uint64_t memlimit = UINT64_MAX;
+        lzma_index *idx = nullptr;
+
+        // liblzma's own guard against an index claiming more records than
+        // the file could hold, and it was switched off. backward_size is
+        // bounded above, but the index inside that buffer still says how
+        // many records to allocate: a crafted 60-byte .xz asked for six
+        // petabytes. A real index is a few bytes per block, so this is
+        // orders of magnitude more than any genuine image needs.
+        uint64_t memlimit = kXzIndexMemLimit;
         size_t pos = 0;
 
         ret = lzma_index_buffer_decode(&idx, &memlimit, NULL,
@@ -102,12 +109,23 @@ quint64 parseGz(const QString &path)
 
         extrLen = isize;
 
-        // Handle files larger than 4GB where ISIZE wraps around
-        // If the uncompressed size appears smaller than the compressed size,
-        // the original file was likely > 4GB. This is a heuristic for storage
-        // space checks but NOT reliable for progress calculation.
-        qint64 compressedSize = f.size();
-        while (extrLen < static_cast<quint64>(compressedSize))
+        /* Handle files over 4 GB, where ISIZE has wrapped.
+         *
+         * The signal is weak: a payload looking smaller than the file
+         * holding it. That is wrapping, and it is also every gzip of
+         * incompressible data, which deflate cannot shrink and the header
+         * and trailer add eighteen bytes to. Alone it called thirty-two
+         * bytes of text four gigabytes.
+         *
+         * So it is bounded by what deflate can have produced: zlib's
+         * maximum ratio is 1032:1. Large images keep the benefit.
+         */
+        const quint64 compressedSize = quint64(qMax(qint64(0), f.size()));
+        const quint64 maxPayload = compressedSize > 0
+                                       ? compressedSize * Q_UINT64_C(1032)
+                                       : 0;
+        while (extrLen < compressedSize
+               && extrLen + Q_UINT64_C(0x100000000) <= maxPayload)
         {
             extrLen += Q_UINT64_C(0x100000000);  // Add 4GB
         }
