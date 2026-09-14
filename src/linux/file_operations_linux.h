@@ -11,6 +11,7 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <thread>
 #include <vector>
 #include <unordered_map>
 
@@ -131,6 +132,12 @@ class LinuxFileOperations : public FileOperations {
   std::unordered_map<std::uint64_t, PendingWrite> pending_callbacks_;
   std::uint64_t next_write_id_;
   mutable std::mutex pending_mutex_;
+
+  // The thread that submits the io_uring writes. io_uring's completion queue
+  // has a single consumer, so this is the only thread PollAsyncCompletions()
+  // reaps for; calls from any other thread stay no-ops. Recorded on every
+  // submission, and read from other threads, hence atomic.
+  std::atomic<std::thread::id> cq_owner_thread_{};
   
   // Note: write_latency_stats_ is inherited from FileOperations base class
 
