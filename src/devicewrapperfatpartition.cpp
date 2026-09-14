@@ -47,7 +47,22 @@ QString longNamePartFromEntry(const struct longfn_entry *l)
     memcpy(part, l->LDIR_Name1, 10);
     memcpy(part + 10, l->LDIR_Name2, 12);
     memcpy(part + 22, l->LDIR_Name3, 4);
-    return QString((QChar *) part, 13);
+    const QString raw((QChar *) part, 13);
+
+    // Control characters dropped, the name kept. A directory can put them
+    // in, and this name is what SecureBoot lists through and then reads
+    // back -- and what a caller may put in a path. The short name already
+    // stops at every byte below 0x20.
+    //
+    // NUL is the exception and must survive: it terminates the name, the
+    // caller truncates there, and the 0xFFFF padding after it goes with it.
+    QString cleaned;
+    cleaned.reserve(raw.size());
+    for (const QChar c : raw) {
+        if (c.unicode() >= 0x20 || c.unicode() == 0)
+            cleaned.append(c);
+    }
+    return cleaned;
 }
 } // namespace
 
