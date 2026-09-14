@@ -128,7 +128,19 @@ signals:
 public slots:
     void processDriveList(std::vector<Drivelist::DeviceDescriptor> l);
 
+private slots:
+    // What the poll thread's results come in through.
+    //
+    // stop() only raises a flag: a poll already under way finishes and emits,
+    // and that emission is queued to this thread, so it arrives after
+    // stopPolling() has returned. This drops it, which is what makes
+    // "stopped" mean the list cannot change again -- during a write, where
+    // polling is stopped to keep off the device, and in the tests, where a
+    // cleared list quietly refilled itself with the machine's own disks.
+    void onPolledDriveList(std::vector<Drivelist::DeviceDescriptor> l);
+
 protected:
+    bool _polling = false;
     QMap<QString,DriveListItem *> _drivelist;
     QHash<int, QByteArray> _rolenames;
     DriveListModelPollThread _thread;
