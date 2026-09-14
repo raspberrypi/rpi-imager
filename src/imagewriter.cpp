@@ -117,7 +117,7 @@ ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent),
       _cacheManager(nullptr),
       _waitingForCacheVerification(false),
-      _src(), _repo(QUrl(QString(OSLIST_URL))),
+      _src(), _repo(defaultOsListUrl()),
       _dst(), _parentCategory(), _osName(), _osReleaseDate(), _currentLang(), _currentLangcode(), _currentKeyboard(),
       _expectedHash(), _cmdline(), _config(), _firstrun(), _cloudinit(), _cloudinitNetwork(), _initFormat(),
       _downloadLen(0), _extrLen(0), _devLen(0), _dlnow(0), _verifynow(0),
@@ -267,8 +267,28 @@ ImageWriter::ImageWriter(QObject *parent)
                             rpi_eeprom::repoUrlFromBlconfig(blconfigBytes);
                         if (!fromEeprom.isEmpty())
                         {
-                            _repo = fromEeprom;
-                            qDebug() << "Repository from EEPROM:" << _repo;
+                            /* The same setting arriving from a URL handler
+                             * goes through isValidRepoUrl first; this one
+                             * came out of flash and went straight in, so a
+                             * file: URL there became the OS list.
+                             *
+                             * Only the scheme is insisted on, not the whole
+                             * of that check: a deployment may well point at
+                             * an https URL whose path does not end in .json,
+                             * and narrowing that here would quietly take its
+                             * list away.
+                             */
+                            const QUrl candidate(fromEeprom);
+                            if (isHttpUrl(candidate))
+                            {
+                                _repo = candidate;
+                                qDebug() << "Repository from EEPROM:" << _repo;
+                            }
+                            else
+                            {
+                                qWarning() << "Ignoring EEPROM repository that is"
+                                              " not an http(s) URL:" << fromEeprom;
+                            }
                         }
                     }
                 }
@@ -558,7 +578,12 @@ ImageWriter::~ImageWriter()
 
     if (_trans)
     {
-        QCoreApplication::removeTranslator(_trans);
+        // The application may already be gone: this is destroyed before it
+        // in the GUI, but a test binary holding the writer in a static
+        // outlives it, and removeTranslator() then warns about an instance
+        // that is not there rather than doing anything.
+        if (QCoreApplication::instance())
+            QCoreApplication::removeTranslator(_trans);
         delete _trans;
     }
 }
@@ -1984,12 +2009,56 @@ quint64 ImageWriter::getSelectedSourceSize()
     return 0;
 }
 
+namespace {
+
+/* Digits in whatever numbering system the locale uses.
+ *
+ * Only the digits are mapped. A fractional part is positional, so it must
+ * never take the group separator QLocale::toString() would add, and its
+ * leading zeros have to survive -- 05 is not 5. Numbering systems whose
+ * zero is not a single code unit are left in Latin digits rather than
+ * rendered wrongly.
+ */
+QString localisedDigits(const QLocale &locale, const QString &latinDigits)
+{
+    const QString zero = locale.zeroDigit();
+    if (zero.size() != 1 || zero == QLatin1String("0"))
+        return latinDigits;
+    const char16_t base = zero.at(0).unicode();
+    QString out;
+    out.reserve(latinDigits.size());
+    for (const QChar c : latinDigits)
+        out += QChar(static_cast<char16_t>(base + (c.unicode() - u'0')));
+    return out;
+}
+
+} // namespace
+
 QString ImageWriter::formatSize(quint64 bytes, int decimals)
 {
-    const quint64 KB = 1024ULL;
-    const quint64 MB = KB * 1024ULL;
-    const quint64 GB = MB * 1024ULL;
-    const quint64 TB = GB * 1024ULL;
+    /* Decimal, because every figure here is read against a number printed
+     * on a card. Dividing by 1024 and labelling it GB is how "requires at
+     * least 7.9 GB" appeared over a card sold as 8 GB -- long reported as
+     * the warning quoting a size saying the card was big enough. It was
+     * not: 8 GB of card is 8,000,000,000 bytes and the image wanted
+     * 8,482,560,409. Only the units disagreed with the refusal, by about 7%
+     * everywhere. Cards are sold in decimal, so the figures move rather
+     * than the labels.
+     */
+    const quint64 KB = 1000ULL;
+    const quint64 MB = KB * 1000ULL;
+    const quint64 GB = MB * 1000ULL;
+    const quint64 TB = GB * 1000ULL;
+
+    /* The reader's locale decides the digits and the separator between the
+     * whole and fractional parts. Grouping is deliberately switched off: a
+     * unit escalates at a thousand, so the whole part only passes three
+     * digits for terabyte figures no storage reaches, and a separator inside
+     * the number is one more thing for anything reading these strings back
+     * to have to handle.
+     */
+    QLocale locale;
+    locale.setNumberOptions(locale.numberOptions() | QLocale::OmitGroupSeparator);
 
     quint64 unit = 1;
     QString unitStr = tr("B");
@@ -1998,15 +2067,25 @@ QString ImageWriter::formatSize(quint64 bytes, int decimals)
     else if (bytes >= MB) { unit = MB; unitStr = tr("MB"); }
     else if (bytes >= KB) { unit = KB; unitStr = tr("KB"); }
 
-    // Integer rounding using quotient/remainder, avoiding floating point
-    if (decimals <= 0) {
-        quint64 rounded = (bytes + unit/2) / unit; // round-to-nearest
-        return tr("%1 %2").arg(QString::number(rounded)).arg(unitStr);
+    /* Both halves of the arithmetic below are done in quint64, and the caller
+     * chooses how many digits. Seven is as many as the widest unit leaves
+     * room for in the product; more than that wraps and reads as an ordinary
+     * answer. Well past anything a size is read to.
+     */
+    const int digits = qMin(decimals, 7);
+
+    // Integer rounding using quotient/remainder, avoiding floating point.
+    // Taken from the remainder rather than by adding half a unit to the byte
+    // count, which wraps at the top of the range and renders as 0 TB.
+    if (digits <= 0) {
+        quint64 rounded = bytes / unit;
+        if ((bytes % unit) * 2 >= unit)
+            ++rounded;
+        return tr("%1 %2").arg(locale.toString(qulonglong(rounded)), unitStr);
     }
 
-    // Compute with 'decimals' fractional digits without overflow
     quint64 scale = 1;
-    for (int i = 0; i < decimals; ++i) scale *= 10ULL; // small decimals (e.g., 1) expected
+    for (int i = 0; i < digits; ++i) scale *= 10ULL;
 
     quint64 q = bytes / unit;
     quint64 r = bytes % unit;
@@ -2019,14 +2098,22 @@ QString ImageWriter::formatSize(quint64 bytes, int decimals)
     }
 
     if (fracScaled == 0) {
-        return tr("%1 %2").arg(QString::number(q)).arg(unitStr);
+        return tr("%1 %2").arg(locale.toString(qulonglong(q)), unitStr);
     }
 
     QString fracStr = QString::number(fracScaled);
-    if (fracStr.length() < decimals) {
-        fracStr = QString(decimals - fracStr.length(), QChar('0')) + fracStr;
+    if (fracStr.length() < digits) {
+        fracStr = QString(digits - fracStr.length(), QChar('0')) + fracStr;
     }
-    return tr("%1.%2 %3").arg(QString::number(q), fracStr, unitStr);
+    /* Assembled rather than translated: the separator between the whole and
+     * fractional parts belongs to the reader's locale, not to the string
+     * catalogue. A German reader is shown 1,5 GB where an English one is
+     * shown 1.5 GB, and each reads the figure their language writes.
+     */
+    const QString number = locale.toString(qulonglong(q))
+                           + locale.decimalPoint()
+                           + localisedDigits(locale, fracStr);
+    return tr("%1 %2").arg(number, unitStr);
 }
 
 QString ImageWriter::osListUrlForDisplay() const {
@@ -2037,6 +2124,14 @@ QString ImageWriter::osListUrlForDisplay() const {
 QUrl ImageWriter::osListUrl() const
 {
     return _repo;
+}
+
+QUrl ImageWriter::defaultOsListUrl()
+{
+    const QString override = qEnvironmentVariable("RPI_IMAGER_OSLIST_URL");
+    if (!override.isEmpty())
+        return QUrl(override);
+    return QUrl(QString(OSLIST_URL));
 }
 
 /* Static version - for use without creating an instance */
@@ -2330,11 +2425,17 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url,
             QJsonObject imager_meta = response_object.contains("imager")
                                           ? response_object["imager"].toObject()
                                           : _completeOsList["imager"].toObject();
-            _completeOsList = QJsonDocument(QJsonObject({
-                {"imager", imager_meta},
-                {"os_list", carryOverSubitems(_completeOsList["os_list"].toArray(),
-                                              response_object["os_list"].toArray(), 1)}
-            }));
+            /* Built from the reply rather than from two named keys. The
+               repository ships os_list_<locale> beside os_list, and naming
+               only the two dropped every localised list the moment anything
+               was refetched -- so a reader who changed language after the
+               first fetch could never be handed the localised list again,
+               whatever locale was asked for. */
+            QJsonObject merged = response_object;
+            merged["imager"] = imager_meta;
+            merged["os_list"] = carryOverSubitems(_completeOsList["os_list"].toArray(),
+                                                  response_object["os_list"].toArray(), 1);
+            _completeOsList = QJsonDocument(merged);
         } else {
             // Preserve latest top-level imager metadata if present in the top-level fetch
             auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), url, 1);
@@ -2343,10 +2444,13 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url,
                 // Update imager metadata when this reply is for the top-level OS list
                 imager_meta = response_object["imager"].toObject();
             }
-            _completeOsList = QJsonDocument(QJsonObject({
-                {"imager", imager_meta},
-                {"os_list", new_list}
-            }));
+            /* Start from what is cached, so the localised lists and
+               anything else the repository sent survive a sublist arriving.
+               See the note in the branch above. */
+            QJsonObject merged = _completeOsList.object();
+            merged["imager"] = imager_meta;
+            merged["os_list"] = new_list;
+            _completeOsList = QJsonDocument(merged);
         }
 
         // Queue fetches for any subitems_url entries
@@ -2579,7 +2683,7 @@ void ImageWriter::refreshOsListFrom(const QUrl &url) {
 }
 
 void ImageWriter::refreshOsListFromDefaultUrl() {
-    refreshOsListFrom(QUrl(QString(OSLIST_URL)));
+    refreshOsListFrom(defaultOsListUrl());
 }
 
 void ImageWriter::onOsListRefreshTimeout()
@@ -4012,7 +4116,13 @@ void ImageWriter::_applySystemdCustomisationFromSettings(const QVariantMap &s)
     if (!script.isEmpty()) {
         const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
         if (!wifiCountry.isEmpty()) {
-            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+            // Held to a country code: this lands on the kernel command
+            // line, where a space starts another parameter.
+            const QString regdom =
+                rpi_imager::CustomisationGenerator::sanitisedCountryCode(wifiCountry);
+            if (!regdom.isEmpty())
+                cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=")
+                                + regdom.toUtf8();
         }
 
         // Check if secure boot should be enabled
@@ -4051,7 +4161,13 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     if (hasContent) {
         const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
         if (!wifiCountry.isEmpty()) {
-            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+            // Held to a country code: this lands on the kernel command
+            // line, where a space starts another parameter.
+            const QString regdom =
+                rpi_imager::CustomisationGenerator::sanitisedCountryCode(wifiCountry);
+            if (!regdom.isEmpty())
+                cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=")
+                                + regdom.toUtf8();
         }
 
         // Check if secure boot should be enabled
@@ -4090,7 +4206,13 @@ void ImageWriter::_applyRpiPreseedCustomisationFromSettings(const QVariantMap &s
         // covers the country-without-SSID case and is harmless when both apply.
         const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
         if (!wifiCountry.isEmpty()) {
-            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+            // Held to a country code: this lands on the kernel command
+            // line, where a space starts another parameter.
+            const QString regdom =
+                rpi_imager::CustomisationGenerator::sanitisedCountryCode(wifiCountry);
+            if (!regdom.isEmpty())
+                cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=")
+                                + regdom.toUtf8();
         }
 
         // Check if secure boot should be enabled
@@ -4277,6 +4399,12 @@ void ImageWriter::changeLanguage(const QString &newLanguageName)
         replaceTranslator(trans);
         _currentLang = newLanguageName;
         _currentLangcode = langcode;
+        /* Numbers as well as words. Only startup set the default locale, so
+         * a reader who switched language afterwards was shown translated
+         * text with the decimal separator of whatever language the machine
+         * started in.
+         */
+        QLocale::setDefault(QLocale(langcode));
     }
     else
     {
@@ -4412,7 +4540,9 @@ bool ImageWriter::isScreenReaderActive() const
 
 bool ImageWriter::customRepo()
 {
-    return _repo.toString() != OSLIST_URL;
+    // Against the default rather than the constant, so a redirected build
+    // still reads as the ordinary repository and shows no "using data from".
+    return _repo.toString() != defaultOsListUrl().toString();
 }
 
 QString ImageWriter::customRepoHost()
@@ -4644,9 +4774,29 @@ void ImageWriter::reboot()
     QProcess::execute(QStringLiteral("/sbin/reboot"), QStringList());
 }
 
+bool ImageWriter::isHttpUrl(const QUrl &url)
+{
+    /* A page, and nothing else. The opener hands the address to the desktop,
+     * which picks a handler by scheme: file: reaches a file manager, and the
+     * platforms each keep schemes that reach something worse. Not every
+     * address here is ours -- an OS list entry names its own page, and the
+     * update check names a release -- so the scheme is checked rather than
+     * assumed, and the host has to be there for it to be a page at all.
+     */
+    if (!url.isValid() || url.isRelative() || url.host().isEmpty())
+        return false;
+    const QString scheme = url.scheme().toLower();
+    return scheme == QLatin1String("http") || scheme == QLatin1String("https");
+}
+
 void ImageWriter::openUrl(const QUrl &url)
 {
     qDebug() << "Opening URL:" << url.toString();
+
+    if (!isHttpUrl(url)) {
+        qWarning() << "Refusing to open URL that is not a web page:" << url.scheme();
+        return;
+    }
 
     // Platform-native URL launching lives in the PAL (PlatformQuirks). It
     // returns false when it cannot — or deliberately will not — open the URL
@@ -4662,6 +4812,38 @@ void ImageWriter::openUrl(const QUrl &url)
     QDesktopServices::openUrl(url);
 #else
     qWarning() << "Unable to open URL in CLI mode:" << url.toString();
+#endif
+}
+
+void ImageWriter::announceToScreenReader(const QString &message)
+{
+#ifndef CLI_ONLY_BUILD
+    /* A write takes minutes and moves nothing: the percentage lives in a
+     * label the user is not on, and a reader speaks what the user moved to.
+     * So the progress the sighted user watches is, to everyone else, silence
+     * until the machine finishes.
+     *
+     * An announcement is the one event that asks for something to be read
+     * out where the user already is. Polite, so it waits for whatever is
+     * being spoken rather than cutting across it.
+     *
+     * Nothing is built when nothing is listening, so an ordinary run pays
+     * for none of this.
+     */
+    if (message.isEmpty() || !QAccessible::isActive())
+        return;
+
+    QObject *target = QGuiApplication::focusWindow();
+    if (!target)
+        target = QGuiApplication::focusObject();
+    if (!target)
+        return;
+
+    QAccessibleAnnouncementEvent ev(target, message);
+    ev.setPoliteness(QAccessible::AnnouncementPoliteness::Polite);
+    QAccessible::updateAccessibility(&ev);
+#else
+    Q_UNUSED(message)
 #endif
 }
 

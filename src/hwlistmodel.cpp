@@ -43,7 +43,7 @@ bool HWListModel::reload()
     QVector<HardwareDevice> next;
 
     const QJsonArray deviceArray = devices.toArray();
-    _hwDevices.reserve(deviceArray.size());
+    next.reserve(deviceArray.size());
     int indexOfDefault = -1;
     for (const QJsonValue &deviceValue: deviceArray) {
         QJsonObject deviceObj = deviceValue.toObject();
@@ -53,22 +53,16 @@ bool HWListModel::reload()
             deviceObj["tags"].toArray(),
             deviceObj["capabilities"].toArray(),
             [&]() {
-                // Through the same sanitiser the OS list icons go through,
-                // which rebases a repository-relative "icons/..." for the
-                // wizard directory and drops the forms that would turn a
-                // board icon into a fetch of somewhere else -- a file URL
-                // naming a host being the one that matters, since its local
-                // path is a UNC path. This list is filled from the same
-                // repository json as the OS list and was not going through
-                // it, so the same entry was checked in one list and not the
-                // other.
-                QString iconPath =
-                    oslist::sanitizeIconSource(deviceObj["icon"].toString());
-                // Route remote icons via image provider to avoid HTTP/2 errors
-                if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
-                    iconPath = QStringLiteral("image://icons/") + iconPath;
-                }
-                return iconPath;
+                // Through the same helper the OS list icons go through. It
+                // sanitises -- rebasing a repository-relative "icons/..." for
+                // the wizard directory, and dropping the forms that would turn
+                // a board icon into a fetch of somewhere else, a file URL
+                // naming a host being the one that matters since its local
+                // path is a UNC path -- and then routes a remote icon through
+                // the image provider, so IconMultiFetcher does the fetch. This
+                // list comes from the same repository json as the OS list and
+                // was going through none of it.
+                return oslist::iconSourceFor(deviceObj["icon"].toString());
             }(),
             deviceObj["description"].toString(),
             deviceObj["matching_type"].toString(),

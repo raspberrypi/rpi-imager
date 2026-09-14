@@ -101,6 +101,37 @@ QByteArray wpaSupplicantSsidField(const QByteArray& ssidOctets)
     return escaped;
 }
 
+
+// A here-document ends at the first line equal to its delimiter. Every one
+// below carries something a user typed, so a value containing a line "EOF"
+// closed the document early and everything after it became script -- run as
+// root on first boot. Found by a fuzz run: an authorized_keys value of
+// "ssh-rsa AAAA\nEOF\nrm -rf /" produced exactly that.
+//
+// Rather than escape the body, pick a delimiter the body does not contain.
+// Well-formed content keeps the delimiter it always had.
+QString heredocDelimiter(const QString& body, const QString& base)
+{
+    QString candidate = base;
+    for (int suffix = 0; suffix < 1000; ++suffix) {
+        if (suffix > 0)
+            candidate = base + QString::number(suffix);
+
+        bool clashes = false;
+        for (const QString& bodyLine : body.split(u'\n')) {
+            // The shell strips no whitespace for an unindented delimiter, so
+            // only an exact line counts.
+            if (bodyLine == candidate) {
+                clashes = true;
+                break;
+            }
+        }
+        if (!clashes)
+            return candidate;
+    }
+    return base + QStringLiteral("_RPI_IMAGER");
+}
+
 } // namespace
 
 QString CustomisationGenerator::shellQuote(const QString& value) {
@@ -111,6 +142,26 @@ QString CustomisationGenerator::shellQuote(const QString& value) {
 
 QString CustomisationGenerator::pbkdf2(const QByteArray& password, const QByteArray& ssid) {
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, password, ssid, 4096, 32).toHex();
+}
+
+QString CustomisationGenerator::sanitisedCountryCode(const QString& value) {
+    /* This is appended to cmdline.txt as cfg80211.ieee80211_regdom=<value>,
+     * and cmdline.txt is one line of kernel parameters separated by spaces.
+     * A value carrying a space therefore adds parameters -- init=/bin/sh
+     * among the things it could add, which is a root shell as PID 1, with no
+     * password, before anything else runs.
+     *
+     * ISO 3166-1 alpha-2 is two ASCII letters and nothing else, so anything
+     * else is not a country code and is dropped rather than escaped.
+     */
+    const QString trimmed = value.trimmed();
+    if (trimmed.size() != 2)
+        return QString();
+    for (const QChar c : trimmed) {
+        if (!((c >= u'A' && c <= u'Z') || (c >= u'a' && c <= u'z')))
+            return QString();
+    }
+    return trimmed;
 }
 
 QString CustomisationGenerator::stripLineTerminators(const QString& secret) {
@@ -325,12 +376,31 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     line(QStringLiteral(""), script);
 
     if (!hostname.isEmpty()) {
+        /* The hostname went into all three of these as it was typed, while
+         * every other field in this file goes through shellQuote(). A
+         * hostname carrying a newline ended the command and the rest of it
+         * became lines of their own -- in a script that runs as root on
+         * first boot.
+         *
+         * Terminators come out first, because a hostname cannot contain one
+         * and a quoted multi-line value would still break the sed below.
+         * Then it is carried in a variable, assigned once and quoted once,
+         * so the two commands expand it rather than embed it.
+         */
+        const QString safeHostname = stripLineTerminators(hostname);
+
+        line(QStringLiteral("IMAGER_HOSTNAME=") + shellQuote(safeHostname), script);
         line(QStringLiteral("CURRENT_HOSTNAME=$(cat /etc/hostname | tr -d \" \\t\\n\\r\")"), script);
         line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
-        line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname ") + hostname, script);
+        line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname \"$IMAGER_HOSTNAME\""), script);
         line(QStringLiteral("else"), script);
-        line(QStringLiteral("   echo ") + hostname + QStringLiteral(" >/etc/hostname"), script);
-        line(QStringLiteral("   sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t") + hostname + QStringLiteral("/g\" /etc/hosts"), script);
+        line(QStringLiteral("   echo \"$IMAGER_HOSTNAME\" >/etc/hostname"), script);
+        /* sed's replacement text gives \, & and the delimiter a meaning of
+         * their own, and the expansion below happens before sed sees it, so
+         * they are escaped here rather than left to it.
+         */
+        line(QStringLiteral("   IMAGER_HOSTNAME_SED=$(printf '%s' \"$IMAGER_HOSTNAME\" | sed -e 's/[\\\\/&]/\\\\&/g')"), script);
+        line(QStringLiteral("   sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t$IMAGER_HOSTNAME_SED/g\" /etc/hosts"), script);
         line(QStringLiteral("fi"), script);
     }
 
@@ -345,9 +415,11 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("   install -o \"$FIRSTUSER\" -m 700 -d \"$FIRSTUSERHOME/.ssh\""), script);
         // Fallback: write keys with heredoc (simpler/more robust than process substitution in this context)
         QString allKeys = keyList.join("\n");
-        line(QStringLiteral("cat > \"$FIRSTUSERHOME/.ssh/authorized_keys\" <<'EOF'"), script);
+        const QString keysDelim = heredocDelimiter(allKeys, QStringLiteral("EOF"));
+        line(QStringLiteral("cat > \"$FIRSTUSERHOME/.ssh/authorized_keys\" <<'")
+             + keysDelim + QStringLiteral("'"), script);
         line(allKeys, script);
-        line(QStringLiteral("EOF"), script);
+        line(keysDelim, script);
         line(QStringLiteral("   chown \"$FIRSTUSER:$FIRSTUSER\" \"$FIRSTUSERHOME/.ssh/authorized_keys\""), script);
         line(QStringLiteral("   chmod 600 \"$FIRSTUSERHOME/.ssh/authorized_keys\""), script);
         line(QStringLiteral("   echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config"), script);
@@ -367,24 +439,37 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     // Also run when SSH public keys are configured (even without password) to ensure
     // the system is marked as configured and the initial setup wizard is skipped
     if (!userName.isEmpty() || !userPass.isEmpty() || !keyList.isEmpty()) {
+        /* The name was quoted on the userconf line and then written into
+         * nine more exactly as it was given. Inside double quotes a backtick
+         * still runs, so a user name of pi`...` did not have to break out of
+         * anything -- it simply ran, as root. Carried in a variable now,
+         * assigned once and quoted once, the way the hostname is.
+         */
+        line(QStringLiteral("IMAGER_USER=") + shellQuote(effectiveUser), script);
+        if (!userPass.isEmpty())
+            line(QStringLiteral("IMAGER_PASS=") + shellQuote(userPass), script);
+        // sed gives \, & and the delimiter a meaning of their own, and the
+        // expansion happens before sed sees it.
+        line(QStringLiteral("IMAGER_USER_SED=$(printf '%s' \"$IMAGER_USER\" | sed -e 's/[\\\\/&]/\\\\&/g')"), script);
+
         line(QStringLiteral("if [ -f /usr/lib/userconf-pi/userconf ]; then"), script);
-        line(QStringLiteral("   /usr/lib/userconf-pi/userconf ") + shellQuote(effectiveUser) + QStringLiteral(" ") + shellQuote(userPass), script);
+        line(QStringLiteral("   /usr/lib/userconf-pi/userconf \"$IMAGER_USER\" ") + shellQuote(userPass), script);
         line(QStringLiteral("else"), script);
         if (!userPass.isEmpty()) {
-            line(QStringLiteral("   echo \"$FIRSTUSER:") + userPass + QStringLiteral("\" | chpasswd -e"), script);
+            line(QStringLiteral("   echo \"$FIRSTUSER:$IMAGER_PASS\" | chpasswd -e"), script);
         }
-        line(QStringLiteral("   if [ \"$FIRSTUSER\" != \"") + effectiveUser + QStringLiteral("\" ]; then"), script);
-        line(QStringLiteral("      usermod -l \"") + effectiveUser + QStringLiteral("\" \"$FIRSTUSER\""), script);
-        line(QStringLiteral("      usermod -m -d \"/home/") + effectiveUser + QStringLiteral("\" \"") + effectiveUser + QStringLiteral("\""), script);
-        line(QStringLiteral("      groupmod -n \"") + effectiveUser + QStringLiteral("\" \"$FIRSTUSER\""), script);
+        line(QStringLiteral("   if [ \"$FIRSTUSER\" != \"$IMAGER_USER\" ]; then"), script);
+        line(QStringLiteral("      usermod -l \"$IMAGER_USER\" \"$FIRSTUSER\""), script);
+        line(QStringLiteral("      usermod -m -d \"/home/$IMAGER_USER\" \"$IMAGER_USER\""), script);
+        line(QStringLiteral("      groupmod -n \"$IMAGER_USER\" \"$FIRSTUSER\""), script);
         line(QStringLiteral("      if grep -q \"^autologin-user=\" /etc/lightdm/lightdm.conf ; then"), script);
-        line(QStringLiteral("         sed /etc/lightdm/lightdm.conf -i -e \"s/^autologin-user=.*/autologin-user=") + effectiveUser + QStringLiteral("/\""), script);
+        line(QStringLiteral("         sed /etc/lightdm/lightdm.conf -i -e \"s/^autologin-user=.*/autologin-user=$IMAGER_USER_SED/\""), script);
         line(QStringLiteral("      fi"), script);
         line(QStringLiteral("      if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then"), script);
-        line(QStringLiteral("         sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/") + effectiveUser + QStringLiteral("/\""), script);
+        line(QStringLiteral("         sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/$IMAGER_USER_SED/\""), script);
         line(QStringLiteral("      fi"), script);
         line(QStringLiteral("      if [ -f /etc/sudoers.d/010_pi-nopasswd ]; then"), script);
-        line(QStringLiteral("         sed -i \"s/^$FIRSTUSER /") + effectiveUser + QStringLiteral(" /\" /etc/sudoers.d/010_pi-nopasswd"), script);
+        line(QStringLiteral("         sed -i \"s/^$FIRSTUSER /$IMAGER_USER_SED /\" /etc/sudoers.d/010_pi-nopasswd"), script);
         line(QStringLiteral("      fi"), script);
         line(QStringLiteral("   fi"), script);
         line(QStringLiteral("fi"), script);
@@ -412,26 +497,37 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
             line(wlanCmd, script);
         }
         line(QStringLiteral("else"), script);
-        script += "cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'WPAEOF'\n";
+
+        // Built first, so the delimiter can be one the body does not hold.
+        // The country and the key come from text boxes, and a line equal to
+        // the delimiter would end the document and hand the rest to the
+        // shell.
+        QByteArray wpaBody;
         if (!wifiCountry.isEmpty())
-            script += ("country=" + wifiCountry + "\n").toUtf8();
-        script += "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n";
-        script += "ap_scan=1\n\n";
-        script += "update_config=1\n";
-        script += "network={\n";
+            wpaBody += ("country=" + wifiCountry + "\n").toUtf8();
+        wpaBody += "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n";
+        wpaBody += "ap_scan=1\n\n";
+        wpaBody += "update_config=1\n";
+        wpaBody += "network={\n";
         if (hidden)
-            script += "\tscan_ssid=1\n";
-        script += wpaSupplicantSsidField(ssidOctets);
-        script += "\n";
+            wpaBody += "\tscan_ssid=1\n";
+        wpaBody += wpaSupplicantSsidField(ssidOctets);
+        wpaBody += "\n";
         if (cryptedPsk.isEmpty()) {
-            script += "\tkey_mgmt=NONE\n";
+            wpaBody += "\tkey_mgmt=NONE\n";
         } else {
-            script += "\tkey_mgmt=WPA-PSK SAE\n";
-            script += "\tpsk=" + cryptedPsk.toUtf8() + "\n";
-            script += "\tieee80211w=1\n";
+            wpaBody += "\tkey_mgmt=WPA-PSK SAE\n";
+            wpaBody += "\tpsk=" + cryptedPsk.toUtf8() + "\n";
+            wpaBody += "\tieee80211w=1\n";
         }
-        script += "}\n";
-        script += "WPAEOF\n";
+        wpaBody += "}\n";
+
+        const QString wpaDelim = heredocDelimiter(QString::fromUtf8(wpaBody),
+                                                  QStringLiteral("WPAEOF"));
+        script += "cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'"
+                  + wpaDelim.toUtf8() + "'\n";
+        script += wpaBody;
+        script += wpaDelim.toUtf8() + "\n";
         line(QStringLiteral("   chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf"), script);
         line(QStringLiteral("   rfkill unblock wifi"), script);
         line(QStringLiteral("   for filename in /var/lib/systemd/rfkill/*:wlan ; do"), script);
@@ -458,9 +554,12 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("TARGET_HOME=$(getent passwd \"$TARGET_USER\" | cut -d: -f6)"), script);
         line(QStringLiteral("if [ -z \"$TARGET_HOME\" ] || [ ! -d \"$TARGET_HOME\" ]; then TARGET_HOME=\"/home/") + effectiveUser + QStringLiteral("\"; fi"), script);
         line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"") + configDir + QStringLiteral("\""), script);
-        line(QStringLiteral("cat > \"") + deployKeyPath + QStringLiteral("\" <<'EOF'"), script);
+        const QString tokenDelim =
+            heredocDelimiter(piConnectTokenTrimmed, QStringLiteral("EOF"));
+        line(QStringLiteral("cat > \"") + deployKeyPath + QStringLiteral("\" <<'")
+             + tokenDelim + QStringLiteral("'"), script);
         line(piConnectTokenTrimmed, script);
-        line(QStringLiteral("EOF"), script);
+        line(tokenDelim, script);
         line(QStringLiteral("chown \"$TARGET_USER:$TARGET_USER\" \"") + deployKeyPath + QStringLiteral("\""), script);
         line(QStringLiteral("chmod 600 \"") + deployKeyPath + QStringLiteral("\""), script);
 
@@ -514,13 +613,16 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
             line(QStringLiteral("   dpkg-reconfigure -f noninteractive tzdata"), script);
         }
         if (!keyboardLayout.isEmpty()) {
-            line(QStringLiteral("cat >/etc/default/keyboard <<'KBEOF'"), script);
+            const QString kbDelim =
+                heredocDelimiter(keyboardLayout, QStringLiteral("KBEOF"));
+            line(QStringLiteral("cat >/etc/default/keyboard <<'") + kbDelim
+                 + QStringLiteral("'"), script);
             line(QStringLiteral("XKBMODEL=\"pc105\""), script);
             line(QStringLiteral("XKBLAYOUT=\"") + keyboardLayout + QStringLiteral("\""), script);
             line(QStringLiteral("XKBVARIANT=\"\""), script);
             line(QStringLiteral("XKBOPTIONS=\"\""), script);
             line(QStringLiteral(""), script);
-            line(QStringLiteral("KBEOF"), script);
+            line(kbDelim, script);
             line(QStringLiteral("   dpkg-reconfigure -f noninteractive keyboard-configuration"), script);
         }
         line(QStringLiteral("fi"), script);
@@ -551,7 +653,12 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     
     const QString hostname = settings.value("hostname").toString().trimmed();
     if (!hostname.isEmpty()) {
-        push(QStringLiteral("hostname: ") + hostname, cloud);
+        // Quoted and escaped, like every other scalar below. Bare, a hostname
+        // carrying a newline ended the line and the rest of it became further
+        // YAML -- "runcmd:" among the things it could be, which cloud-init
+        // runs as root on first boot.
+        push(QStringLiteral("hostname: \"") + yamlEscapeString(hostname)
+             + QStringLiteral("\""), cloud);
         push(QStringLiteral("manage_etc_hosts: true"), cloud);
         // Note: We don't set preserve_hostname: true here because it would prevent
         // cloud-init from setting the hostname on first boot. Cloud-init's per-instance
@@ -571,7 +678,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     
     const QString timezone = settings.value("timezone").toString().trimmed();
     if (!timezone.isEmpty()) {
-        push(QStringLiteral("timezone: ") + timezone, cloud);
+        push(QStringLiteral("timezone: \"") + yamlEscapeString(timezone)
+             + QStringLiteral("\""), cloud);
     }
     
     // Parity with legacy QML: include keyboard model/layout when locale is set
@@ -579,7 +687,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     if (!keyboardLayout.isEmpty()) {
         push(QStringLiteral("keyboard:"), cloud);
         push(QStringLiteral("  model: pc105"), cloud);
-        push(QStringLiteral("  layout: \"") + keyboardLayout + QStringLiteral("\""), cloud);
+        push(QStringLiteral("  layout: \"") + yamlEscapeString(keyboardLayout)
+             + QStringLiteral("\""), cloud);
     }
     
     const bool sshPasswordAuth = settings.value("sshPasswordAuth").toBool();
@@ -606,14 +715,16 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // the distro default and produces a group-less account - see
         // https://github.com/raspberrypi/rpi-imager/issues/1601.
         push(QStringLiteral("user:"), cloud);
-        push(QStringLiteral("  name: ") + effectiveUser, cloud);
+        push(QStringLiteral("  name: \"") + yamlEscapeString(effectiveUser)
+             + QStringLiteral("\""), cloud);
         push(QStringLiteral("  shell: /bin/bash"), cloud);
         
         if (!userPass.isEmpty()) {
             push(QStringLiteral("  lock_passwd: false"), cloud);
             // Quote the password hash to ensure proper YAML parsing
             // (consistent with network-config password handling)
-            push(QStringLiteral("  passwd: \"") + userPass + QStringLiteral("\""), cloud);
+            push(QStringLiteral("  passwd: \"") + yamlEscapeString(userPass)
+             + QStringLiteral("\""), cloud);
         } else if (hasSshKeys) {
             // No password but SSH keys configured - lock password login
             push(QStringLiteral("  lock_passwd: true"), cloud);
@@ -625,13 +736,15 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             if (!sshAuthorizedKeys.isEmpty()) {
                 const QStringList keys = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
                 for (const QString& k : keys) {
-                    push(QStringLiteral("    - \"") + k.trimmed() + QStringLiteral("\""), cloud);
+                    push(QStringLiteral("    - \"") + yamlEscapeString(k.trimmed())
+                     + QStringLiteral("\""), cloud);
                 }
             } else {
                 // Split sshPublicKey by newlines to handle .pub files with multiple keys
                 const QStringList keys = sshPublicKey.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
                 for (const QString& k : keys) {
-                    push(QStringLiteral("    - \"") + k.trimmed() + QStringLiteral("\""), cloud);
+                    push(QStringLiteral("    - \"") + yamlEscapeString(k.trimmed())
+                     + QStringLiteral("\""), cloud);
                 }
             }
         }
@@ -745,51 +858,86 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // The sudo: user property works on standard cloud-init but is not
         // reliably processed by all implementations (e.g. cc_raspberry_pi).
         // Creating the file directly matches the systemd firstrun.sh approach.
+        /* Every runcmd below is a shell command inside a double-quoted
+         * document scalar, and the user's name reached them as a bare word.
+         * Inside those double quotes a backtick still runs, so the name was
+         * read by the shell rather than passed to it -- the same defect the
+         * block in firstrun.sh had.
+         *
+         * Each argument derived from it is quoted for the shell now, and the
+         * finished command escaped for the document, so neither layer sees
+         * anything but a name. $UNIT_SRC and $f below are ours and are meant
+         * to expand.
+         */
+        auto runcmd = [&](const QString& command) {
+            push(QStringLiteral("  - [ sh, -c, \"") + yamlEscapeString(command)
+                 + QStringLiteral("\" ]"), cloud);
+        };
+
         if (needsRuncmdForSudo) {
             const QString sudoersFile = QStringLiteral("/etc/sudoers.d/010_") + effectiveUser + QStringLiteral("-nopasswd");
-            push(QStringLiteral("  - [ sh, -c, \"echo '") + effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL' >") + sudoersFile + QStringLiteral("\" ]"), cloud);
-            push(QStringLiteral("  - [ chmod, '0440', '") + sudoersFile + QStringLiteral("' ]"), cloud);
+            runcmd(QStringLiteral("echo ")
+                   + shellQuote(effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL"))
+                   + QStringLiteral(" >") + shellQuote(sudoersFile));
+            runcmd(QStringLiteral("chmod 0440 ") + shellQuote(sudoersFile));
         }
 
         if (needsRuncmdForPiConnect) {
             const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
             const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
-            
+            const QString userHome = QStringLiteral("/home/") + effectiveUser;
+            const QString userQ = shellQuote(effectiveUser);
+            const QString ownerQ = shellQuote(effectiveUser + QStringLiteral(":") + effectiveUser);
+
             // Don't use write_files with defer:true because cloud-init tries to resolve the user/group
             // at parse time using getpwnam(), which fails if the user doesn't exist yet.
             // Instead, create the file via runcmd after the user is guaranteed to exist.
-            // Create directory and file in runcmd to ensure user exists first
-            push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + configDir + QStringLiteral("\" ]"), cloud);
-            // Write the token file using printf with single-quoted string (safest for arbitrary content)
-            // Inside single quotes, only single quotes need escaping (break out, add escaped quote, resume)
-            QString escapedToken = cleanToken;
-            escapedToken.replace("'", "'\"'\"'");  // ' becomes '"'"' (end quote, add escaped quote, start quote)
-            QString writeTokenCmd = QStringLiteral("  - [ sh, -c, \"printf '%s\\n' '") + escapedToken + QStringLiteral("' > ") + targetPath + QStringLiteral(" && chown ") + effectiveUser + QStringLiteral(":") + effectiveUser + QStringLiteral(" ") + targetPath + QStringLiteral(" && chmod 600 ") + targetPath + QStringLiteral("\" ]");
-            push(writeTokenCmd, cloud);
-            // Enable Raspberry Pi Connect systemd units
-            QString userHome = QStringLiteral("/home/") + effectiveUser;
-            push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants ") + userHome + QStringLiteral("/.config/systemd/user/paths.target.wants\" ]"), cloud);
+            runcmd(QStringLiteral("install -o ") + userQ + QStringLiteral(" -m 700 -d ")
+                   + shellQuote(configDir));
+
+            // The token was hand-escaped for a single-quoted string here;
+            // shellQuote does the same thing and is the one the rest uses.
+            runcmd(QStringLiteral("printf '%s\n' ") + shellQuote(cleanToken)
+                   + QStringLiteral(" > ") + shellQuote(targetPath)
+                   + QStringLiteral(" && chown ") + ownerQ + QStringLiteral(" ") + shellQuote(targetPath)
+                   + QStringLiteral(" && chmod 600 ") + shellQuote(targetPath));
+
+            runcmd(QStringLiteral("install -o ") + userQ + QStringLiteral(" -m 700 -d ")
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/default.target.wants"))
+                   + QStringLiteral(" ")
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/paths.target.wants")));
+
             // Check both /usr/lib and /lib for systemd unit files (different distros use different paths)
-            push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect.service\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-signin.path; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-signin.path; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/paths.target.wants/rpi-connect-signin.path\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-wayvnc.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-wayvnc.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect-wayvnc.service\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"chown -R ") + effectiveUser + QStringLiteral(":") + effectiveUser + QStringLiteral(" ") + userHome + QStringLiteral("/.config/systemd\" ]"), cloud);
+            runcmd(QStringLiteral("UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect.service; ln -sf $UNIT_SRC ")
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect.service")));
+            runcmd(QStringLiteral("UNIT_SRC=/usr/lib/systemd/user/rpi-connect-signin.path; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-signin.path; ln -sf $UNIT_SRC ")
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/paths.target.wants/rpi-connect-signin.path")));
+            runcmd(QStringLiteral("UNIT_SRC=/usr/lib/systemd/user/rpi-connect-wayvnc.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-wayvnc.service; ln -sf $UNIT_SRC ")
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect-wayvnc.service")));
+
+            runcmd(QStringLiteral("chown -R ") + ownerQ + QStringLiteral(" ")
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd")));
+
             // Set up systemd linger for auto-start
-            push(QStringLiteral("  - [ sh, -c, \"install -d -m 0755 /var/lib/systemd/linger\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"install -m 0644 /dev/null /var/lib/systemd/linger/") + effectiveUser + QStringLiteral("\" ]"), cloud);
+            runcmd(QStringLiteral("install -d -m 0755 /var/lib/systemd/linger"));
+            runcmd(QStringLiteral("install -m 0644 /dev/null ")
+                   + shellQuote(QStringLiteral("/var/lib/systemd/linger/") + effectiveUser));
+
             // Start the user services now (linger ensures user manager is running)
-            push(QStringLiteral("  - [ sh, -c, \"loginctl enable-linger ") + effectiveUser + QStringLiteral(" 2>/dev/null || true\" ]"), cloud);
+            runcmd(QStringLiteral("loginctl enable-linger ") + userQ + QStringLiteral(" 2>/dev/null || true"));
             push(QStringLiteral("  - [ sleep, \"2\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host daemon-reload || true\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect.service || true\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-signin.path || true\" ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-wayvnc.service || true\" ]"), cloud);
+
+            const QString machineQ = shellQuote(effectiveUser + QStringLiteral("@.host"));
+            runcmd(QStringLiteral("systemctl --quiet --user --machine=") + machineQ + QStringLiteral(" daemon-reload || true"));
+            runcmd(QStringLiteral("systemctl --quiet --user --machine=") + machineQ + QStringLiteral(" start rpi-connect.service || true"));
+            runcmd(QStringLiteral("systemctl --quiet --user --machine=") + machineQ + QStringLiteral(" start rpi-connect-signin.path || true"));
+            runcmd(QStringLiteral("systemctl --quiet --user --machine=") + machineQ + QStringLiteral(" start rpi-connect-wayvnc.service || true"));
         }
-        
+
         if (needsRuncmdForWifi) {
             // When Wi-Fi country is set but no SSID, unblock Wi-Fi to prevent "blocked by rfkill" message
             push(QStringLiteral("  - [ rfkill, unblock, wifi ]"), cloud);
-            push(QStringLiteral("  - [ sh, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
+            runcmd(QStringLiteral("for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \"$f\"; done"));
         }
     }
     
@@ -849,7 +997,8 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         push(QStringLiteral("    wlan0:"), netcfg);
         push(QStringLiteral("      dhcp4: true"), netcfg);
         if (!regDom.isEmpty()) {
-            push(QStringLiteral("      regulatory-domain: \"") + regDom + QStringLiteral("\""), netcfg);
+            push(QStringLiteral("      regulatory-domain: \"") + yamlEscapeString(regDom)
+                 + QStringLiteral("\""), netcfg);
         }
         
         push(QStringLiteral("      access-points:"), netcfg);

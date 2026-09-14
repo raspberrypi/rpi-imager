@@ -80,7 +80,14 @@ bool PlatformHelper::isScrollInverted(bool qtInvertedFlag) const
 qreal PlatformHelper::textScaleFactor() const
 {
     // Check for user override in settings first
-    QSettings settings("Raspberry Pi", "Raspberry Pi Imager");
+    //
+    // The default constructor, like every other reader in the tree. Naming
+    // the organisation and application here resolved to the same file in
+    // production -- main.cpp and cli.cpp set exactly those two strings --
+    // but it ignored whatever identity the process actually has, so under
+    // test it wrote a settings file shared by every concurrent test process
+    // instead of the scoped one, and nothing cleaned it up.
+    QSettings settings;
     QVariant override = settings.value("textScaleFactor");
     if (override.isValid()) {
         bool ok = false;

@@ -7,6 +7,7 @@
 #define OSLISTMODEL_H
 
 #include <QAbstractItemModel>
+#include <QVariantMap>
 #ifndef CLI_ONLY_BUILD
 #include <QQmlEngine>
 #endif
@@ -77,6 +78,16 @@ public:
     explicit OSListModel(ImageWriter &);
 
     Q_INVOKABLE bool reload();
+
+    // One row as a map keyed by role name.
+    //
+    // QML cannot read a C++ model's rows on its own: roleNames() is a plain
+    // virtual, not invokable, so a view that asks for it gets nothing. The
+    // list views need those rows whenever the delegate is unavailable --
+    // the current item scrolled out of view and recycled, or a search for a
+    // row that was never realised -- and without this they were handed an
+    // empty object and treated it as an entry with no url.
+    Q_INVOKABLE QVariantMap get(int row) const;
     // Emit dataChanged for all rows without resetting the model
     Q_INVOKABLE void softRefresh();
 
