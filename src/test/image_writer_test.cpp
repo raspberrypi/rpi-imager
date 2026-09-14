@@ -2892,6 +2892,98 @@ TEST_CASE("Changing to a language that does not exist is survivable",
     CHECK_FALSE(w.getCurrentLanguage().isEmpty());
 }
 
+TEST_CASE("Every translation is in the language menu", "[imagewriter][locale]")
+{
+    // The menu is keyed by each translation's name, and "pt" and "pt-BR" are
+    // both "português". One replaced the other, so Brazilian Portuguese could
+    // not be chosen at all (#1572).
+    ImageWriter w(nullptr);
+    const QStringList files =
+        QDir(QStringLiteral(":/i18n"), QStringLiteral("rpi-imager_*.qm")).entryList();
+    REQUIRE_FALSE(files.isEmpty());
+
+    const QStringList langs = w.getTranslations();
+    INFO("files: " << files.join(QStringLiteral(", ")).toStdString());
+    INFO("menu: " << langs.join(QStringLiteral(", ")).toStdString());
+    CHECK(langs.size() == files.size());
+}
+
+TEST_CASE("Brazilian Portuguese is named apart from Portuguese", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const QStringList langs = w.getTranslations();
+    INFO("menu: " << langs.join(QStringLiteral(", ")).toStdString());
+    // The language's own translation keeps its name, so a saved choice of it
+    // still applies.
+    CHECK(langs.contains(QStringLiteral("português")));
+    CHECK(langs.contains(QStringLiteral("português (Brasil)")));
+}
+
+TEST_CASE("A regional locale gets its regional translation", "[imagewriter][locale]")
+{
+    // The files are named with BCP 47 tags ("rpi-imager_pt-BR.qm").
+    // QTranslator::load(QLocale, ...) looks for "rpi-imager_pt_BR.qm", does
+    // not find it, and settles for "pt": European Portuguese for everyone in
+    // Brazil (#1572), Simplified Chinese for everyone in Taiwan.
+    const QStringList langcodes = {
+        QStringLiteral("de"), QStringLiteral("en"), QStringLiteral("en-US"),
+        QStringLiteral("pt"), QStringLiteral("pt-BR"),
+        QStringLiteral("zh"), QStringLiteral("zh-TW"),
+    };
+    auto pick = [&langcodes](const char *locale) {
+        return ImageWriter::translationForLocale(QLocale(QString::fromLatin1(locale)), langcodes);
+    };
+
+    CHECK(pick("pt_BR") == QStringLiteral("pt-BR"));
+    CHECK(pick("zh_TW") == QStringLiteral("zh-TW"));
+    CHECK(pick("en_US") == QStringLiteral("en-US"));
+
+    // A region with no translation of its own gets the language's.
+    CHECK(pick("pt_PT") == QStringLiteral("pt"));
+    CHECK(pick("zh_CN") == QStringLiteral("zh"));
+    CHECK(pick("en_GB") == QStringLiteral("en"));
+    CHECK(pick("de_AT") == QStringLiteral("de"));
+
+    // And a language with no translation gets none.
+    CHECK(pick("fi_FI").isEmpty());
+}
+
+TEST_CASE("Starting in Brazil selects Brazilian Portuguese", "[imagewriter][locale]")
+{
+    // What main() does once it knows the platform's UI language.
+    ImageWriter w(nullptr);
+
+    w.setLanguageForLocale(QLocale(QStringLiteral("pt_BR")));
+    CHECK(w.getCurrentLanguage() == QStringLiteral("português (Brasil)"));
+
+    w.setLanguageForLocale(QLocale(QStringLiteral("pt_PT")));
+    CHECK(w.getCurrentLanguage() == QStringLiteral("português"));
+}
+
+TEST_CASE("A regional translation falls back on its language", "[imagewriter][locale]")
+{
+    // zh-TW has translated a few dozen strings, zh most of them. Without zh
+    // underneath it, choosing Traditional Chinese would put the rest of the
+    // application in English.
+    ImageWriter w(nullptr);
+    const QString traditional = QStringLiteral("繁體中文");
+    if (!w.getTranslations().contains(traditional))
+        SKIP("this build has no Traditional Chinese translation");
+
+    // One that zh translates and zh-TW does not.
+    const char *context = "AppOptionsDialog";
+    const char *source = "App Options";
+
+    w.changeLanguage(traditional);
+    REQUIRE(w.getCurrentLanguage() == traditional);
+    CHECK(QCoreApplication::translate(context, source) != QLatin1String(source));
+
+    // Changing language takes the fallback away with the rest.
+    w.changeLanguage(QStringLiteral("English"));
+    REQUIRE(w.getCurrentLanguage() == QStringLiteral("English"));
+    CHECK(QCoreApplication::translate(context, source) == QLatin1String(source));
+}
+
 TEST_CASE("Changing the keyboard layout takes effect", "[imagewriter][locale]")
 {
     // This is written into the customisation, so it is what the board comes

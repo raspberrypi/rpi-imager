@@ -39,6 +39,7 @@ class QQmlApplicationEngine;
 class DownloadThread;
 class DownloadExtractThread;
 class QTranslator;
+class QLocale;
 class WriteProgressWatchdog;
 #ifndef CLI_ONLY_BUILD
 class NativeFileDialog;
@@ -467,6 +468,16 @@ public:
     Q_INVOKABLE bool isSecureBootForcedByCliFlag() const;
 
     void replaceTranslator(QTranslator *trans);
+
+    /* Switch to the translation that best suits the locale, if there is one.
+       Called at startup, once the platform's UI language is known. */
+    void setLanguageForLocale(const QLocale &locale);
+
+    /* Which of langcodes ("de", "pt", "pt-BR", ...) suits the locale best:
+       the most specific one among its UI languages, so pt_BR gets "pt-BR"
+       ahead of "pt". Empty if none of them does. */
+    static QString translationForLocale(const QLocale &locale, const QStringList &langcodes);
+
     QString detectPiKeyboard();
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
@@ -654,6 +665,9 @@ private:
 
     QString parseTokenFromUrl(const QUrl &url, bool strictAuthKey = false) const;
 
+    bool installTranslation(const QString &langcode);
+    void replaceTranslators(const QList<QTranslator *> &translators);
+
 protected:
     QUrl _src, _repo;
     QString _dst, _parentCategory, _osName, _osReleaseDate, _currentLang, _currentLangcode, _currentKeyboard, _bmapUrl;
@@ -678,7 +692,8 @@ protected:
     bool _verifyEnabled, _multipleFilesInZip, _online, _extractSizeKnown;
     QSettings _settings;
     QMap<QString,QString> _translations;
-    QTranslator *_trans;
+    // Installed translators, in the order installed; Qt searches the last first
+    QList<QTranslator *> _translators;
     int _refreshIntervalOverrideMinutes;
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token
