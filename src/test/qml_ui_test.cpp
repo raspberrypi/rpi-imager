@@ -18,6 +18,7 @@
 #include "app_resources.h"
 #include "nativefiledialog.h"
 #include "drivelist/drivelist.h"
+#include "test_scratch.h"
 
 #include <QAccessible>
 #include <QUrl>
@@ -159,6 +160,31 @@ public:
         return QUrl::fromLocalFile(filePath).toString();
     }
 
+    // The same, from a list of byte values.
+    //
+    // write() above encodes the string as UTF-8, which is right for JSON and
+    // wrong for a file that has to begin with particular bytes: gzip's 1f 8b
+    // comes out as 1f c2 8b and nothing recognises it. A case that needs a
+    // real magic number needs this one.
+    Q_INVOKABLE QString writeBytes(const QString &name, const QVariantList &bytes)
+    {
+        if (!_dir.isValid())
+            return QString();
+        QByteArray raw;
+        raw.reserve(bytes.size());
+        for (const QVariant &v : bytes)
+            raw.append(char(v.toUInt() & 0xFF));
+
+        const QString filePath = _dir.filePath(name);
+        QFile f(filePath);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return QString();
+        if (f.write(raw) != raw.size())
+            return QString();
+        f.close();
+        return QUrl::fromLocalFile(filePath).toString();
+    }
+
     // The same file as a plain path, for the calls that want one.
     Q_INVOKABLE QString localPath(const QString &name) const
     {
@@ -193,6 +219,19 @@ ImageWriter *g_qmlWriter = nullptr;
 // a DriveListModel filled by a thread that polls the machine's actual disks.
 // A test cannot plug a card in, and must not go near the disks that are
 // already there.
+// Reads an environment variable from QML, so a chaos run can be replayed
+// with the seed a failure printed instead of the whole set.
+class TestEnv : public QObject
+{
+    Q_OBJECT
+
+public:
+    Q_INVOKABLE QString value(const QString &name) const
+    {
+        return qEnvironmentVariable(name.toLocal8Bit().constData());
+    }
+};
+
 class TestDrives : public QObject
 {
     Q_OBJECT
@@ -311,10 +350,7 @@ public slots:
     void applicationAvailable()
     {
         initAppResources();
-        QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-        QCoreApplication::setApplicationName(
-            QStringLiteral("qml_ui_test-%1").arg(QCoreApplication::applicationPid()));
-        QStandardPaths::setTestModeEnabled(true);
+        rpi_imager_test::useScratchPaths(QStringLiteral("qml_ui_test"));
 
         // The same thing --qml-file-dialogs does when a user passes it.
         //
@@ -360,6 +396,21 @@ public slots:
         // resolves to zero, so the controls lay out at nothing and anything
         // that clicks at a coordinate misses. The application owns this
         // instance the same way main() does.
+        // No test fetches the production OS list. Both Retry buttons call
+        // beginOSListFetch() and a storm clicks them, so a run pulled 210 kB
+        // from downloads.raspberrypi.com -- putting the network inside a
+        // seeded sequence, which is why one seed leaked on some runs and not
+        // others. Six files also reset the repository through
+        // refreshOsListFromDefaultUrl(), so the default is redirected rather
+        // than just _repo. The fixture is the production list with every
+        // icon and the update URL removed.
+        if (qEnvironmentVariableIsEmpty("RPI_IMAGER_OSLIST_URL")) {
+            qputenv("RPI_IMAGER_OSLIST_URL",
+                    QUrl::fromLocalFile(
+                        QStringLiteral(QUICK_TEST_SOURCE_DIR "/fixtures/os_list.json"))
+                        .toEncoded());
+        }
+
         static ImageWriter writer(nullptr);
         ImageWriter::setQmlInstance(&writer);
         g_qmlWriter = &writer;
@@ -382,6 +433,11 @@ public slots:
                                              [](QQmlEngine *, QJSEngine *) -> QObject * {
                                                  return new TestDrives;
                                              });
+
+        qmlRegisterSingletonType<TestEnv>(kUri, 1, 0, "TestEnv",
+                                          [](QQmlEngine *, QJSEngine *) -> QObject * {
+                                              return new TestEnv;
+                                          });
     }
 
     void qmlEngineAvailable(QQmlEngine *engine)

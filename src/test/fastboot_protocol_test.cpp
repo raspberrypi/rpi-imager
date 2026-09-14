@@ -6,6 +6,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "fastboot/fastboot_protocol.h"
@@ -68,6 +69,60 @@ TEST_CASE("FastbootProtocol parses DATA response", "[fastboot][protocol]")
 
     CHECK(resp.type == Response::Data);
     CHECK(resp.dataSize == 0x1000);
+}
+
+TEST_CASE("FastbootProtocol refuses a DATA length that is not hex",
+          "[fastboot][protocol]")
+{
+    // The eight characters after DATA come off the wire. They used to go
+    // straight to std::stoul, which throws on anything that is not a number,
+    // and the throw was caught far enough up that the user was shown the
+    // standard library's own word for it -- "Fastboot error: stoul" -- with
+    // nothing about what had gone wrong or where.
+    struct Case {
+        const char *payload;
+        const char *why;
+    };
+    const auto c = GENERATE(
+        Case{"zzzzzzzz", "not hex at all"},
+        Case{"-0000001", "a sign, which stoul would have taken"},
+        Case{"0x001000", "an 0x prefix"},
+        Case{" 0001000", "leading whitespace, which stoul skips"},
+        Case{"00001",    "too few characters"},
+        Case{"0000100g", "hex until the last character"});
+
+    INFO("payload: " << c.payload << " -- " << c.why);
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("DATA", c.payload));
+
+    FastbootProtocol fb;
+    auto resp = fb.sendCommand(mock, "download:00001000", 3000);
+
+    // Refused as a device failure, not a transport one: the device answered,
+    // it just answered with nonsense.
+    CHECK(resp.type == Response::Fail);
+    CHECK(resp.dataSize == 0);
+    CHECK_THAT(resp.message, Catch::Matchers::ContainsSubstring("malformed DATA length"));
+}
+
+TEST_CASE("FastbootProtocol keeps an unprintable DATA length out of the message",
+          "[fastboot][protocol]")
+{
+    // The bytes are quoted back so the message says what arrived, and a
+    // device sending control characters must not put them in front of the
+    // user.
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("DATA", std::string("00\x01\x02\x7f 0\xff", 8)));
+
+    FastbootProtocol fb;
+    auto resp = fb.sendCommand(mock, "download:00001000", 3000);
+
+    CHECK(resp.type == Response::Fail);
+    for (char ch : resp.message) {
+        INFO("message: " << resp.message);
+        CHECK(static_cast<unsigned char>(ch) >= 0x20);
+        CHECK(static_cast<unsigned char>(ch) <= 0x7E);
+    }
 }
 
 TEST_CASE("FastbootProtocol parses INFO response and continues", "[fastboot][protocol]")
@@ -757,6 +812,51 @@ TEST_CASE("FastbootProtocol upload aborts when cancelled", "[fastboot][protocol]
 // ────────────────────────────────────────────────────────────────────────
 // Device file transfer (writeDeviceFile / readDeviceFile)
 // ────────────────────────────────────────────────────────────────────────
+
+TEST_CASE("A device cannot make us set aside memory by saying a number",
+          "[fastboot][protocol]")
+{
+    // Found by fuzzing, in twenty-four bytes: OKAY, then DATA93550679.
+    //
+    // The eight hex digits after DATA are how much the device says it is
+    // about to send, and the reserve happened before a byte arrived -- so a
+    // device answering 0xFFFFFFFF asked for four gigabytes on a machine
+    // that may not have it. Nothing else in the exchange is needed; the
+    // device never has to send anything.
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));       // oem upload-file
+    mock.queueBulkReadResponse(makeResponse("DATA", "93550679"));
+
+    fastboot::FastbootProtocol proto;
+    std::atomic<bool> cancelled{false};
+    const std::vector<uint8_t> got =
+        proto.readDeviceFile(mock, "/mnt/bootfs/cmdline.txt", cancelled);
+
+    CHECK(got.empty());
+    CHECK_THAT(proto.lastError(), Catch::Matchers::ContainsSubstring("more than this reads"));
+}
+
+TEST_CASE("A device-declared size within reach is still read", "[fastboot][protocol]")
+{
+    // The other side of it: the cap is far above anything that really comes
+    // back this way, so an ordinary read is untouched.
+    MockUsbTransport mock;
+    const std::vector<uint8_t> body = {'c', 'o', 'n', 's', 'o', 'l', 'e'};
+    char sizeHex[9];
+    snprintf(sizeHex, sizeof(sizeHex), "%08x", static_cast<unsigned>(body.size()));
+
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+    mock.queueBulkReadResponse(makeResponse("DATA", sizeHex));
+    mock.queueBulkReadResponse(body);
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+
+    fastboot::FastbootProtocol proto;
+    std::atomic<bool> cancelled{false};
+    const std::vector<uint8_t> got =
+        proto.readDeviceFile(mock, "/mnt/bootfs/cmdline.txt", cancelled);
+
+    CHECK(got == body);
+}
 
 TEST_CASE("FastbootProtocol writeDeviceFile stages then sends oem download-file", "[fastboot][protocol]")
 {

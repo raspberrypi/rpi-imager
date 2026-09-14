@@ -8,11 +8,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include "fastboot/bmap.h"
 #include "fastboot/sparse_encoder.h"
 #include "sparse_decode.h"
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <numeric>
 #include <random>
 #include <vector>
@@ -458,3 +460,149 @@ TEST_CASE("An encoder given a zero segment size still encodes the whole image",
     auto decoded = decodeSegments(segments);
     REQUIRE(decoded == image);
 }
+
+// ---------------------------------------------------------------------------
+// The block map
+//
+// setBlockMap() has one caller in the tree and had no test at all, which is
+// a poor place for a gap: the map decides which blocks reach the card. A
+// block wrongly called unmapped is a hole in the image that nothing reports.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// A bmap covering the given inclusive block ranges, parsed by the real
+// parser rather than built by hand -- the encoder is only ever handed a map
+// that came through parse().
+std::unique_ptr<fastboot::BlockMap> mapCovering(const std::string &ranges,
+                                                uint64_t blocksCount)
+{
+    std::string xml =
+        "<?xml version=\"1.0\" ?>\n<bmap version=\"2.0\">\n"
+        "  <BlockSize>" + std::to_string(SPARSE_BLK_SZ) + "</BlockSize>\n"
+        "  <BlocksCount>" + std::to_string(blocksCount) + "</BlocksCount>\n"
+        "  <MappedBlocksCount>0</MappedBlocksCount>\n"
+        "  <BlockMap>\n" + ranges + "  </BlockMap>\n</bmap>\n";
+    auto map = std::make_unique<fastboot::BlockMap>();
+    std::string err;
+    if (!map->parse(xml, &err))
+        return nullptr;
+    return map;
+}
+
+// Everything the encoder emits, applied over a zeroed image the way a device
+// that has never been written would see it.
+std::vector<uint8_t> encodeWithMap(const std::vector<uint8_t> &raw,
+                                   std::unique_ptr<fastboot::BlockMap> map,
+                                   size_t maxSegment = 1024 * 1024)
+{
+    SparseEncoder enc(maxSegment, raw.size());
+    if (map)
+        enc.setBlockMap(std::move(map));
+
+    std::vector<uint8_t> image(raw.size(), 0);
+    size_t fed = 0;
+    while (fed < raw.size()) {
+        const size_t took = enc.feed(raw.data() + fed, raw.size() - fed);
+        fed += took;
+        auto seg = enc.takeSegment();
+        if (!seg.empty())
+            applySparse(seg, image);
+        else if (took == 0)
+            break;
+    }
+    enc.finish();
+    for (;;) {
+        auto seg = enc.takeSegment();
+        if (seg.empty())
+            break;
+        applySparse(seg, image);
+        enc.finish();
+    }
+    return image;
+}
+
+// Distinct, non-zero content per block, so a block landing at the wrong
+// offset is visible rather than accidentally equal.
+std::vector<uint8_t> distinctBlocks(size_t blocks)
+{
+    std::vector<uint8_t> raw(blocks * SPARSE_BLK_SZ);
+    for (size_t b = 0; b < blocks; ++b)
+        std::fill(raw.begin() + b * SPARSE_BLK_SZ,
+                  raw.begin() + (b + 1) * SPARSE_BLK_SZ,
+                  static_cast<uint8_t>(1 + (b % 255)));
+    return raw;
+}
+
+} // namespace
+
+TEST_CASE("Every block the map calls mapped comes out unchanged", "[sparse][bmap]")
+{
+    constexpr size_t kBlocks = 16;
+    const auto raw = distinctBlocks(kBlocks);
+
+    // Two ranges with a gap between them, and the last block mapped, so the
+    // encoder has to resume after a skip and finish on a mapped run.
+    auto map = mapCovering("    <Range>0-3</Range>\n"
+                           "    <Range>8-9</Range>\n"
+                           "    <Range>15</Range>\n", kBlocks);
+    REQUIRE(map);
+
+    const auto image = encodeWithMap(raw, std::move(map));
+    REQUIRE(image.size() == raw.size());
+
+    for (size_t b = 0; b < kBlocks; ++b) {
+        const bool mapped = b <= 3 || b == 8 || b == 9 || b == 15;
+        const uint8_t *got = image.data() + b * SPARSE_BLK_SZ;
+        const uint8_t *want = raw.data() + b * SPARSE_BLK_SZ;
+        INFO("block " << b << (mapped ? " is mapped" : " is not mapped"));
+        if (mapped) {
+            CHECK(std::memcmp(got, want, SPARSE_BLK_SZ) == 0);
+        } else {
+            // Unmapped blocks are DONT_CARE: the device keeps what it had,
+            // which here is the zeroed image. What matters is that the
+            // encoder did not put somebody else's data there.
+            CHECK(std::all_of(got, got + SPARSE_BLK_SZ,
+                              [](uint8_t v) { return v == 0; }));
+        }
+    }
+}
+
+TEST_CASE("A map covering everything encodes the same image as no map",
+          "[sparse][bmap]")
+{
+    constexpr size_t kBlocks = 12;
+    const auto raw = distinctBlocks(kBlocks);
+
+    auto map = mapCovering("    <Range>0-11</Range>\n", kBlocks);
+    REQUIRE(map);
+
+    const auto withMap = encodeWithMap(raw, std::move(map));
+    const auto without = encodeWithMap(raw, nullptr);
+    CHECK(withMap == without);
+    CHECK(withMap == raw);
+}
+
+TEST_CASE("A mapped run split across segments keeps its blocks", "[sparse][bmap]")
+{
+    // A segment small enough that the encoder has to cut a mapped range in
+    // half. The cut is where a block number and a segment offset are added
+    // together, which is where they can disagree.
+    constexpr size_t kBlocks = 24;
+    const auto raw = distinctBlocks(kBlocks);
+
+    auto map = mapCovering("    <Range>2-21</Range>\n", kBlocks);
+    REQUIRE(map);
+
+    const size_t tinySegment = SPARSE_FILE_HDR_SZ + SPARSE_CHUNK_HDR_SZ * 3
+                             + SPARSE_BLK_SZ * 3;
+    const auto image = encodeWithMap(raw, std::move(map), tinySegment);
+    REQUIRE(image.size() == raw.size());
+
+    for (size_t b = 2; b <= 21; ++b) {
+        INFO("block " << b);
+        CHECK(std::memcmp(image.data() + b * SPARSE_BLK_SZ,
+                          raw.data() + b * SPARSE_BLK_SZ, SPARSE_BLK_SZ) == 0);
+    }
+}
+

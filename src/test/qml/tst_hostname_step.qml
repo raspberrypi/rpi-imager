@@ -75,6 +75,79 @@ TestCase {
         return ImageWriterSingleton.getSavedCustomisationSettings().hostname
     }
 
+    // Builds the step again with a hostname already in the settings, which
+    // is the only way to reach the restore path: init() creates the step
+    // before a case can put anything there.
+    function rebuildWith(saved) {
+        step.destroy()
+        step = null
+        fakeContainer.customizationSettings = ({ hostname: saved })
+        fakeContainer.hostnameConfigured = false
+        step = stepComponent.createObject(testCase)
+        verify(step, "the step was rebuilt")
+        return step
+    }
+
+    function notice() {
+        return findChild(step, "hostnameRejectedNotice")
+    }
+
+    // -- What comes back from a previous session ---------------------------
+
+    function test_a_saved_hostname_that_still_passes_is_filled_in() {
+        rebuildWith("pi-in-the-shed")
+
+        compare(field().text, "pi-in-the-shed")
+        verify(fakeContainer.hostnameConfigured, "and counts as configured")
+        verify(!notice().visible, "with nothing to complain about")
+    }
+
+    function test_a_saved_hostname_the_rules_now_refuse_is_not_filled_in() {
+        // Assigning text does not run the validator -- Qt only clears
+        // acceptableInput, which nothing here reads -- so a value written by
+        // an older version, edited by hand into the settings file, or left
+        // behind by a tightening of the rules came straight back and was
+        // written out again on Next.
+        rebuildWith("-starts-with-a-hyphen")
+
+        compare(field().text, "")
+        verify(!fakeContainer.hostnameConfigured,
+               "and the step is not treated as configured")
+    }
+
+    function test_a_refused_hostname_is_explained_rather_than_dropped() {
+        // An empty box and no reason for it is the worst of the outcomes.
+        rebuildWith("not a hostname")
+
+        verify(notice().visible, "the step says what happened")
+        verify(notice().text.indexOf("not a hostname") >= 0,
+               "and names the value it refused: " + notice().text)
+    }
+
+    function test_a_refused_hostname_is_not_written_back_out() {
+        rebuildWith("far-too-long-" + "x".repeat(80))
+
+        step.nextClicked()
+
+        verify(fakeContainer.customizationSettings.hostname === undefined,
+               "the bad value did not survive the step")
+    }
+
+    function test_what_is_quoted_back_is_printable_and_bounded() {
+        // The value is the user's own, but a hand-edited settings file can
+        // hold anything, and this string goes in front of them.
+        rebuildWith("bad\u0001\u0002name\u007f" + "y".repeat(200))
+
+        verify(notice().visible, "the step says what happened");
+        var shown = notice().text
+        verify(shown.length < 200, "the quote is bounded (" + shown.length + ")")
+        for (var i = 0; i < shown.length; ++i) {
+            var c = shown.charCodeAt(i)
+            verify(c >= 0x20 && c !== 0x7F,
+                   "printable at " + i + " (" + c + ")")
+        }
+    }
+
     // -- What leaving the step records -------------------------------------
 
     function test_a_hostname_typed_in_is_recorded() {

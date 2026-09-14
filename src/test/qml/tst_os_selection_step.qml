@@ -60,6 +60,7 @@ TestCase {
     }
 
     property var step: null
+    property bool usedOwnList: false
 
     SignalSpy {
         id: advanced
@@ -110,6 +111,14 @@ TestCase {
     }
 
     function cleanup() {
+        // One ImageWriter is shared by every QML file in the run, so a case
+        // that pointed it at a list of its own has to put the repository
+        // back. Without this the dialog cases in another file opened on a
+        // source that was not the official one, and failed there.
+        if (usedOwnList) {
+            ImageWriterSingleton.refreshOsListFromDefaultUrl()
+            usedOwnList = false
+        }
         advanced.target = null
         if (step) {
             step.destroy()
@@ -259,4 +268,77 @@ TestCase {
         verify(fakeContainer.wifiConfigured,
                "so the staged settings are still there")
     }
+
+    // -----------------------------------------------------------------
+    // What a row says about a size it was given
+    // -----------------------------------------------------------------
+
+    // Every text label on the step, however deep.
+    function labelsOn(item, out, depth) {
+        if (!item || depth > 12 || out.length > 200)
+            return out
+        if (item.visible !== false && typeof item.text === "string"
+                && item.text.length > 0)
+            out.push(item.text)
+        var kids = item.children
+        for (var i = 0; kids && i < kids.length; ++i)
+            labelsOn(kids[i], out, depth + 1)
+        return out
+    }
+
+    function test_a_row_states_no_download_size_it_does_not_have() {
+        // JSON numbers are doubles, so a repository can declare -1 or 1e30.
+        // Both are refused upstream and arrive as nought -- and nought is
+        // also what an absent field gives. Either way the row has no figure,
+        // and "Online - 0 B download" tells the user the download is
+        // nothing. The local-file branch beside it already omits an unknown
+        // size rather than assert one.
+        const list = JSON.stringify({ os_list: [
+            { name: "declared badly", description: "size the list made up",
+              url: "https://example.invalid/bad.img.xz",
+              image_download_size: -1, extract_size: -1,
+              init_format: "systemd" },
+            { name: "declared properly", description: "an ordinary entry",
+              url: "https://example.invalid/good.img.xz",
+              image_download_size: 4294967296, extract_size: 8589934592,
+              init_format: "systemd" }
+        ]})
+
+        const url = TestFiles.write("sized-oslist.json", list)
+        verify(url.length > 0, "the list was written")
+        ignoreWarning(/declared a size that could not be used/)
+        usedOwnList = true
+        ImageWriterSingleton.refreshOsListFrom(url)
+
+        const view = findChild(step, "osList")
+        verify(view, "found the list")
+        tryVerify(function() { return view.count >= 2 }, 5000,
+                  "both entries arrived (" + view.count + ")")
+        waitForRendering(step, 2000)
+        view.positionViewAtBeginning()
+        waitForRendering(step, 2000)
+
+        var texts = []
+        for (var i = 0; i < view.count; ++i)
+            labelsOn(view.itemAtIndex(i), texts, 0)
+        verify(texts.length > 0, "rows were drawn to read (" + texts.length + ")")
+
+        var sawGoodFigure = false
+        for (var t = 0; t < texts.length; ++t) {
+            var raw = String(texts[t])
+            // A stated download size has to be a size somebody could wait
+            // for. Nought is not one.
+            var m = raw.match(/([\d.]+)\s*([KMGTP]?B)\s+download/)
+            if (m) {
+                verify(parseFloat(m[1]) > 0,
+                       "no download stated as nothing: " + raw)
+                sawGoodFigure = true
+            }
+        }
+        // The check above says nothing on a screen that drew no figure at
+        // all, so the well-formed entry has to have produced one.
+        verify(sawGoodFigure,
+               "the entry with a real size stated it: " + texts.join(" | "))
+    }
+
 }

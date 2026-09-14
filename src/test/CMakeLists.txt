@@ -38,7 +38,22 @@ function(rpi_discover_tests target)
     # One ENVIRONMENT list, not two: CMake keeps only the last of a repeated
     # property key, so appending a second would have dropped the first --
     # which on macOS is the interpose library the fault-injection tests need.
-    set(_test_env "RPI_IMAGER_TELEMETRY_URL=" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1")
+    #
+    # XDG_CONFIG_HOME as well: the imager keeps its settings in QSettings, and
+    # several paths write them -- setPersistedCustomisationSetting() is called
+    # whenever a customisation step is completed. Without this a test run
+    # rewrites the developer's own "Raspberry Pi Imager.conf", which holds
+    # their hostname, username and password hash. Pointed at the build tree,
+    # where it belongs.
+    #
+    # BROWSER too. Several screens offer a link, and openUrlExternally() goes
+    # through xdg-open, which launches whatever the developer has configured
+    # -- a chaos run clicking about opened a terminal browser at
+    # raspberrypi.com and held the test until it timed out. Pointed at true(1),
+    # which accepts the argument and does nothing.
+    set(_test_env "RPI_IMAGER_TELEMETRY_URL=" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1"
+                  "XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
+                  "BROWSER=true")
     if(APPLE AND "FAULT_INJECTION" IN_LIST ARGN)
         add_dependencies(${target} faulty_io_interpose)
         list(APPEND _test_env "DYLD_INSERT_LIBRARIES=${RPI_FAULTY_INTERPOSE_LIB}")
@@ -530,11 +545,16 @@ add_custom_target(test_fastboot_protocol
 add_executable(sparse_encoder_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
+    # setBlockMap() is half of what the encoder does on a real write, and the
+    # only map it is ever handed came out of this parser. Qt comes with it:
+    # the bmap is XML.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
     sparse_encoder_test.cpp
 )
 
 target_link_libraries(sparse_encoder_test PRIVATE
     Catch2::Catch2WithMain
+    Qt6::Core
 )
 
 target_include_directories(sparse_encoder_test PRIVATE
@@ -1653,6 +1673,36 @@ target_compile_features(drive_list_item_test PRIVATE cxx_std_20)
 rpi_discover_tests(drive_list_item_test)
 
 # ============================================================================
+# The accelerated SHA-256
+# ============================================================================
+# The hash both sides of the write comparison are computed with. It had no
+# direct test on any platform: it was only ever exercised through the writer,
+# where a wrong digest on both sides still compares equal.
+
+add_executable(accelerated_hash_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../acceleratedcryptographichash.h
+    ${PLATFORM_ACCEL_HASH_SRC}
+    accelerated_hash_test.cpp
+)
+
+target_include_directories(accelerated_hash_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS}
+)
+
+target_link_libraries(accelerated_hash_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${GNUTLS_LIBRARIES}
+)
+
+rpi_link_platform_backends(accelerated_hash_test)
+
+target_compile_features(accelerated_hash_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(accelerated_hash_test)
+
+# ============================================================================
 # DeviceInfo on a desktop
 # ============================================================================
 # The stubs the non-embedded build links in place of the /proc/cpuinfo
@@ -2045,8 +2095,25 @@ endif()
         # thousand cases, seven minutes on a laptop. The suite-wide --timeout
         # that stops a deadlocked case from costing the whole run is far below
         # that, so this one says how long it honestly needs.
+        #
+        # The two URLs are the same pair rpi_discover_tests() sets for every
+        # Catch2 binary, and for the same reason: this suite drives the real
+        # ImageWriter singleton, so anything it reaches that reports a write
+        # or enrols a device would do so against production. Registered with
+        # add_test() rather than through that function, it was the one binary
+        # without them -- and it is the one that drives the wizard hardest.
+        # One ENVIRONMENT list, not three: CMake keeps only the last of a
+        # repeated property key.
+        # Nearly all the suite's wall time, ctest running the rest behind it.
+        # It timed out here at 1800.08s on 14 September 2026, and the cause
+        # was not the storms: nested OS icons were reaching Image.source
+        # unrouted, so Qt Quick fetched hundreds of them over the network.
+        # Routed, the same suite passes in 692.61s under UBSan on a machine
+        # also running three fuzzers. Left at 1800, which is now well over
+        # twice what it needs -- doubling it would have hidden the fetches
+        # rather than found them.
         set_tests_properties(qml_ui_test PROPERTIES
-            ENVIRONMENT "QT_QUICK_BACKEND=software"
+            ENVIRONMENT "QT_QUICK_BACKEND=software;RPI_IMAGER_TELEMETRY_URL=;RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
             TIMEOUT 1800)
 
         # The same binary again, on one file, on its own.
@@ -2064,7 +2131,7 @@ endif()
                  COMMAND qml_ui_test -platform offscreen
                          -input "${CMAKE_CURRENT_SOURCE_DIR}/qml/tst_device_selection_step.qml")
         set_tests_properties(qml_ui_test_device_selection_offline PROPERTIES
-            ENVIRONMENT "QT_QUICK_BACKEND=software")
+            ENVIRONMENT "QT_QUICK_BACKEND=software;RPI_IMAGER_TELEMETRY_URL=;RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true")
 
         # `qml_coverage`: which of the QML actually ran.
         #
@@ -2460,6 +2527,9 @@ add_executable(download_extract_thread_test
     ${RPI_DOWNLOAD_PIPELINE_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/../downloadextractthread.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../localfileextractthread.cpp
+    # Sizing asks libarchive the same question the write does, and one case
+    # here sets the two verdicts side by side.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imagesizeparser.cpp
     # The stub inhibitor rather than the DBus one: nothing here needs to stop
     # the machine suspending, and the real implementation wants a session bus.
     ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.h

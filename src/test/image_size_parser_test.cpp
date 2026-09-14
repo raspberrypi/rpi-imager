@@ -24,6 +24,7 @@
 #include <QTemporaryDir>
 
 #include <archive.h>
+#include <lzma.h>
 
 #include "fixture_process.h"
 #include "platform_tools.h"
@@ -90,6 +91,122 @@ TEST_CASE("A gzip image reports its uncompressed size", "[imagesize]")
     REQUIRE(runShell(QStringLiteral("gzip -k -f %1").arg(raw)));
 
     CHECK(imagesize::parseGz(raw + ".gz") == quint64(kRawSize));
+}
+
+TEST_CASE("A gzip smaller than its own overhead is not called four gigabytes",
+          "[imagesize]")
+{
+    // ISIZE is the payload modulo 2^32, so a payload that looks smaller than
+    // the file holding it was read as evidence that it had wrapped, and four
+    // gigabytes were added until it did not. That is what wrapping looks
+    // like, and it is also what every gzip of incompressible data looks
+    // like: deflate cannot shrink those, and the header and trailer add
+    // eighteen bytes on top.
+    //
+    // Thirty-two bytes of text came back as 4,294,967,328, which the
+    // capacity check would then have measured a card against and the
+    // progress bar divided by.
+    if (!haveTool("gzip"))
+        SKIP("gzip is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("tiny.img");
+    REQUIRE(writeFile(raw, QByteArray("hi there, this is a tiny payload")));
+    REQUIRE(runShell(QStringLiteral("gzip -k -f %1").arg(raw)));
+
+    const QString gz = raw + ".gz";
+    INFO("compressed to " << QFileInfo(gz).size() << " bytes from 32");
+    REQUIRE(QFileInfo(gz).size() > 32);   // the overhead really does dominate
+    CHECK(imagesize::parseGz(gz) == 32);
+}
+
+TEST_CASE("A gzip of incompressible bytes reports what it holds", "[imagesize]")
+{
+    // The same trap at a size nobody would call small: random data does not
+    // compress, so the file is always a little larger than its payload, and
+    // the rule that fired on thirty-two bytes fires on thirty-two megabytes
+    // just as readily.
+    if (!haveTool("gzip"))
+        SKIP("gzip is not installed");
+
+    Scratch scratch;
+    const QString raw = scratch.path("noise.img");
+    // Genuinely incompressible, or gzip shrinks it and the case proves
+    // nothing: xorshift64, taking a whole byte of state each time.
+    QByteArray noise;
+    noise.resize(512 * 1024);
+    quint64 x = Q_UINT64_C(0x9E3779B97F4A7C15);
+    for (int i = 0; i < noise.size(); ++i) {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        noise[i] = char(x >> 24);
+    }
+    REQUIRE(writeFile(raw, noise));
+    REQUIRE(runShell(QStringLiteral("gzip -k -f %1").arg(raw)));
+
+    const QString gz = raw + ".gz";
+    INFO("compressed " << noise.size() << " to " << QFileInfo(gz).size());
+    CHECK(imagesize::parseGz(gz) == quint64(noise.size()));
+}
+
+
+// Build a file of `totalBytes` that looks like a gzip and declares `isize`
+// bytes inside it. parseGz reads the length and the last four bytes; the body
+// is never inflated, so the filler need not deflate to anything.
+static QString makeGzipDeclaring(QTemporaryDir &dir, const char *name,
+                                 qint64 totalBytes, quint32 isize)
+{
+    const QString path = dir.filePath(QString::fromLatin1(name));
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+
+    f.write(QByteArray::fromHex("1f8b08000000000000ff"));   // a plausible header
+    const QByteArray filler(64 * 1024, '\0');
+    while (f.size() < totalBytes - 8) {
+        const qint64 want = qMin<qint64>(filler.size(), totalBytes - 8 - f.size());
+        f.write(filler.constData(), want);
+    }
+    f.write(QByteArray::fromHex("00000000"));               // CRC32, unread
+    const char trailer[4] = {
+        char(isize & 0xff), char((isize >> 8) & 0xff),
+        char((isize >> 16) & 0xff), char((isize >> 24) & 0xff)
+    };
+    f.write(trailer, 4);
+    f.close();
+    REQUIRE(QFileInfo(path).size() == totalBytes);
+    return path;
+}
+
+TEST_CASE("A gzip whose declared size cannot be the whole story gains a wrap",
+          "[imagesize]")
+{
+    // ISIZE is the original size modulo 2^32, so a large image declares a
+    // small number. The signal is weak -- a payload looking smaller than the
+    // file holding it is also every gzip of incompressible data -- so it is
+    // bounded by what deflate can have produced, 1032:1.
+    //
+    // Nothing else reaches this loop. Entering it needs 4 GiB / 1032, about
+    // 4.2 MB, and no other case builds a file that large; the fuzzer cannot
+    // either, because its harness refuses anything over a megabyte. These two
+    // sit either side of that threshold.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    SECTION("five megabytes could hold a wrapped image, so the wrap is added") {
+        // 5,000,000 * 1032 = 5,160,000,000, and 1000 + 2^32 = 4,294,968,296
+        // fits inside it. One wrap, and the second does not fit.
+        const QString path = makeGzipDeclaring(dir, "wrapped.gz", 5000000, 1000);
+        CHECK(imagesize::parseGz(path) == 1000ull + 4294967296ull);
+    }
+
+    SECTION("four megabytes could not, so the figure is left alone") {
+        // 4,000,000 * 1032 = 4,128,000,000, below 1000 + 2^32. Deflate cannot
+        // have produced that much from this file, so the small figure stands
+        // rather than being inflated into one no card would satisfy.
+        const QString path = makeGzipDeclaring(dir, "plain.gz", 4000000, 1000);
+        CHECK(imagesize::parseGz(path) == 1000ull);
+    }
 }
 
 TEST_CASE("A file too short to hold a gzip trailer reports unknown", "[imagesize]")
@@ -499,4 +616,74 @@ TEST_CASE("probeFormat reports the xz filter whatever the file is called",
     const auto probed = imagesize::probeFormat(mislabelled);
     CHECK(probed.readable);
     CHECK(probed.filterCode == ARCHIVE_FILTER_XZ);
+}
+
+// ══════════════════════════════════════════════════════════════
+// An index that claims more than the file could hold
+//
+// parseXz() handed liblzma a memlimit of UINT64_MAX, which switches off the
+// library's own guard against exactly this. backward_size is bounded before
+// the read, but the index inside that buffer still says how many records to
+// allocate -- and these sixty bytes asked for about six petabytes. Found by
+// fuzzing; the bytes below are the input that found it.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("An xz index claiming an absurd size is refused, not allocated for",
+          "[imagesize]")
+{
+    static const char kCrafted[] = {
+        char(0xfd), char(0x16), char(0x05), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x00), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x00), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x00), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x00), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x00), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x00), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x00), char(0x00), char(0x00),
+        char(0x00), char(0xff), char(0x9e), char(0xbe), char(0xcb),
+        char(0x9e), char(0xbb), char(0x5d), char(0x1f), char(0xb6),
+        char(0xf3), char(0x7d), char(0x01), char(0x00), char(0x00),
+        char(0x00), char(0x00), char(0x04), char(0x59), char(0x5a)
+    };
+
+    Scratch scratch;
+    const QString path = scratch.path(QStringLiteral("crafted.img.xz"));
+    REQUIRE(writeFile(path, QByteArray(kCrafted, int(sizeof(kCrafted)))));
+
+    // Unknown rather than enormous.
+    CHECK(imagesize::parseXz(path) == 0);
+
+    // That alone does not pin the defect: with the limit switched off the
+    // parser still answers 0, because the huge malloc simply fails and
+    // liblzma reports an error. What went wrong was the attempt, which is
+    // invisible from the return value. So ask liblzma directly whether the
+    // limit we pass refuses this index rather than trying to satisfy it.
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    const QByteArray whole = f.readAll();
+    f.close();
+
+    lzma_stream_flags opts = {};
+    REQUIRE(whole.size() > LZMA_STREAM_HEADER_SIZE);
+    const uchar *footer = reinterpret_cast<const uchar *>(whole.constData())
+                        + whole.size() - LZMA_STREAM_HEADER_SIZE;
+    REQUIRE(lzma_stream_footer_decode(&opts, footer) == LZMA_OK);
+
+    const qint64 start = qint64(whole.size()) - LZMA_STREAM_HEADER_SIZE
+                       - qint64(opts.backward_size);
+    REQUIRE(start >= 0);
+    const QByteArray index = whole.mid(int(start));
+
+    lzma_index *idx = nullptr;
+    uint64_t limit = imagesize::kXzIndexMemLimit;
+    size_t pos = 0;
+    const lzma_ret ret = lzma_index_buffer_decode(
+        &idx, &limit, nullptr,
+        reinterpret_cast<const uint8_t *>(index.constData()), &pos,
+        size_t(index.size()));
+    lzma_index_end(idx, nullptr);
+
+    INFO("liblzma returned " << int(ret) << ", wanted " << limit << " bytes");
+    CHECK(ret == LZMA_MEMLIMIT_ERROR);
+    CHECK(limit > imagesize::kXzIndexMemLimit);
 }

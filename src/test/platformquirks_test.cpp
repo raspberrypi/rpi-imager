@@ -2415,7 +2415,14 @@ TEST_CASE("Run without elevation, nothing is repointed",
     INFO(r.out.toStdString());
     CHECK(r.value(QStringLiteral("AFTER_HOME"))
           == r.value(QStringLiteral("BEFORE_HOME")));
-    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME")).isEmpty());
+
+    // Unchanged, not empty. The probe inherits this process's environment,
+    // and the suite now sets XDG_CONFIG_HOME so that a test run writes its
+    // settings into the build tree rather than the developer's own. Asserting
+    // emptiness was really asserting something about the harness; what the
+    // case is named for is that an unelevated run repoints nothing.
+    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME"))
+          == qEnvironmentVariable("XDG_CONFIG_HOME"));
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
