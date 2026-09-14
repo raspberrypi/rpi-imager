@@ -315,6 +315,53 @@ TestCase {
         ImageWriterSingleton.onCancelled()
     }
 
+    function test_a_total_that_was_understated_is_shown_not_hidden() {
+        // A percentage is only shown when the size was called reliable, so
+        // an overrun means one of those sources was wrong rather than
+        // unknowable -- gzip, the one format that cannot be trusted, is
+        // already barred as a divisor upstream.
+        //
+        // So it stays on screen. It is the only sign anybody gets, and a
+        // figure nobody sees is a figure nobody reports.
+        beWriting()
+
+        ignoreWarning(/write progress past 100%/)
+        step.onWriteProgress(2048, 1024)
+
+        verify(progressText().text.indexOf("200") !== -1,
+               "the overrun is on screen: " + progressText().text)
+        // The bar is the one thing that cannot follow: it has a range.
+        compare(progressBar().value, 100)
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_the_announcement_carries_the_same_overrun() {
+        // It used to bound at a hundred, so on the same run the label said
+        // 200% and the screen reader said a hundred -- the one user who
+        // could not see the label was the one told nothing was wrong.
+        beWriting()
+
+        compare(step.progressAnnouncement("write", 200),
+                "Writing, 200 percent")
+
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_an_understated_total_reaches_the_log() {
+        // Where a bug report can carry it: the two figures, once per run.
+        beWriting()
+
+        ignoreWarning(/write progress past 100%: 5 bytes written against a declared total of 2/)
+        step.onVerifyProgress(5, 2)
+
+        verify(progressText().text.indexOf("250") !== -1,
+               "and verification shows it the same way: "
+               + progressText().text)
+
+        ImageWriterSingleton.onCancelled()
+    }
+
     function test_progress_without_a_known_total_shows_what_has_been_written() {
         // A gzip stream over 4 GB does not report its size, so a percentage
         // would sit at zero and read as stuck. Bytes written at least moves.
@@ -382,6 +429,43 @@ TestCase {
             return progressText().text.indexOf("no space left on device") !== -1
         }, 3000, "the reason is on screen: " + progressText().text)
 
+        ImageWriterSingleton.onCancelled()
+    }
+
+    function test_a_failure_stays_on_screen_after_the_dialog_goes() {
+        // The step hid its whole progress section the moment the state left
+        // Writing, so once the error dialog was dismissed nothing anywhere
+        // said what had happened. The dialog is the only place the reason
+        // appeared, and a click outside it used to be enough to lose it.
+        //
+        // Pins the second half of the fix: the section's visibility follows
+        // failureMessage as well as the writing and complete states, so the
+        // reason survives the dialog and stays until the next write clears
+        // it.
+        beWriting()
+        ImageWriterSingleton.onError("no space left on device")
+        tryVerify(function () {
+            return progressText().text.indexOf("no space left on device") !== -1
+        }, 3000)
+
+        compare(step.failureMessage, "no space left on device",
+                "the step kept the reason")
+
+        // Whatever ends the write, the reason stays put.
+        ImageWriterSingleton.onCancelled()
+        wait(100)
+
+        verify(progressText().visible,
+               "the progress text is still shown once the dialog has gone")
+        verify(progressText().text.indexOf("no space left on device") !== -1,
+               "and still says why: " + progressText().text)
+
+        // What clears it is starting another write, which happens on the
+        // confirm path rather than on any signal the writer sends -- so
+        // driving the writer, as this case does, must NOT clear it.
+        beWriting()
+        compare(step.failureMessage, "no space left on device",
+                "the writer's own signals do not clear it")
         ImageWriterSingleton.onCancelled()
     }
 
@@ -709,5 +793,68 @@ TestCase {
         verify(above > 0, "there is padding above the content")
         compare(below, above,
                 "and the same amount of it under the last row of buttons")
+    }
+
+    // -- What is said while it runs ----------------------------------------
+    //
+    // A write takes minutes and moves nothing on screen: the percentage sits
+    // in a label the user is not on, and a reader speaks what the user moved
+    // to. So the progress a sighted user watches was, to everyone else,
+    // silence until the machine finished. These cases cover what is chosen
+    // to be said; that it is said at all is announceToScreenReader's job.
+
+    function test_progress_is_announced_once_per_tenth() {
+        var spoken = []
+        for (var p = 0; p <= 100; ++p) {
+            var what = step.progressAnnouncement("write", p)
+            if (what.length > 0)
+                spoken.push(what)
+        }
+        compare(spoken.length, 11,
+                "eleven tenths from nought to a hundred: " + JSON.stringify(spoken))
+        verify(spoken[0].indexOf("0") >= 0, "starting from the beginning")
+    }
+
+    function test_a_percentage_that_barely_moves_says_nothing_new() {
+        // The writer reports far more often than this: a message on every
+        // update would talk over itself and over everything else the user
+        // is doing.
+        compare(step.progressAnnouncement("write", 41).length > 0, true)
+        compare(step.progressAnnouncement("write", 42), "")
+        compare(step.progressAnnouncement("write", 49), "")
+        verify(step.progressAnnouncement("write", 50).length > 0,
+               "and speaks again at the next tenth")
+    }
+
+    function test_verifying_starts_counting_again() {
+        step.progressAnnouncement("write", 100)
+        const first = step.progressAnnouncement("verify", 0)
+        verify(first.length > 0, "verification announces its own beginning")
+        verify(first !== step.progressAnnouncement("write", 0),
+               "and says which of the two it is")
+    }
+
+    function test_a_percentage_outside_the_range_is_carried_not_hidden() {
+        // Progress past 100% is a real report, from a size the writer could
+        // not know in advance. It was bounded here, which left the label
+        // saying one thing and the screen reader another, and hid the only
+        // sign a user gets that the declared size was wrong.
+        const over = step.progressAnnouncement("write", 4000)
+        verify(over.indexOf("4000") >= 0,
+               "four thousand percent, as reported: " + over)
+        // A negative is not a report of anything: the signal carries two
+        // unsigned quantities, so nothing below zero can arrive.
+        const under = step.progressAnnouncement("write", -20)
+        verify(under.indexOf("-") < 0, "but not a negative one: " + under)
+    }
+
+    function test_a_write_with_no_total_counts_in_megabytes() {
+        // A gzip over 4 GB says nothing about its size, so there is no
+        // percentage to count.
+        const first = step.bytesAnnouncement(0)
+        verify(first.length > 0, "it says something at the start")
+        compare(step.bytesAnnouncement(12), "", "and not again straight away")
+        verify(step.bytesAnnouncement(600).length > 0,
+               "but does once it has got somewhere")
     }
 }

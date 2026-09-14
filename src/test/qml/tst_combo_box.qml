@@ -389,4 +389,43 @@ TestCase {
         tryVerify(function () { return !box.popup.visible }, 3000,
                   "the list closed behind the choice")
     }
+
+    // ── What a screen reader is told ──────────────────────────────────
+
+    function test_the_announcement_carries_the_purpose_and_the_value() {
+        // On its own the box announced its value and nothing about what the
+        // value was for: "Europe/London", never "Time zone, Europe/London".
+        // The label beside it is not associated with the control in any way
+        // an assistive technology can follow, so none of it is read out when
+        // focus arrives.
+        const box = create({ accessiblePurpose: "Time zone:" })
+        box.currentIndex = testCase.zones.indexOf("Europe/London")
+        compare(box.currentText, "Europe/London")
+        compare(box.Accessible.name, "Time zone, Europe/London")
+    }
+
+    function test_the_label_keeps_its_colon_and_the_announcement_does_not() {
+        // Every one of these labels is written with its trailing colon, and
+        // that punctuation is part of the string translators are given. It
+        // is dropped here rather than at the five call sites, so the wording
+        // stays a single translatable string.
+        const plain = create({ accessiblePurpose: "Keyboard layout" })
+        const colon = create({ accessiblePurpose: "Keyboard layout:" })
+        const spaced = create({ accessiblePurpose: "  Keyboard layout :  " })
+        const fullwidth = create({ accessiblePurpose: "Keyboard layout：" })
+
+        for (const box of [plain, colon, spaced, fullwidth]) {
+            box.currentIndex = 0
+            compare(box.Accessible.name,
+                    "Keyboard layout, " + testCase.zones[0])
+        }
+    }
+
+    function test_a_box_with_no_purpose_still_announces_its_value() {
+        // Not every use of this has a label beside it, and an announcement
+        // opening with a comma would be worse than none.
+        const box = create({})
+        box.currentIndex = 0
+        compare(box.Accessible.name, testCase.zones[0])
+    }
 }
