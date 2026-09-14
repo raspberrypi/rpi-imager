@@ -26,6 +26,7 @@
 #include <QCoreApplication>
 #include "config.h"
 #include "signal_log.h"
+#include "test_scratch.h"
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QSettings>
@@ -422,10 +423,7 @@ int main(int argc, char *argv[])
     // and clearCacheDir() is remove_all() on that directory while
     // clearCacheSettings() wipes that file. One case deletes what another is
     // partway through using.
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("cache_manager_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("cache_manager_test"));
 
     const int rc = Catch::Session().run(argc, argv);
 

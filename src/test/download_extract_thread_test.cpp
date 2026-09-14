@@ -17,6 +17,7 @@
 #include "downloadextractthread.h"
 #include "localfileextractthread.h"
 #include "archive_kind.h"
+#include "imagesizeparser.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -673,6 +674,105 @@ TEST_CASE("A .cache file is still written raw when it is a plain image",
 // are these bytes the disk image, or a container holding one? Unpack a plain
 // .img and libarchive hands the same bytes back, slower. Copy a container
 // verbatim and the card gets the zip instead of what is inside it.
+
+// Reaches _testArchiveFormat() without running the thread, so the verdict the
+// write reaches can be set beside the one the sizing reaches.
+class ProbeOnlyExtractThread : public LocalFileExtractThread
+{
+public:
+    using LocalFileExtractThread::LocalFileExtractThread;
+
+    bool saysContainer(const QString &path)
+    {
+        _inputfile.setFileName(path);
+        if (!_inputfile.open(QIODevice::ReadOnly))
+            return false;
+        const bool verdict = _testArchiveFormat();
+        _inputfile.close();
+        return verdict;
+    }
+};
+
+TEST_CASE("Sizing and writing reach the same verdict about a file",
+          "[extract][local][imagesize]")
+{
+    // Two pieces of code ask libarchive the same question about the same
+    // bytes: one to size the write, one to decide whether to unpack. When
+    // they disagreed -- sizing by name, writing by content -- xz bytes named
+    // .img were sized raw and written decompressed.
+    //
+    // They reach libarchive differently, which is where a difference would
+    // hide: one opens the path and can seek, the other reads through a
+    // callback with none. A zip turns on seeking, so there is one here.
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(64 * 1024, 97);
+
+    struct Candidate { QString name; bool built = false; };
+    QList<Candidate> files;
+
+    auto put = [&](const QString &name, const QByteArray &body) {
+        REQUIRE(writeFile(scratch.filePath(name), body));
+        files.append({name, true});
+    };
+
+    put(QStringLiteral("raw.img"), image);
+    put(QStringLiteral("prose.img"), QByteArray("not an image at all\n"));
+    put(QStringLiteral("empty.img"), QByteArray());
+    put(QStringLiteral("one-byte.img"), QByteArray(1, '\0'));
+
+    if (haveTool(QStringLiteral("gzip"))) {
+        REQUIRE(writeFile(scratch.filePath(QStringLiteral("gz.img")), image));
+        if (runTool(QStringLiteral("gzip"),
+                    {QStringLiteral("-q"), QStringLiteral("-f"), QStringLiteral("gz.img")},
+                    scratch.path()))
+            files.append({QStringLiteral("gz.img.gz"), true});
+    }
+    if (haveTool(QStringLiteral("xz"))) {
+        REQUIRE(writeFile(scratch.filePath(QStringLiteral("xz.img")), image));
+        if (runTool(QStringLiteral("xz"),
+                    {QStringLiteral("-q"), QStringLiteral("-f"), QStringLiteral("xz.img")},
+                    scratch.path()))
+            files.append({QStringLiteral("xz.img.xz"), true});
+    }
+    if (haveTool(QStringLiteral("tar"))) {
+        REQUIRE(writeFile(scratch.filePath(QStringLiteral("inside.img")), image));
+        if (runTool(QStringLiteral("tar"),
+                    {QStringLiteral("-cf"), QStringLiteral("bundle.tar"),
+                     QStringLiteral("inside.img")},
+                    scratch.path()))
+            files.append({QStringLiteral("bundle.tar"), true});
+    }
+    if (haveTool(QStringLiteral("zip"))) {
+        REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("holder"))));
+        REQUIRE(writeFile(scratch.filePath(QStringLiteral("holder/os.img")), image));
+        if (runTool(QStringLiteral("zip"),
+                    {QStringLiteral("-q"), QStringLiteral("-r"),
+                     QStringLiteral("folder.zip"), QStringLiteral("holder")},
+                    scratch.path()))
+            files.append({QStringLiteral("folder.zip"), true});
+    }
+
+    REQUIRE(files.size() >= 4);
+
+    for (const Candidate &c : files) {
+        const QString path = scratch.filePath(c.name);
+        INFO("file: " << c.name.toStdString());
+
+        const imagesize::SourceFormat probed = imagesize::probeFormat(path);
+        const bool sizingSaysContainer =
+            probed.readable
+            && !archivekind::bytesAreTheDiskImage(probed.format, probed.filterCode);
+
+        ProbeOnlyExtractThread probe(QByteArray("file://") + path.toUtf8(),
+                                     QByteArray(), QByteArray());
+        const bool writeSaysContainer = probe.saysContainer(path);
+
+        INFO("sizing says container: " << sizingSaysContainer
+             << ", writing says: " << writeSaysContainer
+             << " (format " << probed.format << ", filter " << probed.filterCode << ")");
+        CHECK(sizingSaysContainer == writeSaysContainer);
+    }
+}
 
 TEST_CASE("An image inside a zipped folder is extracted, not called corrupt",
           "[extract][local]")
