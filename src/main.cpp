@@ -657,7 +657,6 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    QTranslator *translator = new QTranslator;
     if (customQm.isEmpty())
     {
 #ifdef Q_OS_DARWIN
@@ -695,13 +694,11 @@ int main(int argc, char *argv[])
         QLocale::setDefault(QLocale(langcode));
 #endif
 
-        if (translator->load(QLocale(), "rpi-imager", "_", QLatin1String(":/i18n")))
-            imageWriter.replaceTranslator(translator);
-        else
-            delete translator;
+        imageWriter.setLanguageForLocale(QLocale());
     }
     else
     {
+        QTranslator *translator = new QTranslator;
         if (translator->load(customQm))
             imageWriter.replaceTranslator(translator);
         else
