@@ -33,14 +33,14 @@ inline void checkFatNames(const QStringList &names)
     for (const QString &n : names) {
         if (n.isEmpty())
             __builtin_trap();           // a name nothing can open
-        // A NUL and nothing narrower. The 8.3 name now stops at every byte
-        // below 0x20, but a *long* filename is assembled from UCS-2 the
-        // directory chose, and what such a name should do about a control
-        // character is a decision nobody has made -- reject the entry, strip
-        // it, or pass it on. Asserting the stricter rule here would hold the
-        // code to a contract it does not have.
-        if (n.contains(QChar(u'\0')))
-            __builtin_trap();           // read past the terminator
+        // No control character at all, which both halves now promise. The
+        // 8.3 name stops at every byte below 0x20; the long name is
+        // assembled from UCS-2 the directory chose and drops them, keeping
+        // the name rather than rejecting the entry. This was a NUL and
+        // nothing narrower while that decision was outstanding.
+        for (const QChar c : n)
+            if (c.unicode() < 0x20)
+                __builtin_trap();       // a control character in a filename
         const QStringList parts = n.split(QLatin1Char('/'));
         for (const QString &part : parts)
             if (part == QLatin1String(".."))
