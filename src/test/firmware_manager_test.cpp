@@ -1013,7 +1013,7 @@ size_t countOccurrences(const std::string &haystack, const std::string &needle)
 // into rpiboot again rather than into whatever it would normally boot. That is
 // arranged by appending two settings to the recovery's config.txt, and the
 // order of the two is load-bearing: config.txt is read top to bottom, and a
-// recovery_reboot reached before set_boot_order reboots the device before the
+// recovery_reboot reached before set_reboot_order reboots the device before the
 // override has been seen. The device then powers up into normal boot, the
 // imager sits waiting for a device that is never coming back, and nothing
 // says why.
@@ -1063,7 +1063,7 @@ TEST_CASE("A recovery config gains both settings, boot order first",
     const std::string out = readAll(cfg);
     INFO("config.txt:\n" << out);
 
-    const auto orderAt = out.find("set_boot_order=0x3");
+    const auto orderAt = out.find("set_reboot_order=0x3");
     const auto rebootAt = out.find("recovery_reboot=1");
     REQUIRE(orderAt != std::string::npos);
     REQUIRE(rebootAt != std::string::npos);
@@ -1085,7 +1085,7 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     const auto cfg = sbrConfigFor(versionDir, ChipGeneration::BCM2712,
                                   "recovery_reboot=1\n"
                                   "[all]\n"
-                                  "  set_boot_order=0xf41\n"
+                                  "  set_reboot_order=0xf41\n"
                                   "arm_64bit=1\n");
 
     TestableFirmwareManager fm;
@@ -1095,10 +1095,10 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     INFO("config.txt:\n" << out);
 
     // Exactly one of each, ours, in our order.
-    CHECK(countOccurrences(out, "set_boot_order=") == 1);
+    CHECK(countOccurrences(out, "set_reboot_order=") == 1);
     CHECK(countOccurrences(out, "recovery_reboot=") == 1);
     CHECK(out.find("0xf41") == std::string::npos);
-    CHECK(out.find("set_boot_order=0x3") < out.find("recovery_reboot=1"));
+    CHECK(out.find("set_reboot_order=0x3") < out.find("recovery_reboot=1"));
     CHECK(out.find("arm_64bit=1") != std::string::npos);
 }
 
@@ -1170,8 +1170,8 @@ TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2711));
 
-    CHECK(readAll(older).find("set_boot_order=0x3") != std::string::npos);
-    CHECK(readAll(newer).find("set_boot_order=0x3") == std::string::npos);
+    CHECK(readAll(older).find("set_reboot_order=0x3") != std::string::npos);
+    CHECK(readAll(newer).find("set_reboot_order=0x3") == std::string::npos);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2276,7 +2276,7 @@ TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
 TEST_CASE("Boot-order lines already in the recovery config are replaced, not repeated",
           "[firmware]")
 {
-    // config.txt is read top to bottom and set_boot_order has to be seen
+    // config.txt is read top to bottom and set_reboot_order has to be seen
     // before recovery_reboot, or the bootloader reboots before applying the
     // override and the board comes up in normal boot instead of rpiboot.
     // Upstream's own config may carry either key, so they are stripped and
@@ -2286,9 +2286,9 @@ TEST_CASE("Boot-order lines already in the recovery config are replaced, not rep
     const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
     writeFile(configPath,
               "recovery_reboot=1\n"
-              "  set_boot_order=0x1\n"
+              "  set_reboot_order=0x1\n"
               "arm_64bit=1\r\n"
-              "set_boot_order=0xf41\n");
+              "set_reboot_order=0xf41\n");
 
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
@@ -2301,7 +2301,7 @@ TEST_CASE("Boot-order lines already in the recovery config are replaced, not rep
 
     REQUIRE(lines.size() == 3);
     CHECK(lines[0] == "arm_64bit=1");   // the CR was stripped with it
-    CHECK(lines[1] == "set_boot_order=0x3");
+    CHECK(lines[1] == "set_reboot_order=0x3");
     CHECK(lines[2] == "recovery_reboot=1");
 }
 
@@ -2643,7 +2643,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     QFile config(QString::fromStdString((sub / "config.txt").string()));
     REQUIRE(config.open(QIODevice::ReadOnly));
     const QByteArray body = config.readAll();
-    CHECK(body.contains("set_boot_order=0x3"));
+    CHECK(body.contains("set_reboot_order=0x3"));
     CHECK(body.contains("recovery_reboot=1"));
 
     // And the bootcode was counter-signed from the unsigned baseline.

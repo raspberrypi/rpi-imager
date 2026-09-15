@@ -956,11 +956,11 @@ bool FirmwareManager::ensureSbrReenumerates(const std::filesystem::path& version
         return false;
     }
 
-    // Strip any pre-existing set_boot_order= or recovery_reboot= lines.
+    // Strip any pre-existing set_reboot_order= or recovery_reboot= lines.
     // We re-append them in the required order at the end of the file so
     // we don't have to reason about the section the upstream put them in
     // (config.txt is processed top-to-bottom; recovery_reboot must be
-    // reached *after* set_boot_order has been observed, otherwise the
+    // reached *after* set_reboot_order has been observed, otherwise the
     // bootloader reboots before applying our boot-order override and the
     // device powers up into normal boot instead of back into rpiboot).
     auto isOverrideKey = [](const std::string& line) {
@@ -968,7 +968,10 @@ bool FirmwareManager::ensureSbrReenumerates(const std::filesystem::path& version
         if (trimStart == std::string::npos)
             return false;
         std::string_view rest(line.data() + trimStart, line.size() - trimStart);
-        return rest.starts_with("set_boot_order=") ||
+        // set_boot_order= too: caches written before the name was corrected
+        // carry that dead line, and nothing else would ever take it out.
+        return rest.starts_with("set_reboot_order=") ||
+               rest.starts_with("set_boot_order=") ||
                rest.starts_with("recovery_reboot=");
     };
 
@@ -993,15 +996,19 @@ bool FirmwareManager::ensureSbrReenumerates(const std::filesystem::path& version
     }
     for (const auto& l : kept)
         out << l << '\n';
-    // Order is load-bearing: set_boot_order must precede recovery_reboot.
-    out << "set_boot_order=0x3\n";
+    // Order is load-bearing: set_reboot_order must precede recovery_reboot.
+    // So is the name.  recovery.bin takes only program_pubkey, recovery_reboot
+    // and set_reboot_order; set_boot_order, which this wrote before, is not a
+    // directive it knows and was dropped without complaint, leaving the device
+    // to reboot on its EEPROM's own BOOT_ORDER and never come back to rpiboot.
+    out << "set_reboot_order=0x3\n";
     out << "recovery_reboot=1\n";
     if (!out) {
         _lastError = "Write failed on SBR config.txt: " + configPath.string();
         return false;
     }
     qDebug() << "FirmwareManager: rewrote" << QString::fromStdString(configPath.string())
-             << "with set_boot_order=0x3 + recovery_reboot=1"
+             << "with set_reboot_order=0x3 + recovery_reboot=1"
              << "(kept" << kept.size() << "upstream line(s))";
     return true;
 }
