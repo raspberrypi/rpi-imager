@@ -161,8 +161,11 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
                                "fastboot/" + gadget});
             entries.push_back({usbboot + "mass-storage-gadget64/config.txt",
                                "fastboot/config.txt"});
+            // Fetched to .original, not bootfiles.bin: the latter is derived
+            // per run, and a derived file cannot also be the one the
+            // conditional GET refreshes.
             entries.push_back({usbboot + "firmware/bootfiles.bin",
-                               "fastboot/bootfiles.bin"});
+                               "fastboot/bootfiles.bin.original"});
         }
         break;
 
@@ -451,23 +454,22 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     // 3c. Extract the correct bootcode from bootfiles.bin for chips that
     // need it (BCM2711 → bootcode4.bin, BCM2712 → bootcode5.bin).
     //
-    // If a re-provisioning run on a previous invocation re-packed
-    // bootfiles.bin (with a counter-signed bootcode inside), we kept the
-    // upstream tar at bootfiles.bin.original.  Restore from .original
-    // before extracting so we always read the unsigned upstream bootcode
-    // — extracting from a signed blob and re-signing on top of that
-    // would chain-sign and the ROM would reject the result.
+    // bootfiles.bin is derived, so rebuild from .original: a re-provisioning
+    // run leaves a counter-signed bootcode in it, and signing that again
+    // chain-signs what the ROM rejects.
     if (needsBootcodeExtraction) {
         auto bundlePath     = versionDir / "fastboot" / "bootfiles.bin";
         auto bundleOriginal = versionDir / "fastboot" / "bootfiles.bin.original";
-        if (std::filesystem::exists(bundleOriginal)) {
-            std::error_code restoreEc;
-            overwriteCopy(bundleOriginal, bundlePath, restoreEc);
-            if (restoreEc) {
-                _lastError = "Failed to restore bootfiles.bin from .original: "
-                           + restoreEc.message();
-                return {};
-            }
+        if (!std::filesystem::exists(bundleOriginal)) {
+            _lastError = "Upstream bootfiles.bin.original missing from the cache";
+            return {};
+        }
+        std::error_code restoreEc;
+        overwriteCopy(bundleOriginal, bundlePath, restoreEc);
+        if (restoreEc) {
+            _lastError = "Failed to restore bootfiles.bin from .original: "
+                       + restoreEc.message();
+            return {};
         }
         if (!extractBootcodeFromBootfiles(versionDir, chip))
             return {};  // _lastError set by helper
@@ -565,19 +567,6 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         if (mode == SideloadMode::Fastboot) {
             auto bundlePath = versionDir / "fastboot" / "bootfiles.bin";
             auto bundleOriginal = versionDir / "fastboot" / "bootfiles.bin.original";
-
-            // Preserve a pristine copy of the upstream tar on first encounter.
-            // This protects against re-signing-an-already-signed blob across
-            // repeated runs; we always re-baseline from .original below.
-            std::error_code preserveEc;
-            if (!std::filesystem::exists(bundleOriginal)) {
-                std::filesystem::copy_file(bundlePath, bundleOriginal, preserveEc);
-                if (preserveEc) {
-                    _lastError = "Failed to preserve bootfiles.bin.original: "
-                               + preserveEc.message();
-                    return {};
-                }
-            }
 
             // Read the pristine tar, splice in the signed bootcode, write
             // back to bootfiles.bin (overwriting any previous-run output).
