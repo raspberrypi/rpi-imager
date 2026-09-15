@@ -200,8 +200,10 @@ ListView {
         // Re-assert the node so the alert is read again when the wording is
         // the same but the event has happened twice -- two cards of the same
         // kind removed in a row, say.
+        // Qualified through the id: textChanged carries a `text` argument, and
+        // the bare name would bind to that deprecated parameter injection.
         onTextChanged: {
-            if (text.length > 0) {
+            if (populationAlert.text.length > 0) {
                 Accessible.ignored = true
                 // Guarded: a deferred call outlives the view that scheduled
                 // it, and an id whose object has gone reads as null.
