@@ -358,15 +358,19 @@ bool DownloadThread::_openAndPrepareDevice()
     // Device path is already platform-optimized by caller (e.g., rdisk on macOS)
     rpi_imager::FileError result = _file->OpenDevice(filename_str);
 
-#ifdef Q_OS_WIN
-    // On Windows, the device may be temporarily held by the OS after volume
-    // dismount/clean operations (especially on Windows 11 25H2+).
-    // Retry with geometric backoff, keeping the user informed.
+    // The device may be held briefly by the OS after a dismount or a
+    // partition-table rewrite -- on Windows 11 25H2+ especially. Retry with
+    // geometric backoff, keeping the user informed.
+    //
+    // Whether a retry is worth anything is asked of the file operations layer
+    // rather than decided here: this used to test Windows error codes inline,
+    // behind an #ifdef, and could not tell a drive the OS was still letting go
+    // of from a file the user simply cannot write. The second case was retried
+    // for sixty-four seconds and then reported -- long after the caller had
+    // stopped waiting for an answer.
     if (result != rpi_imager::FileError::kSuccess)
     {
-        int lastErr = _file->GetLastErrorCode();
-        // Only retry for transient access errors, not permanent failures
-        if (lastErr == ERROR_ACCESS_DENIED || lastErr == ERROR_SHARING_VIOLATION || lastErr == ERROR_NOT_READY)
+        if (_file->OpenFailureMayBeTransient(filename_str))
         {
             constexpr int kMaxRetries = 8;
             constexpr int kInitialDelayMs = 250;
@@ -382,9 +386,17 @@ bool DownloadThread::_openAndPrepareDevice()
                 emit preparationStatusUpdate(tr("Waiting for drive to become available... (%1s)")
                     .arg(totalWaitSec));
                 qDebug() << "OpenDevice retry" << attempt << "of" << kMaxRetries
-                         << "after error" << lastErr << "- waiting" << delayMs << "ms";
+                         << "after error" << _file->GetLastErrorCode()
+                         << "- waiting" << delayMs << "ms";
 
-                QThread::msleep(delayMs);
+                // Slept in slices: the last wait here is thirty-two seconds,
+                // and a single msleep of that length ignores a cancel for its
+                // whole duration.
+                constexpr int kCancelPollMs = 50;
+                for (int slept = 0; slept < delayMs && !_cancelled; slept += kCancelPollMs)
+                    QThread::msleep(kCancelPollMs);
+                if (_cancelled)
+                    break;
                 delayMs *= 2;
 
                 result = _file->OpenDevice(filename_str);
@@ -393,13 +405,11 @@ bool DownloadThread::_openAndPrepareDevice()
                     qDebug() << "OpenDevice succeeded on retry" << attempt;
                     break;
                 }
-                lastErr = _file->GetLastErrorCode();
-                if (lastErr != ERROR_ACCESS_DENIED && lastErr != ERROR_SHARING_VIOLATION && lastErr != ERROR_NOT_READY)
+                if (!_file->OpenFailureMayBeTransient(filename_str))
                     break;  // Non-transient error, stop retrying
             }
         }
     }
-#endif
 
     qint64 authOpenMs = authTimer.elapsed();
     qDebug() << "Device authorization and open took" << authOpenMs << "ms";

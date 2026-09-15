@@ -25,6 +25,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QString>
+#include <QFile>
 
 namespace {
     // Network monitoring state
@@ -881,5 +882,12 @@ void logFontEngine()
     qDebug() << "Font engine:" << windowsFontEngineFromPlatformArgs(platform)
              << "(QT_QPA_PLATFORM =" << platform << ")";
 }
+
+} // namespace PlatformQuirks
+
+namespace PlatformQuirks {
+
+NativePermissionScope::NativePermissionScope() { qEnableNtfsPermissionChecks(); }
+NativePermissionScope::~NativePermissionScope() { qDisableNtfsPermissionChecks(); }
 
 } // namespace PlatformQuirks

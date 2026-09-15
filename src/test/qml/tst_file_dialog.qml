@@ -157,6 +157,40 @@ TestCase {
         compare(d._toFileUrl("~/os.img"), "file://" + homePath + "/os.img")
     }
 
+    function test_a_windows_drive_path_becomes_a_file_url() {
+        // "C:/..." does not start with a slash, so it used to fall past every
+        // branch and come back unchanged -- a bare path handed to a caller
+        // expecting a URL. Checked on every platform: the shape is a Windows
+        // one, but nothing about recognising it is platform-specific.
+        const d = create({})
+        compare(d._toFileUrl("C:/Users/pi/os.img"), "file:///C:/Users/pi/os.img")
+        compare(d._toFileUrl("d:/images/os.img"), "file:///d:/images/os.img")
+    }
+
+    function test_a_windows_path_with_backslashes_becomes_a_file_url() {
+        // What actually arrives when a path is pasted from Explorer.
+        const d = create({})
+        compare(d._toFileUrl("C:" + String.fromCharCode(92) + "Users"
+                             + String.fromCharCode(92) + "pi"
+                             + String.fromCharCode(92) + "os.img"),
+                "file:///C:/Users/pi/os.img")
+    }
+
+    function test_three_slashes_are_not_two() {
+        // "file://C:/x" reads C: as the authority, so QUrl takes "c" for a host
+        // and leaves "/x" as the path. The drive letter belongs to the path.
+        const d = create({})
+        const url = d._toFileUrl("C:/x")
+        verify(url.indexOf("file:///") === 0, "expected three slashes, got " + url)
+    }
+
+    function test_a_drive_path_url_displays_without_a_leading_slash() {
+        // Stripping "file://" off "file:///C:/x" leaves "/C:/x", and shown to
+        // the user that reads as a directory which does not exist.
+        const d = create({})
+        compare(d._toDisplayPath("file:///C:/Users/pi/os.img"), "C:/Users/pi/os.img")
+    }
+
     function test_a_url_becomes_a_display_path() {
         const d = create({})
         compare(d._toDisplayPath("file:///home/pi/os.img"), "/home/pi/os.img")

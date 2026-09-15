@@ -14,6 +14,8 @@
 #include <QStringList>
 #include <QStringConverter>
 #include <QDebug>
+#include <QRandomGenerator>
+
 #include <random>
 
 namespace rpi_imager {
@@ -183,13 +185,23 @@ QString CustomisationGenerator::cryptPassword(const QByteArray& passwordInput, c
     const QByteArray saltchars =
       "./0123456789ABCDEFGHIJKLMNOPQRST"
       "UVWXYZabcdefghijklmnopqrstuvwxyz";
-    std::mt19937 gen(static_cast<unsigned>(QDateTime::currentMSecsSinceEpoch()));
-    std::uniform_int_distribution<> uid(0, saltchars.length() - 1);
+    // Salt bytes come from the system CSPRNG. They used to come from an
+    // mt19937 seeded with QDateTime::currentMSecsSinceEpoch(), which made the
+    // salt a function of when the card was written: two passwords hashed in the
+    // same millisecond got the same salt, and the seed itself was guessable by
+    // anyone who knew roughly when the image was made.
+    //
+    // Windows is where this stopped being theoretical. The system clock there
+    // ticks at ~15.6 ms by default, so consecutive hashes routinely landed in
+    // one tick and came out identical -- "Hashing the same password twice gives
+    // different hashes" failed four runs in five.
+    QRandomGenerator *gen = QRandomGenerator::system();
+    const quint32 saltCharCount = static_cast<quint32>(saltchars.length());
 
     if (osUsesYescrypt(osReleaseDate)) {
         QByteArray salt;
         for (int i = 0; i < 16; i++)  // yescrypt uses longer salts
-            salt += saltchars[uid(gen)];
+            salt += saltchars[gen->bounded(saltCharCount)];
 
         char *result = yescrypt_crypt(password.constData(), salt.constData());
         return result ? QString(result) : QString();
@@ -197,7 +209,7 @@ QString CustomisationGenerator::cryptPassword(const QByteArray& passwordInput, c
 
     QByteArray salt = "$5$";
     for (int i = 0; i < 10; i++)
-        salt += saltchars[uid(gen)];
+        salt += saltchars[gen->bounded(saltCharCount)];
 
     return sha256_crypt(password.constData(), salt.constData());
 }

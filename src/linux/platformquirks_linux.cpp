@@ -2310,3 +2310,11 @@ void applyEmbeddedDisplayScaling()
 }
 
 } // namespace PlatformQuirks
+
+namespace PlatformQuirks {
+
+// The stat bits are already the answer here.
+NativePermissionScope::NativePermissionScope() = default;
+NativePermissionScope::~NativePermissionScope() = default;
+
+} // namespace PlatformQuirks
