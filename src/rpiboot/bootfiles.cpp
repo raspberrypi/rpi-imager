@@ -11,11 +11,33 @@
 
 #include <fstream>
 
+namespace {
+
+// Whether a pathname fits USTAR's name[100], or a prefix[155] split on '/'.
+bool fitsUstarName(const std::string& name)
+{
+    if (name.size() <= 100)
+        return true;
+    if (name.size() > 256)
+        return false;
+    // Split so the tail fits name[100] and the head prefix[155].
+    for (size_t i = 0; i + 1 < name.size(); ++i) {
+        if (name[i] != '/')
+            continue;
+        if (i <= 155 && name.size() - i - 1 <= 100)
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
 namespace rpiboot {
 
 bool Bootfiles::extractFromMemory(const std::vector<uint8_t>& tarData)
 {
     _files.clear();
+    _entries.clear();
 
     if (tarData.empty()) {
         _lastError = "Empty archive data";
@@ -42,6 +64,7 @@ bool Bootfiles::extractFromMemory(const std::vector<uint8_t>& tarData)
 bool Bootfiles::extractFromFile(const std::string& path)
 {
     _files.clear();
+    _entries.clear();
 
     ::archive* a = archive_read_new();
     archive_read_support_format_tar(a);
@@ -109,24 +132,53 @@ bool Bootfiles::replaceEntry(const std::string& name, std::vector<uint8_t> data)
 
 bool Bootfiles::writeToFile(const std::string& path)
 {
+    // Checked before anything is opened, so a name we cannot store leaves no
+    // file behind; GNU would otherwise write a @LongLink entry no ROM reads.
+    for (const auto& meta : _entries) {
+        if (!fitsUstarName(meta.name)) {
+            _lastError = "writeToFile: pathname too long for tar: " + meta.name;
+            return false;
+        }
+    }
+
     ::archive* a = archive_write_new();
-    // USTAR is the most portable / minimal tar format; it's what the
-    // upstream `tar -vcf` produces by default on most Linux distros and
-    // what the BCM2712 bootloader is happy to parse.
-    archive_write_set_format_ustar(a);
+    // GNU tar, not USTAR: what upstream's `tar -vcf` writes.  The magic
+    // differs, changing every checksum.
+    archive_write_set_format_gnutar(a);
     if (archive_write_open_filename(a, path.c_str()) != ARCHIVE_OK) {
         _lastError = std::string("writeToFile: ") + archive_error_string(a);
         archive_write_free(a);
         return false;
     }
 
-    for (const auto& [name, data] : _files) {
+    static const std::vector<uint8_t> kNoData;
+
+    for (const auto& meta : _entries) {
+        const std::string& name = meta.name;
+        const auto it = _files.find(name);
+        const std::vector<uint8_t>& data =
+            it != _files.end() ? it->second : kNoData;
+
         ::archive_entry* e = archive_entry_new();
         archive_entry_set_pathname(e, name.c_str());
-        archive_entry_set_size(e, static_cast<la_int64_t>(data.size()));
-        archive_entry_set_filetype(e, AE_IFREG);
-        // Match the file mode rpi-eeprom firmware ships with (0644).
-        archive_entry_set_perm(e, 0644);
+        archive_entry_set_filetype(e, meta.filetype);
+        archive_entry_set_perm(e, meta.perm);
+        archive_entry_set_uid(e, meta.uid);
+        archive_entry_set_gid(e, meta.gid);
+        if (!meta.uname.empty())
+            archive_entry_set_uname(e, meta.uname.c_str());
+        if (!meta.gname.empty())
+            archive_entry_set_gname(e, meta.gname.c_str());
+        if (meta.hasMtime)
+            archive_entry_set_mtime(e, meta.mtime, 0);
+        if (meta.filetype == AE_IFLNK && !meta.symlinkTarget.empty())
+            archive_entry_set_symlink(e, meta.symlinkTarget.c_str());
+        // Only a regular entry carries a payload; a directory declaring one
+        // makes libarchive expect bytes that never come.
+        const bool isRegular = (meta.filetype == AE_IFREG);
+        archive_entry_set_size(e, isRegular
+                                      ? static_cast<la_int64_t>(data.size())
+                                      : 0);
 
         if (archive_write_header(a, e) != ARCHIVE_OK) {
             _lastError = std::string("writeToFile header for ") + name + ": "
@@ -137,7 +189,7 @@ bool Bootfiles::writeToFile(const std::string& path)
             return false;
         }
 
-        if (!data.empty()) {
+        if (isRegular && !data.empty()) {
             la_ssize_t written = archive_write_data(a, data.data(), data.size());
             if (written < 0 ||
                 static_cast<size_t>(written) != data.size()) {
@@ -164,14 +216,50 @@ bool Bootfiles::writeToFile(const std::string& path)
 
 bool Bootfiles::extractFromArchive(::archive* a)
 {
+    // Numeric in the header so it need not include libarchive.
+    static_assert(kFileTypeRegular == AE_IFREG, "AE_IFREG mismatch");
+    static_assert(kFileTypeSymlink == AE_IFLNK, "AE_IFLNK mismatch");
+
     ::archive_entry* entry;
 
     while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
-        // Skip directories
-        if (archive_entry_filetype(entry) != AE_IFREG)
+        const unsigned int filetype =
+            static_cast<unsigned int>(archive_entry_filetype(entry));
+        const char* rawName = archive_entry_pathname(entry);
+        if (!rawName)
             continue;
 
-        std::string name = archive_entry_pathname(entry);
+        // Strip leading "./" from the entry name for cleaner lookups
+        std::string name = rawName;
+        if (name.size() > 2 && name[0] == '.' && name[1] == '/')
+            name = name.substr(2);
+
+        // Record what tar said about every entry, directories included.
+        EntryMeta meta;
+        meta.name = name;
+        meta.filetype = filetype;
+        meta.perm = static_cast<unsigned int>(archive_entry_perm(entry));
+        meta.uid = archive_entry_uid(entry);
+        meta.gid = archive_entry_gid(entry);
+        if (const char* u = archive_entry_uname(entry))
+            meta.uname = u;
+        if (const char* g = archive_entry_gname(entry))
+            meta.gname = g;
+        if (archive_entry_mtime_is_set(entry)) {
+            meta.mtime = archive_entry_mtime(entry);
+            meta.hasMtime = true;
+        }
+        if (filetype == AE_IFLNK) {
+            if (const char* t = archive_entry_symlink(entry))
+                meta.symlinkTarget = t;
+        }
+
+        if (filetype != AE_IFREG) {
+            _entries.push_back(std::move(meta));
+            archive_read_data_skip(a);
+            continue;
+        }
+
         int64_t entrySize = archive_entry_size(entry);
 
         if (entrySize < 0) {
@@ -217,10 +305,7 @@ bool Bootfiles::extractFromArchive(::archive* a)
             data.resize(offset);
         }
 
-        // Strip leading "./" from the entry name for cleaner lookups
-        if (name.size() > 2 && name[0] == '.' && name[1] == '/')
-            name = name.substr(2);
-
+        _entries.push_back(std::move(meta));
         _files[std::move(name)] = std::move(data);
     }
 
