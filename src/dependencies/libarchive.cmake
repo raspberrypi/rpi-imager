@@ -1,4 +1,6 @@
-# Bundled libarchive configured for static zlib and zstd
+# Bundled libarchive configured for static zlib, zstd and bzip2
+
+include(${CMAKE_CURRENT_LIST_DIR}/bzip2.cmake)
 
 set(ENABLE_WERROR OFF CACHE BOOL "")
 set(ENABLE_INSTALL OFF CACHE BOOL "")
@@ -8,7 +10,14 @@ set(ENABLE_MBEDTLS OFF CACHE BOOL "")
 set(ENABLE_NETTLE OFF CACHE BOOL "")
 set(ENABLE_OPENSSL OFF CACHE BOOL "")
 set(ENABLE_ZLIB ON CACHE BOOL "")
-set(ENABLE_BZip2 OFF CACHE BOOL "")
+# ON, and backed by the bundled libbz2 pulled in just above. OFF did not mean
+# "no bzip2 support" -- it meant libarchive shelled out to a bzip2 on PATH,
+# which works on Linux and macOS and hangs on Windows. See bzip2.cmake.
+# FORCE, unlike its neighbours: those were written into the cache the first
+# time any given build tree was configured, and a plain CACHE set never
+# revisits an entry that already exists. Every tree configured before this
+# change carries ENABLE_BZip2=OFF and would silently keep it.
+set(ENABLE_BZip2 ON CACHE BOOL "" FORCE)
 set(ENABLE_LZ4 OFF CACHE BOOL "")
 set(ENABLE_LZO OFF CACHE BOOL "")
 set(ENABLE_LIBB2 OFF CACHE BOOL "")
@@ -42,6 +51,13 @@ endif()
 
 if (TARGET archive_static AND TARGET ZLIB::ZLIB)
     add_dependencies(archive_static ZLIB::ZLIB)
+endif()
+if (TARGET archive_static AND TARGET bz2_static)
+    # libarchive already links it: BZIP2_LIBRARIES goes into its ADDITIONAL_LIBS.
+    # This only orders the build, and does not link it a second time -- libarchive
+    # uses the plain target_link_libraries signature throughout, so adding the
+    # keyword form against the same target is rejected outright.
+    add_dependencies(archive_static bz2_static)
 endif()
 
 unset(POSIX_REGEX_LIB)

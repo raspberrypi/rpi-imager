@@ -4,6 +4,8 @@
  */
 
 #include "winfile.h"
+
+#include <string>
 #include <QDebug>
 #include <QThread>
 
@@ -26,12 +28,24 @@ void WinFile::setFileName(const QString &name)
 
 bool WinFile::open(QIODevice::OpenMode)
 {
-    QByteArray n = _name.toLatin1();
+    // Wide, not Latin-1. toLatin1() replaces everything outside it with '?',
+    // so a path under a profile named in Cyrillic or CJK -- an ordinary thing
+    // to have -- named a file that does not exist, and the open failed after
+    // two seconds of retries for a reason no message explained.
+    const std::wstring n = _name.toStdWString();
 
     for (int attempt = 0; attempt < 20; attempt++)
     {
-        _h = CreateFileA(n.data(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+        _h = CreateFileW(n.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
         if (_h != INVALID_HANDLE_VALUE)
+            break;
+
+        // Not worth retrying something that cannot become true: a path that is
+        // not there will not be there in two seconds, and the wait was paid on
+        // every failed open. Only a device being briefly held is transient.
+        const DWORD err = GetLastError();
+        if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND ||
+            err == ERROR_INVALID_NAME)
             break;
 
         qDebug() << "Error opening device. Retrying...";
@@ -40,7 +54,7 @@ bool WinFile::open(QIODevice::OpenMode)
 
     // Try with FILE_SHARE_WRITE
     if (_h == INVALID_HANDLE_VALUE)
-        _h = CreateFileA(n.data(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);;
+        _h = CreateFileW(n.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
     if (_h == INVALID_HANDLE_VALUE)
     {

@@ -25,6 +25,24 @@ namespace PlatformQuirks {
         Error
     };
     /**
+     * Makes QFileInfo answer permission questions from the real ACLs for as
+     * long as it is in scope.
+     *
+     * Qt reads Windows permissions off the read-only attribute unless asked
+     * otherwise, checking an ACL being slow, so a file the user genuinely
+     * cannot read looks readable. Elsewhere the stat bits are already the
+     * answer and this does nothing.
+     */
+    class NativePermissionScope
+    {
+    public:
+        NativePermissionScope();
+        ~NativePermissionScope();
+        NativePermissionScope(const NativePermissionScope &) = delete;
+        NativePermissionScope &operator=(const NativePermissionScope &) = delete;
+    };
+
+    /**
      * Apply platform-specific quirks and workarounds.
      * This function should be called early in main() before Qt initialization.
      */

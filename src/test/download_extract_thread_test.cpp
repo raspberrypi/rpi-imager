@@ -12,6 +12,9 @@
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <archive.h>
+#include <archive_entry.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "downloadextractthread.h"
@@ -30,6 +33,7 @@
 #include <QProcessEnvironment>
 #include <QThread>
 #include <QTimer>
+#include <QUrl>
 #include <QUuid>
 
 #include <memory>
@@ -113,6 +117,43 @@ bool runTool(const QString &tool, const QStringList &args, const QString &workin
     return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
 }
 
+// A .zip holding one stored entry, written with libarchive rather than zip(1).
+//
+// Every other container here is built by the tool that owns the format, so the
+// decompressor is fed something a real producer made. Zip is where that stops
+// working: Git for Windows carries no zip binary and GNU tar cannot write the
+// format, so a tool-built fixture skips on one platform or the other whatever
+// is chosen, quietly dropping the only container with a directory rather than
+// a plain stream.
+//
+// libarchive's writer is a different code path from the reader under test, so
+// this is still not the reader checking its own output.
+bool writeStoredZip(const QString &archivePath, const QString &entryName,
+                    const QByteArray &contents)
+{
+    struct archive *a = archive_write_new();
+    if (!a)
+        return false;
+    bool ok = archive_write_set_format_zip(a) == ARCHIVE_OK
+              && archive_write_zip_set_compression_store(a) == ARCHIVE_OK
+              && archive_write_open_filename(a, archivePath.toUtf8().constData()) == ARCHIVE_OK;
+    if (ok) {
+        struct archive_entry *entry = archive_entry_new();
+        archive_entry_set_pathname(entry, entryName.toUtf8().constData());
+        archive_entry_set_size(entry, contents.size());
+        archive_entry_set_filetype(entry, AE_IFREG);
+        archive_entry_set_perm(entry, 0644);
+        ok = archive_write_header(a, entry) == ARCHIVE_OK
+             && archive_write_data(a, contents.constData(),
+                                   std::size_t(contents.size())) == contents.size();
+        archive_entry_free(entry);
+    }
+    if (archive_write_close(a) != ARCHIVE_OK)
+        ok = false;
+    archive_write_free(a);
+    return ok;
+}
+
 struct Outcome {
     bool finished = false;
     bool succeeded = false;
@@ -162,7 +203,7 @@ std::unique_ptr<DownloadExtractThread> makeExtract(const ScratchDir &scratch,
     const QString dest = scratch.filePath(destName);
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
 
-    const QByteArray url = QByteArray("file://") + archivePath.toUtf8();
+    const QByteArray url = QUrl::fromLocalFile(archivePath).toEncoded();
     auto dt = std::make_unique<DownloadExtractThread>(url, dest.toUtf8(), QByteArray());
     dt->setExtractTotal(static_cast<uint64_t>(image.size()));
     return dt;
@@ -266,19 +307,11 @@ TEST_CASE("DownloadExtractThread decompresses a gzip image onto the target", "[e
 
 TEST_CASE("DownloadExtractThread decompresses a zipped image onto the target", "[extract]")
 {
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no .zip image can be built to extract");
-
     ScratchDir scratch;
     const QByteArray image = imageOfSize(1024 * 1024, 13);
-    const QString raw = scratch.filePath(QStringLiteral("zip-image.img"));
-    REQUIRE(writeFile(raw, image));
 
     const QString archive = scratch.filePath(QStringLiteral("image.zip"));
-    REQUIRE(runTool(QStringLiteral("zip"),
-                    {QStringLiteral("-q"), QStringLiteral("-0"), archive,
-                     QStringLiteral("zip-image.img")},
-                    QFileInfo(raw).absolutePath()));
+    REQUIRE(writeStoredZip(archive, QStringLiteral("zip-image.img"), image));
     REQUIRE(QFileInfo::exists(archive));
 
     // Zip is the case with a directory rather than a plain stream, so the
@@ -383,7 +416,7 @@ TEST_CASE("A download that stops mid-archive is not blamed on the file",
 
     const QString dest = scratch.filePath(QStringLiteral("short-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(), hash);
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(), hash);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
     dt.setVerifyEnabled(false);
 
@@ -458,7 +491,7 @@ TEST_CASE("DownloadExtractThread reports a destination it cannot open", "[extrac
     REQUIRE(writeFile(raw, image));
     REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
 
-    DownloadExtractThread dt(QByteArray("file://") + (raw + QStringLiteral(".xz")).toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile((raw + QStringLiteral(".xz"))).toEncoded(),
                              "/nonexistent-rpi-imager-dir/deeper/dest.img", QByteArray());
 
     const Outcome outcome = runToCompletion(dt, 60000);
@@ -523,7 +556,7 @@ TEST_CASE("LocalFileExtractThread writes a local xz image", "[extract][local]")
     // The path is parsed with QUrl::toLocalFile(), so it has to be a
     // file:// URL -- a bare path yields an empty filename and "Error opening
     // image file".
-    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -548,7 +581,7 @@ TEST_CASE("LocalFileExtractThread writes a local uncompressed image", "[extract]
 
     // No container at all: the format sniff has to fall through to the raw
     // path rather than treating an unrecognised header as corruption.
-    LocalFileExtractThread dt(QByteArray("file://") + raw.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(raw).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -597,7 +630,7 @@ TEST_CASE("LocalFileExtractThread reports a corrupt local archive", "[extract][l
     const QString dest = scratch.filePath(QStringLiteral("bad-local-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
 
-    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -624,7 +657,7 @@ TEST_CASE("A .xz that is not an archive at all is refused, not written raw",
     const QString dest = scratch.filePath(QStringLiteral("notxz-dest.img"));
     REQUIRE(writeFile(dest, blank));
 
-    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -654,7 +687,7 @@ TEST_CASE("A .cache file is still written raw when it is a plain image",
     const QString dest = scratch.filePath(QStringLiteral("cache-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (1024 * 1024), '\0')));
 
-    LocalFileExtractThread dt(QByteArray("file://") + cached.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(cached).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -763,7 +796,7 @@ TEST_CASE("Sizing and writing reach the same verdict about a file",
             probed.readable
             && !archivekind::bytesAreTheDiskImage(probed.format, probed.filterCode);
 
-        ProbeOnlyExtractThread probe(QByteArray("file://") + path.toUtf8(),
+        ProbeOnlyExtractThread probe(QUrl::fromLocalFile(path).toEncoded(),
                                      QByteArray(), QByteArray());
         const bool writeSaysContainer = probe.saysContainer(path);
 
@@ -796,7 +829,7 @@ TEST_CASE("An image inside a zipped folder is extracted, not called corrupt",
     const QString dest = scratch.filePath(QStringLiteral("folder-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
 
-    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -833,7 +866,7 @@ TEST_CASE("An image inside a tarred folder is extracted, not called corrupt",
     const QString dest = scratch.filePath(QStringLiteral("tar-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
 
-    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -868,7 +901,7 @@ TEST_CASE("An archive with nothing in it is refused, not written as an empty car
     const QString dest = scratch.filePath(QStringLiteral("nothing-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(2 * 1024 * 1024, '\0')));
 
-    LocalFileExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -909,7 +942,7 @@ TEST_CASE("An ISO is copied to the card, not unpacked onto it", "[extract][local
     const QString dest = scratch.filePath(QStringLiteral("iso-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(isoBytes.size() + (2 * 1024 * 1024), '\0')));
 
-    LocalFileExtractThread dt(QByteArray("file://") + iso.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(iso).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(isoBytes.size()));
@@ -995,7 +1028,7 @@ TEST_CASE("A corrupt cache says it will be replaced by itself", "[extract][hash]
     const QByteArray wrong =
         QCryptographicHash::hash(QByteArray("not this image"), QCryptographicHash::Sha256).toHex();
 
-    LocalFileExtractThread dt(QByteArray("file://") + cached.toUtf8(), dest.toUtf8(), wrong);
+    LocalFileExtractThread dt(QUrl::fromLocalFile(cached).toEncoded(), dest.toUtf8(), wrong);
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
 
@@ -1028,7 +1061,7 @@ TEST_CASE("A corrupt file of the user's own is named as theirs", "[extract][hash
     const QByteArray wrong =
         QCryptographicHash::hash(QByteArray("not this image"), QCryptographicHash::Sha256).toHex();
 
-    LocalFileExtractThread dt(QByteArray("file://") + own.toUtf8(), dest.toUtf8(), wrong);
+    LocalFileExtractThread dt(QUrl::fromLocalFile(own).toEncoded(), dest.toUtf8(), wrong);
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
 
@@ -1109,8 +1142,13 @@ TEST_CASE("DownloadExtractThread decompresses an image inside a tar", "[extract]
     // A tar has entry headers in front of the payload, unlike the bare
     // compressed streams above, so the entry has to be walked to rather than
     // decompressed straight through.
+    // Relative rather than absolute: GNU tar reads a colon before the first
+    // slash in -f as the host:path form it once used for remote archives, so a
+    // Windows path makes it resolve a host called "C". --force-local turns that
+    // off, but bsdtar, which macOS ships as tar, has no such option.
     REQUIRE(runTool(QStringLiteral("tar"),
-                    {QStringLiteral("-czf"), archive, QStringLiteral("tar-image.img")},
+                    {QStringLiteral("-czf"), QStringLiteral("image.tar.gz"),
+                     QStringLiteral("tar-image.img")},
                     QFileInfo(raw).absolutePath()));
     REQUIRE(QFileInfo::exists(archive));
 
@@ -1172,7 +1210,7 @@ TEST_CASE("DownloadExtractThread verifies a decompressed image against its hash"
     // is checked after extraction rather than against the archive.
     const QByteArray hash = QCryptographicHash::hash(image, QCryptographicHash::Sha256).toHex();
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(), hash);
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(), hash);
     dt.setVerifyEnabled(true);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
 
@@ -1202,7 +1240,7 @@ TEST_CASE("DownloadExtractThread rejects a decompressed image with the wrong has
         QCryptographicHash::hash(QByteArray("a different image"), QCryptographicHash::Sha256)
             .toHex();
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(), wrong);
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(), wrong);
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
 
@@ -1246,6 +1284,15 @@ bool runPrivileged(const QString &program, const QStringList &args, QByteArray *
 class MountedFatDevice
 {
 public:
+#ifdef _WIN32
+    // losetup, mount and the uid= option that hands the mounted files to the
+    // invoking user are Linux facilities, and no arrangement of Windows APIs
+    // stands in for them here. Left not ready, so the cases wanting one skip
+    // themselves exactly as they do on a host that will not allow a loop
+    // device at all.
+    explicit MountedFatDevice(int) {}
+    ~MountedFatDevice() = default;
+#else
     explicit MountedFatDevice(int megabytes)
     {
         _dir = QDir::temp().filePath(QStringLiteral("rpi-imager-mf-%1")
@@ -1319,6 +1366,7 @@ public:
             runPrivileged(QStringLiteral("losetup"), {QStringLiteral("-d"), _loop});
         QDir(_dir).removeRecursively();
     }
+#endif
 
     MountedFatDevice(const MountedFatDevice &) = delete;
     MountedFatDevice &operator=(const MountedFatDevice &) = delete;
@@ -1360,7 +1408,7 @@ TEST_CASE("DownloadExtractThread unpacks a multi-file archive onto the target",
     zipArgs << names;
     REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1440,7 +1488,7 @@ TEST_CASE("A multi-file archive that fails leaves nothing behind on the card",
     // A hash that is the right shape and the wrong value.
     const QByteArray wrongHash(64, 'b');
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), wrongHash);
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1498,7 +1546,7 @@ TEST_CASE("A truncated multi-file archive leaves no partial tree",
         REQUIRE(writeFile(archive, whole.left(whole.size() * 2 / 5)));
     }
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1544,7 +1592,7 @@ TEST_CASE("DownloadExtractThread unpacks nested directories", "[extract][multifi
                      QStringLiteral("config.txt"), QStringLiteral("overlays")},
                     QFileInfo(archive).absolutePath()));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1589,7 +1637,7 @@ TEST_CASE("DownloadExtractThread unpacks many small files", "[extract][multifile
     args << names;
     REQUIRE(runTool(QStringLiteral("zip"), args, QFileInfo(archive).absolutePath()));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1634,7 +1682,7 @@ TEST_CASE("DownloadExtractThread unpacks a compressed multi-file archive",
                      QStringLiteral("kernel8.img"), QStringLiteral("config.txt")},
                     QFileInfo(archive).absolutePath()));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1695,7 +1743,7 @@ TEST_CASE("DownloadExtractThread reports a corrupt multi-file archive",
         REQUIRE(check.exitCode() != 0);
     }
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1777,7 +1825,7 @@ TEST_CASE("DownloadExtractThread will not write outside the target",
     const QString escapeTarget = QStringLiteral("/tmp/rpi-imager-escaped.txt");
     QFile::remove(escapeTarget);
 
-    DownloadExtractThread dt(QByteArray("file://") + hostile.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(hostile).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1823,7 +1871,7 @@ TEST_CASE("DownloadExtractThread will not write to an absolute path",
     const QString escapeTarget = QStringLiteral("/tmp/rpi-imager-absolute.txt");
     QFile::remove(escapeTarget);
 
-    DownloadExtractThread dt(QByteArray("file://") + hostile.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(hostile).toEncoded(),
                              device.device().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -1870,7 +1918,7 @@ TEST_CASE("An image that does not fill its last sector is padded, not truncated"
     const QString dest = scratch.filePath(QStringLiteral("ragged-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\xEE')));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                              QByteArray());
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
     dt.setVerifyEnabled(false);
@@ -1914,7 +1962,7 @@ TEST_CASE("A ragged local image is written whole", "[extract][local]")
     const QString dest = scratch.filePath(QStringLiteral("ragged-local-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (1024 * 1024), '\xEE')));
 
-    LocalFileExtractThread dt(QByteArray("file://") + raw.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(raw).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -1953,7 +2001,7 @@ TEST_CASE("A ragged local image reaches a real device, whose last sector must be
              "sudo), so the sector rule cannot be enforced");
 
     const QString dest = QString::fromStdString(device.path());
-    LocalFileExtractThread dt(QByteArray("file://") + raw.toUtf8(), dest.toUtf8(),
+    LocalFileExtractThread dt(QUrl::fromLocalFile(raw).toEncoded(), dest.toUtf8(),
                               QByteArray());
     dt.setVerifyEnabled(false);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
@@ -2007,7 +2055,7 @@ TEST_CASE("A verified compressed download is kept for next time",
     const QString dest = scratch.filePath(QStringLiteral("cache-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                              imageHash);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
     dt.setVerifyEnabled(false);
@@ -2071,7 +2119,7 @@ TEST_CASE("A download whose hash does not match is not kept", "[extract][cache]"
     const QString dest = scratch.filePath(QStringLiteral("nocache-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\0')));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(), dest.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
                              wrongHash);
     dt.setExtractTotal(static_cast<uint64_t>(image.size()));
     dt.setVerifyEnabled(false);
@@ -2156,7 +2204,7 @@ TEST_CASE("A multi-file archive that verifies is kept for next time",
 
     const QString cachePath = scratch.filePath(QStringLiteral("cached.zip"));
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), expected);
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();
@@ -2217,7 +2265,7 @@ TEST_CASE("A multi-file archive whose hash is wrong leaves no cache entry",
     const QString cachePath = scratch.filePath(QStringLiteral("cached.zip"));
     const QByteArray wrong(64, 'a');
 
-    DownloadExtractThread dt(QByteArray("file://") + archive.toUtf8(),
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), wrong);
     dt.setVerifyEnabled(false);
     dt.enableMultipleFileExtraction();

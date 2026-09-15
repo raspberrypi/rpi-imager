@@ -489,9 +489,19 @@ QString ImageWriter::readFileContents(const QString &filePath)
         return QString();
     }
 
-    QFile file(filePath);
+    // A file:// URL is accepted as well as a path, and converted here rather
+    // than by the caller. Every QML caller was stripping the scheme with a
+    // string replace, which leaves "/C:/Users/..." on Windows -- a leading
+    // slash that is not part of the path, so the open failed and the chosen
+    // file read as empty. QUrl::toLocalFile() knows the difference; six
+    // hand-written strips in QML did not.
+    const QString path = filePath.startsWith(QLatin1String("file:"))
+                             ? QUrl(filePath).toLocalFile()
+                             : filePath;
+
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qDebug() << "Failed to open file:" << filePath << "Error:" << file.errorString();
+        qDebug() << "Failed to open file:" << path << "Error:" << file.errorString();
         return QString();
     }
 
@@ -563,7 +573,13 @@ ImageWriter::~ImageWriter()
             if (!_thread->wait(10000)) {
                 qDebug() << "Thread did not finish within 10 seconds, terminating it";
                 _thread->terminate();
-                _thread->wait(2000);
+                // Re-read the member rather than using it again. terminate()
+                // lets the thread's own teardown run, and that path clears
+                // _thread -- so the wait() below was dereferencing a null
+                // pointer and taking the process with it, a segfault ten
+                // seconds after a write that would not stop.
+                if (_thread)
+                    _thread->wait(2000);
             }
         }
         delete _thread;
@@ -1109,9 +1125,22 @@ void ImageWriter::_startConfiguredWrite()
 // Where the download counter is reported, if anywhere.
 static QByteArray telemetryEndpoint()
 {
-    if (!qEnvironmentVariableIsSet("RPI_IMAGER_TELEMETRY_URL"))
-        return QByteArray(TELEMETRY_URL);
-    return qgetenv("RPI_IMAGER_TELEMETRY_URL");
+    // "off" as well as empty, because empty cannot be expressed on Windows.
+    // Setting a variable to an empty string there deletes it -- the CRT's
+    // _putenv_s does, and so does the shell -- so a caller asking for silence
+    // the POSIX way is indistinguishable from one who set nothing at all, and
+    // this fell through to the production endpoint.
+    //
+    // That is not only a user's problem: the suite sets this empty precisely so
+    // a fabricated write does not post a download counter to production, and on
+    // Windows that protection did nothing at all.
+    if (qEnvironmentVariableIsSet("RPI_IMAGER_TELEMETRY_URL")) {
+        const QByteArray value = qgetenv("RPI_IMAGER_TELEMETRY_URL");
+        if (value.compare("off", Qt::CaseInsensitive) == 0)
+            return QByteArray();
+        return value;
+    }
+    return QByteArray(TELEMETRY_URL);
 }
 
 void ImageWriter::_configureWriteThread()
@@ -1459,6 +1488,15 @@ ImageWriter::WritePath ImageWriter::choosePath() const
 // definition means the next check added lands on both paths.
 QString ImageWriter::_localSourceError(const QString &localPath) const
 {
+    // isReadable() consults the real ACL only while this is in scope. Without
+    // it Qt answers from the read-only attribute alone on Windows, so a file
+    // the user has genuinely been denied read access to was reported readable
+    // and the write went ahead, failing somewhere less explicable than here.
+    //
+    // Scoped rather than global: the lookup costs a security-descriptor query
+    // per call, and this is the one place that needs the true answer.
+    const PlatformQuirks::NativePermissionScope nativePermissions;
+
     const QFileInfo fi(localPath);
 
     if (!fi.exists())
@@ -2403,7 +2441,19 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url,
     // update _repo to reflect the final URL. This ensures "Using data from X"
     // shows the actual server that served the data, not the original redirect source.
     // This is a security consideration - users should see where data actually came from.
-    if (isTopLevelRequest && customRepo() && effectiveUrl.isValid() && effectiveUrl != url) {
+    // Only where a redirect is a thing that can happen. Adopting the effective
+    // URL is meant to show which server actually served the data, which means
+    // nothing for a file:// repository -- and on Windows it actively breaks one:
+    // curl hands the effective URL back in a form QUrl reparses with the drive
+    // letter as the authority, so "file:///C:/list.json" was stored as
+    // "file://c/list.json". The first fetch succeeded, the corrupted URL went
+    // into _repo, and every fetch after it failed -- including the one behind
+    // the Retry button.
+    const QString repoScheme = url.scheme().toLower();
+    const bool redirectsApply = (repoScheme == QLatin1String("http") ||
+                                 repoScheme == QLatin1String("https"));
+    if (redirectsApply && isTopLevelRequest && customRepo() &&
+        effectiveUrl.isValid() && effectiveUrl != url) {
         QString oldHost = _repo.host();
         _repo = effectiveUrl;
         QString newHost = _repo.host();

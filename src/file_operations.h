@@ -313,6 +313,24 @@ class FileOperations {
   // Get the last platform-specific error code (Windows error code, errno on Unix)
   virtual int GetLastErrorCode() const = 0;
 
+  // Whether a failed OpenDevice() on this path is worth trying again shortly.
+  //
+  // Windows can hold a physical drive for a few seconds after a dismount or a
+  // partition-table rewrite -- Explorer, the indexer or an AV re-scanning it --
+  // so an open that is refused there may well succeed on the next attempt. An
+  // ordinary file that refuses an open will refuse it again, and every other
+  // platform opens the device without this dance.
+  //
+  // The question lives here rather than in the caller because answering it
+  // needs to know what the path is, which is platform knowledge: the caller
+  // used to decide by testing Windows error codes directly, and retried a
+  // permanently unwritable file for sixty-four seconds before giving up.
+  virtual bool OpenFailureMayBeTransient(const std::string& path) const
+  {
+    (void)path;
+    return false;
+  }
+
   // Classify the last write error into a platform-agnostic category so callers
   // can render localized user messages. The default maps everything to
   // kUnknown; platform implementations override to inspect OS state.

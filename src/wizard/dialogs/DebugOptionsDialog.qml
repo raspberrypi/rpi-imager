@@ -394,8 +394,14 @@ BaseDialog {
                     // and reopened, and a plain path after. The same setting
                     // rendered two ways depending on how recently it was
                     // chosen.
+                    //
+                    // Through the dialog's own _toDisplayPath rather than a
+                    // string replace: taking seven characters off
+                    // "file:///C:/gadget.img" leaves "/C:/gadget.img", which is
+                    // not a path -- the label showed it and the writer could
+                    // not open it.
                     gadgetPathText.gadgetPath =
-                        selectedFile.toString().replace(/^file:\/\//, "")
+                        gadgetFileDialog._toDisplayPath(selectedFile)
                 }
             }
 

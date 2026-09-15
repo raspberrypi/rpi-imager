@@ -283,8 +283,8 @@ TestCase {
     // guard on them is the part worth pinning: every one checks isWriting
     // first, so a progress signal that arrives after the write has ended
     // cannot paint over the outcome. Without it a trailing update replaces
-    // "Write failed: no space left on device" with "Writing... 50%", and
-    // the reason is gone from the one place it was shown.
+    // "Write failed: no space left on device" with "Writing... 50%" -- on
+    // screen while the write runs, and in what is spoken after it ends.
 
     function progressText() {
         var t = findChild(step, "writeProgressText")
@@ -420,58 +420,58 @@ TestCase {
 
     function test_a_failure_says_why() {
         // "Write failed:" with nothing after it leaves the user with no
-        // reason and nothing to search for.
+        // reason and nothing to search for. The line is not painted --
+        // see the case below -- but it is what goes to the screen
+        // reader, so the reason still has to be in it.
         beWriting()
 
         ImageWriterSingleton.onError("no space left on device")
 
         tryVerify(function () {
             return progressText().text.indexOf("no space left on device") !== -1
-        }, 3000, "the reason is on screen: " + progressText().text)
+        }, 3000, "the reason is in the line: " + progressText().text)
 
         ImageWriterSingleton.onCancelled()
     }
 
-    function test_a_failure_stays_on_screen_after_the_dialog_goes() {
-        // The step hid its whole progress section the moment the state left
-        // Writing, so once the error dialog was dismissed nothing anywhere
-        // said what had happened. The dialog is the only place the reason
-        // appeared, and a click outside it used to be enough to lose it.
+    function test_a_failure_is_not_left_in_the_window_behind_the_dialog() {
+        // The dialog carries the reason, and only the dialog. This step
+        // kept a copy for a while, because BaseDialog closed on a press
+        // outside and the click that raised a buried Imager window took
+        // the error unread with it (PR #1725). BaseDialog is
+        // CloseOnEscape now -- nothing dismisses it by accident -- so the
+        // copy is gone, and with it the sight that prompted this case: an
+        // unwrapped reason painted across the window, over the sidebar
+        // and the buttons, after a laptop suspended mid-write.
         //
-        // Pins the second half of the fix: the section's visibility follows
-        // failureMessage as well as the writing and complete states, so the
-        // reason survives the dialog and stays until the next write clears
-        // it.
+        // What the dialog does with the reason is pinned in
+        // tst_main_window_messages.qml; what is pinned here is the step
+        // not showing a second copy behind it.
         beWriting()
-        ImageWriterSingleton.onError("no space left on device")
-        tryVerify(function () {
-            return progressText().text.indexOf("no space left on device") !== -1
-        }, 3000)
 
-        compare(step.failureMessage, "no space left on device",
-                "the step kept the reason")
+        ImageWriterSingleton.onError(
+            "Download failed: HTTP/2 stream 1 reset by curl (error 0xfffffdec unknown)")
 
-        // Whatever ends the write, the reason stays put.
+        // onError sets WriteState::Failed, which is neither writing nor
+        // complete, so the section goes as the error arrives -- while the
+        // dialog is still up in front of it.
+        tryVerify(function () { return !progressText().visible }, 3000,
+                  "the step says nothing behind the dialog")
+        verify(!progressBar().visible, "and neither does the bar")
+
+        // And it stays gone however the run is wound up.
         ImageWriterSingleton.onCancelled()
         wait(100)
-
-        verify(progressText().visible,
-               "the progress text is still shown once the dialog has gone")
-        verify(progressText().text.indexOf("no space left on device") !== -1,
-               "and still says why: " + progressText().text)
-
-        // What clears it is starting another write, which happens on the
-        // confirm path rather than on any signal the writer sends -- so
-        // driving the writer, as this case does, must NOT clear it.
-        beWriting()
-        compare(step.failureMessage, "no space left on device",
-                "the writer's own signals do not clear it")
-        ImageWriterSingleton.onCancelled()
+        verify(!progressText().visible,
+               "nor once the dialog has been dismissed")
     }
 
     function test_a_late_progress_signal_does_not_hide_a_failure() {
         // The guard. Progress arriving after the write ended must not
-        // replace the failure text with a percentage.
+        // replace the failure line with a percentage -- the line is what
+        // the screen reader was given, and each of these handlers speaks
+        // what it writes, so without the guard the last thing a user
+        // hears about a failed write is "Writing, 50 percent".
         beWriting()
         ImageWriterSingleton.onError("no space left on device")
         tryVerify(function () {

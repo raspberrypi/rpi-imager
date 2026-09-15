@@ -185,7 +185,7 @@ std::unique_ptr<DownloadThread> makeDownload(const ScratchDir &scratch, const QB
     // standing in for a block device, which is never created by the writer.
     REQUIRE(writeFile(dest, QByteArray(payload.size() + (1024 * 1024), '\0')));
 
-    const QByteArray url = QByteArray("file://") + source.toUtf8();
+    const QByteArray url = QUrl::fromLocalFile(source).toEncoded();
     return std::make_unique<DownloadThread>(url, dest.toUtf8(), expectedHash);
 }
 
@@ -345,7 +345,7 @@ TEST_CASE("DownloadThread reports a destination it cannot open", "[download]")
     const QString source = scratch.filePath(QStringLiteral("src.img"));
     REQUIRE(writeFile(source, patternOfSize(4096, 1)));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       "/nonexistent-rpi-imager-dir/deeper/dest.img", "");
 
     const Outcome outcome = runToCompletion(dt);
@@ -905,7 +905,7 @@ TEST_CASE("DownloadThread writes config.txt into the boot partition", "[download
     const QString dest = scratch.filePath(QStringLiteral("cust-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // initFormat is not optional: the whole customisation pass is gated on it
     // being set, so an empty one silently skips every edit below.
@@ -939,7 +939,7 @@ TEST_CASE("DownloadThread writes cmdline and firstrun into the boot partition",
 
     const QByteArray firstrun = "#!/bin/bash\necho provisioned\nrm -f /boot/firstrun.sh\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation(QByteArray(), "quiet splash", firstrun, QByteArray(), QByteArray(),
                              "systemd", ImageOptions::AdvancedOptions());
@@ -976,7 +976,7 @@ TEST_CASE("DownloadThread writes cloud-init files into the boot partition",
     const QByteArray userData = "#cloud-config\nhostname: testpi\n";
     const QByteArray networkData = "version: 2\nethernets:\n  eth0:\n    dhcp4: true\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), userData, networkData,
                              "cloudinit", ImageOptions::AdvancedOptions());
@@ -1007,7 +1007,7 @@ TEST_CASE("DownloadThread leaves the image alone when nothing is customised",
     const QString dest = scratch.filePath(QStringLiteral("plain-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // No customisation at all: the whole reopen-and-edit pass must be
     // skipped rather than run with empty values, which would still rewrite
@@ -1168,7 +1168,7 @@ TEST_CASE("A device node that has gone is reported, not waited on",
     const QByteArray target = "/dev/nonexistent-rpi-imager-target";
     REQUIRE_FALSE(QFileInfo::exists(QString::fromUtf8(target)));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), target, QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), target, QByteArray());
     dt.setVerifyEnabled(false);
 
     const Outcome outcome = runToCompletion(dt, 60000);
@@ -1233,7 +1233,7 @@ TEST_CASE("An image download will not be redirected into a local file",
     const QByteArray blank(secret.size() + (1024 * 1024), '\0');
     REQUIRE(writeFile(dest, blank));
 
-    const QByteArray target = QByteArray("file://") + local.toUtf8();
+    const QByteArray target = QUrl::fromLocalFile(local).toEncoded();
     DownloadThread dt(server.redirectTo(target), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -1442,7 +1442,7 @@ TEST_CASE("A signing key that is not a key stops the write", "[download][secureb
     const QString dest = scratch.filePath(QStringLiteral("sb-bad-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1491,7 +1491,7 @@ TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secur
     const QString dest = scratch.filePath(QStringLiteral("sb-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1546,7 +1546,7 @@ TEST_CASE("Secure boot does not throw away the user's own settings",
         "/usr/lib/userconf-pi/userconf 'pi' '$5$notarealhash'\n"
         "rm -f /boot/firstrun.sh\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), firstrun, QByteArray(), QByteArray(),
                              "systemd", ImageOptions::EnableSecureBoot);
@@ -1603,7 +1603,7 @@ TEST_CASE("Secure boot keeps every cloud-init file and not just the first",
     const QByteArray userData = "hostname: securepi\nusers:\n  - name: pi\n";
     const QByteArray networkData = "version: 2\nethernets:\n  eth0:\n    dhcp4: true\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), userData, networkData,
                              "cloudinit", ImageOptions::EnableSecureBoot);
@@ -1644,7 +1644,7 @@ TEST_CASE("DownloadThread refuses secure boot with no key configured",
     const QString dest = scratch.filePath(QStringLiteral("sb-nokey-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1674,7 +1674,7 @@ TEST_CASE("DownloadThread refuses secure boot with a key that is not there",
     const QString dest = scratch.filePath(QStringLiteral("sb-gone-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1712,7 +1712,7 @@ TEST_CASE("DownloadThread verifies the customisation it wrote", "[download][cust
     const QByteArray hash =
         QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex();
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), hash);
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), hash);
     dt.setVerifyEnabled(true);
     dt.setImageCustomisation("dtparam=audio=on", "console=tty1",
                              "#!/bin/sh\nexit 0\n", QByteArray(), QByteArray(), "systemd",
@@ -1750,7 +1750,7 @@ TEST_CASE("DownloadThread verifies cloud-init customisation", "[download][custom
     const QByteArray hash =
         QCryptographicHash::hash(readFile(source), QCryptographicHash::Sha256).toHex();
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), hash);
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), hash);
     dt.setVerifyEnabled(true);
     dt.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(),
                              "#cloud-config\nhostname: verified\n",
@@ -1776,7 +1776,7 @@ TEST_CASE("DownloadThread applies rpi-preseed customisation", "[download][custom
     const QString dest = scratch.filePath(QStringLiteral("preseed-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // The third init format, alongside systemd and cloudinit; it writes a
     // different file set again.
@@ -1830,7 +1830,7 @@ TEST_CASE("DownloadThread reports a device that fails partway through a write",
     const QString source = scratch.filePath(QStringLiteral("faulty-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -1867,7 +1867,7 @@ TEST_CASE("DownloadThread reports a faulty device under async I/O",
     const QString source = scratch.filePath(QStringLiteral("faulty-async-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // With async submission the failure arrives as a negative completion on
@@ -1902,7 +1902,7 @@ TEST_CASE("DownloadThread writes successfully within the good region",
     const QString source = scratch.filePath(QStringLiteral("good-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // Buffered, synchronous writes.
@@ -1936,7 +1936,7 @@ TEST_CASE("An image larger than the device is refused, not half-written",
     const QString source = scratch.filePath(QStringLiteral("oversized-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setDebugAsyncIO(false);
@@ -2161,7 +2161,7 @@ TEST_CASE("DownloadThread skips customisation without an init format",
     const QString dest = scratch.filePath(QStringLiteral("noinit-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // Settings supplied, but no init format. The pass is gated on the format
     // as well as the content, so nothing is written -- worth pinning, because
@@ -2200,7 +2200,7 @@ TEST_CASE("DownloadThread detects a card that lies about its capacity",
     const QString source = scratch.filePath(QStringLiteral("counterfeit-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -2228,7 +2228,7 @@ TEST_CASE("DownloadThread can be told to skip the end-of-device check",
     const QString source = scratch.filePath(QStringLiteral("skipend-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // The escape hatch for a device that legitimately refuses writes at the
@@ -4241,7 +4241,7 @@ TEST_CASE("Customising an image with no boot partition fails rather than skippin
     const QString dest = scratch.filePath(QStringLiteral("no-boot-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(8 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("dtoverlay=disable-bt", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::AdvancedOptions());
@@ -4275,7 +4275,7 @@ TEST_CASE("An image with no boot partition is still written when nothing is cust
     const QString dest = scratch.filePath(QStringLiteral("plain-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(8 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
     const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);

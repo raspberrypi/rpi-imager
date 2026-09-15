@@ -766,10 +766,15 @@ TestCase {
         const name = "perf-export.json"
         // Written and removed again, so the export is what creates it and the
         // assertion cannot pass on a file that was already there.
-        verify(TestFiles.write(name, "placeholder") !== "", "the scratch file works")
+        // The url TestFiles hands back, not one rebuilt from the path:
+        // "file://" + "C:/..." has two slashes where three are needed, so QUrl
+        // reads the drive letter as a host and the dialog passes on
+        // "file://c/Users/...", which names nothing.
+        const url = TestFiles.write(name, "placeholder")
+        verify(url !== "", "the scratch file works")
 
         const d = performanceSave()
-        d.selectedFile = "file://" + TestFiles.localPath(name)
+        d.selectedFile = url
         d.accepted()
 
         tryVerify(function () { return TestFiles.sizeOf(name) > 0 }, 5000,
