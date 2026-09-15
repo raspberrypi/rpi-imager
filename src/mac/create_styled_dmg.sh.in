@@ -233,22 +233,33 @@ if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_P
     echo "✓ DMG notarized and stapled"
 
     echo "Assessing app inside DMG with Gatekeeper (spctl)..."
+    # macOS 26 deprecated hdiutil attach/detach for diskutil image.  Prefer the
+    # replacement where it exists; earlier build machines have only the
+    # original.  diskutil also verifies the checksum -noverify skipped.
+    if diskutil image >/dev/null 2>&1; then
+        dmg_attach() { diskutil image attach "$1" --nobrowse --readOnly --mountPoint "$2" >/dev/null; }
+        dmg_detach() { diskutil eject "$1" >/dev/null; }
+    else
+        dmg_attach() { hdiutil attach "$1" -nobrowse -readonly -noverify -mountpoint "$2" >/dev/null; }
+        dmg_detach() { hdiutil detach "$1" >/dev/null; }
+    fi
+
     MOUNT_DIR=$(mktemp -d)
-    if hdiutil attach "$FINAL_DMG_PATH" -nobrowse -readonly -noverify -mountpoint "$MOUNT_DIR" >/dev/null; then
+    if dmg_attach "$FINAL_DMG_PATH" "$MOUNT_DIR"; then
         APP_IN_DMG="$MOUNT_DIR/${APP_NAME}.app"
         if [ ! -d "$APP_IN_DMG" ]; then
             echo "Error: Mounted DMG does not contain expected app at $APP_IN_DMG"
-            hdiutil detach "$MOUNT_DIR" >/dev/null || true
+            dmg_detach "$MOUNT_DIR" || true
             rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
             exit 1
         fi
         if ! spctl -a -vvv --type execute "$APP_IN_DMG"; then
             echo "Error: Gatekeeper assessment failed for app inside DMG"
-            hdiutil detach "$MOUNT_DIR" >/dev/null || true
+            dmg_detach "$MOUNT_DIR" || true
             rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
             exit 1
         fi
-        hdiutil detach "$MOUNT_DIR" >/dev/null || true
+        dmg_detach "$MOUNT_DIR" || true
         rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
     else
         # This is the gate, not diagnostics: an unmountable DMG means the
