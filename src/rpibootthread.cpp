@@ -332,6 +332,14 @@ void RpibootThread::run()
 
         if (_cancelled.load())
             return;
+
+        // SBR ends by rebooting into rpiboot.  If it never arrived, fastboot
+        // has nothing to open.
+        if (i + 1 < phases.size() && !_nextStageFound.load()) {
+            emit error(tr("Device did not return to rpiboot after the recovery "
+                          "reboot, so the fastboot stage cannot start."));
+            return;
+        }
     }
 
     const auto finalMode = phases.back();
@@ -482,6 +490,14 @@ bool RpibootThread::pollForRpibootReturn(std::atomic<bool>& found,
     if (!pollCtx)
         return false;
 
+    // Report the port's occupant on each change: whether it leaves the bus
+    // separates a reboot that returned oddly from one that never happened.
+    int lastSeenStage = -2;   // -1 means absent; no device reports that
+    // Two misses, not one: the scanner runs beside the file server, and a
+    // glitched scan would read as the reboot and cancel it.
+    int absentPolls = 0;
+    bool sawAbsent = false;
+
     constexpr int POLLS = 120;
     for (int attempt = 0; attempt < POLLS; ++attempt) {
         if (_cancelled.load() || _stopScanner.load()) return false;
@@ -490,18 +506,48 @@ bool RpibootThread::pollForRpibootReturn(std::atomic<bool>& found,
 
         try {
             auto devices = pollCtx->scanBootDevices();
+
+            int stageNow = -1;
             for (const auto& dev : devices) {
-                const bool portMatches = !_device.portPath.empty() &&
-                                         dev.portPath == _device.portPath;
-                const bool isFreshAddress = (dev.deviceAddress != priorDeviceAddress);
-                if (portMatches && isFreshAddress) {
-                    qDebug() << "SBR: rpiboot device returned on same port path "
-                                "(bus" << dev.busNumber
+                if (!_device.portPath.empty() && dev.portPath == _device.portPath)
+                    stageNow = static_cast<int>(dev.serialNumberIndex);
+            }
+            if (stageNow != lastSeenStage) {
+                if (stageNow < 0)
+                    qDebug() << "SBR wait: port" << QString::fromStdString(
+                                    rpiboot::portPathToUriField(_device.portPath))
+                             << "went away after" << (attempt * 500) << "ms";
+                else
+                    qDebug() << "SBR wait: port" << QString::fromStdString(
+                                    rpiboot::portPathToUriField(_device.portPath))
+                             << "present, serial#" << stageNow
+                             << "after" << (attempt * 500) << "ms";
+                lastSeenStage = stageNow;
+            }
+
+            // The reboot is a disappearance then a reappearance; that is all
+            // of it.  What returns is the bootloader just written, with the
+            // same serial# as before -- only the gap tells them apart.
+            if (sawAbsent && stageNow >= 0) {
+                for (const auto& dev : devices) {
+                    if (_device.portPath.empty() || dev.portPath != _device.portPath)
+                        continue;
+                    qDebug() << "SBR: device returned on port"
+                             << QString::fromStdString(
+                                    rpiboot::portPathToUriField(_device.portPath))
+                             << "at bus" << dev.busNumber
                              << "addr" << dev.deviceAddress
-                             << "vs prior addr" << priorDeviceAddress << ")";
+                             << "serial#" << dev.serialNumberIndex
+                             << "(prior addr" << priorDeviceAddress << ")";
                     found.store(true);
                     return true;
                 }
+            }
+            if (stageNow < 0) {
+                if (++absentPolls >= 2)
+                    sawAbsent = true;
+            } else {
+                absentPolls = 0;
             }
         } catch (const std::exception& e) {
             qWarning() << "rpiboot: USB scan failed during SBR re-enum wait:" << e.what();

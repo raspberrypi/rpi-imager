@@ -1013,7 +1013,7 @@ size_t countOccurrences(const std::string &haystack, const std::string &needle)
 // into rpiboot again rather than into whatever it would normally boot. That is
 // arranged by appending two settings to the recovery's config.txt, and the
 // order of the two is load-bearing: config.txt is read top to bottom, and a
-// recovery_reboot reached before set_boot_order reboots the device before the
+// recovery_reboot reached before set_reboot_order reboots the device before the
 // override has been seen. The device then powers up into normal boot, the
 // imager sits waiting for a device that is never coming back, and nothing
 // says why.
@@ -1063,15 +1063,17 @@ TEST_CASE("A recovery config gains both settings, boot order first",
     const std::string out = readAll(cfg);
     INFO("config.txt:\n" << out);
 
-    const auto orderAt = out.find("set_boot_order=0x3");
+    const auto orderAt = out.find("set_reboot_order=0x3");
     const auto rebootAt = out.find("recovery_reboot=1");
     REQUIRE(orderAt != std::string::npos);
     REQUIRE(rebootAt != std::string::npos);
     CHECK(orderAt < rebootAt);
 
-    // What upstream shipped is still there.
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
-    CHECK(out.find("[all]") != std::string::npos);
+    CHECK(out.find("program_pubkey=1") != std::string::npos);
+    // Whatever upstream shipped is gone: recovery.bin is not the bootloader
+    // and takes only these directives, so the template is not served to it.
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
+    CHECK(out.find("[all]") == std::string::npos);
 }
 
 TEST_CASE("Settings already in the file are moved rather than duplicated",
@@ -1085,7 +1087,7 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     const auto cfg = sbrConfigFor(versionDir, ChipGeneration::BCM2712,
                                   "recovery_reboot=1\n"
                                   "[all]\n"
-                                  "  set_boot_order=0xf41\n"
+                                  "  set_reboot_order=0xf41\n"
                                   "arm_64bit=1\n");
 
     TestableFirmwareManager fm;
@@ -1095,11 +1097,11 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     INFO("config.txt:\n" << out);
 
     // Exactly one of each, ours, in our order.
-    CHECK(countOccurrences(out, "set_boot_order=") == 1);
+    CHECK(countOccurrences(out, "set_reboot_order=") == 1);
     CHECK(countOccurrences(out, "recovery_reboot=") == 1);
     CHECK(out.find("0xf41") == std::string::npos);
-    CHECK(out.find("set_boot_order=0x3") < out.find("recovery_reboot=1"));
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
+    CHECK(out.find("set_reboot_order=0x3") < out.find("recovery_reboot=1"));
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
 }
 
 TEST_CASE("Running twice leaves the file as it was after once",
@@ -1125,8 +1127,8 @@ TEST_CASE("Running twice leaves the file as it was after once",
 TEST_CASE("A recovery config with Windows line endings is rewritten as LF",
           "[firmware][sbr]")
 {
-    // The bootloader wants LF. A stray CR left on a kept line would ride
-    // along into the rewritten file.
+    // The bootloader wants LF, and what we write has to be LF whatever the
+    // file it replaces was.
     ScratchDir scratch;
     const std::filesystem::path versionDir = scratch.path();
     const auto cfg = sbrConfigFor(versionDir, ChipGeneration::BCM2712,
@@ -1138,22 +1140,23 @@ TEST_CASE("A recovery config with Windows line endings is rewritten as LF",
     const std::string out = readAll(cfg);
     INFO("config.txt:\n" << out);
     CHECK(out.find('\r') == std::string::npos);
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
     CHECK(countOccurrences(out, "recovery_reboot=") == 1);
 }
 
 TEST_CASE("A recovery config that is not there yet is not an error",
           "[firmware][sbr]")
 {
-    // First run: the download has not happened. The caller comes back after
-    // the download loop, so this has to be a benign no-op rather than a
-    // failure that aborts provisioning.
+    // Nothing is downloaded to build on any more, so an absent file is the
+    // normal case rather than a first-run one: the directory and the config
+    // are both created here.
     ScratchDir scratch;
     const std::filesystem::path versionDir = scratch.path();
 
     TestableFirmwareManager fm;
     CHECK(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
     CHECK(fm.lastError().empty());
+    CHECK(std::filesystem::exists(versionDir / "secure-boot-recovery5" / "config.txt"));
 }
 
 TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
@@ -1170,8 +1173,8 @@ TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2711));
 
-    CHECK(readAll(older).find("set_boot_order=0x3") != std::string::npos);
-    CHECK(readAll(newer).find("set_boot_order=0x3") == std::string::npos);
+    CHECK(readAll(older).find("set_reboot_order=0x3") != std::string::npos);
+    CHECK(readAll(newer).find("set_reboot_order=0x3") == std::string::npos);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2276,19 +2279,18 @@ TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
 TEST_CASE("Boot-order lines already in the recovery config are replaced, not repeated",
           "[firmware]")
 {
-    // config.txt is read top to bottom and set_boot_order has to be seen
+    // config.txt is read top to bottom and set_reboot_order has to be seen
     // before recovery_reboot, or the bootloader reboots before applying the
     // override and the board comes up in normal boot instead of rpiboot.
-    // Upstream's own config may carry either key, so they are stripped and
-    // re-appended in order rather than left where they were found.
+    // Whatever was there before is discarded: the file is written outright.
     ScratchDir dir;
     const fs::path versionDir = dir.path() / "v1";
     const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
     writeFile(configPath,
               "recovery_reboot=1\n"
-              "  set_boot_order=0x1\n"
+              "  set_reboot_order=0x1\n"
               "arm_64bit=1\r\n"
-              "set_boot_order=0xf41\n");
+              "set_reboot_order=0xf41\n");
 
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
@@ -2300,43 +2302,30 @@ TEST_CASE("Boot-order lines already in the recovery config are replaced, not rep
         lines.push_back(line);
 
     REQUIRE(lines.size() == 3);
-    CHECK(lines[0] == "arm_64bit=1");   // the CR was stripped with it
-    CHECK(lines[1] == "set_boot_order=0x3");
+    CHECK(lines[0] == "program_pubkey=1");
+    CHECK(lines[1] == "set_reboot_order=0x3");
     CHECK(lines[2] == "recovery_reboot=1");
 }
 
-TEST_CASE("A recovery config that cannot be read or rewritten is reported", "[firmware]")
+TEST_CASE("A recovery config that cannot be written is reported", "[firmware]")
 {
     if (::geteuid() == 0)
         SKIP("running as root, which the mode bits do not stop");
 
-    SECTION("unreadable") {
+    // The file is written outright rather than read and amended, so the only
+    // way it can fail is the write.  Silently leaving whatever was there
+    // would send a board into normal boot when recovery was asked for.
+    for (const auto mode : {0000, 0400}) {
         ScratchDir dir;
         const fs::path versionDir = dir.path() / "v1";
         const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
         writeFile(configPath, "arm_64bit=1\n");
-        REQUIRE(::chmod(configPath.c_str(), 0000) == 0);
+        REQUIRE(::chmod(configPath.c_str(), static_cast<mode_t>(mode)) == 0);
 
         TestableFirmwareManager fm;
+        INFO("mode " << std::oct << mode);
         CHECK_FALSE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
-        CHECK(fm.lastError().find("Cannot read") != std::string::npos);
-
-        ::chmod(configPath.c_str(), 0600);
-    }
-
-    SECTION("read-only") {
-        // Readable, so the upstream lines are gathered, and then the rewrite
-        // is refused. Silently keeping the original would send a board into
-        // normal boot when the user asked for recovery.
-        ScratchDir dir;
-        const fs::path versionDir = dir.path() / "v1";
-        const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
-        writeFile(configPath, "arm_64bit=1\n");
-        REQUIRE(::chmod(configPath.c_str(), 0400) == 0);
-
-        TestableFirmwareManager fm;
-        CHECK_FALSE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
-        CHECK(fm.lastError().find("Cannot rewrite") != std::string::npos);
+        CHECK(fm.lastError().find("Cannot write") != std::string::npos);
 
         ::chmod(configPath.c_str(), 0600);
     }
@@ -2643,7 +2632,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     QFile config(QString::fromStdString((sub / "config.txt").string()));
     REQUIRE(config.open(QIODevice::ReadOnly));
     const QByteArray body = config.readAll();
-    CHECK(body.contains("set_boot_order=0x3"));
+    CHECK(body.contains("set_reboot_order=0x3"));
     CHECK(body.contains("recovery_reboot=1"));
 
     // And the bootcode was counter-signed from the unsigned baseline.
