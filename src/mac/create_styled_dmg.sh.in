@@ -173,6 +173,9 @@ echo "Creating DMG with create-dmg..."
 # Build create-dmg command
 CREATE_DMG_CMD=(
     create-dmg
+    # LZMA, against create-dmg's zlib default: ~30% off a download made once
+    # by many, for ten seconds per release.  macOS 10.15 can mount it.
+    --format ULMO
     --volname "Raspberry Pi Imager @IMAGER_VERSION_STR@"
     --window-pos 200 120
     --window-size 600 400
