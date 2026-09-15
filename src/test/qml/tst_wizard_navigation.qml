@@ -471,9 +471,23 @@ TestCase {
         return -99
     }
 
+    // A case that needs the OS list says so rather than failing for want of
+    // it: run this file on its own and nothing has fetched one, which looked
+    // like five defects. The suite as a whole covers these, because a file
+    // that runs earlier populates the list they share.
+    function requireList() {
+        if (!wiz.hasNetworkConnectivity) {
+            skip("no OS list was fetched in this run, so the navigation "
+                 + "stops on the first guard and these cases would pass "
+                 + "without exercising the rest")
+            return false
+        }
+        return true
+    }
+
     function test_going_back_skips_the_same_steps_going_forward_did(data) {
-        verify(wiz.hasNetworkConnectivity,
-               "these cases assume the OS list is populated")
+        if (!requireList())
+            return
         startAt(stepFor(data.from) + 1)
         wiz[data.flag] = false
 
@@ -486,7 +500,8 @@ TestCase {
         // One move, not eleven: none of the customisation steps were shown
         // on the way in, so walking back through them would show screens the
         // user has never seen and cannot use.
-        verify(wiz.hasNetworkConnectivity)
+        if (!requireList())
+            return
         startAt(wiz.stepWriting)
         wiz.customizationSupported = false
 
@@ -506,7 +521,8 @@ TestCase {
     // -- Jumping from the sidebar ------------------------------------------
 
     function test_jumping_to_a_step_goes_there() {
-        verify(wiz.hasNetworkConnectivity)
+        if (!requireList())
+            return
         startAt(wiz.stepDeviceSelection)
 
         wiz.jumpToStep(wiz.stepStorageSelection)
@@ -523,7 +539,8 @@ TestCase {
     }
 
     function test_jumping_outside_the_wizard_does_nothing(data) {
-        verify(wiz.hasNetworkConnectivity)
+        if (!requireList())
+            return
         startAt(wiz.stepStorageSelection)
 
         wiz.jumpToStep(data.index)
@@ -1357,5 +1374,90 @@ TestCase {
         tryVerify(function () { return wiz.hasNetworkConnectivity }, 10000,
                   "the list is back")
         ImageWriterSingleton.setCustomRepo(previousRepo)
+    }
+
+    // ── The shape of the customisation chain ──────────────────────────
+
+    // Two functions describe it and neither reads the other:
+    // getLastCustomizationStep() says where the chain ends, and
+    // getCustomizationSubstepLabels() says what the sidebar lists. They are
+    // written from the same four flags in two different shapes -- a chain of
+    // conditionals and a list of pushes -- so a step added to one and not the
+    // other leaves the sidebar and the navigation disagreeing.
+    //
+    // All sixteen combinations, because the flags come from an operating
+    // system's capabilities and any of them can hold. The container is shared
+    // with every case in this file, so they are put back afterwards.
+
+    function withFlags(mask, body) {
+        var was = {
+            supported: wiz.customizationSupported,
+            secureBoot: wiz.secureBootAvailable,
+            piConnect: wiz.piConnectAvailable,
+            ccRpi: wiz.ccRpiAvailable,
+            ifFeat: wiz.ifAndFeaturesAvailable
+        };
+        wiz.customizationSupported = true;
+        wiz.secureBootAvailable    = (mask & 1) !== 0;
+        wiz.piConnectAvailable     = (mask & 2) !== 0;
+        wiz.ccRpiAvailable         = (mask & 4) !== 0;
+        wiz.ifAndFeaturesAvailable = (mask & 8) !== 0;
+        try {
+            body();
+        } finally {
+            wiz.customizationSupported = was.supported;
+            wiz.secureBootAvailable    = was.secureBoot;
+            wiz.piConnectAvailable     = was.piConnect;
+            wiz.ccRpiAvailable         = was.ccRpi;
+            wiz.ifAndFeaturesAvailable = was.ifFeat;
+        }
+    }
+
+    function test_the_sidebar_lists_the_steps_the_chain_has_data() {
+        var out = [];
+        for (var mask = 0; mask < 16; ++mask)
+            out.push({ tag: "flags-" + mask, mask: mask });
+        return out;
+    }
+
+    function test_the_sidebar_lists_the_steps_the_chain_has(data) {
+        withFlags(data.mask, function () {
+            var interfaces = wiz.ccRpiAvailable && wiz.ifAndFeaturesAvailable;
+            var extra = (wiz.secureBootAvailable ? 1 : 0)
+                      + (wiz.piConnectAvailable ? 1 : 0)
+                      + (interfaces ? 1 : 0);
+
+            var labels = wiz.getCustomizationSubstepLabels();
+            compare(labels.length, 5 + extra,
+                    data.tag + ": five fixed steps plus what is offered");
+
+            // The chain ends on the last step that exists, not merely on one
+            // that does.
+            var expectedLast = interfaces ? wiz.stepIfAndFeatures
+                             : wiz.piConnectAvailable ? wiz.stepPiConnectCustomization
+                             : wiz.secureBootAvailable ? wiz.stepSecureBootCustomization
+                             : wiz.stepRemoteAccess;
+            compare(wiz.getLastCustomizationStep(), expectedLast,
+                    data.tag + ": the chain ends on the last step offered");
+
+            // And both agree which that is: the optional labels are pushed in
+            // step order, so the final label names the final step.
+            var nameOfLast = interfaces ? "Interfaces"
+                           : wiz.piConnectAvailable ? "Connect"
+                           : wiz.secureBootAvailable ? "Secure Boot"
+                           : "Remote";
+            var lastLabel = labels[labels.length - 1];
+            verify(lastLabel.indexOf(nameOfLast) >= 0,
+                   data.tag + ": the last label names the last step ("
+                   + lastLabel + ")");
+        });
+    }
+
+    function test_an_image_that_cannot_be_customised_lists_nothing() {
+        var was = wiz.customizationSupported;
+        wiz.customizationSupported = false;
+        compare(wiz.getCustomizationSubstepLabels().length, 0,
+                "nothing to list when there is nothing to customise");
+        wiz.customizationSupported = was;
     }
 }

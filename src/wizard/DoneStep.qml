@@ -86,9 +86,10 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Layout.fillWidth: true
                     elide: Text.ElideRight
+                    textFormat: Text.PlainText
                     Accessible.ignored: true
 
-                    ToolTip.text: text
+                    ToolTip.text: CommonStrings.plainText(text)
                     ToolTip.visible: truncated && deviceValueMouseArea.containsMouse
                     ToolTip.delay: 500
                     MouseArea {
@@ -116,9 +117,10 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Layout.fillWidth: true
                     elide: Text.ElideRight
+                    textFormat: Text.PlainText
                     Accessible.ignored: true
 
-                    ToolTip.text: text
+                    ToolTip.text: CommonStrings.plainText(text)
                     ToolTip.visible: truncated && osValueMouseArea.containsMouse
                     ToolTip.delay: 500
                     MouseArea {
@@ -146,9 +148,10 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Layout.fillWidth: true
                     elide: Text.ElideRight
+                    textFormat: Text.PlainText
                     Accessible.ignored: true
 
-                    ToolTip.text: text
+                    ToolTip.text: CommonStrings.plainText(text)
                     ToolTip.visible: truncated && storageValueMouseArea.containsMouse
                     ToolTip.delay: 500
                     MouseArea {
@@ -220,17 +223,17 @@ WizardStepBase {
                         id: customizationColumn
                         width: parent.width
                         property var snapshot: root.wizardContainer.completionSnapshot
-                        Text { text: "✓ " + CommonStrings.hostnameConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.hostnameConfigured }
-                        Text { text: "✓ " + CommonStrings.localeConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.localeConfigured }
-                        Text { text: "✓ " + CommonStrings.userAccountConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.userConfigured }
-                        Text { text: "✓ " + CommonStrings.wifiConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.wifiConfigured }
-                        Text { text: "✓ " + CommonStrings.sshEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.sshEnabled }
-                        Text { text: "✓ " + CommonStrings.piConnectEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.piConnectEnabled }
-                        Text { text: "✓ " + CommonStrings.usbGadgetEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.featUsbGadgetEnabled }
-                        Text { text: "✓ " + CommonStrings.i2cEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifI2cEnabled }
-                        Text { text: "✓ " + CommonStrings.spiEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSpiEnabled }
-                        Text { text: "✓ " + CommonStrings.onewireEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.if1WireEnabled }
-                        Text { text: "✓ " + CommonStrings.serialConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSerial !== "" && customizationColumn.snapshot.ifSerial !== "Disabled" }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.hostnameConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.hostnameConfigured }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.localeConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.localeConfigured }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.userAccountConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.userConfigured }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.wifiConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.wifiConfigured }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.sshEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.sshEnabled }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.piConnectEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.piConnectEnabled }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.usbGadgetEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.featUsbGadgetEnabled }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.i2cEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifI2cEnabled }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.spiEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSpiEnabled }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.onewireEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.if1WireEnabled }
+                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.serialConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSerial !== "" && customizationColumn.snapshot.ifSerial !== "Disabled" }
                     }
                 }
                 ScrollBar.vertical: ScrollBar { policy: contentItem.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff; width: Style.scrollBarWidth }

@@ -6,6 +6,7 @@
 #include "fastbootflashthread.h"
 #include "rpiboot/libusb_transport.h"
 #include "fastboot/fastboot_protocol.h"
+#include "cmdline_params.h"
 #include "config_txt_merge.h"
 #include "fastboot/sparse_encoder.h"
 #include "fastboot/bmap.h"
@@ -355,6 +356,28 @@ void FastbootFlashThread::applyBootOrderUpdate(fastboot::FastbootProtocol& fb,
     qDebug() << "EEPROM: BOOT_ORDER update committed";
 }
 
+// Where text read back from the device ends.
+//
+// What comes back is what the device chose to send, and a read of a fixed
+// size comes back padded -- with nought, or with the 0xFF of erased flash.
+// Neither byte is whitespace, so trimmed() keeps both, and whatever is
+// appended afterwards lands on the far side of the padding.
+//
+// Neither can occur in valid UTF-8, so the first of them ends the text.
+static QByteArray textBeforePadding(const uint8_t *data, size_t size)
+{
+    QByteArray out(reinterpret_cast<const char *>(data),
+                   static_cast<qsizetype>(size));
+    for (qsizetype i = 0; i < out.size(); ++i) {
+        const uchar b = static_cast<uchar>(out.at(i));
+        if (b == 0x00 || b == 0xFF) {
+            out.truncate(i);
+            break;
+        }
+    }
+    return out;
+}
+
 bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
                                               rpiboot::IUsbTransport& transport)
 {
@@ -407,8 +430,7 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
                        .arg(QString::fromStdString(fb.lastError())));
             return false;
         }
-        QByteArray config(reinterpret_cast<const char*>(configData.data()),
-                          static_cast<int>(configData.size()));
+        QByteArray config = textBeforePadding(configData.data(), configData.size());
 
         auto items = _config.split('\n');
         items.removeAll("");
@@ -430,9 +452,7 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
                        .arg(QString::fromStdString(fb.lastError())));
             return false;
         }
-        cmdlineAppend += " systemd.run=/boot/firstrun.sh"
-                         " systemd.run_success_action=reboot"
-                         " systemd.unit=kernel-command-line.target";
+        cmdlineAppend += rpi_cmdline::systemdFirstRun();
     }
 
     // ── rpi-preseed.toml (rpi-preseed format) ──
@@ -453,15 +473,15 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
     bool initCloud = (_initFormat == "cloudinit" || _initFormat == "cloudinit-rpi");
     bool hasCloudContent = !_cloudinit.isEmpty() || !_cloudinitNetwork.isEmpty();
     if (initCloud && hasCloudContent) {
-        QByteArray instanceId = "rpi-imager-" + QByteArray::number(QDateTime::currentMSecsSinceEpoch());
-        QByteArray metadata = "instance-id: " + instanceId + "\n";
+        const QByteArray instanceId = rpi_cmdline::newInstanceId();
+        const QByteArray metadata = rpi_cmdline::nocloudMetaData(instanceId);
         if (!fb.writeDeviceFile(transport, BOOT + "meta-data", toSpan(metadata), _cancelled)) {
             emit error(tr("Failed to write meta-data: %1")
                        .arg(QString::fromStdString(fb.lastError())));
             return false;
         }
 
-        cmdlineAppend += " ds=nocloud;i=" + instanceId;
+        cmdlineAppend += rpi_cmdline::nocloudDatasource(instanceId);
 
         if (!_cloudinit.isEmpty()) {
             QByteArray userData = "#cloud-config\n" + _cloudinit;
@@ -490,8 +510,13 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
                        .arg(QString::fromStdString(fb.lastError())));
             return false;
         }
-        QByteArray cmdline = QByteArray(reinterpret_cast<const char*>(cmdlineData.data()),
-                                         static_cast<int>(cmdlineData.size())).trimmed();
+        // The kernel reads its command line up to the first NUL, so anything
+        // appended past the device's padding is not wrong but absent: the Pi
+        // boots, the settings are simply not in effect, and nothing says so.
+        // systemd.run=/boot/firstrun.sh is appended here, so the whole of
+        // first-boot customisation would go the same way.
+        QByteArray cmdline =
+            textBeforePadding(cmdlineData.data(), cmdlineData.size()).trimmed();
         cmdline += cmdlineAppend;
 
         if (!fb.writeDeviceFile(transport, BOOT + "cmdline.txt", toSpan(cmdline), _cancelled)) {
@@ -991,10 +1016,19 @@ void FastbootFlashThread::runImpl()
                     resp->append(ptr, size * nmemb);
                     return size * nmemb;
                 };
+                // The same settings every other fetch in the tree gets. Set
+                // by hand, this one had no proxy, no user agent, no CA
+                // bundle, no redirect protocol restriction and no size
+                // limit -- so behind a proxy it was the one request that
+                // could not get out, and "bmap files are tiny" was a
+                // comment rather than anything enforced.
+                CurlNetworkConfig::instance().applyCurlSettings(
+                    curl, CurlNetworkConfig::FetchProfile::SmallFile);
                 curl_easy_setopt(curl, CURLOPT_URL, _bmapUrl.toString().toUtf8().constData());
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
-                curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+                // Tighter than the profile's sixty: nothing here is worth
+                // holding the write up for a minute.
                 curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
                 CURLcode res = curl_easy_perform(curl);
                 curl_easy_cleanup(curl);

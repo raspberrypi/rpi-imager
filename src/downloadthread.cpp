@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include "aligned_buffer.h"
 #include "config.h"
+#include "cmdline_params.h"
 #include "config_txt_merge.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
@@ -2789,7 +2790,7 @@ bool DownloadThread::_customizeImage()
             if (_initFormat == "systemd") {
                 fat->writeFile("firstrun.sh", _firstrun);
                 _recordCustomisationWrite("firstrun.sh", _firstrun);
-                _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
+                _cmdline += rpi_cmdline::systemdFirstRun();
             } else if (_initFormat == "rpi-preseed") {
                 // rpi-preseed applies /boot/firmware/rpi-preseed.toml on first
                 // boot; its units are gated on the file's presence, so no
@@ -2806,8 +2807,8 @@ bool DownloadThread::_customizeImage()
             // Write meta-data file for NoCloud datasource
             // cloud-init requires meta-data to be present for proper datasource detection
             // instance-id should be unique per imaging to ensure cloud-init processes user-data
-            QByteArray instanceId = "rpi-imager-" + QByteArray::number(QDateTime::currentMSecsSinceEpoch());
-            QByteArray metadata = "instance-id: " + instanceId + "\n";
+            const QByteArray instanceId = rpi_cmdline::newInstanceId();
+            const QByteArray metadata = rpi_cmdline::nocloudMetaData(instanceId);
             fat->writeFile("meta-data", metadata);
             _recordCustomisationWrite("meta-data", metadata);
 
@@ -2817,7 +2818,7 @@ bool DownloadThread::_customizeImage()
             // deployment pattern). Without this, the NoCloud datasource cache
             // is invalidated on every reboot (/run is tmpfs), forcing a full
             // re-discovery from /boot/firmware on every boot.
-            _cmdline += " ds=nocloud;i=" + instanceId;
+            _cmdline += rpi_cmdline::nocloudDatasource(instanceId);
 
             if (!_cloudinit.isEmpty())
             {

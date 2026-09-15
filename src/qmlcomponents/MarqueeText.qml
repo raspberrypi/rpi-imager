@@ -63,6 +63,9 @@ Item {
     Text {
         id: label
         text: root.text
+        // Names come from a repository and from device firmware. AutoText
+        // would read markup in one as rich text and fetch what an <img> names.
+        textFormat: Text.PlainText
         font: textMetrics.font
         color: root.color
         width: root.width

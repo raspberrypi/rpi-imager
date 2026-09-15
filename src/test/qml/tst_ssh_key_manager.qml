@@ -347,4 +347,119 @@ TestCase {
 
         compare(mgr.keys.length, 1)
     }
+
+    // ── Files nobody wrote on purpose ─────────────────────────────────
+
+    property int rngState: 1
+
+    // Math.imul, not *: the product reaches 2.4e18, which is 263 times
+    // past the largest integer a double holds exactly, so the multiply
+    // rounded before the mask ever ran. The sequence stopped being the
+    // LCG it was written as at the second draw, and consecutive draws
+    // correlated -- eleven jumps in a row chose the same destination of
+    // twelve on one seed, which is what found this.
+    function rnd() {
+        rngState = (Math.imul(rngState, 1103515245) + 12345) & 0x7fffffff;
+        return rngState / 0x7fffffff;
+    }
+
+    function rndInt(n) { return n > 0 ? Math.floor(rnd() * n) % n : 0; }
+
+    // Pieces a real authorized_keys file is made of, and pieces no file
+    // should contain. Assembled at random rather than by hand: the cases
+    // above each name one shape, and this is for the ones nobody thought of.
+    readonly property var fragments: [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMockKeyDataHere user@host",
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQMockRsaBlob== user@host",
+        "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTY= user@host",
+        "",
+        "   ",
+        "\t\t",
+        "---- BEGIN SSH2 PUBLIC KEY ----",
+        "---- END SSH2 PUBLIC KEY ----",
+        "Comment: \"a comment\"",
+        "AAAAC3NzaC1lZDI1NTE5AAAAIMockKeyDataHere",
+        "not a key at all",
+        "constructor",
+        "__proto__",
+        "# a comment line",
+        'command="/bin/false" ssh-rsa AAAAB3Nz user@host',
+        "x".repeat(400),
+        "ssh-rsa AAAA\u0001\u0002 user@host"
+    ]
+
+    function randomFile(lineCount) {
+        var lines = [];
+        for (var i = 0; i < lineCount; ++i) {
+            var frag = fragments[rndInt(fragments.length)];
+            lines.push(frag);
+        }
+        // Mixed line endings, because a file written on Windows and one
+        // written by a Mac of a certain age both arrive here.
+        var joiner = ["\n", "\r\n", "\n"][rndInt(3)];
+        return lines.join(joiner);
+    }
+
+    function test_a_file_nobody_wrote_on_purpose_data() {
+        return [ { tag: "seed-13", seed: 13 },
+                 { tag: "seed-601", seed: 601 },
+                 { tag: "seed-7919", seed: 7919 } ];
+    }
+
+    function test_a_file_nobody_wrote_on_purpose(data) {
+        failOnWarning(/TypeError/)
+        failOnWarning(/ReferenceError/)
+        failOnWarning(/is not a function/)
+
+        rngState = data.seed;
+        var filesFed = 0;
+
+        for (var round = 0; round < 40; ++round) {
+            mgr.addKeysFromFile(randomFile(1 + rndInt(12)));
+            ++filesFed;
+
+            var keys = mgr.keys;
+            for (var k = 0; k < keys.length; ++k) {
+                var key = keys[k];
+                // One key per line, or one key silently becomes two in a
+                // file that authorises logins.
+                verify(key.indexOf("\n") < 0,
+                       data.tag + ": no newline inside a key");
+                verify(key.indexOf("\r") < 0,
+                       data.tag + ": no carriage return inside a key");
+                verify(key.length > 0, data.tag + ": no empty key");
+                verify(key === key.trim(),
+                       data.tag + ": keys arrive trimmed");
+            }
+
+            // Nothing is stored twice, whatever order the files arrived in.
+            //
+            // Object.create(null), for the reason deduplicateKeys() gives:
+            // a plain object inherits Object.prototype, so seen["constructor"]
+            // is truthy before anything has been seen and seen["__proto__"]
+            // never becomes an own property at all. Written the other way
+            // first, and it failed on exactly those two lines.
+            var seen = Object.create(null);
+            for (var d = 0; d < keys.length; ++d) {
+                verify(seen[keys[d]] === undefined,
+                       data.tag + ": " + JSON.stringify(keys[d]) + " stored once");
+                seen[keys[d]] = true;
+            }
+
+            // And what would be written out reads back as the same list,
+            // which is the property the file format rests on.
+            var roundTripped = mgr.splitKeys(mgr.getAllKeysAsString());
+            compare(roundTripped.length, keys.length,
+                    data.tag + ": the written file holds the same count");
+            for (var r = 0; r < keys.length; ++r)
+                compare(roundTripped[r], keys[r],
+                        data.tag + ": entry " + r + " survives the round trip");
+        }
+
+        verify(filesFed === 40, "every file was fed (" + filesFed + ")");
+        verify(mgr.keys.length > 0,
+               "and something was accepted (" + mgr.keys.length + ")");
+        console.log("SshKeyManager", data.tag, "files", filesFed,
+                    "keys", mgr.keys.length);
+    }
 }

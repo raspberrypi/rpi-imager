@@ -59,6 +59,7 @@ using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
 #include "fixture_process.h"
 #include "local_http_server.h"
 #include "asynccachewriter.h"
+#include "test_scratch.h"
 
 #include <QTemporaryDir>
 
@@ -529,10 +530,15 @@ TEST_CASE("DownloadThread writes a cache copy alongside the target", "[download]
 
     // And the hash it reports must be of what it actually wrote -- a cache
     // entry filed under the wrong digest is worse than no cache at all.
-    if (!reportedHash.isEmpty()) {
-        CHECK(reportedHash ==
-              QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
-    }
+    //
+    // Required, not skipped when absent. The two lines above have already
+    // shown the cache file exists and holds the payload, so the write
+    // happened; an empty hash after that means the signal never fired or
+    // fired with nothing, and both are the thing this guards against. Behind
+    // a test for emptiness, the check was skipped exactly when it mattered.
+    REQUIRE_FALSE(reportedHash.isEmpty());
+    CHECK(reportedHash ==
+          QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
 }
 
 TEST_CASE("DownloadThread survives a cache file it cannot open", "[download][cache]")
@@ -2101,7 +2107,6 @@ int main(int argc, char *argv[])
     // The secure-boot cases read the signing key path from QSettings. Test
     // mode plus a scoped name keeps that in a throwaway file rather than the
     // developer's real imager configuration.
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
     // Scoped to this process, not just to test mode. catch_discover_tests
     // runs every TEST_CASE as its own process, so `ctest -j4` has several
     // of these alive at once -- and a settings file shared between them is
@@ -2109,13 +2114,9 @@ int main(int argc, char *argv[])
     // secureboot_rsa_key, so one process would see another's: the case
     // that expects no key found a valid one, the write it expected to be
     // refused went ahead, and the failure looked like a timing flake.
-    QCoreApplication::setApplicationName(
-        QStringLiteral("download_thread_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("download_thread_test"));
     const int rc = Catch::Session().run(argc, argv);
 
-    // One settings file per process would otherwise pile up.
-    QFile::remove(QSettings().fileName());
     return rc;
 }
 

@@ -82,7 +82,7 @@ QByteArray IconMultiFetcher::getCachedData(const QString &urlKey) const
 // Limit pending requests to prevent memory exhaustion DoS
 static constexpr int MaxPendingRequests = 500;
 
-void IconMultiFetcher::queueFetch(IconImageResponse *response, const QUrl &url)
+void IconMultiFetcher::queueFetch(quint64 requestId, const QUrl &url)
 {
     if (_shutdown.load()) {
         qWarning() << "IconMultiFetcher: Ignoring fetch request during shutdown";
@@ -98,12 +98,7 @@ void IconMultiFetcher::queueFetch(IconImageResponse *response, const QUrl &url)
     if (_pendingRequests.size() >= MaxPendingRequests) {
         locker.unlock();
         qWarning() << "IconMultiFetcher: Request queue full, rejecting:" << url.host();
-        if (response) {
-            QMetaObject::invokeMethod(response, "onFetchComplete",
-                                      Qt::QueuedConnection,
-                                      Q_ARG(QString, QString()),
-                                      Q_ARG(QString, QStringLiteral("Request queue full")));
-        }
+        emit fetchFinished(requestId, QString(), QStringLiteral("Request queue full"));
         return;
     }
     
@@ -118,17 +113,12 @@ void IconMultiFetcher::queueFetch(IconImageResponse *response, const QUrl &url)
         const QString errorMsg = cacheIt->errorMsg;
         locker.unlock();
         
-        if (response) {  // Defensive check
-            QMetaObject::invokeMethod(response, "onFetchComplete",
-                                      Qt::QueuedConnection,
-                                      Q_ARG(QString, urlKey),
-                                      Q_ARG(QString, errorMsg));
-        }
+        emit fetchFinished(requestId, urlKey, errorMsg);
         return;
     }
     
     // Not in cache - queue for fetching with pre-computed urlKey
-    _pendingRequests.enqueue({response, url, urlKey});
+    _pendingRequests.enqueue({requestId, url, urlKey});
     _hasWork.wakeAll();
     
     // Wake up curl_multi_poll immediately to reduce latency (requires libcurl 7.68.0+)
@@ -139,10 +129,10 @@ void IconMultiFetcher::queueFetch(IconImageResponse *response, const QUrl &url)
 #endif
 }
 
-void IconMultiFetcher::cancelFetch(IconImageResponse *response)
+void IconMultiFetcher::cancelFetch(quint64 requestId)
 {
     QMutexLocker locker(&_mutex);
-    _cancelledResponses.insert(response);
+    _cancelledResponses.insert(requestId);
     _hasWork.wakeAll();
 }
 
@@ -222,22 +212,12 @@ void IconMultiFetcher::processPendingRequests()
     while (!_pendingRequests.isEmpty()) {
         PendingRequest req = _pendingRequests.dequeue();
         
-        // Skip if response was deleted
-        if (!req.response) {
-            continue;
-        }
-        
-        if (_cancelledResponses.contains(req.response.data())) {
+        if (_cancelledResponses.contains(req.id)) {
             // Don't start cancelled requests
-            _cancelledResponses.remove(req.response.data());
+            _cancelledResponses.remove(req.id);
             // Notify of cancellation (empty urlKey signals no data available)
             locker.unlock();
-            if (req.response) {  // Re-check after releasing lock
-                QMetaObject::invokeMethod(req.response.data(), "onFetchComplete",
-                                          Qt::QueuedConnection,
-                                          Q_ARG(QString, QString()),
-                                          Q_ARG(QString, QStringLiteral("Cancelled")));
-            }
+            emit fetchFinished(req.id, QString(), QStringLiteral("Cancelled"));
             locker.relock();
         } else {
             stillPending.enqueue(req);
@@ -247,11 +227,6 @@ void IconMultiFetcher::processPendingRequests()
     // Now process remaining pending requests
     while (!stillPending.isEmpty()) {
         PendingRequest req = stillPending.dequeue();
-        
-        // Skip if response was deleted while waiting
-        if (!req.response) {
-            continue;
-        }
         
         // Use pre-computed urlKey (no QString allocation here)
         const QString &urlKey = req.urlKey;
@@ -263,7 +238,7 @@ void IconMultiFetcher::processPendingRequests()
             CURL *existingEasy = inFlightIt.value();
             auto transferIt = _activeTransfers.find(existingEasy);
             if (transferIt != _activeTransfers.end()) {
-                transferIt.value()->waitingResponses.append(req.response);
+                transferIt.value()->waitingIds.append(req.id);
                 continue; // No new fetch needed
             }
         }
@@ -274,7 +249,7 @@ void IconMultiFetcher::processPendingRequests()
         
         if (easy) {
             // Add response to waiting list
-            _activeTransfers[easy]->waitingResponses.append(req.response);
+            _activeTransfers[easy]->waitingIds.append(req.id);
             _inFlightUrls[urlKey] = easy;
             
             CURLMcode mc = curl_multi_add_handle(_multi, easy);
@@ -283,12 +258,8 @@ void IconMultiFetcher::processPendingRequests()
                 _inFlightUrls.remove(urlKey);
                 locker.unlock();
                 cleanupTransfer(easy);
-                if (req.response) {  // Re-check after releasing lock
-                    QMetaObject::invokeMethod(req.response.data(), "onFetchComplete",
-                                              Qt::QueuedConnection,
-                                              Q_ARG(QString, QString()),
-                                              Q_ARG(QString, QStringLiteral("Failed to start transfer")));
-                }
+                emit fetchFinished(req.id, QString(),
+                                   QStringLiteral("Failed to start transfer"));
                 locker.relock();
             }
         } else {
@@ -299,18 +270,13 @@ void IconMultiFetcher::processPendingRequests()
             // the response was never collected. Report it the same way a
             // failed add does.
             locker.unlock();
-            if (req.response) {
-                QMetaObject::invokeMethod(req.response.data(), "onFetchComplete",
-                                          Qt::QueuedConnection,
-                                          Q_ARG(QString, QString()),
-                                          Q_ARG(QString, QStringLiteral("Unsupported URL")));
-            }
+            emit fetchFinished(req.id, QString(), QStringLiteral("Unsupported URL"));
             locker.relock();
         }
     }
     
     // Handle cancellations for active transfers
-    QSet<IconImageResponse*> toCancel = _cancelledResponses;
+    QSet<quint64> toCancel = _cancelledResponses;
     _cancelledResponses.clear();
     locker.unlock();
     
@@ -319,23 +285,18 @@ void IconMultiFetcher::processPendingRequests()
         TransferData *data = it.value();
         
         // Remove cancelled or deleted responses from waiting list
-        for (auto respIt = data->waitingResponses.begin(); respIt != data->waitingResponses.end(); ) {
-            bool shouldRemove = !(*respIt) || toCancel.contains(respIt->data());
-            if (shouldRemove) {
-                if (*respIt) {  // Only notify if not deleted
-                    QMetaObject::invokeMethod(respIt->data(), "onFetchComplete",
-                                              Qt::QueuedConnection,
-                                              Q_ARG(QString, QString()),
-                                              Q_ARG(QString, QStringLiteral("Cancelled")));
-                }
-                respIt = data->waitingResponses.erase(respIt);
+        for (auto respIt = data->waitingIds.begin(); respIt != data->waitingIds.end(); ) {
+            if (toCancel.contains(*respIt)) {
+                emit fetchFinished(*respIt, QString(),
+                                   QStringLiteral("Cancelled"));
+                respIt = data->waitingIds.erase(respIt);
             } else {
                 ++respIt;
             }
         }
         
         // If no responses are waiting anymore, cancel the transfer
-        if (data->waitingResponses.isEmpty()) {
+        if (data->waitingIds.isEmpty()) {
             CURL *easy = it.key();
             _inFlightUrls.remove(data->urlKey);  // Use pre-computed key
             curl_multi_remove_handle(_multi, easy);
@@ -382,7 +343,12 @@ void IconMultiFetcher::processCompletedTransfers()
             // TODO: Consider adding TTL for negative cache entries if needed
             {
                 QMutexLocker locker(&_mutex);
-                addToCache(data->urlKey, data->buffer);  // Use pre-computed key
+                // The failure is worth remembering; the bytes behind it are
+                // not. A reply taken down at the size limit leaves ten
+                // megabytes of something that was never an icon, and three
+                // of those evict every real icon from a 32 MB cache.
+                addToCache(data->urlKey,
+                           errorMsg.isEmpty() ? data->buffer : QByteArray());
                 if (!errorMsg.isEmpty()) {
                     // Update cache entry with error message
                     auto cacheIt = _cache.find(data->urlKey);
@@ -393,14 +359,8 @@ void IconMultiFetcher::processCompletedTransfers()
             }
             
             // Deliver cache key to all waiting responses (they look up data directly)
-            for (const QPointer<IconImageResponse> &response : data->waitingResponses) {
-                if (response) {
-                    QMetaObject::invokeMethod(response.data(), "onFetchComplete",
-                                              Qt::QueuedConnection,
-                                              Q_ARG(QString, data->urlKey),
-                                              Q_ARG(QString, errorMsg));
-                }
-            }
+            for (const quint64 id : std::as_const(data->waitingIds))
+                emit fetchFinished(id, data->urlKey, errorMsg);
             
             // Cleanup - use pre-computed urlKey
             _inFlightUrls.remove(data->urlKey);
@@ -510,6 +470,7 @@ size_t IconMultiFetcher::writeCallback(char *ptr, size_t size, size_t nmemb, voi
 {
     auto *data = static_cast<TransferData*>(userdata);
     size_t totalSize = size * nmemb;
+
     data->buffer.append(ptr, static_cast<qsizetype>(totalSize));
     return totalSize;
 }

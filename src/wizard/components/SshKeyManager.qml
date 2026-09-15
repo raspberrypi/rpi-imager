@@ -269,6 +269,7 @@ ColumnLayout {
                 
                 // Key text (truncated for display)
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     Layout.maximumWidth: parent ? parent.width - 100 : 500
                     text: {

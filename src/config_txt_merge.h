@@ -17,17 +17,30 @@
  *   - it is there commented out, and that line is uncommented in place;
  *   - it is not there, and it is appended.
  */
-inline QByteArray mergeConfigTxtItem(const QByteArray &config, const QByteArray &item)
+inline QByteArray mergeConfigTxtItem(const QByteArray &config, const QByteArray &rawItem)
 {
+    // Every trailing carriage return, not just one. A file written with
+    // CRLF yields one; text that has been round-tripped through more than
+    // one tool can carry several, and a line that differs from the item
+    // only by them names the same setting.
+    auto stripped = [](const QByteArray &line) {
+        int end = line.size();
+        while (end > 0 && line[end - 1] == '\r')
+            --end;
+        return line.left(end);
+    };
+
+    // The item is stripped the same way the lines are. A caller that split a
+    // CRLF config on '\n' hands over items still carrying their carriage
+    // return, and comparing those against stripped lines never matches -- so
+    // the setting was appended again on every pass and config.txt grew a
+    // duplicate line each time.
+    const QByteArray item = stripped(rawItem);
     if (item.isEmpty())
         return config;
 
     const QList<QByteArray> lines = config.split('\n');
     const QByteArray commented = QByteArray("#") + item;
-
-    auto stripped = [](const QByteArray &line) {
-        return line.endsWith('\r') ? line.left(line.size() - 1) : line;
-    };
 
     int commentedAt = -1;
     for (int i = 0; i < lines.size(); ++i) {

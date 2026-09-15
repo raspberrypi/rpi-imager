@@ -89,7 +89,15 @@ ListView {
         color: root.activeFocus ? Style.listViewHighlightColor : Style.listViewRowBackgroundColor
         radius: 0
         anchors.fill: parent
-        anchors.rightMargin: (root.contentHeight > root.height ? Style.scrollBarWidth : 0)
+        // Reserved unconditionally. Making it conditional on the content
+        // overflowing fed back into the layout: reserving the width narrows
+        // the item, a narrower item can wrap its delegates taller, and that
+        // decides the condition again. It converges -- Qt logs no binding
+        // loop -- but two chaos seeds stalled inside the cascade, one for
+        // 2,563 seconds against about eight for its siblings. Ten pixels of
+        // list width is the price. The scroll bar itself still appears only
+        // when it is needed; it is the space that is always there.
+        anchors.rightMargin: Style.scrollBarWidth
     }
     highlightFollowsCurrentItem: true
     highlightRangeMode: ListView.ApplyRange
@@ -180,6 +188,7 @@ ListView {
     // describes something that just happened.
     Label {
         id: populationAlert
+        textFormat: Text.PlainText
         objectName: "populationAnnouncement"
         anchors.fill: parent
         opacity: 0
@@ -191,10 +200,17 @@ ListView {
         // Re-assert the node so the alert is read again when the wording is
         // the same but the event has happened twice -- two cards of the same
         // kind removed in a row, say.
+        // Qualified through the id: textChanged carries a `text` argument, and
+        // the bare name would bind to that deprecated parameter injection.
         onTextChanged: {
-            if (text.length > 0) {
+            if (populationAlert.text.length > 0) {
                 Accessible.ignored = true
-                Qt.callLater(function() { populationAlert.Accessible.ignored = false })
+                // Guarded: a deferred call outlives the view that scheduled
+                // it, and an id whose object has gone reads as null.
+                Qt.callLater(function() {
+                    if (populationAlert)
+                        populationAlert.Accessible.ignored = false
+                })
             }
         }
     }
@@ -302,20 +318,29 @@ ListView {
             return null
         }
         
-        // For QML ListModel (has get() method)
+        // A QML ListModel, or a C++ model that offers the same call --
+        // OSListModel does, because this is the only way its rows can be
+        // read without the delegate that draws them.
         if (typeof model.get === "function") {
             return model.get(index)
         }
         
-        // For QAbstractListModel (like OSListModel, HWListModel)
-        // Create a JavaScript object with all role data
+        // Otherwise assemble the row from its roles.
         var modelIndex = model.index(index, 0)
         if (!modelIndex || !modelIndex.valid) {
             return null
         }
         
+        // roleNames() is a plain virtual on QAbstractItemModel, so QML
+        // cannot call it unless the model declares it invokable. Say so
+        // rather than returning a shell object: callers check the fields
+        // they need by type, and an object holding none of them reads as a
+        // valid entry that happens to have no url.
+        if (!model.roleNames)
+            return null
+
         var data = {}
-        var roles = model.roleNames ? model.roleNames() : {}
+        var roles = model.roleNames()
         for (var roleKey in roles) {
             var roleName = roles[roleKey]
             var value = model.data(modelIndex, parseInt(roleKey))

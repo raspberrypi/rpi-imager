@@ -4,7 +4,10 @@
  */
 
 #include "secureboot.h"
+
+#include <climits>
 #include "secureboot_crypto.h"
+#include "asn1_length.h"
 #include "devicewrapperfatpartition.h"
 #include "acceleratedcryptographichash.h"
 #include "bootimgcreator.h"
@@ -224,21 +227,9 @@ QByteArray SecureBoot::generateConfigSig(const QByteArray &configText, const QSt
     return sig;
 }
 
-// Parse one ASN.1 length field at *off, advance *off past it, return length
-// or -1 on error.  Supports short form and long-form ≤ 4 bytes (covers all
-// realistic RSA-2048 keys).
-static int asn1ParseLength(const uint8_t *d, int len, int *off)
-{
-    if (*off >= len) return -1;
-    uint8_t b = d[(*off)++];
-    if (b < 0x80) return b;
-    int n = b & 0x7f;
-    if (n == 0 || n > 4 || *off + n > len) return -1;
-    int result = 0;
-    for (int i = 0; i < n; ++i)
-        result = (result << 8) | d[(*off)++];
-    return result;
-}
+// One copy of this, in asn1_length.h, because it was written twice and the
+// same overflow was in both. See the header for what it refuses and why.
+using rpi_imager::asn1ParseLength;
 
 QByteArray SecureBoot::extractRsaPubkeyBin(const QString &rsaKeyPath)
 {

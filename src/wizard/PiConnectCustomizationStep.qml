@@ -61,6 +61,7 @@ WizardStepBase {
             visible: root.orgModeEnabled
 
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 font.pointSize: Style.fontSizeDescription

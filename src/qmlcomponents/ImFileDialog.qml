@@ -293,6 +293,7 @@ BaseDialog {
         
         Text {
             id: titleText
+            textFormat: Text.PlainText
             text: dialog.dialogTitle
             font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold

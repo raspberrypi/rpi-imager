@@ -10,6 +10,10 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <cmath>
+#include <limits>
+#include <vector>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/catch_session.hpp>
@@ -27,6 +31,7 @@
 #include "file_operations.h"
 #include "app_resources.h"
 #include "platform_tools.h"
+#include <QLocale>
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include "drivelistmodel.h"
@@ -49,6 +54,7 @@
 #include <QJsonParseError>
 #include <QProcess>
 #include "fixture_process.h"
+#include "test_scratch.h"
 #include <QDir>
 #include <QAccessible>
 #include <QSettings>
@@ -68,6 +74,12 @@
 #include <QVariant>
 #include <QVersionNumber>
 #include <QVariantMap>
+
+#include <chrono>
+#include <thread>
+
+#include "localfileextractthread.h"
+#include "platform_file_operations.h"
 
 using Catch::Matchers::ContainsSubstring;
 
@@ -1185,7 +1197,15 @@ TEST_CASE("Something that is not a key produces no fingerprint at all",
     // A public key where a private one is needed: the signer cannot use it,
     // so offering a fingerprint for it would be confirming a key that cannot
     // sign.
-    if (haveOpensslBinary()) {
+    // Skipped rather than quietly doing less, which is what the two cases
+    // above this one do and what the rest of the suite does 499 times over.
+    // Without openssl the check below never ran and the case still reported
+    // a pass, so a machine missing it was testing something narrower than
+    // the name says and nothing anywhere mentioned it.
+    if (!haveOpensslBinary())
+        SKIP("openssl is not installed, so no key pair can be generated");
+
+    {
         const QString priv = QDir(dir.path()).filePath(QStringLiteral("p.pem"));
         const QString pub = QDir(dir.path()).filePath(QStringLiteral("p.pub"));
         REQUIRE(generateRsaKeyAt(priv));
@@ -1628,10 +1648,7 @@ int main(int argc, char *argv[])
     qputenv("RPI_IMAGER_CONNECT_URL", QByteArray("http://127.0.0.1:1"));
     QGuiApplication app(argc, argv);
     initAppResources();
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("image_writer_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("image_writer_test"));
     return Catch::Session().run(argc, argv);
 }
 
@@ -1902,50 +1919,419 @@ TEST_CASE("The built-in entries survive filtering", "[imagewriter][oslist]")
 // rounding is how somebody picks a card believing it is big enough.
 // ══════════════════════════════════════════════════════════════
 
-TEST_CASE("Sizes are formatted in binary units", "[imagewriter][format]")
+namespace {
+
+// formatSize() renders through the default locale, so a case that pins a
+// figure has to pin the locale too. Without this the suite passes or fails
+// by the machine's LANG -- a German developer would see 1,5 GB where the
+// expectation says 1.5 GB, and the failure would look like a code fault.
+struct ScopedLocale {
+    QLocale previous;
+    explicit ScopedLocale(const QLocale &l) { QLocale::setDefault(l); }
+    ~ScopedLocale() { QLocale::setDefault(previous); }
+};
+
+const QLocale kBritish{QLocale::English, QLocale::UnitedKingdom};
+
+} // namespace
+
+
+TEST_CASE("Sizes are formatted in the units storage is sold in",
+          "[imagewriter][format]")
 {
+    ScopedLocale guard{kBritish};
     ImageWriter w(nullptr);
     CHECK(w.formatSize(0, 0) == QStringLiteral("0 B"));
     CHECK(w.formatSize(512, 0) == QStringLiteral("512 B"));
-    CHECK(w.formatSize(1024, 0) == QStringLiteral("1 KB"));
-    CHECK(w.formatSize(1024ull * 1024, 0) == QStringLiteral("1 MB"));
-    CHECK(w.formatSize(1024ull * 1024 * 1024, 0) == QStringLiteral("1 GB"));
-    CHECK(w.formatSize(1024ull * 1024 * 1024 * 1024, 0) == QStringLiteral("1 TB"));
+    CHECK(w.formatSize(1000, 0) == QStringLiteral("1 KB"));
+    CHECK(w.formatSize(1000ull * 1000, 0) == QStringLiteral("1 MB"));
+    CHECK(w.formatSize(1000ull * 1000 * 1000, 0) == QStringLiteral("1 GB"));
+    CHECK(w.formatSize(1000ull * 1000 * 1000 * 1000, 0) == QStringLiteral("1 TB"));
 }
 
 TEST_CASE("A size just below a unit boundary keeps the smaller unit",
           "[imagewriter][format]")
 {
-    // 1023 bytes is not "1 KB"; rounding it up would let a card look larger
+    ScopedLocale guard{kBritish};
+    // 999 bytes is not "1 KB"; rounding it up would let a card look larger
     // than it is right at the boundary that matters.
     ImageWriter w(nullptr);
-    CHECK(w.formatSize(1023, 0) == QStringLiteral("1023 B"));
-    CHECK_THAT(w.formatSize(1024ull * 1024 - 1, 1).toStdString(),
+    CHECK(w.formatSize(999, 0) == QStringLiteral("999 B"));
+    CHECK_THAT(w.formatSize(1000ull * 1000 - 1, 1).toStdString(),
                ContainsSubstring("KB"));
 }
 
 TEST_CASE("Decimal places are honoured", "[imagewriter][format]")
 {
+    ScopedLocale guard{kBritish};
     ImageWriter w(nullptr);
-    const QString oneAndAHalf = w.formatSize(1536ull * 1024 * 1024, 1);
+    const QString oneAndAHalf = w.formatSize(1500ull * 1000 * 1000, 1);
     INFO("1.5 GB rendered as: " << oneAndAHalf.toStdString());
     CHECK_THAT(oneAndAHalf.toStdString(), ContainsSubstring("1.5"));
     CHECK_THAT(oneAndAHalf.toStdString(), ContainsSubstring("GB"));
 }
 
-TEST_CASE("A realistic card size reads sensibly", "[imagewriter][format]")
+TEST_CASE("A card reads as the size printed on it", "[imagewriter][format]")
 {
-    // What a 32 GB card actually reports.
+    ScopedLocale guard{kBritish};
+    // The long-standing complaint this fixes: a card sold as 32 GB read as
+    // 29.8, because the divisor was 1024 and the label said GB. Users saw
+    // "the image requires at least 7.9 GB" over a card marked 8 GB and
+    // reasonably concluded the refusal was nonsense. It was not -- 8 GB of
+    // card is 8,000,000,000 bytes -- but only the units said so.
     ImageWriter w(nullptr);
-    const QString s = w.formatSize(31914983424ull, 1);
-    INFO("32 GB card rendered as: " << s.toStdString());
-    CHECK_THAT(s.toStdString(), ContainsSubstring("GB"));
-    CHECK_THAT(s.toStdString(), ContainsSubstring("29."));
+
+    const QString card32 = w.formatSize(31914983424ull, 1);
+    INFO("a 32 GB card renders as: " << card32.toStdString());
+    CHECK_THAT(card32.toStdString(), ContainsSubstring("31.9 GB"));
+
+    const QString card8 = w.formatSize(8000000000ull, 1);
+    INFO("an 8 GB card renders as: " << card8.toStdString());
+    CHECK_THAT(card8.toStdString(), ContainsSubstring("8 GB"));
+}
+
+TEST_CASE("What is displayed means what it says, at every size",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The property behind the two cases above, checked across the range
+    // rather than at a handful of points: read the figure back, multiply by
+    // the unit it was labelled with, and it has to be the number that went
+    // in -- to within the precision on show.
+    //
+    // A wrong divisor fails this everywhere, which is what the units bug
+    // was. So does a wrong label, a missing unit, and an overflow at the top
+    // of the range.
+    ImageWriter w(nullptr);
+
+    auto unitOf = [](const QString &suffix) -> quint64 {
+        if (suffix == QLatin1String("B"))  return 1ull;
+        if (suffix == QLatin1String("KB")) return 1000ull;
+        if (suffix == QLatin1String("MB")) return 1000ull * 1000;
+        if (suffix == QLatin1String("GB")) return 1000ull * 1000 * 1000;
+        if (suffix == QLatin1String("TB")) return 1000ull * 1000 * 1000 * 1000;
+        return 0;
+    };
+
+    std::vector<quint64> sizes{0, 1, 511, 512, 999, 1000, 1001};
+    for (quint64 unit : {1000ull, 1000ull * 1000, 1000ull * 1000 * 1000,
+                         1000ull * 1000 * 1000 * 1000}) {
+        for (quint64 mult : {1ull, 2ull, 7ull, 999ull}) {
+            sizes.push_back(unit * mult);
+            sizes.push_back(unit * mult + unit / 3);
+            sizes.push_back(unit * mult - 1);
+        }
+    }
+    // Real capacities and a real image, and the top of the range.
+    for (quint64 v : {8000000000ull, 16000000000ull, 31914983424ull,
+                      64000000000ull, 8482560409ull,
+                      std::numeric_limits<quint64>::max()})
+        sizes.push_back(v);
+
+    for (quint64 bytes : sizes) {
+        const QString rendered = w.formatSize(bytes, 1);
+        INFO(bytes << " rendered as " << rendered.toStdString());
+
+        const QStringList parts = rendered.split(QLatin1Char(' '));
+        REQUIRE(parts.size() == 2);
+        const quint64 unit = unitOf(parts.at(1));
+        REQUIRE(unit != 0);
+
+        bool ok = false;
+        const double shown = parts.at(0).toDouble(&ok);
+        REQUIRE(ok);
+        REQUIRE(shown >= 0.0);
+
+        // One decimal place, so the figure stands for the byte count to
+        // within a twentieth of its unit. Rounding at the top of a unit can
+        // carry into the next one, which is why the tolerance is taken from
+        // the unit shown.
+        const double back = shown * double(unit);
+        const double tolerance = double(unit) / 20.0 + 1.0;
+        CHECK(std::fabs(back - double(bytes)) <= tolerance);
+    }
+}
+
+TEST_CASE("Every decimal count a caller can pass still renders a size",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The count comes from the caller and QML callers are not bound to the
+    // default of one. Two pieces of the arithmetic depend on it: the rounding
+    // branch taken when it is zero or less, and the scale built by repeated
+    // multiplication when it is more. Both are done in quint64, so a figure
+    // that wraps comes back looking like an ordinary answer.
+    ImageWriter w(nullptr);
+
+    const auto unitOf = [](const QString &suffix) -> quint64 {
+        if (suffix == QLatin1String("B")) return 1;
+        if (suffix == QLatin1String("KB")) return 1000ull;
+        if (suffix == QLatin1String("MB")) return 1000ull * 1000;
+        if (suffix == QLatin1String("GB")) return 1000ull * 1000 * 1000;
+        if (suffix == QLatin1String("TB")) return 1000ull * 1000 * 1000 * 1000;
+        return 0;
+    };
+
+    const std::vector<quint64> sizes{
+        0, 1, 999, 1000, 1500,
+        8000000000ull, 31914983424ull,
+        1000000000000ull, 1999999999999ull,
+        std::numeric_limits<quint64>::max() - 1,
+        std::numeric_limits<quint64>::max(),
+    };
+
+    for (int decimals : {-3, -1, 0, 1, 2, 3, 6, 9, 18, 20, 40}) {
+        for (quint64 bytes : sizes) {
+            const QString rendered = w.formatSize(bytes, decimals);
+            INFO(bytes << " at " << decimals << " decimals renders as "
+                       << rendered.toStdString());
+
+            const QStringList parts = rendered.split(QLatin1Char(' '));
+            REQUIRE(parts.size() == 2);
+            const quint64 unit = unitOf(parts.at(1));
+            REQUIRE(unit != 0);
+
+            bool ok = false;
+            const double shown = parts.at(0).toDouble(&ok);
+            REQUIRE(ok);
+            REQUIRE(shown >= 0.0);
+
+            // Whatever the count, the figure has to stand for the byte count.
+            // Asking for none rounds to the nearest whole unit, so the
+            // tolerance is half a unit either way.
+            const double back = shown * double(unit);
+            const double tolerance = double(unit) / 2.0 + 1.0;
+            CHECK(std::fabs(back - double(bytes)) <= tolerance);
+        }
+    }
+}
+
+TEST_CASE("A size is written the way the reader's language writes numbers",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The figure is read against a number printed on a card, and a reader
+    // whose language puts a comma where English puts a point reads 1.5 GB as
+    // fifteen. The units are already decimal because cards are sold that way;
+    // the separator has to follow the reader for the same reason.
+    ImageWriter w(nullptr);
+    const quint64 oneAndAHalfGB = 1500ull * 1000 * 1000;
+
+    {
+        ScopedLocale german{QLocale(QLocale::German, QLocale::Germany)};
+        CHECK(w.formatSize(oneAndAHalfGB, 1) == QStringLiteral("1,5 GB"));
+    }
+    {
+        ScopedLocale french{QLocale(QLocale::French, QLocale::France)};
+        CHECK(w.formatSize(oneAndAHalfGB, 1) == QStringLiteral("1,5 GB"));
+    }
+    {
+        ScopedLocale british{kBritish};
+        CHECK(w.formatSize(oneAndAHalfGB, 1) == QStringLiteral("1.5 GB"));
+    }
+}
+
+
+TEST_CASE("An image too big for a card reads as bigger than the card",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The two figures the user compares. Whatever the units, the one that
+    // does not fit has to be the larger of the two on screen -- which is
+    // exactly what failed before: 7.9 against a card marked 8.
+    ImageWriter w(nullptr);
+    const quint64 cardBytes = 8000000000ull;          // an 8 GB card
+    const quint64 imageBytes = 8482560409ull;         // 7.9 GiB, which does not fit
+    REQUIRE(imageBytes > cardBytes);
+
+    const QString card = w.formatSize(cardBytes, 1);
+    const QString image = w.formatSize(imageBytes, 1);
+    INFO("card: " << card.toStdString() << ", image: " << image.toStdString());
+
+    const double cardNumber = card.split(QLatin1Char(' ')).first().toDouble();
+    const double imageNumber = image.split(QLatin1Char(' ')).first().toDouble();
+    CHECK(card.endsWith(QStringLiteral("GB")));
+    CHECK(image.endsWith(QStringLiteral("GB")));
+    CHECK(imageNumber > cardNumber);
 }
 
 // ══════════════════════════════════════════════════════════════
 // Settings
 // ══════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════
+// What a link from outside is allowed to say
+//
+// handleIncomingUrl() is reached from a registered URI scheme, so a web page
+// can hand these strings to the application. Two validators stand in front of
+// everything it then does: one decides what may become the repository the OS
+// list is fetched from, the other what may be kept as a Connect token. Both
+// are regular expressions, and a regular expression that disagrees with the
+// parser used afterwards is how a check gets walked past.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A repository link is only ever an ordinary web address",
+          "[imagewriter][deeplink]")
+{
+    ImageWriter w(nullptr);
+
+    // Pieces assembled into candidates rather than random bytes: acceptance
+    // has to happen often enough for the property to be worth holding, and
+    // random bytes almost never spell a URL.
+    const QStringList schemes = {
+        "https://", "http://", "HTTPS://", "file://", "javascript:",
+        "data:text/html,", "ftp://", "//", "https:/", "https:///", "https://///"
+    };
+    const QStringList hosts = {
+        "example.com", "", "a", "user:pw@example.com", "example.com:8443",
+        "[::1]", "exa mple.com", "example.com\\@evil.com", "éxample.com"
+    };
+    const QStringList paths = {
+        "/os_list.json", "/a/b.json", "/x." MANIFEST_EXTENSION, "/no-extension",
+        "/x.json/../y", "/<img src=x>.json", "/a.JSON", "/a.json%00.txt", "/.json"
+    };
+    const QStringList tails = { "", "?sig=abc", "#frag", "?a=1#b", " ", "\n" };
+
+    int accepted = 0, rejected = 0;
+    for (const QString &s : schemes)
+        for (const QString &h : hosts)
+            for (const QString &p : paths)
+                for (const QString &t : tails) {
+                    const QString url = s + h + p + t;
+                    if (!w.isValidRepoUrl(url)) { ++rejected; continue; }
+                    ++accepted;
+                    INFO("accepted: " << url.toStdString());
+
+                    // The property. Whatever the regular expression made of
+                    // it, the thing actually fetched is what QUrl parses --
+                    // and that must be an ordinary web address. A file: or
+                    // javascript: URL surviving here is the interesting
+                    // failure, not a malformed host.
+                    const QUrl parsed(url);
+                    const QString scheme = parsed.scheme().toLower();
+                    CHECK((scheme == QLatin1String("http")
+                           || scheme == QLatin1String("https")));
+                    CHECK_FALSE(parsed.isLocalFile());
+                }
+
+    // Both answers have to occur, or the loop above proves nothing.
+    CHECK(accepted > 0);
+    CHECK(rejected > 0);
+}
+
+TEST_CASE("A token from a link is the shape a token has",
+          "[imagewriter][deeplink]")
+{
+    ImageWriter w(nullptr);
+
+    const QStringList prefixes = { "rpuak_", "rpoak_", "rpuak", "RPUAK_", "", "x_" };
+    const QStringList payloads = {
+        "",
+        "123456789ABCDEFGHJKLMNPQ",                  // 24, all Base58
+        "123456789ABCDEFGHJKLMNP",                   // 23
+        "123456789ABCDEFGHJKLMNPQR",                 // 25
+        "123456789ABCDEFGHJKLMNP0",                  // 24 with a forbidden 0
+        "123456789ABCDEFGHJKLMNPO",                  // ... and O
+        "123456789ABCDEFGHJKLMNPI",                  // ... and I
+        "123456789ABCDEFGHJKLMNPl",                  // ... and l
+        "123456789ABCDEFGHJKLMN Q",                  // a space
+        "123456789ABCDEFGHJKLMN\nQ",                 // a newline
+    };
+
+    int loose = 0, strict = 0, refused = 0;
+    for (const QString &pre : prefixes)
+        for (const QString &pay : payloads) {
+            const QString token = pre + pay;
+            const bool ok = w.verifyAuthKey(token, false);
+            const bool okStrict = w.verifyAuthKey(token, true);
+            INFO("token: " << token.toStdString());
+
+            // Strict is the narrower question, so it can never say yes where
+            // the looser one says no. If it ever did, a key accepted at the
+            // stricter gate would be rejected at the gentler one.
+            if (okStrict)
+                CHECK(ok);
+
+            if (!ok) { ++refused; continue; }
+            ++loose;
+            if (okStrict) ++strict;
+
+            // What "accepted" is allowed to mean.
+            CHECK((token.startsWith(QStringLiteral("rpuak_"))
+                   || token.startsWith(QStringLiteral("rpoak_"))));
+            const QString body = token.mid(6);
+            CHECK(body.size() >= 24);
+            for (const QChar c : body) {
+                INFO("character: " << int(c.unicode()));
+                CHECK(QStringLiteral("0OIl").indexOf(c) < 0);
+                CHECK(c.isLetterOrNumber());
+            }
+            if (okStrict)
+                CHECK(body.size() == 24);
+        }
+
+    CHECK(loose > 0);
+    CHECK(strict > 0);
+    CHECK(refused > 0);
+}
+
+TEST_CASE("Only an ordinary web address is opened or fetched from",
+          "[imagewriter][openurl]")
+{
+    // Not every address reaching openUrl is ours. An OS list entry names its
+    // own page and the update check names a release, both fetched from a
+    // repository the user can point anywhere. The desktop picks a handler by
+    // scheme, so an entry naming file: opens a file manager and the platforms
+    // each keep schemes that reach something worse.
+    struct Case { const char *url; bool openable; };
+    const Case cases[] = {
+        { "https://www.raspberrypi.com/software/", true },
+        { "http://example.com/page", true },
+        { "HTTPS://EXAMPLE.COM/", true },
+        { "https://example.com/a/../b?q=1#f", true },
+
+        { "", false },
+        { "not a url at all", false },
+        { "/etc/passwd", false },
+        { "file:///etc/passwd", false },
+        { "javascript:alert(1)", false },
+        { "data:text/html,<script>", false },
+        { "ftp://example.com/x", false },
+        { "mailto:someone@example.com", false },
+        { "smb://server/share", false },
+        { "ms-msdt:/id", false },
+        { "vbscript:msgbox", false },
+        { "https://", false },
+        { "http:///nohost/path", false },
+    };
+
+    for (const Case &c : cases) {
+        const QUrl url(QString::fromUtf8(c.url));
+        INFO(c.url << " parsed as " << url.toString().toStdString());
+        CHECK(ImageWriter::isHttpUrl(url) == c.openable);
+    }
+}
+
+TEST_CASE("Announcing to a screen reader that is not there does nothing",
+          "[imagewriter][accessibility]")
+{
+    // The writing step calls this on every tenth of a write, every
+    // preparation message and every ending, whether or not anything is
+    // listening. A headless run, a CI machine and the great majority of
+    // real users have no screen reader at all, so the quiet path is the one
+    // that matters: it has to cost nothing and it has to be safe.
+    ImageWriter w(nullptr);
+
+    w.announceToScreenReader(QString());
+    w.announceToScreenReader(QStringLiteral(""));
+    w.announceToScreenReader(QStringLiteral("Writing, 40 percent"));
+    w.announceToScreenReader(QString(64 * 1024, QLatin1Char('a')));
+    w.announceToScreenReader(QStringLiteral("newline\nand a \x01 control"));
+    w.announceToScreenReader(QStringLiteral("<b>markup</b> and %1 and %% too"));
+
+    SUCCEED("no announcement reached a reader, and none of them threw");
+}
 
 TEST_CASE("Settings round-trip", "[imagewriter][settings]")
 {
@@ -3032,10 +3418,91 @@ WriteOutcome runWrite(ImageWriter &w, int timeoutMs = 120000)
     QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
     guard.start(timeoutMs);
 
-    w.startWrite();
+    // Started from inside the loop, not before it. startWrite() validates a
+    // local source before it spawns anything -- _localSourceError() answers
+    // for a path that is missing, not a file, unreadable or empty -- and
+    // calls onError() straight away. Called before exec(), that error sets
+    // the flags and then quits a loop that has not started, which is a
+    // no-op, so the case waited out its whole timeout. Two of them did:
+    // sixty seconds each, the slowest in the file outside QML, and the wait
+    // read as the writer being slow to report rather than the harness being
+    // deaf to it.
+    QTimer::singleShot(0, &w, [&w] { w.startWrite(); });
     loop.exec();
     return out;
 }
+
+// ── pacing ──────────────────────────────────────────────────────────────────
+// Three cases below are about what the writer does *while* a write runs: that
+// progress reaches the UI, that cancelling stops it, that skipping
+// verification still finishes. All three have to observe a write in flight,
+// and the destination is a file, which on any modern machine is memory. A 64MB
+// image can therefore land inside a single 100ms progress sample -- so the run
+// ends before the case can see or do anything, and it fails for being on a
+// fast host rather than for a fault in the code.
+//
+// Pacing the device fixes that at the source: the write takes as long as the
+// case says it does, on a laptop and on a build machine alike. dm-delay would
+// do the same for a real block device, but needs root, which the suite does
+// not have and should not want.
+
+class PacedDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    explicit PacedDevice(std::chrono::milliseconds perWrite) : _perWrite(perWrite) {}
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *data, std::size_t size) override
+    {
+        std::this_thread::sleep_for(_perWrite);
+        return rpi_imager::PlatformFileOperations::WriteSequential(data, size);
+    }
+
+    // The write loop takes this path instead when async I/O is on, so pacing
+    // only the synchronous one would leave the case as quick as it was.
+    rpi_imager::FileError AsyncWriteSequential(const std::uint8_t *data, std::size_t size,
+                                               rpi_imager::FileOperations::AsyncWriteCallback callback) override
+    {
+        std::this_thread::sleep_for(_perWrite);
+        return rpi_imager::PlatformFileOperations::AsyncWriteSequential(data, size,
+                                                                        std::move(callback));
+    }
+
+private:
+    std::chrono::milliseconds _perWrite;
+};
+
+class PacedLocalFileThread : public LocalFileExtractThread
+{
+public:
+    PacedLocalFileThread(const QByteArray &url, const QByteArray &dst, const QByteArray &hash,
+                         std::chrono::milliseconds perWrite, QObject *parent)
+        : LocalFileExtractThread(url, dst, hash, parent)
+    {
+        // DownloadThread's constructor has already put the platform
+        // implementation here; swapping it now is what the scripted-device
+        // cases elsewhere in the suite do.
+        _file = std::make_shared<PacedDevice>(perWrite);
+    }
+};
+
+// An ImageWriter that writes through a paced device. Everything else about the
+// run -- the thread, the signals, the state machine -- is the production path.
+class PacedImageWriter : public ImageWriter
+{
+public:
+    explicit PacedImageWriter(std::chrono::milliseconds perWrite)
+        : ImageWriter(nullptr), _perWrite(perWrite) {}
+
+protected:
+    DownloadExtractThread *createLocalFileThread(const QByteArray &url, const QByteArray &dst,
+                                                 const QByteArray &expectedHash) override
+    {
+        return new PacedLocalFileThread(url, dst, expectedHash, _perWrite, this);
+    }
+
+private:
+    std::chrono::milliseconds _perWrite;
+};
 
 // A small image of recognisable bytes, and somewhere to write it.
 class WriteFixture
@@ -3156,7 +3623,10 @@ TEST_CASE("The UI is told what is happening during a write",
     // point -- no progress, and nothing wrong. Several buffers' worth is
     // what a real image looks like and what the bar is there for.
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so the write spans several progress samples however fast the
+    // host is. Unpaced it can finish inside one, and the only sample taken
+    // catches the download counter moving with nothing yet written.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(false);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -3243,7 +3713,11 @@ TEST_CASE("Skipping verification leaves a finished write, not an abandoned one",
     // away a card that is already correctly written, and they would start
     // again for nothing.
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so a write progress signal arrives while there is still a write
+    // to skip the verification of. Unpaced the run can finish before one is
+    // delivered, leaving the skip never asked for and the case failing on
+    // its own precondition.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(true);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -3282,7 +3756,11 @@ TEST_CASE("Cancelling a write in progress reports cancelled, not success",
           "[imagewriter][write][cancel]")
 {
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so there is still a write to stop when the cancel arrives.
+    // Unpaced the run can be over before the first progress signal is
+    // delivered, and the case then fails for the write having succeeded --
+    // which, the write having genuinely finished, was the right answer.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(false);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -6669,6 +7147,12 @@ TEST_CASE("A zero-length image is refused rather than written", "[imagewriter][e
     const WriteOutcome out = runWrite(w, 60000);
     INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
     CHECK_FALSE(out.succeeded);
+    // Not succeeding is satisfied by saying nothing at all, which is the
+    // failure the comment above is about: the user is owed a reason, not
+    // just the absence of a card. Seventeen cases in this file already ask
+    // for one.
+    CHECK(out.failed);
+    CHECK_FALSE(out.errors.isEmpty());
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -7458,12 +7942,17 @@ Drivelist::DeviceDescriptor removableWithChildren(
     return d;
 }
 
+// The model keys a board on its USB port path, so a caller that means two
+// separate boards has to give them separate ports -- two nodes on one port
+// are one board that turned up twice.
 Drivelist::DeviceDescriptor rpibootDevice(const std::string &device,
-                                          const std::string &chip)
+                                          const std::string &chip,
+                                          const std::vector<uint8_t> &portPath = {})
 {
     Drivelist::DeviceDescriptor d = removable(device, "A board in USB boot");
     d.isRpiboot = true;
     d.rpibootChipName = chip;
+    d.usbPortPath = portPath;
     return d;
 }
 
@@ -7528,8 +8017,8 @@ TEST_CASE("The same board seen twice is still one chip", "[drivelist]")
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList().size() == 1);
@@ -7574,16 +8063,16 @@ TEST_CASE("Two different boards are both reported, in a settled order",
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712"),
-                              rpibootDevice("/dev/sdb", "BCM2711") });
+    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdb", "BCM2711", {1, 3}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList()
           == QStringList{QStringLiteral("BCM2711"), QStringLiteral("BCM2712")});
 
     // The same pair the other way round is not a change.
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711", {1, 3}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
     CHECK(chips.count() == 1);
 }
 
@@ -7843,7 +8332,11 @@ QString listImage(const QString &image, const QString &dir = QString())
     return QString::fromUtf8(p.readAllStandardOutput());
 }
 
-constexpr qint64 kBootImgSize = 8 * 1024 * 1024;
+// Matches the floor SecureBoot::createBootImg applies. Below it mkfs.vfat
+// still builds a FAT32, with a warning and fewer than the 65525 clusters the
+// spec requires, and mtools then refuses to read what it made -- so a smaller
+// image tests a shape the application never asks for and cannot be read back.
+constexpr qint64 kBootImgSize = 33 * 1024 * 1024;
 
 } // namespace
 
@@ -8656,6 +9149,43 @@ TEST_CASE("A second error does not reach the user twice", "[imagewriter][removal
 
     REQUIRE(failed.count() == 1);
     CHECK(failed.at(0).at(0).toString() == QStringLiteral("the real problem"));
+}
+
+TEST_CASE("A test build can point the OS list somewhere else",
+          "[imagewriter][repo]")
+{
+    // The sibling of RPI_IMAGER_TELEMETRY_URL and RPI_IMAGER_CONNECT_URL,
+    // and there for their reason: the QML suite drives this class for real,
+    // so without it every Retry button fetched the production list.
+    struct ScopedOsListUrl {
+        QByteArray previous = qgetenv("RPI_IMAGER_OSLIST_URL");
+        bool had = qEnvironmentVariableIsSet("RPI_IMAGER_OSLIST_URL");
+        explicit ScopedOsListUrl(const QByteArray &v) { qputenv("RPI_IMAGER_OSLIST_URL", v); }
+        ~ScopedOsListUrl() {
+            if (had)
+                qputenv("RPI_IMAGER_OSLIST_URL", previous);
+            else
+                qunsetenv("RPI_IMAGER_OSLIST_URL");
+        }
+    };
+
+    {
+        ScopedOsListUrl unset{QByteArray()};
+        CHECK(ImageWriter::defaultOsListUrl() == QUrl(QString(OSLIST_URL)));
+    }
+
+    {
+        const QString elsewhere = QStringLiteral("file:///nowhere/os_list.json");
+        ScopedOsListUrl redirected{elsewhere.toUtf8()};
+        CHECK(ImageWriter::defaultOsListUrl() == QUrl(elsewhere));
+
+        // And it still reads as the ordinary repository. Otherwise the wizard
+        // announces "using data from", and the two QML cases that wait for
+        // customRepoHost() to empty after a reset never see it.
+        ImageWriter w(nullptr);
+        CHECK_FALSE(w.customRepo());
+        CHECK(w.customRepoHost().isEmpty());
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -11618,6 +12148,24 @@ TEST_CASE("The value survives how the flash region is written",
         conf.append(QByteArray(64, '\0'));
         CHECK(rpi_eeprom::repoUrlFromBlconfig(conf) == expected);
     }
+
+    SECTION("padding with no newline before it, which is the usual shape")
+    {
+        // A fixed-size region written short. There is no reason for the
+        // writer to leave a newline between the value and the rest of the
+        // region, and the section above only passes because it does: the
+        // padding becomes a line of its own and never touches the value.
+        QByteArray conf = "IMAGER_REPO_URL=https://images.example.invalid/os.json";
+        conf.append(QByteArray(64, '\0'));
+        CHECK(rpi_eeprom::repoUrlFromBlconfig(conf) == expected);
+    }
+
+    SECTION("erased flash after the text, which is 0xFF rather than nought")
+    {
+        QByteArray conf = "IMAGER_REPO_URL=https://images.example.invalid/os.json";
+        conf.append(QByteArray(64, '\xFF'));
+        CHECK(rpi_eeprom::repoUrlFromBlconfig(conf) == expected);
+    }
 }
 
 TEST_CASE("A key with nothing after it is not an override to nowhere",
@@ -11652,6 +12200,37 @@ TEST_CASE("With two of them, the last is taken", "[imagewriter][eeprom]")
               "IMAGER_REPO_URL=https://first.invalid/os.json\n"
               "IMAGER_REPO_URL=https://second.invalid/os.json\n")
           == QStringLiteral("https://second.invalid/os.json"));
+}
+
+TEST_CASE("A mark in front of the value does not smuggle whitespace past",
+          "[imagewriter][eeprom]")
+{
+    // Found by fuzzing, in forty-eight bytes.
+    //
+    // The value is trimmed as bytes, and a byte order mark is not
+    // whitespace -- so the trim steps over it and stops. fromUtf8() then
+    // removes the mark, and whatever was behind it is on the front of the
+    // answer. Here that is a vertical tab.
+    const QByteArray bom = QByteArrayLiteral("\xEF\xBB\xBF");
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "\vhttps://images.example.invalid/os.json\n")
+          == QStringLiteral("https://images.example.invalid/os.json"));
+
+    // The same from the other end, and with the ordinary whitespace the
+    // byte-level trim does catch, to show the two agree.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "  https://images.example.invalid/os.json \t\n")
+          == QStringLiteral("https://images.example.invalid/os.json"));
+
+    // A mark and whitespace and nothing else is not a value. Before the
+    // second emptiness check this returned a string of whitespace, which
+    // the caller would have taken for a repository.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "\v\n").isEmpty());
+
+    // And a mark alone, which decodes to nothing at all.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "\n").isEmpty());
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -13473,7 +14052,7 @@ TEST_CASE("A text scale the user set overrides what the desktop reports",
     // because the desktop's answer did not suit them. Only a sane factor is
     // honoured: a stored 40 would make the interface unusable and
     // unrecoverable, since the control to put it back would be off-screen.
-    QSettings settings(QStringLiteral("Raspberry Pi"), QStringLiteral("Raspberry Pi Imager"));
+    QSettings settings;   // this process's own, like the code under test
     const QVariant saved = settings.value(QStringLiteral("textScaleFactor"));
 
     PlatformHelper helper;

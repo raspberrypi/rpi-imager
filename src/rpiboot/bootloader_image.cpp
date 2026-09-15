@@ -176,7 +176,16 @@ QByteArray BootloaderImage::getFile(const QString &name) const
     // Named-file payload starts after [magic 4][length 4][filename 12][meta 4].
     // The recorded `length` covers filename + 4 metadata bytes + payload, so
     // we subtract the 16 bytes that aren't payload.
-    return _bytes.mid(hdr + 4 + FILE_HDR_LEN, len - FILENAME_LEN - 4);
+    //
+    // A section declaring less than those 16 bytes leaves the subtraction
+    // negative, and mid() reads a negative length as "to the end": the rest
+    // of the EEPROM came back as the file's contents, to be counter-signed
+    // and written to a part that accepts an image once. It owns no payload,
+    // so it has none to give.
+    const int payloadLen = len - FILENAME_LEN - 4;
+    if (payloadLen <= 0)
+        return {};
+    return _bytes.mid(hdr + 4 + FILE_HDR_LEN, payloadLen);
 }
 
 bool BootloaderImage::updateFile(const QString &name, const QByteArray &payload)

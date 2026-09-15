@@ -22,6 +22,7 @@
 #include "rpiboot/firmware_manager.h"
 #include "rpiboot/test/mock_usb_transport.h"
 #include "rpiboot/rpiboot_scanner.h"
+#include "test_scratch.h"
 
 #include <QCoreApplication>
 #include <QStringList>
@@ -253,10 +254,7 @@ int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QCoreApplication app(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("rpiboot_thread_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("rpiboot_thread_test"));
     return Catch::Session().run(argc, argv);
 }
 

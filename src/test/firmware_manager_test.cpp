@@ -169,7 +169,7 @@ TEST_CASE("FirmwareManager builds a fastboot manifest", "[firmware]")
     }
 }
 
-TEST_CASE("FirmwareManager downloads the same fastboot payload for either chip",
+TEST_CASE("FirmwareManager downloads each chip's own fastboot gadget",
           "[firmware]")
 {
     TestableFirmwareManager fm;
@@ -180,18 +180,29 @@ TEST_CASE("FirmwareManager downloads the same fastboot payload for either chip",
     REQUIRE_FALSE(for2711.empty());
     REQUIRE_FALSE(for2712.empty());
 
-    // The manifest is deliberately chip-independent here: both CM4 and CM5
-    // pull the same fastboot bootfiles.bin, and the chip only decides which
-    // member is pulled out of that TAR afterwards -- bootcode4.bin for
-    // BCM2711, bootcode5.bin for BCM2712. So the download list matching is
-    // the correct answer, and validateCacheForDevice() is what actually keeps
-    // one chip from using the other's extracted bootcode.
+    // Only the gadget is chip-specific: rpi-sb-provisioner ships one per
+    // device family, and we know the family from the USB PID we enumerated
+    // on, so there is no reason to pull the other family's device trees.
+    // Everything else -- config.txt and bootfiles.bin -- stays shared, and
+    // the chip only decides which bootcode is extracted from that TAR
+    // afterwards, which validateCacheForDevice() is what enforces.
     REQUIRE(for2711.size() == for2712.size());
+
+    std::vector<std::size_t> differing;
     for (std::size_t i = 0; i < for2711.size(); ++i) {
-        INFO("entry " << i);
-        CHECK(for2711[i].url == for2712[i].url);
-        CHECK(for2711[i].localPath == for2712[i].localPath);
+        if (for2711[i].url != for2712[i].url
+            || for2711[i].localPath != for2712[i].localPath)
+            differing.push_back(i);
     }
+    REQUIRE(differing.size() == 1);
+
+    const auto &gadget2711 = for2711[differing.front()];
+    const auto &gadget2712 = for2712[differing.front()];
+
+    CHECK(gadget2711.url.find("fastboot-gadget-pi4-family.img") != std::string::npos);
+    CHECK(gadget2711.localPath == "fastboot/fastboot-gadget-pi4-family.img");
+    CHECK(gadget2712.url.find("fastboot-gadget-pi5-family.img") != std::string::npos);
+    CHECK(gadget2712.localPath == "fastboot/fastboot-gadget-pi5-family.img");
 }
 
 TEST_CASE("FirmwareManager builds a secure-boot recovery manifest", "[firmware]")
@@ -820,6 +831,11 @@ void layOutFirmware(const QString &root)
         {"mass-storage-gadget64/config.txt",  "gadget config"},
         // firmware/bootfiles.bin is written separately below: it has to be a
         // real tar, because the bootcode is extracted from inside it.
+        // One gadget per device family, plus the unsuffixed image the
+        // provisioner keeps as the fallback for a station that cannot tell
+        // what it has connected.
+        {"host-support/fastboot-gadget-pi4-family.img", "pi4 fastboot gadget"},
+        {"host-support/fastboot-gadget-pi5-family.img", "pi5 fastboot gadget"},
         {"host-support/fastboot-gadget.img",  "fastboot gadget"},
         {"host-support/fastboot-gadget.2710-bootfiles-bin", "2710 bootfiles"},
         {"firmware-2711/versions.txt",        "2024-09-23  1727086800  abc  latest\n"},
@@ -997,7 +1013,7 @@ size_t countOccurrences(const std::string &haystack, const std::string &needle)
 // into rpiboot again rather than into whatever it would normally boot. That is
 // arranged by appending two settings to the recovery's config.txt, and the
 // order of the two is load-bearing: config.txt is read top to bottom, and a
-// recovery_reboot reached before set_boot_order reboots the device before the
+// recovery_reboot reached before set_reboot_order reboots the device before the
 // override has been seen. The device then powers up into normal boot, the
 // imager sits waiting for a device that is never coming back, and nothing
 // says why.
@@ -1047,15 +1063,17 @@ TEST_CASE("A recovery config gains both settings, boot order first",
     const std::string out = readAll(cfg);
     INFO("config.txt:\n" << out);
 
-    const auto orderAt = out.find("set_boot_order=0x3");
+    const auto orderAt = out.find("set_reboot_order=0x3");
     const auto rebootAt = out.find("recovery_reboot=1");
     REQUIRE(orderAt != std::string::npos);
     REQUIRE(rebootAt != std::string::npos);
     CHECK(orderAt < rebootAt);
 
-    // What upstream shipped is still there.
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
-    CHECK(out.find("[all]") != std::string::npos);
+    CHECK(out.find("program_pubkey=1") != std::string::npos);
+    // Whatever upstream shipped is gone: recovery.bin is not the bootloader
+    // and takes only these directives, so the template is not served to it.
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
+    CHECK(out.find("[all]") == std::string::npos);
 }
 
 TEST_CASE("Settings already in the file are moved rather than duplicated",
@@ -1069,7 +1087,7 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     const auto cfg = sbrConfigFor(versionDir, ChipGeneration::BCM2712,
                                   "recovery_reboot=1\n"
                                   "[all]\n"
-                                  "  set_boot_order=0xf41\n"
+                                  "  set_reboot_order=0xf41\n"
                                   "arm_64bit=1\n");
 
     TestableFirmwareManager fm;
@@ -1079,11 +1097,11 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     INFO("config.txt:\n" << out);
 
     // Exactly one of each, ours, in our order.
-    CHECK(countOccurrences(out, "set_boot_order=") == 1);
+    CHECK(countOccurrences(out, "set_reboot_order=") == 1);
     CHECK(countOccurrences(out, "recovery_reboot=") == 1);
     CHECK(out.find("0xf41") == std::string::npos);
-    CHECK(out.find("set_boot_order=0x3") < out.find("recovery_reboot=1"));
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
+    CHECK(out.find("set_reboot_order=0x3") < out.find("recovery_reboot=1"));
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
 }
 
 TEST_CASE("Running twice leaves the file as it was after once",
@@ -1109,8 +1127,8 @@ TEST_CASE("Running twice leaves the file as it was after once",
 TEST_CASE("A recovery config with Windows line endings is rewritten as LF",
           "[firmware][sbr]")
 {
-    // The bootloader wants LF. A stray CR left on a kept line would ride
-    // along into the rewritten file.
+    // The bootloader wants LF, and what we write has to be LF whatever the
+    // file it replaces was.
     ScratchDir scratch;
     const std::filesystem::path versionDir = scratch.path();
     const auto cfg = sbrConfigFor(versionDir, ChipGeneration::BCM2712,
@@ -1122,22 +1140,23 @@ TEST_CASE("A recovery config with Windows line endings is rewritten as LF",
     const std::string out = readAll(cfg);
     INFO("config.txt:\n" << out);
     CHECK(out.find('\r') == std::string::npos);
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
     CHECK(countOccurrences(out, "recovery_reboot=") == 1);
 }
 
 TEST_CASE("A recovery config that is not there yet is not an error",
           "[firmware][sbr]")
 {
-    // First run: the download has not happened. The caller comes back after
-    // the download loop, so this has to be a benign no-op rather than a
-    // failure that aborts provisioning.
+    // Nothing is downloaded to build on any more, so an absent file is the
+    // normal case rather than a first-run one: the directory and the config
+    // are both created here.
     ScratchDir scratch;
     const std::filesystem::path versionDir = scratch.path();
 
     TestableFirmwareManager fm;
     CHECK(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
     CHECK(fm.lastError().empty());
+    CHECK(std::filesystem::exists(versionDir / "secure-boot-recovery5" / "config.txt"));
 }
 
 TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
@@ -1154,8 +1173,8 @@ TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2711));
 
-    CHECK(readAll(older).find("set_boot_order=0x3") != std::string::npos);
-    CHECK(readAll(newer).find("set_boot_order=0x3") == std::string::npos);
+    CHECK(readAll(older).find("set_reboot_order=0x3") != std::string::npos);
+    CHECK(readAll(newer).find("set_reboot_order=0x3") == std::string::npos);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1488,6 +1507,10 @@ TEST_CASE("A CM3 fastboot manifest uses the self-contained bundle", "[firmware]"
 
     // No separate gadget kernel and no separate config: the bundle carries
     // both, and asking for them would 404.
+    // No gadget image of any name: not a family one, and not the unsuffixed
+    // fallback either. The self-contained fastboot-gadget.2710-bootfiles-bin
+    // is the bundle itself, checked above, and is meant to be here.
+    CHECK(manifestJoined(m).find("fastboot-gadget-") == std::string::npos);
     CHECK_FALSE(manifestHas(m, "fastboot/fastboot-gadget.img"));
     CHECK_FALSE(manifestHas(m, "fastboot/config.txt"));
 
@@ -1735,7 +1758,7 @@ TEST_CASE("Fetching firmware reports progress the whole way", "[firmware][fetch]
     // the within-file fraction is computed the right way round.
     {
         QFile big(QDir(served.path()).filePath(
-            QStringLiteral("host-support/fastboot-gadget.img")));
+            QStringLiteral("host-support/fastboot-gadget-pi5-family.img")));
         REQUIRE(big.open(QIODevice::WriteOnly | QIODevice::Truncate));
         const QByteArray chunk(1 << 20, 'g');
         for (int i = 0; i < 24; ++i)
@@ -2256,19 +2279,18 @@ TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
 TEST_CASE("Boot-order lines already in the recovery config are replaced, not repeated",
           "[firmware]")
 {
-    // config.txt is read top to bottom and set_boot_order has to be seen
+    // config.txt is read top to bottom and set_reboot_order has to be seen
     // before recovery_reboot, or the bootloader reboots before applying the
     // override and the board comes up in normal boot instead of rpiboot.
-    // Upstream's own config may carry either key, so they are stripped and
-    // re-appended in order rather than left where they were found.
+    // Whatever was there before is discarded: the file is written outright.
     ScratchDir dir;
     const fs::path versionDir = dir.path() / "v1";
     const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
     writeFile(configPath,
               "recovery_reboot=1\n"
-              "  set_boot_order=0x1\n"
+              "  set_reboot_order=0x1\n"
               "arm_64bit=1\r\n"
-              "set_boot_order=0xf41\n");
+              "set_reboot_order=0xf41\n");
 
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
@@ -2280,43 +2302,30 @@ TEST_CASE("Boot-order lines already in the recovery config are replaced, not rep
         lines.push_back(line);
 
     REQUIRE(lines.size() == 3);
-    CHECK(lines[0] == "arm_64bit=1");   // the CR was stripped with it
-    CHECK(lines[1] == "set_boot_order=0x3");
+    CHECK(lines[0] == "program_pubkey=1");
+    CHECK(lines[1] == "set_reboot_order=0x3");
     CHECK(lines[2] == "recovery_reboot=1");
 }
 
-TEST_CASE("A recovery config that cannot be read or rewritten is reported", "[firmware]")
+TEST_CASE("A recovery config that cannot be written is reported", "[firmware]")
 {
     if (::geteuid() == 0)
         SKIP("running as root, which the mode bits do not stop");
 
-    SECTION("unreadable") {
+    // The file is written outright rather than read and amended, so the only
+    // way it can fail is the write.  Silently leaving whatever was there
+    // would send a board into normal boot when recovery was asked for.
+    for (const auto mode : {0000, 0400}) {
         ScratchDir dir;
         const fs::path versionDir = dir.path() / "v1";
         const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
         writeFile(configPath, "arm_64bit=1\n");
-        REQUIRE(::chmod(configPath.c_str(), 0000) == 0);
+        REQUIRE(::chmod(configPath.c_str(), static_cast<mode_t>(mode)) == 0);
 
         TestableFirmwareManager fm;
+        INFO("mode " << std::oct << mode);
         CHECK_FALSE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
-        CHECK(fm.lastError().find("Cannot read") != std::string::npos);
-
-        ::chmod(configPath.c_str(), 0600);
-    }
-
-    SECTION("read-only") {
-        // Readable, so the upstream lines are gathered, and then the rewrite
-        // is refused. Silently keeping the original would send a board into
-        // normal boot when the user asked for recovery.
-        ScratchDir dir;
-        const fs::path versionDir = dir.path() / "v1";
-        const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
-        writeFile(configPath, "arm_64bit=1\n");
-        REQUIRE(::chmod(configPath.c_str(), 0400) == 0);
-
-        TestableFirmwareManager fm;
-        CHECK_FALSE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
-        CHECK(fm.lastError().find("Cannot rewrite") != std::string::npos);
+        CHECK(fm.lastError().find("Cannot write") != std::string::npos);
 
         ::chmod(configPath.c_str(), 0600);
     }
@@ -2389,7 +2398,8 @@ TEST_CASE("A fastboot firmware set is fetched, cached and validated",
     ScratchDir served;
     // Laid out as the upstream repositories are, because the manifest builds
     // its URLs from those paths.
-    writeFile(served.path() / "host-support" / "fastboot-gadget.img", "gadget bytes");
+    writeFile(served.path() / "host-support" / "fastboot-gadget-pi5-family.img",
+              "gadget bytes");
     writeFile(served.path() / "mass-storage-gadget64" / "config.txt", "arm_64bit=1\n");
     writeBootfilesTar(served.path() / "firmware" / "bootfiles.bin", "2712/bootcode5.bin");
 
@@ -2408,7 +2418,7 @@ TEST_CASE("A fastboot firmware set is fetched, cached and validated",
     REQUIRE_FALSE(dir.empty());
 
     // Every manifest file landed where the file server will look for it.
-    CHECK(fs::exists(dir / "fastboot" / "fastboot-gadget.img"));
+    CHECK(fs::exists(dir / "fastboot" / "fastboot-gadget-pi5-family.img"));
     CHECK(fs::exists(dir / "fastboot" / "config.txt"));
     CHECK(fs::exists(dir / "fastboot" / "bootfiles.bin"));
 
@@ -2435,7 +2445,8 @@ TEST_CASE("A fastboot set is counter-signed and re-packed for a fused board",
         SKIP("openssl is not installed, so no key can be generated");
 
     ScratchDir served;
-    writeFile(served.path() / "host-support" / "fastboot-gadget.img", "gadget bytes");
+    writeFile(served.path() / "host-support" / "fastboot-gadget-pi5-family.img",
+              "gadget bytes");
     writeFile(served.path() / "mass-storage-gadget64" / "config.txt", "arm_64bit=1\n");
     writeBootfilesTar(served.path() / "firmware" / "bootfiles.bin", "2712/bootcode5.bin");
 
@@ -2621,7 +2632,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     QFile config(QString::fromStdString((sub / "config.txt").string()));
     REQUIRE(config.open(QIODevice::ReadOnly));
     const QByteArray body = config.readAll();
-    CHECK(body.contains("set_boot_order=0x3"));
+    CHECK(body.contains("set_reboot_order=0x3"));
     CHECK(body.contains("recovery_reboot=1"));
 
     // And the bootcode was counter-signed from the unsigned baseline.

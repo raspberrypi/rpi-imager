@@ -16,6 +16,7 @@
 #include "iconmultifetcher.h"
 #include "iconimageprovider.h"
 #include "local_http_server.h"
+#include "test_scratch.h"
 
 #include <memory>
 #include <vector>
@@ -74,7 +75,7 @@ FetchResult fetchIcon(const QUrl &url, int timeoutMs = 15000)
         out.error = response.errorString();
     });
 
-    IconMultiFetcher::instance().queueFetch(&response, url);
+    IconMultiFetcher::instance().queueFetch(response.requestId(), url);
     waitFor([&] { return out.finished; }, timeoutMs);
     return out;
 }
@@ -85,10 +86,7 @@ int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("icon_fetcher_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("icon_fetcher_test"));
     const int rc = Catch::Session().run(argc, argv);
     IconMultiFetcher::instance().shutdown();
     return rc;
@@ -115,6 +113,31 @@ TEST_CASE("An icon is fetched and cached", "[icons]")
     // The bytes are kept so the next tile showing the same icon costs
     // nothing -- the chooser asks for the same URL many times over.
     CHECK(IconMultiFetcher::instance().getCachedData(url.toString()) == bytes);
+}
+
+TEST_CASE("A reply too big to be an icon leaves nothing of itself behind",
+          "[icons]")
+{
+    // The address comes from the OS list, so what answers it is not ours.
+    // The transfer is bounded -- curl stops it at the maximum even when the
+    // reply declares no length -- but what it had read by then was cached
+    // under the URL, and a broken URL is cached deliberately so it is not
+    // retried on every scroll. Ten megabytes of a reply that was never an
+    // icon, and three of them evict the whole cache.
+    rpi_test::UnsizedHttpServer server(24 * 1024 * 1024);
+    REQUIRE_HTTP_SERVER(server);
+
+    IconMultiFetcher::instance().clearCache();
+    const QUrl url(QString::fromUtf8(server.urlFor(QStringLiteral("endless.png"))));
+
+    const FetchResult r = fetchIcon(url);
+    INFO("error: " << r.error.toStdString());
+    REQUIRE(r.finished);
+    CHECK(!r.error.isEmpty());
+
+    // The failure itself is still remembered, so the next tile asking does
+    // not go back out for it -- but it is remembered as nothing.
+    CHECK(IconMultiFetcher::instance().getCachedData(url.toString()).isEmpty());
 }
 
 TEST_CASE("A second fetch of the same icon is served from the cache", "[icons]")
@@ -229,8 +252,8 @@ TEST_CASE("A cancelled fetch does not deliver", "[icons]")
     // QML cancels when a delegate scrolls out of view, and the response is
     // destroyed straight after. Delivering to it then is a use-after-free.
     IconImageResponse response(url);
-    IconMultiFetcher::instance().queueFetch(&response, url);
-    IconMultiFetcher::instance().cancelFetch(&response);
+    IconMultiFetcher::instance().queueFetch(response.requestId(), url);
+    IconMultiFetcher::instance().cancelFetch(response.requestId());
 
     waitFor([] { return false; }, 500);
     CHECK(response.isCancelled() == false);   // cancel() is Qt's call, not ours
@@ -274,12 +297,12 @@ TEST_CASE("Cancelling one request for an icon leaves the others waiting",
     QObject::connect(&scrolledAway, &QQuickImageResponse::finished,
                      [&] { scrolledAwayDone = true; });
 
-    IconMultiFetcher::instance().queueFetch(&scrolledAway, url);
-    IconMultiFetcher::instance().queueFetch(&stillVisible, url);
-    IconMultiFetcher::instance().queueFetch(&alsoVisible, url);
+    IconMultiFetcher::instance().queueFetch(scrolledAway.requestId(), url);
+    IconMultiFetcher::instance().queueFetch(stillVisible.requestId(), url);
+    IconMultiFetcher::instance().queueFetch(alsoVisible.requestId(), url);
 
     // One delegate scrolls out of view.
-    IconMultiFetcher::instance().cancelFetch(&scrolledAway);
+    IconMultiFetcher::instance().cancelFetch(scrolledAway.requestId());
 
     // The two still on screen get their icon. If cancelling one tore the
     // shared transfer down, this is where a screenful of blank icons would
@@ -318,10 +341,10 @@ TEST_CASE("Cancelling every request for an icon is not an error for anyone",
     {
         IconImageResponse first(url);
         IconImageResponse second(url);
-        IconMultiFetcher::instance().queueFetch(&first, url);
-        IconMultiFetcher::instance().queueFetch(&second, url);
-        IconMultiFetcher::instance().cancelFetch(&first);
-        IconMultiFetcher::instance().cancelFetch(&second);
+        IconMultiFetcher::instance().queueFetch(first.requestId(), url);
+        IconMultiFetcher::instance().queueFetch(second.requestId(), url);
+        IconMultiFetcher::instance().cancelFetch(first.requestId());
+        IconMultiFetcher::instance().cancelFetch(second.requestId());
         waitFor([] { return false; }, 500);
     }
 
@@ -590,7 +613,7 @@ TEST_CASE("More icons than the queue will hold are refused, not accumulated",
                              if (r->errorString().contains(QStringLiteral("queue full")))
                                  ++rejected;
                          });
-        IconMultiFetcher::instance().queueFetch(response.get(), url);
+        IconMultiFetcher::instance().queueFetch(response->requestId(), url);
         responses.push_back(std::move(response));
     }
 
@@ -603,7 +626,7 @@ TEST_CASE("More icons than the queue will hold are refused, not accumulated",
 
     // Cancel what is still outstanding before the responses go out of scope.
     for (auto &r : responses)
-        IconMultiFetcher::instance().cancelFetch(r.get());
+        IconMultiFetcher::instance().cancelFetch(r->requestId());
     waitFor([] { return false; }, 500);
 }
 
@@ -626,14 +649,14 @@ TEST_CASE("Cancelling an icon already on the wire takes the transfer down too",
     QObject::connect(&response, &QQuickImageResponse::finished,
                      [&finished] { finished = true; });
 
-    IconMultiFetcher::instance().queueFetch(&response, url);
+    IconMultiFetcher::instance().queueFetch(response.requestId(), url);
 
     // Long enough to be started rather than still queued: the server answers
     // with headers and then holds the connection open.
     waitFor([] { return false; }, 1000);
     CHECK_FALSE(finished);
 
-    IconMultiFetcher::instance().cancelFetch(&response);
+    IconMultiFetcher::instance().cancelFetch(response.requestId());
     waitFor([&finished] { return finished; }, 5000);
 
     CHECK(finished);
@@ -655,7 +678,7 @@ TEST_CASE("An icon whose delegate went away before the loop looked is dropped",
 
     const QUrl url(QString::fromUtf8(server.urlFor(QStringLiteral("gone.png"))));
     auto *response = new IconImageResponse(url);
-    IconMultiFetcher::instance().queueFetch(response, url);
+    IconMultiFetcher::instance().queueFetch(response->requestId(), url);
     // No event loop in between: the request is still in the queue.
     delete response;
 
@@ -686,7 +709,7 @@ TEST_CASE("Shutting down with an icon still arriving comes back promptly",
 
     const QUrl url(QString::fromUtf8(server.urlFor(QStringLiteral("icon.png"))));
     IconImageResponse response(url);
-    IconMultiFetcher::instance().queueFetch(&response, url);
+    IconMultiFetcher::instance().queueFetch(response.requestId(), url);
 
     // Long enough for the request to have left: the server answers with
     // headers and then holds the connection open, so it is still in flight.
@@ -723,7 +746,7 @@ TEST_CASE("A request made after shutdown is dropped rather than queued",
     QObject::connect(&response, &QQuickImageResponse::finished,
                      [&finished] { finished = true; });
 
-    CHECK_NOTHROW(IconMultiFetcher::instance().queueFetch(&response, url));
+    CHECK_NOTHROW(IconMultiFetcher::instance().queueFetch(response.requestId(), url));
 
     // Dropped in silence: nothing is waiting on the answer by this point, and
     // the callback would run against a half-destroyed engine.

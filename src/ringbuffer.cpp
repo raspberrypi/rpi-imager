@@ -30,7 +30,12 @@ RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment,
     _slotInUse.assign(numSlots, 0);
     _freeSlots.reserve(numSlots);
     // Pushed in reverse so the first slots handed out are 0, 1, 2, ...
-    for (size_t i = numSlots; i-- > 0; ) {
+    // Decremented inside rather than in the condition: the usual
+    // "i-- > 0" leaves i at SIZE_MAX on the way out, which is defined and
+    // discarded, but reads as an overflow under the unsigned check and
+    // would cost this file its coverage by that check to silence.
+    for (size_t i = numSlots; i > 0; ) {
+        --i;
         _freeSlots.push_back(i);
     }
     
@@ -363,7 +368,8 @@ void RingBuffer::reset()
     std::queue<size_t>().swap(_committedSlots);
     _slotInUse.assign(_numSlots, 0);
     _freeSlots.clear();
-    for (size_t i = _numSlots; i-- > 0; ) {
+    for (size_t i = _numSlots; i > 0; ) {
+        --i;
         _freeSlots.push_back(i);
     }
     _producerDone = false;

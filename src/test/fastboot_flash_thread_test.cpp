@@ -1554,6 +1554,104 @@ TEST_CASE("Customisation is written into the boot partition it just flashed",
     CHECK_FALSE(cmds.filter(QStringLiteral("oem umount ")).isEmpty());
 }
 
+TEST_CASE("Padding on the config the device returns is not written back to it",
+          "[fastboot][flash][pipeline]")
+{
+    // config.txt is read back from the device and merged into. A read of a
+    // fixed size comes back padded, and nothing trimmed it, so the padding
+    // was merged into and written back -- with the new settings on the far
+    // side of it.
+    //
+    // What the firmware does with a NUL in the middle of config.txt is the
+    // firmware's business and not asserted here. The property that does not
+    // need to know: a file we write should carry what the user configured
+    // and what was already there, and not a region's padding that we did
+    // not put there and cannot mean anything by.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(512 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     64u * 1024 * 1024};
+
+    QByteArray padded = "[all]\narm_boost=1\n";
+    padded.append(QByteArray(32, '\0'));
+    t.device.seedFile("/mnt/bootfs/config.txt", padded);
+    t.device.seedFile("/mnt/bootfs/cmdline.txt", "console=serial0,115200\n");
+
+    t.setImageCustomisation(QByteArray("dtparam=audio=on"), QByteArray(),
+                            QByteArray("#!/bin/bash\nexit 0\n"),
+                            QByteArray(), QByteArray(),
+                            QByteArray("systemd"));
+
+    SignalLog log;
+    log.attach(&t);
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.success);
+
+    const QByteArray written = t.device.file("/mnt/bootfs/config.txt");
+    INFO("config.txt: " << written.toHex(' ').toStdString());
+
+    CHECK(written.contains("arm_boost=1"));
+    CHECK(written.contains("dtparam=audio=on"));
+    CHECK_FALSE(written.contains('\0'));
+}
+
+TEST_CASE("Padding on the cmdline the device returns does not swallow what is appended",
+          "[fastboot][flash][pipeline]")
+{
+    // cmdline.txt is read back from the device, and what the device sends is
+    // the device's business. A fixed-size read comes back padded, and NUL is
+    // not whitespace -- so trimmed() keeps it and the parameters are
+    // appended behind it.
+    //
+    // The kernel reads its command line up to the first NUL. Everything
+    // after one is not "wrong", it is absent: the boot proceeds, the setting
+    // the user asked for is simply not in effect, and nothing anywhere says
+    // so. systemd.run=/boot/firstrun.sh is among the parameters appended
+    // here, so the whole of first-boot customisation goes with it.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const std::vector<uint8_t> image = patternImage(512 * 1024);
+    const QString path = writeImage(dir.path(), image);
+
+    FlashingThread t{QUrl::fromLocalFile(path), image.size(), QByteArray(),
+                     64u * 1024 * 1024};
+
+    QByteArray padded = "console=serial0,115200 rootwait\n";
+    padded.append(QByteArray(32, '\0'));
+    t.device.seedFile("/mnt/bootfs/cmdline.txt", padded);
+    t.device.seedFile("/mnt/bootfs/config.txt", "[all]\n");
+
+    t.setImageCustomisation(QByteArray(), QByteArray(),
+                            QByteArray("#!/bin/bash\nexit 0\n"),
+                            QByteArray(), QByteArray(),
+                            QByteArray("systemd"));
+
+    SignalLog log;
+    log.attach(&t);
+    t.runImpl();
+
+    INFO("errors: " << log.errors.join(QStringLiteral(" | ")).toStdString());
+    CHECK(log.success);
+
+    const QByteArray written = t.device.file("/mnt/bootfs/cmdline.txt");
+    INFO("cmdline.txt: " << written.toHex(' ').toStdString());
+
+    // What the user already had is still there.
+    CHECK(written.contains("console=serial0,115200"));
+    // And what was appended is on the line the kernel will read, which is
+    // everything up to the first NUL.
+    const qsizetype firstNul = written.indexOf('\0');
+    const QByteArray readable = firstNul < 0 ? written : written.left(firstNul);
+    CHECK(readable.contains("systemd.run=/boot/firstrun.sh"));
+}
+
 TEST_CASE("A boot partition that will not mount stops the write being a success",
           "[fastboot][flash][pipeline]")
 {

@@ -22,6 +22,27 @@ WizardStepBase {
     // algorithm is incompatible with the currently selected OS (drives a hint).
     property bool savedPasswordInvalidated: false
     property string savedUsername: ""
+
+    // The one rule, used by the field's validator and by the check on the
+    // restore path. Written once so the two cannot drift: a username that
+    // can no longer be typed must not arrive by another route either.
+    readonly property var usernameRule: /^[a-z_][a-z0-9_-]*$/
+
+    // Set when a saved username was refused, so the step can say so rather
+    // than presenting an empty field with no explanation.
+    property string rejectedUsername: ""
+
+    // Quoted back to the user, so it is held to printable characters and a
+    // sensible length: a value typed here cannot contain either problem, one
+    // written by hand into the settings file can.
+    readonly property string rejectedUsernameShown: {
+        var out = ""
+        for (var i = 0; i < rejectedUsername.length && out.length < 64; ++i) {
+            var c = rejectedUsername.charCodeAt(i)
+            out += (c < 0x20 || c === 0x7F) ? "?" : rejectedUsername.charAt(i)
+        }
+        return out + (rejectedUsername.length > out.length ? "\u2026" : "")
+    }
     
     title: qsTr("Customisation: Choose username")
     subtitle: qsTr("Create a user account for your Raspberry Pi")
@@ -58,7 +79,7 @@ WizardStepBase {
                     trimWhitespace: true
 
                     validator: RegularExpressionValidator {
-                        regularExpression: /^[a-z_][a-z0-9_-]*$/
+                        regularExpression: root.usernameRule
                     }
                 }
                 
@@ -94,6 +115,18 @@ WizardStepBase {
             WizardDescriptionText {
                 id: helpText
                 text: qsTr("The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
+            }
+
+            WizardDescriptionText {
+                id: rejectedUsernameNotice
+                objectName: "usernameRejectedNotice"
+                visible: root.rejectedUsername.length > 0
+                color: Style.formLabelErrorColor
+                text: qsTr("The saved username \u201C%1\u201D is no longer allowed, so the box has been left empty.")
+                          .arg(root.rejectedUsernameShown)
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: text
+                Accessible.ignored: !visible
             }
 
             WizardDescriptionText {
@@ -188,8 +221,18 @@ WizardStepBase {
         // Prefill from conserved customization settings (avoid showing raw passwords)
         var settings = wizardContainer.customizationSettings
         if (settings.sshUserName) {
-            fieldUsername.text = settings.sshUserName
-            root.savedUsername = settings.sshUserName
+            // Checked rather than trusted. Assigning text does not run the
+            // validator -- Qt only clears acceptableInput, which nothing
+            // here reads -- so a username saved by an older version, edited
+            // into the settings file, or left behind by a tightening of the
+            // rules came back and was written out again on Next. It becomes
+            // the account name in firstrun.sh, which runs as root.
+            if (root.usernameRule.test(settings.sshUserName)) {
+                fieldUsername.text = settings.sshUserName
+                root.savedUsername = settings.sshUserName
+            } else {
+                root.rejectedUsername = settings.sshUserName
+            }
         }
         if (settings.sshUserPassword) {
             if (ImageWriterSingleton.savedUserPasswordUsableWithCurrentOs(settings.sshUserPassword)) {
