@@ -31,6 +31,31 @@ endif()
 
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
+# Nothing in a compile command names the macOS SDK: CMAKE_OSX_SYSROOT is left
+# empty, so no -isysroot is emitted and clang resolves the SDK itself. An OS
+# upgrade therefore changes no command line, nothing rebuilds, and the tree goes
+# on linking objects built against the old SDK beside ones built against the new
+# -- a "conflicting values" warning per object, and a mixed build nobody chose.
+# The build system cannot notice this, so notice it here.
+if(APPLE)
+    execute_process(COMMAND xcrun --show-sdk-version
+                    OUTPUT_VARIABLE RPI_IMAGER_SDK_VERSION
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    if(RPI_IMAGER_SDK_VERSION)
+        if(DEFINED RPI_IMAGER_CONFIGURED_SDK AND
+           NOT RPI_IMAGER_SDK_VERSION STREQUAL RPI_IMAGER_CONFIGURED_SDK)
+            message(FATAL_ERROR
+                "macOS SDK changed since this build tree was configured "
+                "(${RPI_IMAGER_CONFIGURED_SDK} -> ${RPI_IMAGER_SDK_VERSION}). "
+                "Delete the build directory and configure again -- the build "
+                "system cannot see the SDK, so it will not rebuild for it.")
+        endif()
+        set(RPI_IMAGER_CONFIGURED_SDK "${RPI_IMAGER_SDK_VERSION}" CACHE INTERNAL
+            "macOS SDK version this build tree was configured against")
+    endif()
+endif()
+
 project(rpi-imager LANGUAGES CXX C)
 
 find_package(Git QUIET)
