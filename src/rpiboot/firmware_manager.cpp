@@ -183,7 +183,6 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
             // usbboot/secure-boot-recovery/bootcode4.bin is a git-symlink
             // (29 bytes via raw HTTP) — the real binary lives at the root
             // as bootcode4.bin (entry above), no need for a second copy.
-            entries.push_back({usbboot + sub + "config.txt",            sub + "config.txt"});
             const std::string pieepromUrl = eepromVersion
                 ? eeprom + "firmware-2711/latest/pieeprom-" + *eepromVersion + ".bin"
                 : std::string();
@@ -191,7 +190,6 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
         } else if (chip == ChipGeneration::BCM2712) {
             const std::string sub = "secure-boot-recovery5/";
             entries.push_back({usbboot + sub + "boot.conf",              sub + "boot.conf"});
-            entries.push_back({usbboot + sub + "config.txt",              sub + "config.txt"});
             const std::string pieepromUrl = eepromVersion
                 ? eeprom + "firmware-2712/latest/pieeprom-" + *eepromVersion + ".bin"
                 : std::string();
@@ -658,7 +656,7 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         return {};
     }
 
-    // 5. SBR: rewrite recovery config.txt so the device re-enumerates back
+    // 5. SBR: write the recovery config.txt so the device re-enumerates back
     // into rpiboot after writing the EEPROM.  Without this, the device boots
     // into the OS post-recovery and our SBR scanner would time out.
     if (mode == SideloadMode::SecureBootRecovery && !ensureSbrReenumerates(versionDir, chip))
@@ -944,72 +942,28 @@ bool FirmwareManager::ensureSbrReenumerates(const std::filesystem::path& version
                                 ? "secure-boot-recovery5"
                                 : "secure-boot-recovery";
     auto configPath = versionDir / sub / "config.txt";
-    if (!std::filesystem::exists(configPath)) {
-        // First-run case: file not downloaded yet.  Caller invokes us again
-        // after the download loop, so this is a benign no-op.
-        return true;
-    }
 
-    std::ifstream in(configPath);
-    if (!in) {
-        _lastError = "Cannot read SBR config.txt: " + configPath.string();
-        return false;
-    }
+    std::error_code ec;
+    std::filesystem::create_directories(configPath.parent_path(), ec);
 
-    // Strip any pre-existing set_reboot_order= or recovery_reboot= lines.
-    // We re-append them in the required order at the end of the file so
-    // we don't have to reason about the section the upstream put them in
-    // (config.txt is processed top-to-bottom; recovery_reboot must be
-    // reached *after* set_reboot_order has been observed, otherwise the
-    // bootloader reboots before applying our boot-order override and the
-    // device powers up into normal boot instead of back into rpiboot).
-    auto isOverrideKey = [](const std::string& line) {
-        auto trimStart = line.find_first_not_of(" \t");
-        if (trimStart == std::string::npos)
-            return false;
-        std::string_view rest(line.data() + trimStart, line.size() - trimStart);
-        // set_boot_order= too: caches written before the name was corrected
-        // carry that dead line, and nothing else would ever take it out.
-        return rest.starts_with("set_reboot_order=") ||
-               rest.starts_with("set_boot_order=") ||
-               rest.starts_with("recovery_reboot=");
-    };
-
-    std::vector<std::string> kept;
-    kept.reserve(64);
-    std::string line;
-    while (std::getline(in, line)) {
-        // Tolerate CRLF input — strip the trailing \r so our re-write is
-        // pure LF (matches what the bootloader expects).
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        if (isOverrideKey(line))
-            continue;
-        kept.push_back(std::move(line));
-    }
-    in.close();
-
+    // Written whole, not appended to upstream's template of commented-out
+    // examples: recovery.bin takes only a few directives.  This matches what
+    // rpi-sb-bootstrap.sh builds, in the same order -- the boot order must be
+    // set before the reboot is asked for.
     std::ofstream out(configPath, std::ios::binary | std::ios::trunc);
     if (!out) {
-        _lastError = "Cannot rewrite SBR config.txt: " + configPath.string();
+        _lastError = "Cannot write SBR config.txt: " + configPath.string();
         return false;
     }
-    for (const auto& l : kept)
-        out << l << '\n';
-    // Order is load-bearing: set_reboot_order must precede recovery_reboot.
-    // So is the name.  recovery.bin takes only program_pubkey, recovery_reboot
-    // and set_reboot_order; set_boot_order, which this wrote before, is not a
-    // directive it knows and was dropped without complaint, leaving the device
-    // to reboot on its EEPROM's own BOOT_ORDER and never come back to rpiboot.
-    out << "set_reboot_order=0x3\n";
-    out << "recovery_reboot=1\n";
+    out << "program_pubkey=1\n"
+        << "set_reboot_order=0x3\n"
+        << "recovery_reboot=1\n";
     if (!out) {
         _lastError = "Write failed on SBR config.txt: " + configPath.string();
         return false;
     }
-    qDebug() << "FirmwareManager: rewrote" << QString::fromStdString(configPath.string())
-             << "with set_reboot_order=0x3 + recovery_reboot=1"
-             << "(kept" << kept.size() << "upstream line(s))";
+    qDebug() << "FirmwareManager: wrote" << QString::fromStdString(configPath.string())
+             << "with program_pubkey=1 + set_reboot_order=0x3 + recovery_reboot=1";
     return true;
 }
 
