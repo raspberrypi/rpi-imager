@@ -251,7 +251,11 @@ if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_P
         hdiutil detach "$MOUNT_DIR" >/dev/null || true
         rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
     else
-        echo "Warning: Could not mount DMG for Gatekeeper assessment"
+        # This is the gate, not diagnostics: an unmountable DMG means the
+        # assessment never ran, which must not read as a release that passed.
+        echo "Error: Could not mount DMG for Gatekeeper assessment"
+        rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
+        exit 1
     fi
  fi
  
