@@ -2533,6 +2533,14 @@ if(NOT BUILD_CLI_ONLY)
 
     rpi_link_platform_file_ops(rpi_imager_testable)
 
+    # The .qrc files taken from SOURCES name files the application target
+    # generates -- the compiled translations, and the country and timezone
+    # lists. The custom commands that produce them belong to that target, in
+    # a different directory, so AUTORCC here can reach them only once it has
+    # run. Without this a build tree that has never built the application
+    # stops with "no rule to make target rpi-imager_ko.qm".
+    add_dependencies(rpi_imager_testable ${PROJECT_NAME})
+
     target_compile_features(rpi_imager_testable PUBLIC cxx_std_20)
 
     add_executable(image_writer_test image_writer_test.cpp)
