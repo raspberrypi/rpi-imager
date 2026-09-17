@@ -14,6 +14,8 @@
 #ifndef RPI_TEST_PLATFORM_FAT_H
 #define RPI_TEST_PLATFORM_FAT_H
 
+#include <QFileInfo>
+#include <QProcessEnvironment>
 #include <QProcess>
 #include <QString>
 #include <QStringList>
@@ -27,6 +29,12 @@ inline bool haveFatFormatter()
 {
     if (haveTool(QStringLiteral("mkfs.vfat")))
         return true;
+    // mtools writes a filesystem into a plain file, so it needs no block device
+    // and no privilege. It is the only formatter available on Windows, where
+    // dosfstools has no build at all, and it is the one a Mac is most likely to
+    // have already.
+    if (haveTool(QStringLiteral("mformat")))
+        return true;
 #ifdef Q_OS_MACOS
     return haveTool(QStringLiteral("newfs_msdos")) && haveTool(QStringLiteral("hdiutil"));
 #else
@@ -37,15 +45,19 @@ inline bool haveFatFormatter()
 // What to say when there is none, so every case says the same thing.
 inline const char *noFatFormatterReason()
 {
-    return "no FAT formatter here (mkfs.vfat, or newfs_msdos with hdiutil on macOS)";
+    return "no FAT formatter here (mkfs.vfat, mformat from mtools, or "
+           "newfs_msdos with hdiutil on macOS)";
 }
 
 namespace detail {
 
 inline bool runFixtureTool(const QString &tool, const QStringList &args, QString *error,
-                           QString *stdOut = nullptr)
+                           QString *stdOut = nullptr,
+                           const QProcessEnvironment *env = nullptr)
 {
     QProcess proc;
+    if (env)
+        proc.setProcessEnvironment(*env);
     proc.start(tool, args);
     if (!proc.waitForFinished(kFixtureProcessTimeoutMs)) {
         if (error)
@@ -80,6 +92,64 @@ inline bool makeFatFilesystem(const QString &imagePath, int fatBits,
             args << QStringLiteral("-n") << label;
         args << imagePath;
         return detail::runFixtureTool(mkfs, args, error);
+    }
+
+    // mformat, from mtools, writes a FAT filesystem straight into an image file
+    // without mounting it or needing a block device -- which is the whole of
+    // what this helper wants, and the only way to get one on Windows, where
+    // there is no mkfs.vfat to install: dosfstools has no Windows build, and
+    // the OS's own format(1) works on volumes rather than files.
+    //
+    // Tried on every platform rather than under an #ifdef, because a host with
+    // mtools and no dosfstools is not particular to Windows -- it is the
+    // ordinary state of a Mac.
+    const QString mformat = toolPath(QStringLiteral("mformat"));
+    if (!mformat.isEmpty()) {
+        const QFileInfo info(imagePath);
+        const qint64 sectors = info.size() / 512;
+        if (sectors <= 0) {
+            if (error)
+                *error = QStringLiteral("the image has no size to format");
+            return false;
+        }
+
+        // -F asks for FAT32; without it mformat sizes the FAT from the cluster
+        // count, which lands on FAT16 for every image this suite builds. There
+        // is no flag for "FAT16 exactly", so the result is checked below rather
+        // than assumed.
+        QStringList args{QStringLiteral("-i"), imagePath,
+                         QStringLiteral("-T"), QString::number(sectors)};
+        if (fatBits == 32)
+            args << QStringLiteral("-F");
+        if (!label.isEmpty())
+            args << QStringLiteral("-v") << label;
+        args << QStringLiteral("::");
+
+        // MTOOLS_SKIP_CHECK: the image is a bare filesystem with no partition
+        // table, and mtools otherwise refuses the geometry as non-standard.
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("MTOOLS_SKIP_CHECK"), QStringLiteral("1"));
+        if (!detail::runFixtureTool(mformat, args, error, nullptr, &env))
+            return false;
+
+        // What was asked for is what was made. A silently-FAT12 image would
+        // send a case looking for a bug in the driver that was never there.
+        const QString minfo = toolPath(QStringLiteral("minfo"));
+        if (!minfo.isEmpty()) {
+            QString info2;
+            if (detail::runFixtureTool(minfo, {QStringLiteral("-i"), imagePath,
+                                               QStringLiteral("::")},
+                                       nullptr, &info2, &env)) {
+                const QString wanted = QStringLiteral("FAT%1").arg(fatBits);
+                if (!info2.contains(wanted)) {
+                    if (error)
+                        *error = QStringLiteral("mformat produced a filesystem that is "
+                                                "not %1").arg(wanted);
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
 #ifdef Q_OS_MACOS

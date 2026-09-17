@@ -476,14 +476,12 @@ TEST_CASE("FirmwareManager clearing an already-empty cache is harmless", "[firmw
 
 namespace {
 
-bool haveTar() { return QFileInfo::exists(QStringLiteral("/usr/bin/tar")) ||
-                        QFileInfo::exists(QStringLiteral("/bin/tar")); }
+// Asked of the platform rather than by testing two Unix paths, which no
+// Windows machine has -- so every case behind this skipped there, saying tar
+// was not installed on a machine that has two of them.
+bool haveTar() { return rpi_test::haveTool(QStringLiteral("tar")); }
 
-QString tarPath()
-{
-    return QFileInfo::exists(QStringLiteral("/usr/bin/tar")) ? QStringLiteral("/usr/bin/tar")
-                                                             : QStringLiteral("/bin/tar");
-}
+QString tarPath() { return rpi_test::toolPath(QStringLiteral("tar")); }
 
 // Build versionDir/fastboot/bootfiles.bin as a TAR holding the named members.
 bool buildBootfilesTar(const fs::path &versionDir, const std::vector<std::string> &members)
@@ -492,8 +490,12 @@ bool buildBootfilesTar(const fs::path &versionDir, const std::vector<std::string
     fs::create_directories(staging);
     fs::create_directories(versionDir / "fastboot");
 
-    QStringList args{QStringLiteral("-cf"),
-                     QString::fromStdString((versionDir / "fastboot" / "bootfiles.bin").string()),
+    // -f names the archive relative to the working directory: GNU tar reads a
+    // colon before the first slash as the host:path form it once used for
+    // remote archives, so an absolute Windows path sends it looking for a host
+    // called "C". -C takes one safely, that argument not being parsed the same
+    // way.
+    QStringList args{QStringLiteral("-cf"), QStringLiteral("bootfiles.bin"),
                      QStringLiteral("-C"), QString::fromStdString(staging.string())};
     for (const auto &m : members) {
         writeFile(staging / m, std::string(4096, 'F'));
@@ -501,6 +503,7 @@ bool buildBootfilesTar(const fs::path &versionDir, const std::vector<std::string
     }
 
     QProcess tar;
+    tar.setWorkingDirectory(QString::fromStdString((versionDir / "fastboot").string()));
     tar.start(tarPath(), args);
     tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
     fs::remove_all(staging);
@@ -760,7 +763,7 @@ public:
             "s = socketserver.TCPServer(('127.0.0.1', 0), h)\n"
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
-        _proc.start(QStringLiteral("/usr/bin/python3"),
+        _proc.start(rpi_test::pythonPath(),
                     {QStringLiteral("-c"), QString::fromUtf8(kScript), root});
         if (!_proc.waitForStarted(10000))
             return;
@@ -861,12 +864,16 @@ void layOutFirmware(const QString &root)
         f.close();
     }
     QDir().mkpath(QDir(root).filePath(QStringLiteral("firmware")));
+    // -f relative, -C absolute: GNU tar reads a colon before the first slash
+    // in -f as the host:path form it once used for remote archives, so a
+    // Windows path sends it looking for a host called "C". -C is not parsed
+    // that way. Which tar answers to the name varies -- Windows ships bsdtar,
+    // which has no such reading -- so the invocation cannot depend on it.
     QProcess tar;
-    tar.setWorkingDirectory(workDir);
-    tar.start(QStringLiteral("tar"),
-              {QStringLiteral("-cf"),
-               QDir(root).filePath(QStringLiteral("firmware/bootfiles.bin")),
-               QStringLiteral("2712")});
+    tar.setWorkingDirectory(QDir(root).filePath(QStringLiteral("firmware")));
+    tar.start(rpi_test::toolPath(QStringLiteral("tar")),
+              {QStringLiteral("-cf"), QStringLiteral("bootfiles.bin"),
+               QStringLiteral("-C"), workDir, QStringLiteral("2712")});
     REQUIRE(tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
     REQUIRE(tar.exitCode() == 0);
 }
@@ -1470,7 +1477,14 @@ TEST_CASE("A CM4 recovery manifest asks only for CM4 firmware", "[firmware][sbr]
     // The recovery subdirectory is the unsuffixed one; secure-boot-recovery5
     // is the CM5 spelling and nothing here may use it.
     CHECK(manifestHas(m, "secure-boot-recovery/boot.conf"));
-    CHECK(manifestHas(m, "secure-boot-recovery/config.txt"));
+
+    // config.txt is written rather than fetched. usbboot ships it as a template
+    // -- two live settings and two dozen commented-out examples -- and serving
+    // that whole to recovery.bin, which is not the bootloader and understands
+    // almost none of it, is what the change in 429c7a8b stopped doing. That
+    // commit updated the CM5 side of this and left the CM4 twin asserting a
+    // download that no longer happens.
+    CHECK_FALSE(manifestHas(m, "secure-boot-recovery/config.txt"));
 
     const std::string pieeprom = manifestUrlFor(m, "secure-boot-recovery/pieeprom.original.bin");
     CHECK(pieeprom.find("firmware-2711/latest/pieeprom-2024-09-23.bin") != std::string::npos);
@@ -1888,8 +1902,12 @@ qint64 sizeOf(const std::filesystem::path &p)
 QByteArray tarMember(const std::filesystem::path &archive, const QString &member)
 {
     QProcess tar;
-    tar.start(QStringLiteral("tar"),
-              {QStringLiteral("-xOf"), QString::fromStdString(archive.string()), member});
+    // Named relative to its own directory, for the reason above.
+    tar.setWorkingDirectory(
+        QString::fromStdString(archive.parent_path().string()));
+    tar.start(rpi_test::toolPath(QStringLiteral("tar")),
+              {QStringLiteral("-xOf"),
+               QString::fromStdString(archive.filename().string()), member});
     if (!tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
         return {};
     if (tar.exitCode() != 0)
@@ -2213,6 +2231,13 @@ TEST_CASE("A sidecar that no longer matches gets the new bytes", "[firmware][eta
 
 TEST_CASE("A cache directory that cannot be written to is reported", "[firmware]")
 {
+#ifdef _WIN32
+    // The lever this case pulls is a POSIX mode bit, and Windows has no
+    // equivalent: access there is decided by an ACL, which chmod(2) cannot
+    // express, and a directory marked read-only still accepts new files.
+    // Skipped rather than dropped, so the run still accounts for it.
+    SKIP("POSIX mode bits do not gate writes on Windows");
+#else
     // A cache on a full or read-only filesystem. The download has to say so
     // rather than leave a zero-length file where firmware should be.
     if (::geteuid() == 0)
@@ -2230,10 +2255,18 @@ TEST_CASE("A cache directory that cannot be written to is reported", "[firmware]
     CHECK_FALSE(fm.lastError().empty());
 
     ::chmod(holder.c_str(), 0700);
+#endif
 }
 
 TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
 {
+#ifdef _WIN32
+    // The lever this case pulls is a POSIX mode bit, and Windows has no
+    // equivalent: access there is decided by an ACL, which chmod(2) cannot
+    // express, and a directory marked read-only still accepts new files.
+    // Skipped rather than dropped, so the run still accounts for it.
+    SKIP("POSIX mode bits do not gate writes on Windows");
+#else
     // The bootcode is extracted from the bootfiles TAR into the version
     // directory. If that write fails the board would be sent whatever was
     // there before, so it has to stop rather than carry on.
@@ -2248,7 +2281,7 @@ TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
     {
         ::archive *a = archive_write_new();
         archive_write_set_format_ustar(a);
-        archive_write_open_filename(a, (versionDir / "fastboot" / "bootfiles.bin").c_str());
+        archive_write_open_filename(a, (versionDir / "fastboot" / "bootfiles.bin").string().c_str());
         const std::string payload = "bootcode bytes";
         ::archive_entry *e = archive_entry_new();
         archive_entry_set_pathname(e, "2712/bootcode5.bin");
@@ -2274,6 +2307,7 @@ TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
     CHECK(fm.lastError().find("bootcode5.bin") != std::string::npos);
 
     ::chmod(versionDir.c_str(), 0700);
+#endif
 }
 
 TEST_CASE("Boot-order lines already in the recovery config are replaced, not repeated",
@@ -2309,6 +2343,13 @@ TEST_CASE("Boot-order lines already in the recovery config are replaced, not rep
 
 TEST_CASE("A recovery config that cannot be written is reported", "[firmware]")
 {
+#ifdef _WIN32
+    // The lever this case pulls is a POSIX mode bit, and Windows has no
+    // equivalent: access there is decided by an ACL, which chmod(2) cannot
+    // express, and a directory marked read-only still accepts new files.
+    // Skipped rather than dropped, so the run still accounts for it.
+    SKIP("POSIX mode bits do not gate writes on Windows");
+#else
     if (::geteuid() == 0)
         SKIP("running as root, which the mode bits do not stop");
 
@@ -2329,6 +2370,7 @@ TEST_CASE("A recovery config that cannot be written is reported", "[firmware]")
 
         ::chmod(configPath.c_str(), 0600);
     }
+#endif
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2371,7 +2413,7 @@ void writeBootfilesTar(const fs::path &path, const std::string &entry)
     fs::create_directories(path.parent_path());
     ::archive *a = archive_write_new();
     archive_write_set_format_ustar(a);
-    archive_write_open_filename(a, path.c_str());
+    archive_write_open_filename(a, path.string().c_str());
 
     const std::string payload(4096, '\xa5');
     ::archive_entry *e = archive_entry_new();
@@ -2441,7 +2483,7 @@ TEST_CASE("A fastboot set is counter-signed and re-packed for a fused board",
     // uploaded over USB.
     if (!rpi_test::havePython())
         SKIP("python3 is not installed, so no local server can be started");
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/openssl")))
+    if (!rpi_test::haveTool(QStringLiteral("openssl")))
         SKIP("openssl is not installed, so no key can be generated");
 
     ScratchDir served;
@@ -2456,7 +2498,7 @@ TEST_CASE("A fastboot set is counter-signed and re-packed for a fused board",
     ScratchDir keys;
     const auto key = keys.path() / "signing.pem";
     QProcess gen;
-    gen.start(QStringLiteral("/usr/bin/openssl"),
+    gen.start(rpi_test::toolPath(QStringLiteral("openssl")),
               {QStringLiteral("genrsa"), QStringLiteral("-out"),
                QString::fromStdString(key.string()), QStringLiteral("2048")});
     REQUIRE(gen.waitForFinished(60000));
@@ -2573,7 +2615,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     // application.
     if (!rpi_test::havePython())
         SKIP("python3 is not installed, so no local server can be started");
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/openssl")))
+    if (!rpi_test::haveTool(QStringLiteral("openssl")))
         SKIP("openssl is not installed, so no key can be generated");
 
     ScratchDir served;
@@ -2598,7 +2640,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     ScratchDir keys;
     const auto key = keys.path() / "customer.pem";
     QProcess gen;
-    gen.start(QStringLiteral("/usr/bin/openssl"),
+    gen.start(rpi_test::toolPath(QStringLiteral("openssl")),
               {QStringLiteral("genrsa"), QStringLiteral("-out"),
                QString::fromStdString(key.string()), QStringLiteral("2048")});
     REQUIRE(gen.waitForFinished(60000));

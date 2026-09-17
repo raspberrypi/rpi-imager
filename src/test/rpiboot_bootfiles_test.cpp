@@ -13,7 +13,9 @@
 #include <archive.h>
 #include <archive_entry.h>
 
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif
 #include <csignal>
 #include <cstring>
 #include <vector>
@@ -396,6 +398,14 @@ TEST_CASE("Reading an archive that is not there is reported",
 TEST_CASE("An archive that will not fit on disk is reported rather than truncated",
           "[rpiboot][bootfiles]")
 {
+#ifdef _WIN32
+    // RLIMIT_FSIZE and SIGXFSZ are how this provokes a short write without
+    // filling a disk, and Windows has neither: there is no per-process file
+    // size limit to lower and no signal to ignore. Forcing the same failure
+    // there needs a different lever -- a quota or a full volume -- so the
+    // case is skipped rather than quietly dropped from the run.
+    SKIP("RLIMIT_FSIZE has no Windows equivalent");
+#else
     const std::vector<uint8_t> small = {'s', 'm', 'a', 'l', 'l'};
     // Comfortably past the limit set below, so the failure lands in the entry
     // data rather than the header.
@@ -440,6 +450,7 @@ TEST_CASE("An archive that will not fit on disk is reported rather than truncate
     CHECK_FALSE(wrote);
     INFO("error: " << bf.lastError());
     CHECK_FALSE(bf.lastError().empty());
+#endif
 }
 
 // A tar with directory entries in it. rpi-eeprom firmware archives are laid

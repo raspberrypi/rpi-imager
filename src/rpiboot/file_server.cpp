@@ -541,8 +541,11 @@ std::vector<uint8_t> FileServer::readFileFromDisk(const std::filesystem::path& d
     if (ec)
         return {};
 
+    // Ask the path itself whether the first component is "..", rather than
+    // matching a prefix on the native string: that string is a wstring on
+    // Windows, and a directory genuinely named "..boot" is not an escape.
     const auto relative = resolved.lexically_relative(base);
-    if (relative.empty() || relative.native().rfind("..", 0) == 0) {
+    if (relative.empty() || *relative.begin() == std::filesystem::path("..")) {
         qWarning() << "rpiboot: refusing file request that escapes the firmware"
                       " directory:" << QString::fromStdString(filename);
         return {};

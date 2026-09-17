@@ -11,6 +11,7 @@
  * is worse than one that was left alone.
  */
 
+#include "platform_permissions.h"
 #include <catch2/catch_test_macros.hpp>
 
 #include "faulty_block_device.h"
@@ -115,7 +116,8 @@ TEST_CASE("Formatting a path the user cannot write is refused", "[format]")
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write(QByteArray(1024, '\0'));
     f.close();
-    REQUIRE(f.setPermissions(QFileDevice::ReadOwner));
+    rpi_test::DeniedAccess denied(path, rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     TestableFormatThread t(path.toUtf8());
     const Outcome outcome = runToCompletion(t);
@@ -129,6 +131,14 @@ TEST_CASE("Formatting a path the user cannot write is refused", "[format]")
     // case is really about -- refused, told why, card untouched -- still
     // holds; only the wording is out of reach here.
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("unmount"));
+#elif defined(Q_OS_WIN)
+    // Windows never gets as far as the permission check either, and for the
+    // same kind of reason as macOS: the format path is addressed to a physical
+    // drive, and a file path is rejected as not being one before anything is
+    // opened. Refused, told why, card untouched still holds; the wording is
+    // the earlier refusal.
+    CHECK_THAT(outcome.errors[0].toStdString(),
+               ContainsSubstring("physical drive path"));
 #else
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("permission"));
 #endif
@@ -185,6 +195,11 @@ TEST_CASE("A device too small to format says so, through the thread", "[format]"
     // disk, so the refusal is the unmount one and the formatter's own reason
     // is never reached.
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("unmount"));
+#elif defined(Q_OS_WIN)
+    // And as in that case: a file path is not a physical drive, so the format
+    // is refused before it ever looks at how much room there is.
+    CHECK_THAT(outcome.errors[0].toStdString(),
+               ContainsSubstring("physical drive path"));
 #else
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("Insufficient space"));
 #endif

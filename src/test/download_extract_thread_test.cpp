@@ -13,6 +13,8 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <QVector>
+
 #include <archive.h>
 #include <archive_entry.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -117,7 +119,7 @@ bool runTool(const QString &tool, const QStringList &args, const QString &workin
     return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
 }
 
-// A .zip holding one stored entry, written with libarchive rather than zip(1).
+// A .zip built with libarchive rather than zip(1).
 //
 // Every other container here is built by the tool that owns the format, so the
 // decompressor is fed something a real producer made. Zip is where that stops
@@ -128,8 +130,15 @@ bool runTool(const QString &tool, const QStringList &args, const QString &workin
 //
 // libarchive's writer is a different code path from the reader under test, so
 // this is still not the reader checking its own output.
-bool writeStoredZip(const QString &archivePath, const QString &entryName,
-                    const QByteArray &contents)
+//
+// An entry whose name ends in "/" is written as a directory, which is what a
+// folder zipped from Explorer or Finder contains.
+struct ZipEntry {
+    QString name;
+    QByteArray contents;
+};
+
+bool writeStoredZip(const QString &archivePath, const QVector<ZipEntry> &entries)
 {
     struct archive *a = archive_write_new();
     if (!a)
@@ -137,21 +146,46 @@ bool writeStoredZip(const QString &archivePath, const QString &entryName,
     bool ok = archive_write_set_format_zip(a) == ARCHIVE_OK
               && archive_write_zip_set_compression_store(a) == ARCHIVE_OK
               && archive_write_open_filename(a, archivePath.toUtf8().constData()) == ARCHIVE_OK;
-    if (ok) {
+    for (const ZipEntry &e : entries) {
+        if (!ok)
+            break;
+        const bool isDir = e.name.endsWith(QLatin1Char('/'));
         struct archive_entry *entry = archive_entry_new();
-        archive_entry_set_pathname(entry, entryName.toUtf8().constData());
-        archive_entry_set_size(entry, contents.size());
-        archive_entry_set_filetype(entry, AE_IFREG);
-        archive_entry_set_perm(entry, 0644);
-        ok = archive_write_header(a, entry) == ARCHIVE_OK
-             && archive_write_data(a, contents.constData(),
-                                   std::size_t(contents.size())) == contents.size();
+        archive_entry_set_pathname(entry, e.name.toUtf8().constData());
+        archive_entry_set_filetype(entry, isDir ? AE_IFDIR : AE_IFREG);
+        archive_entry_set_perm(entry, isDir ? 0755 : 0644);
+        archive_entry_set_size(entry, isDir ? 0 : e.contents.size());
+        ok = archive_write_header(a, entry) == ARCHIVE_OK;
+        if (ok && !isDir && !e.contents.isEmpty())
+            ok = archive_write_data(a, e.contents.constData(),
+                                    std::size_t(e.contents.size())) == e.contents.size();
         archive_entry_free(entry);
     }
     if (archive_write_close(a) != ARCHIVE_OK)
         ok = false;
     archive_write_free(a);
     return ok;
+}
+
+bool writeStoredZip(const QString &archivePath, const QString &entryName,
+                    const QByteArray &contents)
+{
+    return writeStoredZip(archivePath, QVector<ZipEntry>{{entryName, contents}});
+}
+
+// The named files, as they already are on disk, stored in a zip.
+bool writeStoredZipOf(const QString &archivePath, const QString &dir,
+                      const QStringList &names)
+{
+    QVector<ZipEntry> entries;
+    entries.reserve(names.size());
+    for (const QString &n : names) {
+        QFile f(QDir(dir).filePath(n));
+        if (!f.open(QIODevice::ReadOnly))
+            return false;
+        entries.append({n, f.readAll()});
+    }
+    return writeStoredZip(archivePath, entries);
 }
 
 struct Outcome {
@@ -775,15 +809,10 @@ TEST_CASE("Sizing and writing reach the same verdict about a file",
                     scratch.path()))
             files.append({QStringLiteral("bundle.tar"), true});
     }
-    if (haveTool(QStringLiteral("zip"))) {
-        REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("holder"))));
-        REQUIRE(writeFile(scratch.filePath(QStringLiteral("holder/os.img")), image));
-        if (runTool(QStringLiteral("zip"),
-                    {QStringLiteral("-q"), QStringLiteral("-r"),
-                     QStringLiteral("folder.zip"), QStringLiteral("holder")},
-                    scratch.path()))
-            files.append({QStringLiteral("folder.zip"), true});
-    }
+    if (writeStoredZip(scratch.filePath(QStringLiteral("folder.zip")),
+                       {{QStringLiteral("holder/"), {}},
+                        {QStringLiteral("holder/os.img"), image}}))
+        files.append({QStringLiteral("folder.zip"), true});
 
     REQUIRE(files.size() >= 4);
 
@@ -810,20 +839,14 @@ TEST_CASE("Sizing and writing reach the same verdict about a file",
 TEST_CASE("An image inside a zipped folder is extracted, not called corrupt",
           "[extract][local]")
 {
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no folder archive can be built");
-
     ScratchDir scratch;
     const QByteArray image = imageOfSize(256 * 1024, 211);
-    REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("holder"))));
-    REQUIRE(writeFile(scratch.filePath(QStringLiteral("holder/os.img")), image));
 
-    // -r, so the archive begins with a "holder/" directory entry -- what any
-    // zip of a folder looks like, from Finder, Explorer or the command line.
-    REQUIRE(runTool(QStringLiteral("zip"),
-                    {QStringLiteral("-q"), QStringLiteral("-r"),
-                     QStringLiteral("folder.zip"), QStringLiteral("holder")},
-                    scratch.path()));
+    // A "holder/" directory entry ahead of the file, which is what a zip of a
+    // folder looks like from Finder, Explorer or the command line.
+    REQUIRE(writeStoredZip(scratch.filePath(QStringLiteral("folder.zip")),
+                           {{QStringLiteral("holder/"), {}},
+                            {QStringLiteral("holder/os.img"), image}}));
 
     const QString archive = scratch.filePath(QStringLiteral("folder.zip"));
     const QString dest = scratch.filePath(QStringLiteral("folder-dest.img"));
@@ -882,20 +905,14 @@ TEST_CASE("An image inside a tarred folder is extracted, not called corrupt",
 TEST_CASE("An archive with nothing in it is refused, not written as an empty card",
           "[extract][local]")
 {
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no folder archive can be built");
-
     // Walking past empty entries has to stop somewhere. If the walk runs off
     // the end of the archive the old behaviour is back: nothing to read, so
     // nothing written, and the write reports success. That is the outcome the
     // user cannot recover from on their own -- an unbootable card, and nothing
     // on screen suggesting a retry.
     ScratchDir scratch;
-    REQUIRE(QDir().mkpath(scratch.filePath(QStringLiteral("empty-holder"))));
-    REQUIRE(runTool(QStringLiteral("zip"),
-                    {QStringLiteral("-q"), QStringLiteral("-r"),
-                     QStringLiteral("nothing.zip"), QStringLiteral("empty-holder")},
-                    scratch.path()));
+    REQUIRE(writeStoredZip(scratch.filePath(QStringLiteral("nothing.zip")),
+                           {{QStringLiteral("empty-holder/"), {}}}));
 
     const QString archive = scratch.filePath(QStringLiteral("nothing.zip"));
     const QString dest = scratch.filePath(QStringLiteral("nothing-dest.img"));
@@ -1389,9 +1406,6 @@ TEST_CASE("DownloadExtractThread unpacks a multi-file archive onto the target",
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no multi-file archive can be built");
-
     MountedFatDevice device(48);
     if (!device.isReady())
         SKIP("the loop-backed FAT device could not be mounted");
@@ -1404,9 +1418,7 @@ TEST_CASE("DownloadExtractThread unpacks a multi-file archive onto the target",
         REQUIRE(writeFile(scratch.filePath(n), ("contents of " + n).toUtf8()));
 
     const QString archive = scratch.filePath(QStringLiteral("multi.zip"));
-    QStringList zipArgs{QStringLiteral("-q"), QStringLiteral("-0"), archive};
-    zipArgs << names;
-    REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
+    REQUIRE(writeStoredZipOf(archive, QFileInfo(archive).absolutePath(), names));
 
     DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(),
                              device.device().toUtf8(), QByteArray());
@@ -1467,9 +1479,6 @@ TEST_CASE("A multi-file archive that fails leaves nothing behind on the card",
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no multi-file archive can be built");
-
     MountedFatDevice device(48);
     if (!device.isReady())
         SKIP("the loop-backed FAT device could not be mounted");
@@ -1481,9 +1490,7 @@ TEST_CASE("A multi-file archive that fails leaves nothing behind on the card",
         REQUIRE(writeFile(scratch.filePath(n), ("contents of " + n).toUtf8()));
 
     const QString archive = scratch.filePath(QStringLiteral("corrupt.zip"));
-    QStringList zipArgs{QStringLiteral("-q"), QStringLiteral("-0"), archive};
-    zipArgs << names;
-    REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
+    REQUIRE(writeStoredZipOf(archive, QFileInfo(archive).absolutePath(), names));
 
     // A hash that is the right shape and the wrong value.
     const QByteArray wrongHash(64, 'b');
@@ -1518,9 +1525,6 @@ TEST_CASE("A truncated multi-file archive leaves no partial tree",
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no multi-file archive can be built");
-
     MountedFatDevice device(48);
     if (!device.isReady())
         SKIP("the loop-backed FAT device could not be mounted");
@@ -1535,9 +1539,7 @@ TEST_CASE("A truncated multi-file archive leaves no partial tree",
         REQUIRE(writeFile(scratch.filePath(n), QByteArray(64 * 1024, 'Z')));
 
     const QString archive = scratch.filePath(QStringLiteral("short.zip"));
-    QStringList zipArgs{QStringLiteral("-q"), QStringLiteral("-0"), QStringLiteral("-r"), archive};
-    zipArgs << names;
-    REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
+    REQUIRE(writeStoredZipOf(archive, QFileInfo(archive).absolutePath(), names));
 
     // Cut it off partway so the first entries are whole and the rest is not.
     {
@@ -2176,9 +2178,6 @@ TEST_CASE("A multi-file archive that verifies is kept for next time",
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no multi-file archive can be built");
-
     MountedFatDevice device(48);
     if (!device.isReady())
         SKIP("the loop-backed FAT device could not be mounted");
@@ -2189,9 +2188,7 @@ TEST_CASE("A multi-file archive that verifies is kept for next time",
         REQUIRE(writeFile(scratch.filePath(n), ("contents of " + n).toUtf8()));
 
     const QString archive = scratch.filePath(QStringLiteral("multi.zip"));
-    QStringList zipArgs{QStringLiteral("-q"), QStringLiteral("-0"), archive};
-    zipArgs << names;
-    REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
+    REQUIRE(writeStoredZipOf(archive, QFileInfo(archive).absolutePath(), names));
 
     // The expected hash is of the archive as downloaded, which is what the
     // OS list carries and what the cache decision is made on.
@@ -2247,9 +2244,6 @@ TEST_CASE("A multi-file archive whose hash is wrong leaves no cache entry",
         SKIP("passwordless sudo is unavailable, so no mounted device can be built");
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
-    if (!haveTool(QStringLiteral("zip")))
-        SKIP("zip is not installed, so no multi-file archive can be built");
-
     MountedFatDevice device(48);
     if (!device.isReady())
         SKIP("the loop-backed FAT device could not be mounted");
@@ -2257,10 +2251,8 @@ TEST_CASE("A multi-file archive whose hash is wrong leaves no cache entry",
     ScratchDir scratch;
     REQUIRE(writeFile(scratch.filePath(QStringLiteral("config.txt")), "contents"));
     const QString archive = scratch.filePath(QStringLiteral("multi.zip"));
-    REQUIRE(runTool(QStringLiteral("zip"),
-                    {QStringLiteral("-q"), QStringLiteral("-0"), archive,
-                     QStringLiteral("config.txt")},
-                    QFileInfo(archive).absolutePath()));
+    REQUIRE(writeStoredZipOf(archive, QFileInfo(archive).absolutePath(),
+                             {QStringLiteral("config.txt")}));
 
     const QString cachePath = scratch.filePath(QStringLiteral("cached.zip"));
     const QByteArray wrong(64, 'a');
@@ -2522,9 +2514,7 @@ TEST_CASE("A multi-file archive is written to a card Imager mounts itself",
         REQUIRE(writeFile(scratch.filePath(n), ("contents of " + n).toUtf8()));
 
     const QString archive = scratch.filePath(QStringLiteral("multi.zip"));
-    QStringList zipArgs{QStringLiteral("-q"), QStringLiteral("-0"), archive};
-    zipArgs << names;
-    REQUIRE(runTool(QStringLiteral("zip"), zipArgs, QFileInfo(archive).absolutePath()));
+    REQUIRE(writeStoredZipOf(archive, QFileInfo(archive).absolutePath(), names));
 
     const QString binDir = scratch.filePath(QStringLiteral("bin"));
     REQUIRE(QDir().mkpath(binDir));

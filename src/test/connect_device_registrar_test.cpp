@@ -15,6 +15,8 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "platform_tools.h"
+
 #include "connect_device_registrar.h"
 #include "fastboot/fastboot_protocol.h"
 #include "rpiboot/test/mock_usb_transport.h"
@@ -31,7 +33,7 @@ using rpiboot::testing::MockUsbTransport;
 
 namespace {
 
-bool havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
+bool havePython() { return rpi_test::havePython(); }
 
 class ScratchDir
 {
@@ -89,7 +91,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
                         QString::number(status), QString::fromUtf8(body),
                         QString::number(repeat)});

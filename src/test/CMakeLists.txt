@@ -958,6 +958,7 @@ add_custom_target(test_eeprom_signer
     COMMENT "Running EEPROM signer tests"
 )
 
+if(NOT WIN32)
 # Tests for the real libusb transport, run against an emulated USB device
 # (see rpiboot_usb_device_test.cpp and data/usb_gadget_emulator.sh). Kept
 # separate from rpiboot_integration_test because that one wants a Compute
@@ -1002,6 +1003,7 @@ catch_discover_tests(rpiboot_usb_device_test
         RESOURCE_LOCK usb_gadget_emulator
         TIMEOUT 300
 )
+endif()
 
 # Hardware integration tests (gated by RPIBOOT_TEST_DEVICE env var)
 add_executable(rpiboot_integration_test
@@ -1647,6 +1649,14 @@ endif()
 # where the host will not allow one, which is the normal case in containerised
 # CI. Verified against a KVM guest, where the loop cases do run.
 
+# Not on Windows. The cases are written against the POSIX backend throughout:
+# O_DIRECT, open/pread/ftruncate on descriptors, RLIMIT_NOFILE to force the
+# io_uring fallback, and a loop device for the block-device paths. None of
+# that has a Windows counterpart, and file_operations_windows.cpp is a
+# different implementation -- 1,876 lines of volume locking, dismount and
+# sector-aligned overlapped I/O -- that wants cases of its own rather than a
+# port of these. Guarded rather than half-ported, so the gap stays visible.
+if(NOT WIN32)
 add_executable(file_operations_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
@@ -1688,6 +1698,7 @@ target_compile_options(file_operations_test PRIVATE
 
 rpi_link_platform_file_ops(file_operations_test)
 rpi_discover_tests(file_operations_test FAULT_INJECTION)
+endif()
 
 add_custom_target(test_file_operations
     COMMAND file_operations_test
@@ -2325,6 +2336,7 @@ if(TARGET settings_permissions_probe)
     add_dependencies(image_writer_test settings_permissions_probe)
 endif()
 
+    if(NOT WIN32)
     # The command line, run as a subprocess.
     #
     # Cli::run() builds its own QCoreApplication, so it cannot be called from
@@ -2339,6 +2351,7 @@ endif()
         IMAGER_BINARY="$<TARGET_FILE:${PROJECT_NAME}>")
     add_dependencies(cli_process_test ${PROJECT_NAME})
     rpi_discover_tests(cli_process_test)
+    endif()
 
     # The picker models: same library, its own cases.
     add_executable(picker_models_test picker_models_test.cpp)
@@ -2684,6 +2697,7 @@ endif()
 # for its forward delay before an address arrives. Getting the decision wrong
 # either warns on every managed switch or leaves the user watching a board
 # that looks like it has failed to reach the network.
+if(UNIX AND NOT APPLE)
 add_executable(stp_analyzer_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../linux/stpanalyzer.cpp
     stp_analyzer_test.cpp
@@ -2732,6 +2746,7 @@ if(TARGET Qt6::Network)
     add_dependencies(stp_analyzer_test stp_listener_probe)
     target_compile_definitions(stp_analyzer_test PRIVATE
         STP_LISTENER_PROBE_BINARY="$<TARGET_FILE:stp_listener_probe>")
+endif()
 endif()
 
 

@@ -236,6 +236,9 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
                 std::ifstream in(sidecar);
                 std::string cached;
                 if (std::getline(in, cached) && !cached.empty()) {
+                    // A cache the old code wrote carries the CR.
+                    if (cached.back() == '\r')
+                        cached.pop_back();
                     qWarning() << "FirmwareManager: rpi-eeprom version fetch failed,"
                                   "falling back to cached version"
                                << QString::fromStdString(cached);
@@ -265,6 +268,8 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         if (std::filesystem::exists(sidecar)) {
             std::ifstream in(sidecar);
             std::getline(in, cached);
+            if (!cached.empty() && cached.back() == '\r')
+                cached.pop_back();
         }
         if (cached != *eepromVersion) {
             std::error_code purgeEc;
@@ -385,7 +390,9 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         auto sidecar = versionDir / sub / ".eeprom-version";
         std::error_code sidecarEc;
         std::filesystem::create_directories(sidecar.parent_path(), sidecarEc);
-        std::ofstream out(sidecar, std::ios::trunc);
+        // Binary: a text-mode stream turns the newline into CRLF on Windows,
+        // so the same version wrote different bytes on different platforms.
+        std::ofstream out(sidecar, std::ios::trunc | std::ios::binary);
         if (out)
             out << *eepromVersion << '\n';
     }

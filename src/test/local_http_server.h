@@ -20,6 +20,8 @@
 #include <QString>
 #include <QUrl>
 
+#include "platform_tools.h"
+
 namespace rpi_test {
 
 // A localhost HTTP server serving one directory, torn down with the object.
@@ -54,7 +56,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), directory});
         if (!_process.waitForStarted(10000))
             return;
@@ -155,7 +157,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), directory,
                         QString::number(dropAfterBytes),
                         QString::number(dropCount)});
@@ -223,7 +225,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
                         QString::fromUtf8(body), QString::fromUtf8(etag)});
         if (!_process.waitForStarted(10000))
@@ -285,7 +287,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
                         QString::number(announcedBytes)});
         if (!_process.waitForStarted(10000))
@@ -359,7 +361,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), file,
                         QString::number(prefixBytes), QString::number(announcedBytes)});
         if (!_process.waitForStarted(10000))
@@ -424,7 +426,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
                         QString::number(bytes)});
         if (!_process.waitForStarted(10000))
@@ -455,13 +457,11 @@ private:
     int _port = 0;
 };
 
-bool inline havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
-
 } // namespace rpi_test
 
 #define REQUIRE_HTTP_SERVER(server)                                                                \
     if (!rpi_test::havePython())                                                                             \
-        SKIP("python3 is not installed, so no local HTTP server can be started");                  \
+        SKIP("no usable python3, so no local HTTP server can be started");                  \
     if (!(server).isRunning())                                                                     \
     SKIP("the local HTTP server did not start")
 

@@ -13,6 +13,8 @@
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include "platform_permissions.h"
+#include "platform_privilege.h"
 
 #include "cachemanager.h"
 #include "embedded_config.h"
@@ -496,15 +498,17 @@ TEST_CASE("A cache directory that cannot be written to reports no space",
     // Reported as no space and no directory. Reporting the real free space
     // with the directory named would have the caller cache into somewhere
     // that will refuse every file.
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("root can write to a directory with no write bit");
 
     const QString cacheDir =
         QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
     REQUIRE_FALSE(cacheDir.isEmpty());
     REQUIRE(QDir().mkpath(cacheDir));
-    REQUIRE(QFile::setPermissions(cacheDir,
-                                  QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+    // Windows cannot say "no new files here" with mode bits, so this is a deny
+    // ACE there and 0500 elsewhere; either way the directory refuses a write.
+    rpi_test::DeniedAccess denied(cacheDir, rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     qint64 bytes = -1;
     QString reported = QStringLiteral("unset");
@@ -516,9 +520,6 @@ TEST_CASE("A cache directory that cannot be written to reports no space",
 
     // Put it back before asserting, so a failing case still leaves a
     // directory the run can clean up after itself.
-    QFile::setPermissions(cacheDir, QFileDevice::ReadOwner | QFileDevice::WriteOwner
-                                        | QFileDevice::ExeOwner);
-
     CHECK(bytes == 0);
     CHECK(reported.isEmpty());
 }
@@ -799,7 +800,7 @@ TEST_CASE("A cache file that cannot be read is discarded on startup", "[cache-ma
         SKIP("this disk is below the threshold CacheManager caches above, so there is "
              "no cache to persist");
 
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which can read a file with no permissions");
 
     const QByteArray payload = payloadOfSize(4096, 11);
@@ -817,12 +818,12 @@ TEST_CASE("A cache file that cannot be read is discarded on startup", "[cache-ma
         first.updateCacheFile(uncompressed, hashOf(payload));
     }
 
-    REQUIRE(QFile::setPermissions(cacheFile, QFileDevice::Permissions()));
+    rpi_test::DeniedAccess denied(cacheFile, rpi_test::DeniedAccess::Read);
+    REQUIRE_DENIED(denied);
 
     CacheManager second;
     CHECK_FALSE(second.hasPotentialCache(uncompressed));
 
-    QFile::setPermissions(cacheFile, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
 TEST_CASE("A custom cache file is not written into settings", "[cache-manager][persist]")

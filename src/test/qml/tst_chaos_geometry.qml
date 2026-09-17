@@ -266,7 +266,24 @@ TestCase {
         var c = it.mapToItem(wiz, it.width / 2, it.height / 2)
         if (c.x < 0 || c.y < 0 || c.x > wiz.width || c.y > wiz.height) {
             ++offScreen
-            if (offenders.indexOf(where) < 0) offenders += where
+            // With the numbers: "off screen" alone does not say whether the
+            // control is a pixel out or half a window out, and the two want
+            // different fixes.
+            var detail = where + " centre(" + Math.round(c.x) + "," + Math.round(c.y)
+                       + ") size(" + Math.round(it.width) + "x" + Math.round(it.height)
+                       + ") window(" + Math.round(wiz.width) + "x"
+                       + Math.round(wiz.height) + ")"
+            if (offenders.indexOf(detail) < 0) offenders += detail
+
+            // A picture of the shape that failed, where one is asked for. The
+            // numbers say a control is off the edge; they do not show which
+            // row it is in or what it is competing with for the width.
+            var shotDir = TestEnv.value("RPI_CHAOS_SHOT_DIR")
+            if (shotDir.length > 0) {
+                var img = grabImage(wiz)
+                if (img)
+                    img.save(shotDir + "/offscreen-" + shape.tag + ".png")
+            }
         }
     }
 

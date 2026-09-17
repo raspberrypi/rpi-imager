@@ -312,8 +312,19 @@ TestCase {
 
         const view = findChild(step, "osList")
         verify(view, "found the list")
-        tryVerify(function() { return view.count >= 2 }, 5000,
-                  "both entries arrived (" + view.count + ")")
+        // Waiting for this list, not merely for a populated view. The step
+        // still holds the previous case's rows, so a count is satisfied the
+        // moment it is asked and the case goes on to read somebody else's
+        // entries -- which is how it came to pass while the warning it exists
+        // to provoke was never emitted.
+        tryVerify(function() {
+            for (var i = 0; i < view.count; ++i) {
+                var e = view.model.get ? view.model.get(i) : null
+                if (e && String(e.name) === "declared properly")
+                    return true
+            }
+            return false
+        }, 10000, "this case's own list arrived (" + view.count + " rows)")
         waitForRendering(step, 2000)
         view.positionViewAtBeginning()
         waitForRendering(step, 2000)

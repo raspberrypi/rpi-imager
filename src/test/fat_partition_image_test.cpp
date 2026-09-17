@@ -142,8 +142,8 @@ private:
 
 bool haveMtools()
 {
-    static const bool found = QFileInfo::exists(QStringLiteral("/usr/bin/mmd")) &&
-                              QFileInfo::exists(QStringLiteral("/usr/bin/mcopy"));
+    static const bool found = rpi_test::haveTool(QStringLiteral("mmd")) &&
+                              rpi_test::haveTool(QStringLiteral("mcopy"));
     return found;
 }
 
@@ -2902,6 +2902,10 @@ TEST_CASE("FAT driver deletes from a subdirectory that spans clusters",
 // negative size is rejected separately.
 TEST_CASE("A partition refuses I/O outside its own window", "[devicewrapper]")
 {
+    // The only case here that built an image without asking first, so on a
+    // machine with no mkfs.vfat it failed in its fixture where every other FAT
+    // case skipped.
+    REQUIRE_MKFS();
     FatImage image(16, 32);
     DeviceWrapper *dw = image.fat().deviceWrapper();
     REQUIRE(dw != nullptr);
