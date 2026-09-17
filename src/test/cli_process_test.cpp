@@ -29,7 +29,11 @@
 #include <QFileInfo>
 #include <QTemporaryDir>
 
+#include "platform_privilege.h"
+
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 
 using Catch::Matchers::ContainsSubstring;
@@ -46,11 +50,48 @@ struct Run {
 
 bool haveSudo()
 {
+#ifdef _WIN32
+    // Windows elevates by consent, not by a command that re-runs the binary,
+    // so there is nothing to ask for here. The cases that want an elevated
+    // run skip; the ones that only want the binary run still run it, which is
+    // what puts counters on the shipping binary's objects at all.
+    return false;
+#else
     QProcess probe;
     probe.start(QStringLiteral("sudo"), {QStringLiteral("-n"), QStringLiteral("true")});
     probe.waitForFinished(10000);
     return probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
+#endif
 }
+
+// Whether this process is already the privileged one.
+bool runningElevated()
+{
+    return rpi_test::isPrivileged();
+}
+
+} // namespace
+
+// Whether the imager can be started from here at all.
+//
+// The Windows manifest asks for requireAdministrator, so CreateProcess refuses
+// outright from an unelevated process -- QProcess reports the start as never
+// having happened, not as a run that failed. Nothing in the binary is reached,
+// so every case below is answering a question it could not have asked.
+//
+// This is also why the shipping binary contributes no coverage on Windows
+// unless the suite runs elevated: cli_process_test is what drives it, and it
+// cannot.
+#ifdef _WIN32
+#define REQUIRE_LAUNCHABLE_IMAGER() \
+    if (!runningElevated()) \
+    SKIP("the imager manifest asks for administrator, so an unelevated test " \
+         "cannot start it at all")
+#else
+#define REQUIRE_LAUNCHABLE_IMAGER() ((void)0)
+#endif
+
+namespace {
 
 // Hand back any coverage counters the elevated run created.
 //
@@ -66,6 +107,12 @@ void reclaimCoverageCounters()
     const QString buildTree = QFileInfo(QStringLiteral(IMAGER_BINARY)).absolutePath();
     if (buildTree.isEmpty())
         return;
+#ifdef _WIN32
+    // Nothing to reclaim: without sudo nothing here runs as another user, so
+    // every counter file already belongs to this process.
+    (void)buildTree;
+    return;
+#else
     const QString owner = QStringLiteral("%1:%2").arg(::getuid()).arg(::getgid());
     QProcess p;
     p.start(QStringLiteral("sudo"),
@@ -75,6 +122,7 @@ void reclaimCoverageCounters()
              QStringLiteral("-exec"), QStringLiteral("chown"), owner,
              QStringLiteral("{}"), QStringLiteral("+")});
     p.waitForFinished(60000);
+#endif
 }
 
 Run runImager(const QStringList &args, bool asRoot)
@@ -129,10 +177,11 @@ private:
 
 TEST_CASE("Run without privileges, and it says how to get them", "[cli][process]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // The first thing a script author meets. "Permission denied" from
     // somewhere deeper would leave them guessing; this has to name the
     // problem and the command that fixes it.
-    if (::geteuid() == 0)
+    if (runningElevated())
         SKIP("already root, so the check this is about does not fire");
 #ifdef Q_OS_MACOS
     // PlatformQuirks::hasElevatedPrivileges() answers true unconditionally on
@@ -158,6 +207,7 @@ TEST_CASE("Run without privileges, and it says how to get them", "[cli][process]
 
 TEST_CASE("A source that is not there is refused by name", "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     if (!haveSudo())
         SKIP("passwordless sudo is not available, and the checks below sit "
              "behind the privileges test");
@@ -177,6 +227,7 @@ TEST_CASE("A source that is not there is refused by name", "[cli][process][root]
 
 TEST_CASE("A directory given as the image is refused", "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     if (!haveSudo())
         SKIP("passwordless sudo is not available");
 
@@ -194,6 +245,7 @@ TEST_CASE("A directory given as the image is refused", "[cli][process][root]")
 TEST_CASE("A destination that is not a drive is refused, with the alternatives",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // The one that stands between a mistyped script and somebody's disk. It
     // has to say what could have been written instead, and how to overrule it
     // for the person who really did mean a system drive.
@@ -217,6 +269,7 @@ TEST_CASE("A destination that is not a drive is refused, with the alternatives",
 TEST_CASE("A cache file with no hash is refused before anything is fetched",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // The static behind this is covered on its own; what this adds is that
     // run() actually consults it, and does so before the write rather than
     // after the download.
@@ -237,6 +290,7 @@ TEST_CASE("A cache file with no hash is refused before anything is fetched",
 
 TEST_CASE("A secure boot key that is not there is refused", "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     if (!haveSudo())
         SKIP("passwordless sudo is not available");
 
@@ -276,7 +330,8 @@ QString directoryInPlaceOfFile(const Scratch &scratch)
 
 TEST_CASE("A first-run script that is not there is named as the problem", "[cli][process][root]")
 {
-    if (::geteuid() != 0 && !haveSudo())
+    REQUIRE_LAUNCHABLE_IMAGER();
+    if (!runningElevated() && !haveSudo())
         SKIP("passwordless sudo is not available");
 
     Scratch scratch;
@@ -300,7 +355,8 @@ TEST_CASE("A first-run script that is not there is named as the problem", "[cli]
 TEST_CASE("A user-data file that cannot be opened is told apart from one that is absent",
           "[cli][process][root]")
 {
-    if (::geteuid() != 0 && !haveSudo())
+    REQUIRE_LAUNCHABLE_IMAGER();
+    if (!runningElevated() && !haveSudo())
         SKIP("passwordless sudo is not available");
 
     Scratch scratch;
@@ -325,10 +381,11 @@ TEST_CASE("A user-data file that cannot be opened is told apart from one that is
 TEST_CASE("A network-config file that cannot be opened says which of the two it was",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // The two cloud-init files are read one after the other by the same
     // helper, and a run can name both. Saying only "opening the file" would
     // leave the author to guess which.
-    if (::geteuid() != 0 && !haveSudo())
+    if (!runningElevated() && !haveSudo())
         SKIP("passwordless sudo is not available");
 
     Scratch scratch;
@@ -350,6 +407,7 @@ TEST_CASE("A network-config file that cannot be opened says which of the two it 
 
 TEST_CASE("The refusal never offers a choice from an empty list", "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // With no removable drive attached -- the ordinary way to arrive here --
     // the refusal used to print "Choose one of the following:" and then
     // nothing at all, which reads as the message having broken rather than
@@ -357,7 +415,7 @@ TEST_CASE("The refusal never offers a choice from an empty list", "[cli][process
     //
     // This holds whatever is plugged in: either there are candidates and they
     // are listed, or there are none and the message says so.
-    if (::geteuid() != 0 && !haveSudo())
+    if (!runningElevated() && !haveSudo())
         SKIP("passwordless sudo is not available");
 
     Scratch scratch;
@@ -413,6 +471,7 @@ TEST_CASE("The refusal never offers a choice from an empty list", "[cli][process
 TEST_CASE("A write that succeeds says so and gives the shell back",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     if (!haveSudo())
         SKIP("passwordless sudo is not available, and writing needs root");
 
@@ -448,6 +507,7 @@ TEST_CASE("A write that succeeds says so and gives the shell back",
 TEST_CASE("A completed write leaves no inhibitor behind",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // The other half of the same fault. The inhibitor is a `systemd-inhibit`
     // process holding an idle:sleep lock and a FIFO under /run; a run that
     // hangs leaves both, and they accumulate. A machine that has written a
@@ -527,6 +587,7 @@ QString sizedImage(const QString &dir, int megabytes)
 
 TEST_CASE("A write verifies unless told not to", "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // Verification is on by default and is the only reason to believe the
     // card holds what the image held. Both spellings of the run have to
     // succeed: the flag exists because verification doubles the time, and one
@@ -570,6 +631,7 @@ TEST_CASE("A write verifies unless told not to", "[cli][process][root]")
 TEST_CASE("Quiet means quiet, right up until something fails",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     if (!haveSudo())
         SKIP("passwordless sudo is not available");
 
@@ -615,6 +677,7 @@ TEST_CASE("Quiet means quiet, right up until something fails",
 TEST_CASE("Running as root, a failed open does not advise sudo",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // Every open failure on Linux used to end with "Please run with elevated
     // privileges (sudo)", whatever had actually gone wrong. Somebody already
     // running under sudo -- which the CLI requires, so all of them -- was
@@ -669,6 +732,7 @@ TEST_CASE("Running as root, a failed open does not advise sudo",
 TEST_CASE("An image whose hash does not match is refused, legibly",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     if (!haveSudo())
         SKIP("passwordless sudo is not available, and writing needs root");
 
@@ -702,6 +766,7 @@ TEST_CASE("An image whose hash does not match is refused, legibly",
 
 TEST_CASE("An image whose hash matches is written", "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // The other side, so the refusal above is not simply "--sha256 always
     // fails".
     if (!haveSudo())
@@ -786,6 +851,7 @@ struct CompressedImage
 TEST_CASE("A compressed image is decompressed on its way to the card",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     if (!haveSudo())
         SKIP("passwordless sudo is not available, and writing needs root");
 
@@ -820,6 +886,7 @@ TEST_CASE("A compressed image is decompressed on its way to the card",
 TEST_CASE("A truncated compressed image is refused, not half-written",
           "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // A download that stopped early. The archive is well-formed until it
     // stops, so an extractor that trusts what it has been given writes the
     // part that decompressed and reports success -- and the user gets a card
@@ -868,6 +935,7 @@ TEST_CASE("A truncated compressed image is refused, not half-written",
 
 TEST_CASE("A truncated gzip image is refused too", "[cli][process][root]")
 {
+    REQUIRE_LAUNCHABLE_IMAGER();
     // The format that was always refused correctly, kept honest. libarchive
     // words gzip truncation differently, which is the only reason it never
     // fell into the shortcut that swallowed the xz one -- so it is worth a

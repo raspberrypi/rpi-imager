@@ -24,6 +24,7 @@
 #include <QTemporaryDir>
 
 #include <archive.h>
+#include <archive_entry.h>
 #include <lzma.h>
 
 #include "fixture_process.h"
@@ -356,18 +357,61 @@ TEST_CASE("A zstd file that is not there reports unknown", "[imagesize]")
 // whole write between "one image onto the card" and "unpack these files".
 // ══════════════════════════════════════════════════════════════
 
+// A .zip of the named files, written with libarchive rather than zip(1).
+//
+// Every other fixture here is built by the tool that owns the format, which is
+// the right instinct. Zip is where it stops working: Git for Windows carries
+// no zip binary, so these cases -- the ones that decide whether the write
+// unpacks a tree or lays down an image -- skipped on the platform entirely.
+bool makeZip(const QString &archivePath, const QString &dir,
+             const QStringList &names)
+{
+    struct archive *a = archive_write_new();
+    if (!a)
+        return false;
+    // The wide opener on Windows: archive_write_open_filename takes the path
+    // through the narrow API there, so an archive named outside the active
+    // code page is never created -- which is the very thing one case below
+    // is about.
+#ifdef _WIN32
+    bool ok = archive_write_set_format_zip(a) == ARCHIVE_OK
+              && archive_write_open_filename_w(
+                     a, archivePath.toStdWString().c_str()) == ARCHIVE_OK;
+#else
+    bool ok = archive_write_set_format_zip(a) == ARCHIVE_OK
+              && archive_write_open_filename(
+                     a, archivePath.toUtf8().constData()) == ARCHIVE_OK;
+#endif
+    for (const QString &n : names) {
+        if (!ok)
+            break;
+        QFile f(QDir(dir).filePath(n));
+        if (!f.open(QIODevice::ReadOnly))
+            return false;
+        const QByteArray contents = f.readAll();
+        struct archive_entry *e = archive_entry_new();
+        archive_entry_set_pathname(e, n.toUtf8().constData());
+        archive_entry_set_size(e, contents.size());
+        archive_entry_set_filetype(e, AE_IFREG);
+        archive_entry_set_perm(e, 0644);
+        ok = archive_write_header(a, e) == ARCHIVE_OK
+             && archive_write_data(a, contents.constData(),
+                                   std::size_t(contents.size())) == contents.size();
+        archive_entry_free(e);
+    }
+    if (archive_write_close(a) != ARCHIVE_OK)
+        ok = false;
+    archive_write_free(a);
+    return ok;
+}
+
 TEST_CASE("A zip holding one image reports one file and its size", "[imagesize]")
 {
-    if (!haveTool("zip"))
-        SKIP("zip is not installed");
-
     Scratch scratch;
     const QString raw = scratch.path("image.img");
     const QString zipPath = scratch.path("image.zip");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
-    REQUIRE_COMPRESSOR("cd");
-    REQUIRE(runShell(QStringLiteral("cd %1 && zip -q %2 image.img")
-                         .arg(QFileInfo(raw).path(), zipPath)));
+    REQUIRE(makeZip(zipPath, QFileInfo(raw).path(), {QStringLiteral("image.img")}));
 
     const auto info = imagesize::parseArchive(zipPath);
     CHECK(info.fileCount == 1);
@@ -387,8 +431,6 @@ TEST_CASE("A zip under a name outside Latin-1 still reports its contents",
     // which loses the "image too big for this card" refusal before the write
     // starts, and as "one file", which makes a multi-file archive look like a
     // single image and puts only part of it on the card.
-    if (!haveTool("zip"))
-        SKIP("zip is not installed");
 
     Scratch scratch;
     const QString dir = scratch.path(QString::fromUtf8("\xe3\x82\xa4\xe3\x83\xa1\xe3\x83\xbc\xe3\x82\xb8"));
@@ -396,8 +438,8 @@ TEST_CASE("A zip under a name outside Latin-1 still reports its contents",
     const QString raw = QDir(dir).filePath(QStringLiteral("image.img"));
     const QString zipPath = QDir(dir).filePath(QStringLiteral("image.zip"));
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
-    REQUIRE_COMPRESSOR("cd");
-    REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q image.zip image.img").arg(dir)));
+    REQUIRE(makeZip(QDir(dir).filePath(QStringLiteral("image.zip")), dir,
+                    {QStringLiteral("image.img")}));
     REQUIRE(QFileInfo::exists(zipPath));
 
     const auto info = imagesize::parseArchive(zipPath);
@@ -410,17 +452,13 @@ TEST_CASE("A zip whose own filename is outside Latin-1 reports its contents",
           "[imagesize][encoding]")
 {
     // The other half: the folder may be plain and the file itself not.
-    if (!haveTool("zip"))
-        SKIP("zip is not installed");
 
     Scratch scratch;
     const QString raw = scratch.path(QStringLiteral("image.img"));
     const QString name = QString::fromUtf8("\xd0\xbe\xd0\xb1\xd1\x80\xd0\xb0\xd0\xb7.zip");
     const QString zipPath = scratch.path(name);
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
-    REQUIRE_COMPRESSOR("cd");
-    REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q '%2' image.img")
-                         .arg(QFileInfo(raw).path(), name)));
+    REQUIRE(makeZip(zipPath, QFileInfo(raw).path(), {QStringLiteral("image.img")}));
     REQUIRE(QFileInfo::exists(zipPath));
 
     const auto info = imagesize::parseArchive(zipPath);
@@ -431,8 +469,6 @@ TEST_CASE("A zip whose own filename is outside Latin-1 reports its contents",
 
 TEST_CASE("A zip holding several files reports all of them", "[imagesize]")
 {
-    if (!haveTool("zip"))
-        SKIP("zip is not installed");
 
     Scratch scratch;
     const QString dir = QFileInfo(scratch.path("x")).path();
@@ -440,9 +476,8 @@ TEST_CASE("A zip holding several files reports all of them", "[imagesize]")
         REQUIRE(writeFile(scratch.path(QString::fromLatin1(name)), payloadOfSize(kRawSize)));
 
     const QString zipPath = scratch.path("multi.zip");
-    REQUIRE_COMPRESSOR("cd");
-    REQUIRE(runShell(QStringLiteral("cd %1 && zip -q %2 a.img b.img c.img")
-                         .arg(dir, zipPath)));
+    REQUIRE(makeZip(zipPath, dir, {QStringLiteral("a.img"), QStringLiteral("b.img"),
+                                   QStringLiteral("c.img")}));
 
     const auto info = imagesize::parseArchive(zipPath);
     CHECK(info.fileCount == 3);
@@ -521,16 +556,12 @@ TEST_CASE("A raw image is sized at its own length", "[imagesize]")
 TEST_CASE("A zip named .img is still measured as a container",
           "[imagesize][mislabelled]")
 {
-    if (!haveTool("zip"))
-        SKIP("zip is not installed");
 
     Scratch scratch;
     const QString raw = scratch.path("image.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
     const QString zipPath = scratch.path("bundle.zip");
-    REQUIRE_COMPRESSOR("cd");
-    REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q '%2' image.img")
-                         .arg(QFileInfo(raw).path(), zipPath)));
+    REQUIRE(makeZip(zipPath, QFileInfo(raw).path(), {QStringLiteral("image.img")}));
 
     const QString mislabelled = scratch.path("bundle.img");
     REQUIRE_COMPRESSOR("mv");

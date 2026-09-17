@@ -21,6 +21,7 @@
 #include "driveformatthread.h"
 #include "disk_formatter.h"
 
+#include <QSet>
 #include <QCoreApplication>
 #include <QDeadlineTimer>
 #include <QEventLoop>
@@ -669,4 +670,86 @@ TEST_CASE("The smallest accepted card still holds a valid FAT32", "[format][geom
         INFO("fsck said: " << fsckOutput.toStdString());
         CHECK(clean);
     }
+}
+
+// ── the message a failed format leaves on screen ────────────────────────────
+//
+// This mapping is the whole of what the user is told when a format fails, and
+// it has been wrong before: kCancelled had no case of its own and fell into
+// the default, so someone who had just pressed Cancel was told that something
+// unknown had gone wrong. The switch carries no `default:` now, so a new
+// FormatError without a message is a compiler warning rather than a surprise
+// in the field -- but nothing until now checked what any of them said.
+
+namespace {
+
+// getDeviceSize() and formatErrorToString() are protected, which is how the
+// rest of the suite reaches a thread's own decisions.
+class FormatProbe : public DriveFormatThread
+{
+public:
+    FormatProbe() : DriveFormatThread(QByteArray("//./PhysicalDrive999")) {}
+    using DriveFormatThread::formatErrorToString;
+    using DriveFormatThread::getDeviceSize;
+};
+
+} // namespace
+
+TEST_CASE("Every format error has a message of its own", "[driveformat]")
+{
+    FormatProbe probe;
+    const std::vector<rpi_imager::FormatError> all{
+        rpi_imager::FormatError::kFileOpenError,
+        rpi_imager::FormatError::kFileWriteError,
+        rpi_imager::FormatError::kFileSeekError,
+        rpi_imager::FormatError::kInvalidParameters,
+        rpi_imager::FormatError::kInsufficientSpace,
+        rpi_imager::FormatError::kCancelled,
+    };
+
+    QSet<QString> seen;
+    for (const auto e : all) {
+        const QString msg = probe.formatErrorToString(e);
+        INFO("error " << static_cast<int>(e) << ": " << msg.toStdString());
+        CHECK_FALSE(msg.isEmpty());
+        // Distinct, because two errors sharing a message is the same as
+        // having no message for one of them.
+        CHECK_FALSE(seen.contains(msg));
+        seen.insert(msg);
+    }
+    CHECK(seen.size() == int(all.size()));
+}
+
+TEST_CASE("Cancelling is not reported as an unknown failure", "[driveformat]")
+{
+    // The bug this mapping already had. A user who pressed Cancel and was
+    // told something unknown went wrong has no way to tell the two apart.
+    FormatProbe probe;
+    const QString msg = probe.formatErrorToString(rpi_imager::FormatError::kCancelled);
+    INFO(msg.toStdString());
+    CHECK_THAT(msg.toStdString(), !Catch::Matchers::ContainsSubstring("Unknown"));
+    CHECK_THAT(msg.toStdString(), Catch::Matchers::ContainsSubstring("ancel"));
+}
+
+TEST_CASE("A value outside the enumeration still says something",
+          "[driveformat]")
+{
+    // Reached only by a value from a newer build than this one. An empty
+    // string would leave the dialog blank.
+    FormatProbe probe;
+    const QString msg = probe.formatErrorToString(static_cast<rpi_imager::FormatError>(9999));
+    CHECK_FALSE(msg.isEmpty());
+}
+
+TEST_CASE("A device the drive list does not know falls back to a usable size",
+          "[driveformat]")
+{
+    // Sizing decides how much of the card the format writes over. Answering
+    // nought for a device that could not be found would format nothing at all
+    // and report success, so the fallback is deliberate -- pinned here so it
+    // stays deliberate.
+    FormatProbe probe;
+    const std::uint64_t size = probe.getDeviceSize(QByteArray("//./PhysicalDrive999"));
+    CHECK(size > 0);
+    CHECK(size == 64ULL * 1024 * 1024 * 1024);
 }

@@ -7,6 +7,7 @@
 #define FILE_OPERATIONS_H_
 
 #include <cstdint>
+#include <cstddef>
 #include <string>
 #include <memory>
 #include <functional>
@@ -366,6 +367,33 @@ class FileOperations {
   // Factory method to create platform-specific implementation
   static std::unique_ptr<FileOperations> Create();
 };
+
+// The write buffer a device will actually take in one request.
+//
+// A buffer larger than the device's maximum transfer is split by the OS into
+// sub-requests, which piles on the queue pressure the split was meant to
+// avoid (#1592). The cap is aligned down to a page because the write is made
+// with FILE_FLAG_NO_BUFFERING on Windows and O_DIRECT on Linux, and both
+// refuse a length that is not a multiple of the page size -- so an unaligned
+// cap trades a slow write for one that does not happen.
+//
+// Answers the hint unchanged when there is nothing to cap to, when the device
+// can take more than was asked for, or when its maximum is under a page and
+// aligning down would leave nothing.
+inline std::size_t CapWriteBufferToDevice(std::size_t hint,
+                                          std::size_t maxTransferBytes,
+                                          std::size_t pageSize)
+{
+    if (maxTransferBytes == 0 || maxTransferBytes >= hint)
+        return hint;
+    if (pageSize == 0)
+        return hint;
+
+    const std::size_t aligned = (maxTransferBytes / pageSize) * pageSize;
+    if (aligned < pageSize)
+        return hint;
+    return aligned;
+}
 
 } // namespace rpi_imager
 

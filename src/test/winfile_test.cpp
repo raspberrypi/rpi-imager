@@ -190,3 +190,61 @@ TEST_CASE("A path outside Latin-1 is opened as the user named it",
     CHECK(f.open(QIODevice::ReadWrite));
     f.close();
 }
+
+// ── what the operations do with no file open ────────────────────────────────
+//
+// Only forceSync() asks isOpen() first. The rest hand the invalid handle
+// straight to Win32 and report what it says, which is the behaviour the write
+// path depends on: every one of these is reachable after a failed open, and a
+// silent success from any of them would let the write carry on against
+// nothing.
+
+TEST_CASE("Seeking with no file open fails rather than appearing to work",
+          "[winfile]")
+{
+    WinFile f;
+    CHECK_FALSE(f.seek(0));
+    CHECK_FALSE(f.seek(1024));
+    // And the reason is recorded, not left for the caller to guess.
+    CHECK_FALSE(f.errorString().isEmpty());
+}
+
+TEST_CASE("Asking the position with no file open does not claim nought",
+          "[winfile]")
+{
+    // Nought is a legitimate position, so answering it here would be
+    // indistinguishable from a file open at its start.
+    WinFile f;
+    CHECK(f.pos() < 0);
+}
+
+TEST_CASE("Writing with no file open reports nothing written", "[winfile]")
+{
+    WinFile f;
+    const QByteArray payload = QByteArrayLiteral("data with nowhere to go");
+    CHECK(f.write(payload.constData(), payload.size()) <= 0);
+}
+
+TEST_CASE("Syncing with no file open is refused", "[winfile]")
+{
+    WinFile f;
+    CHECK_FALSE(f.forceSync());
+}
+
+TEST_CASE("Seeking past the end of a file is allowed, as the API allows it",
+          "[winfile]")
+{
+    // Windows permits a seek beyond the end; the file grows on the next
+    // write. The write path relies on it to position within a device larger
+    // than the image.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = makeFile(dir, QStringLiteral("seek-past.img"));
+
+    WinFile f;
+    f.setFileName(path);
+    REQUIRE(f.open(QIODevice::ReadWrite));
+    CHECK(f.seek(1024 * 1024));
+    CHECK(f.pos() == 1024 * 1024);
+    f.close();
+}

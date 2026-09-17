@@ -6801,6 +6801,17 @@ TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][devic
 namespace {
 
 // Points HOME at a scratch directory for as long as it is alive.
+// Points QDir::homePath() somewhere disposable, where the platform allows it.
+//
+// It does not on Windows. QDir::homePath() resolves through the Win32 API
+// there, not the environment: setting HOME, USERPROFILE, HOMEDRIVE and
+// HOMEPATH together leaves it answering the real profile unchanged. Measured,
+// not assumed -- a probe setting all four reported "C:/Users/<name>" before
+// and after.
+//
+// So the cases below check the redirect took and refuse to go on when it did
+// not. What they would otherwise do is write an SSH key into the developer's
+// own ~/.ssh, which is not a thing a test may do to the person running it.
 class ScopedHome
 {
 public:
@@ -6822,7 +6833,8 @@ TEST_CASE("With no key in place none is reported", "[imagewriter][sshkey]")
     REQUIRE(home.isValid());
     ScopedHome scoped(home.path());
     if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+        SKIP("QDir::homePath() does not follow the environment on this "
+             "platform, so the real ~/.ssh would be the one written to");
 
     ImageWriter w(nullptr);
     CHECK_FALSE(w.hasPubKey());
@@ -6835,7 +6847,8 @@ TEST_CASE("An existing public key is read back verbatim", "[imagewriter][sshkey]
     REQUIRE(home.isValid());
     ScopedHome scoped(home.path());
     if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+        SKIP("QDir::homePath() does not follow the environment on this "
+             "platform, so the real ~/.ssh would be the one written to");
 
     REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
     const QString key =
@@ -6861,7 +6874,8 @@ TEST_CASE("Generating a key creates a usable pair", "[imagewriter][sshkey]")
     REQUIRE(home.isValid());
     ScopedHome scoped(home.path());
     if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+        SKIP("QDir::homePath() does not follow the environment on this "
+             "platform, so the real ~/.ssh would be the one written to");
 
     ImageWriter w(nullptr);
     REQUIRE_FALSE(w.hasPubKey());
@@ -6883,7 +6897,8 @@ TEST_CASE("Generating a key does not replace one already there", "[imagewriter][
     REQUIRE(home.isValid());
     ScopedHome scoped(home.path());
     if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+        SKIP("QDir::homePath() does not follow the environment on this "
+             "platform, so the real ~/.ssh would be the one written to");
 
     REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
     const QString key = QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABkeepme user@example");
@@ -8351,10 +8366,17 @@ TEST_CASE("A directory given where a file was wanted is refused",
 
 namespace {
 
+// mcopy alone: reading the image back is all mtools is wanted for here.
+//
+// This used to ask for mkfs.vfat as well, which no Windows machine has -- so
+// every case below skipped on this platform whatever else was true, including
+// when the suite ran elevated and BootImgCreator could actually have built
+// one. Which formatter the image needs is BootImgCreator's business, and
+// REQUIRE_BOOT_IMG_SUPPORT() asks each platform for the thing it really uses:
+// elevation on Windows, where it drives diskpart, and mkfs.vfat elsewhere.
 bool haveMtools()
 {
-    return rpi_test::haveTool(QStringLiteral("mkfs.vfat"))
-        && rpi_test::haveTool(QStringLiteral("mcopy"));
+    return rpi_test::haveTool(QStringLiteral("mcopy"));
 }
 
 // Read a file back out of the image with mtools.
@@ -8391,8 +8413,9 @@ constexpr qint64 kBootImgSize = 33 * 1024 * 1024;
 TEST_CASE("A file put in the boot image can be read back out",
           "[bootimg]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8412,8 +8435,9 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
 {
     // The firmware tree is nested. A file flattened into the root is a file
     // the bootloader will not find.
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8430,8 +8454,9 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
 
 TEST_CASE("Directories several deep are all created", "[bootimg]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8450,8 +8475,9 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
 {
     // The directory is created once for the first file; the rest have to
     // land in it rather than being lost to an "already exists" failure.
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8471,8 +8497,9 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
 
 TEST_CASE("Root files and nested files coexist", "[bootimg]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8494,8 +8521,9 @@ TEST_CASE("Binary content survives unchanged", "[bootimg]")
 {
     // The bootcode and firmware blobs are binary. A text-mode copy would
     // mangle them in ways that do not show up until the board fails to boot.
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8526,8 +8554,9 @@ TEST_CASE("An empty set of files makes no image", "[bootimg]")
 
 TEST_CASE("The output directory is created if it is not there", "[bootimg]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8545,8 +8574,9 @@ TEST_CASE("The image is a filesystem, not just a sized file", "[bootimg]")
     // Read back with mdir, which is a different tool from the one that
     // wrote it -- so this checks the image really is mountable FAT32 rather
     // than that our own writer agrees with itself.
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -13197,11 +13227,15 @@ TEST_CASE("A board on the bus is left alone unless rpiboot is enabled",
     BootstrapProbe w;
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
-    const auto before = drives->scanMode();
 
     w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
 
-    CHECK(drives->scanMode() == before);
+    // Not paused, rather than unchanged from a value read a moment earlier.
+    // The poll thread is running and moves between Normal and Slow on its own,
+    // so a snapshot taken before the call can differ afterwards for reasons
+    // that have nothing to do with it -- which is what made this the one case
+    // in the suite that failed under ctest -j and passed on its own.
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
 
 TEST_CASE("Bootstrapping a board pauses the drive scan, and finishing resumes it",

@@ -22,6 +22,7 @@
 #include "drivelist.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <set>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace Drivelist;
@@ -1182,3 +1183,164 @@ TEST_CASE("An lsblk that answers is believed", "[drivelist][linux][timeout]")
     CHECK_THAT(out->toStdString(), ContainsSubstring("blockdevices"));
 }
 #endif // Q_OS_LINUX
+
+#if defined(Q_OS_WIN) && defined(DRIVELIST_ENABLE_TEST_API)
+
+#include <windows.h>
+#include <winioctl.h>
+
+// ── the Windows drive list's own decisions ──────────────────────────────────
+//
+// None of these had a test. What they decide is which drives the picker
+// offers, and the cost of getting it wrong is not symmetric: hiding the user's
+// SD card is an annoyance, offering them the disk Windows is running from is
+// the end of their afternoon.
+
+namespace Drivelist {
+namespace testing {
+std::string windowsBusTypeToString(int busType);
+bool isWindowsSystemDevice(const std::vector<std::string>& mountpoints);
+std::string windowsWcharToUtf8(const wchar_t* wstr);
+bool windowsEqualsIgnoreCase(const std::string& a, const std::string& b);
+bool windowsContainsIgnoreCase(const std::set<std::string>& s, const std::string& value);
+}
+}
+
+namespace {
+
+// The drive Windows is installed on, taken from the API rather than assumed
+// to be C: -- it usually is, and a test that only passes there is not one.
+std::string systemDriveRoot()
+{
+    const QString home = QDir::homePath();
+    if (home.size() < 2 || home.at(1) != QLatin1Char(':'))
+        return {};
+    return (home.left(2) + QStringLiteral("\\")).toStdString();
+}
+
+// A letter with nothing mounted on it.
+std::string sparedriveRoot()
+{
+    const DWORD mask = GetLogicalDrives();
+    for (int letter = 'Z'; letter >= 'D'; --letter) {
+        if (!(mask & (1u << (letter - 'A'))))
+            return std::string(1, char(letter)) + ":\\";
+    }
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("The drive Windows runs from is recognised as a system device",
+          "[drivelist][windows]")
+{
+    const std::string root = systemDriveRoot();
+    if (root.empty())
+        SKIP("could not work out which drive Windows is installed on");
+    INFO("system drive: " << root);
+    CHECK(Drivelist::testing::isWindowsSystemDevice({root}));
+}
+
+TEST_CASE("The system drive is recognised whatever case it is given in",
+          "[drivelist][windows]")
+{
+    std::string root = systemDriveRoot();
+    if (root.empty())
+        SKIP("could not work out which drive Windows is installed on");
+    // Windows paths are case-insensitive, and a mountpoint can reach us in
+    // either case. Matching only one of them would offer the system disk.
+    root[0] = static_cast<char>(::tolower(static_cast<unsigned char>(root[0])));
+    INFO("system drive, lowercased: " << root);
+    CHECK(Drivelist::testing::isWindowsSystemDevice({root}));
+}
+
+TEST_CASE("A drive with nothing of Windows on it is not a system device",
+          "[drivelist][windows]")
+{
+    const std::string spare = sparedriveRoot();
+    if (spare.empty())
+        SKIP("every drive letter is in use, so none is free to stand in");
+    INFO("spare letter: " << spare);
+    CHECK_FALSE(Drivelist::testing::isWindowsSystemDevice({spare}));
+}
+
+TEST_CASE("A device with no mountpoints at all is not a system device",
+          "[drivelist][windows]")
+{
+    // A freshly inserted card that Windows has not lettered yet. Answering
+    // true would hide exactly the drive the user came to write.
+    CHECK_FALSE(Drivelist::testing::isWindowsSystemDevice({}));
+}
+
+TEST_CASE("Bus types are named as the picker expects", "[drivelist][windows]")
+{
+    using Drivelist::testing::windowsBusTypeToString;
+    // USB and SD are what removable media arrive as, and the picker filters
+    // on the string, so these two matter more than the rest put together.
+    CHECK(windowsBusTypeToString(BusTypeUsb) == "USB");
+    CHECK(windowsBusTypeToString(BusTypeSd) == "SD");
+    CHECK(windowsBusTypeToString(BusTypeNvme) == "NVME");
+    CHECK(windowsBusTypeToString(BusTypeSata) == "SATA");
+    CHECK(windowsBusTypeToString(BusTypeFileBackedVirtual) == "FILEBACKEDVIRTUAL");
+}
+
+TEST_CASE("A bus type outside the enumeration is named, not left empty",
+          "[drivelist][windows]")
+{
+    // A value from a newer Windows than this was built against. An empty
+    // string would read as a drive with no bus at all.
+    CHECK_FALSE(Drivelist::testing::windowsBusTypeToString(9999).empty());
+}
+
+TEST_CASE("A device name outside Latin-1 survives the conversion",
+          "[drivelist][windows][i18n]")
+{
+    // The friendly name comes from the registry as UTF-16 and reaches the
+    // picker as UTF-8. A manufacturer writing its own name in its own script
+    // is ordinary, and a mangled one is what the user has to choose between.
+    const std::wstring name = L"測試 USB диск";
+    const std::string got = Drivelist::testing::windowsWcharToUtf8(name.c_str());
+    // Compared against Qt's own UTF-8 of the same string rather than a byte
+    // literal, so the case says what it means without depending on how this
+    // file is encoded.
+    CHECK(got == QString::fromStdWString(name).toStdString());
+}
+
+TEST_CASE("An empty or absent device name converts to nothing",
+          "[drivelist][windows]")
+{
+    CHECK(Drivelist::testing::windowsWcharToUtf8(nullptr).empty());
+    CHECK(Drivelist::testing::windowsWcharToUtf8(L"").empty());
+}
+
+TEST_CASE("A device name is converted without a trailing null",
+          "[drivelist][windows]")
+{
+    // The length is passed explicitly rather than -1, so the terminator is
+    // not part of the result. A string carrying one compares unequal to the
+    // same name read anywhere else.
+    const std::string got = Drivelist::testing::windowsWcharToUtf8(L"SanDisk");
+    CHECK(got == "SanDisk");
+    CHECK(got.size() == 7);
+}
+
+TEST_CASE("Driver names are compared without regard to case",
+          "[drivelist][windows]")
+{
+    using Drivelist::testing::windowsEqualsIgnoreCase;
+    CHECK(windowsEqualsIgnoreCase("USBSTOR", "usbstor"));
+    CHECK(windowsEqualsIgnoreCase("SdBus", "SDBUS"));
+    CHECK_FALSE(windowsEqualsIgnoreCase("USBSTOR", "USBSTORX"));
+    CHECK_FALSE(windowsEqualsIgnoreCase("scsi", "sata"));
+    CHECK(windowsEqualsIgnoreCase("", ""));
+}
+
+TEST_CASE("Set membership ignores case too", "[drivelist][windows]")
+{
+    const std::set<std::string> drivers{"USBSTOR", "SDBUS", "UASPSTOR"};
+    CHECK(Drivelist::testing::windowsContainsIgnoreCase(drivers, "usbstor"));
+    CHECK(Drivelist::testing::windowsContainsIgnoreCase(drivers, "SdBus"));
+    CHECK_FALSE(Drivelist::testing::windowsContainsIgnoreCase(drivers, "nvme"));
+    CHECK_FALSE(Drivelist::testing::windowsContainsIgnoreCase({}, "usbstor"));
+}
+#endif

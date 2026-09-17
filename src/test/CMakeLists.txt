@@ -162,9 +162,21 @@ function(rpi_discover_tests target)
     if(WIN32)
         set(_dl_paths DL_PATHS ${RPI_TEST_DLL_PATHS})
     endif()
+    # RESOURCE_LOCK <name> serialises this binary's cases against anything
+    # holding the same lock, while the rest of the suite carries on. For a
+    # binary whose cases all want one machine-wide thing -- a fixed port, a
+    # device -- ctest -j otherwise lets them race, and the losers skip.
+    set(_lock)
+    list(FIND ARGN "RESOURCE_LOCK" _lock_idx)
+    if(NOT _lock_idx EQUAL -1)
+        math(EXPR _lock_value_idx "${_lock_idx} + 1")
+        list(GET ARGN ${_lock_value_idx} _lock_name)
+        set(_lock RESOURCE_LOCK ${_lock_name})
+    endif()
+
     catch_discover_tests(${target}
         ${_dl_paths}
-        PROPERTIES SKIP_RETURN_CODE 4 ENVIRONMENT "${_test_env}")
+        PROPERTIES SKIP_RETURN_CODE 4 ENVIRONMENT "${_test_env}" ${_lock})
 endfunction()
 
 # Inert until a test arms it, so it costs every other test one atomic load
@@ -537,6 +549,58 @@ endif()
 if(WIN32)
     # PLATFORM_QUIRKS_SRC as well: DiskpartUtil reaches
     # PlatformQuirks::getEjectDevicePath() on both the unmount and clean paths.
+    # And the relay as the executable Windows starts, which is where the
+    # socket path lives. Depends on the relay target so it is there to run.
+    add_executable(callback_relay_process_test callback_relay_process_test.cpp)
+    target_include_directories(callback_relay_process_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(callback_relay_process_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core Qt6::Network)
+    target_compile_definitions(callback_relay_process_test PRIVATE
+        RPI_IMAGER_RELAY_EXE="$<TARGET_FILE:rpi-imager-callback-relay>")
+    add_dependencies(callback_relay_process_test rpi-imager-callback-relay)
+    target_compile_features(callback_relay_process_test PRIVATE cxx_std_20)
+    # Every case binds the relay's fixed port, so two at once means one of
+    # them skips rather than runs.
+    rpi_discover_tests(callback_relay_process_test RESOURCE_LOCK relay_callback_port)
+
+    # Which letter the boot image is mounted on. The rest of createBootImg
+    # needs elevation and a virtual disk; this decides where the files go.
+    add_executable(bootimg_drive_letter_test
+        bootimg_drive_letter_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp)
+    target_include_directories(bootimg_drive_letter_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(bootimg_drive_letter_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core)
+    target_compile_definitions(bootimg_drive_letter_test PRIVATE BOOTIMG_ENABLE_TEST_API)
+    target_compile_features(bootimg_drive_letter_test PRIVATE cxx_std_20)
+    rpi_discover_tests(bootimg_drive_letter_test)
+
+    # Reading the key out of a WLAN profile. The rest of that file wants the
+    # WLAN service and a wireless card; the decoding does not, and it is what
+    # decides the password written to the card.
+    add_executable(wlan_profile_xml_test wlan_profile_xml_test.cpp)
+    target_include_directories(wlan_profile_xml_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(wlan_profile_xml_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
+    target_compile_features(wlan_profile_xml_test PRIVATE cxx_std_20)
+    rpi_discover_tests(wlan_profile_xml_test)
+
+    # The callback relay is a WIN32 executable of its own, so nothing linked it
+    # and none of it was measured. What it accepts from the shell is the one
+    # place an outside application's string enters the product here.
+    add_executable(callback_relay_url_test callback_relay_url_test.cpp)
+    target_include_directories(callback_relay_url_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(callback_relay_url_test PRIVATE Catch2::Catch2WithMain)
+    target_compile_features(callback_relay_url_test PRIVATE cxx_std_20)
+    rpi_discover_tests(callback_relay_url_test)
+
     add_executable(diskpart_util_test
         diskpart_util_test.cpp
         ${PLATFORM_QUIRKS_SRC})
@@ -1972,6 +2036,11 @@ add_executable(accelerated_hash_test
     accelerated_hash_test.cpp
 )
 
+# The CNG backend releases its resources on every error path and again in the
+# destructor. The failures cannot be provoked -- they are the provider
+# refusing -- but the sequence can.
+target_compile_definitions(accelerated_hash_test PRIVATE ACCELERATED_HASH_ENABLE_TEST_API)
+
 target_include_directories(accelerated_hash_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${GNUTLS_INCLUDE_DIRS}
@@ -2336,7 +2405,6 @@ if(TARGET settings_permissions_probe)
     add_dependencies(image_writer_test settings_permissions_probe)
 endif()
 
-    if(NOT WIN32)
     # The command line, run as a subprocess.
     #
     # Cli::run() builds its own QCoreApplication, so it cannot be called from
@@ -2351,7 +2419,6 @@ endif()
         IMAGER_BINARY="$<TARGET_FILE:${PROJECT_NAME}>")
     add_dependencies(cli_process_test ${PROJECT_NAME})
     rpi_discover_tests(cli_process_test)
-    endif()
 
     # The picker models: same library, its own cases.
     add_executable(picker_models_test picker_models_test.cpp)

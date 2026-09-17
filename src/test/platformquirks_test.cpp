@@ -7,6 +7,8 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <string>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <QtGlobal>
@@ -107,7 +109,118 @@ TEST_CASE("Path transformation roundtrip", "[platformquirks][path]") {
 namespace PlatformQuirks {
 namespace TestAPI {
     int parseDeviceNumber(const QString& device);
+    QByteArray freeTypePlatformArgs();
+    QString fontEngineFromPlatformArgs(const QByteArray &platformArgs);
+    bool nvidiaAdapterName(const std::string &deviceName);
+    bool queryNvidiaPresent();
 }
+}
+
+// ── the font engine the UI is drawn with ────────────────────────────────────
+//
+// Qt 6.11 defaults to DirectWrite, which corrupts uppercase button text on
+// some systems (#1648), so the platform string is rewritten to ask for
+// FreeType before QGuiApplication reads it. The rewrite has to leave whatever
+// the user already put in QT_QPA_PLATFORM intact, and none of it was covered:
+// a mistake here is not a crash but a window full of unreadable buttons.
+
+namespace {
+
+// Sets QT_QPA_PLATFORM for the duration, and puts back what was there.
+class PlatformEnv
+{
+public:
+    explicit PlatformEnv(const QByteArray &value) : _had(qEnvironmentVariableIsSet(kName))
+    {
+        if (_had)
+            _previous = qgetenv(kName);
+        if (value.isNull())
+            qunsetenv(kName);
+        else
+            qputenv(kName, value);
+    }
+    ~PlatformEnv()
+    {
+        if (_had)
+            qputenv(kName, _previous);
+        else
+            qunsetenv(kName);
+    }
+    PlatformEnv(const PlatformEnv &) = delete;
+    PlatformEnv &operator=(const PlatformEnv &) = delete;
+
+private:
+    static constexpr const char *kName = "QT_QPA_PLATFORM";
+    bool _had;
+    QByteArray _previous;
+};
+
+QByteArray argsFor(const QByteArray &platform)
+{
+    PlatformEnv env(platform);
+    return PlatformQuirks::TestAPI::freeTypePlatformArgs();
+}
+
+} // namespace
+
+TEST_CASE("With nothing set, the windows plugin is asked for FreeType",
+          "[platformquirks][windows][font]")
+{
+    CHECK(argsFor(QByteArray()) == "windows:fontengine=freetype");
+}
+
+TEST_CASE("A platform already asking for FreeType is left alone",
+          "[platformquirks][windows][font]")
+{
+    CHECK(argsFor("windows:fontengine=freetype") == "windows:fontengine=freetype");
+}
+
+TEST_CASE("Another font engine is replaced, not appended to",
+          "[platformquirks][windows][font]")
+{
+    // Two fontengine= settings would leave which one wins to the plugin.
+    const QByteArray got = argsFor("windows:fontengine=gdi");
+    INFO("got: " << got.toStdString());
+    CHECK(got == "windows:fontengine=freetype");
+    CHECK(got.count("fontengine=") == 1);
+}
+
+TEST_CASE("Other platform options are kept when the engine is replaced",
+          "[platformquirks][windows][font]")
+{
+    const QByteArray got = argsFor("windows:fontengine=gdi,dpiawareness=0");
+    INFO("got: " << got.toStdString());
+    CHECK(got.contains("dpiawareness=0"));
+    CHECK(got.contains("fontengine=freetype"));
+    CHECK(got.count("fontengine=") == 1);
+}
+
+TEST_CASE("A bare plugin name gains the option separator",
+          "[platformquirks][windows][font]")
+{
+    CHECK(argsFor("windows") == "windows:fontengine=freetype");
+}
+
+TEST_CASE("A platform naming only options is given the windows plugin",
+          "[platformquirks][windows][font]")
+{
+    const QByteArray got = argsFor("dpiawareness=0");
+    INFO("got: " << got.toStdString());
+    CHECK(got.startsWith("windows:"));
+    CHECK(got.contains("fontengine=freetype"));
+}
+
+TEST_CASE("The engine actually in force is reported back",
+          "[platformquirks][windows][font]")
+{
+    using PlatformQuirks::TestAPI::fontEngineFromPlatformArgs;
+    CHECK(fontEngineFromPlatformArgs("windows:fontengine=freetype") == QStringLiteral("freetype"));
+    CHECK(fontEngineFromPlatformArgs("windows:fontengine=gdi,dpiawareness=0")
+          == QStringLiteral("gdi"));
+    // nodirectwrite is the older spelling of the same request.
+    CHECK(fontEngineFromPlatformArgs("windows:nodirectwrite") == QStringLiteral("gdi"));
+    // And with nothing said, Qt picks DirectWrite -- the case #1648 is about.
+    CHECK(fontEngineFromPlatformArgs("windows") == QStringLiteral("directwrite (default)"));
 }
 
 TEST_CASE("Windows parseDeviceNumber parses PhysicalDrive paths", "[platformquirks][windows]") {
@@ -5699,3 +5812,57 @@ TEST_CASE("The chime falls through to whichever player the machine has",
     }
 }
 #endif  // BEEP_PROBE_BINARY
+
+// ── which adapter gets the software renderer ────────────────────────────────
+//
+// An NVIDIA card gets QSG_RHI_PREFER_SOFTWARE_RENDERER, so a name read wrongly
+// is either a window that does not draw or a machine put on the software
+// renderer for no reason. The names come from the controller as it describes
+// itself, which is why the marketing lines are matched and not just the vendor.
+
+TEST_CASE("NVIDIA adapters are recognised however they name themselves",
+          "[platformquirks][windows][gpu]")
+{
+    using PlatformQuirks::TestAPI::nvidiaAdapterName;
+    CHECK(nvidiaAdapterName("NVIDIA GeForce RTX 4090"));
+    CHECK(nvidiaAdapterName("NVIDIA Quadro P2000"));
+    CHECK(nvidiaAdapterName("NVIDIA Tesla V100"));
+    CHECK(nvidiaAdapterName("GeForce GTX 1080 Ti"));
+    // The vendor prefix is not always there, which is the reason the
+    // marketing names are matched at all.
+    CHECK(nvidiaAdapterName("Quadro K620"));
+}
+
+TEST_CASE("The adapter name is matched whatever its case",
+          "[platformquirks][windows][gpu]")
+{
+    using PlatformQuirks::TestAPI::nvidiaAdapterName;
+    CHECK(nvidiaAdapterName("nvidia geforce rtx 3060"));
+    CHECK(nvidiaAdapterName("NVIDIA GEFORCE RTX 3060"));
+    CHECK(nvidiaAdapterName("NvIdIa GeForce"));
+}
+
+TEST_CASE("Other vendors' adapters are left on the hardware renderer",
+          "[platformquirks][windows][gpu]")
+{
+    using PlatformQuirks::TestAPI::nvidiaAdapterName;
+    CHECK_FALSE(nvidiaAdapterName("Intel(R) UHD Graphics 630"));
+    CHECK_FALSE(nvidiaAdapterName("AMD Radeon RX 6700 XT"));
+    CHECK_FALSE(nvidiaAdapterName("Microsoft Basic Display Adapter"));
+    CHECK_FALSE(nvidiaAdapterName("VMware SVGA 3D"));
+    CHECK_FALSE(nvidiaAdapterName(""));
+}
+
+TEST_CASE("The video controller query answers without faulting",
+          "[platformquirks][windows][gpu]")
+{
+    // Read-only, and what it answers depends on the machine, so this asks only
+    // that the COM and WMI plumbing runs to the end and releases what it took.
+    // Called twice, because CoInitializeSecurity can only be set once per
+    // process and the second call has to survive being told so.
+    using PlatformQuirks::TestAPI::queryNvidiaPresent;
+    const bool first = queryNvidiaPresent();
+    const bool second = queryNvidiaPresent();
+    INFO("this machine reports an NVIDIA adapter: " << first);
+    CHECK(first == second);
+}
