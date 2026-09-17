@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include "platform_tools.h"
 #include "customization_generator.h"
 #include "dependencies/sha256crypt/sha256crypt.h"
 #include "dependencies/yescrypt/yescrypt_wrapper.h"
@@ -43,7 +44,14 @@ namespace {
 QString throughTheShell(const QString &value, bool *ran)
 {
     QProcess sh;
-    sh.start(QStringLiteral("/bin/sh"),
+    // The quoting under test is for a script that runs on the Pi, so it is worth
+    // checking wherever the suite runs -- but "/bin/sh" is not a path on
+    // Windows. shellPath() finds the sh that Git for Windows and MSYS2 install;
+    // without one there is no way to ask a shell what it made of the quoting.
+    const QString shell = rpi_test::shellPath();
+    if (shell.isEmpty())
+        SKIP("no POSIX shell available to interpret the quoting");
+    sh.start(shell,
              {QStringLiteral("-c"),
               QStringLiteral("printf %s ") + CustomisationGenerator::shellQuote(value)});
     *ran = sh.waitForFinished(10000) && sh.exitStatus() == QProcess::NormalExit;
@@ -92,7 +100,14 @@ TEST_CASE("A quoted value is a single shell word", "[customization][shellquoting
     // that arrives as two arguments configures the wrong network and drops
     // the rest on the floor, with nothing to say so.
     QProcess sh;
-    sh.start(QStringLiteral("/bin/sh"),
+    // The quoting under test is for a script that runs on the Pi, so it is worth
+    // checking wherever the suite runs -- but "/bin/sh" is not a path on
+    // Windows. shellPath() finds the sh that Git for Windows and MSYS2 install;
+    // without one there is no way to ask a shell what it made of the quoting.
+    const QString shell = rpi_test::shellPath();
+    if (shell.isEmpty())
+        SKIP("no POSIX shell available to interpret the quoting");
+    sh.start(shell,
              {QStringLiteral("-c"),
               QStringLiteral("set -- ")
                   + CustomisationGenerator::shellQuote(
@@ -2724,9 +2739,14 @@ QString pythonThatParses(const char *language)
         return *cached;
 
     QStringList candidates{QStringLiteral("/usr/bin/python3")};
-    const QString onPath = QStandardPaths::findExecutable(QStringLiteral("python3"));
-    if (!onPath.isEmpty() && !candidates.contains(onPath))
-        candidates << onPath;
+    // findExecutable("python3") finds nothing on Windows, where the
+    // interpreter is called python -- and pythonPath() has already checked
+    // that whatever it names actually runs.
+    for (const QString &onPath : {QStandardPaths::findExecutable(QStringLiteral("python3")),
+                                  rpi_test::pythonPath()}) {
+        if (!onPath.isEmpty() && !candidates.contains(onPath))
+            candidates << onPath;
+    }
 
     QString usable;
     for (const QString &python : std::as_const(candidates)) {

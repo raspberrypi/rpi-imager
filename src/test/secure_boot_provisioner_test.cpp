@@ -15,8 +15,11 @@
 #include "rpiboot/test/mock_usb_transport.h"
 #include <atomic>
 #include "platform_paths.h"
+#include "platform_privilege.h"
 #include "platform_permissions.h"
 #include <catch2/catch_test_macros.hpp>
+
+#include "platform_tools.h"
 #include <catch2/generators/catch_generators.hpp>
 
 #include "rpiboot/secure_boot_provisioner.h"
@@ -49,7 +52,7 @@ using rpiboot::ChipGeneration;
 
 namespace {
 
-bool haveOpenssl() { return QFileInfo::exists(QStringLiteral("/usr/bin/openssl")); }
+bool haveOpenssl() { return rpi_test::haveTool(QStringLiteral("openssl")); }
 
 class ScratchDir
 {
@@ -102,7 +105,7 @@ QByteArray readFile(const fs::path &path)
 QByteArray publicKeyDerViaOpenssl(const fs::path &publicKeyPath)
 {
     QProcess proc;
-    proc.start(QStringLiteral("/usr/bin/openssl"),
+    proc.start(rpi_test::toolPath(QStringLiteral("openssl")),
                {QStringLiteral("rsa"), QStringLiteral("-pubin"), QStringLiteral("-in"),
                 QString::fromStdString(publicKeyPath.string()), QStringLiteral("-outform"),
                 QStringLiteral("DER")});
@@ -146,7 +149,7 @@ TEST_CASE("SecureBootProvisioner generates a usable key pair", "[secureboot-otp]
 
     // And openssl has to accept the private key, not just the file shape.
     QProcess check;
-    check.start(QStringLiteral("/usr/bin/openssl"),
+    check.start(rpi_test::toolPath(QStringLiteral("openssl")),
                 {QStringLiteral("rsa"), QStringLiteral("-in"),
                  QString::fromStdString(priv.string()), QStringLiteral("-noout"),
                  QStringLiteral("-check")});
@@ -1158,11 +1161,9 @@ TEST_CASE("A boot image too small for its files is refused rather than handed ov
     // and sized before anything is copied into it, so a swallowed failure
     // returns a correctly-sized image with a file missing -- and a board
     // will not come up from that. Here the payload simply does not fit.
-    if (QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
-                                       {QStringLiteral("/sbin"), QStringLiteral("/usr/sbin")})
-            .isEmpty() ||
-        QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+    REQUIRE_BOOT_IMG_SUPPORT();
+    if (!rpi_test::haveTool(QStringLiteral("mcopy")))
+        SKIP("mtools is needed to put the files into the image");
 
     ScratchDir scratch;
     const QString out = QDir(scratch.dir()).filePath(QStringLiteral("boot.img"));
@@ -1185,10 +1186,7 @@ TEST_CASE("A boot image is not claimed when there is nowhere to stage its files"
     // Deleting the isValid() check does not make this fail: the file-open
     // guard below it refuses too. The check is defence in depth, so what is
     // pinned here is the refusal, not which of the two produced it.
-    if (QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
-                                       {QStringLiteral("/sbin"), QStringLiteral("/usr/sbin")})
-            .isEmpty())
-        SKIP("mkfs.vfat is needed to build a boot image");
+    REQUIRE_BOOT_IMG_SUPPORT();
 
     // Built before TMPDIR is moved, since it wants a real temp directory.
     ScratchDir scratch;
@@ -1451,7 +1449,7 @@ TEST_CASE("A key of the wrong size is refused before anything is written",
 
     const auto bigKey = scratch.path(QStringLiteral("rsa4096.pem"));
     QProcess gen;
-    gen.start(QStringLiteral("/usr/bin/openssl"),
+    gen.start(rpi_test::toolPath(QStringLiteral("openssl")),
               {QStringLiteral("genrsa"), QStringLiteral("-out"),
                QString::fromStdString(bigKey.string()), QStringLiteral("4096")});
     REQUIRE(gen.waitForFinished(60000));

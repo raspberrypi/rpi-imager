@@ -14,6 +14,8 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "platform_tools.h"
+
 #include "downloadstatstelemetry.h"
 #include "test_scratch.h"
 
@@ -49,7 +51,7 @@ private:
     QString _path;
 };
 
-bool havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
+bool havePython() { return rpi_test::havePython(); }
 
 // A localhost server that accepts POSTs and records how many it received.
 class LocalPostServer
@@ -90,7 +92,7 @@ public:
         QStringList args{QStringLiteral("-c"), QString::fromUtf8(kScript), countFile};
         if (withBody)
             args << QStringLiteral("body");
-        _process.start(QStringLiteral("/usr/bin/python3"), args);
+        _process.start(rpi_test::pythonPath(), args);
         if (!_process.waitForStarted(10000))
             return;
         if (_process.waitForReadyRead(10000))

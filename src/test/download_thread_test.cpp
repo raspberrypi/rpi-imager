@@ -15,6 +15,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "platform_permissions.h"
+#include "platform_privilege.h"
+
 #include <algorithm>
 #include <atomic>
 #include "downloadthread.h"
@@ -62,6 +65,7 @@ using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
 #include "test_scratch.h"
 
 #include <QTemporaryDir>
+#include <QUrl>
 
 namespace {
 
@@ -1395,12 +1399,12 @@ TEST_CASE("DownloadThread caches an image fetched over HTTP", "[download][http][
 
 namespace {
 
-bool haveOpenssl() { return QFileInfo::exists(QStringLiteral("/usr/bin/openssl")); }
+bool haveOpenssl() { return rpi_test::haveTool(QStringLiteral("openssl")); }
 
 bool generateRsaKey(const QString &path)
 {
     QProcess openssl;
-    openssl.start(QStringLiteral("/usr/bin/openssl"),
+    openssl.start(rpi_test::toolPath(QStringLiteral("openssl")),
                   {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
                    QStringLiteral("2048")});
     openssl.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
@@ -1422,6 +1426,7 @@ void setConfiguredRsaKey(const QString &path)
 
 TEST_CASE("A signing key that is not a key stops the write", "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     // Secure boot means the Pi will only run an image it can check the
     // signature of. If the signing step fails and the write finishes anyway,
     // the card is written, looks finished, and the board refuses to boot from
@@ -1476,6 +1481,7 @@ TEST_CASE("A signing key that is not a key stops the write", "[download][secureb
 
 TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!rpi_test::haveFatFormatter())
         SKIP(rpi_test::noFatFormatterReason());
     if (!haveOpenssl())
@@ -1518,6 +1524,7 @@ TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secur
 TEST_CASE("Secure boot does not throw away the user's own settings",
           "[download][secureboot][customise]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     // Packaging for secure boot empties the boot partition: every file that
     // was on it is read out, packed into boot.img, and then deleted from the
     // filesystem so that boot.img and boot.sig are all that remain. The
@@ -1580,6 +1587,7 @@ TEST_CASE("Secure boot does not throw away the user's own settings",
 TEST_CASE("Secure boot keeps every cloud-init file and not just the first",
           "[download][secureboot][customise]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     // cloud-init needs three files together: user-data for the configuration,
     // network-config for the network, and meta-data, without which the
     // NoCloud datasource is not detected at all and the other two are never
@@ -1633,6 +1641,7 @@ TEST_CASE("Secure boot keeps every cloud-init file and not just the first",
 TEST_CASE("DownloadThread refuses secure boot with no key configured",
           "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!rpi_test::haveFatFormatter())
         SKIP(rpi_test::noFatFormatterReason());
 
@@ -1663,6 +1672,7 @@ TEST_CASE("DownloadThread refuses secure boot with no key configured",
 TEST_CASE("DownloadThread refuses secure boot with a key that is not there",
           "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!rpi_test::haveFatFormatter())
         SKIP(rpi_test::noFatFormatterReason());
 
@@ -4145,6 +4155,27 @@ public:
     ScopedSystemProxy(const ScopedSystemProxy &) = delete;
     ScopedSystemProxy &operator=(const ScopedSystemProxy &) = delete;
 
+    // Whether setting http_proxy actually configures a proxy on this platform.
+    //
+    // detectSystemProxy() asks QNetworkProxyFactory::systemProxyForQuery(),
+    // and on Windows that reads the WinINet settings out of the registry --
+    // the environment variable is not consulted, so nothing this fixture does
+    // reaches the code under test. The alternative, writing the machine's real
+    // proxy configuration, is not something a test may do to the developer
+    // running it.
+    //
+    // Worth saying plainly: a Windows user who sets http_proxy for the CLI
+    // does not get a proxy. That is a gap in the product rather than in the
+    // test, and it is the reason these cases cannot run here.
+    static bool configurable()
+    {
+#ifdef Q_OS_WIN
+        return false;
+#else
+        return true;
+#endif
+    }
+
 private:
     QByteArray _saved;
 };
@@ -4169,6 +4200,8 @@ void attemptDownloadThroughProxy(const ScratchDir &scratch, const QString &destN
 
 TEST_CASE("The system's HTTP proxy is the one used", "[download][http][proxy]")
 {
+    if (!ScopedSystemProxy::configurable())
+        SKIP("http_proxy is not where Windows keeps its proxy settings");
     ScopedSystemProxy proxy("http://127.0.0.1:3128");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-http-dest.img"));
@@ -4186,6 +4219,8 @@ TEST_CASE("A SOCKS proxy is asked for by the scheme that resolves through it",
     // socks5h, not socks5. Behind a SOCKS proxy the names being fetched are
     // usually only resolvable on the far side of it, and resolving locally
     // fails before a connection is attempted.
+    if (!ScopedSystemProxy::configurable())
+        SKIP("http_proxy is not where Windows keeps its proxy settings");
     ScopedSystemProxy proxy("socks5://127.0.0.1:1080");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-socks-dest.img"));
@@ -4200,6 +4235,8 @@ TEST_CASE("A proxy that wants a password gets one", "[download][http][proxy]")
 {
     // An authenticating proxy is the common corporate arrangement. Dropping
     // the credentials turns every download into a 407 the user cannot act on.
+    if (!ScopedSystemProxy::configurable())
+        SKIP("http_proxy is not where Windows keeps its proxy settings");
     ScopedSystemProxy proxy("http://bob:secret@127.0.0.1:3128");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-auth-dest.img"));
@@ -4496,21 +4533,22 @@ TEST_CASE("Caching stops when the writer behind it has failed", "[download][cach
     // inside curl's write callback -- stalling it stalls the download. The
     // flag goes down, the file is left for the destructor, and the bytes
     // keep moving.
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which the mode bits do not stop");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
     const QString locked = dir.filePath(QStringLiteral("locked"));
     REQUIRE(QDir().mkpath(locked));
-    REQUIRE(QFile::setPermissions(locked, QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+    // Mode bits cannot say "no new files here" on Windows; a deny ACE can, and
+    // DeniedAccess puts it back in its destructor rather than leaving a
+    // directory the suite cannot clean up after a failed assertion.
+    rpi_test::DeniedAccess denied(locked, rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     CacheStateThread dt{QByteArray("http://example.invalid/x.img"), QByteArray(), QByteArray()};
     dt._asyncCacheWriter = std::make_unique<AsyncCacheWriter>();
     const bool opened = dt._asyncCacheWriter->open(locked + QStringLiteral("/cache.img"), 0);
-
-    QFile::setPermissions(locked, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                      QFileDevice::ExeOwner);
 
     // The failure is reported by open() rather than by the error flag: the
     // flag is for a writer that got going and then failed on its own

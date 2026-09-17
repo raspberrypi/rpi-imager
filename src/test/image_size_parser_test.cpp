@@ -27,6 +27,7 @@
 #include <lzma.h>
 
 #include "fixture_process.h"
+#include <QProcessEnvironment>
 #include "platform_tools.h"
 
 namespace {
@@ -56,12 +57,33 @@ bool writeFile(const QString &path, const QByteArray &data)
 // content size recorded.
 bool runShell(const QString &script)
 {
+    // Not "/bin/sh": there is no such path on Windows, so every case that
+    // built a fixture this way failed there rather than skipping. shellPath()
+    // finds the sh that Git for Windows and MSYS2 both install.
+    const QString shell = rpi_test::shellPath();
+    if (shell.isEmpty())
+        return false;
+
+    // The compressors live beside that shell rather than on PATH, so the
+    // script is given somewhere to find them. Appended, not replaced: a host
+    // that does have them on PATH keeps using its own.
     QProcess p;
-    p.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), script});
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    QStringList search = env.value(QStringLiteral("PATH")).split(QDir::listSeparator(),
+                                                                Qt::SkipEmptyParts);
+    search += rpi_test::extraToolDirectories();
+    env.insert(QStringLiteral("PATH"), search.join(QDir::listSeparator()));
+    p.setProcessEnvironment(env);
+
+    p.start(shell, {QStringLiteral("-c"), script});
     if (!p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
         return false;
     return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
 }
+
+// A compressor the cases below need, or a skip naming it. Failing because the
+// machine has no gzip says nothing about the parser under test.
+#define REQUIRE_COMPRESSOR(tool)                                                   if (!rpi_test::haveShell())                                                        SKIP("no POSIX shell available to build the fixture");                     if (!rpi_test::haveTool(QStringLiteral(tool)))                                 SKIP("this machine has no " tool ", so the fixture cannot be built")
 
 class Scratch
 {
@@ -88,6 +110,7 @@ TEST_CASE("A gzip image reports its uncompressed size", "[imagesize]")
     Scratch scratch;
     const QString raw = scratch.path("image.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("gzip");
     REQUIRE(runShell(QStringLiteral("gzip -k -f %1").arg(raw)));
 
     CHECK(imagesize::parseGz(raw + ".gz") == quint64(kRawSize));
@@ -112,6 +135,7 @@ TEST_CASE("A gzip smaller than its own overhead is not called four gigabytes",
     Scratch scratch;
     const QString raw = scratch.path("tiny.img");
     REQUIRE(writeFile(raw, QByteArray("hi there, this is a tiny payload")));
+    REQUIRE_COMPRESSOR("gzip");
     REQUIRE(runShell(QStringLiteral("gzip -k -f %1").arg(raw)));
 
     const QString gz = raw + ".gz";
@@ -143,6 +167,7 @@ TEST_CASE("A gzip of incompressible bytes reports what it holds", "[imagesize]")
         noise[i] = char(x >> 24);
     }
     REQUIRE(writeFile(raw, noise));
+    REQUIRE_COMPRESSOR("gzip");
     REQUIRE(runShell(QStringLiteral("gzip -k -f %1").arg(raw)));
 
     const QString gz = raw + ".gz";
@@ -234,6 +259,7 @@ TEST_CASE("An xz image reports its uncompressed size", "[imagesize]")
     Scratch scratch;
     const QString raw = scratch.path("image.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("xz");
     REQUIRE(runShell(QStringLiteral("xz -k -f %1").arg(raw)));
 
     CHECK(imagesize::parseXz(raw + ".xz") == quint64(kRawSize));
@@ -247,6 +273,7 @@ TEST_CASE("A truncated xz file reports unknown rather than a guess", "[imagesize
     Scratch scratch;
     const QString raw = scratch.path("image.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("xz");
     REQUIRE(runShell(QStringLiteral("xz -k -f %1").arg(raw)));
 
     // Lop off the footer, which is where the index lives.
@@ -272,6 +299,7 @@ TEST_CASE("A zstd image reports its uncompressed size", "[imagesize]")
     Scratch scratch;
     const QString raw = scratch.path("image.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("zstd");
     REQUIRE(runShell(QStringLiteral("zstd -q -k -f %1").arg(raw)));
 
     CHECK(imagesize::parseZstd(raw + ".zst") == quint64(kRawSize));
@@ -292,6 +320,7 @@ TEST_CASE("A streaming-compressed zstd image reports unknown, not a huge number"
     const QString raw = scratch.path("image.img");
     const QString out = scratch.path("streamed.zst");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("cat");
     REQUIRE(runShell(QStringLiteral("cat %1 | zstd -q -o %2 -f").arg(raw, out)));
 
     const quint64 size = imagesize::parseZstd(out);
@@ -336,6 +365,7 @@ TEST_CASE("A zip holding one image reports one file and its size", "[imagesize]"
     const QString raw = scratch.path("image.img");
     const QString zipPath = scratch.path("image.zip");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("cd");
     REQUIRE(runShell(QStringLiteral("cd %1 && zip -q %2 image.img")
                          .arg(QFileInfo(raw).path(), zipPath)));
 
@@ -366,6 +396,7 @@ TEST_CASE("A zip under a name outside Latin-1 still reports its contents",
     const QString raw = QDir(dir).filePath(QStringLiteral("image.img"));
     const QString zipPath = QDir(dir).filePath(QStringLiteral("image.zip"));
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("cd");
     REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q image.zip image.img").arg(dir)));
     REQUIRE(QFileInfo::exists(zipPath));
 
@@ -387,6 +418,7 @@ TEST_CASE("A zip whose own filename is outside Latin-1 reports its contents",
     const QString name = QString::fromUtf8("\xd0\xbe\xd0\xb1\xd1\x80\xd0\xb0\xd0\xb7.zip");
     const QString zipPath = scratch.path(name);
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("cd");
     REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q '%2' image.img")
                          .arg(QFileInfo(raw).path(), name)));
     REQUIRE(QFileInfo::exists(zipPath));
@@ -408,6 +440,7 @@ TEST_CASE("A zip holding several files reports all of them", "[imagesize]")
         REQUIRE(writeFile(scratch.path(QString::fromLatin1(name)), payloadOfSize(kRawSize)));
 
     const QString zipPath = scratch.path("multi.zip");
+    REQUIRE_COMPRESSOR("cd");
     REQUIRE(runShell(QStringLiteral("cd %1 && zip -q %2 a.img b.img c.img")
                          .arg(dir, zipPath)));
 
@@ -456,10 +489,12 @@ TEST_CASE("An xz image named .img is sized decompressed, not by its file length"
     Scratch scratch;
     const QString raw = scratch.path("payload.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("xz");
     REQUIRE(runShell(QStringLiteral("xz -k -f '%1'").arg(raw)));
 
     // The name says raw image; the bytes say xz.
     const QString mislabelled = scratch.path("latest_image.img");
+    REQUIRE_COMPRESSOR("mv");
     REQUIRE(runShell(QStringLiteral("mv '%1.xz' '%2'").arg(raw, mislabelled)));
 
     const quint64 onDisk = quint64(QFileInfo(mislabelled).size());
@@ -493,10 +528,12 @@ TEST_CASE("A zip named .img is still measured as a container",
     const QString raw = scratch.path("image.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
     const QString zipPath = scratch.path("bundle.zip");
+    REQUIRE_COMPRESSOR("cd");
     REQUIRE(runShell(QStringLiteral("cd '%1' && zip -q '%2' image.img")
                          .arg(QFileInfo(raw).path(), zipPath)));
 
     const QString mislabelled = scratch.path("bundle.img");
+    REQUIRE_COMPRESSOR("mv");
     REQUIRE(runShell(QStringLiteral("mv '%1' '%2'").arg(zipPath, mislabelled)));
 
     const auto measured = imagesize::measureLocalFile(mislabelled);
@@ -514,6 +551,7 @@ TEST_CASE("A gzip image is sized for capacity but barred from progress",
     Scratch scratch;
     const QString raw = scratch.path("image.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("gzip");
     REQUIRE(runShell(QStringLiteral("gzip -k -f '%1'").arg(raw)));
 
     const auto measured = imagesize::measureLocalFile(raw + ".gz");
@@ -533,8 +571,10 @@ TEST_CASE("A gzip image named .img is still barred from progress",
     Scratch scratch;
     const QString raw = scratch.path("payload.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("gzip");
     REQUIRE(runShell(QStringLiteral("gzip -k -f '%1'").arg(raw)));
     const QString mislabelled = scratch.path("sneaky.img");
+    REQUIRE_COMPRESSOR("mv");
     REQUIRE(runShell(QStringLiteral("mv '%1.gz' '%2'").arg(raw, mislabelled)));
 
     const auto measured = imagesize::measureLocalFile(mislabelled);
@@ -551,8 +591,10 @@ TEST_CASE("A zstd image named .img is sized decompressed",
     Scratch scratch;
     const QString raw = scratch.path("payload.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("zstd");
     REQUIRE(runShell(QStringLiteral("zstd -q -k -f '%1'").arg(raw)));
     const QString mislabelled = scratch.path("zstd_as_img.img");
+    REQUIRE_COMPRESSOR("mv");
     REQUIRE(runShell(QStringLiteral("mv '%1.zst' '%2'").arg(raw, mislabelled)));
 
     const auto measured = imagesize::measureLocalFile(mislabelled);
@@ -572,8 +614,10 @@ TEST_CASE("A bzip2 image reports unknown rather than its compressed length",
     Scratch scratch;
     const QString raw = scratch.path("payload.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("bzip2");
     REQUIRE(runShell(QStringLiteral("bzip2 -k -f '%1'").arg(raw)));
     const QString mislabelled = scratch.path("bz2_as_img.img");
+    REQUIRE_COMPRESSOR("mv");
     REQUIRE(runShell(QStringLiteral("mv '%1.bz2' '%2'").arg(raw, mislabelled)));
 
     const auto measured = imagesize::measureLocalFile(mislabelled);
@@ -609,8 +653,10 @@ TEST_CASE("probeFormat reports the xz filter whatever the file is called",
     Scratch scratch;
     const QString raw = scratch.path("payload.img");
     REQUIRE(writeFile(raw, payloadOfSize(kRawSize)));
+    REQUIRE_COMPRESSOR("xz");
     REQUIRE(runShell(QStringLiteral("xz -k -f '%1'").arg(raw)));
     const QString mislabelled = scratch.path("named_wrong.img");
+    REQUIRE_COMPRESSOR("mv");
     REQUIRE(runShell(QStringLiteral("mv '%1.xz' '%2'").arg(raw, mislabelled)));
 
     const auto probed = imagesize::probeFormat(mislabelled);

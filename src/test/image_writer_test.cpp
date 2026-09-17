@@ -10,6 +10,9 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include "platform_permissions.h"
+
+#include "platform_privilege.h"
 
 #include <cmath>
 #include <limits>
@@ -18,8 +21,13 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/catch_session.hpp>
 
+#ifndef _WIN32
+// getpwuid() and the uid handling around it belong to the settings-permission
+// cases, which are themselves behind SETTINGS_PERMISSIONS_PROBE_BINARY -- the
+// probe is built only where `unshare -r` exists to run it.
 #include <unistd.h>
 #include <pwd.h>
+#endif
 
 #include "imagewriter.h"
 #include "platformquirks.h"
@@ -30,6 +38,7 @@
 #include "downloadthread.h"
 #include "file_operations.h"
 #include "app_resources.h"
+#include <QProcessEnvironment>
 #include "platform_tools.h"
 #include <QLocale>
 #include <QHostAddress>
@@ -138,7 +147,7 @@ TEST_CASE("Nothing is ready to write before an image and a drive are chosen",
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
     CHECK_FALSE(writer.readyToWrite());   // still no drive
 
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     CHECK(writer.readyToWrite());
 }
 
@@ -148,7 +157,7 @@ TEST_CASE("Clearing the drive makes it not ready again", "[imagewriter]")
     // with it, rather than leaving it live against a drive that is gone.
     ImageWriter writer(nullptr);
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     writer.setDst(QString(), 0);
@@ -199,7 +208,7 @@ TEST_CASE("An image larger than the card is refused before anything is written",
     SourceFile source;
     writer.setSrc(source.url(),
                   /*downloadLen=*/0, /*extrLen=*/8ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
 
     writer.startWrite();
 
@@ -217,7 +226,7 @@ TEST_CASE("An image that fits is not refused on capacity", "[imagewriter]")
 
     SourceFile source;
     writer.setSrc(source.url(), 0, 1ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     for (const QString &e : log.errors) {
@@ -241,7 +250,7 @@ TEST_CASE("An image exactly filling the card is allowed", "[imagewriter]")
     SourceFile source;
     const quint64 card = 4ull * 1024 * 1024 * 1024;
     writer.setSrc(source.url(), 0, card);
-    writer.setDst(QStringLiteral("/dev/null"), card);
+    writer.setDst(QProcess::nullDevice(), card);
     writer.startWrite();
 
     for (const QString &e : log.errors) {
@@ -260,7 +269,7 @@ TEST_CASE("An image one byte too big is refused", "[imagewriter]")
     SourceFile source;
     const quint64 card = 4ull * 1024 * 1024 * 1024;
     writer.setSrc(source.url(), 0, card + 1);
-    writer.setDst(QStringLiteral("/dev/null"), card);
+    writer.setDst(QProcess::nullDevice(), card);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -279,7 +288,7 @@ TEST_CASE("A card of unknown size does not trigger the capacity check",
 
     SourceFile source;
     writer.setSrc(source.url(), 0, 8ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 0);
+    writer.setDst(QProcess::nullDevice(), 0);
     writer.startWrite();
 
     for (const QString &e : log.errors) {
@@ -307,13 +316,13 @@ TEST_CASE("A drive that has gone is named as gone, not as never chosen",
     UiLog log(&writer);
 
     writer.setSrc(source.url(), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     // The signal the drive poller raises when the device it was watching
     // stops being listed.
     REQUIRE(QMetaObject::invokeMethod(&writer, "onSelectedDeviceRemoved",
-                                      Q_ARG(QString, QStringLiteral("/dev/null"))));
+                                      Q_ARG(QString, QProcess::nullDevice())));
     CHECK_FALSE(writer.readyToWrite());
 
     writer.startWrite();
@@ -335,7 +344,7 @@ TEST_CASE("Unplugging some other drive leaves the chosen one alone",
     UiLog log(&writer);
 
     writer.setSrc(source.url(), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     REQUIRE(QMetaObject::invokeMethod(&writer, "onSelectedDeviceRemoved",
@@ -371,7 +380,7 @@ TEST_CASE("A folder picked instead of an image is refused", "[imagewriter]")
     UiLog log(&writer);
 
     writer.setSrc(QUrl::fromLocalFile(dir.path()), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -382,7 +391,7 @@ TEST_CASE("A folder picked instead of an image is refused", "[imagewriter]")
 
 TEST_CASE("An image that cannot be read is refused", "[imagewriter]")
 {
-    if (geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which can read a file with no permissions at all");
 
     QTemporaryDir dir;
@@ -393,18 +402,19 @@ TEST_CASE("An image that cannot be read is refused", "[imagewriter]")
         REQUIRE(f.open(QIODevice::WriteOnly));
         f.write(QByteArray(1024, '\0'));
     }
-    REQUIRE(QFile::setPermissions(path, QFileDevice::Permissions()));
+    // Not setPermissions(): on Windows it cannot express "unreadable" at all
+    // and returns false, so this case used to fail in its own fixture without
+    // reaching the refusal it is about. DeniedAccess writes a deny ACE there
+    // and mode bits everywhere else, and puts them back in its destructor.
+    rpi_test::DeniedAccess denied(path, rpi_test::DeniedAccess::Read);
+    REQUIRE_DENIED(denied);
 
     ImageWriter writer(nullptr);
     UiLog log(&writer);
 
     writer.setSrc(QUrl::fromLocalFile(path), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
-
-    // Restored before the assertions, so a failing case still leaves a
-    // directory that can be removed.
-    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 
     REQUIRE(log.errors.size() == 1);
     INFO("reported: " << log.errors[0].toStdString());
@@ -434,7 +444,7 @@ TEST_CASE("An empty image file is refused rather than written as a blank card",
     UiLog log(&writer);
 
     writer.setSrc(QUrl::fromLocalFile(path), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -455,7 +465,7 @@ TEST_CASE("A source that is not there is named before the card is measured",
 
     const QString missing = QStringLiteral("/nonexistent-rpi-imager/gone.img");
     writer.setSrc(QUrl::fromLocalFile(missing), 0, 64ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -559,9 +569,16 @@ TEST_CASE("The hardware and OS list models are reachable", "[imagewriter]")
 TEST_CASE("A settings file left unwritable is repaired, keeping what it held",
           "[imagewriter][settings]")
 {
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("root can write a file with no write bit, so the case this is "
              "about cannot arise");
+#ifdef Q_OS_WIN
+    // There is no settings file here to make unwritable. QSettings defaults to
+    // NativeFormat, which on Windows is the registry, so fileName() names a key
+    // rather than a path and the repair this case describes has nothing to act
+    // on -- which is also why settings_permissions.cpp is Q_OS_UNIX throughout.
+    SKIP("settings live in the registry on Windows, not in a file");
+#else
 
     QString path;
     {
@@ -606,6 +623,7 @@ TEST_CASE("A settings file left unwritable is repaired, keeping what it held",
     CHECK(after.isWritable());
     CHECK(after.value(QStringLiteral("imager/repository")).toString() ==
           QStringLiteral("https://example.invalid/os_list.json"));
+#endif
 }
 
 TEST_CASE("A disable_warnings flag found in the settings does not survive startup",
@@ -688,7 +706,7 @@ TEST_CASE("Another drive being unplugged leaves the choice alone",
     WriterWithRemoval writer;
     RemovalOutcome outcome(&writer);
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     writer.onSelectedDeviceRemoved(QStringLiteral("/dev/somethingelse"));
@@ -704,10 +722,10 @@ TEST_CASE("The chosen drive being unplugged makes the write impossible and says 
     RemovalOutcome outcome(&writer);
     UiLog log(&writer);
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     // The screen is told, so it can drop the selection rather than leaving a
     // drive listed that is not there.
@@ -730,12 +748,12 @@ TEST_CASE("Unplugging after a successful write is just ejecting",
     // worked.
     WriterWithRemoval writer;
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onSuccess();
     RemovalOutcome outcome(&writer);
     UiLog log(&writer);
 
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     CHECK(outcome.selectedDeviceRemoved == 0);
     CHECK(outcome.cancelledPlain == 0);
@@ -753,11 +771,11 @@ TEST_CASE("Unplugging during preparation says the card went away",
     // user did.
     WriterWithRemoval writer;
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onFinalizing();   // a state the writer counts as in-progress
     RemovalOutcome outcome(&writer);
 
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     CHECK(outcome.cancelledByRemoval == 1);
     CHECK(outcome.cancelledPlain == 0);
@@ -777,12 +795,12 @@ TEST_CASE("A later cancellation is not still blamed on the card",
     // observed.
     WriterWithRemoval writer;
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onFinalizing();
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     // A second write, cancelled by the user this time.
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onFinalizing();
     RemovalOutcome outcome(&writer);
     writer.onCancelled();
@@ -1069,7 +1087,7 @@ namespace {
 bool haveOpensslBinary()
 {
     QProcess p;
-    p.start(QStringLiteral("openssl"), {QStringLiteral("version")});
+    p.start(rpi_test::toolPath(QStringLiteral("openssl")), {QStringLiteral("version")});
     p.waitForFinished(10000);
     return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
 }
@@ -1079,7 +1097,7 @@ bool haveOpensslBinary()
 bool generateRsaKeyAt(const QString& path)
 {
     QProcess p;
-    p.start(QStringLiteral("openssl"),
+    p.start(rpi_test::toolPath(QStringLiteral("openssl")),
             {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
              QStringLiteral("2048")});
     if (!p.waitForFinished(60000))
@@ -1210,7 +1228,7 @@ TEST_CASE("Something that is not a key produces no fingerprint at all",
         const QString pub = QDir(dir.path()).filePath(QStringLiteral("p.pub"));
         REQUIRE(generateRsaKeyAt(priv));
         QProcess p;
-        p.start(QStringLiteral("openssl"),
+        p.start(rpi_test::toolPath(QStringLiteral("openssl")),
                 {QStringLiteral("rsa"), QStringLiteral("-in"), priv,
                  QStringLiteral("-pubout"), QStringLiteral("-out"), pub});
         REQUIRE(p.waitForFinished(30000));
@@ -3956,8 +3974,25 @@ public:
 
         _hash = QCryptographicHash::hash(_payload, QCryptographicHash::Sha256).toHex();
 
+        // Skipped rather than failed where the compressor is absent: whether
+        // this machine has gzip says nothing about the writer under test. The
+        // shell is looked up too -- "/bin/sh" is not a path that exists on
+        // Windows, so this failed there before it could even try.
+        const QString shell = rpi_test::shellPath();
+        if (shell.isEmpty())
+            SKIP("no POSIX shell available to build the fixture");
+        if (!rpi_test::haveTool(QString::fromLatin1(tool)))
+            SKIP(std::string("this machine has no ") + tool +
+                 ", so the compressed fixture cannot be built");
+
         QProcess p;
-        p.start(QStringLiteral("/bin/sh"),
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        QStringList search = env.value(QStringLiteral("PATH"))
+                                 .split(QDir::listSeparator(), Qt::SkipEmptyParts);
+        search += rpi_test::extraToolDirectories();
+        env.insert(QStringLiteral("PATH"), search.join(QDir::listSeparator()));
+        p.setProcessEnvironment(env);
+        p.start(shell,
                 {QStringLiteral("-c"),
                  QStringLiteral("%1 -k -f %2").arg(QString::fromLatin1(tool), raw)});
         REQUIRE(p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
@@ -5651,7 +5686,7 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
     // where the OS would never run it. Ask an independent FAT reader whether
     // firstrun.sh is genuinely a file in the root, and whether it contains
     // what was asked for.
-    if (QFileInfo::exists(QStringLiteral("/usr/bin/mtype"))) {
+    if (rpi_test::haveTool(QStringLiteral("mtype"))) {
         // The image is a partitioned disk, so the filesystem does not start
         // at sector zero. Take the offset from the card's own partition table
         // rather than assuming it, so this keeps working if the fixture is
@@ -5674,7 +5709,7 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
         mtype.setProcessEnvironment(env);
         const QString atOffset =
             dev + QStringLiteral("@@") + QString::number(qint64(firstLba) * 512);
-        mtype.start(QStringLiteral("/usr/bin/mtype"),
+        mtype.start(rpi_test::toolPath(QStringLiteral("mtype")),
                     {QStringLiteral("-i"), atOffset, QStringLiteral("::firstrun.sh")});
         REQUIRE(mtype.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
 
@@ -6554,7 +6589,7 @@ TEST_CASE("A destination in a directory that does not exist is refused", "[image
 
 TEST_CASE("A destination the user cannot write is refused", "[imagewriter][dest]")
 {
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which can write a file with no permissions");
 
     QTemporaryDir dir;
@@ -6564,7 +6599,8 @@ TEST_CASE("A destination the user cannot write is refused", "[imagewriter][dest]
     REQUIRE(t.open(QIODevice::WriteOnly));
     REQUIRE(t.resize(qint64(kFixturePayload)));
     t.close();
-    REQUIRE(QFile::setPermissions(target, QFileDevice::ReadOwner));
+    rpi_test::DeniedAccess denied(target, rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     const WriteOutcome out = writeTo(target, kFixturePayload);
 
@@ -6573,8 +6609,6 @@ TEST_CASE("A destination the user cannot write is refused", "[imagewriter][dest]
     CHECK_FALSE(out.succeeded);
     CHECK(out.failed);
     CHECK_FALSE(out.errors.isEmpty());
-
-    QFile::setPermissions(target, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
 TEST_CASE("An empty destination is refused before anything starts", "[imagewriter][dest]")
@@ -6820,7 +6854,7 @@ TEST_CASE("An existing public key is read back verbatim", "[imagewriter][sshkey]
 
 TEST_CASE("Generating a key creates a usable pair", "[imagewriter][sshkey]")
 {
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/ssh-keygen")))
+    if (!rpi_test::haveTool(QStringLiteral("ssh-keygen")))
         SKIP("ssh-keygen is not installed");
 
     QTemporaryDir home;
@@ -6842,7 +6876,7 @@ TEST_CASE("Generating a key creates a usable pair", "[imagewriter][sshkey]")
 
 TEST_CASE("Generating a key does not replace one already there", "[imagewriter][sshkey]")
 {
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/ssh-keygen")))
+    if (!rpi_test::haveTool(QStringLiteral("ssh-keygen")))
         SKIP("ssh-keygen is not installed");
 
     QTemporaryDir home;
@@ -6880,6 +6914,18 @@ TEST_CASE("Generating a key does not replace one already there", "[imagewriter][
 
 TEST_CASE("Every timezone offered is one the system knows", "[imagewriter][locale]")
 {
+#ifdef Q_OS_WIN
+    // The oracle here is the host's tz database, and on Windows that is the
+    // wrong one. Windows carries its own smaller set of zones, so genuine IANA
+    // entries the Pi accepts are reported unknown -- Antarctica/Troll is a real
+    // zone, in the list for a real reason, and absent from Windows.
+    //
+    // What the case is actually asserting is that the list matches the database
+    // on the *target*, which runs Linux. Checked wherever the host has the full
+    // IANA data, which is every other platform the suite runs on.
+    SKIP("the Windows tz database is smaller than IANA's, so it cannot judge "
+         "the list the Pi will be given");
+#else
     ImageWriter w(nullptr);
     const QStringList zones = w.getTimezoneList();
     REQUIRE(zones.size() > 100);
@@ -6901,6 +6947,7 @@ TEST_CASE("Every timezone offered is one the system knows", "[imagewriter][local
     }
     INFO("unrecognised: " << examples.join(QStringLiteral(", ")).toStdString());
     CHECK(unknown == 0);
+#endif
 }
 
 TEST_CASE("Every country offered is well formed", "[imagewriter][locale]")
@@ -8253,7 +8300,7 @@ TEST_CASE("A file that cannot be opened is told apart from one that is absent",
 {
     // A permissions problem and a typo need different fixes, and with no
     // dialog to interrogate the wording is all the operator has.
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which can read a file with no permissions");
 
     QTemporaryDir dir;
@@ -8263,7 +8310,8 @@ TEST_CASE("A file that cannot be opened is told apart from one that is absent",
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write("secret");
     f.close();
-    REQUIRE(QFile::setPermissions(path, QFileDevice::Permissions()));
+    rpi_test::DeniedAccess denied(path, rpi_test::DeniedAccess::Read);
+    REQUIRE_DENIED(denied);
 
     QByteArray contents;
     QString error;
@@ -8313,7 +8361,7 @@ bool haveMtools()
 QByteArray readFromImage(const QString &image, const QString &path)
 {
     QProcess p;
-    p.start(QStringLiteral("mcopy"),
+    p.start(rpi_test::toolPath(QStringLiteral("mcopy")),
             {QStringLiteral("-i"), image, QStringLiteral("::") + path,
              QStringLiteral("-")});
     if (!p.waitForFinished(10000))
@@ -8325,7 +8373,7 @@ QByteArray readFromImage(const QString &image, const QString &path)
 QString listImage(const QString &image, const QString &dir = QString())
 {
     QProcess p;
-    p.start(QStringLiteral("mdir"),
+    p.start(rpi_test::toolPath(QStringLiteral("mdir")),
             {QStringLiteral("-i"), image, QStringLiteral("::") + dir});
     if (!p.waitForFinished(10000))
         return {};
@@ -8560,9 +8608,16 @@ public:
 // which is not the branch under test here.
 void layDownImage(const BootPartitionFixture &fx)
 {
+    // Found rather than assumed to be on PATH: MSYS2 and Git for Windows both
+    // ship xz, and neither puts its usr/bin on PATH. Skipped where there is
+    // none, because whether this machine can decompress says nothing about
+    // the customisation check under test.
+    const QString xzPath = rpi_test::toolPath(QStringLiteral("xz"));
+    if (xzPath.isEmpty())
+        SKIP("this machine has no xz, so the image cannot be laid down");
+
     QProcess xz;
-    xz.start(QStringLiteral("xz"),
-             {QStringLiteral("-dc"), fx.sourceUrl().toLocalFile()});
+    xz.start(xzPath, {QStringLiteral("-dc"), fx.sourceUrl().toLocalFile()});
     REQUIRE(xz.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
     const QByteArray image = xz.readAllStandardOutput();
     REQUIRE(image.size() > 0);
@@ -8586,10 +8641,16 @@ void putFileOnCard(const QString &imagePath, const QString &name,
     f.write(contents);
     f.close();
 
-    p.start(QStringLiteral("mcopy"),
+    p.start(rpi_test::toolPath(QStringLiteral("mcopy")),
             {QStringLiteral("-i"), imagePath + QStringLiteral("@@1M"),
              QStringLiteral("-o"), local, QStringLiteral("::") + name});
-    p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+    REQUIRE(p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
+    // Asserted rather than assumed. A silent failure here leaves the card
+    // without the file, and the case then fails on the verification it was
+    // written to exercise -- which reads as the product losing a file it
+    // wrote rather than the fixture never having put one there.
+    INFO("mcopy said: " << QString::fromUtf8(p.readAllStandardError()).toStdString());
+    REQUIRE(p.exitCode() == 0);
 }
 
 } // namespace
@@ -8597,7 +8658,7 @@ void putFileOnCard(const QString &imagePath, const QString &name,
 TEST_CASE("Customisation verification passes when the card matches",
           "[imagewriter][customisation-verify]")
 {
-    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+    if (rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty())
         SKIP("mtools is needed to place a file on the card");
 
     BootPartitionFixture fx;
@@ -8633,7 +8694,7 @@ TEST_CASE("Customisation verification fails when the contents differ",
 {
     // Same name, same length, different bytes: a digest check catches this
     // and a size check does not.
-    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+    if (rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty())
         SKIP("mtools is needed to place a file on the card");
 
     BootPartitionFixture fx;
@@ -8650,7 +8711,7 @@ TEST_CASE("Customisation verification fails when the contents differ",
 TEST_CASE("Customisation verification fails when the length differs",
           "[imagewriter][customisation-verify]")
 {
-    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+    if (rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty())
         SKIP("mtools is needed to place a file on the card");
 
     BootPartitionFixture fx;
@@ -10623,7 +10684,7 @@ TEST_CASE("Sync mode stays on for the rest of the session",
     w.restartWrite(QStringLiteral("first stall"));
     REQUIRE(w._forceSyncMode);
 
-    w.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    w.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     CHECK(w._forceSyncMode);
 }
 
@@ -11056,6 +11117,17 @@ TEST_CASE("A key with no default of its own reads as off",
 #include "settings_permissions.h"
 #include <sys/stat.h>
 
+// secureSettingsFile() narrows the settings file to 0600 and its directory to
+// 0700, and these cases check exactly that. settings_permissions.cpp is
+// #ifdef Q_OS_UNIX end to end, so on Windows the function is a no-op and there
+// are no mode bits to assert against -- access there is an ACL, which an octal
+// literal cannot describe. Securing the file on Windows would mean writing a
+// DACL, which is a feature that does not exist yet rather than a test that
+// needs porting.
+//
+// The empty-path case below stays in the run on every platform: refusing a
+// path that is not a path is not a POSIX question.
+#ifndef _WIN32
 namespace {
 // The mode bits, which QFile::permissions does not give back in a form that
 // can be compared against an octal literal.
@@ -11192,6 +11264,7 @@ TEST_CASE("A symlink at the settings path is not followed",
     CHECK_FALSE(result.created);
     CHECK_FALSE(result.secured);
 }
+#endif // !_WIN32 -- POSIX settings modes
 
 TEST_CASE("An empty path is refused rather than acted on",
           "[imagewriter][settingsperms]")
@@ -11211,6 +11284,12 @@ TEST_CASE("An empty path is refused rather than acted on",
 // applyQuirks() repointing HOME leads -- and leaves it root-owned. The file
 // on the machine this was written on is exactly that: root:root, mode 0664.
 
+// The whole settings-ownership story is POSIX. settings_permissions.cpp is
+// #ifdef Q_OS_UNIX end to end, so on Windows there is no behaviour here to
+// test: no SUDO_UID or PKEXEC_UID to read, no uid to hand a file back to,
+// and no mode bits to narrow it with afterwards. The helpers below reach for
+// lstat(), getuid() and sudo to say so.
+#ifndef _WIN32
 namespace {
 bool havePasswordlessSudoForOwnership()
 {
@@ -11739,6 +11818,7 @@ TEST_CASE("The ownership sweep also reads the account from the environment",
     removeAsRoot(tmp.path());
 }
 #endif // SETTINGS_PERMISSIONS_PROBE_BINARY
+#endif // !_WIN32 -- settings ownership
 
 // ══════════════════════════════════════════════════════════════
 // Whether the secure-boot step is offered.
@@ -14523,7 +14603,7 @@ TEST_CASE("Mounting the source media read-only is refused without privilege",
     // image off a stick cannot alter it. Run without privilege -- which is
     // how Imager runs until the write itself -- mount refuses, and the
     // caller has to see that rather than go on to read an empty directory.
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, where the mount would be attempted for real");
 
     QTemporaryDir dir;
@@ -14749,8 +14829,11 @@ TEST_CASE("The download counter goes where it is pointed, or nowhere",
     // to a working one from inside the test that set it.
     WriteFixture fx;
 
-    SECTION("set but empty reports nothing") {
-        qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray());
+    SECTION("asked for silence, it reports nothing") {
+        // "off", not empty: qputenv with an empty value deletes the variable on
+        // Windows, so the case could not set up the state it was testing and
+        // the writer fell through to the production endpoint.
+        qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray("off"));
         ImageWriter w(nullptr);
         w.setVerifyEnabled(false);
         w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img")), 0,
@@ -14781,7 +14864,7 @@ TEST_CASE("The download counter goes where it is pointed, or nowhere",
     }
 
     // Back to silence for everything after this.
-    qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray());
+    qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray("off"));
 }
 
 #include "connect_device_registrar.h"

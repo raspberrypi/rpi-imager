@@ -23,6 +23,8 @@
 #include <unistd.h>
 #endif
 
+#include "platform_tools.h"
+
 namespace rpi_test {
 
 // True when the caller's permissions are not the limiting factor: root on
@@ -57,9 +59,16 @@ inline bool isPrivileged()
 // step reported the error -- is looking at the wrong failure. Elsewhere the
 // image is assembled in-process with no privilege involved.
 #ifdef _WIN32
-#define REQUIRE_BOOT_IMG_SUPPORT()                                                 if (!rpi_test::isPrivileged())                                                 SKIP("building a boot.img here drives diskpart, which needs elevation")
+#define REQUIRE_BOOT_IMG_SUPPORT() \
+    if (!rpi_test::isPrivileged()) \
+    SKIP("building a boot.img here drives diskpart, which needs elevation")
 #else
-#define REQUIRE_BOOT_IMG_SUPPORT() ((void)0)
+// Linux and macOS format the image with mkfs.vfat, which lives in sbin and
+// is not always installed. Asked here so a case does not have to know which
+// tool its platform reaches for.
+#define REQUIRE_BOOT_IMG_SUPPORT() \
+    if (!rpi_test::haveTool(QStringLiteral("mkfs.vfat"))) \
+    SKIP("mkfs.vfat is not installed, so no boot.img can be built")
 #endif
 
 #endif // RPI_TEST_PLATFORM_PRIVILEGE_H

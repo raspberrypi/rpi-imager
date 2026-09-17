@@ -14,6 +14,7 @@
 #include <QUrl>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QElapsedTimer>
 #include "platformquirks.h"
 
 #include <cmath>
@@ -5167,24 +5168,22 @@ TEST_CASE("The URL stays a single argument", "[platformquirks][openurl]")
 
 namespace {
 
-// A stand-in program that records its arguments, one per line, and exits.
-bool writeArgumentRecorder(const QString& path, const QString& logPath,
-                           int exitCode = 0)
+// The recorder these cases launch: a real executable, built as
+// argument_recorder_probe. It was a shell script, which is unrunnable on
+// Windows, and then briefly a .cmd, which measured cmd.exe rather than the
+// code under test -- cmd splits its own command line, so a URL containing
+// "&id=abc" came back as two arguments whatever launchDetached had done.
+//
+// The log path travels in the environment so that everything on the command
+// line is a value under test.
+QString writeArgumentRecorder(const QString& logPath, int exitCode = 0)
 {
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        return false;
-    f.write("#!/bin/sh\n");
-    // %s and not %%s: QString::arg only replaces %1, so a doubled percent
-    // reaches the shell as a doubled percent and printf writes a literal
-    // "%s" for every argument.
-    f.write(QStringLiteral("for a in \"$@\"; do printf '%s\\n' \"$a\" >> '%1'; done\n")
-                .arg(logPath).toUtf8());
-    f.write(QStringLiteral("exit %1\n").arg(exitCode).toUtf8());
-    f.close();
-    return QFile::setPermissions(path,
-                                 QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                 QFileDevice::ExeOwner);
+    qputenv("RPI_RECORDER_LOG", logPath.toLocal8Bit());
+    if (exitCode != 0)
+        qputenv("RPI_RECORDER_EXIT", QByteArray::number(exitCode));
+    else
+        qunsetenv("RPI_RECORDER_EXIT");
+    return QStringLiteral(ARGUMENT_RECORDER_BINARY);
 }
 
 // What the recorder was told, once it has had a moment to run. The launch is
@@ -5214,13 +5213,13 @@ TEST_CASE("A program that starts is reported as started, with its arguments",
 {
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
-    const QString program = dir.filePath(QStringLiteral("recorder"));
     const QString log = dir.filePath(QStringLiteral("args.txt"));
-    REQUIRE(writeArgumentRecorder(program, log));
+    const QString recorder = writeArgumentRecorder(log);
+    REQUIRE_FALSE(recorder.isEmpty());
 
     const QString url =
         QStringLiteral("https://connect.raspberrypi.com/sign-in?next=%2Fdevices&id=abc");
-    CHECK(PlatformQuirks::launchDetached(program, QStringList() << url));
+    CHECK(PlatformQuirks::launchDetached(recorder, QStringList() << url));
 
     // One argument, whole. Joined into a command line for something else to
     // split again, a URL with an ampersand in it arrives cut in two.
@@ -5237,13 +5236,13 @@ TEST_CASE("Arguments are passed one at a time, not run together",
     // browser a single nonsensical argument.
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
-    const QString program = dir.filePath(QStringLiteral("recorder"));
     const QString log = dir.filePath(QStringLiteral("args.txt"));
-    REQUIRE(writeArgumentRecorder(program, log));
+    const QString recorder = writeArgumentRecorder(log);
+    REQUIRE_FALSE(recorder.isEmpty());
 
     const QStringList args{QStringLiteral("--user"), QStringLiteral("a user with spaces"),
                            QStringLiteral("xdg-open"), QStringLiteral("https://example.invalid/")};
-    CHECK(PlatformQuirks::launchDetached(program, args));
+    CHECK(PlatformQuirks::launchDetached(recorder, args));
 
     const QStringList got = recordedArguments(log);
     REQUIRE(got.size() == args.size());
@@ -5288,6 +5287,14 @@ TEST_CASE("A program that cannot be executed is reported too",
 TEST_CASE("The browser outlives the call and is nobody's child",
           "[platformquirks][launch]")
 {
+#ifdef _WIN32
+    // POSIX end to end: the recorder below is a #!/bin/sh script calling
+    // /bin/sleep, and the claim being tested -- that the grandchild is
+    // reparented to init and leaves nothing to reap -- describes a process
+    // model Windows does not have. CreateProcess leaves no zombie to begin
+    // with, so there is no Windows counterpart to assert.
+    SKIP("the double-fork orphan model is POSIX-only");
+#else
     // Detached means detached: the application must not be waiting on the
     // browser, and must not leave a zombie behind when it exits without
     // reaping one. The double fork is what arranges that, and a browser is
@@ -5324,6 +5331,7 @@ TEST_CASE("The browser outlives the call and is nobody's child",
 
     // It really did run, a second later, with nobody waiting.
     CHECK_FALSE(recordedArguments(log).isEmpty());
+#endif
 }
 
 #ifdef UNMOUNT_PROBE_BINARY

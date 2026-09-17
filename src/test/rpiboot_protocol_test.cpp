@@ -10,6 +10,8 @@
 #include <QFileInfo>
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+
+#include "platform_tools.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "rpiboot/test/mock_usb_transport.h"
@@ -686,8 +688,8 @@ TEST_CASE("A sideload reports its progress the whole way through", "[rpiboot][pr
 
 TEST_CASE("A bootfiles archive is preferred and disk is the fallback", "[rpiboot][protocol]")
 {
-    const QString tar = QFileInfo::exists(QStringLiteral("/usr/bin/tar"))
-                            ? QStringLiteral("/usr/bin/tar")
+    const QString tar = rpi_test::haveTool(QStringLiteral("tar"))
+                            ? rpi_test::toolPath(QStringLiteral("tar"))
                             : QStringLiteral("/bin/tar");
     if (!QFileInfo::exists(tar))
         SKIP("tar is not installed, so no bootfiles archive can be built");
@@ -708,9 +710,14 @@ TEST_CASE("A bootfiles archive is preferred and disk is the fallback", "[rpiboot
         std::ofstream f(staging / "gadget.bin", std::ios::binary);
         f.write(fromArchive.data(), static_cast<std::streamsize>(fromArchive.size()));
     }
+    // -f relative to the working directory: GNU tar reads a colon before the
+    // first slash as the host:path form it once used for remote archives, so
+    // an absolute Windows path sends it looking for a host called "C". -C
+    // takes one safely, that argument not being parsed the same way.
     QProcess tarProc;
-    tarProc.start(tar, {QStringLiteral("-cf"),
-                        QString::fromStdString((fw.path() / "fastboot" / "bootfiles.bin").string()),
+    tarProc.setWorkingDirectory(
+        QString::fromStdString((fw.path() / "fastboot").string()));
+    tarProc.start(tar, {QStringLiteral("-cf"), QStringLiteral("bootfiles.bin"),
                         QStringLiteral("-C"), QString::fromStdString(staging.string()),
                         QStringLiteral("gadget.bin")});
     tarProc.waitForFinished(30000);

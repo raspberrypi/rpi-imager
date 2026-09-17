@@ -50,7 +50,7 @@ bool haveTool(const QString &path)
     return QFileInfo::exists(path);
 }
 
-bool haveOpenssl() { return haveTool(QStringLiteral("/usr/bin/openssl")); }
+bool haveOpenssl() { return haveTool(rpi_test::toolPath(QStringLiteral("openssl"))); }
 
 // A scratch directory that removes itself.
 class ScratchDir
@@ -79,7 +79,7 @@ private:
 bool generateRsaKey(const QString &path)
 {
     QProcess openssl;
-    openssl.start(QStringLiteral("/usr/bin/openssl"),
+    openssl.start(rpi_test::toolPath(QStringLiteral("openssl")),
                   {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
                    QStringLiteral("2048")});
     openssl.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
@@ -451,7 +451,7 @@ QStringList bootSigLines(const QString &path)
 QByteArray opensslSha256Hex(const QString &path)
 {
     QProcess p;
-    p.start(QStringLiteral("/usr/bin/openssl"),
+    p.start(rpi_test::toolPath(QStringLiteral("openssl")),
             {QStringLiteral("dgst"), QStringLiteral("-sha256"),
              QStringLiteral("-hex"), path});
     if (!p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
@@ -466,7 +466,7 @@ bool opensslVerify(const QString &keyPath, const QString &imgPath,
 {
     const QString pub = scratch + QStringLiteral("/pub.pem");
     QProcess extract;
-    extract.start(QStringLiteral("/usr/bin/openssl"),
+    extract.start(rpi_test::toolPath(QStringLiteral("openssl")),
                   {QStringLiteral("rsa"), QStringLiteral("-in"), keyPath,
                    QStringLiteral("-pubout"), QStringLiteral("-out"), pub});
     if (!extract.waitForFinished(rpi_test::kFixtureProcessTimeoutMs)
@@ -481,7 +481,7 @@ bool opensslVerify(const QString &keyPath, const QString &imgPath,
     sf.close();
 
     QProcess verify;
-    verify.start(QStringLiteral("/usr/bin/openssl"),
+    verify.start(rpi_test::toolPath(QStringLiteral("openssl")),
                  {QStringLiteral("dgst"), QStringLiteral("-sha256"),
                   QStringLiteral("-verify"), pub,
                   QStringLiteral("-signature"), sigBin, imgPath});
@@ -803,13 +803,13 @@ namespace {
 
 bool haveMtools()
 {
-    return !QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty();
+    return !rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty();
 }
 
 QByteArray readFromImg(const QString &image, const QString &path)
 {
     QProcess p;
-    p.start(QStringLiteral("mcopy"),
+    p.start(rpi_test::toolPath(QStringLiteral("mcopy")),
             {QStringLiteral("-i"), image, QStringLiteral("::") + path,
              QStringLiteral("-")});
     if (!p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))

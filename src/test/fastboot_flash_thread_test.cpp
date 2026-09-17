@@ -41,6 +41,8 @@
 #include "fixture_process.h"
 #include "platform_tools.h"
 #include <QCoreApplication>
+
+#include "test_scratch.h"
 #include <QProcess>
 #include <QSettings>
 #include <QString>
@@ -481,6 +483,17 @@ int main(int argc, char* argv[])
 {
     int argcCopy = argc;
     QCoreApplication app(argcCopy, argv);
+    // Every other binary that touches QSettings does this, and this one needs
+    // it for the same reason with an extra edge: the boot-order cases put the
+    // signing key in QSettings and the code under test reads it back. With no
+    // organisation or application name the store has no real home -- on Unix
+    // that still lands in a file and round-trips by luck, but on Windows it
+    // maps to a degenerate registry path, the key never came back, and the
+    // update aborted with "no usable secureboot_rsa_key in settings".
+    //
+    // It also keeps the run out of the developer's own settings, which is what
+    // the helper is for.
+    rpi_imager_test::useScratchPaths(QStringLiteral("fastboot_flash_thread_test"));
     return Catch::Session().run(argc, argv);
 }
 
@@ -2214,7 +2227,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
                         QString::number(status), QString::fromUtf8(body), _hits});
         if (!_process.waitForStarted(10000))
@@ -2268,7 +2281,7 @@ void queueConnectDevice(MockUsbTransport &mock)
 
 TEST_CASE("A flashed device is registered with Connect", "[fastboot][connect]")
 {
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/python3")))
+    if (!rpi_test::havePython())
         SKIP("python3 is not installed, so no local API server can be started");
 
     ConnectApiStub api(201, R"({"id":"device-identity-0001"})");
@@ -2301,7 +2314,7 @@ TEST_CASE("A flashed device is registered with Connect", "[fastboot][connect]")
 
 TEST_CASE("A Connect registration that fails does not fail the flash", "[fastboot][connect]")
 {
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/python3")))
+    if (!rpi_test::havePython())
         SKIP("python3 is not installed, so no local API server can be started");
 
     // The image is already on the device by this point. A Connect outage must
