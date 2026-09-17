@@ -14,7 +14,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "platform_paths.h"
+#include "platform_privilege.h"
 #include "secureboot.h"
+
+
 #include "secureboot_crypto.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
@@ -292,6 +296,7 @@ TEST_CASE("SecureBoot builds a boot.img from a file map", "[secureboot]")
     files.insert(QStringLiteral("cmdline.txt"), "console=serial0,115200\n");
     files.insert(QStringLiteral("start4.elf"), QByteArray(4096, '\x11'));
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
 
     QFileInfo info(out);
@@ -319,7 +324,7 @@ TEST_CASE("SecureBoot refuses to write a boot.img it cannot open", "[secureboot]
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
 
     CHECK_FALSE(SecureBoot::createBootImg(
-        files, QStringLiteral("/nonexistent-rpi-imager-dir/deeper/boot.img")));
+        files, rpi_test::unwritablePath(QStringLiteral("boot.img"))));
 }
 
 TEST_CASE("SecureBoot signs a boot.img it just built", "[secureboot][crypto]")
@@ -333,6 +338,7 @@ TEST_CASE("SecureBoot signs a boot.img it just built", "[secureboot][crypto]")
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
 
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
@@ -366,6 +372,7 @@ TEST_CASE("SecureBoot boot signature fails on a missing key", "[secureboot][cryp
     const QString img = scratch.filePath(QStringLiteral("boot.img"));
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
 
     CHECK_FALSE(SecureBoot::generateBootSig(img, QStringLiteral("/nonexistent/key.pem"),
@@ -497,6 +504,7 @@ TEST_CASE("boot.sig has the three lines the bootloader reads",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -524,6 +532,7 @@ TEST_CASE("The digest in boot.sig is the digest of the image",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -547,6 +556,7 @@ TEST_CASE("The signature in boot.sig verifies against the key",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -576,7 +586,9 @@ TEST_CASE("A different image gets a different signature",
     QMap<QString, QByteArray> a, b;
     a.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
     b.insert(QStringLiteral("config.txt"), "arm_64bit=0\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(a, imgA));
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(b, imgB));
     REQUIRE(SecureBoot::generateBootSig(imgA, key, sigA));
     REQUIRE(SecureBoot::generateBootSig(imgB, key, sigB));
@@ -607,7 +619,9 @@ TEST_CASE("A signature made for one image does not verify another",
     QMap<QString, QByteArray> a, b;
     a.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
     b.insert(QStringLiteral("config.txt"), "tampered\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(a, imgA));
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(b, imgB));
     REQUIRE(SecureBoot::generateBootSig(imgA, key, sigA));
 
@@ -631,6 +645,7 @@ TEST_CASE("The timestamp in boot.sig is a plausible time",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "x\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -818,6 +833,7 @@ TEST_CASE("The files put in a boot.img are in the boot.img",
     files.insert(QStringLiteral("cmdline.txt"), "console=serial0,115200\n");
     files.insert(QStringLiteral("start4.elf"), QByteArray(4096, '\x11'));
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
 
     CHECK(readFromImg(out, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
@@ -842,6 +858,7 @@ TEST_CASE("A nested firmware tree survives into the boot.img",
     files.insert(QStringLiteral("overlays/vc4-kms-v3d.dtbo"), "OVERLAY");
     files.insert(QStringLiteral("a/b/c/deep.bin"), "DEEP");
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
 
     CHECK(readFromImg(out, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
@@ -864,6 +881,7 @@ TEST_CASE("A boot.img is at least the FAT32 minimum", "[secureboot][bootimg-cont
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "x\n");
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
     CHECK(QFileInfo(out).size() >= 33 * 1024 * 1024);
 }
@@ -882,6 +900,7 @@ TEST_CASE("A boot.img grows to hold what is put in it",
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("big.bin"), QByteArray(48 * 1024 * 1024, '\x7e'));
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
     const qint64 size = QFileInfo(out).size();
     INFO("image size: " << size);

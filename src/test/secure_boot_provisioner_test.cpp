@@ -14,6 +14,8 @@
 
 #include "rpiboot/test/mock_usb_transport.h"
 #include <atomic>
+#include "platform_paths.h"
+#include "platform_permissions.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
@@ -155,8 +157,10 @@ TEST_CASE("SecureBootProvisioner generates a usable key pair", "[secureboot-otp]
 TEST_CASE("SecureBootProvisioner key generation fails on an unwritable path",
           "[secureboot-otp]")
 {
-    const fs::path priv{"/nonexistent-rpi-imager-dir/deeper/private.pem"};
-    const fs::path pub{"/nonexistent-rpi-imager-dir/deeper/public.pem"};
+    const fs::path priv{
+        rpi_test::unwritablePath(QStringLiteral("private.pem")).toStdString()};
+    const fs::path pub{
+        rpi_test::unwritablePath(QStringLiteral("public.pem")).toStdString()};
 
     // Reporting success without writing a key would leave the caller about
     // to fuse a hash of nothing.
@@ -1260,17 +1264,13 @@ TEST_CASE("A recovery image that cannot be written down is reported",
     REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
 
     // Readable and searchable, but nothing new may be created in it.
-    REQUIRE(QFile::setPermissions(QString::fromStdString(recovery.string()),
-                                  QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+    rpi_test::DeniedAccess denied(QString::fromStdString(recovery.string()),
+                                  rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     std::string err;
     const bool ok = SecureBootProvisioner::prepareSignedRecovery(
         ChipGeneration::BCM2711, recovery, key, /*counterSignFirmware=*/false, err);
-
-    // Put it back before any assertion can leave the directory unremovable.
-    QFile::setPermissions(QString::fromStdString(recovery.string()),
-                          QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                          QFileDevice::ExeOwner);
 
     INFO("error: " << err);
     CHECK_FALSE(ok);

@@ -73,6 +73,28 @@ bool copyTree(const QString &from, const QString &to)
     return true;
 }
 
+// The generated module holds only what qt_add_qml_module put there. The fonts
+// and icons the UI loads by relative URL come from src/qml.qrc under the
+// matching "/qt/qml/RpiImager" prefix, so in the application they sit beside
+// Style.qml in the resource system and resolve.
+//
+// Stripping the `prefer` line above moves the module onto disk and leaves them
+// behind, silently: Style.qml's FontLoaders fail and QML falls back to whatever
+// the platform offers. On Linux and macOS that is a system font, so the suite
+// merely measured DejaVu rather than Roboto. On Windows the offscreen plugin
+// offers nothing, so every glyph became a .notdef box.
+bool copyQrcAssets(const QString &dest)
+{
+    for (const QString &sub : {QStringLiteral("fonts"), QStringLiteral("icons")}) {
+        const QString from = QStringLiteral(IMAGER_QML_ASSET_DIR) + QLatin1Char('/') + sub;
+        if (!QDir(from).exists())
+            continue;
+        if (!copyTree(from, dest + QLatin1Char('/') + sub))
+            return false;
+    }
+    return true;
+}
+
 // Lives for the whole run: the engine resolves imports out of it lazily.
 QTemporaryDir *importRoot()
 {
@@ -92,6 +114,8 @@ bool prepareModule()
 
         const QString dest = importRoot()->path() + QStringLiteral("/RpiImager");
         if (!copyTree(moduleDir(), dest))
+            return false;
+        if (!copyQrcAssets(dest))
             return false;
 
         QFile in(dest + QStringLiteral("/qmldir"));
