@@ -17,6 +17,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include "acceleratedcryptographichash.h"
 
@@ -124,3 +125,123 @@ TEST_CASE("Asking for an algorithm that is not implemented is refused", "[hash]"
     CHECK_THROWS(AcceleratedCryptographicHash(QCryptographicHash::Sha1));
     CHECK_THROWS(AcceleratedCryptographicHash(QCryptographicHash::Md5));
 }
+
+#if defined(Q_OS_WIN) && defined(ACCELERATED_HASH_ENABLE_TEST_API)
+TEST_CASE("Releasing the backend twice does not corrupt the heap",
+          "[hash][windows]")
+{
+    // Each of the eight CNG error paths releases and returns, and the
+    // destructor releases again. Release did not clear what it had given
+    // back, so one refusal from the provider meant HeapFree twice on the same
+    // two blocks and a second close of both handles -- heap corruption on the
+    // way out of an object that had only failed to hash.
+    //
+    // A double free does not return a value to check. Either this runs to the
+    // end or the process does not survive it.
+    AcceleratedCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(QByteArrayLiteral("something to allocate the buffers for"));
+    CHECK(hash.result().size() == 32);
+
+    CHECK_NOTHROW(hash.releaseTwiceForTest());
+    SUCCEED("released twice and the heap is intact");
+}
+#endif
+
+#if defined(Q_OS_WIN) && defined(ACCELERATED_HASH_ENABLE_TEST_API)
+
+// ── what happens when the provider refuses ──────────────────────────────────
+//
+// Six CNG calls stand between a caller and a hash, and every one of them can
+// fail: the provider is a system component, and on a locked-down or an
+// FIPS-configured machine it does. Until these could be provoked none of the
+// six error paths had ever run, and they were wrong -- each released the
+// buffers that the destructor then released again.
+//
+// What is asked of each is the same: say so, hand back nothing, and come
+// apart cleanly. A hash that quietly returned a wrong answer here would be
+// written to the card and verified against itself.
+
+namespace {
+
+// Restores the injection whatever the case does, so one failure does not
+// leak into the next case.
+struct CngFailure
+{
+    explicit CngFailure(int ordinal)
+    {
+        AcceleratedCryptographicHash::failNextCngCallForTest(ordinal);
+    }
+    ~CngFailure() { AcceleratedCryptographicHash::failNextCngCallForTest(-1); }
+    CngFailure(const CngFailure &) = delete;
+    CngFailure &operator=(const CngFailure &) = delete;
+};
+
+} // namespace
+
+TEST_CASE("A hash refused at any stage yields nothing and unwinds cleanly",
+          "[hash][windows][cng]")
+{
+    // Walked one call at a time. Construction takes four, addData one and
+    // result one, so this covers every refusal the provider can give.
+    const int ordinal = GENERATE(0, 1, 2, 3, 4, 5);
+    INFO("failing CNG call number " << ordinal);
+
+    CngFailure fail(ordinal);
+
+    // Construction must not throw whichever call is refused: the caller is a
+    // write already under way, and an exception here would come out of a
+    // thread with no handler for it.
+    CHECK_NOTHROW([&] {
+        AcceleratedCryptographicHash hash(QCryptographicHash::Sha256);
+        hash.addData(QByteArrayLiteral("payload that will not be hashed"));
+        const QByteArray result = hash.result();
+        // Either the hash is right or there is none. A short or truncated
+        // digest written to the card would verify against itself and pass.
+        CHECK((result.isEmpty() || result.size() == 32));
+    }());
+}
+
+TEST_CASE("A refusal does not stop the object being destroyed",
+          "[hash][windows][cng]")
+{
+    // The case the double free was in: an error path releases, and then the
+    // destructor releases again on the way out of the scope.
+    const int ordinal = GENERATE(0, 1, 2, 3, 4, 5);
+    INFO("failing CNG call number " << ordinal);
+    CngFailure fail(ordinal);
+
+    {
+        AcceleratedCryptographicHash hash(QCryptographicHash::Sha256);
+        hash.addData(QByteArrayLiteral("x"));
+        (void)hash.result();
+    }
+    SUCCEED("destroyed after a refusal without corrupting the heap");
+}
+
+TEST_CASE("The injection really does refuse the call it names",
+          "[hash][windows][cng]")
+{
+    // Guards the two cases above. Both accept an empty result OR a correct
+    // one, because which calls have already happened decides what is
+    // salvageable -- so neither would notice an injection that never fired.
+    // Refusing the very first call cannot leave a usable hash behind.
+    CngFailure fail(0);
+    AcceleratedCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(QByteArrayLiteral("abc"));
+    CHECK(hash.result().isEmpty());
+    CHECK(AcceleratedCryptographicHash::cngCallCountForTest() > 0);
+}
+
+TEST_CASE("With nothing injected the hash is still correct",
+          "[hash][windows][cng]")
+{
+    // The injection is off by default, and has to stay off: a seam that
+    // leaked into an ordinary run would corrupt every hash the product takes.
+    AcceleratedCryptographicHash::failNextCngCallForTest(-1);
+    AcceleratedCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(QByteArrayLiteral("abc"));
+    CHECK(hash.result()
+          == QCryptographicHash::hash(QByteArrayLiteral("abc"),
+                                      QCryptographicHash::Sha256));
+}
+#endif

@@ -279,3 +279,77 @@ TEST_CASE("A path that is not a block device reports nothing",
 }
 
 #endif // __linux__
+
+// ── capping the write buffer to what the device takes ───────────────────────
+//
+// A buffer larger than the device's maximum transfer is split by the OS into
+// sub-requests, which is the queue pressure the cap exists to avoid (#1592).
+// The alignment is the part that bites: the write is made with
+// FILE_FLAG_NO_BUFFERING on Windows and O_DIRECT on Linux, and both refuse a
+// length that is not a whole number of pages -- so a cap that is not aligned
+// down trades a slow write for one that fails outright.
+//
+// None of this was covered. It needs a device that reports a small maximum,
+// which no test machine here has, so the arithmetic was unreachable while
+// living inside the constructor.
+
+TEST_CASE("A device that takes less than was asked for caps the buffer",
+          "[device_io_limits][buffer]")
+{
+    // 256 KB device maximum against a 1 MB hint, 4 KB pages.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 256 * 1024, 4096)
+          == 256 * 1024u);
+}
+
+TEST_CASE("A device that takes more than was asked for changes nothing",
+          "[device_io_limits][buffer]")
+{
+    CHECK(rpi_imager::CapWriteBufferToDevice(64 * 1024, 1024 * 1024, 4096)
+          == 64 * 1024u);
+    // And exactly equal is not a cap either.
+    CHECK(rpi_imager::CapWriteBufferToDevice(64 * 1024, 64 * 1024, 4096)
+          == 64 * 1024u);
+}
+
+TEST_CASE("A device reporting no maximum leaves the hint alone",
+          "[device_io_limits][buffer]")
+{
+    // Which is what every platform answers when it cannot find out.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 0, 4096)
+          == 1024 * 1024u);
+}
+
+TEST_CASE("The cap is aligned down to a whole number of pages",
+          "[device_io_limits][buffer]")
+{
+    // 100000 is not a multiple of 4096; 98304 is the page below it. Handing
+    // the unaligned figure to a no-buffering write is what fails.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 100000, 4096) == 98304u);
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 100000, 4096) % 4096 == 0);
+}
+
+TEST_CASE("A maximum below one page is refused rather than rounded to nothing",
+          "[device_io_limits][buffer]")
+{
+    // Aligning 2048 down to a 4096 page leaves zero, and a zero-length buffer
+    // is not a smaller write, it is no write at all.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 2048, 4096)
+          == 1024 * 1024u);
+    // Exactly one page is the smallest cap that means anything.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 4096, 4096) == 4096u);
+}
+
+TEST_CASE("A page size of zero does not divide by it",
+          "[device_io_limits][buffer]")
+{
+    // getSystemPageSize() should never answer zero, and the whole write path
+    // is built in this constructor -- so if it ever did, the crash would be
+    // before the first byte and with nothing said.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 4096, 0) == 1024 * 1024u);
+}
+
+TEST_CASE("A large page size still caps sensibly", "[device_io_limits][buffer]")
+{
+    // 64 KB pages, as some systems use.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 200000, 65536) == 196608u);
+}

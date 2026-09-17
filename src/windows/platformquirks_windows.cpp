@@ -67,6 +67,24 @@ namespace {
 
 namespace PlatformQuirks {
 
+// Whether an adapter name is one of NVIDIA's.
+//
+// The answer decides whether QSG_RHI_PREFER_SOFTWARE_RENDERER is set, so a
+// name read wrongly is either a window that does not draw or a machine put on
+// the software renderer for nothing. Matched on the marketing names as well as
+// the vendor, because that is how the controller reports itself.
+static bool isNvidiaAdapterName(const std::string &deviceName) {
+    std::string lower = deviceName;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+
+    for (const char *needle : {"nvidia", "geforce", "quadro", "tesla", "rtx", "gtx"}) {
+        if (lower.find(needle) != std::string::npos)
+            return true;
+    }
+    return false;
+}
+
 static bool hasNvidiaGraphicsCard() {
     HRESULT hres;
     
@@ -187,17 +205,7 @@ static bool hasNvidiaGraphicsCard() {
             std::string deviceName(len - 1, 0);
             WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, -1, &deviceName[0], len, nullptr, nullptr);
             
-            // Convert to lowercase for case-insensitive comparison
-            std::string lowerDeviceName = deviceName;
-            std::transform(lowerDeviceName.begin(), lowerDeviceName.end(), lowerDeviceName.begin(), ::tolower);
-            
-            // Check if this is an NVIDIA device (case-insensitive)
-            if (lowerDeviceName.find("nvidia") != std::string::npos || 
-                lowerDeviceName.find("geforce") != std::string::npos ||
-                lowerDeviceName.find("quadro") != std::string::npos ||
-                lowerDeviceName.find("tesla") != std::string::npos ||
-                lowerDeviceName.find("rtx") != std::string::npos ||
-                lowerDeviceName.find("gtx") != std::string::npos) {
+            if (isNvidiaAdapterName(deviceName)) {
                 foundNvidia = true;
             }
         }
@@ -849,6 +857,23 @@ DiskResult ejectDisk(const QString& device) {
 namespace TestAPI {
     int parseDeviceNumber(const QString& device) {
         return parseDeviceNumberImpl(device);
+    }
+    // What the platform string becomes before QGuiApplication reads it. The
+    // rule it enforces is what keeps uppercase button text legible (#1648),
+    // and it has to survive whatever the user already had in QT_QPA_PLATFORM.
+    QByteArray freeTypePlatformArgs() {
+        return ensureWindowsFreeTypeFontEngine();
+    }
+    QString fontEngineFromPlatformArgs(const QByteArray &platformArgs) {
+        return windowsFontEngineFromPlatformArgs(platformArgs);
+    }
+    bool nvidiaAdapterName(const std::string &deviceName) {
+        return isNvidiaAdapterName(deviceName);
+    }
+    // The WMI query itself. Read-only, and the answer depends on the machine,
+    // so a case can only ask that it answers rather than what it answers.
+    bool queryNvidiaPresent() {
+        return hasNvidiaGraphicsCard();
     }
 }
 #endif

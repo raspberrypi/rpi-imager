@@ -7,6 +7,8 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <strsafe.h>
+
+#include "callback_relay_url.h"
 #pragma comment(lib, "ws2_32.lib")
 
 #ifndef RPI_IMAGER_PORT
@@ -130,74 +132,15 @@ static void start_imager_with_url(const wchar_t* urlW)
 
 int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR cmdLine, int)
 {
-    // Windows passes the URL as %1, which appears in cmdLine for ShellExecute-based calls.
-    const wchar_t* urlW = cmdLine;
-    
-    // If cmdLine is empty, parse GetCommandLineW() to extract first argument
-    if (!urlW || !*urlW) {
-        urlW = GetCommandLineW();
-        // Skip executable path (handles quoted and unquoted paths)
-        if (urlW && *urlW == L'"') {
-            urlW = wcschr(urlW + 1, L'"');
-            if (urlW) urlW++;
-        } else if (urlW) {
-            while (*urlW && *urlW != L' ') urlW++;
-        }
-        // Skip spaces to get to first argument
-        while (urlW && *urlW == L' ') urlW++;
-    }
-
-    if (!urlW || !*urlW) return 0;
-
-    // Trim surrounding quotes if present and copy to buffer for safety
+    // Both decisions live in callback_relay_url.h, where a test can reach
+    // them: this is the entry point for a string an outside application asked
+    // Windows to open.
     wchar_t urlBuf[2048];
-    if (*urlW == L'"') {
-        // Copy and strip quotes
-        const wchar_t* start = urlW + 1;
-        const wchar_t* end = wcsrchr(start, L'"');
-        if (end) {
-            size_t len = end - start;
-            if (len > 0 && len < _countof(urlBuf)) {
-                wcsncpy_s(urlBuf, _countof(urlBuf), start, len);
-                urlBuf[len] = L'\0';
-                urlW = urlBuf;
-            } else {
-                return 0; // URL too long or empty after quote stripping
-            }
-        } else {
-            return 0; // Malformed: opening quote but no closing quote
-        }
-    } else {
-        // Not quoted - copy to buffer for consistent handling and length validation
-        size_t len = wcsnlen_s(urlW, _countof(urlBuf));
-        if (len == 0 || len >= _countof(urlBuf)) {
-            return 0; // Empty or too long
-        }
-        wcsncpy_s(urlBuf, _countof(urlBuf), urlW, len);
-        urlBuf[len] = L'\0';
-        urlW = urlBuf;
-    }
-
-    // Validate: must start with rpi-imager://
-    if (wcsncmp(urlW, L"rpi-imager://", 13) != 0) {
+    if (!rpi_relay::extractUrl(cmdLine, GetCommandLineW(), urlBuf, _countof(urlBuf)))
         return 0;
-    }
-
-    // Additional validation: check for reasonable URL length (after protocol)
-    size_t totalLen = wcslen(urlW);
-    if (totalLen < 14 || totalLen > 2000) { // min: rpi-imager://x, max: reasonable limit
+    if (!rpi_relay::isAcceptableUrl(urlBuf))
         return 0;
-    }
-
-    // Validate: no control characters or unexpected chars in URL
-    for (size_t i = 0; i < totalLen; i++) {
-        wchar_t c = urlW[i];
-        // Allow only printable ASCII, common URL chars, and some UTF-8
-        // Block control chars (0x00-0x1F, 0x7F), and dangerous shell chars if any slip through
-        if (c < 0x20 || c == 0x7F) {
-            return 0; // Control character detected
-        }
-    }
+    const wchar_t *urlW = urlBuf;
 
     int r = send_url_over_tcp_utf8(urlW);
 #if RPI_IMAGER_START_ON_FAIL

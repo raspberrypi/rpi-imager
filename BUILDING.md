@@ -41,6 +41,32 @@ This will build and install the version of Qt preferred for Raspberry Pi Imager 
 - Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
 - It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
 
+#### Dependencies for the test suite
+
+The suite itself needs nothing beyond the build, but a good many cases build
+their fixtures with ordinary command-line tools and skip when they are absent.
+Without these the suite still passes; it just covers a good deal less, and
+says so in each skip.
+
+- **Git for Windows** supplies a POSIX userland: `tar`, `gzip`, `bzip2`,
+  `openssl`, `ssh-keygen`, `dd`, `truncate`. Its `usrin` is deliberately not
+  on PATH -- it would shadow Windows' own `find.exe` and `sort.exe` -- so the
+  suite looks there directly.
+- **MSYS2** supplies the rest: `xz`, `zstd`, and `mtools` (`mformat`, `mcopy`),
+  which is the only FAT formatter available here since dosfstools has no
+  Windows build. Install with `pacman -S mingw-w64-x86_64-mtools`.
+- **Python 3** with **PyYAML** (`pip install PyYAML`) parses the generated
+  cloud-init documents, and stands up the local HTTP servers several cases
+  fetch from. The interpreter is called `python` here rather than `python3`.
+
+Run the suite with `ctest --test-dir <build dir> -j4`.
+
+Some cases need an elevated shell: building a boot image drives `diskpart`,
+and the imager's own manifest asks for administrator, so nothing can start the
+shipping binary without it. Run an elevated pass **as well as** an ordinary
+one, not instead of it -- an elevated token reads straight through a deny ACE,
+so the cases about refused permissions skip when it holds.
+
 #### Building
 
 Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or a derivative).

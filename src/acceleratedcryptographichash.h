@@ -25,6 +25,23 @@ public:
     void addData(const QByteArray &data);
     QByteArray result() const;
     void reset();
+
+#ifdef ACCELERATED_HASH_ENABLE_TEST_API
+    // Release the backend's resources twice over.
+    //
+    // Every CNG error path releases and returns, and the destructor releases
+    // again, so a single hardware failure used to free the same two heap
+    // blocks twice. The failures themselves cannot be provoked from a test --
+    // they are the card's crypto provider refusing -- but the sequence they
+    // produce can be, and that is where the damage was.
+    void releaseTwiceForTest();
+
+    // Make the nth CNG call of the next operation report failure, counting
+    // from zero, or -1 to stop. There are six, spread across construction,
+    // addData() and result().
+    static void failNextCngCallForTest(int ordinal);
+    static int cngCallCountForTest();
+#endif
 };
 
 #endif // ACCELERATEDCRYPTOGRAPHICHASH_H

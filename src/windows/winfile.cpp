@@ -142,7 +142,9 @@ qint64 WinFile::pos()
     {
         _lasterrorcode = GetLastError();
         _lasterror = qt_error_string();
-        return 0;
+        // -1, not 0: nought is a legitimate position, so answering it here
+        // would be indistinguishable from a file open at its start.
+        return -1;
     }
 
     return qint64(current.QuadPart);

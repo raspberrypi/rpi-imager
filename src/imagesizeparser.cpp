@@ -13,6 +13,8 @@
 #include <QFile>
 #include <QFileInfo>
 
+#include <cstdio>
+
 #include <archive.h>
 #include <archive_entry.h>
 #include <lzma.h>
@@ -194,23 +196,103 @@ quint64 parseZstd(const QString &path)
     return fcs;
 }
 
+// Feeding libarchive from a QFile rather than handing it the path.
+//
+// archive_read_open_filename takes a narrow path, and on Windows reads it in
+// the active code page -- so a name outside that page names a file libarchive
+// cannot find, whatever encoding we hand it. QFile::encodeName gives UTF-8,
+// which is right everywhere else and wrong there.
+//
+// A failed open is not reported as a failure by the caller: it reads as an
+// archive holding nothing, which loses the "image too big for this card"
+// refusal and makes a multi-file archive look like a single image. So an
+// image under a Cyrillic or CJK username -- an ordinary thing to have -- was
+// written as though it were one file.
+//
+// QFile opens by wide path on Windows and by bytes elsewhere, so reading
+// through it is correct on all three and needs no platform of its own.
+namespace {
+
+struct QFileSource {
+    QFile file;
+    QByteArray buffer;
+};
+
+la_ssize_t readFromQFile(struct archive *, void *data, const void **buff)
+{
+    auto *src = static_cast<QFileSource *>(data);
+    const qint64 n = src->file.read(src->buffer.data(), src->buffer.size());
+    if (n < 0)
+        return -1;
+    *buff = src->buffer.constData();
+    return static_cast<la_ssize_t>(n);
+}
+
+int closeQFile(struct archive *, void *data)
+{
+    static_cast<QFileSource *>(data)->file.close();
+    return ARCHIVE_OK;
+}
+
+// Named rather than left null: the file is already open by the time
+// libarchive asks, and a null open callback is not accepted by every version.
+int openQFile(struct archive *, void *)
+{
+    return ARCHIVE_OK;
+}
+
+// Without this libarchive reads the archive as a stream, and a zip read that
+// way reports nought for any entry whose size lives in the trailing data
+// descriptor rather than the local header. The file count then comes back as
+// zero for an archive that plainly holds something, which is the same wrong
+// answer a failed open gives. archive_read_open_filename installs a seek
+// callback of its own; reading through a QFile has to install this one.
+la_int64_t seekQFile(struct archive *, void *data, la_int64_t offset, int whence)
+{
+    auto *src = static_cast<QFileSource *>(data);
+    qint64 target = 0;
+    switch (whence) {
+    case SEEK_SET: target = offset; break;
+    case SEEK_CUR: target = src->file.pos() + offset; break;
+    case SEEK_END: target = src->file.size() + offset; break;
+    default: return ARCHIVE_FATAL;
+    }
+    if (target < 0 || !src->file.seek(target))
+        return ARCHIVE_FATAL;
+    return src->file.pos();
+}
+
+// Opens `path` and attaches it to `a`. False when the file will not open,
+// which the callers treat exactly as libarchive refusing the archive.
+bool openArchiveFrom(struct archive *a, const QString &path, QFileSource &src)
+{
+    src.file.setFileName(path);
+    src.buffer.resize(10240);
+    if (!src.file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+    archive_read_set_seek_callback(a, seekQFile);
+    if (archive_read_open(a, &src, openQFile, readFromQFile, closeQFile) != ARCHIVE_OK) {
+        qDebug() << "imagesize: could not read" << path << ":"
+                 << archive_error_string(a);
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
 ArchiveInfo parseArchive(const QString &path)
 {
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
-    // encodeName(), not toLatin1(): this is a filesystem path, and toLatin1()
-    // turns every character outside Latin-1 into a question mark. A perfectly
-    // good zip under a folder or a username written in any other script then
-    // could not be opened, and the caller reads that as an archive holding
-    // nothing -- which loses the "image too big for this card" refusal, and
-    // makes a multi-file archive look like a single image.
-    QByteArray fn = QFile::encodeName(path);
     ArchiveInfo info;
+    QFileSource src;
 
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
 
-    if (archive_read_open_filename(a, fn.data(), 10240) == ARCHIVE_OK)
+    if (openArchiveFrom(a, path, src))
     {
         while ( (archive_read_next_header(a, &entry)) == ARCHIVE_OK)
         {
@@ -234,15 +316,14 @@ SourceFormat probeFormat(const QString &path)
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
     SourceFormat out;
-    // encodeName() for the same reason parseArchive() uses it.
-    QByteArray fn = QFile::encodeName(path);
+    QFileSource src;
 
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
     // format_all excludes raw: without it a plain .img matches nothing.
     archive_read_support_format_raw(a);
 
-    if (archive_read_open_filename(a, fn.data(), 10240) == ARCHIVE_OK
+    if (openArchiveFrom(a, path, src)
         && archive_read_next_header(a, &entry) == ARCHIVE_OK)
     {
         out.format = archive_format(a);

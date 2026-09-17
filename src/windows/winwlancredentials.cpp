@@ -11,6 +11,8 @@
 #include <delayimp.h>
 #include <QDebug>
 #include <QRegularExpression>
+
+#include "wlan_profile_xml.h"
 #ifndef WLAN_PROFILE_GET_PLAINTEXT_KEY
 #define WLAN_PROFILE_GET_PLAINTEXT_KEY 4
 #endif
@@ -31,24 +33,6 @@ FARPROC WINAPI dllDelayNotifyHook(unsigned dliNotify, PDelayLoadInfo)
 
 PfnDliHook __pfnDliNotifyHook2 = dllDelayNotifyHook;
 
-inline QString unescapeXml(QString str)
-{
-    static const char *table[] = {
-        "&lt;", "<",
-        "&gt;", ">",
-        "&quot;", "\"",
-        "&apos;", "'",
-        "&amp;", "&"
-    };
-    int tableLen = sizeof(table) / sizeof(table[0]);
-
-    for (int i=0; i < tableLen; i+=2)
-    {
-        str.replace(table[i], table[i+1]);
-    }
-
-    return str;
-}
 
 WinWlanCredentials::~WinWlanCredentials()
 {
@@ -133,12 +117,7 @@ WinWlanCredentials::WinWlanCredentials()
                                           NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
                         {
                             QString xml = QString::fromWCharArray(xmlstr);
-                            QRegularExpression rx("<keyMaterial>(.+)</keyMaterial>");
-                            QRegularExpressionMatch match = rx.match(xml);
-
-                            if (match.hasMatch()) {
-                                _psk = unescapeXml(match.captured(1)).toLatin1();
-                            }
+                            _psk = rpi_wlan::pskFromProfileXml(xml);
 
                             // Zero the local XML string that contains the plaintext PSK
                             // inside <keyMaterial> tags before it goes out of scope.
