@@ -91,6 +91,17 @@ public:
         const QString dest = _dir.path() + QStringLiteral("/RpiImager");
         if (!copyTree(moduleDir(), dest))
             return;
+        // The fonts and icons live in src/qml.qrc under the same
+        // "/qt/qml/RpiImager" prefix, so in the application they sit beside
+        // Style.qml in the resource system. Dropping the `prefer` line below
+        // moves the module onto disk and leaves them behind, which silently
+        // costs the UI its fonts. See copyQrcAssets() in qml_ui_test.cpp.
+        for (const QString &sub : {QStringLiteral("fonts"), QStringLiteral("icons")}) {
+            const QString from =
+                QStringLiteral(IMAGER_QML_ASSET_DIR) + QLatin1Char('/') + sub;
+            if (QDir(from).exists() && !copyTree(from, dest + QLatin1Char('/') + sub))
+                return;
+        }
 
         QFile in(dest + QStringLiteral("/qmldir"));
         if (!in.open(QIODevice::ReadOnly | QIODevice::Text))

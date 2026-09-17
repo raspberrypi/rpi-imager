@@ -1,4 +1,7 @@
-/build**
+# Only the build tree and its logs -- /build** also matched BUILDING.md,
+# which is why the build instructions were never in the repository.
+/build/
+/build.log
 src/build/*
 src/build/**
 compile_commands.json

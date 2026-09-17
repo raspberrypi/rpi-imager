@@ -21,6 +21,72 @@ FetchContent_MakeAvailable(Catch2)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
+# Where the DLLs a test binary needs at run time live.
+#
+# Windows resolves a DLL from PATH, having no rpath, so every test needs this --
+# and so does catch_discover_tests, which runs each binary at build time to
+# enumerate its cases. Without it a binary dies of STATUS_DLL_NOT_FOUND before
+# main(), reported only as "Error listing tests from executable".
+#
+# Qt's install paths rather than $<TARGET_FILE_DIR:Qt6::Core>, because the
+# QtQuickTest entries below are registered with add_test() and take this through
+# set_tests_properties(), where a generator expression is not dependable. Qt's
+# bin directory carries libgcc and libwinpthread beside the Qt DLLs.
+set(RPI_TEST_DLL_PATHS)
+if(WIN32)
+    list(APPEND RPI_TEST_DLL_PATHS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}")
+    if(MINGW64_ROOT)
+        list(APPEND RPI_TEST_DLL_PATHS "${MINGW64_ROOT}/bin")
+    endif()
+endif()
+
+# Where the tests find fonts.
+#
+# Qt ships none, and the offscreen plugin on Windows looks under
+# ${QT6_INSTALL_PREFIX}/lib/fonts, which Qt does not create. Linux has
+# fontconfig to fall back on; Windows has not, so QFontDatabase::families()
+# comes back empty and every glyph is a .notdef box.
+#
+# The product never meets this -- platformquirks_windows.cpp forces FreeType and
+# the real plugin reads the system fonts -- but -platform offscreen bypasses
+# that. Nothing failed to start, so the QtQuickTest run went green against a UI
+# with no text in it, every width assertion measuring identical tofu.
+set(RPI_TEST_FONT_ENV)
+if(WIN32)
+    if(DEFINED ENV{SystemRoot})
+        file(TO_CMAKE_PATH "$ENV{SystemRoot}/Fonts" _rpi_test_fontdir)
+    else()
+        set(_rpi_test_fontdir "C:/Windows/Fonts")
+    endif()
+    if(EXISTS "${_rpi_test_fontdir}")
+        set(RPI_TEST_FONT_ENV "QT_QPA_FONTDIR=${_rpi_test_fontdir}")
+    else()
+        message(WARNING
+                "No font directory at ${_rpi_test_fontdir}. The offscreen "
+                "platform ships no fonts, so QML tests that measure text will "
+                "be measuring .notdef boxes.")
+    endif()
+endif()
+
+# The same search path, plus the logging setting below, for tests registered
+# with add_test() rather than through Catch2. Takes one or more test names.
+function(rpi_set_windows_test_env)
+    if(NOT WIN32)
+        return()
+    endif()
+    set(_mod)
+    foreach(_dir IN LISTS RPI_TEST_DLL_PATHS)
+        list(APPEND _mod "PATH=path_list_prepend:${_dir}")
+    endforeach()
+    set_tests_properties(${ARGN} PROPERTIES ENVIRONMENT_MODIFICATION "${_mod}")
+    set_property(TEST ${ARGN} APPEND PROPERTY
+                 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
+    if(RPI_TEST_FONT_ENV)
+        set_property(TEST ${ARGN} APPEND PROPERTY
+                     ENVIRONMENT "${RPI_TEST_FONT_ENV}")
+    endif()
+endfunction()
+
 # Register a Catch2 binary's cases with CTest.
 #
 # Wraps catch_discover_tests purely to pin SKIP_RETURN_CODE. Catch2 exits 4 when
@@ -55,14 +121,49 @@ function(rpi_discover_tests target)
     # -- a chaos run clicking about opened a terminal browser at
     # raspberrypi.com and held the test until it timed out. Pointed at true(1),
     # which accepts the argument and does nothing.
-    set(_test_env "RPI_IMAGER_TELEMETRY_URL=" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1"
+    # "off" rather than empty on Windows, and this is not a nicety: setting an
+    # environment variable to an empty string there deletes it, so the empty
+    # value below never reached the process and every fabricated write in this
+    # suite posted a download counter to the production endpoint -- the exact
+    # thing the comment above says was fixed.
+    if(WIN32)
+        set(_telemetry_off "RPI_IMAGER_TELEMETRY_URL=off")
+    else()
+        set(_telemetry_off "RPI_IMAGER_TELEMETRY_URL=")
+    endif()
+    set(_test_env "${_telemetry_off}" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1"
                   "XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
                   "BROWSER=true")
+    # Without this Qt's default handler on Windows sends qDebug/qWarning to the
+    # debugger rather than to stderr, so a test that fails under CTest comes
+    # back with an exit code and not one line of why. The QtQuickTest binary was
+    # the extreme case: thirteen seconds of work, a real assertion failure, and
+    # completely empty output.
+    if(WIN32)
+        list(APPEND _test_env "QT_FORCE_STDERR_LOGGING=1")
+    endif()
+    if(RPI_TEST_FONT_ENV)
+        list(APPEND _test_env "${RPI_TEST_FONT_ENV}")
+    endif()
     if(APPLE AND "FAULT_INJECTION" IN_LIST ARGN)
         add_dependencies(${target} faulty_io_interpose)
         list(APPEND _test_env "DYLD_INSERT_LIBRARIES=${RPI_FAULTY_INTERPOSE_LIB}")
     endif()
+    # Without this a freshly built binary cannot locate Qt6Core.dll, and the
+    # discovery run dies of STATUS_DLL_NOT_FOUND before main() -- silently, so
+    # all CMake reports is "Error listing tests from executable". Every test
+    # target failed to configure on Windows for want of it.
+    #
+    # DL_PATHS rather than another entry in _test_env: Catch2 puts these on PATH
+    # for its own discovery run and emits an ENVIRONMENT_MODIFICATION for each
+    # test it registers, so one setting covers both, where ENVIRONMENT would
+    # reach only the second.
+    set(_dl_paths)
+    if(WIN32)
+        set(_dl_paths DL_PATHS ${RPI_TEST_DLL_PATHS})
+    endif()
     catch_discover_tests(${target}
+        ${_dl_paths}
         PROPERTIES SKIP_RETURN_CODE 4 ENVIRONMENT "${_test_env}")
 endfunction()
 
@@ -199,8 +300,48 @@ if(WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/acceleratedcryptographichash_cng.cpp)
     set(PLATFORM_DRIVELIST_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp)
+
+    # The Windows backend sources no test target ever compiled. DiskpartUtil is
+    # called from platformquirks_windows.cpp, downloadthread.cpp and
+    # driveformatthread.cpp, and it in turn reaches WinFile and
+    # Drivelist::ListStorageDevices() -- so ten targets compiled cleanly and then
+    # failed at the link. Gathered into one library rather than three sources
+    # named across a dozen targets, so the next caller cannot reintroduce it.
+    #
+    # drivelist_windows.cpp appears here as well as in PLATFORM_DRIVELIST_SRC,
+    # and deliberately: a static archive gives up only the members needed to
+    # resolve something still undefined, so a target compiling it directly keeps
+    # its own object and never sees this copy.
+    add_library(rpi_windows_support STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/diskpart_util.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/winfile.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp)
+    # WinFile is a QObject.
+    set_target_properties(rpi_windows_support PROPERTIES AUTOMOC ON)
+    target_include_directories(rpi_windows_support PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(rpi_windows_support PUBLIC Qt6::Core setupapi)
+    target_compile_features(rpi_windows_support PRIVATE cxx_std_20)
+    # Reaches extractDiskNumber(), which is static otherwise -- the same hook
+    # platformquirks_windows.cpp offers for parseDeviceNumber(). Set here
+    # because this is where diskpart_util.cpp is compiled; a define on the test
+    # target that merely links the archive would come too late to affect it.
+    target_compile_definitions(rpi_windows_support PRIVATE DISKPART_ENABLE_TEST_API)
+
+    # Qt6::Gui sits among the system libraries because platformquirks_windows.cpp
+    # reads the "Make text bigger" accessibility setting through
+    # QFontDatabase::systemFont(). The application links Gui for its own reasons,
+    # so the dependency only ever surfaced here: ten test targets compile that
+    # backend against Qt6::Core alone and stopped at "QFont: No such file or
+    # directory". Neither the Linux nor the macOS backend wants it, which is why
+    # it belongs in this branch rather than in the common link list.
+    # setupapi for drivelist_windows.cpp, which calls
+    # SetupDiGetDeviceRegistryProperty and SetupDiGetDeviceInterfaceDetail. The
+    # application has carried it in EXTRALIBS all along; the tests linking the
+    # same backend had not.
     set(PLATFORM_BACKEND_LIBS
-        ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt)
+        ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt setupapi
+        Qt6::Gui rpi_windows_support)
 elseif(APPLE)
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm)
@@ -310,6 +451,106 @@ add_custom_target(test_fat_partition
 )
 
 # ============================================================================
+# WinFile -- Windows only
+# ============================================================================
+# The Win32 handle wrapper the write path opens a device through, and what
+# DiskpartUtil locks and dismounts volumes with. It had no test at all: 0% of
+# its branches, in 221 lines that sit directly under the write.
+if(WIN32)
+    add_executable(winfile_test
+        winfile_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/winfile.cpp)
+    set_target_properties(winfile_test PROPERTIES AUTOMOC ON)
+    target_include_directories(winfile_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(winfile_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
+    target_compile_features(winfile_test PRIVATE cxx_std_20)
+    rpi_discover_tests(winfile_test)
+endif()
+
+# ============================================================================
+# SecureBootCrypto
+# ============================================================================
+# The RSA signing behind secure boot. Every case that reached it went through
+# rpi-eeprom-digest, which is a Linux tool, so the whole of this skipped on
+# Windows -- leaving the CryptoAPI implementation at half its branches with
+# nothing asserting it produces a signature a bootloader would take.
+#
+# Verified against openssl rather than a recorded blob: a signature is only
+# right if the public half can check it.
+add_executable(secureboot_crypto_test
+    secureboot_crypto_test.cpp
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC})
+target_include_directories(secureboot_crypto_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS})
+target_link_libraries(secureboot_crypto_test PRIVATE
+    Catch2::Catch2WithMain Qt6::Core ${GNUTLS_LIBRARIES})
+rpi_link_platform_backends(secureboot_crypto_test)
+target_compile_features(secureboot_crypto_test PRIVATE cxx_std_20)
+rpi_discover_tests(secureboot_crypto_test)
+
+# ============================================================================
+# The Windows file-operations backend -- Windows only
+# ============================================================================
+# file_operations_test covers the POSIX backend and is excluded here, which
+# left the 1,876 lines that actually write a card on Windows at 25% branch
+# coverage -- 752 branches, the largest single gap in the tree. This is the
+# Windows half: the open and close lifecycle, sequential and positioned I/O,
+# the asynchronous queue and its synchronous fallback.
+#
+# virtdisk for vhd_device.h, which the physical-drive cases attach.
+if(WIN32)
+    add_executable(file_operations_windows_test
+        file_operations_windows_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${PLATFORM_FILE_OPS})
+    set_target_properties(file_operations_windows_test PROPERTIES AUTOMOC ON)
+    target_include_directories(file_operations_windows_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(file_operations_windows_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core virtdisk)
+    rpi_link_platform_backends(file_operations_windows_test)
+    rpi_link_platform_file_ops(file_operations_windows_test)
+    target_compile_features(file_operations_windows_test PRIVATE cxx_std_20)
+    # Reaches FailNextWriteCompletions(), which rehearses a device refusing
+    # writes while Windows re-enumerates it. Safe to set on the target: this one
+    # compiles file_operations_windows.cpp itself rather than linking an archive.
+    target_compile_definitions(file_operations_windows_test PRIVATE FILEOPS_ENABLE_TEST_API)
+    rpi_discover_tests(file_operations_windows_test)
+endif()
+
+# ============================================================================
+# DiskpartUtil -- Windows only
+# ============================================================================
+# The code that wipes a card's partition table before a write, and locks and
+# dismounts its volumes on the way. It had no test of any kind: until the
+# support library above, no test target even compiled it.
+#
+# The device cases want a VHD attached, which needs an elevated process, so an
+# ordinary run exercises the parsing and skips the rest -- the same bargain
+# file_operations_test strikes with loop devices on Linux. virtdisk carries
+# CreateVirtualDisk and friends for vhd_device.h.
+if(WIN32)
+    # PLATFORM_QUIRKS_SRC as well: DiskpartUtil reaches
+    # PlatformQuirks::getEjectDevicePath() on both the unmount and clean paths.
+    add_executable(diskpart_util_test
+        diskpart_util_test.cpp
+        ${PLATFORM_QUIRKS_SRC})
+    target_include_directories(diskpart_util_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(diskpart_util_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core virtdisk)
+    rpi_link_platform_backends(diskpart_util_test)
+    target_compile_features(diskpart_util_test PRIVATE cxx_std_20)
+    rpi_discover_tests(diskpart_util_test)
+endif()
+
+# ============================================================================
 # Drivelist Tests
 # ============================================================================
 
@@ -414,6 +655,20 @@ target_compile_options(platformquirks_test PRIVATE
 
 # Register with CTest for automatic test discovery
 rpi_discover_tests(platformquirks_test)
+
+# A real executable for the launch cases to launch, on every platform. They used
+# to write a shell script, which cannot be run on Windows at all, and a .cmd
+# rewrite of it measured cmd.exe's command-line parsing rather than
+# launchDetached's -- a URL containing "&id=abc" came back as two arguments
+# whatever the code under test had done. An .exe is handed its arguments by the
+# OS and reports what it actually received.
+add_executable(argument_recorder_probe
+    ${CMAKE_CURRENT_SOURCE_DIR}/argument_recorder_probe.cpp)
+target_link_libraries(argument_recorder_probe PRIVATE Qt6::Core)
+target_compile_features(argument_recorder_probe PRIVATE cxx_std_20)
+add_dependencies(platformquirks_test argument_recorder_probe)
+target_compile_definitions(platformquirks_test PRIVATE
+    ARGUMENT_RECORDER_BINARY="$<TARGET_FILE:argument_recorder_probe>")
 
 # Custom target for manual running
 add_custom_target(test_platformquirks
@@ -2096,7 +2351,8 @@ endif()
     set_target_properties(qml_load_test PROPERTIES AUTOMOC ON)
     target_link_libraries(qml_load_test PRIVATE Catch2::Catch2 rpi_imager_testable Qt6::Quick)
     target_compile_definitions(qml_load_test PRIVATE
-        IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}")
+        IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}"
+        IMAGER_QML_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
     rpi_discover_tests(qml_load_test)
 
     # Driven tests for the controls themselves: real clicks and keystrokes
@@ -2109,6 +2365,7 @@ endif()
             rpi_imager_testable Qt6::Quick Qt6::QuickTest)
         target_compile_definitions(qml_ui_test PRIVATE
             IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}"
+            IMAGER_QML_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
             QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
         add_test(NAME qml_ui_test
                  COMMAND qml_ui_test -platform offscreen)
@@ -2153,6 +2410,18 @@ endif()
                          -input "${CMAKE_CURRENT_SOURCE_DIR}/qml/tst_device_selection_step.qml")
         set_tests_properties(qml_ui_test_device_selection_offline PROPERTIES
             ENVIRONMENT "QT_QUICK_BACKEND=software;RPI_IMAGER_TELEMETRY_URL=;RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true")
+
+        # These two are registered by hand rather than through
+        # rpi_discover_tests(), so nothing has given them a DLL search path. On
+        # Windows both exited 0xc0000135 before main(), which took the whole
+        # QtQuickTest suite -- 981 test functions behind two CTest entries --
+        # out of the run while reporting only two failures.
+        #
+        # ENVIRONMENT_MODIFICATION rather than an addition to ENVIRONMENT above:
+        # it prepends to the PATH the runner already has instead of replacing
+        # it, and it is a separate property, so neither of the two settings
+        # overwrites the other.
+        rpi_set_windows_test_env(qml_ui_test qml_ui_test_device_selection_offline)
 
         # `qml_coverage`: which of the QML actually ran.
         #
