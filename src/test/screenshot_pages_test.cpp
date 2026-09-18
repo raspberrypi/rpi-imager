@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (C) 2025 Raspberry Pi Ltd
+// Copyright (C) 2026 Raspberry Pi Ltd
 //
-// The screenshot runner is a custom target rather than a test: it wants fonts,
-// a user namespace and several seconds a page, and its output is meant to be
-// looked at. What can be checked cheaply is the page list it is driven from,
-// which names things in two other files and is silently wrong when either
-// moves. A page naming a step the wizard does not have fails a thirteen-page
-// run at the one page; a published name drifting from the metainfo ships a
-// screenshot nothing points at, and leaves the listing showing the old one.
+// The screenshot runner is a custom target rather than a test: it wants
+// fonts, a user namespace and several seconds a page, and its output is meant
+// to be looked at. What can be checked cheaply is the page list driving it,
+// which names things in two other files and goes silently wrong when either
+// moves -- a page naming a step the wizard lacks, or a published name adrift
+// from the metainfo, ships a screenshot nothing points at.
 
 #include <catch2/catch_test_macros.hpp>
 

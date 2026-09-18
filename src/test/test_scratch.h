@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2025 Raspberry Pi Ltd
+ * Copyright (C) 2026 Raspberry Pi Ltd
  */
 
 #ifndef RPI_IMAGER_TEST_SCRATCH_H
@@ -82,17 +82,15 @@ inline void useScratchPaths(const QString &testName)
     QCoreApplication::setApplicationName(name);
     QStandardPaths::setTestModeEnabled(true);
 
-    // And the settings themselves, which test mode does not reach on Windows.
-    // QSettings defaults to NativeFormat, and that is the registry there -- so
-    // a run wrote to the developer's own HKCU\Software\Raspberry Pi, including
-    // the imagecustomization key that holds their hostname, username and
-    // password hash. The organisation and application names above kept the
-    // .conf file on Unix out of the way and did nothing at all here.
+    // And the settings themselves, which test mode does not reach on Windows:
+    // QSettings defaults to NativeFormat, which is the registry there, so a
+    // run would write to the developer's own HKCU\Software\Raspberry Pi --
+    // including the imagecustomization key holding their hostname, username
+    // and password hash.
     //
-    // IniFormat puts it in a file instead, and test mode redirects that file
-    // into the scratch tree with everything else. Set for every platform rather
-    // than only Windows: one storage shape under test is easier to reason about
-    // than two, and the cases that read settings back do not care which it is.
+    // IniFormat puts it in a file, which test mode redirects into the scratch
+    // tree. Set on every platform: one storage shape is easier to reason about
+    // than two, and nothing reading settings back cares which it is.
     QSettings::setDefaultFormat(QSettings::IniFormat);
 
     detail::scratchName() = name;
