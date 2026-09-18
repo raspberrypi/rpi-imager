@@ -10925,6 +10925,30 @@ public:
 };
 } // namespace
 
+TEST_CASE("A token says why it went, not only that it did",
+          "[imagewriter][connecttoken]")
+{
+    // The wizard does different things with the two. A key dropped because
+    // the OS or the card changed was never written with, so the step is not
+    // configured. One consumed by a successful write was, and the sidebar and
+    // the completion summary both report it -- reading the consumed case as
+    // an invalidation un-bolded the step as the write finished.
+    ConnectTokenWriter w;
+    std::vector<bool> reasons;
+    QObject::connect(&w, &ImageWriter::connectTokenCleared,
+                     [&reasons](bool invalidated) { reasons.push_back(invalidated); });
+
+    w.pretendOrgKeyWasMinted(QStringLiteral("rpoak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w.discardOrgMintedConnectToken();
+    REQUIRE(reasons.size() == 1);
+    CHECK(reasons[0]);
+
+    w.overwriteConnectToken(QStringLiteral("rpuak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w.clearConnectToken();
+    REQUIRE(reasons.size() == 2);
+    CHECK_FALSE(reasons[1]);
+}
+
 TEST_CASE("Changing the card throws away a key minted for the old one",
           "[imagewriter][connecttoken]")
 {
