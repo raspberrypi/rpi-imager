@@ -425,7 +425,12 @@ TEST_CASE("Ejecting a virtual disk detaches it", "[platformquirks][disk][vhd]") 
     // leaves the disk attached with nothing mounted: it stays listed as a
     // drive, and the file behind it cannot be attached again -- which reads
     // to the user as an image that has been corrupted.
-    rpi_test::VhdDevice vhd(64);
+    // Attached the way Explorer and Mount-VHD attach one, because that is the
+    // only shape ejectDisk can detach: a handle-bound attachment belongs to
+    // the handle that made it, and DetachVirtualDisk from anywhere else
+    // answers ERROR_NOT_READY.
+    rpi_test::VhdDevice vhd(64, rpi_test::VhdDevice::NoDriveLetter,
+                            rpi_test::VhdDevice::Permanent);
     if (!vhd.valid())
         SKIP("attaching a virtual disk needs elevation: "
              + vhd.reason().toStdString());
