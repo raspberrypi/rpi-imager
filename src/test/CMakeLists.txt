@@ -1222,6 +1222,12 @@ target_link_libraries(disk_formatter_test PRIVATE
     Qt6::Core
 )
 
+# Reaches ComputeGeometry on its own. Driving it through a whole format only
+# ever asks it the sizes a format is given, which leaves the degenerate ones
+# -- a partition no larger than its own reserved sectors, or one whose FATs
+# fill it -- with nothing holding them.
+target_compile_definitions(disk_formatter_test PRIVATE DISKFORMATTER_ENABLE_TEST_API)
+
 target_compile_features(disk_formatter_test PRIVATE cxx_std_20)
 target_compile_options(disk_formatter_test PRIVATE
     -Wall -Wextra -Wpedantic
