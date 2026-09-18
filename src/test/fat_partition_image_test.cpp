@@ -2550,29 +2550,69 @@ quint32 directoryFirstCluster(const QString &imagePath, const Fat32DataArea &d,
     return 0;
 }
 
-bool fillSubdirectory(const QString &imagePath, int fileCount)
+// Enough entries to spill the subdirectory over `clusters` clusters.
+//
+// The count follows from the cluster size rather than being fixed, because
+// the formatter chooses that and the hosts do not agree: 400 names fill more
+// than three 4 KB clusters and fewer than two 32 KB ones, so a fixed count
+// left the cases that corrupt the third cluster skipping themselves wherever
+// the clusters were large.
+//
+// Each name takes five 32-byte entries -- four for the long name and one for
+// the short one -- and the copy is done in batches, because Windows caps the
+// whole command line at 32,767 characters and a thousand paths is well past
+// it.
+// The name of the nth entry the fixture writes. Long enough to take four
+// long-filename entries, so the count below follows from it.
+QString subdirectoryEntryName(int i)
 {
+    return QStringLiteral("a-file-with-a-fairly-long-name-%1.txt")
+        .arg(i, 4, 10, QLatin1Char('0'));
+}
+
+// How many entries the last fill wrote, so a case can reach for one it knows
+// is past the first cluster without repeating the arithmetic.
+int g_subdirectoryEntries = 0;
+
+bool fillSubdirectory(const QString &imagePath, int clusters)
+{
+    const Fat32DataArea geometry = readDataArea(imagePath);
+    if (geometry.base.bytesPerSector == 0 || geometry.sectorsPerCluster == 0)
+        return false;
+    const int clusterBytes = geometry.base.bytesPerSector * geometry.sectorsPerCluster;
+
+    constexpr int kBytesPerName = 5 * 32;
+    constexpr int kBatch = 60;
+    // One extra cluster's worth, so the last cluster asked for is full rather
+    // than only just started.
+    const int fileCount = ((clusters + 1) * clusterBytes) / kBytesPerName;
+
     if (!runMtool(QStringLiteral("mmd"),
                   {QStringLiteral("-i"), imagePath,
                    QStringLiteral("::/") + kLoopDirName}))
         return false;
 
     ScopedTempDir sources(QStringLiteral("rpi-imager-fatsub"));
-    QStringList args;
-    args << QStringLiteral("-i") << imagePath << QStringLiteral("-o");
-    for (int i = 0; i < fileCount; ++i) {
-        const QString name = QStringLiteral("a-file-with-a-fairly-long-name-%1.txt")
-                                 .arg(i, 3, 10, QLatin1Char('0'));
-        const QString path = sources.filePath(name);
-        QFile f(path);
-        if (!f.open(QIODevice::WriteOnly))
+    const QString target = QStringLiteral("::/") + kLoopDirName + QStringLiteral("/");
+
+    for (int start = 0; start < fileCount; start += kBatch) {
+        QStringList args;
+        args << QStringLiteral("-i") << imagePath << QStringLiteral("-o");
+        for (int i = start; i < qMin(start + kBatch, fileCount); ++i) {
+            const QString path = sources.filePath(subdirectoryEntryName(i));
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly))
+                return false;
+            f.write("x");
+            f.close();
+            args << path;
+        }
+        args << target;
+        if (!runMtool(QStringLiteral("mcopy"), args))
             return false;
-        f.write("x");
-        f.close();
-        args << path;
     }
-    args << QStringLiteral("::/") + kLoopDirName + QStringLiteral("/");
-    return runMtool(QStringLiteral("mcopy"), args);
+    g_subdirectoryEntries = fileCount;
+    return true;
 }
 
 // Builds the loop. Returns false when the subdirectory did not need three
@@ -2581,7 +2621,7 @@ bool fillSubdirectory(const QString &imagePath, int fileCount)
 // the cluster it lands in must itself be full.
 bool loopASubdirectory(const QString &imagePath)
 {
-    if (!fillSubdirectory(imagePath, 400))
+    if (!fillSubdirectory(imagePath, 3))
         return false;
     const Fat32DataArea d = readDataArea(imagePath);
     if (d.base.bytesPerSector == 0 || d.sectorsPerCluster == 0)
@@ -2651,7 +2691,7 @@ bool moveCluster(const QString &imagePath, const Fat32DataArea &d,
 // move it to.
 bool fragmentASubdirectory(const QString &imagePath)
 {
-    if (!fillSubdirectory(imagePath, 400))
+    if (!fillSubdirectory(imagePath, 3))
         return false;
     const Fat32DataArea d = readDataArea(imagePath);
     if (d.base.bytesPerSector == 0 || d.sectorsPerCluster == 0)
@@ -2752,8 +2792,10 @@ TEST_CASE("A file past the first cluster of a scattered directory can still be d
         SKIP("the subdirectory could not be scattered, so reading on and "
              "following the chain would land in the same place");
 
-    const QString victim =
-        kLoopDirName + QStringLiteral("/a-file-with-a-fairly-long-name-399.txt");
+    // The last one written, which is as far past the first cluster as the
+    // directory goes.
+    const QString victim = kLoopDirName + QStringLiteral("/") +
+                           subdirectoryEntryName(g_subdirectoryEntries - 1);
 
     // readFile() has always consulted the chain after a long-name entry, so
     // it finds the file either way. It is here to show the file really is

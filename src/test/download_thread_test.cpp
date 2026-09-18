@@ -57,6 +57,8 @@ using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
 #include <QTimer>
 #include <QUuid>
 
+#include <condition_variable>
+#include <mutex>
 #include <memory>
 
 #include "fixture_process.h"
@@ -4610,4 +4612,327 @@ TEST_CASE("A UNC path is corrected before curl is given it", "[download]")
     // Reported rather than silently dropped: the user chose that share.
     INFO("error: " << reported.toStdString());
     CHECK_FALSE(reported.isEmpty());
+}
+
+// ============================================================================
+// A card that stops taking data part-way
+// ============================================================================
+// The faulty-device cases above build a real block device that returns EIO
+// past a point, with device-mapper over a loop device. That needs Linux and
+// passwordless sudo, and there is no counterpart on Windows -- so the
+// reporting they check has never run here, although none of it is
+// platform-specific: it is DownloadThread deciding that a partly written card
+// is not a finished one.
+//
+// This reaches the same decision through the device interface instead, which
+// every platform shares.
+
+namespace {
+
+// Takes the first `goodBytes` and refuses everything after.
+class FailsPartwayDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    FailsPartwayDevice(std::uint64_t size, std::uint64_t goodBytes)
+        : _size(size), _good(goodBytes)
+    {
+    }
+
+    rpi_imager::FileError OpenDevice(const std::string &) override
+    {
+        _open = true;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError CreateTestFile(const std::string &, std::uint64_t) override
+    {
+        return rpi_imager::FileError::kSuccess;
+    }
+    bool IsOpen() const override { return _open; }
+    rpi_imager::FileError Close() override
+    {
+        _open = false;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError GetSize(std::uint64_t &size) override
+    {
+        size = _size;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError Flush() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        _pos = position;
+        return rpi_imager::FileError::kSuccess;
+    }
+    std::uint64_t Tell() const override { return _pos; }
+
+    // Synchronous only. The asynchronous path has its own cases above, and
+    // this one is about what the caller does with a refusal.
+    bool IsAsyncIOSupported() const override { return false; }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t size) override
+    {
+        if (_pos + size > _good) {
+            ++_refusals;
+            return rpi_imager::FileError::kWriteError;
+        }
+        _pos += size;
+        _accepted += size;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ReadSequential(std::uint8_t *, std::size_t, std::size_t &read) override
+    {
+        read = 0;
+        return rpi_imager::FileError::kReadError;
+    }
+
+    std::uint64_t accepted() const { return _accepted; }
+    int refusals() const { return _refusals; }
+
+private:
+    std::uint64_t _size;
+    std::uint64_t _good;
+    std::uint64_t _pos = 0;
+    std::uint64_t _accepted = 0;
+    int _refusals = 0;
+    bool _open = false;
+};
+
+class WriterOnFailingCard : public DownloadThread
+{
+public:
+    WriterOnFailingCard(const QByteArray &url, std::uint64_t size, std::uint64_t goodBytes)
+        : DownloadThread(url, "fake-device", "")
+    {
+        device = std::make_shared<FailsPartwayDevice>(size, goodBytes);
+        _file = device;
+    }
+
+    std::shared_ptr<FailsPartwayDevice> device;
+};
+
+} // namespace
+
+TEST_CASE("A card that stops taking data is not reported as written",
+          "[download][partialwrite]")
+{
+    // The whole point of the faulty-device cases: a write that got under way
+    // and then failed must not come back as a success. It would leave a card
+    // holding the first part of an image, which boots far enough to look like
+    // the image is at fault.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(8 * 1024 * 1024, 107);
+    const QString source = scratch.filePath(QStringLiteral("partial-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    WriterOnFailingCard dt(QUrl::fromLocalFile(source).toEncoded().constData(),
+                           64 * 1024 * 1024, 2 * 1024 * 1024);
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK_FALSE(outcome.succeeded);
+    CHECK_FALSE(outcome.errorMessage.isEmpty());
+
+    // And it really did refuse rather than never being asked, which would
+    // make the case pass for the wrong reason.
+    CHECK(dt.device->refusals() > 0);
+}
+
+TEST_CASE("A card that takes everything is reported as written",
+          "[download][partialwrite]")
+{
+    // The other side, so the case above is not passing because this harness
+    // cannot succeed at all.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(4 * 1024 * 1024, 109);
+    const QString source = scratch.filePath(QStringLiteral("whole-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    WriterOnFailingCard dt(QUrl::fromLocalFile(source).toEncoded().constData(),
+                           64 * 1024 * 1024, 64 * 1024 * 1024);
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK(outcome.succeeded);
+    CHECK(dt.device->refusals() == 0);
+    CHECK(dt.device->accepted() >= payload.size());
+}
+
+// ============================================================================
+// Cancelling while the end of the device is being zeroed
+// ============================================================================
+// Before the image goes down, a megabyte of zeroes is written to the end of
+// the card. On a counterfeit card -- one reporting a capacity it does not
+// have -- that write never returns, which is how the fake capacity is caught;
+// it is wrapped in a timeout with a cancel flag for exactly that reason.
+//
+// The cancel arm detaches the worker and returns while the write is still
+// blocked, so everything the worker touches has to outlive the thread that
+// gave up on it. It did not: a raw device pointer and a pointer into a local
+// buffer were both dangling by the time the worker unblocked, and cancelling
+// early in a write could take the process down. Nothing reached that arm,
+// because provoking it needs a device that blocks on demand.
+
+namespace {
+
+// Writes normally until one lands at or past `blockFrom`, and holds that one
+// until it is let go.
+class StallsAtEndOfDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    StallsAtEndOfDevice(std::uint64_t size, std::uint64_t blockFrom)
+        : _size(size), _blockFrom(blockFrom)
+    {
+    }
+
+    ~StallsAtEndOfDevice() override { release(); }
+
+    rpi_imager::FileError OpenDevice(const std::string &) override
+    {
+        _open = true;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError CreateTestFile(const std::string &, std::uint64_t) override
+    {
+        return rpi_imager::FileError::kSuccess;
+    }
+    bool IsOpen() const override { return _open; }
+    rpi_imager::FileError Close() override
+    {
+        _open = false;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError GetSize(std::uint64_t &size) override
+    {
+        size = _size;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError Flush() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        _pos = position;
+        return rpi_imager::FileError::kSuccess;
+    }
+    std::uint64_t Tell() const override { return _pos; }
+    bool IsAsyncIOSupported() const override { return false; }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t size) override
+    {
+        if (_pos >= _blockFrom) {
+            _stalled.store(true);
+            // Let go eventually whatever happens: this worker is detached, so
+            // a wait with no end would leave a thread running past the case.
+            std::unique_lock<std::mutex> lock(_mutex);
+            _wake.wait_for(lock, std::chrono::seconds(20),
+                           [this] { return _released.load(); });
+            _stalled.store(false);
+            return rpi_imager::FileError::kWriteError;
+        }
+        _pos += size;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ReadSequential(std::uint8_t *, std::size_t, std::size_t &read) override
+    {
+        read = 0;
+        return rpi_imager::FileError::kReadError;
+    }
+
+    bool stalled() const { return _stalled.load(); }
+
+    void release()
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _released.store(true);
+        }
+        _wake.notify_all();
+    }
+
+private:
+    std::uint64_t _size;
+    std::uint64_t _blockFrom;
+    std::uint64_t _pos = 0;
+    bool _open = false;
+    std::atomic<bool> _stalled{false};
+    std::atomic<bool> _released{false};
+    std::mutex _mutex;
+    std::condition_variable _wake;
+};
+
+class WriterOnStallingCard : public DownloadThread
+{
+public:
+    WriterOnStallingCard(const QByteArray &url, std::uint64_t size, std::uint64_t blockFrom)
+        : DownloadThread(url, "fake-device", "")
+    {
+        device = std::make_shared<StallsAtEndOfDevice>(size, blockFrom);
+        _file = device;
+    }
+
+    std::shared_ptr<StallsAtEndOfDevice> device;
+};
+
+} // namespace
+
+TEST_CASE("Cancelling while the end of the device is stalled is survivable",
+          "[download][partialwrite]")
+{
+#ifdef Q_OS_WIN
+    SKIP("DownloadThread does not zero the end of the device on Windows -- the "
+         "whole block, counterfeit-card timeout included, is compiled out "
+         "there -- so there is no stalled write to cancel");
+#endif
+
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(4 * 1024 * 1024, 113);
+    const QString source = scratch.filePath(QStringLiteral("stall-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    constexpr std::uint64_t kCardSize = 64 * 1024 * 1024;
+    // The end-of-device write is the only one that lands this far in.
+    auto dt = std::make_unique<WriterOnStallingCard>(
+        QUrl::fromLocalFile(source).toEncoded().constData(), kCardSize,
+        kCardSize - (2 * 1024 * 1024));
+    dt->setVerifyEnabled(false);
+
+    auto stalling = dt->device;
+
+    QEventLoop loop;
+    bool finished = false;
+    QObject::connect(dt.get(), &DownloadThread::success, &loop,
+                     [&]() { finished = true; loop.quit(); });
+    QObject::connect(dt.get(), &DownloadThread::error, &loop,
+                     [&](const QString &) { finished = true; loop.quit(); });
+    QObject::connect(dt.get(), &DownloadThread::finished, &loop,
+                     [&]() { finished = true; loop.quit(); });
+
+    dt->start();
+
+    // Wait for the write to be in the hands of the stalling device, so the
+    // cancel lands on the arm under test rather than before it.
+    for (int i = 0; i < 400 && !stalling->stalled(); ++i)
+        QThread::msleep(25);
+    REQUIRE(stalling->stalled());
+
+    CHECK_NOTHROW(dt->cancelDownload());
+
+    QTimer::singleShot(kWriteTimeoutMs, &loop, &QEventLoop::quit);
+    loop.exec();
+    CHECK(finished);
+    CHECK_FALSE(dt->successfull());
+
+    // Let the detached worker finish before anything it points at is
+    // released. Destroying the thread object with a worker still inside the
+    // device is the crash this case exists for, and the release has to happen
+    // whether the assertions above passed or not.
+    stalling->release();
+    dt->wait(30000);
 }

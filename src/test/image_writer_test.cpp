@@ -11148,12 +11148,10 @@ TEST_CASE("A key with no default of its own reads as off",
 #include <sys/stat.h>
 
 // secureSettingsFile() narrows the settings file to 0600 and its directory to
-// 0700, and these cases check exactly that. settings_permissions.cpp is
-// #ifdef Q_OS_UNIX end to end, so on Windows the function is a no-op and there
-// are no mode bits to assert against -- access there is an ACL, which an octal
-// literal cannot describe. Securing the file on Windows would mean writing a
-// DACL, which is a feature that does not exist yet rather than a test that
-// needs porting.
+// 0700, and these cases check exactly that. The mode bits are the POSIX half
+// of the function: access on Windows is an access list, which an octal
+// literal cannot describe, and what it reports there is covered in
+// settings_permissions_test.cpp instead.
 //
 // The empty-path case below stays in the run on every platform: refusing a
 // path that is not a path is not a POSIX question.
@@ -11314,11 +11312,10 @@ TEST_CASE("An empty path is refused rather than acted on",
 // applyQuirks() repointing HOME leads -- and leaves it root-owned. The file
 // on the machine this was written on is exactly that: root:root, mode 0664.
 
-// The whole settings-ownership story is POSIX. settings_permissions.cpp is
-// #ifdef Q_OS_UNIX end to end, so on Windows there is no behaviour here to
-// test: no SUDO_UID or PKEXEC_UID to read, no uid to hand a file back to,
-// and no mode bits to narrow it with afterwards. The helpers below reach for
-// lstat(), getuid() and sudo to say so.
+// The whole settings-ownership story is POSIX: on Windows there is no
+// SUDO_UID or PKEXEC_UID to read, no uid to hand a file back to, and no mode
+// bits to narrow it with afterwards. The helpers below reach for lstat(),
+// getuid() and sudo to say so.
 #ifndef _WIN32
 namespace {
 bool havePasswordlessSudoForOwnership()

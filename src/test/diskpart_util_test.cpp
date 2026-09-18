@@ -118,6 +118,25 @@ TEST_CASE("A disk number too large to hold is refused, not thrown",
     if (!(vhd).valid())                                                        \
     SKIP("no virtual disk: " + (vhd).reason().toStdString())
 
+namespace {
+
+// The only way a case here reaches a DiskpartUtil call.
+//
+// These functions unmount volumes and wipe partition tables, and the path
+// they take is one character away from a real drive. Taking the object rather
+// than a path means a case cannot name a disk at all: it gets the one that
+// was attached for it, checked, or the assertion fails before anything is
+// touched. A path pasted in from a bug report will not compile.
+template <typename Call>
+auto onOurDisk(const rpi_test::VhdDevice &vhd, Call call) -> decltype(call(QByteArray()))
+{
+    const QByteArray device = vhd.pathBytes();
+    REQUIRE(vhd.ownsPath(device));
+    return call(device);
+}
+
+} // namespace
+
 TEST_CASE("An attached virtual disk presents a physical drive path",
           "[diskpart][vhd]")
 {
@@ -138,12 +157,13 @@ TEST_CASE("Rescanning an attached disk succeeds", "[diskpart][vhd]")
 {
     rpi_test::VhdDevice vhd(64);
     REQUIRE_VHD(vhd);
-    REQUIRE(vhd.ownsPath(vhd.pathBytes()));
 
     // Non-destructive: it asks Windows to re-read the partition table. Called
     // after every write, successful or not, so a failure here leaves a card
     // that looks missing in Explorer.
-    const auto result = DiskpartUtil::rescanDisk(vhd.pathBytes());
+    const auto result = onOurDisk(vhd, [](const QByteArray &device) {
+        return DiskpartUtil::rescanDisk(device);
+    });
     CHECK(result.success);
     CHECK(result.errorMessage.isEmpty());
 }
@@ -162,14 +182,15 @@ TEST_CASE("Unmounting a disk with no volumes holds nothing open",
 {
     rpi_test::VhdDevice vhd(64);
     REQUIRE_VHD(vhd);
-    REQUIRE(vhd.ownsPath(vhd.pathBytes()));
 
     // A freshly created VHD has no partition table, so there is nothing to
     // lock. The handles matter: anything adopted here is held open until the
     // caller releases it, and a handle leaked on a disk with no volumes would
     // keep the drive letter of whatever came next.
     DiskpartUtil::LockedVolumes locked;
-    const auto result = DiskpartUtil::unmountVolumes(vhd.pathBytes(), locked);
+    const auto result = onOurDisk(vhd, [&locked](const QByteArray &device) {
+        return DiskpartUtil::unmountVolumes(device, locked);
+    });
     CHECK(result.success);
     CHECK(locked.empty());
 }

@@ -20,10 +20,15 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+// The system-tool check drives losetup, mkfs.vfat and fsck against a real
+// loop device, which is a POSIX mechanism with no counterpart here. The
+// rest of the file is arithmetic over bytes and runs anywhere.
+#ifndef _WIN32
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#endif
 
 namespace fs = std::filesystem;
 using namespace rpi_imager;
@@ -353,6 +358,8 @@ class DiskFormatterTest {
     return true;
   }
   
+#ifndef _WIN32
+
   // Run a command with separate argv (no shell interpretation).
   // Returns the exit status, or -1 on fork/exec failure.
   static int runCommand(const char *path, const std::vector<const char*> &argv) {
@@ -656,6 +663,18 @@ class DiskFormatterTest {
     std::cout << "System tool validation completed\n";
     return all_passed;
   }
+#else
+
+  // Nothing to drive here: there is no loop device to attach the image to,
+  // and no mkfs.vfat or fsck.vfat to read it back with. Every other case
+  // in this file checks the bytes themselves and runs as it does anywhere.
+  static bool TestSystemToolValidation() {
+    std::cout << "Skipping the system-tool check: no loop device here\n";
+    return true;
+  }
+
+#endif  // !_WIN32
+
 
 
   // A format lays down seven things in order. If any one of them fails the

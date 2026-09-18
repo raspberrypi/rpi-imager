@@ -15,8 +15,10 @@
  * It is also the only safe way to test the destructive paths. cleanDisk()
  * wipes a partition table; pointed at a VHD it wipes one belonging to nobody.
  * Every case that calls a destructive function must pass this object's own
- * path() and nothing else -- see requirePathIsOurs() below, which is there to
- * make a copy-paste of a real drive path fail loudly rather than quietly.
+ * path and nothing else. ownsPath() answers whether a given path is this
+ * disk, and diskpart_util_test.cpp routes such calls through a helper that
+ * takes the object rather than a path, so a drive path copied out of a bug
+ * report cannot reach one.
  *
  * Attaching a VHD needs elevation, so unelevated runs get valid() == false and
  * a reason to print, exactly as LoopDevice does on a Linux host without
@@ -39,10 +41,20 @@ namespace rpi_test {
 
 class VhdDevice {
 public:
+    // Whether Windows may mount what is on the disk.
+    //
+    // NoDriveLetter for the destructive cases: Explorer otherwise mounts
+    // whatever a case just wrote and starts polling the device, which slows
+    // the run and raises "Please insert a disk" the moment a case wipes the
+    // partition table underneath it. AllowDriveLetter for a case that wants
+    // the filesystem mounted, which is how a fixture stands in for the loop
+    // device and `mount` that the POSIX hosts use.
+    enum Mounting { NoDriveLetter, AllowDriveLetter };
+
     // Fixed rather than dynamically expanding: the write paths under test care
     // about the size the disk reports, and a dynamic VHD reports its maximum
     // while occupying almost nothing, which is the one way the two differ.
-    explicit VhdDevice(quint64 megabytes = 64)
+    explicit VhdDevice(quint64 megabytes = 64, Mounting mounting = NoDriveLetter)
     {
         _file = QDir(QDir::tempPath()).filePath(
             QStringLiteral("rpi-imager-test-%1.vhd")
@@ -76,15 +88,12 @@ public:
             return;
         }
 
-        // NO_DRIVE_LETTER keeps Explorer out of it. Without it Windows mounts
-        // whatever volume the case just wrote and starts polling the device,
-        // which both slows the run and raises "Please insert a disk" dialogs
-        // the moment a case wipes the partition table underneath it.
-        //
         // No PERMANENT_LIFETIME: the attachment is tied to this handle, so a
         // case that crashes or is killed leaves no VHD bound to the machine.
         rc = ::AttachVirtualDisk(_handle, nullptr,
-                                 ATTACH_VIRTUAL_DISK_FLAG_NO_DRIVE_LETTER,
+                                 mounting == NoDriveLetter
+                                     ? ATTACH_VIRTUAL_DISK_FLAG_NO_DRIVE_LETTER
+                                     : ATTACH_VIRTUAL_DISK_FLAG_NONE,
                                  0, nullptr, nullptr);
         if (rc != ERROR_SUCCESS) {
             _reason = describe(QStringLiteral("AttachVirtualDisk"), rc);
@@ -129,10 +138,14 @@ public:
     // they forgot to elevate or the machine cannot do it at all.
     QString reason() const { return _reason; }
 
-    // A destructive call must be aimed at this object and nothing else. Cheap
-    // insurance against a path being pasted in from a bug report: the cases
-    // below wipe partition tables, and the difference between this and a real
-    // drive is one character.
+    // Whether a path is this disk. A destructive call must be aimed at this
+    // object and nothing else: the difference between it and a real drive is
+    // one character, and the cases wipe partition tables.
+    //
+    // Asked with this object's own path it answers yes by construction, so it
+    // is worth nothing on its own -- it has to be asked about the path the
+    // call is actually being given. onOurDisk() in diskpart_util_test.cpp is
+    // where that happens.
     bool ownsPath(const QByteArray &device) const
     {
         return valid() && device == pathBytes();

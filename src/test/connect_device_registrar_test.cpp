@@ -67,11 +67,18 @@ public:
     {
     }
 
-    // The body repeated, for the sizes argv cannot carry: a single argument
-    // is capped well below a megabyte, and what a hostile endpoint can send
-    // is not.
+    // The body repeated, for the sizes argv cannot carry.
+    //
+    // Windows caps the whole command line at 32,767 characters, script and
+    // all, so the unit passed here has to stay small however large the body
+    // is meant to be -- a 64 KB unit does not start the server at all, and
+    // the case that wanted eight megabytes skipped itself on every run.
     FakeApiServer(int status, const QByteArray &body, int repeat)
     {
+        // Well under the cap, with the script and the other arguments to fit
+        // alongside it. A larger body is expressed as a bigger repeat.
+        REQUIRE(body.size() <= 4096);
+
         static const char *kScript =
             "import http.server, socketserver, sys\n"
             "status = int(sys.argv[1])\n"
@@ -271,7 +278,7 @@ TEST_CASE("Registrar refuses an endless response body", "[connect]")
     //
     // Eight megabytes here, which is small for a server that means it; the
     // shape is what matters.
-    FakeApiServer server(201, QByteArray(64 * 1024, 'x'), 128);
+    FakeApiServer server(201, QByteArray(1024, 'x'), 8 * 1024);
     REQUIRE_SERVER(server);
 
     ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
