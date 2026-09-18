@@ -30,6 +30,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QRegularExpression>
+#include <QTemporaryDir>
 #include <QFileInfo>
 #include <QMap>
 #include <QProcess>
@@ -1167,4 +1168,76 @@ TEST_CASE("SecureBoot skips a zero-length file and keeps the rest", "[secureboot
     CHECK(extracted.contains(QStringLiteral("config.txt")));
     // Skipped, not carried through as an empty placeholder.
     CHECK_FALSE(extracted.contains(QStringLiteral("empty.txt")));
+}
+
+// ---------------------------------------------------------------------------
+// What signBootcode2712 refuses before it signs anything
+// ---------------------------------------------------------------------------
+//
+// The arguments decide what a Pi will accept as its own bootcode. A keynum or
+// a version outside what the format holds would be truncated into the header
+// silently -- a signature over one set of fields, describing another.
+
+TEST_CASE("Signing refuses a bootcode with nothing in it", "[secureboot]")
+{
+    CHECK(SecureBoot::signBootcode2712(QByteArray(), QStringLiteral("any.pem"),
+                                       0, 0).isEmpty());
+}
+
+TEST_CASE("Signing refuses a key number the header cannot hold", "[secureboot]")
+{
+    const QByteArray bootcode(1024, '\x5a');
+    const QString key = QStringLiteral("any.pem");
+
+    // Nought to four are the key slots; sixteen is the one reserved value.
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, -1, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 5, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 15, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 17, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 1000, 0).isEmpty());
+}
+
+TEST_CASE("Signing refuses a version the header cannot hold", "[secureboot]")
+{
+    const QByteArray bootcode(1024, '\x5a');
+    const QString key = QStringLiteral("any.pem");
+
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 0, -1).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 0, 33).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 0, 1000).isEmpty());
+}
+
+TEST_CASE("Signing stops when there is no key to sign with", "[secureboot]")
+{
+    // Past the argument checks and into the signing itself, which cannot
+    // produce the 256 bytes the format wants without a key. Nothing partial
+    // comes back: a truncated result would be written as a signature.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString absent = QDir(dir.path()).filePath(QStringLiteral("no-such.pem"));
+
+    CHECK(SecureBoot::signBootcode2712(QByteArray(1024, '\x5a'), absent,
+                                       0, 0).isEmpty());
+}
+
+TEST_CASE("A boot signature is refused when the hash is the wrong length",
+          "[secureboot]")
+{
+    // generateBootSig is handed a hash to sign. Anything that is not a
+    // SHA-256 is not the thing the bootloader will check against.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = QDir(dir.path()).filePath(QStringLiteral("boot.img"));
+    const QString sig = QDir(dir.path()).filePath(QStringLiteral("boot.sig"));
+    {
+        QFile f(img);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray(4096, '\x11'));
+    }
+
+    // No key, so this refuses whatever else is true -- what it must not do is
+    // leave a signature file behind.
+    CHECK_FALSE(SecureBoot::generateBootSig(
+        img, QDir(dir.path()).filePath(QStringLiteral("no-such.pem")), sig));
+    CHECK_FALSE(QFileInfo::exists(sig));
 }
