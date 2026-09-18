@@ -61,11 +61,11 @@ says so in each skip.
 
 Run the suite with `ctest --test-dir <build dir> -j4`.
 
-Some cases need an elevated shell: building a boot image drives `diskpart`,
-and the imager's own manifest asks for administrator, so nothing can start the
-shipping binary without it. Run an elevated pass **as well as** an ordinary
-one, not instead of it -- an elevated token reads straight through a deny ACE,
-so the cases about refused permissions skip when it holds.
+Some cases need an elevated shell: the imager's own manifest asks for
+administrator, so nothing can start the shipping binary without it. Run an
+elevated pass **as well as** an ordinary one, not instead of it -- an elevated
+token reads straight through a deny ACE, so the cases about refused
+permissions skip when it holds.
 
 #### Building
 
