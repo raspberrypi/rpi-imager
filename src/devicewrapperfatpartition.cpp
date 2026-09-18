@@ -333,7 +333,18 @@ bool DeviceWrapperFatPartition::isEndOfChain(uint32_t cluster) const
 QList<uint32_t> DeviceWrapperFatPartition::getClusterChain(uint32_t firstCluster)
 {
     QList<uint32_t> list;
+    QSet<uint32_t> seen;
     uint32_t cluster = firstCluster;
+
+    /* A chain cannot hold more clusters than the partition has. Without the
+       bound, a table whose entries climb steadily is followed until it
+       happens to repeat -- and the repeat was looked for by scanning
+       everything collected so far, which is quadratic in the length. On a
+       card-sized partition that is minutes of a busy processor with nothing
+       to show for it, and the imager looks to the user as though it has
+       hung. A set answers the same question in constant time. */
+    const quint64 clusterCapacity =
+        _bytesPerCluster ? (_partLen / _bytesPerCluster) + 2 : 0;
 
     while (true)
     {
@@ -343,9 +354,13 @@ QList<uint32_t> DeviceWrapperFatPartition::getClusterChain(uint32_t firstCluster
             break;
         }
 
-        if (list.contains(cluster))
+        if (seen.contains(cluster))
             throw std::runtime_error("Corrupt file system. Circular references in FAT table");
 
+        if (static_cast<quint64>(list.size()) >= clusterCapacity)
+            throw std::runtime_error("Corrupt file system. Cluster chain longer than the partition");
+
+        seen.insert(cluster);
         list.append(cluster);
         cluster = getFAT(cluster);
     }
