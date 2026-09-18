@@ -138,7 +138,9 @@ static bool writePieepromSig(const std::filesystem::path& bootImgPath,
     }
 
     QFile f(QString::fromStdString(sigPath.string()));
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+    // Not QIODevice::Text: pieeprom.sig is read by the recovery image,
+    // which wants the bytes written here and not Windows line endings.
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         errOut = "Cannot write " + sigPath.string();
         return false;
     }

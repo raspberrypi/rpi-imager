@@ -307,8 +307,18 @@ if(WIN32)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
+    # boot.img is built in-process on Windows now -- the filesystem by
+    # DiskFormatter and the files into it by DeviceWrapperFatPartition -- so
+    # the creator brings those with it rather than shelling out to diskpart.
     set(PLATFORM_BOOTIMGCREATOR_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${PLATFORM_FILE_OPS})
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/acceleratedcryptographichash_cng.cpp)
     set(PLATFORM_DRIVELIST_SRC
@@ -572,20 +582,6 @@ if(WIN32)
     # Every case binds the relay's fixed port, so two at once means one of
     # them skips rather than runs.
     rpi_discover_tests(callback_relay_process_test RESOURCE_LOCK relay_callback_port)
-
-    # Which letter the boot image is mounted on. The rest of createBootImg
-    # needs elevation and a virtual disk; this decides where the files go.
-    add_executable(bootimg_drive_letter_test
-        bootimg_drive_letter_test.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp)
-    target_include_directories(bootimg_drive_letter_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    target_link_libraries(bootimg_drive_letter_test PRIVATE
-        Catch2::Catch2WithMain Qt6::Core)
-    target_compile_definitions(bootimg_drive_letter_test PRIVATE BOOTIMG_ENABLE_TEST_API)
-    target_compile_features(bootimg_drive_letter_test PRIVATE cxx_std_20)
-    rpi_discover_tests(bootimg_drive_letter_test)
 
     # Reading the key out of a WLAN profile. The rest of that file wants the
     # WLAN service and a wireless card; the decoding does not, and it is what
@@ -2061,6 +2057,36 @@ target_link_libraries(settings_permissions_test PRIVATE
 target_compile_features(settings_permissions_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(settings_permissions_test)
+
+# Writing into a subdirectory, measured against mtools rather than against
+# this driver's own reading -- which has agreed with it while it put files in
+# the wrong place.
+add_executable(fat_subdirectory_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    fat_subdirectory_test.cpp
+)
+
+set_target_properties(fat_subdirectory_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(fat_subdirectory_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(fat_subdirectory_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+rpi_link_platform_file_ops(fat_subdirectory_test)
+target_compile_features(fat_subdirectory_test PRIVATE cxx_std_20)
+rpi_discover_tests(fat_subdirectory_test)
 
 add_executable(fat_partition_image_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.h

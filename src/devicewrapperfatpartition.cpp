@@ -1200,7 +1200,7 @@ inline QByteArray _dirEntryToShortName(struct dir_entry *entry)
         return base+"."+ext;
 }
 
-bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct dir_entry *entry, bool createIfNotExist)
+bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct dir_entry *entry, bool createIfNotExist, uint32_t dirCluster)
 {
     QString filenameRead, longFilenameLower = longFilename.toLower();
     uint8_t lfnExpectedChecksum = 0;
@@ -1209,7 +1209,7 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
     if (longFilename.isEmpty())
         throw std::runtime_error("Filename cannot not be empty");
 
-    openDir();
+    openDirAt(dirCluster);
     while (readDir(entry))
     {
         if (IS_LONG_NAME_ENTRY(entry->DIR_Attr))
@@ -1458,22 +1458,37 @@ void DeviceWrapperFatPartition::writeDirEntryAtCurrentPos(struct dir_entry *dirE
 
 void DeviceWrapperFatPartition::openDir()
 {
-    /* Seek to start of root directory */
-    if (_type == FAT16)
+    openDirAt(0);
+}
+
+// Start a walk at `cluster`, or at the root when it is nought.
+//
+// openDir() used to be the only way in and always went to the root, so
+// anything wanting to look inside a subdirectory had to set the traversal
+// state itself and then avoid every function that calls openDir() -- which
+// is getDirEntry() and updateDirEntry(), the two that find and write
+// entries. deleteFile() carries an inline copy of the search for that
+// reason, and writeFile() refused subdirectories outright rather than
+// silently creating the entry in the root.
+void DeviceWrapperFatPartition::openDirAt(uint32_t cluster)
+{
+    if (_type == FAT16 && cluster == 0)
     {
         // Held to 64 bits: the constructor refused a root directory outside
         // the partition, but the product itself wraps in uint32_t.
         seek(qint64(quint64(_fat16_firstRootDirSector) * _bytesPerSector));
+        return;
     }
-    else
-    {
-        _fat32_currentRootDirCluster = _fat32_firstRootDirCluster;
-        seekCluster(_fat32_currentRootDirCluster);
-        /* Keep track of directory clusters we seeked to, to be able
-           to detect circular references */
-        _currentDirClusters.clear();
-        _currentDirClusters.append(_fat32_currentRootDirCluster);
-    }
+
+    // On FAT16 a subdirectory is an ordinary cluster chain like any other,
+    // so only the root is special there.
+    _fat32_currentRootDirCluster =
+        (cluster == 0) ? _fat32_firstRootDirCluster : cluster;
+    seekCluster(_fat32_currentRootDirCluster);
+    /* Keep track of directory clusters we seeked to, to be able
+       to detect circular references */
+    _currentDirClusters.clear();
+    _currentDirClusters.append(_fat32_currentRootDirCluster);
 }
 
 bool DeviceWrapperFatPartition::readDir(struct dir_entry *result)
