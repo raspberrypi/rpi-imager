@@ -52,9 +52,12 @@ says so in each skip.
   `openssl`, `ssh-keygen`, `dd`, `truncate`. Its `usrin` is deliberately not
   on PATH -- it would shadow Windows' own `find.exe` and `sort.exe` -- so the
   suite looks there directly.
-- **MSYS2** supplies the rest: `xz`, `zstd`, and `mtools` (`mformat`, `mcopy`),
-  which is the only FAT formatter available here since dosfstools has no
-  Windows build. Install with `pacman -S mingw-w64-x86_64-mtools`.
+- **MSYS2** supplies the rest: `xz`, `zstd`, and `mtools` (`mformat`, `mmd`,
+  `mcopy`, `mdir`). Install with `pacman -S mingw-w64-x86_64-mtools`. mtools is
+  not used to build anything the product needs -- it is the reference the FAT
+  writer is measured against, so that the driver is not left marking its own
+  work. Without it those cases skip and the FAT cover falls to whatever the
+  driver says about itself.
 - **Python 3** with **PyYAML** (`pip install PyYAML`) parses the generated
   cloud-init documents, and stands up the local HTTP servers several cases
   fetch from. The interpreter is called `python` here rather than `python3`.

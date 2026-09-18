@@ -4,21 +4,15 @@
  *
  * A reference filesystem, and what it takes to trust our own.
  *
- * The FAT writer here has been wrong in a way nothing noticed before: an
- * entry meant for a subdirectory was created in the root instead, so a file
- * asked for at "overlays/added.dtbo" was readable at "added.dtbo" and absent
- * from where it was put. Every test that only used this driver to read back
- * what this driver had written agreed with it.
- *
- * So the driver is not asked to mark its own work. mtools -- mformat, mmd,
- * mcopy, mdir -- builds a reference image, and the two implementations check
- * each other both ways round:
+ * A case that writes with the FAT driver and reads back with it agrees with
+ * itself however wrong the on-disk result is. mtools is the second
+ * implementation, and the two check each other both ways round:
  *
  *   ours read by theirs   what we wrote, listed and extracted by mtools
  *   theirs read by ours   what mtools wrote, listed and read by the driver
  *
- * A file in the wrong directory fails the first. A directory we cannot walk
- * fails the second. Neither can pass by agreeing with itself.
+ * A file in the wrong directory fails the first; a directory we cannot walk
+ * fails the second.
  */
 
 #ifndef RPI_TEST_FAT_REFERENCE_H

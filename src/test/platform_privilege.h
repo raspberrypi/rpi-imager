@@ -9,10 +9,9 @@
  * privilege none of that holds -- the open succeeds and the case proves
  * nothing -- so each one asks first and skips itself.
  *
- * Every one of them asked as ::geteuid() == 0, which is a question Windows
- * cannot answer: there are no euids, and the equivalent authority is carried
- * by the process token. Asked in one place instead, in the terms the cases
- * actually mean.
+ * Asked here rather than as ::geteuid() == 0, which Windows cannot answer:
+ * there are no euids, and the equivalent authority is carried by the process
+ * token.
  */
 #ifndef RPI_TEST_PLATFORM_PRIVILEGE_H
 #define RPI_TEST_PLATFORM_PRIVILEGE_H
@@ -63,24 +62,15 @@ inline bool isPrivileged()
 // not always installed.
 #ifdef _WIN32
 #define REQUIRE_BOOT_IMG_SUPPORT() ((void)0)
-
-// A boot image with a directory in it is a separate question.
-//
-// DeviceWrapperFatPartition::writeFile refuses a path carrying a directory:
-// getDirEntry() begins by seeking back to the root, so an entry meant for a
-// subdirectory would be created at the top level instead -- silently, and
-// worse than refusing. Until the writer can place one, a boot image carrying
-// overlays/ is one Windows cannot build.
-#define REQUIRE_NESTED_BOOT_IMG_SUPPORT()                                      \
-    SKIP("the FAT writer cannot create subdirectories yet, so a boot image "   \
-         "with a directory in it cannot be built here")
 #else
 #define REQUIRE_BOOT_IMG_SUPPORT() \
     if (!rpi_test::haveTool(QStringLiteral("mkfs.vfat"))) \
     SKIP("mkfs.vfat is not installed, so no boot.img can be built")
-
-// mcopy places a file in a subdirectory quite happily.
-#define REQUIRE_NESTED_BOOT_IMG_SUPPORT() REQUIRE_BOOT_IMG_SUPPORT()
 #endif
+
+// A boot image carrying a directory needs no more than the above: the FAT
+// writer creates the directory and places the file in it, cross-checked
+// against mtools in fat_subdirectory_test.cpp.
+#define REQUIRE_NESTED_BOOT_IMG_SUPPORT() REQUIRE_BOOT_IMG_SUPPORT()
 
 #endif // RPI_TEST_PLATFORM_PRIVILEGE_H

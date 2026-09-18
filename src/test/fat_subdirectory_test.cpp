@@ -4,17 +4,12 @@
  *
  * Writing into a subdirectory, checked against mtools.
  *
- * The driver has been wrong here in a way nothing noticed: an entry meant
- * for a subdirectory was created in the root instead, so a file asked for at
- * "overlays/added.dtbo" was readable at "added.dtbo" and absent from where
- * it was put. Every test that used this driver to read back what this driver
- * had written agreed with it.
- *
- * So it does not mark its own work. mtools builds the reference, and the two
- * check each other both ways: what we write is listed and extracted by
- * mtools, and what mtools writes is listed and read by us. A file in the
- * wrong directory fails the first; a directory we cannot walk fails the
- * second.
+ * The driver does not mark its own work here: a case that writes with this
+ * driver and reads back with it will agree with itself however wrong the
+ * on-disk result is. mtools is the second implementation, and the two check
+ * each other both ways -- what we write is listed and extracted by mtools,
+ * what mtools writes is listed and read by us. A file in the wrong directory
+ * fails the first; a directory we cannot walk fails the second.
  */
 
 #include <catch2/catch_test_macros.hpp>
@@ -163,18 +158,12 @@ TEST_CASE("Our driver reads what mtools put in a subdirectory",
     CHECK(fat.readFile(QStringLiteral("overlays/one.dtbo")) == QByteArray("ONE"));
 }
 
-TEST_CASE("A file more than one directory down is not read yet",
+TEST_CASE("A file more than one directory down is read at its path",
           "[fat][subdir][reference]")
 {
-    // Found by the reference rather than assumed: readFile() descends
-    // exactly one level. It takes the first path component as the directory
-    // and looks for the rest as a name inside it, so "a/b/c/deep.bin" is
-    // searched for as a file called "b/c/deep.bin" in "a", and is not there.
-    //
-    // Written down as it stands rather than left failing. A boot partition
-    // is one level deep so nothing ships broken by it -- but anything nested
-    // further reads as absent, which is worse than an error, and the writer
-    // has the matching gap.
+    // Depth is checked against the reference rather than assumed. A driver
+    // that descends only one level reports anything below it as absent,
+    // which a caller cannot tell from a file that is genuinely not there.
     REQUIRE_MTOOLS_REFERENCE();
 
     QTemporaryDir scratch;
@@ -197,9 +186,11 @@ TEST_CASE("A file more than one directory down is not read yet",
     DeviceWrapperFatPartition fat(&dw, 0,
                                   quint64(kImageMegabytes) * 1024 * 1024);
 
-    // And we do not find it. When the driver learns to descend further, this
-    // fails, and this is the place to say so.
-    CHECK(fat.readFile(QStringLiteral("a/b/c/deep.bin")).isEmpty());
+    // And so do we, at the path mtools put it at and at no other.
+    CHECK(fat.readFile(QStringLiteral("a/b/c/deep.bin")) == QByteArray("DEEP"));
+    CHECK(fat.fileExists(QStringLiteral("a/b/c/deep.bin")));
+    CHECK(fat.readFile(QStringLiteral("deep.bin")).isEmpty());
+    CHECK(fat.readFile(QStringLiteral("a/deep.bin")).isEmpty());
 }
 
 TEST_CASE("A file we write to the root is where mtools looks for it",
@@ -227,13 +218,13 @@ TEST_CASE("A file we write to the root is where mtools looks for it",
                                scratch.path()) == QByteArray("arm_64bit=1\n"));
 }
 
-TEST_CASE("A file we cannot place is refused, not put somewhere else",
+TEST_CASE("A file we nest is where mtools looks for it, and nowhere else",
           "[fat][subdir][reference]")
 {
-    // The failure this area had, stated as a requirement. Until the writer
-    // can create a directory, asking it for a path with one in it must
-    // refuse -- and above all must not leave the file in the root, where the
-    // caller would never look and mtools would plainly show it.
+    // The writer makes the directory and puts the file in it, and above all
+    // does not leave it in the root. Only the other implementation can say
+    // which of those happened: reading our own image back would agree with
+    // whatever we did.
     REQUIRE_MTOOLS_REFERENCE();
 
     QTemporaryDir scratch;
@@ -244,25 +235,77 @@ TEST_CASE("A file we cannot place is refused, not put somewhere else",
         OurImage image(img);
         REQUIRE(image.ok());
         image.fat().writeFile(QStringLiteral("config.txt"), "arm_64bit=1\n");
-
-        bool threw = false;
-        try {
-            image.fat().writeFile(QStringLiteral("overlays/one.dtbo"), "ONE");
-        } catch (const std::runtime_error &) {
-            threw = true;
-        }
-        CHECK(threw);
+        image.fat().writeFile(QStringLiteral("overlays/one.dtbo"), "ONE");
+        // Two files in one directory, so the second is placed into a
+        // directory that already exists rather than one it just made.
+        image.fat().writeFile(QStringLiteral("overlays/two.dtbo"), "TWO");
+        // And a path several levels down, every directory of which has to be
+        // created on the way.
+        image.fat().writeFile(QStringLiteral("a/b/c/deep.bin"), "DEEP");
         image.close();
     }
 
     const QStringList paths = rpi_test::mtoolsPaths(img);
     INFO("mtools sees: " << paths.join(QStringLiteral(", ")).toStdString());
-    // The refusal left the image as it was.
     CHECK(paths.contains(QStringLiteral("config.txt")));
-    // And nothing anywhere called one.dtbo -- not in overlays/, and not
-    // dropped in the root under its own name, which is what used to happen.
-    for (const QString &path : paths) {
-        INFO("found " << path.toStdString());
-        CHECK_FALSE(path.endsWith(QStringLiteral("one.dtbo")));
+    CHECK(paths.contains(QStringLiteral("overlays/one.dtbo")));
+    CHECK(paths.contains(QStringLiteral("overlays/two.dtbo")));
+    CHECK(paths.contains(QStringLiteral("a/b/c/deep.bin")));
+
+    // Nothing stranded in the root under its own name.
+    CHECK_FALSE(paths.contains(QStringLiteral("one.dtbo")));
+    CHECK_FALSE(paths.contains(QStringLiteral("two.dtbo")));
+    CHECK_FALSE(paths.contains(QStringLiteral("deep.bin")));
+
+    // And the contents survive the trip, read out by the other implementation.
+    CHECK(rpi_test::mtoolsRead(img, QStringLiteral("overlays/one.dtbo"),
+                               scratch.path()) == QByteArray("ONE"));
+    CHECK(rpi_test::mtoolsRead(img, QStringLiteral("overlays/two.dtbo"),
+                               scratch.path()) == QByteArray("TWO"));
+    CHECK(rpi_test::mtoolsRead(img, QStringLiteral("a/b/c/deep.bin"),
+                               scratch.path()) == QByteArray("DEEP"));
+}
+
+TEST_CASE("A directory we make is one mtools can add to", "[fat][subdir][reference]")
+{
+    // Stronger than reading it back: mtools writing into our directory has
+    // to find "." and ".." where the format says they are, the cluster chain
+    // terminated, and the end-of-directory marker in place. A directory that
+    // merely lists correctly can still be malformed in all three.
+    REQUIRE_MTOOLS_REFERENCE();
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    const QString img = scratch.filePath(QStringLiteral("ours.img"));
+
+    {
+        OurImage image(img);
+        REQUIRE(image.ok());
+        image.fat().writeFile(QStringLiteral("overlays/ours.dtbo"), "OURS");
+        image.close();
     }
+
+    const QString staged = QStringLiteral("theirs.bin");
+    {
+        QFile f(QDir(scratch.path()).filePath(staged));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("THEIRS");
+    }
+    REQUIRE(rpi_test::runMtool(QStringLiteral("mcopy"),
+                               {QStringLiteral("-i"), img, staged,
+                                QStringLiteral("::/overlays/theirs.bin")},
+                               nullptr, scratch.path()));
+
+    const QStringList paths = rpi_test::mtoolsPaths(img);
+    INFO("mtools sees: " << paths.join(QStringLiteral(", ")).toStdString());
+    CHECK(paths.contains(QStringLiteral("overlays/ours.dtbo")));
+    CHECK(paths.contains(QStringLiteral("overlays/theirs.bin")));
+
+    // Both readable by us afterwards, so their write did not disturb ours.
+    auto ops = rpi_imager::FileOperations::Create();
+    REQUIRE(ops->OpenDevice(img.toStdString()) == rpi_imager::FileError::kSuccess);
+    DeviceWrapper dw(ops.get());
+    DeviceWrapperFatPartition fat(&dw, 0, quint64(kImageMegabytes) * 1024 * 1024);
+    CHECK(fat.readFile(QStringLiteral("overlays/ours.dtbo")) == QByteArray("OURS"));
+    CHECK(fat.readFile(QStringLiteral("overlays/theirs.bin")) == QByteArray("THEIRS"));
 }
