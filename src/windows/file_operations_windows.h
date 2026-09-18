@@ -169,6 +169,15 @@ class WindowsFileOperations : public FileOperations {
 
   int RemainingInjectedWriteFailures() const { return injected_write_failures_.load(); }
 
+  // Replay the pending writes synchronously, as the emergency path does.
+  //
+  // Its only caller is a five-minute timeout inside WaitForPendingWrites,
+  // reached when writes stop completing altogether. No case can wait that
+  // long and none can stop a scratch file completing, so the replay -- which
+  // must put every outstanding buffer back at the offset it was given -- had
+  // no cover at all.
+  FileError ReplayPendingWritesSynchronously() { return AttemptSyncFallback(); }
+
  private:
   unsigned long injected_write_error_ = 0;
   std::atomic<int> injected_write_failures_{0};
