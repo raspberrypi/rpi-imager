@@ -1202,6 +1202,17 @@ TestCase {
         return null
     }
 
+    // The Text actually drawn for a substep, not the wrapper it was set on.
+    // MarqueeText is an Item holding the rendered element, so a case reading
+    // the wrapper's font cannot tell whether it reached the glyphs.
+    function substepGlyphs(label) {
+        const wrapper = findChild(substepRow(label), "sidebarSubstepLabel")
+        verify(wrapper, "'" + label + "' has a label")
+        const drawn = findChild(wrapper, "marqueeTextLabel")
+        verify(drawn, "'" + label + "' has a rendered label")
+        return drawn
+    }
+
     // The step index the sidebar's own mapping gives a label, so a case does
     // not have to repeat that mapping and cannot disagree with it.
     function substepIndexOf(label) {
@@ -1313,6 +1324,46 @@ TestCase {
             }
         }
         return -1
+    }
+
+    // Bold in the sidebar is how a user sees that a step is done, and it is a
+    // separate thing from the flag behind it: isCustomizationSubstepConfigured()
+    // can be right while nothing reaches the label it feeds.
+    function test_a_configured_substep_is_drawn_bold() {
+        wiz.secureBootAvailable = false
+        wiz.ccRpiAvailable = false
+        wiz.piConnectAvailable = true
+        showTheSublist(wiz.stepWifiCustomization)
+
+        // Taken in the sidebar's own order rather than written out here, so
+        // this cannot disagree with the list it is checking.
+        const flags = ["hostnameConfigured", "localeConfigured",
+                       "userConfigured", "wifiConfigured", "sshEnabled",
+                       "piConnectEnabled"]
+        const labels = wiz.getCustomizationSubstepLabels()
+        compare(labels.length, flags.length,
+                "the sublist is the one this case maps: " + labels.join(", "))
+
+        for (let i = 0; i < flags.length; i++)
+            wiz[flags[i]] = false
+        waitForRendering(testCase)
+        for (let i = 0; i < labels.length; i++)
+            verify(!substepGlyphs(labels[i]).font.bold,
+                   "'" + labels[i] + "' is not bold before it is configured")
+
+        for (let i = 0; i < flags.length; i++) {
+            wiz[flags[i]] = true
+            waitForRendering(testCase)
+            verify(substepGlyphs(labels[i]).font.bold,
+                   "'" + labels[i] + "' is drawn bold once " + flags[i]
+                   + " is set")
+            for (let j = 0; j < labels.length; j++) {
+                if (j !== i)
+                    verify(!substepGlyphs(labels[j]).font.bold,
+                           "'" + labels[j] + "' did not bold with it")
+            }
+            wiz[flags[i]] = false
+        }
     }
 
     function test_the_substeps_hang_off_the_customisation_row() {
