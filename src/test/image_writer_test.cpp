@@ -8397,6 +8397,59 @@ constexpr qint64 kBootImgSize = 33 * 1024 * 1024;
 
 } // namespace
 
+TEST_CASE("A boot image of no size is refused before anything is made",
+          "[bootimg]")
+{
+    // The size comes from the caller's arithmetic over the files it wants
+    // packed. Nought or negative means that arithmetic went wrong, and
+    // formatting to it would produce something the bootloader cannot read.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["config.txt"] = "arm_64bit=1\n";
+
+    CHECK_FALSE(BootImgCreator::createBootImg(files, img, 0));
+    CHECK_FALSE(BootImgCreator::createBootImg(files, img, -1));
+    // And nothing is left behind to be signed and served.
+    CHECK_FALSE(QFileInfo::exists(img));
+}
+
+TEST_CASE("A boot image with no files is refused", "[bootimg]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    CHECK_FALSE(BootImgCreator::createBootImg({}, img, kBootImgSize));
+    CHECK_FALSE(QFileInfo::exists(img));
+}
+
+TEST_CASE("A leading separator does not make a nameless file", "[bootimg]")
+{
+    // Callers assemble these paths, and an absolute-looking one is a path
+    // from the root of the image rather than of the host. Stripped, or the
+    // name would begin with a separator FAT has no place for -- and a name
+    // that is nothing but separators names no file at all and is skipped
+    // rather than refused, so one stray entry cannot fail the whole image.
+    REQUIRE_BOOT_IMG_SUPPORT();
+    if (!haveMtools())
+        SKIP("mtools is needed to read the image back");
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = dir.filePath(QStringLiteral("boot.img"));
+
+    QMap<QString, QByteArray> files;
+    files["/config.txt"] = "arm_64bit=1\n";
+    files["/"] = "nothing at all";
+
+    REQUIRE(BootImgCreator::createBootImg(files, img, kBootImgSize));
+    CHECK(readFromImage(img, QStringLiteral("config.txt"))
+          == QByteArray("arm_64bit=1\n"));
+}
+
 TEST_CASE("A file put in the boot image can be read back out",
           "[bootimg]")
 {
