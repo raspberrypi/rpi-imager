@@ -346,6 +346,23 @@ TEST_CASE("The pending list is ordered by where each write goes",
     CHECK(dev->GetPendingWritesSorted().empty());
 }
 
+TEST_CASE("Draining a queue that is not empty switches to synchronous mode",
+          "[fileops-win]")
+{
+    // Asked of an empty queue elsewhere, which returns before the drain loop.
+    // With writes on it the loop polls completions until the count reaches
+    // nought, which is what a stalling card puts it through.
+    ScratchDevice dev(48u * 1024 * 1024);
+    QueuedWrites queued;
+    if (!fillTheQueue(dev, queued, 96, 256 * 1024))
+        SKIP("this backend has no asynchronous path to exercise");
+
+    REQUIRE(dev->DrainAndSwitchToSync(30));
+    CHECK(dev->IsInSyncFallbackMode());
+    CHECK(dev->GetPendingWriteCount() == 0);
+    CHECK(queued.completed.load() + queued.failed.load() == 96);
+}
+
 TEST_CASE("Waiting with nothing outstanding returns at once", "[fileops-win]")
 {
     ScratchDevice dev;
@@ -858,6 +875,45 @@ TEST_CASE("A cancelled device abandons a write it was retrying",
     dev->CancelAsyncIO();
     const auto block = pattern(4096, 7);
     CHECK(dev->WriteAtOffset(0, block.data(), block.size()) == FileError::kCancelled);
+}
+
+
+TEST_CASE("The emergency replay puts every pending write where it belongs",
+          "[fileops-win][transient]")
+{
+    // Reached in the product from a five-minute timeout, when writes have
+    // stopped completing entirely. What matters is that each outstanding
+    // buffer is written at the offset it was given rather than wherever the
+    // file pointer happened to be, because the queue is replayed in order
+    // after the async attempt is abandoned.
+    ScratchDevice dev(8u * 1024 * 1024);
+    if (!dev->IsAsyncIOSupported())
+        SKIP("this backend has no asynchronous path to exercise");
+
+    dev->SetAsyncQueueDepth(32);
+
+    // Three distinguishable blocks, queued back to back so they take
+    // consecutive offsets from nought.
+    std::vector<std::vector<std::uint8_t>> blocks;
+    for (int i = 0; i < 3; ++i)
+        blocks.push_back(pattern(64 * 1024, static_cast<std::uint8_t>(100 + i)));
+    for (const auto &b : blocks) {
+        REQUIRE(dev->AsyncWriteSequential(b.data(), b.size()) == FileError::kSuccess);
+    }
+
+    REQUIRE(backend(dev).ReplayPendingWritesSynchronously() == FileError::kSuccess);
+    CHECK(dev->IsInSyncFallbackMode());
+
+    // Whether they were replayed or had already landed, the file must read
+    // back as the three blocks in the order they were queued.
+    for (std::size_t i = 0; i < blocks.size(); ++i) {
+        REQUIRE(dev->Seek(static_cast<std::uint64_t>(i) * 64 * 1024) == FileError::kSuccess);
+        std::vector<std::uint8_t> got(blocks[i].size());
+        std::size_t read = 0;
+        REQUIRE(dev->ReadSequential(got.data(), got.size(), read) == FileError::kSuccess);
+        INFO("block " << i);
+        CHECK(got == blocks[i]);
+    }
 }
 
 #endif // FILEOPS_ENABLE_TEST_API
