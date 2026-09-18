@@ -48,6 +48,16 @@
 #include "fixture_process.h"
 #include "platform_tools.h"
 #include "platform_fat.h"
+#include "platform_privilege.h"
+#include "fat_disk_image.h"
+
+#ifdef _WIN32
+// A virtual disk is what stands in for the loop device here; the rescan is
+// what makes Windows read the partition table that was just written to it.
+#include "vhd_device.h"
+#include "windows/diskpart_util.h"
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -1279,12 +1289,34 @@ TEST_CASE("DownloadExtractThread rejects a decompressed image with the wrong has
 
 namespace {
 
+// Whether a mounted device can be built here at all.
+//
+// The two hosts ask different questions. Linux and macOS shell out to
+// losetup and mount, so what matters is whether sudo will run without a
+// password prompt; Windows attaches a virtual disk in-process, so what
+// matters is whether this token is elevated. Asking the POSIX question on
+// Windows skipped every case that wanted a device, however the run started.
 bool canRunPrivileged()
 {
+#ifdef _WIN32
+    return rpi_test::isPrivileged();
+#else
     QProcess probe;
     probe.start(QStringLiteral("sudo"), {QStringLiteral("-n"), QStringLiteral("true")});
     probe.waitForFinished(10000);
     return probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
+#endif
+}
+
+// Why no mounted device could be built, for the twelve cases that want one.
+const char *noMountedDeviceReason()
+{
+#ifdef _WIN32
+    return "attaching a virtual disk needs an elevated process, and this one "
+           "is not";
+#else
+    return "passwordless sudo is unavailable, so no mounted device can be built";
+#endif
 }
 
 bool runPrivileged(const QString &program, const QStringList &args, QByteArray *out = nullptr)
@@ -1302,13 +1334,108 @@ class MountedFatDevice
 {
 public:
 #ifdef _WIN32
-    // losetup, mount and the uid= option that hands the mounted files to the
-    // invoking user are Linux facilities, and no arrangement of Windows APIs
-    // stands in for them here. Left not ready, so the cases wanting one skip
-    // themselves exactly as they do on a host that will not allow a loop
-    // device at all.
-    explicit MountedFatDevice(int) {}
-    ~MountedFatDevice() = default;
+    // A virtual disk stands in for the loop device. Attached, it is a
+    // physical drive with a partition table Windows reads and a filesystem
+    // the Mount Manager gives a letter to, which is what these cases need:
+    // Drivelist then reports the drive with that letter as its mount point,
+    // and DownloadExtractThread unpacks into it exactly as it would a card.
+    //
+    // Attaching needs elevation. Every step below leaves _mounted false where
+    // it cannot be taken, so an unelevated run -- or a machine with automount
+    // switched off -- skips these cases rather than failing them.
+    explicit MountedFatDevice(int megabytes)
+    {
+        _dir = QDir::temp().filePath(QStringLiteral("rpi-imager-mf-%1")
+                                         .arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
+        QDir().mkpath(_dir);
+
+        const QByteArray disk = rpi_test::buildFat32DiskImage(_dir, megabytes);
+        if (disk.isEmpty())
+            return;
+
+        // Letters already in use, so the one that appears can be told from
+        // the ones that were always there.
+        const DWORD before = ::GetLogicalDrives();
+
+        _vhd = std::make_unique<rpi_test::VhdDevice>(
+            quint64(megabytes) + 8, rpi_test::VhdDevice::AllowDriveLetter);
+        if (!_vhd->valid())
+            return;
+        _loop = _vhd->path();
+
+        if (!writeToPhysicalDrive(_loop, disk))
+            return;
+
+        // Windows has the old, empty table cached. Without this the volume
+        // never appears however long the wait.
+        if (!DiskpartUtil::rescanDisk(_loop.toLatin1()).success)
+            return;
+
+        const char letter = waitForNewDriveLetter(before);
+        if (letter == 0)
+            return;
+
+        _mountPoint = QStringLiteral("%1:/").arg(QLatin1Char(letter));
+        _mounted = true;
+    }
+
+    ~MountedFatDevice()
+    {
+        // The VHD detaches itself, which takes the volume and its letter with
+        // it. Only the scratch directory is ours to remove.
+        _vhd.reset();
+        QDir(_dir).removeRecursively();
+    }
+
+private:
+    // Sector-aligned from offset nought, which is what a physical drive
+    // handle accepts. The disk was attached with no partitions, so nothing is
+    // holding a volume on it and no lock is needed.
+    static bool writeToPhysicalDrive(const QString &path, const QByteArray &bytes)
+    {
+        const std::wstring wide = path.toStdWString();
+        HANDLE h = ::CreateFileW(wide.c_str(), GENERIC_WRITE,
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                 OPEN_EXISTING, 0, nullptr);
+        if (h == INVALID_HANDLE_VALUE)
+            return false;
+
+        bool ok = true;
+        DWORD written = 0;
+        qint64 done = 0;
+        while (done < bytes.size()) {
+            const DWORD chunk = DWORD(qMin<qint64>(1 << 20, bytes.size() - done));
+            if (!::WriteFile(h, bytes.constData() + done, chunk, &written, nullptr) ||
+                written != chunk) {
+                ok = false;
+                break;
+            }
+            done += written;
+        }
+        ::FlushFileBuffers(h);
+        ::CloseHandle(h);
+        return ok;
+    }
+
+    // The letter the Mount Manager gave the volume that just appeared, or
+    // nought if none did. Polled because the assignment is asynchronous and
+    // happens after the rescan returns.
+    static char waitForNewDriveLetter(DWORD before)
+    {
+        for (int i = 0; i < 100; ++i) {
+            const DWORD now = ::GetLogicalDrives();
+            const DWORD added = now & ~before;
+            if (added) {
+                for (int bit = 0; bit < 26; ++bit)
+                    if (added & (1u << bit))
+                        return char('A' + bit);
+            }
+            QThread::msleep(100);
+        }
+        return 0;
+    }
+
+public:
 #else
     explicit MountedFatDevice(int megabytes)
     {
@@ -1319,31 +1446,9 @@ public:
         QDir().mkpath(_mountPoint);
         const QString backing = QDir(_dir).filePath(QStringLiteral("disk.img"));
 
-        const qint64 partOffset = 2048LL * 512;
-        const qint64 fatBytes = static_cast<qint64>(megabytes) * 1024 * 1024;
-
-        // FAT filesystem first, then an MBR in front of it.
-        const QString fatPath = QDir(_dir).filePath(QStringLiteral("fat.img"));
-        { QFile f(fatPath); if (!f.open(QIODevice::WriteOnly) || !f.resize(fatBytes)) return; }
-        if (!rpi_test::makeFatFilesystem(fatPath, 32, QStringLiteral("bootfs")))
+        const QByteArray disk = rpi_test::buildFat32DiskImage(_dir, megabytes);
+        if (disk.isEmpty())
             return;
-
-        QFile fat(fatPath);
-        if (!fat.open(QIODevice::ReadOnly)) return;
-        const QByteArray fatImage = fat.readAll();
-        fat.close();
-        QFile::remove(fatPath);
-
-        QByteArray disk(partOffset, '\0');
-        auto put32 = [&](int off, quint32 v) {
-            disk[off] = char(v & 0xFF); disk[off+1] = char((v >> 8) & 0xFF);
-            disk[off+2] = char((v >> 16) & 0xFF); disk[off+3] = char((v >> 24) & 0xFF);
-        };
-        disk[0x1BE] = char(0x80); disk[0x1C2] = char(0x0C);
-        put32(0x1C6, 2048);
-        put32(0x1CA, static_cast<quint32>(fatBytes / 512));
-        disk[0x1FE] = char(0x55); disk[0x1FF] = char(0xAA);
-        disk.append(fatImage);
 
         { QFile f(backing); if (!f.open(QIODevice::WriteOnly)) return; f.write(disk); f.close(); }
 
@@ -1395,6 +1500,9 @@ public:
 private:
     QString _dir, _mountPoint, _loop, _partition;
     bool _mounted = false;
+#ifdef _WIN32
+    std::unique_ptr<rpi_test::VhdDevice> _vhd;
+#endif
 };
 
 } // namespace
@@ -1403,7 +1511,7 @@ TEST_CASE("DownloadExtractThread unpacks a multi-file archive onto the target",
           "[extract][multifile]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     MountedFatDevice device(48);
@@ -1445,7 +1553,7 @@ TEST_CASE("DownloadExtractThread reports a multi-file archive it cannot read",
           "[extract][multifile]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
 
@@ -1476,7 +1584,7 @@ TEST_CASE("A multi-file archive that fails leaves nothing behind on the card",
     // a corrupted download looks like: everything unpacks, then the check at
     // the end rejects it.
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     MountedFatDevice device(48);
@@ -1522,7 +1630,7 @@ TEST_CASE("A truncated multi-file archive leaves no partial tree",
     // go too, directories included -- an empty overlays/ left behind is the
     // kind of thing that makes a later write look like it worked.
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     MountedFatDevice device(48);
@@ -1568,7 +1676,7 @@ TEST_CASE("A truncated multi-file archive leaves no partial tree",
 TEST_CASE("DownloadExtractThread unpacks nested directories", "[extract][multifile]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
@@ -1614,7 +1722,7 @@ TEST_CASE("DownloadExtractThread unpacks nested directories", "[extract][multifi
 TEST_CASE("DownloadExtractThread unpacks many small files", "[extract][multifile]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
@@ -1661,7 +1769,7 @@ TEST_CASE("DownloadExtractThread unpacks a compressed multi-file archive",
           "[extract][multifile]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
@@ -1709,7 +1817,7 @@ TEST_CASE("DownloadExtractThread reports a corrupt multi-file archive",
           "[extract][multifile]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
@@ -1777,7 +1885,7 @@ TEST_CASE("DownloadExtractThread will not write outside the target",
           "[extract][multifile][security]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
@@ -1848,7 +1956,7 @@ TEST_CASE("DownloadExtractThread will not write to an absolute path",
           "[extract][multifile][security]")
 {
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     if (!haveTool(QStringLiteral("zip")))
@@ -2175,7 +2283,7 @@ TEST_CASE("A multi-file archive that verifies is kept for next time",
     // is one every later write would have to throw away -- or worse, would
     // not.
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     MountedFatDevice device(48);
@@ -2241,7 +2349,7 @@ TEST_CASE("A multi-file archive whose hash is wrong leaves no cache entry",
     // write of that image starts from a corrupt copy that no longer has a
     // download to be checked against.
     if (!canRunPrivileged())
-        SKIP("passwordless sudo is unavailable, so no mounted device can be built");
+        SKIP(noMountedDeviceReason());
     if (!rpi_test::haveFatFormatter())
         SKIP("mkfs.vfat is not installed");
     MountedFatDevice device(48);

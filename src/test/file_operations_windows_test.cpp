@@ -18,6 +18,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include "file_operations.h"
 #include "platform_permissions.h"
@@ -517,6 +518,94 @@ TEST_CASE("A refusal reaches the reissue path from the queue as well as the drai
                                         got.begin() + (i + 1) * block.size());
         CHECK(slice == block);
     }
+}
+
+// ============================================================================
+// The synchronous write, refused
+// ============================================================================
+// WriteAtOffset is what the write path falls back to where the asynchronous
+// queue is not in use, and it sorts the failures it gets into ones worth
+// trying again and ones that will never come right. None of that had run:
+// a scratch file does not answer "write protected" on request, so every
+// branch below the first was reached only on somebody's card, in the field,
+// with the card already spoilt.
+
+namespace {
+
+// A write of one block to a device that answers with `error` `count` times.
+FileError writeRefusedWith(ScratchDevice &dev, unsigned long error, int count)
+{
+    backend(dev).FailNextWriteCompletions(error, count);
+    const auto block = pattern(4096, 7);
+    return dev->WriteAtOffset(0, block.data(), block.size());
+}
+
+} // namespace
+
+TEST_CASE("A write refused for a reason that will not change is not retried",
+          "[fileops-win][transient]")
+{
+    // A full disk, a write-protected card and a bad sector are all answers
+    // the next attempt gets as well. Retrying them costs the user three more
+    // seconds and the same failure, and on a card that is failing it is
+    // three more attempts at a sector that is going.
+    const unsigned long error = GENERATE(
+        static_cast<unsigned long>(ERROR_DISK_FULL),
+        static_cast<unsigned long>(ERROR_WRITE_PROTECT),
+        static_cast<unsigned long>(ERROR_SECTOR_NOT_FOUND),
+        static_cast<unsigned long>(ERROR_CRC),
+        static_cast<unsigned long>(ERROR_ACCESS_DENIED));
+
+    ScratchDevice dev;
+    INFO("error " << error);
+    // One injection, and it is not used up by a retry -- because there is
+    // none.
+    CHECK(writeRefusedWith(dev, error, 4) == FileError::kWriteError);
+    CHECK(backend(dev).RemainingInjectedWriteFailures() == 3);
+}
+
+TEST_CASE("A write refused while the device settles is tried again",
+          "[fileops-win][transient]")
+{
+    // ERROR_NOT_READY is what a card reader answers while Windows finishes
+    // re-enumerating the disk after the partition table is rewritten. It
+    // comes right on its own, so the write is reissued rather than the card
+    // being called a failure.
+    ScratchDevice dev;
+    CHECK(writeRefusedWith(dev, ERROR_NOT_READY, 1) == FileError::kSuccess);
+    CHECK(backend(dev).RemainingInjectedWriteFailures() == 0);
+
+    // And what it wrote is what was asked for, at the offset that was asked
+    // for -- a retry that lost its place would pass the return code alone.
+    const auto block = pattern(4096, 7);
+    std::vector<std::uint8_t> got(block.size());
+    REQUIRE(dev->Seek(0) == FileError::kSuccess);
+    std::size_t read = 0;
+    REQUIRE(dev->ReadSequential(got.data(), got.size(), read) == FileError::kSuccess);
+    CHECK(read == got.size());
+    CHECK(got == block);
+}
+
+TEST_CASE("A write refused past the attempts allowed gives up",
+          "[fileops-win][transient]")
+{
+    // Three retries, then the error is reported. Carrying on would be a
+    // write that never returns and a progress bar that never moves.
+    ScratchDevice dev;
+    CHECK(writeRefusedWith(dev, ERROR_NOT_READY, 10) == FileError::kWriteError);
+    // Four attempts in total: the first and three retries.
+    CHECK(backend(dev).RemainingInjectedWriteFailures() == 6);
+}
+
+TEST_CASE("A cancelled device abandons a write it was retrying",
+          "[fileops-win][transient]")
+{
+    // Cancelling is checked at the top of every attempt, so a retry loop
+    // does not hold a cancel up for its whole backoff.
+    ScratchDevice dev;
+    dev->CancelAsyncIO();
+    const auto block = pattern(4096, 7);
+    CHECK(dev->WriteAtOffset(0, block.data(), block.size()) == FileError::kCancelled);
 }
 
 #endif // FILEOPS_ENABLE_TEST_API

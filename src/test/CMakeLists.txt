@@ -718,6 +718,12 @@ target_compile_options(platformquirks_test PRIVATE
 )
 
 # Register with CTest for automatic test discovery
+if(WIN32)
+    # virtdisk for vhd_device.h, reached through TestBlockDevice: a
+    # virtual disk is what stands in for a loop device here.
+    target_link_libraries(platformquirks_test PRIVATE virtdisk)
+endif()
+
 rpi_discover_tests(platformquirks_test)
 
 # A real executable for the launch cases to launch, on every platform. They used
@@ -1163,62 +1169,63 @@ add_custom_target(test_rpiboot
 # Disk Formatter Tests
 # ============================================================================
 
-# Standalone test (not Catch2) — uses POSIX fork/exec for system tool validation
-if(NOT WIN32)
-    add_executable(disk_formatter_test
-        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../aligned_buffer.h
-        ${PLATFORM_FILE_OPS}
-        disk_formatter_test.cpp
-    )
+# Standalone test (not Catch2). The loop-device section is POSIX and is
+# compiled out elsewhere; everything else is arithmetic over the bytes a
+# format lays down, and had no counterpart on Windows while the whole binary
+# was skipped there.
+add_executable(disk_formatter_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../aligned_buffer.h
+    ${PLATFORM_FILE_OPS}
+    disk_formatter_test.cpp
+)
 
-    # Enable Qt MOC for Q_OBJECT classes (e.g. MacFile on macOS)
-    set_target_properties(disk_formatter_test PROPERTIES AUTOMOC ON)
+# Enable Qt MOC for Q_OBJECT classes (e.g. MacFile on macOS)
+set_target_properties(disk_formatter_test PROPERTIES AUTOMOC ON)
 
-    target_include_directories(disk_formatter_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..
-    )
+target_include_directories(disk_formatter_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
 
-    # Qt6::Core needed by platform file_operations (QFile, QDebug)
+# Qt6::Core needed by platform file_operations (QFile, QDebug)
+target_link_libraries(disk_formatter_test PRIVATE
+    Qt6::Core
+)
+
+target_compile_features(disk_formatter_test PRIVATE cxx_std_20)
+target_compile_options(disk_formatter_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+if(APPLE)
     target_link_libraries(disk_formatter_test PRIVATE
-        Qt6::Core
-    )
-
-    target_compile_features(disk_formatter_test PRIVATE cxx_std_20)
-    target_compile_options(disk_formatter_test PRIVATE
-        -Wall -Wextra -Wpedantic
-        $<$<CONFIG:Debug>:-g -O0>
-    )
-
-    if(APPLE)
-        target_link_libraries(disk_formatter_test PRIVATE
-            "-framework Security"
-            "-framework DiskArbitration"
-            "-framework CoreFoundation"
-        )
-    endif()
-
-    rpi_link_platform_file_ops(disk_formatter_test)
-
-    # Not Catch2, so rpi_discover_tests does not apply -- register it directly.
-    # Until now this binary was built but never registered, which left
-    # file_operations.cpp and the platform file_operations implementation with
-    # no test that actually runs. The TIMEOUT is a backstop: the loop-device
-    # section shells out, and while every sudo in it now passes -n, a wedged
-    # external tool should fail the suite rather than hang it.
-    add_test(NAME disk_formatter COMMAND disk_formatter_test)
-    set_tests_properties(disk_formatter PROPERTIES TIMEOUT 120)
-
-    add_custom_target(test_disk_formatter
-        COMMAND disk_formatter_test
-        DEPENDS disk_formatter_test
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Running disk formatter tests"
+        "-framework Security"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
     )
 endif()
+
+rpi_link_platform_file_ops(disk_formatter_test)
+
+# Not Catch2, so rpi_discover_tests does not apply -- register it directly.
+# Until now this binary was built but never registered, which left
+# file_operations.cpp and the platform file_operations implementation with
+# no test that actually runs. The TIMEOUT is a backstop: the loop-device
+# section shells out, and while every sudo in it now passes -n, a wedged
+# external tool should fail the suite rather than hang it.
+add_test(NAME disk_formatter COMMAND disk_formatter_test)
+set_tests_properties(disk_formatter PROPERTIES TIMEOUT 120)
+
+add_custom_target(test_disk_formatter
+    COMMAND disk_formatter_test
+    DEPENDS disk_formatter_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running disk formatter tests"
+)
 
 # ============================================================================
 # Device I/O Limits Diagnostic Test
@@ -1922,6 +1929,83 @@ add_custom_target(test_performance_stats
 # and drives the same code against that: no device, no mount, no privileges,
 # and both FAT16 and FAT32. Cases skip themselves where mkfs.vfat is absent.
 
+add_executable(proxy_url_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../proxy_url.h
+    proxy_url_test.cpp
+)
+
+target_include_directories(proxy_url_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(proxy_url_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    Qt6::Network
+)
+
+target_compile_features(proxy_url_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(proxy_url_test)
+
+add_executable(image_options_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imageadvancedoptions.h
+    image_options_test.cpp
+)
+
+# Q_NAMESPACE, so moc has to see the header.
+set_target_properties(image_options_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(image_options_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(image_options_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(image_options_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(image_options_test)
+
+add_executable(revision_code_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../embedded/revision_code.h
+    revision_code_test.cpp
+)
+
+target_include_directories(revision_code_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(revision_code_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(revision_code_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(revision_code_test)
+
+add_executable(settings_permissions_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.cpp
+    settings_permissions_test.cpp
+)
+
+target_include_directories(settings_permissions_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(settings_permissions_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(settings_permissions_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(settings_permissions_test)
+
 add_executable(fat_partition_image_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
@@ -2249,6 +2333,12 @@ rpi_link_platform_file_ops(drive_format_thread_test)
 
 target_compile_features(drive_format_thread_test PRIVATE cxx_std_20)
 
+if(WIN32)
+    # virtdisk for vhd_device.h, reached through TestBlockDevice: a
+    # virtual disk is what stands in for a loop device here.
+    target_link_libraries(drive_format_thread_test PRIVATE virtdisk)
+endif()
+
 rpi_discover_tests(drive_format_thread_test)
 
 # ── ImageWriter and the models behind the pickers ───────────────────────────
@@ -2385,6 +2475,12 @@ if(NOT BUILD_CLI_ONLY)
         add_dependencies(image_writer_test network_manager_psk_probe)
     endif()
     target_link_libraries(image_writer_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+if(WIN32)
+        # virtdisk for vhd_device.h, reached through TestBlockDevice: a virtual
+        # disk is what stands in for a loop device here.
+        target_link_libraries(image_writer_test PRIVATE virtdisk)
+    endif()
+
     target_compile_definitions(image_writer_test PRIVATE
         IMAGER_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
     rpi_discover_tests(image_writer_test FAULT_INJECTION)
@@ -2907,6 +3003,13 @@ rpi_link_platform_backends(download_thread_test)
 
 rpi_link_platform_file_ops(download_thread_test)
 
+if(WIN32)
+    # virtdisk for vhd_device.h, reached through TestBlockDevice: a virtual
+    # disk is what stands in for a loop device here.
+    target_link_libraries(download_thread_test PRIVATE virtdisk)
+endif()
+
+
 target_compile_features(download_thread_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(download_thread_test FAULT_INJECTION)
@@ -2963,6 +3066,12 @@ target_link_libraries(download_extract_thread_test PRIVATE
 rpi_link_platform_backends(download_extract_thread_test)
 
 rpi_link_platform_file_ops(download_extract_thread_test)
+
+if(WIN32)
+    # virtdisk for vhd_device.h: the mounted-FAT fixture attaches a virtual
+    # disk where the POSIX hosts take a loop device.
+    target_link_libraries(download_extract_thread_test PRIVATE virtdisk)
+endif()
 
 target_compile_features(download_extract_thread_test PRIVATE cxx_std_20)
 

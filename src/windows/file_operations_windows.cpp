@@ -633,77 +633,63 @@ FileError WindowsFileOperations::WriteAtOffset(
     DWORD written = 0;
     
     BOOL result = WriteFile(handle_, data + bytes_written, chunk_size, &written, &overlapped);
-    
-    if (!result) {
-      DWORD error = GetLastError();
-      
-      if (error == ERROR_IO_PENDING) {
-        // I/O is pending - wait for completion with cancellation support
-        if (!WaitForOverlappedWithCancel(&overlapped, &written)) {
-          error = GetLastError();
-          CloseHandle(overlapped.hEvent);
-          
-          // Check if cancelled
-          if (cancelled_.load() || error == ERROR_OPERATION_ABORTED) {
-            return FileError::kCancelled;
-          }
-          
-          std::ostringstream oss;
-          oss << "WriteAtOffset: GetOverlappedResult failed, offset=" << (offset + bytes_written)
-              << ", chunk_size=" << chunk_size << ", error=" << error;
-          Log(oss.str());
-          
-          if (!WriteErrorIsTransient(error)) {
-            return FileError::kWriteError;
-          }
 
-          // For other errors, try to retry
-          if (retry_count < max_retries) {
-            retry_count++;
-            Sleep(100 * retry_count);
-            continue;
-          }
-          return FileError::kWriteError;
-        }
+    // Taken here rather than where it is read, so it cannot be clobbered by
+    // anything called in between.
+    DWORD error = result ? ERROR_SUCCESS : GetLastError();
+    const bool pending = !result && error == ERROR_IO_PENDING;
+
+    if (pending) {
+      // The usual answer on a handle opened for overlapped I/O. Waited for
+      // in slices so a cancel is not held up for the whole transfer.
+      if (WaitForOverlappedWithCancel(&overlapped, &written)) {
+        result = TRUE;
+        error = ERROR_SUCCESS;
       } else {
-        // Real error (not pending)
-        std::ostringstream oss;
-        oss << "WriteAtOffset: WriteFile failed, offset=" << (offset + bytes_written)
-            << ", chunk_size=" << chunk_size << ", error=" << error;
-        Log(oss.str());
-        CloseHandle(overlapped.hEvent);
-        
-        // Handle specific Windows errors
-        if (error == ERROR_ACCESS_DENIED) {
-          Log("WriteAtOffset: Access denied - volume may be locked or protected");
-          return FileError::kWriteError;
-        } else if (error == ERROR_DISK_FULL) {
-          Log("WriteAtOffset: Disk full");
-          return FileError::kWriteError;
-        } else if (error == ERROR_WRITE_PROTECT) {
-          Log("WriteAtOffset: Write protected");
-          return FileError::kWriteError;
-        } else if (error == ERROR_SECTOR_NOT_FOUND || error == ERROR_CRC) {
-          Log("WriteAtOffset: Media error detected");
-          return FileError::kWriteError;
-        }
-        
-        // For other errors, try to retry
-        if (retry_count < max_retries) {
-          retry_count++;
-          std::ostringstream oss2;
-          oss2 << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
-          Log(oss2.str());
-          Sleep(100 * retry_count);
-          continue;
-        }
-        
-        return FileError::kWriteError;
+        error = GetLastError();
       }
     }
-    
+
+    // Both routes join here, so an injected failure reaches the branches
+    // below whichever way the device answered -- which on a scratch file is
+    // always the pending one.
+    ApplyWriteFaultInjection(result, error);
+
+    if (!result) {
+      CloseHandle(overlapped.hEvent);
+
+      if (cancelled_.load() || error == ERROR_OPERATION_ABORTED) {
+        return FileError::kCancelled;
+      }
+
+      std::ostringstream oss;
+      oss << "WriteAtOffset: " << (pending ? "completion" : "WriteFile")
+          << " failed, offset=" << (offset + bytes_written)
+          << ", chunk_size=" << chunk_size << ", error=" << error;
+      Log(oss.str());
+
+      // A full disk, a write-protected card and a bad sector all answer the
+      // same way next time. Retrying costs the user the wait and gives them
+      // the same failure, and on a card that is going it is three more
+      // attempts at a sector that is already failing.
+      if (!WriteErrorIsTransient(error)) {
+        return FileError::kWriteError;
+      }
+
+      if (retry_count < max_retries) {
+        retry_count++;
+        std::ostringstream retrying;
+        retrying << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
+        Log(retrying.str());
+        Sleep(100 * retry_count);
+        continue;
+      }
+
+      return FileError::kWriteError;
+    }
+
     CloseHandle(overlapped.hEvent);
-    
+
     if (written == 0) {
       Log("WriteAtOffset: WriteFile returned 0 bytes written");
       

@@ -14,6 +14,8 @@
 #include <QNetworkProxy>
 #include <QNetworkProxyFactory>
 #include <QNetworkProxyQuery>
+// Needs QNetworkProxy, so it follows the same guard.
+#include "proxy_url.h"
 #endif
 
 // Static member initialization
@@ -110,20 +112,11 @@ void CurlNetworkConfig::detectSystemProxy(const QUrl &url)
     QNetworkProxyQuery npq{url};
     QList<QNetworkProxy> proxyList = QNetworkProxyFactory::systemProxyForQuery(npq);
     if (!proxyList.isEmpty()) {
-        QNetworkProxy proxy = proxyList.first();
-        if (proxy.type() != QNetworkProxy::NoProxy) {
-            QUrl proxyUrl;
-            proxyUrl.setScheme(proxy.type() == QNetworkProxy::Socks5Proxy ? "socks5h" : "http");
-            proxyUrl.setHost(proxy.hostName());
-            proxyUrl.setPort(proxy.port());
-
-            if (!proxy.user().isEmpty()) {
-                proxyUrl.setUserName(proxy.user());
-                proxyUrl.setPassword(proxy.password());
-            }
-
-            _proxy = proxyUrl.toEncoded();
-            qDebug() << "System proxy detected:" << proxyUrl.host() << ":" << proxyUrl.port();
+        const QNetworkProxy proxy = proxyList.first();
+        const QByteArray proxyUrl = rpi_imager::proxyUrlFor(proxy);
+        if (!proxyUrl.isEmpty()) {
+            _proxy = proxyUrl;
+            qDebug() << "System proxy detected:" << proxy.hostName() << ":" << proxy.port();
         }
     }
 #else

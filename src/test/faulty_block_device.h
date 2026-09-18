@@ -27,6 +27,7 @@
 
 #include <memory>
 #include "fixture_process.h"
+#include "vhd_device.h"
 
 #ifdef Q_OS_MACOS
 #include <dlfcn.h>
@@ -256,11 +257,27 @@ public:
             _readPath = _path;
             return;
         }
+#ifdef _WIN32
+        // An attached virtual disk, which is a physical drive at the layer
+        // these cases work at. Attaching needs elevation, and an unelevated
+        // run is left not ready so they skip -- exactly as a Linux host
+        // without CAP_SYS_ADMIN does.
+        //
+        // Nothing is left behind: the attachment is tied to the handle rather
+        // than made permanent, so it goes when the process does even if the
+        // destructor never runs.
+        _vhd = std::make_unique<rpi_test::VhdDevice>(quint64(megabytes));
+        if (_vhd->valid()) {
+            _path = _vhd->path();
+            _readPath = _path;
+        }
+#else
         _owned = std::make_unique<LoopDevice>(megabytes);
         if (_owned->isReady()) {
             _path = _owned->path();
             _readPath = _owned->readPath();
         }
+#endif
     }
 
     bool isReady() const { return !_path.isEmpty(); }
@@ -302,6 +319,9 @@ private:
     }
 
     std::unique_ptr<LoopDevice> _owned;
+#ifdef _WIN32
+    std::unique_ptr<rpi_test::VhdDevice> _vhd;
+#endif
     QString _path;
     QString _readPath;
 };

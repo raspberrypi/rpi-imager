@@ -225,7 +225,14 @@ ImageWriter::ImageWriter(QObject *parent)
         changeKeyboard(detectPiKeyboard());
         if (_currentKeyboard.isEmpty())
             _currentKeyboard = "us";
-            _currentLang = "English";
+
+        // Outside the branch above, and deliberately: the locale scan below
+        // only names a language when it finds a translation matching it, so
+        // without a default here an unrecognised locale leaves the language
+        // empty and the interface with nothing to show. The indentation used
+        // to say this belonged to the keyboard fallback, which would have
+        // left exactly that gap whenever a keyboard was detected.
+        _currentLang = "English";
 
         {
             QString nvmem_blconfig_path = {};
