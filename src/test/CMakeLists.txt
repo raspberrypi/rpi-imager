@@ -749,6 +749,31 @@ if(WIN32)
     rpi_discover_tests(disk_formatter_alloc_test)
 endif()
 
+# WinFile when the volume lock is granted and when the sync will not finish.
+#
+# A binary of its own for the same reason as the two above: both wraps apply
+# to everything linked with them.
+if(WIN32)
+    add_executable(winfile_fault_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/winfile.cpp
+        winfile_fault.cpp
+        winfile_fault_test.cpp
+    )
+    # WinFile is a QObject, so its vtable comes from moc.
+    set_target_properties(winfile_fault_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(winfile_fault_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+    )
+    target_link_options(winfile_fault_test PRIVATE
+        -Wl,--wrap=__imp_DeviceIoControl
+        -Wl,--wrap=__imp_FlushFileBuffers)
+    target_include_directories(winfile_fault_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(winfile_fault_test PRIVATE cxx_std_20)
+    rpi_discover_tests(winfile_fault_test)
+endif()
+
 # Custom target for manual running
 add_custom_target(test_drivelist
     COMMAND drivelist_test
