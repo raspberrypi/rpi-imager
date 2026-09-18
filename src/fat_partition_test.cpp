@@ -11,6 +11,7 @@
 #include "disk_formatter.h"
 #include "file_operations.h"
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
 #include <filesystem>
@@ -46,16 +47,23 @@ static std::string g_scratch_disk_path;
 // runs from a static constructor, before main() and before anything has set
 // up a QCoreApplication for QStandardPaths to ask.
 static std::string makeScratchDisk() {
+    // Named for this process. CTest runs each case as its own invocation and
+    // several at once, so a fixed path has them formatting one image while
+    // the others read it: the run either skips for want of the file or walks
+    // a half-written FAT, which the driver answers by extending the
+    // directory a cluster at a time until the image is full.
     std::error_code ec;
-    const fs::path dir = fs::temp_directory_path(ec) / "rpi-imager-fat-scratch";
+    const fs::path dir = fs::temp_directory_path(ec)
+        / ("rpi-imager-fat-scratch-"
+           + std::to_string(QCoreApplication::applicationPid()));
     if (ec)
         return {};
+    fs::remove_all(dir, ec);
     fs::create_directories(dir, ec);
     if (ec)
         return {};
 
     const fs::path image = dir / "disk.img";
-    fs::remove(image, ec);
 
     // 64 MB: enough for FAT32's minimum cluster count past the 4 MB the
     // partition starts at, and small enough not to be felt.
