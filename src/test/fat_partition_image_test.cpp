@@ -19,6 +19,7 @@
 #include "devicewrapperpartition.h"
 #include "file_operations.h"
 
+#include <QElapsedTimer>
 #include <QByteArray>
 #include <QDir>
 #include <QProcess>
@@ -3477,6 +3478,99 @@ TEST_CASE("A FAT chain that points back at itself is refused", "[fat][image]")
     INFO("message: " << message);
     CHECK(threw);
     CHECK(message.find("Circular references") != std::string::npos);
+}
+
+TEST_CASE("A FAT chain that never ends is refused rather than followed",
+          "[fat][image]")
+{
+    // The companion to the loop above, and the one that hurts. A table whose
+    // entries climb steadily never repeats, so a guard that only looks for a
+    // repeat follows it to the end of the table -- and looking for the repeat
+    // by scanning what has been collected is quadratic in the length. On a
+    // card-sized partition that is minutes of a busy processor with nothing
+    // to show, which the user reads as the imager having hung.
+    //
+    // A chain cannot hold more clusters than the partition has, so it is
+    // refused at that point however novel each entry looks.
+    ScopedTempDir scratch(QStringLiteral("rpi-imager-longchain"));
+    const QString path = scratch.filePath(QStringLiteral("long.img"));
+
+    const int totalSectors   = 70000;
+    const int bytesPerSector = 512;
+    const int reservedSecs   = 32;
+    const int numFats        = 2;
+    const int fatSectors     = 512;
+    const qint64 imageBytes  = qint64(totalSectors) * bytesPerSector;
+
+    const int fatStart      = reservedSecs * bytesPerSector;
+    const int clusterOffset = fatStart + numFats * fatSectors * bytesPerSector;
+
+    QByteArray disk(imageBytes, 0);
+    auto put8  = [&disk](int off, unsigned v) {
+        disk[off] = static_cast<char>(v & 0xff);
+    };
+    auto put16 = [&disk](int off, unsigned v) {
+        disk[off]     = static_cast<char>(v & 0xff);
+        disk[off + 1] = static_cast<char>((v >> 8) & 0xff);
+    };
+    auto put32 = [&disk](int off, quint32 v) {
+        for (int i = 0; i < 4; ++i)
+            disk[off + i] = static_cast<char>((v >> (8 * i)) & 0xff);
+    };
+
+    put16(0x0B, bytesPerSector);
+    put8 (0x0D, 1);
+    put16(0x0E, reservedSecs);
+    put8 (0x10, numFats);
+    put16(0x11, 0);
+    put16(0x13, 0);
+    put16(0x16, 0);
+    put32(0x20, totalSectors);
+    put32(0x24, fatSectors);
+    put32(0x2C, 2);
+    put8 (510, 0x55);
+    put8 (511, 0xAA);
+
+    const int entry = clusterOffset;
+    std::memcpy(disk.data() + entry, "TEST    BIN", 11);
+    put8 (entry + 11, 0x20);
+    put16(entry + 20, 0);
+    put16(entry + 26, 3);
+    put32(entry + 28, bytesPerSector);
+
+    // Every entry points at the next one, all the way up. Nothing repeats, so
+    // the circular guard never fires.
+    const int fatEntries = (fatSectors * bytesPerSector) / 4;
+    for (int i = 3; i < fatEntries - 1; ++i)
+        put32(fatStart + i * 4, static_cast<quint32>(i + 1));
+
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    REQUIRE(f.write(disk) == disk.size());
+    f.close();
+
+    auto ops = rpi_imager::FileOperations::Create();
+    REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+    DeviceWrapper dw(ops.get());
+    DeviceWrapperFatPartition fat(&dw, 0, imageBytes);
+
+    QElapsedTimer timer;
+    timer.start();
+    bool threw = false;
+    std::string message;
+    try {
+        (void)fat.readFile(QStringLiteral("TEST.BIN"));
+    } catch (const std::runtime_error &e) {
+        threw = true;
+        message = e.what();
+    }
+    const qint64 ms = timer.elapsed();
+
+    INFO("message: " << message);
+    CHECK(threw);
+    // And promptly: the point is that it does not grind through the table.
+    INFO("took " << ms << "ms");
+    CHECK(ms < 5000);
 }
 
 TEST_CASE("A corrupt FSinfo sector is refused rather than written back",
