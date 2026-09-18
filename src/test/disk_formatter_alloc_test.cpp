@@ -30,6 +30,22 @@ std::string scratchImage(QTemporaryDir &dir)
     return QDir(dir.path()).filePath(QStringLiteral("format.img")).toStdString();
 }
 
+// A format here can also fail for reasons that have nothing to do with the
+// injector -- the disk, the path, a scanner holding the file open. Without
+// this the refusal comes back as a bare REQUIRE and says nothing about which.
+const char *reason(rpi_imager::FormatError error)
+{
+    switch (error) {
+    case rpi_imager::FormatError::kFileOpenError:    return "file open";
+    case rpi_imager::FormatError::kFileWriteError:   return "file write";
+    case rpi_imager::FormatError::kFileSeekError:    return "file seek";
+    case rpi_imager::FormatError::kInvalidParameters:return "invalid parameters";
+    case rpi_imager::FormatError::kInsufficientSpace:return "insufficient space";
+    case rpi_imager::FormatError::kCancelled:        return "cancelled";
+    }
+    return "unknown";
+}
+
 }  // namespace
 
 TEST_CASE("A format that cannot get a buffer is refused, not half written",
@@ -50,7 +66,9 @@ TEST_CASE("A format that cannot get a buffer is refused, not half written",
     rpi_test::failAlignedAllocAt(-1);
     {
         rpi_imager::DiskFormatter formatter;
-        REQUIRE(formatter.FormatFile(scratchImage(dir), kImageBytes));
+        const auto clean = formatter.FormatFile(scratchImage(dir), kImageBytes);
+        INFO("a format with nothing failing was refused: " << reason(clean.error()));
+        REQUIRE(clean);
     }
     const int total = rpi_test::alignedAllocCallsMade();
     INFO("aligned allocations in a whole format: " << total);
@@ -66,9 +84,13 @@ TEST_CASE("A format that cannot get a buffer is refused, not half written",
         rpi_test::failAlignedAllocAt(i);
         rpi_imager::DiskFormatter formatter;
         const auto result = formatter.FormatFile(path, kImageBytes);
+        const int reached = rpi_test::alignedAllocCallsMade();
         rpi_test::stopFailingAlignedAlloc();
 
         INFO("allocation " << i << " of " << total << " made to fail");
+        // A format that asked for fewer buffers than the clean one never met
+        // the armed allocation, so a success here would say nothing.
+        INFO("allocations reached: " << reached);
         // Refused, every time. What must not happen is a format reporting
         // success having skipped a structure it could not build a buffer for.
         CHECK_FALSE(result);
@@ -87,7 +109,9 @@ TEST_CASE("A format asks for the same buffers whether or not one fails",
     rpi_test::failAlignedAllocAt(-1);
     {
         rpi_imager::DiskFormatter formatter;
-        REQUIRE(formatter.FormatFile(scratchImage(dir), kImageBytes));
+        const auto clean = formatter.FormatFile(scratchImage(dir), kImageBytes);
+        INFO("a format with nothing failing was refused: " << reason(clean.error()));
+        REQUIRE(clean);
     }
     const int whole = rpi_test::alignedAllocCallsMade();
 
