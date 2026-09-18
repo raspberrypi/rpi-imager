@@ -696,6 +696,34 @@ target_compile_options(drivelist_test PRIVATE
 # Register with CTest for automatic test discovery
 rpi_discover_tests(drivelist_test)
 
+# The drive list when Windows refuses to enumerate at all.
+#
+# Its own binary because the refusal is forced with --wrap, which applies to
+# everything linked into the target: every SetupDiGetClassDevsW in here
+# fails, so nothing else can share it. The drive list itself is compiled
+# unchanged and carries no seam -- a call into a DLL goes through
+# __imp_<name>, a data symbol holding the address, so the wrap redirects a
+# pointer rather than a function.
+if(WIN32)
+    add_executable(drivelist_enum_failure_test
+        ${DRIVELIST_PLATFORM_SOURCES}
+        drivelist_enum_failure_wrap.cpp
+        drivelist_enum_failure_test.cpp
+    )
+    target_compile_definitions(drivelist_enum_failure_test PRIVATE DRIVELIST_ENABLE_TEST_API)
+    target_link_libraries(drivelist_enum_failure_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+        ${DRIVELIST_PLATFORM_LIBS}
+    )
+    target_link_options(drivelist_enum_failure_test PRIVATE
+        -Wl,--wrap=__imp_SetupDiGetClassDevsW)
+    target_include_directories(drivelist_enum_failure_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(drivelist_enum_failure_test PRIVATE cxx_std_20)
+    rpi_discover_tests(drivelist_enum_failure_test)
+endif()
+
 # Custom target for manual running
 add_custom_target(test_drivelist
     COMMAND drivelist_test
