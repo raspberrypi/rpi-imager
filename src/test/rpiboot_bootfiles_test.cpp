@@ -666,3 +666,102 @@ TEST_CASE("An entry whose data was cut short does not come through whole",
         CHECK_FALSE(bf.lastError().empty());
     }
 }
+
+// A tar holding the entry kinds a real bootfiles.bin carries besides plain
+// files: a directory, and a symlink with an owner recorded on it.
+//
+// The firmware archives this reads are produced elsewhere and are not all
+// regular files. An entry kind the reader mishandles is firmware served to a
+// device wrong, so the kinds have to survive a round trip rather than only
+// not crash.
+static std::vector<uint8_t> createTarWithEntryKinds()
+{
+    constexpr size_t kBufSize = 256 * 1024;
+    std::vector<uint8_t> buf(kBufSize);
+    size_t usedSize = 0;
+
+    ::archive* a = archive_write_new();
+    archive_write_set_format_ustar(a);
+    archive_write_open_memory(a, buf.data(), kBufSize, &usedSize);
+
+    // A directory, which carries no data of its own.
+    {
+        ::archive_entry* e = archive_entry_new();
+        archive_entry_set_pathname(e, "2712");
+        archive_entry_set_filetype(e, AE_IFDIR);
+        archive_entry_set_perm(e, 0755);
+        archive_write_header(a, e);
+        archive_entry_free(e);
+    }
+
+    // A regular file inside it, with an owner and group recorded.
+    {
+        const std::string payload = "bootcode";
+        ::archive_entry* e = archive_entry_new();
+        archive_entry_set_pathname(e, "2712/bootcode5.bin");
+        archive_entry_set_size(e, static_cast<la_int64_t>(payload.size()));
+        archive_entry_set_filetype(e, AE_IFREG);
+        archive_entry_set_perm(e, 0644);
+        archive_entry_set_uname(e, "root");
+        archive_entry_set_gname(e, "root");
+        archive_write_header(a, e);
+        archive_write_data(a, payload.data(), payload.size());
+        archive_entry_free(e);
+    }
+
+    // And a symlink pointing at it.
+    {
+        ::archive_entry* e = archive_entry_new();
+        archive_entry_set_pathname(e, "bootcode.bin");
+        archive_entry_set_filetype(e, AE_IFLNK);
+        archive_entry_set_symlink(e, "2712/bootcode5.bin");
+        archive_entry_set_perm(e, 0777);
+        archive_write_header(a, e);
+        archive_entry_free(e);
+    }
+
+    archive_write_close(a);
+    std::vector<uint8_t> result(buf.data(), buf.data() + usedSize);
+    archive_write_free(a);
+    return result;
+}
+
+TEST_CASE("Bootfiles reads an archive holding more than regular files",
+          "[rpiboot][bootfiles]")
+{
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(createTarWithEntryKinds()));
+
+    // The regular file is there with its contents.
+    const std::vector<uint8_t>* boot = bf.find("2712/bootcode5.bin");
+    REQUIRE(boot != nullptr);
+    CHECK(std::string(boot->begin(), boot->end()) == "bootcode");
+
+    // And is reachable through the chip prefix, as the server asks for it.
+    CHECK(bf.find("bootcode5.bin", "2712") != nullptr);
+
+    // The directory carries no data, so it is not offered as a file to serve.
+    CHECK(bf.find("2712") == nullptr);
+}
+
+TEST_CASE("Bootfiles repacks the entry kinds it was given",
+          "[rpiboot][bootfiles]")
+{
+    // The archive is re-packed after a counter-signed bootcode is spliced in,
+    // and served to the device. A symlink or an owner dropped on the way out
+    // is a different archive from the one that came in.
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(createTarWithEntryKinds()));
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::string out =
+        QDir(dir.path()).filePath(QStringLiteral("repacked.bin")).toStdString();
+    REQUIRE(bf.writeToFile(out));
+
+    Bootfiles again;
+    REQUIRE(again.extractFromFile(out));
+    const std::vector<uint8_t>* boot = again.find("2712/bootcode5.bin");
+    REQUIRE(boot != nullptr);
+    CHECK(std::string(boot->begin(), boot->end()) == "bootcode");
+}
