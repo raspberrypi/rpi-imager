@@ -59,6 +59,7 @@
 #include <QTimeZone>
 #include "signal_log.h"
 #include "local_http_server.h"
+#include "fake_connect_api.h"
 #include "faulty_block_device.h"
 #include <QJsonParseError>
 #include <QProcess>
@@ -13755,6 +13756,89 @@ TEST_CASE("A Connect key that cannot be minted is reported, not returned empty",
     CHECK_FALSE(out.value(QStringLiteral("ok")).toBool());
     CHECK_FALSE(out.value(QStringLiteral("error")).toString().isEmpty());
     // And no secret came back to be written into anything.
+    CHECK(out.value(QStringLiteral("secret")).toString().isEmpty());
+}
+
+namespace {
+
+// Points the registrar at a throwaway server for the life of the object.
+// ImageWriter builds its own registrar with no base URL, so the environment
+// is the only way in; the suite sets it, so it is put back rather than unset.
+class ScopedConnectUrl
+{
+public:
+    explicit ScopedConnectUrl(const QString &url)
+        : _saved(qgetenv("RPI_IMAGER_CONNECT_URL"))
+    {
+        qputenv("RPI_IMAGER_CONNECT_URL", url.toUtf8());
+    }
+    ~ScopedConnectUrl() { qputenv("RPI_IMAGER_CONNECT_URL", _saved); }
+
+    ScopedConnectUrl(const ScopedConnectUrl &) = delete;
+    ScopedConnectUrl &operator=(const ScopedConnectUrl &) = delete;
+
+private:
+    QByteArray _saved;
+};
+
+}  // namespace
+
+TEST_CASE("A Connect secret that could break out of the boot script is refused",
+          "[imagewriter][connect][security]")
+{
+    // The minted secret is written into the image as a Pi Connect token, into
+    // a shell heredoc in a cloud-init runcmd. A secret carrying a newline
+    // closes the heredoc early and what follows runs as root on first boot,
+    // so an API that has been compromised or is being intercepted would own
+    // every card written after it.
+    //
+    // The registrar hands back whatever the server said; refusing a secret
+    // that is not shaped like an auth key is ImageWriter's decision, and it
+    // had never been taken in a test.
+    rpi_test::FakeApiServer server(
+        201,
+        R"({"id":"1","secret":"rpoak_good\nrm -rf / #"})");
+    RPI_REQUIRE_FAKE_API(server);
+
+    ScopedConnectUrl connectUrl(server.baseUrl());
+    FeedableImageWriter w;
+    w.setSetting(QStringLiteral("connect_org_api_key"),
+                 QStringLiteral("rpak_notarealkeybutthecorrectshape"));
+
+    const QVariantMap out = w.requestOrgAuthKey(QStringLiteral("a board"), 7);
+
+    INFO("returned: " << out.value(QStringLiteral("error")).toString().toStdString());
+    CHECK_FALSE(out.value(QStringLiteral("ok")).toBool());
+    CHECK_FALSE(out.value(QStringLiteral("error")).toString().isEmpty());
+    // And nothing was kept: a refusal that still stashed the secret would put
+    // it into the next card written.
+    CHECK(w.getRuntimeConnectToken().isEmpty());
+}
+
+TEST_CASE("A Connect secret in the shape of an auth key is taken",
+          "[imagewriter][connect]")
+{
+    // Guards the case above. If the mint never got as far as looking at the
+    // secret -- a server the registrar could not reach, a response it could
+    // not parse -- the refusal there would be about something else entirely
+    // and would hold whatever the check did.
+    rpi_test::FakeApiServer server(
+        201,
+        R"({"id":"1","secret":"rpoak_aaaaaaaaaaaaaaaaaaaaaaaa"})");
+    RPI_REQUIRE_FAKE_API(server);
+
+    ScopedConnectUrl connectUrl(server.baseUrl());
+    FeedableImageWriter w;
+    w.setSetting(QStringLiteral("connect_org_api_key"),
+                 QStringLiteral("rpak_notarealkeybutthecorrectshape"));
+
+    const QVariantMap out = w.requestOrgAuthKey(QStringLiteral("a board"), 7);
+
+    INFO("returned: " << out.value(QStringLiteral("error")).toString().toStdString());
+    CHECK(out.value(QStringLiteral("ok")).toBool());
+    CHECK(w.getRuntimeConnectToken()
+          == QStringLiteral("rpoak_aaaaaaaaaaaaaaaaaaaaaaaa"));
+    // The secret is kept on the writer, not handed back to QML.
     CHECK(out.value(QStringLiteral("secret")).toString().isEmpty());
 }
 
