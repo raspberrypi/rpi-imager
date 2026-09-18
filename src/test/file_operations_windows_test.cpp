@@ -32,6 +32,9 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
+#include <cstring>
+#include <string>
+#include <QUuid>
 
 #include <memory>
 #include <vector>
@@ -620,6 +623,11 @@ TEST_CASE("A refused write says what refused it", "[fileops-win][transient]")
         {ERROR_IO_DEVICE, rpi_imager::WriteErrorClass::kIoDeviceError,
          "the card pulled out mid-write"},
     };
+    // ERROR_ACCESS_DENIED is deliberately not in the table: what it means
+    // depends on whether Defender's Controlled Folder Access is blocking disk
+    // writes on this machine, and asserting one answer would fail on a
+    // machine set the other way. Both answers are pinned in the Defender
+    // cases below.
 
     for (const Case &c : kCases) {
         ScratchDevice dev;
@@ -689,4 +697,277 @@ TEST_CASE("A synchronous write continues where the asynchronous queue stopped",
     std::vector<std::uint8_t> tail(got.begin() + first.size(), got.end());
     CHECK(head == first);
     CHECK(tail == second);
+}
+
+// ============================================================================
+// Windows Defender Controlled Folder Access
+// ============================================================================
+// Defender can stop an application writing, and the write fails with a plain
+// ERROR_ACCESS_DENIED -- the same code as a permissions problem the user
+// could actually fix. Told apart, the remedy is to add Imager to an
+// allow-list; not told apart, the user goes hunting for a file permission
+// that was never the problem.
+//
+// It has five modes, not two:
+//
+//   0  disabled
+//   1  enabled                       blocks protected folders and disk sectors
+//   2  audit mode                    logs, blocks nothing
+//   3  block disk modification only  blocks disk sectors
+//   4  audit disk modification only  logs disk-sector writes, blocks nothing
+//
+// https://learn.microsoft.com/en-us/defender-endpoint/controlled-folder-access-configure
+//
+// Mode 3 is the one aimed squarely at what a disk imager does, and only mode
+// 1 used to count -- so a user in mode 3 was blocked by Defender and told it
+// was a permissions problem.
+//
+// Turning it on from a test is not on: it is machine policy, and it would
+// block whatever else the machine is doing. The decision is reached directly
+// instead.
+
+#ifdef FILEOPS_ENABLE_TEST_API
+
+// Declared inside the backend's own namespace, which is where the file that
+// defines them lives.
+namespace rpi_imager {
+namespace WindowsWriteErrorTesting {
+bool cfaModeBlocks(unsigned long mode);
+int classify(unsigned long error, bool defenderBlocks);
+bool defenderBlocksDiskWritesHere();
+}
+}
+using namespace rpi_imager::WindowsWriteErrorTesting;
+
+TEST_CASE("Only the modes that block a disk write count as blocking",
+          "[fileops-win][defender]")
+{
+
+    CHECK_FALSE(cfaModeBlocks(0));   // disabled
+    CHECK(cfaModeBlocks(1));         // enabled
+    CHECK_FALSE(cfaModeBlocks(2));   // audit mode: logs, blocks nothing
+    // Block disk modification only. This is the one that catches an imager,
+    // and the one that used to be read as "not enabled".
+    CHECK(cfaModeBlocks(3));
+    CHECK_FALSE(cfaModeBlocks(4));   // audit disk modification only
+
+    // A mode from a newer Defender than this was built against. Claiming it
+    // blocks would blame Defender for every access denial on that machine.
+    CHECK_FALSE(cfaModeBlocks(5));
+    CHECK_FALSE(cfaModeBlocks(99));
+}
+
+TEST_CASE("Defender blocking a write is told apart from a permissions problem",
+          "[fileops-win][defender]")
+{
+
+    const int denied = static_cast<int>(rpi_imager::WriteErrorClass::kAccessDenied);
+    const int byDefender = static_cast<int>(
+        rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess);
+    REQUIRE(denied != byDefender);
+
+    CHECK(classify(ERROR_ACCESS_DENIED, true) == byDefender);
+    CHECK(classify(ERROR_ACCESS_DENIED, false) == denied);
+}
+
+TEST_CASE("Defender is not blamed for errors it has no part in",
+          "[fileops-win][defender]")
+{
+    // Only an access denial can be Defender's doing. A full disk is a full
+    // disk whatever Defender is set to, and sending that user to an
+    // allow-list wastes their time.
+
+    for (unsigned long error : {static_cast<unsigned long>(ERROR_DISK_FULL),
+                                static_cast<unsigned long>(ERROR_WRITE_PROTECT),
+                                static_cast<unsigned long>(ERROR_CRC),
+                                static_cast<unsigned long>(ERROR_SECTOR_NOT_FOUND),
+                                static_cast<unsigned long>(ERROR_INVALID_PARAMETER),
+                                static_cast<unsigned long>(ERROR_IO_DEVICE),
+                                static_cast<unsigned long>(ERROR_NOT_SUPPORTED)}) {
+        INFO("error " << error);
+        CHECK(classify(error, true) == classify(error, false));
+        CHECK(classify(error, true) !=
+              static_cast<int>(
+                  rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess));
+    }
+}
+
+TEST_CASE("Asking what Defender is set to answers without faulting",
+          "[fileops-win][defender]")
+{
+    // Read-only, and what it answers depends on the machine -- so this asks
+    // only that the registry read runs to the end, releases what it took, and
+    // gives the same answer twice.
+    const bool first = defenderBlocksDiskWritesHere();
+    const bool second = defenderBlocksDiskWritesHere();
+    INFO("Defender blocks disk writes on this machine: " << first);
+    CHECK(first == second);
+}
+
+#endif // FILEOPS_ENABLE_TEST_API
+
+// ---------------------------------------------------------------------------
+// Emulating Controlled Folder Access being on
+// ---------------------------------------------------------------------------
+// The real setting is under HKEY_LOCAL_MACHINE. A test has no business
+// writing it: it is machine security policy, and turning Controlled Folder
+// Access on would block whatever else the machine is doing. So the probe is
+// pointed at a key under HKEY_CURRENT_USER, which this process may write
+// freely, and the reading is exercised for real -- each mode, a value of the
+// wrong type, a missing value, and a missing key.
+
+namespace rpi_imager {
+namespace WindowsWriteErrorTesting {
+void readCfaFrom(void *root, const char *subkey);
+long cfaModeRead();
+}
+}
+
+namespace {
+
+// A scratch registry key that removes itself.
+class ScratchRegistryKey
+{
+public:
+    ScratchRegistryKey()
+        : _path("Software\rpi-imager-test\\" +
+                QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString())
+    {
+        HKEY key = nullptr;
+        _made = ::RegCreateKeyExA(HKEY_CURRENT_USER, _path.c_str(), 0, nullptr,
+                                  REG_OPTION_VOLATILE, KEY_READ | KEY_WRITE,
+                                  nullptr, &key, nullptr) == ERROR_SUCCESS;
+        if (_made)
+            ::RegCloseKey(key);
+    }
+
+    ~ScratchRegistryKey()
+    {
+        rpi_imager::WindowsWriteErrorTesting::readCfaFrom(nullptr, nullptr);
+        if (_made)
+            ::RegDeleteKeyA(HKEY_CURRENT_USER, _path.c_str());
+    }
+
+    ScratchRegistryKey(const ScratchRegistryKey &) = delete;
+    ScratchRegistryKey &operator=(const ScratchRegistryKey &) = delete;
+
+    bool ok() const { return _made; }
+    const std::string &path() const { return _path; }
+
+    // Point the probe here, so it reads what this test writes.
+    void useForCfa() const
+    {
+        rpi_imager::WindowsWriteErrorTesting::readCfaFrom(HKEY_CURRENT_USER,
+                                                          _path.c_str());
+    }
+
+    bool setDword(const char *name, DWORD value) const
+    {
+        HKEY key = nullptr;
+        if (::RegOpenKeyExA(HKEY_CURRENT_USER, _path.c_str(), 0, KEY_WRITE, &key)
+            != ERROR_SUCCESS)
+            return false;
+        const LONG rc = ::RegSetValueExA(key, name, 0, REG_DWORD,
+                                         reinterpret_cast<const BYTE *>(&value),
+                                         sizeof(value));
+        ::RegCloseKey(key);
+        return rc == ERROR_SUCCESS;
+    }
+
+    bool setString(const char *name, const char *value) const
+    {
+        HKEY key = nullptr;
+        if (::RegOpenKeyExA(HKEY_CURRENT_USER, _path.c_str(), 0, KEY_WRITE, &key)
+            != ERROR_SUCCESS)
+            return false;
+        const LONG rc = ::RegSetValueExA(
+            key, name, 0, REG_SZ, reinterpret_cast<const BYTE *>(value),
+            static_cast<DWORD>(std::strlen(value) + 1));
+        ::RegCloseKey(key);
+        return rc == ERROR_SUCCESS;
+    }
+
+private:
+    std::string _path;
+    bool _made = false;
+};
+
+} // namespace
+
+TEST_CASE("Every Controlled Folder Access mode is read back as it was written",
+          "[fileops-win][defender]")
+{
+    ScratchRegistryKey scratch;
+    if (!scratch.ok())
+        SKIP("could not create a scratch registry key to read the setting from");
+    scratch.useForCfa();
+
+    for (DWORD mode = 0; mode <= 4; ++mode) {
+        INFO("mode " << mode);
+        REQUIRE(scratch.setDword("EnableControlledFolderAccess", mode));
+        CHECK(rpi_imager::WindowsWriteErrorTesting::cfaModeRead() ==
+              static_cast<long>(mode));
+        CHECK(rpi_imager::WindowsWriteErrorTesting::defenderBlocksDiskWritesHere() ==
+              (mode == 1 || mode == 3));
+    }
+}
+
+TEST_CASE("Controlled Folder Access switched on is reported as the cause",
+          "[fileops-win][defender]")
+{
+    // The end of the story: the setting is on, a write comes back access
+    // denied, and the user is told it was Defender rather than sent looking
+    // for a file permission.
+    ScratchRegistryKey scratch;
+    if (!scratch.ok())
+        SKIP("could not create a scratch registry key to read the setting from");
+    scratch.useForCfa();
+    REQUIRE(scratch.setDword("EnableControlledFolderAccess", 1));
+
+    ScratchDevice dev;
+    REQUIRE(writeRefusedWith(dev, ERROR_ACCESS_DENIED, 8) == FileError::kWriteError);
+    CHECK(backend(dev).ClassifyLastWriteError() ==
+          rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess);
+}
+
+TEST_CASE("Controlled Folder Access switched off leaves a plain denial alone",
+          "[fileops-win][defender]")
+{
+    ScratchRegistryKey scratch;
+    if (!scratch.ok())
+        SKIP("could not create a scratch registry key to read the setting from");
+    scratch.useForCfa();
+    REQUIRE(scratch.setDword("EnableControlledFolderAccess", 0));
+
+    ScratchDevice dev;
+    REQUIRE(writeRefusedWith(dev, ERROR_ACCESS_DENIED, 8) == FileError::kWriteError);
+    CHECK(backend(dev).ClassifyLastWriteError() ==
+          rpi_imager::WriteErrorClass::kAccessDenied);
+}
+
+TEST_CASE("A setting that is not there, or not a number, is not read as on",
+          "[fileops-win][defender]")
+{
+    // The ordinary case is the key missing entirely -- every machine that has
+    // never turned it on. Reading that as enabled would blame Defender for
+    // every access denial there is.
+    ScratchRegistryKey scratch;
+    if (!scratch.ok())
+        SKIP("could not create a scratch registry key to read the setting from");
+    scratch.useForCfa();
+
+    // Key there, value absent.
+    CHECK(rpi_imager::WindowsWriteErrorTesting::cfaModeRead() == -1);
+    CHECK_FALSE(rpi_imager::WindowsWriteErrorTesting::defenderBlocksDiskWritesHere());
+
+    // Value there, but a string rather than the DWORD it must be.
+    REQUIRE(scratch.setString("EnableControlledFolderAccess", "1"));
+    CHECK(rpi_imager::WindowsWriteErrorTesting::cfaModeRead() == -1);
+    CHECK_FALSE(rpi_imager::WindowsWriteErrorTesting::defenderBlocksDiskWritesHere());
+
+    // And no key at all.
+    rpi_imager::WindowsWriteErrorTesting::readCfaFrom(
+        HKEY_CURRENT_USER, "Software\rpi-imager-test\definitely-not-here");
+    CHECK(rpi_imager::WindowsWriteErrorTesting::cfaModeRead() == -1);
+    CHECK_FALSE(rpi_imager::WindowsWriteErrorTesting::defenderBlocksDiskWritesHere());
 }

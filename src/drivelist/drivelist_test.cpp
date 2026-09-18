@@ -1284,6 +1284,41 @@ TEST_CASE("Bus types are named as the picker expects", "[drivelist][windows]")
     CHECK(windowsBusTypeToString(BusTypeFileBackedVirtual) == "FILEBACKEDVIRTUAL");
 }
 
+TEST_CASE("Every bus type Windows reports has a name of its own",
+          "[drivelist][windows]")
+{
+    // The picker filters on these strings, so a wrong one puts a drive in
+    // the wrong category: an internal NVMe offered as removable media, or a
+    // card reader left out of the list entirely.
+    using Drivelist::testing::windowsBusTypeToString;
+
+    struct Bus {
+        int value;
+        const char *name;
+    };
+    static const Bus kBuses[] = {
+        {BusTypeUnknown, "UNKNOWN"},   {BusTypeScsi, "SCSI"},
+        {BusTypeAtapi, "ATAPI"},       {BusTypeAta, "ATA"},
+        {BusType1394, "1394"},         {BusTypeSsa, "SSA"},
+        {BusTypeFibre, "FIBRE"},       {BusTypeUsb, "USB"},
+        {BusTypeRAID, "RAID"},         {BusTypeiScsi, "iSCSI"},
+        {BusTypeSas, "SAS"},           {BusTypeSata, "SATA"},
+        {BusTypeSd, "SD"},             {BusTypeMmc, "MMC"},
+        {BusTypeVirtual, "VIRTUAL"},   {BusTypeFileBackedVirtual, "FILEBACKEDVIRTUAL"},
+        {BusTypeSpaces, "SPACES"},     {BusTypeNvme, "NVME"},
+        {BusTypeSCM, "SCM"},           {BusTypeUfs, "UFS"},
+    };
+
+    std::set<std::string> names;
+    for (const Bus &bus : kBuses) {
+        INFO("bus type " << bus.value);
+        const std::string name = windowsBusTypeToString(bus.value);
+        CHECK(name == bus.name);
+        // And no two share a name, or the filter cannot tell them apart.
+        CHECK(names.insert(name).second);
+    }
+}
+
 TEST_CASE("A bus type outside the enumeration is named, not left empty",
           "[drivelist][windows]")
 {

@@ -7,6 +7,8 @@
 #include "../timeout_utils.h"
 
 #include <winioctl.h>
+#include <optional>
+#include <string>
 #include <sstream>
 #include <chrono>
 #include <algorithm>
@@ -1276,46 +1278,159 @@ int WindowsFileOperations::GetLastErrorCode() const {
   return last_error_code_;
 }
 
-WriteErrorClass WindowsFileOperations::ClassifyLastWriteError() const {
-  switch (last_error_code_) {
-    case ERROR_ACCESS_DENIED: {
-      // Probe Windows Defender Controlled Folder Access. If enabled, surface
-      // the dedicated category so the UI can point the user at the allow-list.
-      HKEY key;
-      LONG rc = RegOpenKeyExA(
-          HKEY_LOCAL_MACHINE,
-          "SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
-          0,
-          KEY_READ | KEY_WOW64_64KEY,
-          &key);
-      if (rc == ERROR_SUCCESS) {
-        DWORD value = 0;
-        DWORD size = sizeof(value);
-        DWORD type = 0;
-        rc = RegQueryValueExA(key, "EnableControlledFolderAccess", nullptr, &type,
-                              reinterpret_cast<LPBYTE>(&value), &size);
-        RegCloseKey(key);
-        if (rc == ERROR_SUCCESS && type == REG_DWORD && value == 1) {
-          return WriteErrorClass::kAccessDeniedControlledFolderAccess;
-        }
-      }
-      return WriteErrorClass::kAccessDenied;
-    }
-    case ERROR_DISK_FULL:
-      return WriteErrorClass::kDiskFull;
-    case ERROR_WRITE_PROTECT:
-      return WriteErrorClass::kWriteProtected;
-    case ERROR_SECTOR_NOT_FOUND:
-    case ERROR_CRC:
-      return WriteErrorClass::kMediaError;
-    case ERROR_INVALID_PARAMETER:
-      return WriteErrorClass::kInvalidParameter;
-    case ERROR_IO_DEVICE:
-      return WriteErrorClass::kIoDeviceError;
-    default:
-      return WriteErrorClass::kUnknown;
-  }
+namespace {
+
+// Where Defender records the Controlled Folder Access setting, and what the
+// values mean. Documented at
+// https://learn.microsoft.com/en-us/defender-endpoint/controlled-folder-access-configure
+//
+//   0  disabled
+//   1  enabled                       blocks protected folders and disk sectors
+//   2  audit mode                    logs, blocks nothing
+//   3  block disk modification only  blocks disk sectors
+//   4  audit disk modification only  logs disk-sector writes, blocks nothing
+constexpr const char *kCfaKey =
+    "SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\"
+    "Controlled Folder Access";
+constexpr const char *kCfaValue = "EnableControlledFolderAccess";
+
+// Whether a mode stops this application writing to a disk.
+//
+// Imager writes raw sectors rather than files in Documents, so the mode that
+// matters as much as "enabled" is "block disk modification only" -- which is
+// aimed squarely at what a disk imager does, and was read as "not enabled"
+// here. A user in that mode was told plain access denied and sent looking for
+// a file permission that was never the problem.
+//
+// The two audit modes log and allow, so a write that failed under one of them
+// failed for some other reason and must not be blamed on Defender.
+bool cfaModeBlocksDiskWrites(DWORD mode)
+{
+    return mode == 1 || mode == 3;
 }
+
+// Where the setting is read from.
+//
+// A test cannot write the real one: it lives under HKEY_LOCAL_MACHINE, it is
+// machine security policy, and turning Controlled Folder Access on would
+// block whatever else the machine is doing. Pointed somewhere writable
+// instead, so the reading -- the missing key, the missing value, the wrong
+// type, each mode -- can be exercised for real rather than assumed.
+struct CfaLocation {
+    HKEY root = HKEY_LOCAL_MACHINE;
+    std::string subkey = kCfaKey;
+};
+CfaLocation g_cfaLocation;
+
+// The mode Defender is in, or nothing where the setting is absent -- which is
+// every machine that has never turned it on.
+std::optional<DWORD> readControlledFolderAccessMode()
+{
+    HKEY key = nullptr;
+    if (RegOpenKeyExA(g_cfaLocation.root, g_cfaLocation.subkey.c_str(), 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+        return std::nullopt;
+
+    DWORD value = 0;
+    DWORD size = sizeof(value);
+    DWORD type = 0;
+    const LONG rc = RegQueryValueExA(key, kCfaValue, nullptr, &type,
+                                     reinterpret_cast<LPBYTE>(&value), &size);
+    RegCloseKey(key);
+
+    if (rc != ERROR_SUCCESS || type != REG_DWORD)
+        return std::nullopt;
+    return value;
+}
+
+// What a failed write means, given the error and whether Defender is standing
+// in the way. Separated from the registry read so every answer can be checked
+// without a machine configured each way -- and there are five ways.
+WriteErrorClass classifyWriteError(DWORD error, bool defenderBlocksDiskWrites)
+{
+    switch (error) {
+        case ERROR_ACCESS_DENIED:
+            // The same error code either way. Telling them apart is the whole
+            // point: one is answered by adding Imager to an allow-list, the
+            // other by looking at who owns the device.
+            return defenderBlocksDiskWrites
+                       ? WriteErrorClass::kAccessDeniedControlledFolderAccess
+                       : WriteErrorClass::kAccessDenied;
+        case ERROR_DISK_FULL:
+            return WriteErrorClass::kDiskFull;
+        case ERROR_WRITE_PROTECT:
+            return WriteErrorClass::kWriteProtected;
+        case ERROR_SECTOR_NOT_FOUND:
+        case ERROR_CRC:
+            return WriteErrorClass::kMediaError;
+        case ERROR_INVALID_PARAMETER:
+            return WriteErrorClass::kInvalidParameter;
+        case ERROR_IO_DEVICE:
+            return WriteErrorClass::kIoDeviceError;
+        default:
+            return WriteErrorClass::kUnknown;
+    }
+}
+
+} // namespace
+
+#ifdef FILEOPS_ENABLE_TEST_API
+// Controlled Folder Access cannot be turned on from a test -- it is machine
+// policy, and turning it on would block whatever else the machine is doing.
+// So the decision is reached directly instead, for every mode Defender has.
+namespace WindowsWriteErrorTesting {
+
+bool cfaModeBlocks(unsigned long mode) { return cfaModeBlocksDiskWrites(mode); }
+
+int classify(unsigned long error, bool defenderBlocks)
+{
+    return static_cast<int>(classifyWriteError(error, defenderBlocks));
+}
+
+// What this machine is actually set to, so a case can say which answer it is
+// entitled to expect rather than assuming Defender is off.
+bool defenderBlocksDiskWritesHere()
+{
+    const auto mode = readControlledFolderAccessMode();
+    return mode.has_value() && cfaModeBlocksDiskWrites(*mode);
+}
+
+// Read the setting from somewhere a test is allowed to write. Passing a null
+// subkey puts it back to the real one.
+void readCfaFrom(void *root, const char *subkey)
+{
+    if (!subkey) {
+        g_cfaLocation = CfaLocation{};
+        return;
+    }
+    g_cfaLocation.root = static_cast<HKEY>(root);
+    g_cfaLocation.subkey = subkey;
+}
+
+// The mode as the probe reads it, so a case can check the reading and not
+// only the deciding. -1 where there is no usable value.
+long cfaModeRead()
+{
+    const auto mode = readControlledFolderAccessMode();
+    return mode.has_value() ? static_cast<long>(*mode) : -1;
+}
+
+} // namespace WindowsWriteErrorTesting
+#endif
+
+WriteErrorClass WindowsFileOperations::ClassifyLastWriteError() const {
+    const DWORD error = static_cast<DWORD>(last_error_code_);
+
+    // Asked only where the answer could differ. Every other error means
+    // something Defender has no part in, and the registry read is not free.
+    bool defenderBlocks = false;
+    if (error == ERROR_ACCESS_DENIED) {
+        const auto mode = readControlledFolderAccessMode();
+        defenderBlocks = mode.has_value() && cfaModeBlocksDiskWrites(*mode);
+    }
+    return classifyWriteError(error, defenderBlocks);
+}
+
 
 // ============= Async I/O Implementation (using IOCP) =============
 

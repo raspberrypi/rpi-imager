@@ -4885,12 +4885,6 @@ public:
 TEST_CASE("Cancelling while the end of the device is stalled is survivable",
           "[download][partialwrite]")
 {
-#ifdef Q_OS_WIN
-    SKIP("DownloadThread does not zero the end of the device on Windows -- the "
-         "whole block, counterfeit-card timeout included, is compiled out "
-         "there -- so there is no stalled write to cancel");
-#endif
-
     ScratchDir scratch;
     const QByteArray payload = patternOfSize(4 * 1024 * 1024, 113);
     const QString source = scratch.filePath(QStringLiteral("stall-src.img"));
@@ -4935,4 +4929,127 @@ TEST_CASE("Cancelling while the end of the device is stalled is survivable",
     // whether the assertions above passed or not.
     stalling->release();
     dt->wait(30000);
+}
+
+// ============================================================================
+// The write that catches a counterfeit card
+// ============================================================================
+
+namespace {
+
+// Records where every write landed, and accepts them all.
+class RecordingDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    explicit RecordingDevice(std::uint64_t size) : _size(size) {}
+
+    rpi_imager::FileError OpenDevice(const std::string &) override
+    {
+        _open = true;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError CreateTestFile(const std::string &, std::uint64_t) override
+    {
+        return rpi_imager::FileError::kSuccess;
+    }
+    bool IsOpen() const override { return _open; }
+    rpi_imager::FileError Close() override
+    {
+        _open = false;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError GetSize(std::uint64_t &size) override
+    {
+        size = _size;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError Flush() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        _pos = position;
+        return rpi_imager::FileError::kSuccess;
+    }
+    std::uint64_t Tell() const override { return _pos; }
+    bool IsAsyncIOSupported() const override { return false; }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t size) override
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _writes.push_back({_pos, size});
+        }
+        _pos += size;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ReadSequential(std::uint8_t *, std::size_t, std::size_t &read) override
+    {
+        read = 0;
+        return rpi_imager::FileError::kReadError;
+    }
+
+    // Whether anything was written covering `offset`.
+    bool wroteAt(std::uint64_t offset) const
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        for (const auto &w : _writes)
+            if (offset >= w.first && offset < w.first + w.second)
+                return true;
+        return false;
+    }
+
+private:
+    std::uint64_t _size;
+    std::uint64_t _pos = 0;
+    bool _open = false;
+    mutable std::mutex _mutex;
+    std::vector<std::pair<std::uint64_t, std::size_t>> _writes;
+};
+
+class WriterOnRecordingCard : public DownloadThread
+{
+public:
+    WriterOnRecordingCard(const QByteArray &url, std::uint64_t size)
+        : DownloadThread(url, "fake-device", "")
+    {
+        device = std::make_shared<RecordingDevice>(size);
+        _file = device;
+    }
+
+    std::shared_ptr<RecordingDevice> device;
+};
+
+} // namespace
+
+TEST_CASE("The end of the card is written before the image is",
+          "[download][counterfeit]")
+{
+    // A card reporting a capacity it does not have never returns from a write
+    // to the end of that capacity. That write is the whole of the detection,
+    // and on Windows it did not happen at all -- the block it lives in was
+    // compiled out, so a counterfeit card was written as though it were real
+    // and failed later, or silently.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(2 * 1024 * 1024, 117);
+    const QString source = scratch.filePath(QStringLiteral("counterfeit-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    constexpr std::uint64_t kCardSize = 64 * 1024 * 1024;
+    constexpr std::uint64_t kMegabyte = 1024 * 1024;
+
+    WriterOnRecordingCard dt(QUrl::fromLocalFile(source).toEncoded().constData(),
+                             kCardSize);
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+
+    // The first megabyte, which takes the old partition table with it.
+    CHECK(dt.device->wroteAt(0));
+    // And the last, which carries the backup GPT header and is the write a
+    // counterfeit card never answers.
+    CHECK(dt.device->wroteAt(kCardSize - kMegabyte));
+    CHECK(dt.device->wroteAt(kCardSize - 1));
 }
