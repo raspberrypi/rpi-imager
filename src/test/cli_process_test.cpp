@@ -24,6 +24,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QString>
 #include <QStringList>
 #include <QFileInfo>
@@ -66,6 +67,35 @@ bool runningElevated()
     return rpi_test::isPrivileged();
 }
 
+// Which binary carrying Cli::run() can be started, and whether there is one.
+//
+// The shipping manifest asks for requireAdministrator, so CreateProcess
+// refuses it from an unelevated process: QProcess reports the start as never
+// having happened rather than as a run that failed. cli_harness is the same
+// Cli out of the same library with no manifest, so an unelevated run still
+// reaches run() -- which is the code these cases are about.
+#ifdef _WIN32
+bool useHarness() { return !runningElevated(); }
+
+QString cliBinary()
+{
+#ifdef IMAGER_CLI_HARNESS
+    if (useHarness())
+        return QStringLiteral(IMAGER_CLI_HARNESS);
+#endif
+    return QStringLiteral(IMAGER_BINARY);
+}
+
+bool haveHarness()
+{
+#ifdef IMAGER_CLI_HARNESS
+    return QFileInfo::exists(QStringLiteral(IMAGER_CLI_HARNESS));
+#else
+    return false;
+#endif
+}
+#endif
+
 // Whether the imager can be started with the privileges a write needs.
 //
 // The two hosts get there differently: POSIX re-runs the binary under sudo,
@@ -76,7 +106,11 @@ bool runningElevated()
 bool canStartPrivileged()
 {
 #ifdef _WIN32
-    return runningElevated();
+    // Elevated for real, or the harness answering the check in its place.
+    // Nothing below writes to a device -- every destination is a file in a
+    // temporary directory -- so what the privilege buys is reaching the
+    // arguments at all.
+    return runningElevated() || haveHarness();
 #else
     // Already root counts: sudo is only the way to get there, not the point.
     return runningElevated() || haveSudo();
@@ -96,21 +130,17 @@ const char *noPrivilegedRunReason()
 
 } // namespace
 
-// Whether the imager can be started from here at all.
+// Whether anything carrying Cli::run() can be started from here at all.
 //
-// The Windows manifest asks for requireAdministrator, so CreateProcess refuses
-// outright from an unelevated process -- QProcess reports the start as never
-// having happened, not as a run that failed. Nothing in the binary is reached,
-// so every case below is answering a question it could not have asked.
-//
-// This is also why the shipping binary contributes no coverage on Windows
-// unless the suite runs elevated: cli_process_test is what drives it, and it
-// cannot.
+// Elevated, that is the shipping binary. Unelevated on Windows it is the
+// harness, because the manifest puts the real one out of reach; without the
+// harness nothing below could reach run() and every case would be answering
+// a question it could not ask.
 #ifdef _WIN32
 #define REQUIRE_LAUNCHABLE_IMAGER() \
-    if (!runningElevated()) \
+    if (!runningElevated() && !haveHarness()) \
     SKIP("the imager manifest asks for administrator, so an unelevated test " \
-         "cannot start it at all")
+         "cannot start it, and no harness was built")
 #else
 #define REQUIRE_LAUNCHABLE_IMAGER() ((void)0)
 #endif
@@ -158,8 +188,17 @@ Run runImager(const QStringList &args, bool asRoot)
 #ifdef _WIN32
     // Whatever this process has, the child inherits. There is no sudo to go
     // through and nothing to elevate past.
-    Q_UNUSED(asRoot)
-    p.start(QStringLiteral(IMAGER_BINARY), args);
+    //
+    // Where the harness stands in, asRoot is what it answers the
+    // administrator check with: the cases that pass false are the ones about
+    // the refusal that check produces.
+    if (useHarness()) {
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("RPI_IMAGER_TEST_FAKE_ADMIN"),
+                   asRoot ? QStringLiteral("1") : QStringLiteral("0"));
+        p.setProcessEnvironment(env);
+    }
+    p.start(cliBinary(), args);
 #else
     if (asRoot) {
         QStringList sudoArgs{QStringLiteral("-n"), QStringLiteral(IMAGER_BINARY)};
@@ -228,10 +267,22 @@ TEST_CASE("Run without privileges, and it says how to get them", "[cli][process]
     INFO(r.output.toStdString());
     REQUIRE(r.finished);
     CHECK(r.exitCode == 1);
+#ifdef _WIN32
+    // Windows elevates by consent rather than by a command, so the advice is
+    // the only part that differs -- there is nothing for the reader to type.
+    CHECK_THAT(r.output.toStdString(),
+               ContainsSubstring("Not running as Administrator"));
+    CHECK_THAT(r.output.toStdString(),
+               ContainsSubstring("Please run as Administrator"));
+#else
     CHECK_THAT(r.output.toStdString(), ContainsSubstring("Not running as root"));
     CHECK_THAT(r.output.toStdString(), ContainsSubstring("sudo"));
     // Named, because on an AppImage the thing to type is not "rpi-imager".
     CHECK_THAT(r.output.toStdString(), ContainsSubstring("--cli"));
+#endif
+    // Whichever it said, it has to say why.
+    CHECK_THAT(r.output.toStdString(),
+               ContainsSubstring("requires elevated privileges"));
     // And nothing was written to the destination that was named.
     CHECK_FALSE(QFile::exists(scratch.notADevice()));
 }
