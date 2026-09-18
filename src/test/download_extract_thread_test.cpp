@@ -849,6 +849,48 @@ TEST_CASE("Sizing and writing reach the same verdict about a file",
     }
 }
 
+TEST_CASE("A local image that was cut short is reported, not written short",
+          "[extract][local]")
+{
+    // The other answer to "No progress is possible". For a download that has
+    // just finished, running out of input is the tail of a race and is taken
+    // as the end of the stream -- without that every download would fail at
+    // 100%. A file already on disk has no such race: it ran out because it is
+    // truncated, and writing what there was would put a part of an image on
+    // the card and call it a success.
+    if (!haveTool(QStringLiteral("xz")))
+        SKIP("xz is not installed, so no .xz image can be built to cut short");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(512 * 1024, 41);
+    const QString raw = scratch.filePath(QStringLiteral("cut.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
+
+    const QString archive = raw + QStringLiteral(".xz");
+    const QByteArray whole = readFile(archive);
+    REQUIRE(whole.size() > 4096);
+    // Two thirds, so the stream starts and then runs out rather than being
+    // refused at the front as not an archive at all.
+    REQUIRE(writeFile(archive, whole.left(whole.size() * 2 / 3)));
+
+    const QString dest = scratch.filePath(QStringLiteral("cut-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (1024 * 1024), '\0')));
+
+    // No hash: the truncation itself has to be caught, not a mismatch after
+    // the fact. A hash would pass this case whether or not the short read was
+    // noticed.
+    LocalFileExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(),
+                              QByteArray());
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    REQUIRE(outcome.finished);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    CHECK_FALSE(outcome.succeeded);
+    CHECK_FALSE(outcome.errorMessage.isEmpty());
+}
+
 TEST_CASE("An image inside a zipped folder is extracted, not called corrupt",
           "[extract][local]")
 {
