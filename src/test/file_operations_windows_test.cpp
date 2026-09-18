@@ -451,6 +451,25 @@ TEST_CASE("A failed open of a file is not worth retrying", "[fileops-win]")
     CHECK_FALSE(ops->OpenFailureMayBeTransient(path.toStdString()));
 }
 
+TEST_CASE("A drive that is not there is not worth retrying", "[fileops-win]")
+{
+    // Shaped like a physical drive, so the decision is made on the error the
+    // open failed with rather than on the path. A drive number nothing is
+    // using answers "not there", which will not become true by waiting --
+    // unlike the sharing violations and not-ready that a real drive gives
+    // while Windows re-enumerates it.
+    auto ops = FileOperations::Create();
+    const std::string absent = "\\\\.\\PhysicalDrive99";
+
+    // Nothing has been attempted yet, so there is no failure to judge.
+    CHECK_FALSE(ops->OpenFailureMayBeTransient(absent));
+
+    REQUIRE(ops->OpenDevice(absent) != FileError::kSuccess);
+    CHECK_FALSE(ops->OpenFailureMayBeTransient(absent));
+    // And the reason is carried out rather than collapsed into a bare false.
+    CHECK(ops->GetLastErrorCode() != 0);
+}
+
 // ============================================================================
 // Against a real physical drive
 // ============================================================================
