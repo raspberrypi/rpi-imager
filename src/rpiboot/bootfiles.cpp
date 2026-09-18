@@ -30,6 +30,15 @@ bool fitsUstarName(const std::string& name)
     return false;
 }
 
+// archive_error_string() answers null where libarchive set no message, which
+// several of its failures do not. Appending that to a std::string is
+// undefined, so every report below goes through here.
+std::string archiveError(struct archive* a)
+{
+    const char* why = archive_error_string(a);
+    return why ? why : "libarchive gave no reason";
+}
+
 } // namespace
 
 namespace rpiboot {
@@ -51,7 +60,7 @@ bool Bootfiles::extractFromMemory(const std::vector<uint8_t>& tarData)
 
     int rc = archive_read_open_memory(a, tarData.data(), tarData.size());
     if (rc != ARCHIVE_OK) {
-        _lastError = std::string("Failed to open tar from memory: ") + archive_error_string(a);
+        _lastError = std::string("Failed to open tar from memory: ") + archiveError(a);
         archive_read_free(a);
         return false;
     }
@@ -73,7 +82,7 @@ bool Bootfiles::extractFromFile(const std::string& path)
 
     int rc = archive_read_open_filename(a, path.c_str(), 16384);
     if (rc != ARCHIVE_OK) {
-        _lastError = std::string("Failed to open tar file: ") + archive_error_string(a);
+        _lastError = std::string("Failed to open tar file: ") + archiveError(a);
         archive_read_free(a);
         return false;
     }
@@ -146,7 +155,7 @@ bool Bootfiles::writeToFile(const std::string& path)
     // differs, changing every checksum.
     archive_write_set_format_gnutar(a);
     if (archive_write_open_filename(a, path.c_str()) != ARCHIVE_OK) {
-        _lastError = std::string("writeToFile: ") + archive_error_string(a);
+        _lastError = std::string("writeToFile: ") + archiveError(a);
         archive_write_free(a);
         return false;
     }
@@ -182,7 +191,7 @@ bool Bootfiles::writeToFile(const std::string& path)
 
         if (archive_write_header(a, e) != ARCHIVE_OK) {
             _lastError = std::string("writeToFile header for ") + name + ": "
-                       + archive_error_string(a);
+                       + archiveError(a);
             archive_entry_free(e);
             archive_write_close(a);
             archive_write_free(a);
@@ -194,7 +203,7 @@ bool Bootfiles::writeToFile(const std::string& path)
             if (written < 0 ||
                 static_cast<size_t>(written) != data.size()) {
                 _lastError = std::string("writeToFile data for ") + name + ": "
-                           + (written < 0 ? archive_error_string(a) : "short write");
+                           + (written < 0 ? archiveError(a) : "short write");
                 archive_entry_free(e);
                 archive_write_close(a);
                 archive_write_free(a);
@@ -206,7 +215,7 @@ bool Bootfiles::writeToFile(const std::string& path)
     }
 
     if (archive_write_close(a) != ARCHIVE_OK) {
-        _lastError = std::string("writeToFile close: ") + archive_error_string(a);
+        _lastError = std::string("writeToFile close: ") + archiveError(a);
         archive_write_free(a);
         return false;
     }
@@ -291,7 +300,7 @@ bool Bootfiles::extractFromArchive(::archive* a)
 
                 la_ssize_t bytesRead = archive_read_data(a, data.data() + offset, want);
                 if (bytesRead < 0) {
-                    _lastError = std::string("Error reading archive entry '") + name + "': " + archive_error_string(a);
+                    _lastError = std::string("Error reading archive entry '") + name + "': " + archiveError(a);
                     return false;
                 }
                 if (bytesRead == 0)
