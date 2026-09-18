@@ -48,26 +48,50 @@ struct Run {
     bool finished = false;
 };
 
+// Windows elevates by consent rather than by a command that re-runs the
+// binary, so there is nothing to ask for and nothing to define there.
+#ifndef _WIN32
 bool haveSudo()
 {
-#ifdef _WIN32
-    // Windows elevates by consent, not by a command that re-runs the binary,
-    // so there is nothing to ask for here. The cases that want an elevated
-    // run skip; the ones that only want the binary run still run it, which is
-    // what puts counters on the shipping binary's objects at all.
-    return false;
-#else
     QProcess probe;
     probe.start(QStringLiteral("sudo"), {QStringLiteral("-n"), QStringLiteral("true")});
     probe.waitForFinished(10000);
     return probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
-#endif
 }
+#endif
 
 // Whether this process is already the privileged one.
 bool runningElevated()
 {
     return rpi_test::isPrivileged();
+}
+
+// Whether the imager can be started with the privileges a write needs.
+//
+// The two hosts get there differently: POSIX re-runs the binary under sudo,
+// so what matters is whether sudo will run without a password; Windows has
+// no such command and the binary inherits the privileges of whoever starts
+// it, so what matters is whether this process is elevated. Asking the POSIX
+// question on Windows skipped every write case even under elevation.
+bool canStartPrivileged()
+{
+#ifdef _WIN32
+    return runningElevated();
+#else
+    // Already root counts: sudo is only the way to get there, not the point.
+    return runningElevated() || haveSudo();
+#endif
+}
+
+// Why the imager could not be started with the privileges a write needs.
+const char *noPrivilegedRunReason()
+{
+#ifdef _WIN32
+    return "this process is not elevated, so the imager cannot be started "
+           "with the privileges a write needs";
+#else
+    return "passwordless sudo is not available, and writing needs root";
+#endif
 }
 
 } // namespace
@@ -131,6 +155,12 @@ Run runImager(const QStringList &args, bool asRoot)
     QProcess p;
     p.setProcessChannelMode(QProcess::MergedChannels);
 
+#ifdef _WIN32
+    // Whatever this process has, the child inherits. There is no sudo to go
+    // through and nothing to elevate past.
+    Q_UNUSED(asRoot)
+    p.start(QStringLiteral(IMAGER_BINARY), args);
+#else
     if (asRoot) {
         QStringList sudoArgs{QStringLiteral("-n"), QStringLiteral(IMAGER_BINARY)};
         sudoArgs << args;
@@ -138,6 +168,7 @@ Run runImager(const QStringList &args, bool asRoot)
     } else {
         p.start(QStringLiteral(IMAGER_BINARY), args);
     }
+#endif
 
     r.finished = p.waitForFinished(kCliTimeoutMs);
     r.output = QString::fromUtf8(p.readAll());
@@ -208,9 +239,8 @@ TEST_CASE("Run without privileges, and it says how to get them", "[cli][process]
 TEST_CASE("A source that is not there is refused by name", "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available, and the checks below sit "
-             "behind the privileges test");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"), scratch.missing(),
@@ -228,8 +258,8 @@ TEST_CASE("A source that is not there is refused by name", "[cli][process][root]
 TEST_CASE("A directory given as the image is refused", "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"), scratch.dir(),
@@ -249,8 +279,8 @@ TEST_CASE("A destination that is not a drive is refused, with the alternatives",
     // The one that stands between a mistyped script and somebody's disk. It
     // has to say what could have been written instead, and how to overrule it
     // for the person who really did mean a system drive.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"), scratch.source(),
@@ -273,8 +303,8 @@ TEST_CASE("A cache file with no hash is refused before anything is fetched",
     // The static behind this is covered on its own; what this adds is that
     // run() actually consults it, and does so before the write rather than
     // after the download.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"),
@@ -291,8 +321,8 @@ TEST_CASE("A cache file with no hash is refused before anything is fetched",
 TEST_CASE("A secure boot key that is not there is refused", "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"),
@@ -331,8 +361,8 @@ QString directoryInPlaceOfFile(const Scratch &scratch)
 TEST_CASE("A first-run script that is not there is named as the problem", "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!runningElevated() && !haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"),
@@ -356,8 +386,8 @@ TEST_CASE("A user-data file that cannot be opened is told apart from one that is
           "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!runningElevated() && !haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const QString unopenable = directoryInPlaceOfFile(scratch);
@@ -385,8 +415,8 @@ TEST_CASE("A network-config file that cannot be opened says which of the two it 
     // The two cloud-init files are read one after the other by the same
     // helper, and a run can name both. Saying only "opening the file" would
     // leave the author to guess which.
-    if (!runningElevated() && !haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const QString unopenable = directoryInPlaceOfFile(scratch);
@@ -415,8 +445,8 @@ TEST_CASE("The refusal never offers a choice from an empty list", "[cli][process
     //
     // This holds whatever is plugged in: either there are candidates and they
     // are listed, or there are none and the message says so.
-    if (!runningElevated() && !haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const Run r = runImager({QStringLiteral("--cli"), scratch.source(),
@@ -472,8 +502,8 @@ TEST_CASE("A write that succeeds says so and gives the shell back",
           "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available, and writing needs root");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const QString target = scratch.notADevice();
@@ -512,8 +542,8 @@ TEST_CASE("A completed write leaves no inhibitor behind",
     // process holding an idle:sleep lock and a FIFO under /run; a run that
     // hangs leaves both, and they accumulate. A machine that has written a
     // few cards should not be one that can no longer go to sleep.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 #ifndef Q_OS_LINUX
     // The FIFO under /run and the systemd-inhibit holding it are the Linux
     // inhibitor's own arrangement; other platforms inhibit sleep through
@@ -592,8 +622,8 @@ TEST_CASE("A write verifies unless told not to", "[cli][process][root]")
     // card holds what the image held. Both spellings of the run have to
     // succeed: the flag exists because verification doubles the time, and one
     // that broke the write would be worse than one that wasted it.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available, and writing needs root");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const QString source = sizedImage(scratch.dir(), 48);
@@ -632,8 +662,8 @@ TEST_CASE("Quiet means quiet, right up until something fails",
           "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
 
@@ -683,8 +713,8 @@ TEST_CASE("Running as root, a failed open does not advise sudo",
     // running under sudo -- which the CLI requires, so all of them -- was
     // told to do the thing they had just done, and sent round the same loop
     // with nothing to change.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 #ifndef Q_OS_LINUX
     // The message this is about is the Linux branch of the open failure.
     // macOS has its own, which also opens a System Settings pane on the way
@@ -733,8 +763,8 @@ TEST_CASE("An image whose hash does not match is refused, legibly",
           "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available, and writing needs root");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const QString target = scratch.notADevice();
@@ -769,8 +799,8 @@ TEST_CASE("An image whose hash matches is written", "[cli][process][root]")
     REQUIRE_LAUNCHABLE_IMAGER();
     // The other side, so the refusal above is not simply "--sha256 always
     // fails".
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const QString target = scratch.notADevice();
@@ -852,8 +882,8 @@ TEST_CASE("A compressed image is decompressed on its way to the card",
           "[cli][process][root]")
 {
     REQUIRE_LAUNCHABLE_IMAGER();
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available, and writing needs root");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const CompressedImage image(scratch.dir());
@@ -891,8 +921,8 @@ TEST_CASE("A truncated compressed image is refused, not half-written",
     // stops, so an extractor that trusts what it has been given writes the
     // part that decompressed and reports success -- and the user gets a card
     // that boots part-way, or not at all, with nothing to say why.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
 
     Scratch scratch;
     const CompressedImage image(scratch.dir());
@@ -940,8 +970,8 @@ TEST_CASE("A truncated gzip image is refused too", "[cli][process][root]")
     // words gzip truncation differently, which is the only reason it never
     // fell into the shortcut that swallowed the xz one -- so it is worth a
     // case of its own rather than an assumption.
-    if (!haveSudo())
-        SKIP("passwordless sudo is not available");
+    if (!canStartPrivileged())
+        SKIP(noPrivilegedRunReason());
     if (!rpi_test::haveTool(QStringLiteral("gzip")))
         SKIP("gzip is not installed");
 

@@ -658,6 +658,12 @@ FileError WindowsFileOperations::WriteAtOffset(
     if (!result) {
       CloseHandle(overlapped.hEvent);
 
+      // Recorded, because this is what the message the user sees is built
+      // from. Left unset, ClassifyLastWriteError() answers from whatever was
+      // stored last -- an open several steps back -- so a write-protected
+      // card could be reported as a permission problem, or as nothing at all.
+      last_error_code_ = static_cast<int>(error);
+
       if (cancelled_.load() || error == ERROR_OPERATION_ABORTED) {
         return FileError::kCancelled;
       }

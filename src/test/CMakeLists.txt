@@ -502,6 +502,11 @@ target_link_libraries(secureboot_crypto_test PRIVATE
     Catch2::Catch2WithMain Qt6::Core ${GNUTLS_LIBRARIES})
 rpi_link_platform_backends(secureboot_crypto_test)
 target_compile_features(secureboot_crypto_test PRIVATE cxx_std_20)
+# Reaches the CryptoAPI and CNG failure paths, which no arrangement of
+# inputs can provoke.
+target_compile_definitions(secureboot_crypto_test PRIVATE
+    SECUREBOOT_CRYPTO_ENABLE_TEST_API)
+
 rpi_discover_tests(secureboot_crypto_test)
 
 # ============================================================================
@@ -1929,6 +1934,36 @@ add_custom_target(test_performance_stats
 # and drives the same code against that: no device, no mount, no privileges,
 # and both FAT16 and FAT32. Cases skip themselves where mkfs.vfat is absent.
 
+if(WIN32)
+    # The filter parsing behind the native open dialog. Only the Windows
+    # backend has it; the dialog itself cannot be opened from a test, so the
+    # parsing is reached through a seam instead.
+    add_executable(native_file_dialog_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/nativefiledialog_windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../nativefiledialog.h
+        native_file_dialog_test.cpp
+    )
+
+    target_compile_definitions(native_file_dialog_test PRIVATE
+        NATIVEFILEDIALOG_ENABLE_TEST_API)
+
+    target_include_directories(native_file_dialog_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_link_libraries(native_file_dialog_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+        Qt6::Gui
+        ole32
+        shell32
+    )
+
+    target_compile_features(native_file_dialog_test PRIVATE cxx_std_20)
+
+    rpi_discover_tests(native_file_dialog_test)
+endif()
+
 add_executable(proxy_url_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../proxy_url.h
     proxy_url_test.cpp
@@ -3248,6 +3283,19 @@ rpi_link_platform_backends(secure_boot_provisioner_test)
 rpi_link_platform_file_ops(secure_boot_provisioner_test)
 
 target_compile_features(secure_boot_provisioner_test PRIVATE cxx_std_20)
+
+# A real executable rather than a shell script: Windows appends ".exe" to a
+# bare program name and nothing else, so a shebang script named "openssl" was
+# never found and the cases that plant one passed by taking the "not
+# installed" path instead.
+add_executable(fake_openssl_probe
+    fake_openssl_probe.cpp
+)
+target_compile_features(fake_openssl_probe PRIVATE cxx_std_20)
+
+target_compile_definitions(secure_boot_provisioner_test PRIVATE
+    FAKE_OPENSSL_BINARY="$<TARGET_FILE:fake_openssl_probe>")
+add_dependencies(secure_boot_provisioner_test fake_openssl_probe)
 
 rpi_discover_tests(secure_boot_provisioner_test)
 

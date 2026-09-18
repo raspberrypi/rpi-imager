@@ -5866,3 +5866,99 @@ TEST_CASE("The video controller query answers without faulting",
     INFO("this machine reports an NVIDIA adapter: " << first);
     CHECK(first == second);
 }
+
+// ============================================================================
+// Where ssh-keygen is
+// ============================================================================
+
+TEST_CASE("The ssh-keygen path is one that can actually be run",
+          "[platformquirks][sshkeygen]")
+{
+    // Windows keeps it under the system directory, and which name reaches
+    // that directory depends on the bitness of this process. The answer was
+    // SysNative unconditionally -- the WOW64 alias a 32-bit process uses,
+    // which does not exist at all for a 64-bit one. The shipping build is
+    // 64-bit, so the path was never there: Imager reported it had no
+    // ssh-keygen and the button that generates a key did nothing.
+    const QString path = PlatformQuirks::sshKeyGenPath();
+    INFO("path: " << path.toStdString());
+
+    if (path.isEmpty())
+        SKIP("this machine has no ssh-keygen, which is an answer in itself");
+
+    // Either a bare name to be found on PATH, or a path that is really there.
+    if (path.contains(QLatin1Char('/')))
+        CHECK(QFile::exists(path));
+    else
+        CHECK(path == QStringLiteral("ssh-keygen"));
+}
+
+TEST_CASE("The ssh-keygen path does not name the WOW64 alias to a 64-bit build",
+          "[platformquirks][sshkeygen]")
+{
+    // The specific mistake, named: SysNative resolves only for a 32-bit
+    // process, so a 64-bit build that returns it returns a path to nothing.
+    const QString path = PlatformQuirks::sshKeyGenPath();
+    if (path.isEmpty() || !path.contains(QStringLiteral("SysNative"), Qt::CaseInsensitive))
+        SUCCEED("not a SysNative path");
+    else
+        CHECK(sizeof(void *) == 4);
+}
+
+// ============================================================================
+// Elevation on Windows
+// ============================================================================
+// Windows elevates through the UAC manifest on the executable, not through a
+// policy file installed alongside it the way the Linux build does. The
+// platform layer has to say so rather than leave the answer to chance: a
+// caller told a policy could be installed would offer to install one, and
+// nothing would happen.
+
+TEST_CASE("Windows reports no elevation policy to install",
+          "[platformquirks][windows][elevation]")
+{
+    CHECK_FALSE(PlatformQuirks::hasElevationPolicyInstalled());
+    CHECK_FALSE(PlatformQuirks::installElevationPolicy());
+    CHECK_FALSE(PlatformQuirks::runElevatedPolicyInstaller());
+}
+
+TEST_CASE("Windows declines to re-exec itself elevated",
+          "[platformquirks][windows][elevation]")
+{
+    // The manifest asks for administrator, so the process is already elevated
+    // or it was never going to be. Answering yes here would start a second
+    // copy of Imager while the first was still running.
+    char program[] = "rpi-imager";
+    char *argv[] = {program, nullptr};
+    CHECK_FALSE(PlatformQuirks::tryElevate(1, argv));
+
+    // And the no-op that goes with it: nothing is started, and it returns.
+    CHECK_NOTHROW(PlatformQuirks::execElevated(QStringList{QStringLiteral("--version")}));
+}
+
+TEST_CASE("Windows has no application bundle", "[platformquirks][windows]")
+{
+    // The macOS notion. A caller that treated the answer as a path would
+    // build one from a null pointer.
+    CHECK_FALSE(PlatformQuirks::isElevatableBundle());
+    CHECK(PlatformQuirks::getBundlePath() == nullptr);
+}
+
+TEST_CASE("The URI scheme is registered by the installer, not at runtime",
+          "[platformquirks][windows]")
+{
+    // Answering false would have the caller report a failure to register
+    // something the installer already wrote to the registry.
+    CHECK(PlatformQuirks::registerUriScheme());
+}
+
+TEST_CASE("A URL is not handed to the shell", "[platformquirks][windows]")
+{
+    // Declining on purpose: launching through `cmd /c start` would pass the
+    // URL through the shell, where &, | and friends run commands. The caller
+    // falls back to QDesktopServices, which does not.
+    CHECK_FALSE(PlatformQuirks::openUrlExternally(
+        QUrl(QStringLiteral("https://www.raspberrypi.com/"))));
+    CHECK_FALSE(PlatformQuirks::openUrlExternally(
+        QUrl(QStringLiteral("https://example.com/\" & calc.exe & \""))));
+}

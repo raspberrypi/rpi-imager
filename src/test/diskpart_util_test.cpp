@@ -25,6 +25,12 @@
 #include "platform_privilege.h"
 
 #include <QByteArray>
+#include <utility>
+#include <string>
+#include <windows.h>
+#include <QFile>
+#include <QDir>
+#include <QTemporaryDir>
 #include <QString>
 
 // Declared in diskpart_util.cpp when the test API is enabled.
@@ -193,6 +199,102 @@ TEST_CASE("Unmounting a disk with no volumes holds nothing open",
     });
     CHECK(result.success);
     CHECK(locked.empty());
+}
+
+// Handles a real volume lock would hand over, stood in for by ordinary files.
+//
+// What LockedVolumes does with them is the same either way: hold them, count
+// them, and close every one on release. release() also asks each for an
+// unlock, which a file handle refuses harmlessly -- the comment on it says as
+// much, because a wiped volume refuses too.
+namespace {
+
+HANDLE openScratchHandle(const QString &path)
+{
+    const std::wstring wide = path.toStdWString();
+    return ::CreateFileW(wide.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                         CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr);
+}
+
+} // namespace
+
+TEST_CASE("Adopted handles are counted and then closed", "[diskpart][locked]")
+{
+    // A handle left open keeps its volume locked, and the drive letter bound
+    // to a volume Windows will not re-mount. That is the fault behind the
+    // card readers that came back with no letter at all.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString first = QDir(dir.path()).filePath(QStringLiteral("one.lock"));
+    const QString second = QDir(dir.path()).filePath(QStringLiteral("two.lock"));
+
+    HANDLE a = openScratchHandle(first);
+    HANDLE b = openScratchHandle(second);
+    REQUIRE(a != INVALID_HANDLE_VALUE);
+    REQUIRE(b != INVALID_HANDLE_VALUE);
+
+    {
+        DiskpartUtil::LockedVolumes locked;
+        CHECK(locked.empty());
+        locked.adopt(a);
+        CHECK_FALSE(locked.empty());
+        CHECK(locked.count() == 1);
+        locked.adopt(b);
+        CHECK(locked.count() == 2);
+
+        locked.release();
+        CHECK(locked.empty());
+        CHECK(locked.count() == 0);
+    }
+
+    // Closed, not merely forgotten: Windows refuses to delete a file that
+    // still has an open handle, so this is the check that matters.
+    CHECK(QFile::remove(first));
+    CHECK(QFile::remove(second));
+}
+
+TEST_CASE("Handles adopted and never released are still closed",
+          "[diskpart][locked]")
+{
+    // The write path relies on this: the object goes out of scope on every
+    // path out, including the ones that failed, and the volumes have to come
+    // back whether or not anybody remembered to say so.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("dropped.lock"));
+
+    HANDLE h = openScratchHandle(path);
+    REQUIRE(h != INVALID_HANDLE_VALUE);
+    {
+        DiskpartUtil::LockedVolumes locked;
+        locked.adopt(h);
+        CHECK(locked.count() == 1);
+    }
+    CHECK(QFile::remove(path));
+}
+
+TEST_CASE("A moved-from holder gives up what it was holding",
+          "[diskpart][locked]")
+{
+    // unmountVolumes hands one back by value. If the move left both objects
+    // holding the same handles, the second destructor would close a handle
+    // the first had already closed.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("moved.lock"));
+
+    HANDLE h = openScratchHandle(path);
+    REQUIRE(h != INVALID_HANDLE_VALUE);
+
+    {
+        DiskpartUtil::LockedVolumes from;
+        from.adopt(h);
+        DiskpartUtil::LockedVolumes to(std::move(from));
+        CHECK(to.count() == 1);
+        // Nothing left behind to be closed a second time.
+        CHECK(from.empty());
+    }
+    CHECK(QFile::remove(path));
 }
 
 TEST_CASE("Releasing held volumes twice is safe", "[diskpart][vhd]")

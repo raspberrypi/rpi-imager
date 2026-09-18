@@ -582,6 +582,66 @@ TEST_CASE("A name USTAR cannot hold fails the repack, with the name in the error
     CHECK(bf.lastError().find(longName) != std::string::npos);
 }
 
+TEST_CASE("A long name that splits on a directory is repacked",
+          "[rpiboot][bootfiles]")
+{
+    // USTAR stores a pathname as prefix[155] + '/' + name[100], so a name
+    // well over 100 characters is storable as long as it has a separator in
+    // the right place. Refusing these would turn a package that is perfectly
+    // valid into a failure between signing the firmware and serving it --
+    // and the firmware trees really do nest this deep.
+    const std::string dir(120, 'd');
+    const std::string leaf(90, 'l');
+    const std::string splittable = dir + "/" + leaf;   // 211 characters
+    REQUIRE(splittable.size() > 100);
+    REQUIRE(splittable.size() <= 256);
+
+    auto tar = createPaxTarInMemory({
+        {"config.txt", {'o', 'k'}},
+        {splittable, {'y', 'e', 's'}},
+    });
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+    REQUIRE(bf.find(splittable) != nullptr);
+
+    QTemporaryDir dir2;
+    REQUIRE(dir2.isValid());
+    const std::string out = (dir2.path() + "/repacked.tar").toStdString();
+
+    INFO("error: " << bf.lastError());
+    CHECK(bf.writeToFile(out));
+
+    // And it really is in the archive that came out, under the same name.
+    Bootfiles back;
+    REQUIRE(back.extractFromFile(out));
+    const auto *data = back.find(splittable);
+    REQUIRE(data != nullptr);
+    CHECK(*data == std::vector<uint8_t>{'y', 'e', 's'});
+}
+
+TEST_CASE("A name longer than USTAR can hold at all fails the repack",
+          "[rpiboot][bootfiles]")
+{
+    // prefix[155] + '/' + name[100] is 256 characters and no arrangement of
+    // separators stores more. Refused before the split is looked for, so the
+    // search does not have to answer for a name it could never hold.
+    const std::string huge = std::string(200, 'a') + "/" + std::string(100, 'b');
+    REQUIRE(huge.size() > 256);
+
+    auto tar = createPaxTarInMemory({{huge, {'n', 'o'}}});
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::string out = (dir.path() + "/repacked.tar").toStdString();
+
+    CHECK_FALSE(bf.writeToFile(out));
+    CHECK(bf.lastError().find(huge) != std::string::npos);
+}
+
 // A package that was cut short in transfer. The header block arrived whole,
 // so the entry announces a size, and the bytes behind it are not there. Read
 // as far as it goes and stop: the alternative is serving the board a file

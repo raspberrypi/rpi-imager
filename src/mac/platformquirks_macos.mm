@@ -436,6 +436,11 @@ bool prefersReducedMotion() {
     return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
 }
 
+// On PATH, which is where every distribution and macOS put it.
+QString sshKeyGenPath() {
+    return QStringLiteral("ssh-keygen");
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // On macOS, use raw disk device (/dev/rdisk) for direct I/O.
     // This bypasses the macOS buffer cache and provides significantly

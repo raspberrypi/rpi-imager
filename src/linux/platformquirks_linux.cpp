@@ -1698,6 +1698,11 @@ bool prefersReducedMotion() {
     return false;
 }
 
+// On PATH, which is where every distribution and macOS put it.
+QString sshKeyGenPath() {
+    return QStringLiteral("ssh-keygen");
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // Linux uses the same device path for both buffered and direct I/O.
     // Direct I/O is controlled via O_DIRECT flag, not device path.

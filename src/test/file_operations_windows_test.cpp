@@ -597,6 +597,52 @@ TEST_CASE("A write refused past the attempts allowed gives up",
     CHECK(backend(dev).RemainingInjectedWriteFailures() == 6);
 }
 
+TEST_CASE("A refused write says what refused it", "[fileops-win][transient]")
+{
+    // The classification behind the message the user is shown. It reads the
+    // last error the backend recorded, and a synchronous write that failed
+    // used not to record one -- so a write-protected card was reported from
+    // whatever had been stored several steps earlier, usually the open.
+    struct Case {
+        unsigned long error;
+        rpi_imager::WriteErrorClass expected;
+        const char *why;
+    };
+    static const Case kCases[] = {
+        {ERROR_DISK_FULL, rpi_imager::WriteErrorClass::kDiskFull, "no room left"},
+        {ERROR_WRITE_PROTECT, rpi_imager::WriteErrorClass::kWriteProtected,
+         "the lock switch on the card"},
+        {ERROR_CRC, rpi_imager::WriteErrorClass::kMediaError, "a bad sector"},
+        {ERROR_SECTOR_NOT_FOUND, rpi_imager::WriteErrorClass::kMediaError,
+         "a sector that is not there"},
+        {ERROR_INVALID_PARAMETER, rpi_imager::WriteErrorClass::kInvalidParameter,
+         "an unaligned transfer"},
+        {ERROR_IO_DEVICE, rpi_imager::WriteErrorClass::kIoDeviceError,
+         "the card pulled out mid-write"},
+    };
+
+    for (const Case &c : kCases) {
+        ScratchDevice dev;
+        INFO(c.why << " (error " << c.error << ")");
+        // More than the attempts allowed, so the errors that are retried run
+        // out of attempts rather than succeeding on the next one.
+        REQUIRE(writeRefusedWith(dev, c.error, 8) == FileError::kWriteError);
+        CHECK(backend(dev).GetLastErrorCode() == static_cast<int>(c.error));
+        CHECK(backend(dev).ClassifyLastWriteError() == c.expected);
+    }
+}
+
+TEST_CASE("An error with no category of its own is not given one",
+          "[fileops-win][transient]")
+{
+    // Better an unspecific message than a confident wrong one: telling
+    // somebody their card is write-protected when it is not sends them
+    // looking at a switch that was never the problem.
+    ScratchDevice dev;
+    REQUIRE(writeRefusedWith(dev, ERROR_NOT_SUPPORTED, 8) == FileError::kWriteError);
+    CHECK(backend(dev).ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kUnknown);
+}
+
 TEST_CASE("A cancelled device abandons a write it was retrying",
           "[fileops-win][transient]")
 {

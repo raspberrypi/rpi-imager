@@ -248,3 +248,47 @@ TEST_CASE("Seeking past the end of a file is allowed, as the API allows it",
     CHECK(f.pos() == 1024 * 1024);
     f.close();
 }
+
+TEST_CASE("A closed file hands out no handle and no error code", "[winfile]")
+{
+    // handle() is what the callers reach for when they need an IOCTL the
+    // wrapper does not offer. Handing back a stale or uninitialised value
+    // would have them call DeviceIoControl on whatever it happened to be.
+    WinFile f;
+    CHECK(f.handle() == INVALID_HANDLE_VALUE);
+    // Nothing has failed yet, so there is nothing to report.
+    CHECK(f.errorCode() == 0);
+}
+
+TEST_CASE("The code and the text describe the same failure", "[winfile]")
+{
+    // Two accessors, one failure. A caller that logs the text and branches on
+    // the code has to be looking at the same event.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    WinFile f;
+    f.setFileName(QDir(dir.path()).filePath(QStringLiteral("not-here.img")));
+    REQUIRE_FALSE(f.open(QIODevice::ReadOnly));
+
+    INFO("error: " << f.errorString().toStdString() << " code " << f.errorCode());
+    CHECK(f.errorCode() != 0);
+    CHECK_FALSE(f.errorString().isEmpty());
+}
+
+TEST_CASE("An open file hands out the handle it is using", "[winfile]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = makeFile(dir, QStringLiteral("handed-out.img"));
+
+    WinFile f;
+    f.setFileName(path);
+    REQUIRE(f.open(QIODevice::ReadWrite));
+    const HANDLE h = f.handle();
+    REQUIRE(h != INVALID_HANDLE_VALUE);
+
+    // A handle worth having: Windows answers for it.
+    LARGE_INTEGER size{};
+    CHECK(GetFileSizeEx(h, &size));
+    f.close();
+}

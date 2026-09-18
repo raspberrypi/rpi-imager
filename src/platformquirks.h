@@ -182,6 +182,18 @@ namespace PlatformQuirks {
     qreal fontDpiCorrection();
 
     /**
+     * The ssh-keygen this platform offers, or empty where it has none.
+     *
+     * Windows keeps it under the system directory, and which name reaches
+     * that directory depends on the bitness of this process: a 64-bit one
+     * uses System32, a 32-bit one has to use the SysNative alias because
+     * System32 is redirected to SysWOW64 underneath it. Asked here rather
+     * than assumed, so the answer follows the build rather than the guess
+     * made when it was written.
+     */
+    QString sshKeyGenPath();
+
+    /**
      * Get the optimal device path for write I/O operations.
      * On macOS, converts /dev/diskN to /dev/rdiskN for direct I/O (bypasses buffer cache).
      * On other platforms, returns the path unchanged.
