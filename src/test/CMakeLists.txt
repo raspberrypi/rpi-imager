@@ -2733,6 +2733,26 @@ endif()
     target_compile_definitions(cli_process_test PRIVATE
         IMAGER_BINARY="$<TARGET_FILE:${PROJECT_NAME}>")
     add_dependencies(cli_process_test ${PROJECT_NAME})
+
+    # The same Cli, in a binary an unelevated test can start.
+    #
+    # The shipping manifest asks for requireAdministrator, which CreateProcess
+    # refuses from an unelevated process, so every case above skipped and the
+    # CLI went untested on Windows. This carries no manifest, and wraps the
+    # administrator check so the refusals past it are reachable. See
+    # cli_harness_main.cpp.
+    if(WIN32)
+        add_executable(cli_harness cli_harness_main.cpp cli_admin_fault.cpp)
+        set_target_properties(cli_harness PROPERTIES AUTOMOC ON)
+        target_link_libraries(cli_harness PRIVATE rpi_imager_testable)
+        target_link_options(cli_harness PRIVATE
+            -Wl,--wrap=__imp_CheckTokenMembership)
+        target_compile_features(cli_harness PRIVATE cxx_std_20)
+        target_compile_definitions(cli_process_test PRIVATE
+            IMAGER_CLI_HARNESS="$<TARGET_FILE:cli_harness>")
+        add_dependencies(cli_process_test cli_harness)
+    endif()
+
     rpi_discover_tests(cli_process_test)
 
     # The picker models: same library, its own cases.
