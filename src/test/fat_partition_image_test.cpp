@@ -936,8 +936,10 @@ TEST_CASE("FAT driver rejects malformed subdirectory paths", "[fat][image]")
     REQUIRE_MKFS();
     FatImage image(32, 64);
 
-    // A path that splits to fewer than two parts is not a subdirectory
-    // reference at all, and must be refused rather than half-interpreted.
+    // A path that names no file at all must be refused rather than
+    // half-interpreted -- and refused by returning nothing, not by throwing,
+    // because a caller asking whether a file is there is entitled to an
+    // answer.
     CHECK(image.fat().readFile(QStringLiteral("/")).isEmpty());
     CHECK_FALSE(image.fat().deleteFile(QStringLiteral("/")));
     CHECK(image.fat().readFile(QStringLiteral("nosuchdir/file.txt")).isEmpty());
@@ -973,15 +975,44 @@ TEST_CASE("FAT driver reads a subdirectory file on FAT16", "[fat][image]")
     CHECK(image.fat().readFile(QStringLiteral("config.txt")) == QByteArray("root still works"));
 }
 
-// fileExists() does not understand subdirectory paths, though readFile() and
-// deleteFile() both do.
+TEST_CASE("FAT driver writes into and makes a subdirectory on FAT16", "[fat][image]")
+{
+    // The root is the only special directory on FAT16: a subdirectory is an
+    // ordinary cluster chain, as it is on FAT32. So the walk must follow the
+    // chain here, and a directory larger than one cluster is what proves it
+    // does.
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(16, 16, [&](const QString &imagePath) {
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+    });
+
+    // Into a directory mtools made...
+    image.fat().writeFile(QStringLiteral("overlays/ours.dtbo"), QByteArray(1024, 'O'));
+    // ...and into ones that are not there at all.
+    image.fat().writeFile(QStringLiteral("made/up/deep.bin"), QByteArray("DEEP"));
+    image.sync();
+
+    CHECK(image.fat().readFile(QStringLiteral("overlays/ours.dtbo")) == QByteArray(1024, 'O'));
+    CHECK(image.fat().readFile(QStringLiteral("made/up/deep.bin")) == QByteArray("DEEP"));
+    CHECK(image.fat().fileExists(QStringLiteral("made/up/deep.bin")));
+    // Not stranded in the root under their own names.
+    CHECK(image.fat().readFile(QStringLiteral("ours.dtbo")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("deep.bin")).isEmpty());
+}
+
+// fileExists(), fileSize(), readFile() and deleteFile() must agree about
+// where a file is.
 //
-// The first two split "dir/file" and walk into the directory; fileExists()
-// hands the whole string to getDirEntry(), which looks for a root-level entry
-// literally named "overlays/disable-bt.dtbo" and does not find one. So a file
-// readFile() returns happily is reported as absent.
-TEST_CASE("FAT driver fileExists does not follow subdirectory paths",
-          "[fat][image][known-asymmetry]")
+// They did not: the first two handed the whole path to getDirEntry(), which
+// searched one directory for an entry literally named
+// "overlays/disable-bt.dtbo" and did not find one, while readFile() split the
+// path and walked in. So a file readFile() returned happily was reported
+// absent by the call a caller would use to ask.
+TEST_CASE("FAT driver fileExists follows subdirectory paths",
+          "[fat][image]")
 {
     REQUIRE_MKFS();
     REQUIRE_MTOOLS();
@@ -1002,8 +1033,11 @@ TEST_CASE("FAT driver fileExists does not follow subdirectory paths",
 
     // Readable...
     CHECK(image.fat().readFile(QStringLiteral("overlays/here.dtbo")) == QByteArray("present"));
-    // ...but reported absent.
-    CHECK_FALSE(image.fat().fileExists(QStringLiteral("overlays/here.dtbo")));
+    // ...and reported present, by every accessor that answers the question.
+    CHECK(image.fat().fileExists(QStringLiteral("overlays/here.dtbo")));
+    CHECK(image.fat().fileSize(QStringLiteral("overlays/here.dtbo")) == 7);
+    CHECK_FALSE(image.fat().fileExists(QStringLiteral("overlays/absent.dtbo")));
+    CHECK(image.fat().fileSize(QStringLiteral("overlays/absent.dtbo")) == -1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1049,6 +1083,34 @@ bool writeBootSector(const QString &path, quint16 bytesPerSector,
     bs[18] = char(2);                      // root entries, 512
     bs[20] = char(8);                      // total sectors, 2048
     bs[22] = char(64);                     // sectors per FAT
+    bs[510] = char(0x55);
+    bs[511] = char(0xAA);
+    return f.seek(0) && f.write(bs) == bs.size();
+}
+
+// An exFAT volume boot record, written by hand.
+//
+// mkfs.exfat is not installed on every host, and a case that runs only where
+// it is proves nothing anywhere else. The layout is short enough to lay down
+// directly: the jump, the "EXFAT   " signature, and 53 bytes of zero where
+// FAT keeps its BPB, which is what tells the two apart.
+//
+// exFAT is the default for cards over 32 GB, so it is the unsupported
+// filesystem most likely to turn up in a reader.
+bool writeExfatBootSector(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadWrite))
+        return false;
+
+    QByteArray bs(512, '\0');
+    bs[0] = char(0xEB);
+    bs[1] = char(0x76);
+    bs[2] = char(0x90);
+    memcpy(bs.data() + 3, "EXFAT   ", 8);
+    // Bytes 11-63 are MustBeZero, and are the fields a FAT driver reads.
+    bs[108] = char(9);   // bytes per sector shift, 512
+    bs[109] = char(3);   // sectors per cluster shift, 4k clusters
     bs[510] = char(0x55);
     bs[511] = char(0xAA);
     return f.seek(0) && f.write(bs) == bs.size();
@@ -1176,12 +1238,25 @@ TEST_CASE("The largest sector size the format allows is accepted", "[fat][image]
 
 TEST_CASE("FAT driver refuses an exFAT filesystem", "[fat][image]")
 {
+    // Runs everywhere, because the volume boot record is written here rather
+    // than asked for from a tool that may not be installed.
+    const OpenAttempt attempt = tryOpenAs(writeExfatBootSector, 2);
+
+    INFO("message: " << attempt.message);
+    REQUIRE(attempt.threw);
+    CHECK(attempt.message.find("exFAT") != std::string::npos);
+}
+
+TEST_CASE("FAT driver refuses an exFAT filesystem mkfs.exfat made", "[fat][image]")
+{
+    // The same refusal against the real thing, where the tool is there. The
+    // hand-written record above pins the fields the driver reads; this one
+    // says those are the fields mkfs.exfat actually writes.
     const QString mkfsExfat = rpi_test::toolPath(QStringLiteral("mkfs.exfat"));
     if (mkfsExfat.isEmpty())
-        SKIP("mkfs.exfat is not installed");
+        SKIP("mkfs.exfat is not installed, so only the written-by-hand record "
+             "can be checked here");
 
-    // exFAT is the default for cards over 32GB, so this is the most likely
-    // unsupported filesystem to actually turn up in a reader.
     const OpenAttempt attempt =
         tryOpenAs([&mkfsExfat](const QString &path) {
             QString error;
@@ -1588,16 +1663,17 @@ TEST_CASE("FAT driver writes a file into an existing subdirectory", "[fat][image
                          {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
     });
 
-    // Refused, rather than silently written to the root -- which is what it
-    // used to do, because getDirEntry() seeks back to the root and discards
-    // the subdirectory the caller selected.
+    // Placed where it was asked for, and nowhere else. Landing in the root
+    // under its own name is the failure worth guarding against, because a
+    // caller reading "overlays/added.dtbo" would report it absent.
     const QByteArray payload("device tree overlay contents");
-    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("overlays/added.dtbo"), payload));
+    image.fat().writeFile(QStringLiteral("overlays/added.dtbo"), payload);
     image.sync();
 
-    // Nothing was created anywhere.
-    CHECK(image.fat().readFile(QStringLiteral("overlays/added.dtbo")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("overlays/added.dtbo")) == payload);
+    // And nowhere else.
     CHECK(image.fat().readFile(QStringLiteral("added.dtbo")).isEmpty());
+    CHECK_FALSE(image.fat().fileExists(QStringLiteral("added.dtbo")));
 }
 
 TEST_CASE("FAT driver replaces a file already in a subdirectory", "[fat][image]")
@@ -1622,30 +1698,33 @@ TEST_CASE("FAT driver replaces a file already in a subdirectory", "[fat][image]"
     REQUIRE(image.fat().readFile(QStringLiteral("overlays/existing.dtbo"))
             == QByteArray("original"));
 
-    // Also refused. Previously this left the original in place and created
-    // an unrelated entry in the root, so the caller believed it had replaced
-    // a file it had not touched.
+    // Replaced in place, and grown past the cluster it started in. A caller
+    // that believes it has replaced a file must not leave the original
+    // where it was.
     const QByteArray replacement("replaced contents, rather longer than before");
-    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("overlays/existing.dtbo"), replacement));
+    image.fat().writeFile(QStringLiteral("overlays/existing.dtbo"), replacement);
     image.sync();
 
-    CHECK(image.fat().readFile(QStringLiteral("overlays/existing.dtbo"))
-          == QByteArray("original"));
+    CHECK(image.fat().readFile(QStringLiteral("overlays/existing.dtbo")) == replacement);
     CHECK(image.fat().readFile(QStringLiteral("existing.dtbo")).isEmpty());
 }
 
-TEST_CASE("FAT driver refuses a write into a directory that is not there",
-          "[fat][image]")
+TEST_CASE("FAT driver makes a directory that is not there yet", "[fat][image]")
 {
-    // Rather than creating the file somewhere else, which is the failure
-    // mode worth guarding against.
+    // And puts the file in it. Creating it in the root under its own name
+    // is the failure worth guarding against, because the caller never looks
+    // there.
     REQUIRE_MKFS();
     FatImage image(32, 64);
 
-    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("nosuchdir/file.txt"),
-                                         QByteArray("contents")));
+    image.fat().writeFile(QStringLiteral("nosuchdir/file.txt"), QByteArray("contents"));
     image.sync();
+
+    CHECK(image.fat().readFile(QStringLiteral("nosuchdir/file.txt"))
+          == QByteArray("contents"));
     CHECK(image.fat().readFile(QStringLiteral("file.txt")).isEmpty());
+    CHECK(image.fat().listAllFilesRecursive()
+              .contains(QStringLiteral("nosuchdir/file.txt")));
 }
 
 TEST_CASE("FAT driver refuses a path with no file name", "[fat][image]")
@@ -1921,10 +2000,19 @@ TEST_CASE("FAT driver handles a malformed subdirectory path", "[fat][image]")
 
     FatImage image(32, 64, [&](const QString &p) { populateWithSubdirs(p, "x"); });
 
-    // Nothing here should reach the cluster walk with a half-parsed path.
+    // Nothing here should reach the cluster walk with a half-parsed path,
+    // and nothing should throw: a path naming no file is a file that is not
+    // there, which readFile() reports by returning nothing.
     CHECK(image.fat().readFile(QStringLiteral("/")).isEmpty());
+    // A trailing separator names a directory. Taking "overlays" as the file
+    // would read the directory's own entry as though it held contents.
     CHECK(image.fat().readFile(QStringLiteral("overlays/")).isEmpty());
-    CHECK(image.fat().readFile(QStringLiteral("/config.txt")).isEmpty());
+    // A leading separator is the partition root, which is where the walk
+    // starts anyway, so this names the file it appears to name. Reporting a
+    // file plainly present as absent is the worse answer.
+    CHECK(image.fat().readFile(QStringLiteral("/config.txt"))
+          == image.fat().readFile(QStringLiteral("config.txt")));
+    CHECK_FALSE(image.fat().readFile(QStringLiteral("/config.txt")).isEmpty());
 }
 
 TEST_CASE("Every name the recursive listing returns can be read", "[fat][image]")
@@ -2554,16 +2642,14 @@ quint32 directoryFirstCluster(const QString &imagePath, const Fat32DataArea &d,
 //
 // The count follows from the cluster size rather than being fixed, because
 // the formatter chooses that and the hosts do not agree: 400 names fill more
-// than three 4 KB clusters and fewer than two 32 KB ones, so a fixed count
-// left the cases that corrupt the third cluster skipping themselves wherever
-// the clusters were large.
+// than three 4 KB clusters but fewer than two 32 KB ones, and a case that
+// corrupts the third cluster needs three.
 //
-// Each name takes five 32-byte entries -- four for the long name and one for
-// the short one -- and the copy is done in batches, because Windows caps the
-// whole command line at 32,767 characters and a thousand paths is well past
-// it.
+// Each name takes five 32-byte entries, four of them for the long name. The
+// copy runs in batches: Windows caps the command line at 32,767 characters.
+
 // The name of the nth entry the fixture writes. Long enough to take four
-// long-filename entries, so the count below follows from it.
+// long-filename entries, so the count above follows from it.
 QString subdirectoryEntryName(int i)
 {
     return QStringLiteral("a-file-with-a-fairly-long-name-%1.txt")

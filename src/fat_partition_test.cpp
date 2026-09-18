@@ -8,12 +8,14 @@
 
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
+#include "disk_formatter.h"
 #include "file_operations.h"
 
 #include <QDebug>
 #include <QFile>
 #include <filesystem>
 #include <iostream>
+#include <system_error>
 
 #ifdef __APPLE__
 #include <fcntl.h>
@@ -33,6 +35,64 @@ static std::shared_ptr<rpi_imager::FileOperations> g_shared_file_ops;
 static std::shared_ptr<DeviceWrapper> g_shared_device_wrapper;
 static int g_partition_num = 1;
 static std::string g_test_device_path;
+static std::string g_scratch_disk_path;
+
+// A partitioned FAT32 image standing in for a card, populated to look like a
+// boot partition: the files at the top, and an overlays/ directory, because
+// the cases below look for both and skip when they find neither.
+//
+// Returns the path to the whole disk, or an empty string if it could not be
+// built. Everything here goes through std::filesystem rather than Qt: this
+// runs from a static constructor, before main() and before anything has set
+// up a QCoreApplication for QStandardPaths to ask.
+static std::string makeScratchDisk() {
+    std::error_code ec;
+    const fs::path dir = fs::temp_directory_path(ec) / "rpi-imager-fat-scratch";
+    if (ec)
+        return {};
+    fs::create_directories(dir, ec);
+    if (ec)
+        return {};
+
+    const fs::path image = dir / "disk.img";
+    fs::remove(image, ec);
+
+    // 64 MB: enough for FAT32's minimum cluster count past the 4 MB the
+    // partition starts at, and small enough not to be felt.
+    constexpr std::uint64_t kSizeBytes = 64ull * 1024 * 1024;
+    {
+        rpi_imager::DiskFormatter formatter;
+        if (!formatter.FormatFile(image.string(), kSizeBytes))
+            return {};
+    }
+
+    // Filled through the driver under test. That is circular for the reads
+    // below taken alone -- which is why the cross-checks against mtools live
+    // in fat_subdirectory_test.cpp, and why these cases are about the
+    // accessors rather than about the on-disk format.
+    auto ops = rpi_imager::FileOperations::Create();
+    if (ops->OpenDevice(image.string()) != rpi_imager::FileError::kSuccess)
+        return {};
+    try {
+        DeviceWrapper dw(ops.get());
+        DeviceWrapperFatPartition *fat = dw.fatPartition(1);
+        if (!fat)
+            return {};
+        fat->writeFile("config.txt", "arm_64bit=1\ndtparam=audio=on\n");
+        fat->writeFile("cmdline.txt", "console=serial0,115200 root=PARTUUID=deadbeef-02\n");
+        fat->writeFile("a-long-file-name-that-needs-more-than-one-entry.txt",
+                       "long names take several directory entries\n");
+        fat->writeFile("overlays/disable-bt.dtbo", QByteArray(512, 'B'));
+        fat->writeFile("overlays/vc4-kms-v3d.dtbo", QByteArray(2048, 'V'));
+        dw.sync();
+    } catch (const std::exception &e) {
+        std::cerr << "WARNING: could not populate the scratch FAT disk: "
+                  << e.what() << std::endl;
+        return {};
+    }
+
+    return image.string();
+}
 
 // Initialize the shared device wrapper once.
 //
@@ -47,17 +107,34 @@ static void initializeSharedDevice() {
         return; // Already initialized
     }
 
+    std::string disk_path;
     std::string mount_path = getTestMountPath();
+
     if (mount_path.empty()) {
-        std::cerr << "WARNING: No test device path available" << std::endl;
-        return;
+        // No card in the machine, so one is made. These cases used to skip
+        // wholesale without a real device named by FAT_TEST_MOUNT_PATH, which
+        // no automated run has -- so they never ran anywhere, and the driver
+        // they cover was left to the image-level cases alone.
+        //
+        // What they need is a whole disk carrying a partition table, which is
+        // exactly what DiskFormatter::FormatFile writes. The scratch image
+        // stands in for the card; a real one named in the environment still
+        // takes precedence, because it is the stronger check.
+        disk_path = makeScratchDisk();
+        if (disk_path.empty()) {
+            std::cerr << "WARNING: could not build the scratch FAT disk" << std::endl;
+            return;
+        }
+        g_scratch_disk_path = disk_path;
+        mount_path = disk_path;
+        g_partition_num = 1;
+    } else {
+        // Convert partition to whole disk
+        disk_path = getWholeDiskPath(mount_path);
+        g_partition_num = getPartitionNumber(mount_path);
     }
 
     g_test_device_path = mount_path;
-
-    // Convert partition to whole disk
-    std::string disk_path = getWholeDiskPath(mount_path);
-    g_partition_num = getPartitionNumber(mount_path);
 
     std::cerr << "=========================================" << std::endl;
     std::cerr << "Opening test device ONCE for all tests" << std::endl;
@@ -93,6 +170,14 @@ static void cleanupSharedDevice() {
         std::cerr << "=========================================" << std::endl;
         g_shared_device_wrapper.reset();
         g_shared_file_ops.reset();
+    }
+
+    // The handles go first, so the image is not still open when it is
+    // removed -- which on Windows does not fail, it simply does not happen.
+    if (!g_scratch_disk_path.empty()) {
+        std::error_code ec;
+        fs::remove_all(fs::path(g_scratch_disk_path).parent_path(), ec);
+        g_scratch_disk_path.clear();
     }
 }
 

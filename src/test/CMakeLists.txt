@@ -422,6 +422,10 @@ add_executable(fat_partition_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
     ${PLATFORM_FILE_OPS}
+    # Builds the partitioned scratch image these cases open when no real card
+    # is named in the environment, which is every automated run.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fat_partition_test.cpp
 )
 
