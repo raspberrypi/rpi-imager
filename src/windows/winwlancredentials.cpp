@@ -36,14 +36,17 @@ PfnDliHook __pfnDliNotifyHook2 = dllDelayNotifyHook;
 
 WinWlanCredentials::~WinWlanCredentials()
 {
-    // Securely erase credentials from memory to prevent recovery
-    // from core dumps, swap, or cold-boot attacks.
-    if (!_psk.isEmpty()) {
-        SecureZeroMemory(_psk.data(), _psk.size());
-        _psk.clear();
-    }
+    // The passphrase is wiped where it lives, which is the whole point: it
+    // must not survive in a core dump, in swap, or in memory handed back to
+    // the allocator and read by whatever gets it next.
+    _psk.wipe();
+
+    // The SSID is not a secret and is not shared with anyone by the time we
+    // get here, so const_cast is enough to clear it without detaching into a
+    // fresh copy and zeroing that instead.
     if (!_ssid.isEmpty()) {
-        SecureZeroMemory(_ssid.data(), _ssid.size());
+        rpi_imager::secureZero(const_cast<char *>(_ssid.constData()),
+                               static_cast<size_t>(_ssid.size()));
         _ssid.clear();
     }
 }
@@ -117,7 +120,12 @@ WinWlanCredentials::WinWlanCredentials()
                                           NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
                         {
                             QString xml = QString::fromWCharArray(xmlstr);
-                            _psk = rpi_wlan::pskFromProfileXml(xml);
+                            QByteArray psk = rpi_wlan::pskFromProfileXml(xml);
+                            _psk.assign(psk);
+                            // The intermediate goes too: it held the same
+                            // passphrase, and it is ours alone to clear.
+                            rpi_imager::secureZero(psk.data(), psk.size());
+                            psk.clear();
 
                             // Zero the local XML string that contains the plaintext PSK
                             // inside <keyMaterial> tags before it goes out of scope.
@@ -150,15 +158,17 @@ QByteArray WinWlanCredentials::getSSID()
 
 QByteArray WinWlanCredentials::getPSK()
 {
-    return _psk;
+    // A copy, sharing nothing with our storage -- so wiping ours later
+    // cannot reach into the caller's, and the caller cannot keep ours alive.
+    return _psk.copy();
 }
 
 QByteArray WinWlanCredentials::getPSKForSSID(const QByteArray &ssid)
 {
     // Windows implementation caches both SSID and PSK during construction
     // If requested SSID matches cached SSID, return cached PSK
-    if (ssid == _ssid && !_psk.isEmpty()) {
-        return _psk;
+    if (ssid == _ssid && !_psk.empty()) {
+        return _psk.copy();
     }
     // Otherwise, return empty (would need to re-query Windows WLAN API)
     return QByteArray();

@@ -1024,6 +1024,14 @@ private:
 
 } // namespace
 
+// Key generation shells out to openssl on the POSIX hosts and does not on
+// Windows, which makes the key with CNG instead -- so these three describe a
+// dependency Windows no longer has. Guarded rather than deleted: they still
+// say what must happen where openssl is the tool doing the work.
+//
+// The Windows equivalents are in secureboot_crypto_test.cpp, where each CNG
+// and CryptoAPI call is made to refuse in turn.
+#ifndef Q_OS_WIN
 TEST_CASE("Key generation with no openssl installed fails rather than pretending",
           "[secureboot-otp]")
 {
@@ -1145,22 +1153,53 @@ TEST_CASE("An openssl that succeeds but prints nothing is not believed",
     CHECK(SecureBootCrypto::extractRsaPubkeyBin(QStringLiteral("/any.pem")).isEmpty());
 }
 
-TEST_CASE("The OTP key hash is not computed without openssl", "[secureboot-otp]")
+#endif  // !Q_OS_WIN -- the openssl-dependent key generation
+
+
+TEST_CASE("The OTP key hash is taken without needing openssl", "[secureboot-otp]")
 {
-    // This hash is what gets fused into the device, permanently. Producing a
-    // wrong one -- or a zero one -- burns a board to a key nobody holds, so
-    // the only safe answer when the tool is missing is no answer.
+    // The hash used to come from `openssl rsa -pubin -outform DER`. That DER
+    // is the body of the PEM, so it is decoded in-process instead -- and the
+    // hash is now available on a machine with no openssl at all, which is
+    // every stock Windows one.
+    //
+    // secureboot_crypto_test.cpp holds those bytes to openssl's own: a
+    // different encoding is a different hash, fused into a board for good.
     ScratchDir scratch;
     ScratchDir toolDir;
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    // Nothing on PATH at all, openssl included.
+    PathOverride only(toolDir.dir());
+    const auto hash = SecureBootProvisioner::calculateOtpKeyHash(pub);
+    REQUIRE(hash.has_value());
+
+    // A real hash, not a zero one: burning a board to the hash of nothing
+    // would look like success until it refused to boot.
+    bool anySet = false;
+    for (uint8_t b : *hash)
+        anySet = anySet || b != 0;
+    CHECK(anySet);
+}
+
+TEST_CASE("The OTP key hash is refused for a file that is not a public key",
+          "[secureboot-otp]")
+{
+    // Producing a wrong hash -- or the hash of nothing -- burns a board to a
+    // key nobody holds. The armour alone is not enough to believe.
+    ScratchDir scratch;
     const fs::path pub = scratch.path(QStringLiteral("public.pem"));
     {
         QFile f(QString::fromStdString(pub.string()));
         REQUIRE(f.open(QIODevice::WriteOnly));
         f.write("-----BEGIN PUBLIC KEY-----\nnot a key\n-----END PUBLIC KEY-----\n");
     }
-
-    PathOverride only(toolDir.dir());
     CHECK_FALSE(SecureBootProvisioner::calculateOtpKeyHash(pub).has_value());
+
+    const fs::path missing = scratch.path(QStringLiteral("absent.pem"));
+    CHECK_FALSE(SecureBootProvisioner::calculateOtpKeyHash(missing).has_value());
 }
 
 TEST_CASE("An OTP key hash is not made from an empty DER", "[secureboot-otp]")

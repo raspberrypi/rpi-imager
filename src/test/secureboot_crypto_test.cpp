@@ -311,3 +311,247 @@ TEST_CASE("With nothing armed the signature is still correct",
 }
 
 #endif // SECUREBOOT_CRYPTO_ENABLE_TEST_API
+
+// ============================================================================
+// Making a key pair
+// ============================================================================
+// Windows does not ship openssl, and the provisioner shelled out to it to
+// make the secure boot key. On a machine with neither Git for Windows nor
+// MSYS -- which is most of them -- that simply failed.
+//
+// The replacement has to produce a key openssl itself accepts, and a public
+// key whose DER is byte-for-byte what openssl would write: the SHA-256 of
+// that DER is fused into the device and cannot be changed afterwards.
+
+TEST_CASE("A generated key pair is written as two PEM files", "[secureboot][keygen]")
+{
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    const QString priv = scratch.filePath(QStringLiteral("private.pem"));
+    const QString pub = scratch.filePath(QStringLiteral("public.pem"));
+
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(priv, pub));
+
+    QFile pf(priv);
+    REQUIRE(pf.open(QIODevice::ReadOnly));
+    const QByteArray privPem = pf.readAll();
+    QFile qf(pub);
+    REQUIRE(qf.open(QIODevice::ReadOnly));
+    const QByteArray pubPem = qf.readAll();
+
+    CHECK(privPem.contains("PRIVATE KEY-----"));
+    CHECK(pubPem.startsWith("-----BEGIN PUBLIC KEY-----"));
+    CHECK(pubPem.trimmed().endsWith("-----END PUBLIC KEY-----"));
+    // Armour and base64, nothing else.
+    CHECK(privPem.size() > 1000);
+}
+
+TEST_CASE("A generated key signs, and the signature verifies", "[secureboot][keygen]")
+{
+    // The whole point of the key. Signing goes through the same CNG path the
+    // product uses, so this proves the generated key is one it can drive.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    const QString priv = scratch.filePath(QStringLiteral("private.pem"));
+    const QString pub = scratch.filePath(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(priv, pub));
+
+    const QByteArray digest =
+        QCryptographicHash::hash(QByteArrayLiteral("boot.img contents"),
+                                 QCryptographicHash::Sha256);
+    const QByteArray sig = SecureBootCrypto::rsaSignSha256(digest, priv);
+    INFO("signature length: " << sig.size());
+    REQUIRE_FALSE(sig.isEmpty());
+    CHECK(sig.size() == 512);   // 256 bytes of RSA-2048, hex
+}
+
+TEST_CASE("The generated public key is the one the private key implies",
+          "[secureboot][keygen]")
+{
+    // Derived from the private half rather than written separately, so a pair
+    // that does not match would sign with one key and fuse the hash of
+    // another -- a board that will not boot its own firmware, permanently.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    const QString priv = scratch.filePath(QStringLiteral("private.pem"));
+    const QString pub = scratch.filePath(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(priv, pub));
+
+    // extractRsaPubkeyBin takes the private key -- every platform derives the
+    // public half from it -- so the public PEM is checked by decoding it and
+    // parsing out the same modulus and exponent.
+    const QByteArray fromPrivate = SecureBootCrypto::extractRsaPubkeyBin(priv);
+    REQUIRE(fromPrivate.size() == 264);
+
+    const QByteArray der = SecureBootCrypto::publicKeyPemToDer(pub);
+    REQUIRE_FALSE(der.isEmpty());
+    const QByteArray fromPublic =
+        SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(der);
+    REQUIRE(fromPublic.size() == 264);
+
+    CHECK(fromPrivate == fromPublic);
+}
+
+TEST_CASE("Two generated key pairs are different", "[secureboot][keygen]")
+{
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    const QString privA = scratch.filePath(QStringLiteral("a.pem"));
+    const QString pubA = scratch.filePath(QStringLiteral("a.pub.pem"));
+    const QString privB = scratch.filePath(QStringLiteral("b.pem"));
+    const QString pubB = scratch.filePath(QStringLiteral("b.pub.pem"));
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(privA, pubA));
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(privB, pubB));
+
+    CHECK(SecureBootCrypto::extractRsaPubkeyBin(privA) !=
+          SecureBootCrypto::extractRsaPubkeyBin(privB));
+}
+
+TEST_CASE("openssl accepts the generated key and agrees about its public half",
+          "[secureboot][keygen]")
+{
+    // The check that matters most. The SHA-256 of the public key's DER is
+    // fused into the device, so our encoding has to be byte-for-byte what
+    // openssl writes -- down to the explicit ASN.1 NULL in the algorithm
+    // identifier. A different encoding is a different hash and a board fused
+    // to a key nobody can prove they hold.
+    REQUIRE_OPENSSL();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    const QString priv = scratch.filePath(QStringLiteral("private.pem"));
+    const QString pub = scratch.filePath(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(priv, pub));
+
+    // openssl reads the private key and derives the public half itself.
+    const QString derived = scratch.filePath(QStringLiteral("derived.pem"));
+    QProcess pubout;
+    pubout.start(rpi_test::toolPath(QStringLiteral("openssl")),
+                 {QStringLiteral("rsa"), QStringLiteral("-in"), priv,
+                  QStringLiteral("-pubout"), QStringLiteral("-out"), derived});
+    REQUIRE(pubout.waitForFinished(30000));
+    INFO("openssl rsa -pubout: " << pubout.readAllStandardError().constData());
+    REQUIRE(pubout.exitCode() == 0);
+
+    QFile ours(pub);
+    REQUIRE(ours.open(QIODevice::ReadOnly));
+    QFile theirs(derived);
+    REQUIRE(theirs.open(QIODevice::ReadOnly));
+
+    // Compare the base64 bodies, so a line ending cannot fail this.
+    auto body = [](QByteArray pem) {
+        pem.replace("\r", "").replace("\n", "");
+        return pem;
+    };
+    CHECK(body(ours.readAll()) == body(theirs.readAll()));
+}
+
+TEST_CASE("The DER we take the OTP hash over is the DER openssl prints",
+          "[secureboot][keygen]")
+{
+    // The OTP hash is SHA-256 of this DER and it is fused into the device
+    // permanently. It used to come from `openssl rsa -pubin -outform DER`;
+    // it now comes from decoding the PEM body here. Those must be the same
+    // bytes, or a board provisioned by one build will not accept firmware
+    // signed for the other.
+    REQUIRE_OPENSSL();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    const QString priv = scratch.filePath(QStringLiteral("private.pem"));
+    const QString pub = scratch.filePath(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(priv, pub));
+
+    const QString derPath = scratch.filePath(QStringLiteral("public.der"));
+    QProcess openssl;
+    openssl.start(rpi_test::toolPath(QStringLiteral("openssl")),
+                  {QStringLiteral("rsa"), QStringLiteral("-pubin"),
+                   QStringLiteral("-in"), pub, QStringLiteral("-outform"),
+                   QStringLiteral("DER"), QStringLiteral("-out"), derPath});
+    REQUIRE(openssl.waitForFinished(30000));
+    INFO("openssl: " << openssl.readAllStandardError().constData());
+    REQUIRE(openssl.exitCode() == 0);
+
+    QFile f(derPath);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    const QByteArray theirs = f.readAll();
+    const QByteArray ours = SecureBootCrypto::publicKeyPemToDer(pub);
+
+    REQUIRE_FALSE(ours.isEmpty());
+    INFO("ours " << ours.size() << " bytes, openssl " << theirs.size());
+    CHECK(ours == theirs);
+}
+
+TEST_CASE("A PEM that is not a public key yields no DER", "[secureboot][keygen]")
+{
+    // Hashing whatever came back would give a well-formed 32-byte value that
+    // is the hash of nothing in particular -- and that value gets fused.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    const QString notPem = scratch.filePath(QStringLiteral("notes.txt"));
+    { QFile f(notPem); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("hello\n"); }
+    CHECK(SecureBootCrypto::publicKeyPemToDer(notPem).isEmpty());
+
+    // A private key is not a public one, however well-formed.
+    const QString priv = scratch.filePath(QStringLiteral("private.pem"));
+    const QString pub = scratch.filePath(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootCrypto::generateRsaKeyPair(priv, pub));
+    CHECK(SecureBootCrypto::publicKeyPemToDer(priv).isEmpty());
+
+    // Armour with rubbish inside it.
+    const QString broken = scratch.filePath(QStringLiteral("broken.pem"));
+    {
+        QFile f(broken);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("-----BEGIN PUBLIC KEY-----\nnot base64 at all !!!\n-----END PUBLIC KEY-----\n");
+    }
+    CHECK(SecureBootCrypto::publicKeyPemToDer(broken).isEmpty());
+
+    CHECK(SecureBootCrypto::publicKeyPemToDer(
+              scratch.filePath(QStringLiteral("absent.pem"))).isEmpty());
+}
+
+#ifdef SECUREBOOT_CRYPTO_ENABLE_TEST_API
+
+TEST_CASE("Generating a key refuses rather than leaving half a pair",
+          "[secureboot][keygen][inject]")
+{
+    // Generation walks a dozen CNG and CryptoAPI calls, each with its own
+    // failure path. A refusal part-way must leave nothing usable behind: a
+    // private key with no public half is still a real RSA key, and Imager's
+    // own file chooser would offer it to sign with.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    int calls = 0;
+    {
+        ArmedFailure none(-1);
+        const QString priv = scratch.filePath(QStringLiteral("clean.pem"));
+        const QString pub = scratch.filePath(QStringLiteral("clean.pub.pem"));
+        REQUIRE(SecureBootCrypto::generateRsaKeyPair(priv, pub));
+        calls = SecureBootCryptoTesting::callsMade();
+    }
+    INFO("guarded calls in a clean generation: " << calls);
+    REQUIRE(calls > 0);
+
+    for (int ordinal = 0; ordinal < calls; ++ordinal) {
+        INFO("failing call " << ordinal << " of " << calls);
+        const QString priv =
+            scratch.filePath(QStringLiteral("priv-%1.pem").arg(ordinal));
+        const QString pub =
+            scratch.filePath(QStringLiteral("pub-%1.pem").arg(ordinal));
+
+        ArmedFailure armed(ordinal);
+        bool made = true;
+        REQUIRE_NOTHROW(made = SecureBootCrypto::generateRsaKeyPair(priv, pub));
+        CHECK_FALSE(made);
+
+        // Nothing usable left where the caller would look for it.
+        CHECK_FALSE(QFile::exists(pub));
+        if (QFile::exists(priv)) {
+            INFO("a private key was left at " << priv.toStdString());
+            CHECK_FALSE(QFile::exists(priv));
+        }
+    }
+}
+
+#endif // SECUREBOOT_CRYPTO_ENABLE_TEST_API

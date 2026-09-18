@@ -305,7 +305,8 @@ if(WIN32)
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/platformquirks_windows.cpp)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
     set(PLATFORM_BOOTIMGCREATOR_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
@@ -358,7 +359,8 @@ elseif(APPLE)
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
     set(PLATFORM_BOOTIMGCREATOR_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/bootimgcreator_macos.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
@@ -380,7 +382,8 @@ else()
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
     set(PLATFORM_BOOTIMGCREATOR_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
@@ -2003,6 +2006,24 @@ target_link_libraries(image_options_test PRIVATE
 target_compile_features(image_options_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(image_options_test)
+
+add_executable(secure_bytes_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secure_bytes.h
+    secure_bytes_test.cpp
+)
+
+target_include_directories(secure_bytes_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(secure_bytes_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(secure_bytes_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(secure_bytes_test)
 
 add_executable(revision_code_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../embedded/revision_code.h

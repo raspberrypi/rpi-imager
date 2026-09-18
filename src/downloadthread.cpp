@@ -529,8 +529,21 @@ bool DownloadThread::_openAndPrepareDevice()
     }
 #endif
 
-#ifndef Q_OS_WIN
-    // Zero out MBR using unified FileOperations
+    // Zero the first and last megabyte, and time the second one.
+    //
+    // The write to the end is what catches a counterfeit card. A card
+    // reporting a capacity it does not have never returns from a write to
+    // the end of that capacity, so the write is wrapped in a timeout and a
+    // card that does not answer is named as counterfeit rather than left to
+    // hang. The last megabyte also carries the backup GPT header, which
+    // survives an MBR-only wipe and leaves the card looking like a hybrid
+    // nothing agrees how to read.
+    //
+    // This was #ifndef Q_OS_WIN with no #else, so Windows had neither: no
+    // counterfeit detection at all, on the platform most cards are written
+    // from. Nothing in it is POSIX -- the buffer, the timeout and the four
+    // device calls are all platform-agnostic -- so the guard is gone rather
+    // than answered.
     QElapsedTimer mbrTimer;
     mbrTimer.start();
     
@@ -654,7 +667,6 @@ bool DownloadThread::_openAndPrepareDevice()
         .arg(_timer.elapsed())  // Last MB timing (from last _timer.restart)
         .arg(knownsize / (1024 * 1024));
     emit eventDriveMbrZeroing(static_cast<quint32>(mbrTotalMs), true, mbrMetadata);
-#endif
 
 #ifdef Q_OS_LINUX
     _sectorsStart = _sectorsWritten();
