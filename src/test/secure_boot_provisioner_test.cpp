@@ -1251,13 +1251,9 @@ TEST_CASE("A boot image is not claimed when the filesystem cannot be made",
 TEST_CASE("A boot image too small for its files is refused rather than handed over",
           "[secureboot-otp]")
 {
-    // mcopy failing is not a warning to carry on from. The image is created
-    // and sized before anything is copied into it, so a swallowed failure
-    // returns a correctly-sized image with a file missing -- and a board
-    // will not come up from that. Here the payload simply does not fit.
+    // A size below what FAT32 can hold at all: the format is refused before
+    // any file is written, so nothing is created to be handed over.
     REQUIRE_BOOT_IMG_SUPPORT();
-    if (!rpi_test::haveTool(QStringLiteral("mcopy")))
-        SKIP("mtools is needed to put the files into the image");
 
     ScratchDir scratch;
     const QString out = QDir(scratch.dir()).filePath(QStringLiteral("boot.img"));
@@ -1268,6 +1264,37 @@ TEST_CASE("A boot image too small for its files is refused rather than handed ov
     files.insert(QStringLiteral("big.bin"), QByteArray(6 * 1024 * 1024, 'x'));
 
     CHECK_FALSE(BootImgCreator::createBootImg(files, out, 4 * 1024 * 1024));
+}
+
+TEST_CASE("A boot image that fills up part-way is removed, not handed over",
+          "[secureboot-otp]")
+{
+    // The other way it does not fit, and the one that reaches further: the
+    // image is a legal FAT32 size, so it formats, and the files are written
+    // into it one by one until the filesystem is full. That failure arrives
+    // as an exception from the FAT writer partway through.
+    //
+    // What must not survive is the part-filled image. It is a correctly
+    // sized, correctly formatted boot.img missing some of its contents, and
+    // the caller goes on to sign it and serve it to a board that will not
+    // come up from it.
+    REQUIRE_BOOT_IMG_SUPPORT();
+
+    ScratchDir scratch;
+    const QString out = QDir(scratch.dir()).filePath(QStringLiteral("boot.img"));
+
+    // 33 MB is the smallest a FAT32 may be; the payload is comfortably past
+    // what it can hold.
+    constexpr qint64 kSmallestFat32 = 33 * 1024 * 1024;
+    QMap<QString, QByteArray> files;
+    files.insert(QStringLiteral("config.txt"), QByteArray("arm_64bit=1\n"));
+    for (int i = 0; i < 6; ++i) {
+        files.insert(QStringLiteral("filler%1.bin").arg(i),
+                     QByteArray(8 * 1024 * 1024, char('a' + i)));
+    }
+
+    CHECK_FALSE(BootImgCreator::createBootImg(files, out, kSmallestFat32));
+    CHECK_FALSE(QFileInfo::exists(out));
 }
 
 TEST_CASE("A boot image is not claimed when there is nowhere to stage its files",
