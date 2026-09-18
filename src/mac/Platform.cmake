@@ -16,7 +16,6 @@ set(PLATFORM_SOURCES
     mac/acceleratedcryptographichash_commoncrypto.cpp
     mac/macfile.cpp
     mac/macfile.h
-    mac/bootimgcreator_macos.cpp
     mac/secureboot_crypto_macos.cpp
     drivelist/drivelist_darwin.mm
     mac/file_operations_macos.cpp

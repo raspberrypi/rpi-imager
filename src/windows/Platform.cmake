@@ -36,7 +36,6 @@ set(PLATFORM_SOURCES
     drivelist/drivelist_windows.cpp
     windows/winfile.cpp
     windows/winfile.h
-    windows/bootimgcreator_windows.cpp
     windows/secureboot_crypto_windows.cpp
     windows/diskpart_util.cpp
     windows/diskpart_util.h

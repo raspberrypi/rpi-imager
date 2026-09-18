@@ -23,7 +23,10 @@ Architecture: amd64 arm64 armhf
 # The build chroot is a separate matter and does still need libfuse2 (see
 # debian/chroot-packages): appimagetool is itself a classic AppImage linked
 # against libfuse.so.2, and the chroot is bookworm, where that still exists.
-Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse,
+# No dosfstools, fdisk or mtools: boot.img is built in process by
+# DiskFormatter and DeviceWrapperFatPartition, so nothing here shells out to a
+# formatter. util-linux stays for the mount and umount the extract path uses.
+Depends: ${shlibs:Depends}, ${misc:Depends}, fuse,
          util-linux (>= 2.37), pkexec,
          libstdc++6, libatomic1,
          libfontconfig1, libfreetype6,
@@ -56,7 +59,7 @@ Architecture: arm64
 # NO libegl1/libgl1/libx11-6 (Mesa/X11 are far too large for the image) and no
 # libsystemd0 (no session bus). Keep it in step with the external sonames from
 # embedded_deploy_lib_closure() (debian/lib.sh).
-Depends: dosfstools, fdisk, util-linux (>= 2.37),
+Depends: util-linux (>= 2.37),
          libc6, libgcc-s1, libstdc++6,
          libdrm2, libinput10, libudev1
 Suggests: rpi-eeprom, firmware-brcm80211
@@ -77,7 +80,7 @@ Architecture: amd64 arm64 armhf
 # See the fuse note on the rpi-imager stanza above: the AppImage runtime
 # bundles libfuse3 statically, and libfuse2 must not come back.
 Depends: ${shlibs:Depends}, ${misc:Depends},
-         dosfstools, fdisk, fuse, util-linux (>= 2.37),
+         fuse, util-linux (>= 2.37),
          libstdc++6, libatomic1
 Conflicts: rpi-imager, rpi-imager-embedded
 Description: Raspberry Pi Imaging utility (command-line only)

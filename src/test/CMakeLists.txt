@@ -289,6 +289,21 @@ else()
     )
 endif()
 
+# boot.img is built in this process on every platform now -- the filesystem
+# by DiskFormatter and the files into it by DeviceWrapperFatPartition -- so
+# the creator brings those with it rather than shelling out to diskpart,
+# mtools or hdiutil. It is no longer chosen per platform, because there is
+# only one of it.
+set(PLATFORM_BOOTIMGCREATOR_SRC
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bootimgcreator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS})
+
 # The other four platform backends, chosen the same way.
 #
 # Eleven targets below named the linux/ sources directly, so the suite could
@@ -307,18 +322,6 @@ if(WIN32)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
-    # boot.img is built in-process on Windows now -- the filesystem by
-    # DiskFormatter and the files into it by DeviceWrapperFatPartition -- so
-    # the creator brings those with it rather than shelling out to diskpart.
-    set(PLATFORM_BOOTIMGCREATOR_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
-        ${PLATFORM_FILE_OPS})
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/acceleratedcryptographichash_cng.cpp)
     set(PLATFORM_DRIVELIST_SRC
@@ -371,8 +374,6 @@ elseif(APPLE)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
-    set(PLATFORM_BOOTIMGCREATOR_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/bootimgcreator_macos.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/acceleratedcryptographichash_commoncrypto.cpp)
     set(PLATFORM_DRIVELIST_SRC
@@ -394,8 +395,6 @@ else()
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
-    set(PLATFORM_BOOTIMGCREATOR_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp)
     set(PLATFORM_DRIVELIST_SRC

@@ -129,7 +129,8 @@ rpi_add_fuzzer(fuzz_der MOC
     SOURCES ${SRC}/secureboot.cpp
             ${SRC}/linux/acceleratedcryptographichash_gnutls.cpp
             ${SRC}/linux/secureboot_crypto_linux.cpp
-            ${SRC}/linux/bootimgcreator_linux.cpp
+            ${SRC}/bootimgcreator.cpp
+            ${SRC}/disk_formatter.cpp
             ${SRC}/devicewrapper.cpp
             ${SRC}/devicewrapperpartition.cpp
             ${SRC}/devicewrapperfatpartition.cpp
