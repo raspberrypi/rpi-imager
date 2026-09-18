@@ -470,6 +470,16 @@ else()
         # have to make the allocation fail.
         --exclude-throw-branches
         --exclude-unreachable-branches
+        # A counter large enough to look like gcov's overflow bug, when it is
+        # merely a hot loop. allocateCluster() scans the whole FAT, and the
+        # suite formats enough filesystems to reach seven billion iterations
+        # of it -- at which point gcovr refuses the whole report rather than
+        # the one line, and the run is lost after the suite has been paid for.
+        --gcov-ignore-parse-errors=suspicious_hits.warn_once_per_file
+        # Objects whose working directory gcovr cannot infer. It resolves
+        # nearly all of them; the few it cannot are not worth forfeiting the
+        # other ninety-odd sources over.
+        --gcov-ignore-errors=no_working_dir_found
         # Qt's registration macros. Q_ENUM and its relatives expand to
         # meta-object glue the runtime touches only when something looks the
         # type up by name, so mostly they sit at zero for the life of the
