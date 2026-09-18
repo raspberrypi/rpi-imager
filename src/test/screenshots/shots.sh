@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (C) 2025 Raspberry Pi Ltd
+# Copyright (C) 2026 Raspberry Pi Ltd
 #
 # Photograph the desktop imager UI, one PNG per wizard page, so the screenshots
 # the AppStream metainfo and the store listings point at can be regenerated
