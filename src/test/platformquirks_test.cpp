@@ -729,9 +729,11 @@ TEST_CASE("Network monitoring can be started and stopped", "[platformquirks][net
 }
 
 TEST_CASE("Network monitoring handles null callback gracefully", "[platformquirks][network]") {
-    // This shouldn't crash
-    PlatformQuirks::startNetworkMonitoring(nullptr);
-    PlatformQuirks::stopNetworkMonitoring();
+    // Said as assertions rather than left to a crash: Catch2 counts a case
+    // with none as having proved nothing, and a stop that throws would be
+    // reported against whichever case happened to run next.
+    CHECK_NOTHROW(PlatformQuirks::startNetworkMonitoring(nullptr));
+    CHECK_NOTHROW(PlatformQuirks::stopNetworkMonitoring());
 }
 
 // How many descriptors and threads this process is holding. The monitor takes
