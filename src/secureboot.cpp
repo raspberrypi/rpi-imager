@@ -169,7 +169,12 @@ bool SecureBoot::generateBootSig(const QString &bootImgPath, const QString &rsaK
 
     // Create boot.sig file
     QFile sigFile(bootSigPath);
-    if (!sigFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    // Not QIODevice::Text. On Windows that turns every newline into a
+    // carriage return and a newline, and boot.sig is parsed by the
+    // bootloader -- three lines, each ending in one byte. The other
+    // platforms write LF, so a Windows-built signature was a different file
+    // for the same image.
+    if (!sigFile.open(QIODevice::WriteOnly)) {
         qDebug() << "SecureBoot::generateBootSig: failed to create" << bootSigPath;
         return false;
     }

@@ -8422,7 +8422,7 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
 {
     // The firmware tree is nested. A file flattened into the root is a file
     // the bootloader will not find.
-    REQUIRE_BOOT_IMG_SUPPORT();
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
         SKIP("mtools is needed to read the image back");
 
@@ -8441,7 +8441,7 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
 
 TEST_CASE("Directories several deep are all created", "[bootimg]")
 {
-    REQUIRE_BOOT_IMG_SUPPORT();
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
         SKIP("mtools is needed to read the image back");
 
@@ -8462,7 +8462,7 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
 {
     // The directory is created once for the first file; the rest have to
     // land in it rather than being lost to an "already exists" failure.
-    REQUIRE_BOOT_IMG_SUPPORT();
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
         SKIP("mtools is needed to read the image back");
 
@@ -8484,7 +8484,7 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
 
 TEST_CASE("Root files and nested files coexist", "[bootimg]")
 {
-    REQUIRE_BOOT_IMG_SUPPORT();
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
         SKIP("mtools is needed to read the image back");
 

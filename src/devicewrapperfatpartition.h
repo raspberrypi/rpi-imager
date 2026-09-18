@@ -49,11 +49,25 @@ protected:
     void seekCluster(uint32_t cluster);
     uint32_t allocateCluster();
     uint32_t allocateCluster(uint32_t previousCluster);
-    bool getDirEntry(const QString &longFilename, struct dir_entry *entry, bool createIfNotExist = false);
+    // Find an entry in a directory. `dirCluster` of nought is the root,
+    // which is what every caller wanted before subdirectories could be
+    // reached at all.
+    //
+    // Searching a subdirectory works. Creating in one does not yet: the
+    // creation path goes on to call dirNameExists() and writes the entry at
+    // the current position, and both of those still start from the root. So
+    // createIfNotExist together with a non-zero dirCluster would find the
+    // name free in the wrong directory and put the entry in the wrong one --
+    // which is the failure this whole area already had once. Pass one or the
+    // other until that is finished.
+    bool getDirEntry(const QString &longFilename, struct dir_entry *entry,
+                     bool createIfNotExist = false, uint32_t dirCluster = 0);
     bool dirNameExists(const QByteArray dirname);
     void updateDirEntry(struct dir_entry *dirEntry);
     void writeDirEntryAtCurrentPos(struct dir_entry *dirEntry);
     void openDir();
+    // Walk a directory other than the root. Nought means the root.
+    void openDirAt(uint32_t cluster);
     bool readDir(struct dir_entry *result);
     // Helper for recursive listing.
     //

@@ -52,23 +52,35 @@ inline bool isPrivileged()
 
 } // namespace rpi_test
 
-// Building a boot.img on Windows drives diskpart: it attaches the image as a
-// VDisk, partitions it, formats FAT32 and assigns a drive letter, all of which
-// need an elevated process. Unelevated the call fails before it has built
-// anything, and a case that goes on to inspect the image -- or to check which
-// step reported the error -- is looking at the wrong failure. Elsewhere the
-// image is assembled in-process with no privilege involved.
+// What a boot.img needs, which differs by platform.
+//
+// Windows builds it in this process now -- DiskFormatter lays down the FAT32
+// and DeviceWrapperFatPartition writes the files into it -- so it needs
+// nothing at all. It used to drive diskpart, which needed elevation and
+// never worked anyway.
+//
+// Linux and macOS still format with mkfs.vfat, which lives in sbin and is
+// not always installed.
 #ifdef _WIN32
-#define REQUIRE_BOOT_IMG_SUPPORT() \
-    if (!rpi_test::isPrivileged()) \
-    SKIP("building a boot.img here drives diskpart, which needs elevation")
+#define REQUIRE_BOOT_IMG_SUPPORT() ((void)0)
+
+// A boot image with a directory in it is a separate question.
+//
+// DeviceWrapperFatPartition::writeFile refuses a path carrying a directory:
+// getDirEntry() begins by seeking back to the root, so an entry meant for a
+// subdirectory would be created at the top level instead -- silently, and
+// worse than refusing. Until the writer can place one, a boot image carrying
+// overlays/ is one Windows cannot build.
+#define REQUIRE_NESTED_BOOT_IMG_SUPPORT()                                      \
+    SKIP("the FAT writer cannot create subdirectories yet, so a boot image "   \
+         "with a directory in it cannot be built here")
 #else
-// Linux and macOS format the image with mkfs.vfat, which lives in sbin and
-// is not always installed. Asked here so a case does not have to know which
-// tool its platform reaches for.
 #define REQUIRE_BOOT_IMG_SUPPORT() \
     if (!rpi_test::haveTool(QStringLiteral("mkfs.vfat"))) \
     SKIP("mkfs.vfat is not installed, so no boot.img can be built")
+
+// mcopy places a file in a subdirectory quite happily.
+#define REQUIRE_NESTED_BOOT_IMG_SUPPORT() REQUIRE_BOOT_IMG_SUPPORT()
 #endif
 
 #endif // RPI_TEST_PLATFORM_PRIVILEGE_H

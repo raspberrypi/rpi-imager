@@ -1,84 +1,44 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2025 Raspberry Pi Ltd
+ *
+ * boot.img, built in this process.
+ *
+ * This used to create the output with QFile::resize -- a raw file of the
+ * right length -- and then ask diskpart to `select vdisk file=` it, attach
+ * it, partition it, format it and hand it a drive letter. That cannot work:
+ * `select vdisk` wants a real VHD, with the footer that makes it one, and a
+ * raw file is not one. diskpart refused every time, and reported it only as
+ * an empty error message, because the code read its standard error and
+ * diskpart writes to standard output. Secure boot could not build a boot.img
+ * on Windows at all, and had not been able to for as long as the code has
+ * been there.
+ *
+ * Everything needed to do it properly was already in the tree: DiskFormatter
+ * writes a FAT32 filesystem, and DeviceWrapperFatPartition writes files into
+ * one, subdirectories included. Neither needs diskpart, a virtual disk, a
+ * drive letter or an elevated process -- so this now works from an ordinary
+ * run, and the cases that cover it no longer need one either.
+ *
+ * The output is a bare FAT32 filesystem with no partition table, which is
+ * what `mkfs.vfat` over a whole file produces on the POSIX hosts and what
+ * the bootloader is given.
  */
 
 #include "bootimgcreator.h"
-#include <QFile>
-#include <QDir>
-#include <QFileInfo>
-#include <QProcess>
-#include <QTemporaryDir>
-#include <QTextStream>
+
+#include "../devicewrapper.h"
+#include "../devicewrapperfatpartition.h"
+#include "../disk_formatter.h"
+#include "../file_operations.h"
+
 #include <QDebug>
-#include <QThread>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 
-#include <windows.h>
-
-namespace {
-
-// A drive letter nothing is using, or nought when every one is taken.
-//
-// The letter used to be Z, unconditionally. Z is a popular choice for a mapped
-// network drive, and diskpart reports a failed `assign` in its output while
-// still exiting zero -- so where Z was already taken the assign failed, the
-// exit code said otherwise, and the boot files were written to whatever Z
-// already was. Two harms from the one line: somebody's share gains a
-// config.txt, and the image they should have gone into is handed back
-// formatted, empty, and reported as a success.
-//
-// Searched from Z downwards, because the low letters are where real volumes
-// live. A and B are left alone whatever the mask says: they are the floppy
-// letters, and Windows still treats them differently.
-//
-// Takes the mask rather than reading it, so the choosing can be tested against
-// a machine laid out any way at all rather than only against this one.
-char freeDriveLetterFrom(DWORD mask)
-{
-    for (int letter = 'Z'; letter >= 'D'; --letter) {
-        if (!(mask & (1u << (letter - 'A'))))
-            return static_cast<char>(letter);
-    }
-    return 0;
-}
-
-bool driveLetterPresentIn(DWORD mask, char letter)
-{
-    if (letter < 'A' || letter > 'Z')
-        return false;
-    return (mask & (1u << (letter - 'A'))) != 0;
-}
-
-char freeDriveLetter() { return freeDriveLetterFrom(GetLogicalDrives()); }
-
-// Whether a volume answers to this letter now. Asked after the assign, so a
-// letter that has not appeared means the assign failed however diskpart chose
-// to exit.
-bool driveLetterPresent(char letter)
-{
-    return driveLetterPresentIn(GetLogicalDrives(), letter);
-}
-
-} // namespace
-
-#ifdef BOOTIMG_ENABLE_TEST_API
-// Which letter the image is mounted on, and whether it turned up, are the two
-// decisions here that do not need diskpart -- and the two that put the boot
-// files somewhere other than the image when they were wrong.
-namespace BootImgCreatorTesting {
-
-char chooseFreeDriveLetter(unsigned long mask)
-{
-    return freeDriveLetterFrom(static_cast<DWORD>(mask));
-}
-
-bool letterPresentIn(unsigned long mask, char letter)
-{
-    return driveLetterPresentIn(static_cast<DWORD>(mask), letter);
-}
-
-} // namespace BootImgCreatorTesting
-#endif
+#include <exception>
+#include <memory>
 
 bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
                                    const QString &outputPath,
@@ -88,111 +48,91 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
         qDebug() << "BootImgCreator (Windows): no files to pack";
         return false;
     }
+    if (totalSize <= 0) {
+        qDebug() << "BootImgCreator (Windows): refusing to build a boot.img of"
+                 << totalSize << "bytes";
+        return false;
+    }
 
     qDebug() << "BootImgCreator (Windows): creating" << totalSize << "byte boot.img";
-    
-    // Ensure parent directory exists
-    QFileInfo outputInfo(outputPath);
-    QDir().mkpath(outputInfo.absolutePath());
-    
-    QTemporaryDir tempDir;
-    if (!tempDir.isValid()) {
-        qDebug() << "BootImgCreator (Windows): failed to create temp directory";
-        return false;
-    }
-    
-    // Create empty file
-    QFile imgFile(outputPath);
-    if (!imgFile.open(QIODevice::WriteOnly)) {
-        qDebug() << "BootImgCreator (Windows): failed to create" << outputPath;
-        return false;
-    }
-    imgFile.resize(totalSize);
-    imgFile.close();
-    
-    // Create a diskpart script to format the image
-    QString diskpartScript = tempDir.path() + "/format_boot.txt";
-    QFile scriptFile(diskpartScript);
-    if (!scriptFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "BootImgCreator (Windows): failed to create diskpart script";
-        return false;
-    }
-    
-    const char mountLetter = freeDriveLetter();
-    if (mountLetter == 0) {
-        qDebug() << "BootImgCreator (Windows): every drive letter is in use, so the"
-                    " image cannot be mounted to fill it";
+
+    const QFileInfo outputInfo(outputPath);
+    if (!QDir().mkpath(outputInfo.absolutePath())) {
+        qDebug() << "BootImgCreator (Windows): cannot create"
+                 << outputInfo.absolutePath();
         return false;
     }
 
-    QTextStream script(&scriptFile);
-    QString winPath = QDir::toNativeSeparators(outputPath);
-    script << "select vdisk file=\"" << winPath << "\"\r\n";
-    script << "attach vdisk\r\n";
-    script << "create partition primary\r\n";
-    script << "format fs=fat32 quick\r\n";
-    script << "assign letter=" << mountLetter << "\r\n";
-    scriptFile.close();
-    
-    // Run diskpart
-    QProcess diskpartProc;
-    diskpartProc.start("diskpart", QStringList() << "/s" << diskpartScript);
-    if (!diskpartProc.waitForFinished(60000) || diskpartProc.exitCode() != 0) {
-        qDebug() << "BootImgCreator (Windows): diskpart failed:" 
-                 << diskpartProc.readAllStandardError();
-        return false;
-    }
-    
-    // Wait for the drive to be ready
-    QThread::msleep(2000);
+    // Anything already there is ours to replace, and a stale image left
+    // behind would be signed and served as though it were this one.
+    QFile::remove(outputPath);
 
-    // Checked, not assumed. diskpart exits zero having reported a failed
-    // assign in its output, and writing to a letter this image did not get is
-    // writing into whatever else holds it.
-    if (!driveLetterPresent(mountLetter)) {
-        qDebug() << "BootImgCreator (Windows): drive letter" << mountLetter
-                 << "did not appear after attaching the image";
+    {
+        rpi_imager::DiskFormatter formatter;
+        const auto formatted = formatter.FormatFilesystemOnly(
+            outputPath.toStdString(), static_cast<std::uint64_t>(totalSize));
+        if (!formatted) {
+            qDebug() << "BootImgCreator (Windows): could not format boot.img, error"
+                     << static_cast<int>(formatted.error());
+            QFile::remove(outputPath);
+            return false;
+        }
+    }
+
+    auto ops = rpi_imager::FileOperations::Create();
+    if (!ops || ops->OpenDevice(outputPath.toStdString()) !=
+                    rpi_imager::FileError::kSuccess) {
+        qDebug() << "BootImgCreator (Windows): could not reopen" << outputPath;
+        QFile::remove(outputPath);
         return false;
     }
 
-    const QString mountRoot = QString(QLatin1Char(mountLetter)) + QStringLiteral(":\\");
-
-    // Copy files in
+    // Checked before anything is written, so a set we cannot place whole
+    // leaves no half-filled image behind to be signed and served.
+    //
+    // DeviceWrapperFatPartition::writeFile refuses a path with a directory in
+    // it -- getDirEntry() starts by seeking back to the root, so an entry
+    // meant for a subdirectory ends up at the top level instead, which is
+    // worse than refusing. Until it can, a boot image needing overlays/ is
+    // one this cannot build.
     for (auto it = files.constBegin(); it != files.constEnd(); ++it) {
-        QString destPath = mountRoot + QString(it.key()).replace("/", "\\");
-        
-        // Create parent directory if needed
-        QFileInfo fileInfo(destPath);
-        QString parentDir = fileInfo.absolutePath();
-        if (!QDir(parentDir).exists()) {
-            QDir().mkpath(parentDir);
+        if (it.key().contains(QLatin1Char('/')) || it.key().contains(QLatin1Char('\\'))) {
+            qDebug() << "BootImgCreator (Windows): cannot place" << it.key()
+                     << "-- the FAT writer does not create subdirectories yet";
+            QFile::remove(outputPath);
+            return false;
         }
-        
-        // Write file
-        QFile outFile(destPath);
-        if (!outFile.open(QIODevice::WriteOnly)) {
-            qDebug() << "BootImgCreator (Windows): failed to create" << destPath;
-            continue;
+    }
+
+    try {
+        DeviceWrapper dw(ops.get());
+        // From nought, over the whole file: no partition table in front of it.
+        DeviceWrapperFatPartition fat(&dw, 0, static_cast<quint64>(totalSize));
+
+        for (auto it = files.constBegin(); it != files.constEnd(); ++it) {
+            // Written with forward slashes whatever the caller used, because
+            // that is what a path inside a FAT directory is.
+            QString name = it.key();
+            name.replace(QLatin1Char('\\'), QLatin1Char('/'));
+            while (name.startsWith(QLatin1Char('/')))
+                name.remove(0, 1);
+            if (name.isEmpty())
+                continue;
+
+            fat.writeFile(name, it.value());
         }
-        outFile.write(it.value());
-        outFile.close();
+        dw.sync();
+    } catch (const std::exception &e) {
+        // The FAT writer reports a full or malformed filesystem by throwing,
+        // and the callers here only check for false. A half-filled image left
+        // on disk would be signed and served as though it were whole.
+        qDebug() << "BootImgCreator (Windows): failed to fill boot.img:" << e.what();
+        ops->Close();
+        QFile::remove(outputPath);
+        return false;
     }
-    
-    // Detach the virtual disk
-    QString detachScript = tempDir.path() + "/detach.txt";
-    QFile detachFile(detachScript);
-    if (detachFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream ds(&detachFile);
-        ds << "select vdisk file=\"" << winPath << "\"\r\n";
-        ds << "detach vdisk\r\n";
-        detachFile.close();
-        
-        QProcess detachProc;
-        detachProc.start("diskpart", QStringList() << "/s" << detachScript);
-        detachProc.waitForFinished(10000);
-    }
-    
+
+    ops->Close();
     qDebug() << "BootImgCreator (Windows): boot.img created successfully";
     return true;
 }
-

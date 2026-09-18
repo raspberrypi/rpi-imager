@@ -858,7 +858,7 @@ TEST_CASE("A nested firmware tree survives into the boot.img",
     files.insert(QStringLiteral("overlays/vc4-kms-v3d.dtbo"), "OVERLAY");
     files.insert(QStringLiteral("a/b/c/deep.bin"), "DEEP");
 
-    REQUIRE_BOOT_IMG_SUPPORT();
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
 
     CHECK(readFromImg(out, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
