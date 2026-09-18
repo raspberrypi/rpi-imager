@@ -62,7 +62,7 @@ set(DEPENDENCIES
     ${CMAKE_BINARY_DIR}/rpi-imager.rc
     ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib
 )
-set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll crypt32 ole32 oleaut32 wbemuuid)
+set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll crypt32 ole32 oleaut32 wbemuuid virtdisk)
 
 # Add winusb for rpiboot support
 set(EXTRALIBS ${EXTRALIBS} winusb)

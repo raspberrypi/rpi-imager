@@ -365,9 +365,13 @@ if(WIN32)
     # SetupDiGetDeviceRegistryProperty and SetupDiGetDeviceInterfaceDetail. The
     # application has carried it in EXTRALIBS all along; the tests linking the
     # same backend had not.
+    # virtdisk for platformquirks_windows.cpp, which detaches a virtual disk
+    # rather than asking a non-removable device to eject its media. Every
+    # target compiling that backend needs it, not only the ones whose cases
+    # attach a VHD of their own.
     set(PLATFORM_BACKEND_LIBS
         ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt setupapi
-        Qt6::Gui rpi_windows_support)
+        virtdisk Qt6::Gui rpi_windows_support)
 elseif(APPLE)
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm)
