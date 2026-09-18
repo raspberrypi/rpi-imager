@@ -5039,7 +5039,9 @@ void ImageWriter::clearConnectToken()
 {
     _piConnectToken.clear();
     _piConnectTokenIsOrgMinted = false;
-    emit connectTokenCleared();
+    // Consumed, not invalidated: this runs on a successful write, and what
+    // the user configured is what was written.
+    emit connectTokenCleared(false);
 }
 
 void ImageWriter::discardOrgMintedConnectToken()
@@ -5049,7 +5051,7 @@ void ImageWriter::discardOrgMintedConnectToken()
     qDebug() << "Connect: discarding org-minted auth key (storage / OS changed)";
     _piConnectToken.clear();
     _piConnectTokenIsOrgMinted = false;
-    emit connectTokenCleared();
+    emit connectTokenCleared(true);
 }
 
 bool ImageWriter::isElevatableBundle()

@@ -589,7 +589,11 @@ signals:
     void ejectStateChanged();
     void connectTokenReceived(const QString &token);
     void connectTokenConflictDetected(const QString &token);
-    void connectTokenCleared();
+    // The session token has gone. `configurationInvalidated` separates the
+    // two reasons, which want different things of the wizard: a token
+    // consumed by a successful write leaves the step configured, and one
+    // dropped because the OS or storage changed does not.
+    void connectTokenCleared(bool configurationInvalidated);
     void repositoryUrlReceived(const QString &url);
     void customRepoChanged();
     void customRepoHostChanged();  // Emitted when displayed repo host changes (e.g., after redirect)
