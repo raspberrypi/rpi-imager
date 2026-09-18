@@ -22,6 +22,7 @@
 #include "rpiboot/firmware_manager.h"
 #include "rpiboot/test/mock_usb_transport.h"
 #include "rpiboot/rpiboot_scanner.h"
+#include "test_scratch.h"
 
 #include <QCoreApplication>
 #include <QStringList>
@@ -30,7 +31,9 @@
 #include <QStandardPaths>
 #include <QElapsedTimer>
 
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif
 
 #include <atomic>
 #include <functional>
@@ -253,10 +256,7 @@ int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QCoreApplication app(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("rpiboot_thread_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("rpiboot_thread_test"));
     return Catch::Session().run(argc, argv);
 }
 
@@ -524,15 +524,41 @@ TEST_CASE("A bus that cannot be opened ends the wait, and says so",
 // fresh enumeration is given a new one.
 // ══════════════════════════════════════════════════════════════
 
-TEST_CASE("The board returning on the same port with a new address is taken",
+TEST_CASE("A board that leaves the port and comes back has rebooted",
           "[rpiboot][sbr]")
 {
+    // The gap is the signal, not the address. This host hands the same address
+    // back on the same port, so an address comparison sat through the whole
+    // sixty seconds against a board that had already returned -- which is what
+    // the wait was changed to stop doing.
+    //
+    // Two absent polls, because one glitched scan beside the file server would
+    // otherwise read as the reboot.
     TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
-    t.bus.bootDevices = { device(1, 21, {1, 2}) };
+    t.bus.onScan = [&t](int n) {
+        if (n <= 2)
+            t.bus.bootDevices.clear();
+        else
+            t.bus.bootDevices = { device(1, 21, {1, 2}) };
+    };
 
     std::atomic<bool> found{false};
     REQUIRE(t.pollForRpibootReturn(found, /*priorDeviceAddress=*/4));
     CHECK(found.load());
+}
+
+TEST_CASE("A board that never leaves the port has not rebooted",
+          "[rpiboot][sbr]")
+{
+    // The case the address comparison got wrong. Same port, different address,
+    // and no gap: nothing has happened, whatever the address says.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.bus.bootDevices = { device(1, 21, {1, 2}) };
+    t.bus.onScan = [&t](int n) { if (n >= 3) t.cancel(); };
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, /*priorDeviceAddress=*/4));
+    CHECK_FALSE(found.load());
 }
 
 TEST_CASE("A board still at its old address has not come back yet",
@@ -578,10 +604,15 @@ TEST_CASE("With no port path nothing is accepted at all", "[rpiboot][sbr]")
 TEST_CASE("The returning board is found among others on the bus",
           "[rpiboot][sbr]")
 {
+    // Ours goes away and returns; the other board never moves. Only the port
+    // path picks them apart, so a wait that watched the bus rather than the
+    // port would settle on the wrong one.
     TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
-    t.bus.bootDevices = {
-        device(1, 4, {5, 6}),      // another board, untouched
-        device(1, 21, {1, 2}),     // ours, new address
+    t.bus.onScan = [&t](int n) {
+        std::vector<UsbDeviceInfo> devices = { device(1, 4, {5, 6}) };
+        if (n > 2)
+            devices.push_back(device(1, 21, {1, 2}));
+        t.bus.bootDevices = devices;
     };
 
     std::atomic<bool> found{false};
@@ -983,6 +1014,12 @@ public:
     std::vector<rpiboot::SideloadMode> phasesRun;
     int failAfter = -1;              // -1 never; 0 fails the first phase
     bool cancelAfterFirst = false;
+    // Whether the board comes back from the recovery reboot. The real
+    // runPhase() sets _nextStageFound from its scanner thread, and run() will
+    // not start fastboot without it -- a gate added when the wait began taking
+    // the disconnect as the signal. Overriding runPhase() bypasses the scanner,
+    // so the answer has to be given here instead.
+    bool nextStageReturns = true;
 
 protected:
     bool runPhase(rpiboot::SideloadMode mode, QString &fastbootId,
@@ -990,6 +1027,8 @@ protected:
     {
         phasesRun.push_back(mode);
         fastbootId = QStringLiteral("1:9");
+        if (nextStageReturns)
+            _nextStageFound.store(true);
         if (cancelAfterFirst && phasesRun.size() == 1)
             cancel();
         if (failAfter >= 0 && static_cast<int>(phasesRun.size()) > failAfter)
@@ -1464,6 +1503,13 @@ TEST_CASE("A bus that throws mid-scan yields no rpiboot devices", "[rpiboot][sca
 TEST_CASE("A libusb that will not start yields no devices rather than throwing",
           "[rpiboot][scan]")
 {
+#ifdef _WIN32
+    // The descriptor ceiling this lowers to make libusb_init fail is
+    // RLIMIT_NOFILE, which Windows does not have -- handles are not
+    // descriptors and there is no per-process limit to tighten. Skipped
+    // rather than dropped, so the run still accounts for it.
+    SKIP("RLIMIT_NOFILE has no Windows equivalent");
+#else
     struct rlimit saved{};
     REQUIRE(getrlimit(RLIMIT_NOFILE, &saved) == 0);
 
@@ -1495,6 +1541,7 @@ TEST_CASE("A libusb that will not start yields no devices rather than throwing",
     CHECK(contextRefused);
     CHECK_FALSE(threw);
     CHECK(found.empty());
+#endif
 }
 
 // The real makeUsbContext(), not the fake the rest of this file installs.
@@ -1515,6 +1562,12 @@ public:
 TEST_CASE("A USB bus that will not open becomes a null context, not an exception",
           "[rpiboot][usb]")
 {
+#ifdef _WIN32
+    // The second of the pair: this one starves libusb of descriptors to see
+    // the null context come back rather than an exception. Same lever,
+    // RLIMIT_NOFILE, and the same absence of one on Windows.
+    SKIP("RLIMIT_NOFILE has no Windows equivalent");
+#else
     RealBusRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
 
     struct rlimit saved{};
@@ -1535,6 +1588,7 @@ TEST_CASE("A USB bus that will not open becomes a null context, not an exception
 
     CHECK_FALSE(threw);
     CHECK(ctx == nullptr);
+#endif
 }
 
 // Secure-boot recovery waits for the board to come back as an rpiboot

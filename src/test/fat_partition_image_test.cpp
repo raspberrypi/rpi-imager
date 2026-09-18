@@ -142,8 +142,8 @@ private:
 
 bool haveMtools()
 {
-    static const bool found = QFileInfo::exists(QStringLiteral("/usr/bin/mmd")) &&
-                              QFileInfo::exists(QStringLiteral("/usr/bin/mcopy"));
+    static const bool found = rpi_test::haveTool(QStringLiteral("mmd")) &&
+                              rpi_test::haveTool(QStringLiteral("mcopy"));
     return found;
 }
 
@@ -537,6 +537,69 @@ TEST_CASE("FAT driver walks into subdirectories", "[fat][image]")
     CHECK(sawNested);
 }
 
+TEST_CASE("FAT driver refuses a directory that points back at itself",
+          "[fat][image]")
+{
+    // A subdirectory entry names the cluster its contents begin at, off the
+    // card, and nothing stops it naming a directory already on the path. The
+    // chain inside one directory was guarded; the tree was not, so
+    // listAllFilesRecursive() walked the loop forever. 88 bytes reached
+    // 2.2 GB.
+    //
+    // Built by making a real subdirectory and rewriting its first cluster to
+    // the root's, found by its 8.3 name rather than by parsing the BPB.
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(32, 64, [&](const QString &imagePath) {
+        const QString src = imagePath + QStringLiteral(".src");
+        QFile f(src);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("overlay payload");
+        f.close();
+
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/loopdir")}));
+        REQUIRE(runMtool(QStringLiteral("mcopy"),
+                         {QStringLiteral("-i"), imagePath, src,
+                          QStringLiteral("::/loopdir/inside.txt")}));
+        REQUIRE(runMtool(QStringLiteral("mcopy"),
+                         {QStringLiteral("-i"), imagePath, src, QStringLiteral("::/config.txt")}));
+        QFile::remove(src);
+
+        QFile img(imagePath);
+        REQUIRE(img.open(QIODevice::ReadWrite));
+        QByteArray raw = img.readAll();
+
+        // The root directory of a FAT32 volume starts at cluster 2, which is
+        // what the loop is pointed at.
+        const QByteArray shortName("LOOPDIR    ", 11);
+        int patched = 0;
+        for (int at = raw.indexOf(shortName); at >= 0;
+             at = raw.indexOf(shortName, at + 1)) {
+            // DIR_FstClusHI at +20, DIR_FstClusLO at +26, both little-endian.
+            raw[at + 20] = char(0);
+            raw[at + 21] = char(0);
+            raw[at + 26] = char(2);
+            raw[at + 27] = char(0);
+            ++patched;
+        }
+        REQUIRE(patched > 0);
+
+        img.seek(0);
+        REQUIRE(img.write(raw) == raw.size());
+        img.close();
+    });
+
+    // The property is simply that it comes back. Before the guard this never
+    // returned, so there was nothing to assert against.
+    const QStringList recursive = image.fat().listAllFilesRecursive();
+    INFO("recursive listing: " << recursive.join(QStringLiteral(", ")).toStdString());
+    CHECK(recursive.size() < 1000);
+    CHECK(image.fat().listAllFiles().contains(QStringLiteral("config.txt"),
+                                              Qt::CaseInsensitive));
+}
+
 TEST_CASE("FAT driver reads a large file written by mtools", "[fat][image]")
 {
     REQUIRE_MKFS();
@@ -722,6 +785,16 @@ TEST_CASE("FAT driver keeps the extension on a bare 8.3 name", "[fat][image][reg
     CHECK(flat.contains(QStringLiteral("SSH"), Qt::CaseInsensitive));
     CHECK_FALSE(flat.contains(QStringLiteral("SSH."), Qt::CaseInsensitive));
 
+    // And the case, which is now a decision rather than an accident. FAT
+    // stores 8.3 upper-cased and every walker lowers it, so one file has one
+    // name whichever entry point asked. These two listings used to return
+    // "CONFIG.TXT" where readFile() and listFilesInDirectory() returned
+    // "config.txt" -- the same file, two names, depending on how you asked.
+    CHECK(flat.contains(QStringLiteral("config.txt")));
+    CHECK(flat.contains(QStringLiteral("start.elf")));
+    CHECK(flat.contains(QStringLiteral("ssh")));
+    CHECK_FALSE(flat.contains(QStringLiteral("CONFIG.TXT")));
+
     // The recursive walk is the one SecureBoot uses, and had the same fault.
     const QStringList recursive = image.fat().listAllFilesRecursive();
     INFO("recursive listing: " << recursive.join(QStringLiteral(", ")).toStdString());
@@ -731,6 +804,13 @@ TEST_CASE("FAT driver keeps the extension on a bare 8.3 name", "[fat][image][reg
             sawConfig = true;
     }
     CHECK(sawConfig);
+
+    bool sawLoweredConfig = false;
+    for (const QString &entry : recursive) {
+        if (entry.endsWith(QStringLiteral("config.txt")))
+            sawLoweredConfig = true;
+    }
+    CHECK(sawLoweredConfig);
 
     // And the names it hands back must actually resolve, which is the whole
     // point: SecureBoot reads every listed file straight back.
@@ -856,8 +936,10 @@ TEST_CASE("FAT driver rejects malformed subdirectory paths", "[fat][image]")
     REQUIRE_MKFS();
     FatImage image(32, 64);
 
-    // A path that splits to fewer than two parts is not a subdirectory
-    // reference at all, and must be refused rather than half-interpreted.
+    // A path that names no file at all must be refused rather than
+    // half-interpreted -- and refused by returning nothing, not by throwing,
+    // because a caller asking whether a file is there is entitled to an
+    // answer.
     CHECK(image.fat().readFile(QStringLiteral("/")).isEmpty());
     CHECK_FALSE(image.fat().deleteFile(QStringLiteral("/")));
     CHECK(image.fat().readFile(QStringLiteral("nosuchdir/file.txt")).isEmpty());
@@ -893,15 +975,44 @@ TEST_CASE("FAT driver reads a subdirectory file on FAT16", "[fat][image]")
     CHECK(image.fat().readFile(QStringLiteral("config.txt")) == QByteArray("root still works"));
 }
 
-// fileExists() does not understand subdirectory paths, though readFile() and
-// deleteFile() both do.
+TEST_CASE("FAT driver writes into and makes a subdirectory on FAT16", "[fat][image]")
+{
+    // The root is the only special directory on FAT16: a subdirectory is an
+    // ordinary cluster chain, as it is on FAT32. So the walk must follow the
+    // chain here, and a directory larger than one cluster is what proves it
+    // does.
+    REQUIRE_MKFS();
+    REQUIRE_MTOOLS();
+
+    FatImage image(16, 16, [&](const QString &imagePath) {
+        REQUIRE(runMtool(QStringLiteral("mmd"),
+                         {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
+    });
+
+    // Into a directory mtools made...
+    image.fat().writeFile(QStringLiteral("overlays/ours.dtbo"), QByteArray(1024, 'O'));
+    // ...and into ones that are not there at all.
+    image.fat().writeFile(QStringLiteral("made/up/deep.bin"), QByteArray("DEEP"));
+    image.sync();
+
+    CHECK(image.fat().readFile(QStringLiteral("overlays/ours.dtbo")) == QByteArray(1024, 'O'));
+    CHECK(image.fat().readFile(QStringLiteral("made/up/deep.bin")) == QByteArray("DEEP"));
+    CHECK(image.fat().fileExists(QStringLiteral("made/up/deep.bin")));
+    // Not stranded in the root under their own names.
+    CHECK(image.fat().readFile(QStringLiteral("ours.dtbo")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("deep.bin")).isEmpty());
+}
+
+// fileExists(), fileSize(), readFile() and deleteFile() must agree about
+// where a file is.
 //
-// The first two split "dir/file" and walk into the directory; fileExists()
-// hands the whole string to getDirEntry(), which looks for a root-level entry
-// literally named "overlays/disable-bt.dtbo" and does not find one. So a file
-// readFile() returns happily is reported as absent.
-TEST_CASE("FAT driver fileExists does not follow subdirectory paths",
-          "[fat][image][known-asymmetry]")
+// They did not: the first two handed the whole path to getDirEntry(), which
+// searched one directory for an entry literally named
+// "overlays/disable-bt.dtbo" and did not find one, while readFile() split the
+// path and walked in. So a file readFile() returned happily was reported
+// absent by the call a caller would use to ask.
+TEST_CASE("FAT driver fileExists follows subdirectory paths",
+          "[fat][image]")
 {
     REQUIRE_MKFS();
     REQUIRE_MTOOLS();
@@ -922,8 +1033,11 @@ TEST_CASE("FAT driver fileExists does not follow subdirectory paths",
 
     // Readable...
     CHECK(image.fat().readFile(QStringLiteral("overlays/here.dtbo")) == QByteArray("present"));
-    // ...but reported absent.
-    CHECK_FALSE(image.fat().fileExists(QStringLiteral("overlays/here.dtbo")));
+    // ...and reported present, by every accessor that answers the question.
+    CHECK(image.fat().fileExists(QStringLiteral("overlays/here.dtbo")));
+    CHECK(image.fat().fileSize(QStringLiteral("overlays/here.dtbo")) == 7);
+    CHECK_FALSE(image.fat().fileExists(QStringLiteral("overlays/absent.dtbo")));
+    CHECK(image.fat().fileSize(QStringLiteral("overlays/absent.dtbo")) == -1);
 }
 
 // ---------------------------------------------------------------------------
@@ -950,6 +1064,58 @@ struct OpenAttempt {
 // The formatter is a callable rather than a tool and its arguments: what
 // builds a FAT filesystem is not the same program everywhere, and the cases
 // that want an unusual one (FAT12, exFAT) still name their own.
+
+// A boot sector carrying just the fields the driver reads before it decides
+// what filesystem this is. Everything else is zero, which is what makes the
+// two divisors easy to aim at.
+bool writeBootSector(const QString &path, quint16 bytesPerSector,
+                     quint8 sectorsPerCluster)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadWrite))
+        return false;
+    QByteArray bs(512, '\0');
+    bs[11] = char(bytesPerSector & 0xFF);
+    bs[12] = char((bytesPerSector >> 8) & 0xFF);
+    bs[13] = char(sectorsPerCluster);
+    bs[14] = char(4);                      // reserved sectors
+    bs[16] = char(2);                      // FATs
+    bs[18] = char(2);                      // root entries, 512
+    bs[20] = char(8);                      // total sectors, 2048
+    bs[22] = char(64);                     // sectors per FAT
+    bs[510] = char(0x55);
+    bs[511] = char(0xAA);
+    return f.seek(0) && f.write(bs) == bs.size();
+}
+
+// An exFAT volume boot record, written by hand.
+//
+// mkfs.exfat is not installed on every host, and a case that runs only where
+// it is proves nothing anywhere else. The layout is short enough to lay down
+// directly: the jump, the "EXFAT   " signature, and 53 bytes of zero where
+// FAT keeps its BPB, which is what tells the two apart.
+//
+// exFAT is the default for cards over 32 GB, so it is the unsupported
+// filesystem most likely to turn up in a reader.
+bool writeExfatBootSector(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadWrite))
+        return false;
+
+    QByteArray bs(512, '\0');
+    bs[0] = char(0xEB);
+    bs[1] = char(0x76);
+    bs[2] = char(0x90);
+    memcpy(bs.data() + 3, "EXFAT   ", 8);
+    // Bytes 11-63 are MustBeZero, and are the fields a FAT driver reads.
+    bs[108] = char(9);   // bytes per sector shift, 512
+    bs[109] = char(3);   // sectors per cluster shift, 4k clusters
+    bs[510] = char(0x55);
+    bs[511] = char(0xAA);
+    return f.seek(0) && f.write(bs) == bs.size();
+}
+
 OpenAttempt tryOpenAs(const std::function<bool(const QString &)> &formatter, int sizeMB)
 {
     ScopedTempDir scratch(QStringLiteral("rpi-imager-reject"));
@@ -1003,14 +1169,94 @@ TEST_CASE("FAT driver refuses a FAT12 filesystem", "[fat][image]")
     CHECK(attempt.message.find("FAT12") != std::string::npos);
 }
 
+// ══════════════════════════════════════════════════════════════
+// Boot-sector fields used as divisors
+//
+// BPB_BytsPerSec and BPB_SecPerClus are read straight off the disk and were
+// divided by before anything checked them. exFAT stores zero in the first by
+// definition, so the "refuses an exFAT filesystem" case above was already
+// dividing by zero -- and passing, because AArch64 yields zero rather than
+// trapping. On x86 the same division raises SIGFPE and takes the application
+// down, in the customisation pass that runs after the card is written.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A boot sector claiming no bytes per sector is refused, not divided by",
+          "[fat][image]")
+{
+    // Honest about its own reach: on AArch64 this passed before the fix too,
+    // because the division yielded zero and the code carried on to the right
+    // error. What it pins is the message; what catches the division is a
+    // sanitiser build, or an x86 host, where the same line raises SIGFPE.
+    const OpenAttempt attempt = tryOpenAs([](const QString &path) {
+        return writeBootSector(path, 0, 4);
+    }, 2);
+
+    INFO("message: " << attempt.message);
+    REQUIRE(attempt.threw);
+    CHECK(attempt.message.find("exFAT") != std::string::npos);
+}
+
+TEST_CASE("A boot sector claiming no sectors per cluster is refused",
+          "[fat][image]")
+{
+    const OpenAttempt attempt = tryOpenAs([](const QString &path) {
+        return writeBootSector(path, 512, 0);
+    }, 2);
+
+    INFO("message: " << attempt.message);
+    REQUIRE(attempt.threw);
+    CHECK(attempt.message.find("sectors per cluster") != std::string::npos);
+}
+
+TEST_CASE("A sector size the format does not allow is refused", "[fat][image]")
+{
+    // 65532 passed the old "multiple of four" test, and allocateCluster()
+    // then sized a stack buffer from it. The buffer is fixed now, and this
+    // is what keeps it honest.
+    const OpenAttempt attempt = tryOpenAs([](const QString &path) {
+        return writeBootSector(path, 65532, 4);
+    }, 2);
+
+    INFO("message: " << attempt.message);
+    REQUIRE(attempt.threw);
+    CHECK(attempt.message.find("bytes per sector") != std::string::npos);
+}
+
+TEST_CASE("The largest sector size the format allows is accepted", "[fat][image]")
+{
+    // Reaching the FAT12 refusal means the sector size itself was allowed:
+    // the bound is on what the format permits, not on what mkfs happens to
+    // emit.
+    const OpenAttempt attempt = tryOpenAs([](const QString &path) {
+        return writeBootSector(path, 4096, 4);
+    }, 2);
+
+    INFO("message: " << attempt.message);
+    REQUIRE(attempt.threw);
+    CHECK(attempt.message.find("bytes per sector") == std::string::npos);
+}
+
 TEST_CASE("FAT driver refuses an exFAT filesystem", "[fat][image]")
 {
+    // Runs everywhere, because the volume boot record is written here rather
+    // than asked for from a tool that may not be installed.
+    const OpenAttempt attempt = tryOpenAs(writeExfatBootSector, 2);
+
+    INFO("message: " << attempt.message);
+    REQUIRE(attempt.threw);
+    CHECK(attempt.message.find("exFAT") != std::string::npos);
+}
+
+TEST_CASE("FAT driver refuses an exFAT filesystem mkfs.exfat made", "[fat][image]")
+{
+    // The same refusal against the real thing, where the tool is there. The
+    // hand-written record above pins the fields the driver reads; this one
+    // says those are the fields mkfs.exfat actually writes.
     const QString mkfsExfat = rpi_test::toolPath(QStringLiteral("mkfs.exfat"));
     if (mkfsExfat.isEmpty())
-        SKIP("mkfs.exfat is not installed");
+        SKIP("mkfs.exfat is not installed, so only the written-by-hand record "
+             "can be checked here");
 
-    // exFAT is the default for cards over 32GB, so this is the most likely
-    // unsupported filesystem to actually turn up in a reader.
     const OpenAttempt attempt =
         tryOpenAs([&mkfsExfat](const QString &path) {
             QString error;
@@ -1417,16 +1663,17 @@ TEST_CASE("FAT driver writes a file into an existing subdirectory", "[fat][image
                          {QStringLiteral("-i"), imagePath, QStringLiteral("::/overlays")}));
     });
 
-    // Refused, rather than silently written to the root -- which is what it
-    // used to do, because getDirEntry() seeks back to the root and discards
-    // the subdirectory the caller selected.
+    // Placed where it was asked for, and nowhere else. Landing in the root
+    // under its own name is the failure worth guarding against, because a
+    // caller reading "overlays/added.dtbo" would report it absent.
     const QByteArray payload("device tree overlay contents");
-    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("overlays/added.dtbo"), payload));
+    image.fat().writeFile(QStringLiteral("overlays/added.dtbo"), payload);
     image.sync();
 
-    // Nothing was created anywhere.
-    CHECK(image.fat().readFile(QStringLiteral("overlays/added.dtbo")).isEmpty());
+    CHECK(image.fat().readFile(QStringLiteral("overlays/added.dtbo")) == payload);
+    // And nowhere else.
     CHECK(image.fat().readFile(QStringLiteral("added.dtbo")).isEmpty());
+    CHECK_FALSE(image.fat().fileExists(QStringLiteral("added.dtbo")));
 }
 
 TEST_CASE("FAT driver replaces a file already in a subdirectory", "[fat][image]")
@@ -1451,30 +1698,33 @@ TEST_CASE("FAT driver replaces a file already in a subdirectory", "[fat][image]"
     REQUIRE(image.fat().readFile(QStringLiteral("overlays/existing.dtbo"))
             == QByteArray("original"));
 
-    // Also refused. Previously this left the original in place and created
-    // an unrelated entry in the root, so the caller believed it had replaced
-    // a file it had not touched.
+    // Replaced in place, and grown past the cluster it started in. A caller
+    // that believes it has replaced a file must not leave the original
+    // where it was.
     const QByteArray replacement("replaced contents, rather longer than before");
-    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("overlays/existing.dtbo"), replacement));
+    image.fat().writeFile(QStringLiteral("overlays/existing.dtbo"), replacement);
     image.sync();
 
-    CHECK(image.fat().readFile(QStringLiteral("overlays/existing.dtbo"))
-          == QByteArray("original"));
+    CHECK(image.fat().readFile(QStringLiteral("overlays/existing.dtbo")) == replacement);
     CHECK(image.fat().readFile(QStringLiteral("existing.dtbo")).isEmpty());
 }
 
-TEST_CASE("FAT driver refuses a write into a directory that is not there",
-          "[fat][image]")
+TEST_CASE("FAT driver makes a directory that is not there yet", "[fat][image]")
 {
-    // Rather than creating the file somewhere else, which is the failure
-    // mode worth guarding against.
+    // And puts the file in it. Creating it in the root under its own name
+    // is the failure worth guarding against, because the caller never looks
+    // there.
     REQUIRE_MKFS();
     FatImage image(32, 64);
 
-    REQUIRE_THROWS(image.fat().writeFile(QStringLiteral("nosuchdir/file.txt"),
-                                         QByteArray("contents")));
+    image.fat().writeFile(QStringLiteral("nosuchdir/file.txt"), QByteArray("contents"));
     image.sync();
+
+    CHECK(image.fat().readFile(QStringLiteral("nosuchdir/file.txt"))
+          == QByteArray("contents"));
     CHECK(image.fat().readFile(QStringLiteral("file.txt")).isEmpty());
+    CHECK(image.fat().listAllFilesRecursive()
+              .contains(QStringLiteral("nosuchdir/file.txt")));
 }
 
 TEST_CASE("FAT driver refuses a path with no file name", "[fat][image]")
@@ -1750,10 +2000,19 @@ TEST_CASE("FAT driver handles a malformed subdirectory path", "[fat][image]")
 
     FatImage image(32, 64, [&](const QString &p) { populateWithSubdirs(p, "x"); });
 
-    // Nothing here should reach the cluster walk with a half-parsed path.
+    // Nothing here should reach the cluster walk with a half-parsed path,
+    // and nothing should throw: a path naming no file is a file that is not
+    // there, which readFile() reports by returning nothing.
     CHECK(image.fat().readFile(QStringLiteral("/")).isEmpty());
+    // A trailing separator names a directory. Taking "overlays" as the file
+    // would read the directory's own entry as though it held contents.
     CHECK(image.fat().readFile(QStringLiteral("overlays/")).isEmpty());
-    CHECK(image.fat().readFile(QStringLiteral("/config.txt")).isEmpty());
+    // A leading separator is the partition root, which is where the walk
+    // starts anyway, so this names the file it appears to name. Reporting a
+    // file plainly present as absent is the worse answer.
+    CHECK(image.fat().readFile(QStringLiteral("/config.txt"))
+          == image.fat().readFile(QStringLiteral("config.txt")));
+    CHECK_FALSE(image.fat().readFile(QStringLiteral("/config.txt")).isEmpty());
 }
 
 TEST_CASE("Every name the recursive listing returns can be read", "[fat][image]")
@@ -2379,29 +2638,67 @@ quint32 directoryFirstCluster(const QString &imagePath, const Fat32DataArea &d,
     return 0;
 }
 
-bool fillSubdirectory(const QString &imagePath, int fileCount)
+// Enough entries to spill the subdirectory over `clusters` clusters.
+//
+// The count follows from the cluster size rather than being fixed, because
+// the formatter chooses that and the hosts do not agree: 400 names fill more
+// than three 4 KB clusters but fewer than two 32 KB ones, and a case that
+// corrupts the third cluster needs three.
+//
+// Each name takes five 32-byte entries, four of them for the long name. The
+// copy runs in batches: Windows caps the command line at 32,767 characters.
+
+// The name of the nth entry the fixture writes. Long enough to take four
+// long-filename entries, so the count above follows from it.
+QString subdirectoryEntryName(int i)
 {
+    return QStringLiteral("a-file-with-a-fairly-long-name-%1.txt")
+        .arg(i, 4, 10, QLatin1Char('0'));
+}
+
+// How many entries the last fill wrote, so a case can reach for one it knows
+// is past the first cluster without repeating the arithmetic.
+int g_subdirectoryEntries = 0;
+
+bool fillSubdirectory(const QString &imagePath, int clusters)
+{
+    const Fat32DataArea geometry = readDataArea(imagePath);
+    if (geometry.base.bytesPerSector == 0 || geometry.sectorsPerCluster == 0)
+        return false;
+    const int clusterBytes = geometry.base.bytesPerSector * geometry.sectorsPerCluster;
+
+    constexpr int kBytesPerName = 5 * 32;
+    constexpr int kBatch = 60;
+    // One extra cluster's worth, so the last cluster asked for is full rather
+    // than only just started.
+    const int fileCount = ((clusters + 1) * clusterBytes) / kBytesPerName;
+
     if (!runMtool(QStringLiteral("mmd"),
                   {QStringLiteral("-i"), imagePath,
                    QStringLiteral("::/") + kLoopDirName}))
         return false;
 
     ScopedTempDir sources(QStringLiteral("rpi-imager-fatsub"));
-    QStringList args;
-    args << QStringLiteral("-i") << imagePath << QStringLiteral("-o");
-    for (int i = 0; i < fileCount; ++i) {
-        const QString name = QStringLiteral("a-file-with-a-fairly-long-name-%1.txt")
-                                 .arg(i, 3, 10, QLatin1Char('0'));
-        const QString path = sources.filePath(name);
-        QFile f(path);
-        if (!f.open(QIODevice::WriteOnly))
+    const QString target = QStringLiteral("::/") + kLoopDirName + QStringLiteral("/");
+
+    for (int start = 0; start < fileCount; start += kBatch) {
+        QStringList args;
+        args << QStringLiteral("-i") << imagePath << QStringLiteral("-o");
+        for (int i = start; i < qMin(start + kBatch, fileCount); ++i) {
+            const QString path = sources.filePath(subdirectoryEntryName(i));
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly))
+                return false;
+            f.write("x");
+            f.close();
+            args << path;
+        }
+        args << target;
+        if (!runMtool(QStringLiteral("mcopy"), args))
             return false;
-        f.write("x");
-        f.close();
-        args << path;
     }
-    args << QStringLiteral("::/") + kLoopDirName + QStringLiteral("/");
-    return runMtool(QStringLiteral("mcopy"), args);
+    g_subdirectoryEntries = fileCount;
+    return true;
 }
 
 // Builds the loop. Returns false when the subdirectory did not need three
@@ -2410,7 +2707,7 @@ bool fillSubdirectory(const QString &imagePath, int fileCount)
 // the cluster it lands in must itself be full.
 bool loopASubdirectory(const QString &imagePath)
 {
-    if (!fillSubdirectory(imagePath, 400))
+    if (!fillSubdirectory(imagePath, 3))
         return false;
     const Fat32DataArea d = readDataArea(imagePath);
     if (d.base.bytesPerSector == 0 || d.sectorsPerCluster == 0)
@@ -2480,7 +2777,7 @@ bool moveCluster(const QString &imagePath, const Fat32DataArea &d,
 // move it to.
 bool fragmentASubdirectory(const QString &imagePath)
 {
-    if (!fillSubdirectory(imagePath, 400))
+    if (!fillSubdirectory(imagePath, 3))
         return false;
     const Fat32DataArea d = readDataArea(imagePath);
     if (d.base.bytesPerSector == 0 || d.sectorsPerCluster == 0)
@@ -2581,8 +2878,10 @@ TEST_CASE("A file past the first cluster of a scattered directory can still be d
         SKIP("the subdirectory could not be scattered, so reading on and "
              "following the chain would land in the same place");
 
-    const QString victim =
-        kLoopDirName + QStringLiteral("/a-file-with-a-fairly-long-name-399.txt");
+    // The last one written, which is as far past the first cluster as the
+    // directory goes.
+    const QString victim = kLoopDirName + QStringLiteral("/") +
+                           subdirectoryEntryName(g_subdirectoryEntries - 1);
 
     // readFile() has always consulted the chain after a long-name entry, so
     // it finds the file either way. It is here to show the file really is
@@ -2731,6 +3030,10 @@ TEST_CASE("FAT driver deletes from a subdirectory that spans clusters",
 // negative size is rejected separately.
 TEST_CASE("A partition refuses I/O outside its own window", "[devicewrapper]")
 {
+    // The only case here that built an image without asking first, so on a
+    // machine with no mkfs.vfat it failed in its fixture where every other FAT
+    // case skipped.
+    REQUIRE_MKFS();
     FatImage image(16, 32);
     DeviceWrapper *dw = image.fat().deviceWrapper();
     REQUIRE(dw != nullptr);
@@ -2782,4 +3085,439 @@ TEST_CASE("A partition refuses I/O outside its own window", "[devicewrapper]")
         part.seek(static_cast<qint64>(kLen));
         CHECK(part.pos() == static_cast<qint64>(kLen));
     }
+}
+
+// A directory entry's declared file size is a 32-bit field living on the
+// card, and readFile() sized its buffer from it before reading a byte. An
+// entry claiming four gigabytes made the imager ask for four gigabytes and
+// return the shortfall as zeroes. The FAT fuzzer found it as a 1.28 GB
+// malloc from a four-kilobyte input. What a file can hold is its cluster
+// chain, and at the very most the partition around it.
+
+namespace {
+
+// Overwrite one little-endian field of the first plain-file directory entry
+// whose recorded size matches `sizeNow`. Short names are mangled on write,
+// so the size is the dependable way to find the entry we just created.
+qint64 findDirEntry(const QString &path, quint32 sizeNow)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return -1;
+    const QByteArray raw = f.read(8 * 1024 * 1024);
+    for (qint64 off = 0; off + 32 <= raw.size(); off += 32) {
+        const auto *e = reinterpret_cast<const quint8 *>(raw.constData() + off);
+        if (e[11] != 0x20)      // a plain file, not a label or a long-name part
+            continue;
+        const quint32 size = quint32(e[28]) | (quint32(e[29]) << 8) |
+                             (quint32(e[30]) << 16) | (quint32(e[31]) << 24);
+        if (size == sizeNow)
+            return off;
+    }
+    return -1;
+}
+
+void pokeLe(const QString &path, qint64 offset, quint32 value, int bytes)
+{
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::ReadWrite));
+    REQUIRE(f.seek(offset));
+    QByteArray raw;
+    for (int i = 0; i < bytes; ++i)
+        raw.append(char((value >> (8 * i)) & 0xFF));
+    REQUIRE(f.write(raw) == raw.size());
+}
+
+} // namespace
+
+TEST_CASE("FAT driver caps a file at the clusters it owns", "[fat][image]")
+{
+    REQUIRE_MKFS();
+
+    ScopedTempDir scratch(QStringLiteral("rpi-imager-declared"));
+    const QString path = scratch.filePath(QStringLiteral("declared.img"));
+    const quint64 imageSize = 64ull * 1024 * 1024;
+
+    {
+        auto ops = rpi_imager::FileOperations::Create();
+        REQUIRE(ops->CreateTestFile(path.toStdString(), imageSize) ==
+                rpi_imager::FileError::kSuccess);
+    }
+    QString formatError;
+    INFO("formatter: " << formatError.toStdString());
+    REQUIRE(rpi_test::makeFatFilesystem(path, 32, QString(), &formatError));
+
+    const QByteArray payload(4096, '\x5A');
+    const QString name = QStringLiteral("declared.bin");
+    {
+        auto ops = rpi_imager::FileOperations::Create();
+        REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+        DeviceWrapper dw(ops.get());
+        DeviceWrapperFatPartition fat(&dw, 0, imageSize);
+        fat.writeFile(name, payload);
+    }
+
+    const qint64 entry = findDirEntry(path, quint32(payload.size()));
+    REQUIRE(entry >= 0);
+
+    // A gigabyte: absurd for this file, and small enough that an unbounded
+    // allocation still succeeds here rather than aborting the run. Reverting
+    // the cap must make this case fail its size check, not die.
+    constexpr quint32 kDeclared = 1u << 30;
+
+    SECTION("a wildly overstated size is cut to the chain")
+    {
+        pokeLe(path, entry + 28, kDeclared, 4);
+
+        auto ops = rpi_imager::FileOperations::Create();
+        REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+        DeviceWrapper dw(ops.get());
+        DeviceWrapperFatPartition fat(&dw, 0, imageSize);
+
+        const QByteArray got = fat.readFile(name);
+        INFO("returned " << got.size() << " bytes for a declared " << kDeclared);
+        CHECK(quint64(got.size()) < quint64(kDeclared));
+        CHECK(quint64(got.size()) <= imageSize);
+        // Whatever the chain did hold is still returned intact.
+        REQUIRE(got.size() >= payload.size());
+        CHECK(got.left(payload.size()) == payload);
+    }
+
+    SECTION("a size with no chain behind it yields nothing")
+    {
+        pokeLe(path, entry + 28, kDeclared, 4);
+        // First cluster beyond every end-of-chain marker: the walk returns an
+        // empty list, so the file owns no bytes at all.
+        pokeLe(path, entry + 26, 0xFFFF, 2);   // DIR_FstClusLO
+        pokeLe(path, entry + 20, 0xFFFF, 2);   // DIR_FstClusHI
+
+        auto ops = rpi_imager::FileOperations::Create();
+        REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+        DeviceWrapper dw(ops.get());
+        DeviceWrapperFatPartition fat(&dw, 0, imageSize);
+
+        CHECK(fat.readFile(name).isEmpty());
+    }
+}
+
+// ── a boot sector describing more than the volume holds ─────────────────────
+//
+// The BPB is the card's own account of itself, and a corrupt one is ordinary:
+// a half-written card, a bad SD controller, an image truncated mid-download.
+// Reserved sectors plus the FATs plus the root directory can add up to more
+// sectors than the volume claims to have, and the subtraction that follows
+// would wrap -- a tiny file system reading as an enormous one, and every
+// cluster offset after it pointing somewhere arbitrary on a card that is
+// about to be written to.
+
+TEST_CASE("A boot sector claiming more metadata than volume is refused",
+          "[fat][image]")
+{
+    ScopedTempDir scratch(QStringLiteral("rpi-imager-bpb"));
+    const QString path = scratch.filePath(QStringLiteral("overclaim.img"));
+
+    QByteArray disk(8 * 1024 * 1024, 0);
+    auto put8  = [&disk](int off, unsigned v) {
+        disk[off] = static_cast<char>(v & 0xff);
+    };
+    auto put16 = [&disk](int off, unsigned v) {
+        disk[off]     = static_cast<char>(v & 0xff);
+        disk[off + 1] = static_cast<char>((v >> 8) & 0xff);
+    };
+
+    put16(0x0B, 512);   // bytes per sector
+    put8 (0x0D, 1);     // sectors per cluster
+    put16(0x0E, 1000);  // reserved sectors -- already more than the volume
+    put8 (0x10, 2);     // two FATs
+    put16(0x11, 512);   // root entries
+    put16(0x13, 100);   // total sectors: a hundred
+    put16(0x16, 100);   // sectors per FAT
+    put8 (510, 0x55);
+    put8 (511, 0xAA);
+
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    f.write(disk);
+    f.close();
+
+    auto ops = rpi_imager::FileOperations::Create();
+    REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+    DeviceWrapper dw(ops.get());
+
+    bool threw = false;
+    std::string message;
+    try {
+        DeviceWrapperFatPartition fat(&dw, 0, 8 * 1024 * 1024);
+    } catch (const std::runtime_error &e) {
+        threw = true;
+        message = e.what();
+    }
+
+    INFO("message: " << message);
+    CHECK(threw);
+    // Refused for the reason it was refused, so the next person reading a bug
+    // report knows the card described itself impossibly rather than that the
+    // imager could not read it.
+    CHECK(message.find("reserved sectors") != std::string::npos);
+}
+
+TEST_CASE("A root directory cluster below the first is refused", "[fat][image]")
+{
+    // FAT numbers clusters from two; nought and one are reserved and never
+    // name data. A boot sector claiming the root directory starts at one is
+    // corrupt, and the offset is worked out as (cluster - 2) * clusterSize --
+    // so believing it subtracts past zero and seeks somewhere arbitrary on a
+    // card that is about to be written to.
+    ScopedTempDir scratch(QStringLiteral("rpi-imager-rootclus"));
+    const QString path = scratch.filePath(QStringLiteral("rootclus.img"));
+
+    // Large enough to be read as FAT32: the type is decided by the cluster
+    // count, and below 65525 it would be taken for FAT16 and never consult
+    // BPB_RootClus at all.
+    const int totalSectors = 70000;
+    const qint64 imageBytes = qint64(totalSectors) * 512;
+
+    QByteArray disk(imageBytes, 0);
+    auto put8  = [&disk](int off, unsigned v) {
+        disk[off] = static_cast<char>(v & 0xff);
+    };
+    auto put16 = [&disk](int off, unsigned v) {
+        disk[off]     = static_cast<char>(v & 0xff);
+        disk[off + 1] = static_cast<char>((v >> 8) & 0xff);
+    };
+    auto put32 = [&disk](int off, unsigned v) {
+        for (int i = 0; i < 4; ++i)
+            disk[off + i] = static_cast<char>((v >> (8 * i)) & 0xff);
+    };
+
+    put16(0x0B, 512);          // bytes per sector
+    put8 (0x0D, 1);            // sectors per cluster
+    put16(0x0E, 32);           // reserved sectors
+    put8 (0x10, 2);            // two FATs
+    put16(0x11, 0);            // no root entries -- FAT32 keeps none here
+    put16(0x13, 0);            // 16-bit total unused
+    put16(0x16, 0);            // 16-bit FAT size unused
+    put32(0x20, totalSectors); // 32-bit total
+    put32(0x24, 512);          // sectors per FAT
+    put32(0x2C, 1);            // root directory cluster -- the corrupt value
+    put8 (510, 0x55);
+    put8 (511, 0xAA);
+
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    REQUIRE(f.write(disk) == disk.size());
+    f.close();
+
+    auto ops = rpi_imager::FileOperations::Create();
+    REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+    DeviceWrapper dw(ops.get());
+
+    DeviceWrapperFatPartition fat(&dw, 0, imageBytes);
+
+    // Reading the root directory is what follows the cluster number.
+    bool threw = false;
+    std::string message;
+    try {
+        (void)fat.fileExists(QStringLiteral("config.txt"));
+    } catch (const std::runtime_error &e) {
+        threw = true;
+        message = e.what();
+    }
+
+    INFO("message: " << message);
+    CHECK(threw);
+    CHECK(message.find("Cluster number below the first") != std::string::npos);
+}
+
+TEST_CASE("A cluster beyond the end of the partition is refused", "[fat][image]")
+{
+    // The companion to the case above. A cluster number that is legal in
+    // itself -- two or more -- can still name an offset past the end of the
+    // partition, and seeking there would put a write outside the region the
+    // imager was given. Checked after the multiplication, in 64 bits, so a
+    // number large enough to wrap cannot slip past by wrapping.
+    ScopedTempDir scratch(QStringLiteral("rpi-imager-farclus"));
+    const QString path = scratch.filePath(QStringLiteral("farclus.img"));
+
+    const int totalSectors = 70000;              // enough clusters to be FAT32
+    const qint64 imageBytes = qint64(totalSectors) * 512;
+
+    QByteArray disk(imageBytes, 0);
+    auto put8  = [&disk](int off, unsigned v) {
+        disk[off] = static_cast<char>(v & 0xff);
+    };
+    auto put16 = [&disk](int off, unsigned v) {
+        disk[off]     = static_cast<char>(v & 0xff);
+        disk[off + 1] = static_cast<char>((v >> 8) & 0xff);
+    };
+    auto put32 = [&disk](int off, quint32 v) {
+        for (int i = 0; i < 4; ++i)
+            disk[off + i] = static_cast<char>((v >> (8 * i)) & 0xff);
+    };
+
+    put16(0x0B, 512);
+    put8 (0x0D, 1);
+    put16(0x0E, 32);
+    put8 (0x10, 2);
+    put16(0x11, 0);
+    put16(0x13, 0);
+    put16(0x16, 0);
+    put32(0x20, totalSectors);
+    put32(0x24, 512);
+    // Legal as a cluster number, and far past the end of a 35 MB partition:
+    // 200000 clusters of 512 bytes is a hundred megabytes in.
+    put32(0x2C, 200000);
+    put8 (510, 0x55);
+    put8 (511, 0xAA);
+
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    REQUIRE(f.write(disk) == disk.size());
+    f.close();
+
+    auto ops = rpi_imager::FileOperations::Create();
+    REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+    DeviceWrapper dw(ops.get());
+
+    DeviceWrapperFatPartition fat(&dw, 0, imageBytes);
+
+    bool threw = false;
+    std::string message;
+    try {
+        (void)fat.fileExists(QStringLiteral("config.txt"));
+    } catch (const std::runtime_error &e) {
+        threw = true;
+        message = e.what();
+    }
+
+    INFO("message: " << message);
+    CHECK(threw);
+    CHECK(message.find("Cluster outside the partition") != std::string::npos);
+}
+
+TEST_CASE("A FAT chain that points back at itself is refused", "[fat][image]")
+{
+    // A cluster chain is followed until it reaches an end-of-chain marker.
+    // A corrupt table can point a cluster back into the chain instead, and
+    // without the guard the walk never ends: the imager hangs on a card that
+    // is merely damaged, with no error and no way out but killing it.
+    ScopedTempDir scratch(QStringLiteral("rpi-imager-loop"));
+    const QString path = scratch.filePath(QStringLiteral("loop.img"));
+
+    const int totalSectors   = 70000;   // enough clusters to be read as FAT32
+    const int bytesPerSector = 512;
+    const int reservedSecs   = 32;
+    const int numFats        = 2;
+    const int fatSectors     = 512;
+    const qint64 imageBytes  = qint64(totalSectors) * bytesPerSector;
+
+    // Where the FAT and the data region land, by the same arithmetic the
+    // driver uses: the FAT after the reserved sectors, the clusters after
+    // both copies of it.
+    const int fatStart      = reservedSecs * bytesPerSector;
+    const int clusterOffset = fatStart + numFats * fatSectors * bytesPerSector;
+
+    QByteArray disk(imageBytes, 0);
+    auto put8  = [&disk](int off, unsigned v) {
+        disk[off] = static_cast<char>(v & 0xff);
+    };
+    auto put16 = [&disk](int off, unsigned v) {
+        disk[off]     = static_cast<char>(v & 0xff);
+        disk[off + 1] = static_cast<char>((v >> 8) & 0xff);
+    };
+    auto put32 = [&disk](int off, quint32 v) {
+        for (int i = 0; i < 4; ++i)
+            disk[off + i] = static_cast<char>((v >> (8 * i)) & 0xff);
+    };
+
+    put16(0x0B, bytesPerSector);
+    put8 (0x0D, 1);                 // one sector per cluster
+    put16(0x0E, reservedSecs);
+    put8 (0x10, numFats);
+    put16(0x11, 0);
+    put16(0x13, 0);
+    put16(0x16, 0);
+    put32(0x20, totalSectors);
+    put32(0x24, fatSectors);
+    put32(0x2C, 2);                 // root directory at the first real cluster
+    put8 (510, 0x55);
+    put8 (511, 0xAA);
+
+    // One 8.3 entry in the root directory: TEST.BIN, one cluster long,
+    // starting at cluster 3.
+    const int entry = clusterOffset;
+    std::memcpy(disk.data() + entry, "TEST    BIN", 11);
+    put8 (entry + 11, 0x20);        // archive
+    put16(entry + 20, 0);           // first cluster, high half
+    put16(entry + 26, 3);           // first cluster, low half
+    put32(entry + 28, bytesPerSector);  // size: one cluster
+
+    // And the corruption: cluster 3 names itself as its own successor.
+    put32(fatStart + 3 * 4, 3);
+
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::WriteOnly));
+    REQUIRE(f.write(disk) == disk.size());
+    f.close();
+
+    auto ops = rpi_imager::FileOperations::Create();
+    REQUIRE(ops->OpenDevice(path.toStdString()) == rpi_imager::FileError::kSuccess);
+    DeviceWrapper dw(ops.get());
+    DeviceWrapperFatPartition fat(&dw, 0, imageBytes);
+
+    bool threw = false;
+    std::string message;
+    try {
+        (void)fat.readFile(QStringLiteral("TEST.BIN"));
+    } catch (const std::runtime_error &e) {
+        threw = true;
+        message = e.what();
+    }
+
+    INFO("message: " << message);
+    CHECK(threw);
+    CHECK(message.find("Circular references") != std::string::npos);
+}
+
+TEST_CASE("A corrupt FSinfo sector is refused rather than written back",
+          "[fat][image]")
+{
+    // FSinfo caches the free cluster count and where to look for the next
+    // free one. Allocating a cluster reads it, adjusts it and writes it back.
+    // Read without checking, a sector holding something else entirely is
+    // parsed as though it were FSinfo and then written over -- so whatever
+    // the sector really was is destroyed, and the numbers taken from it are
+    // nonsense. The signature says whether it is FSinfo at all.
+    REQUIRE_MKFS();
+
+    FatImage image(32, 64, [](const QString &path) {
+        QFile f(path);
+        REQUIRE(f.open(QIODevice::ReadWrite));
+
+        QByteArray boot = f.read(512);
+        REQUIRE(boot.size() == 512);
+        const int bytesPerSector = quint8(boot[0x0B]) | (quint8(boot[0x0C]) << 8);
+        const int fsinfoSector   = quint8(boot[0x30]) | (quint8(boot[0x31]) << 8);
+        REQUIRE(fsinfoSector > 0);
+
+        // The lead signature, "RRaA", made into something else. The rest of
+        // the sector is left as the formatter wrote it, so only the check
+        // itself stands between here and the write-back.
+        REQUIRE(f.seek(qint64(fsinfoSector) * bytesPerSector));
+        REQUIRE(f.write("XXXX", 4) == 4);
+        f.close();
+    });
+
+    bool threw = false;
+    std::string message;
+    try {
+        image.fat().writeFile(QStringLiteral("alloc.txt"), QByteArray(64, 'a'));
+    } catch (const std::runtime_error &e) {
+        threw = true;
+        message = e.what();
+    }
+
+    INFO("message: " << message);
+    CHECK(threw);
+    CHECK(message.find("FSinfo") != std::string::npos);
 }

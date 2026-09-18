@@ -48,9 +48,9 @@ public:
     bool replaceEntry(const std::string& name, std::vector<uint8_t> data);
 
     // Re-pack the current in-memory entries as a USTAR archive at `path`.
-    // Entries are written in alphabetical order (the upstream bootloader
-    // doesn't depend on tar ordering).  Returns false on I/O / libarchive
-    // error; details in lastError().
+    // Entries keep the order, metadata and directories they arrived with;
+    // only bytes passed to replaceEntry() differ.  Returns false on I/O /
+    // libarchive error; details in lastError().
     bool writeToFile(const std::string& path);
 
     // Number of entries extracted
@@ -64,6 +64,30 @@ public:
 private:
     bool extractFromArchive(::archive* a);
 
+    // What tar records and _files cannot: directories, permissions,
+    // ownership, mtimes, arrival order.  Only one entry is meant to change,
+    // so the rest must go back unchanged -- rebuilding from names and bytes
+    // alone dropped 2711/ and 2712/ and demoted both bootmain to 0644.
+    //
+    // Numeric so this header need not include libarchive; bootfiles.cpp
+    // asserts they match AE_IFREG/AE_IFLNK.
+    static constexpr unsigned int kFileTypeRegular = 0100000;  // AE_IFREG
+    static constexpr unsigned int kFileTypeSymlink = 0120000;  // AE_IFLNK
+
+    struct EntryMeta {
+        std::string name;
+        std::string symlinkTarget;      // only when filetype is a symlink
+        unsigned int filetype = kFileTypeRegular;
+        unsigned int perm = 0644;
+        int64_t uid = 0;
+        int64_t gid = 0;
+        std::string uname;
+        std::string gname;
+        int64_t mtime = 0;
+        bool hasMtime = false;
+    };
+
+    std::vector<EntryMeta> _entries;
     std::map<std::string, std::vector<uint8_t>> _files;
     std::string _lastError;
 };

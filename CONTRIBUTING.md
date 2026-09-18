@@ -78,11 +78,11 @@ cmake -B build-asan -G Ninja src \
     -DBUILD_TESTING=ON \
     -DXZ_SANDBOX=no \
     -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
-    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g -D_GLIBCXX_ASSERTIONS" \
     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
 cmake --build build-asan --target generate_version
 cmake --build build-asan
-cd build-asan && ASAN_OPTIONS=detect_leaks=0 ctest -j3
+cd build-asan && LSAN_OPTIONS=suppressions=../src/test/qml/lsan-qt.supp ctest -j3
 ```
 
 Three of those are not obvious and each stops the build dead:
@@ -96,8 +96,31 @@ Three of those are not obvious and each stops the build dead:
   of a custom target that the test targets do not depend on, so a fresh
   sanitiser tree fails on the missing header until it has been made once.
 
-`detect_leaks=0` keeps Qt's static initialisers from burying the report.
-Leave leak detection on if that is what you are looking for.
+Leak detection is on: this line used to carry `ASAN_OPTIONS=detect_leaks=0`
+with the note that Qt's static initialisers bury the report. Measured on
+14 September 2026, they do not. The whole suite runs clean with detection
+on — 2337 tests, **zero** LeakSanitizer reports — and not one entry in the
+suppression file fires, so the suppressions are there for the chaos storms
+rather than for the suite.
+
+Two-sided, because a zero is only a result if the detector was armed: a
+test binary prints `LeakSanitizer: checking for leaks`, and a deliberate
+4 KB leak under the same options and the same suppression file is still
+reported and still exits non-zero.
+
+Turning detection off costs the thing it is best at. The one real leak
+found in this area — 42 KB of Qt Quick pixmap reader, still fetching an
+icon over the network at exit — surfaced in a storm sweep, which is the
+only place leak detection had been left on.
+
+`_GLIBCXX_ASSERTIONS` is there because the sanitisers cannot see one thing.
+A vector reserves more than it holds, so an index past `size()` often lands
+inside the allocation: valid heap, nothing to report. Fed a vector of 64
+bytes and asked for element 100, an ASan build and an ASan+UBSan build both
+print rubbish and exit 0; with the assertions on, it aborts. It is the
+assertions mode, not `_GLIBCXX_DEBUG`, so container layout does not change
+and the prebuilt Qt need not be rebuilt to match. The whole suite passes
+under it — 2337 tests, alongside `-fsanitize=undefined`.
 
 A race is a different question and wants `-fsanitize=thread` in place of
 `address`, in its own build directory — the two cannot be combined.

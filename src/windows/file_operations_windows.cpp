@@ -7,6 +7,8 @@
 #include "../timeout_utils.h"
 
 #include <winioctl.h>
+#include <optional>
+#include <string>
 #include <sstream>
 #include <chrono>
 #include <algorithm>
@@ -15,8 +17,36 @@ using rpi_imager::TimeoutDefaults::kSyncWriteTimeoutSeconds;
 using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
 using rpi_imager::TimeoutDefaults::kHighLatencyThresholdMs;
 using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
+using rpi_imager::TimeoutDefaults::kTransientWriteRetries;
+using rpi_imager::TimeoutDefaults::kTransientWriteBackoffMs;
 
 namespace rpi_imager {
+
+namespace {
+
+// Whether a write that failed with this error is worth issuing again.
+//
+// The errors listed are the ones a medium answers the same way however often
+// it is asked: refused, protected, full, or physically bad. Everything else is
+// treated as transient. ERROR_NOT_READY lands there, which is the point --
+// a drive gives it while Windows re-enumerates it after its partition table is
+// rewritten, and the write that hits that window is the first of the image.
+//
+// Shared so the synchronous and asynchronous paths cannot drift apart on it.
+bool WriteErrorIsTransient(DWORD error) {
+  switch (error) {
+    case ERROR_ACCESS_DENIED:
+    case ERROR_DISK_FULL:
+    case ERROR_WRITE_PROTECT:
+    case ERROR_SECTOR_NOT_FOUND:
+    case ERROR_CRC:
+      return false;
+    default:
+      return true;
+  }
+}
+
+}  // namespace
 
 // Forward declaration — defined at bottom of file, called from OpenDevice()
 FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path);
@@ -30,7 +60,7 @@ static void Log(const std::string& msg) {
 WindowsFileOperations::WindowsFileOperations() 
     : handle_(INVALID_HANDLE_VALUE), last_error_code_(0), using_direct_io_(false),
       async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
-      async_write_offset_(0), current_file_position_(0), iocp_(INVALID_HANDLE_VALUE) {
+      write_offset_(0), current_file_position_(0), iocp_(INVALID_HANDLE_VALUE) {
 }
 
 bool WindowsFileOperations::IsPhysicalDrivePath(const std::string& path) {
@@ -120,7 +150,13 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
         &completion_key,
         &overlapped,
         timeout);
-    
+
+    // Read here, not where it is classified below. Between the two sit a mutex
+    // acquisition and a Log() call, and either may replace the thread's last
+    // error -- so a write could be reported as having failed for a reason
+    // belonging to something else entirely.
+    DWORD completion_error = success ? ERROR_SUCCESS : GetLastError();
+
     if (overlapped == nullptr) {
       // Timeout or error with no overlapped
       if (!wait || cancelled_.load()) break;
@@ -179,12 +215,21 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
     }
     
     FileError error = FileError::kSuccess;
-    
+
+    ApplyWriteFaultInjection(success, completion_error);
+
     if (!success) {
-      DWORD err = GetLastError();
+      DWORD err = completion_error;
       // ERROR_OPERATION_ABORTED means the I/O was cancelled
       if (err == ERROR_OPERATION_ABORTED) {
         error = FileError::kCancelled;
+      } else if (ReissueAfterTransientFailure(ctx, err)) {
+        // In flight again under the same context: it keeps its slot in
+        // pending_writes_, its callback has not run, and it will come back
+        // round through this loop.
+        processed_at_least_one = true;
+        timeout = 0;
+        continue;
       } else {
         error = FileError::kWriteError;
         if (first_async_error_ == FileError::kSuccess) {
@@ -217,6 +262,63 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
     // other ready completions, but don't wait for more
     timeout = 0;
   }
+}
+
+bool WindowsFileOperations::ReissueAfterTransientFailure(AsyncWriteContext* ctx, DWORD error) {
+  if (!WriteErrorIsTransient(error) || ctx->retries >= kTransientWriteRetries ||
+      cancelled_.load()) {
+    return false;
+  }
+
+  // Backoff, slept in slices so a cancel is not ignored for the whole wait.
+  const int delayMs = kTransientWriteBackoffMs << ctx->retries;
+  constexpr int kCancelPollMs = 50;
+  for (int slept = 0; slept < delayMs; slept += kCancelPollMs) {
+    if (cancelled_.load()) {
+      return false;
+    }
+    Sleep(kCancelPollMs);
+  }
+
+  ctx->retries++;
+
+  // Only the offset is carried over. The rest of the OVERLAPPED is kernel
+  // state belonging to the attempt that just failed.
+  const DWORD offsetLow = ctx->overlapped.Offset;
+  const DWORD offsetHigh = ctx->overlapped.OffsetHigh;
+  ZeroMemory(&ctx->overlapped, sizeof(OVERLAPPED));
+  ctx->overlapped.Offset = offsetLow;
+  ctx->overlapped.OffsetHigh = offsetHigh;
+
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    pending_contexts_[&ctx->overlapped] = ctx;
+  }
+
+  std::ostringstream oss;
+  oss << "Async write at offset "
+      << ((static_cast<std::uint64_t>(offsetHigh) << 32) | offsetLow)
+      << " failed with error " << error << ", reissuing (attempt " << ctx->retries
+      << "/" << kTransientWriteRetries << ") after " << delayMs << "ms";
+  Log(oss.str());
+
+  // recordCompletion() already counted the failed attempt, so the reissue is a
+  // fresh submission as far as the statistics are concerned.
+  ctx->submit_time = std::chrono::steady_clock::now();
+  write_latency_stats_.recordSubmit();
+
+  if (!WriteFile(handle_, ctx->data, static_cast<DWORD>(ctx->size), nullptr,
+                 &ctx->overlapped)) {
+    const DWORD reissueError = GetLastError();
+    if (reissueError != ERROR_IO_PENDING) {
+      std::lock_guard<std::mutex> lock(pending_mutex_);
+      pending_contexts_.erase(&ctx->overlapped);
+      Log("Async write reissue failed, error: " + std::to_string(reissueError));
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool WindowsFileOperations::WaitForOverlappedWithCancel(OVERLAPPED* overlapped, DWORD* bytes_transferred) {
@@ -372,7 +474,23 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
         Log("Exclusive open failed (error " + std::to_string(err) + "), retry " +
             std::to_string(attempt) + "/" + std::to_string(kExclusiveRetries) +
             " for exclusive access in " + std::to_string(delayMs) + "ms");
-        Sleep(delayMs);
+        // Slept in slices and checked between them, for the same reason the
+        // volume lock is: a single Sleep(3200) ignores a cancel for its whole
+        // duration, and the six attempts here add up to about 6.3 seconds --
+        // long enough to outlast a caller that has already given up.
+        constexpr int kCancelPollMs = 50;
+        bool cancelledDuringBackoff = false;
+        for (int slept = 0; slept < delayMs; slept += kCancelPollMs) {
+          if (cancelled_.load()) {
+            cancelledDuringBackoff = true;
+            break;
+          }
+          Sleep(kCancelPollMs);
+        }
+        if (cancelledDuringBackoff) {
+          Log("Exclusive open abandoned: cancelled");
+          break;
+        }
         delayMs *= 2;
         result = tryOpenAtShareMode(FILE_SHARE_READ);
         if (result == FileError::kSuccess)
@@ -412,7 +530,7 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
 
   // Only try to lock volume if this is not a physical drive
   if (!isPhysicalDrive) {
-    FileError lock_result = LockVolume();
+    FileError lock_result = LockVolume(path);
     if (lock_result != FileError::kSuccess) {
       Log("Warning: Failed to lock volume, continuing anyway");
     }
@@ -421,7 +539,7 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   }
   
   // Reset async state for new file
-  async_write_offset_ = 0;
+  write_offset_ = 0;
   current_file_position_ = 0;
   first_async_error_ = FileError::kSuccess;
   cancelled_.store(false);
@@ -517,80 +635,69 @@ FileError WindowsFileOperations::WriteAtOffset(
     DWORD written = 0;
     
     BOOL result = WriteFile(handle_, data + bytes_written, chunk_size, &written, &overlapped);
-    
-    if (!result) {
-      DWORD error = GetLastError();
-      
-      if (error == ERROR_IO_PENDING) {
-        // I/O is pending - wait for completion with cancellation support
-        if (!WaitForOverlappedWithCancel(&overlapped, &written)) {
-          error = GetLastError();
-          CloseHandle(overlapped.hEvent);
-          
-          // Check if cancelled
-          if (cancelled_.load() || error == ERROR_OPERATION_ABORTED) {
-            return FileError::kCancelled;
-          }
-          
-          std::ostringstream oss;
-          oss << "WriteAtOffset: GetOverlappedResult failed, offset=" << (offset + bytes_written)
-              << ", chunk_size=" << chunk_size << ", error=" << error;
-          Log(oss.str());
-          
-          // Handle specific Windows errors
-          if (error == ERROR_ACCESS_DENIED || error == ERROR_DISK_FULL ||
-              error == ERROR_WRITE_PROTECT || error == ERROR_SECTOR_NOT_FOUND || 
-              error == ERROR_CRC) {
-            return FileError::kWriteError;
-          }
-          
-          // For other errors, try to retry
-          if (retry_count < max_retries) {
-            retry_count++;
-            Sleep(100 * retry_count);
-            continue;
-          }
-          return FileError::kWriteError;
-        }
+
+    // Taken here rather than where it is read, so it cannot be clobbered by
+    // anything called in between.
+    DWORD error = result ? ERROR_SUCCESS : GetLastError();
+    const bool pending = !result && error == ERROR_IO_PENDING;
+
+    if (pending) {
+      // The usual answer on a handle opened for overlapped I/O. Waited for
+      // in slices so a cancel is not held up for the whole transfer.
+      if (WaitForOverlappedWithCancel(&overlapped, &written)) {
+        result = TRUE;
+        error = ERROR_SUCCESS;
       } else {
-        // Real error (not pending)
-        std::ostringstream oss;
-        oss << "WriteAtOffset: WriteFile failed, offset=" << (offset + bytes_written)
-            << ", chunk_size=" << chunk_size << ", error=" << error;
-        Log(oss.str());
-        CloseHandle(overlapped.hEvent);
-        
-        // Handle specific Windows errors
-        if (error == ERROR_ACCESS_DENIED) {
-          Log("WriteAtOffset: Access denied - volume may be locked or protected");
-          return FileError::kWriteError;
-        } else if (error == ERROR_DISK_FULL) {
-          Log("WriteAtOffset: Disk full");
-          return FileError::kWriteError;
-        } else if (error == ERROR_WRITE_PROTECT) {
-          Log("WriteAtOffset: Write protected");
-          return FileError::kWriteError;
-        } else if (error == ERROR_SECTOR_NOT_FOUND || error == ERROR_CRC) {
-          Log("WriteAtOffset: Media error detected");
-          return FileError::kWriteError;
-        }
-        
-        // For other errors, try to retry
-        if (retry_count < max_retries) {
-          retry_count++;
-          std::ostringstream oss2;
-          oss2 << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
-          Log(oss2.str());
-          Sleep(100 * retry_count);
-          continue;
-        }
-        
-        return FileError::kWriteError;
+        error = GetLastError();
       }
     }
-    
+
+    // Both routes join here, so an injected failure reaches the branches
+    // below whichever way the device answered -- which on a scratch file is
+    // always the pending one.
+    ApplyWriteFaultInjection(result, error);
+
+    if (!result) {
+      CloseHandle(overlapped.hEvent);
+
+      // Recorded, because this is what the message the user sees is built
+      // from. Left unset, ClassifyLastWriteError() answers from whatever was
+      // stored last -- an open several steps back -- so a write-protected
+      // card could be reported as a permission problem, or as nothing at all.
+      last_error_code_ = static_cast<int>(error);
+
+      if (cancelled_.load() || error == ERROR_OPERATION_ABORTED) {
+        return FileError::kCancelled;
+      }
+
+      std::ostringstream oss;
+      oss << "WriteAtOffset: " << (pending ? "completion" : "WriteFile")
+          << " failed, offset=" << (offset + bytes_written)
+          << ", chunk_size=" << chunk_size << ", error=" << error;
+      Log(oss.str());
+
+      // A full disk, a write-protected card and a bad sector all answer the
+      // same way next time. Retrying costs the user the wait and gives them
+      // the same failure, and on a card that is going it is three more
+      // attempts at a sector that is already failing.
+      if (!WriteErrorIsTransient(error)) {
+        return FileError::kWriteError;
+      }
+
+      if (retry_count < max_retries) {
+        retry_count++;
+        std::ostringstream retrying;
+        retrying << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
+        Log(retrying.str());
+        Sleep(100 * retry_count);
+        continue;
+      }
+
+      return FileError::kWriteError;
+    }
+
     CloseHandle(overlapped.hEvent);
-    
+
     if (written == 0) {
       Log("WriteAtOffset: WriteFile returned 0 bytes written");
       
@@ -684,7 +791,7 @@ FileError WindowsFileOperations::Close() {
   using_direct_io_ = false;
   // Don't reset direct_io_info_ here - it's needed for post-operation diagnostics
   // and is properly reset at the start of OpenDevice() when opening a new device
-  async_write_offset_ = 0;
+  write_offset_ = 0;
   current_file_position_ = 0;
   
   // Clean up IOCP - it's tied to the file handle
@@ -771,9 +878,26 @@ FileError WindowsFileOperations::SetDirectIOEnabled(bool enabled) {
   return FileError::kSuccess;
 }
 
-FileError WindowsFileOperations::LockVolume() {
+FileError WindowsFileOperations::LockVolume(const std::string& path) {
   if (!IsOpen()) {
     return FileError::kOpenError;
+  }
+
+  // An ordinary filesystem path has no volume to lock. The distinction is worth
+  // drawing here because the error a regular file answers FSCTL_LOCK_VOLUME
+  // with is ERROR_ACCESS_DENIED, not the ERROR_INVALID_FUNCTION the fast path
+  // below looks for -- so a write to a file ran the entire geometric backoff,
+  // 12.7 seconds, failing to lock something that was never a volume.
+  //
+  // That is longer than the ten seconds ImageWriter's destructor allows a write
+  // to stop in, so a cancelled write could not meet its own deadline and got
+  // terminate()d instead. Only device-namespace paths reach the retry loop:
+  // this is called for volumes such as \\.\E:, never for
+  // physical drives, which the caller excludes.
+  const bool deviceNamespace = path.rfind("\\\\.\\", 0) == 0 ||
+                               path.rfind("\\\\?\\", 0) == 0;
+  if (!deviceNamespace) {
+    return FileError::kSuccess;
   }
 
   // Retry with geometric backoff — the volume may be temporarily held by
@@ -801,7 +925,18 @@ FileError WindowsFileOperations::LockVolume() {
     if (attempt < kMaxRetries) {
       Log("FSCTL_LOCK_VOLUME failed (error " + std::to_string(error) +
           "), retrying in " + std::to_string(delayMs) + "ms");
-      Sleep(delayMs);
+      // Slept in slices, and checked between them, because this loop is the one
+      // place a write can sit for seconds at a time with nothing else to do.
+      // A single Sleep(6400) ignores the cancel flag for its whole duration,
+      // which is how a cancelled write came to miss the destructor's deadline.
+      constexpr int kCancelPollMs = 50;
+      for (int slept = 0; slept < delayMs; slept += kCancelPollMs) {
+        if (cancelled_.load()) {
+          Log("FSCTL_LOCK_VOLUME retry abandoned: cancelled");
+          return FileError::kCancelled;
+        }
+        Sleep(kCancelPollMs);
+      }
       delayMs *= 2;
     }
   }
@@ -878,14 +1013,16 @@ FileError WindowsFileOperations::WriteSequential(const std::uint8_t* data, std::
       return FileError::kWriteError;
     }
     
-    // Set the file offset in the OVERLAPPED structure
+    // Where the async queue had got to, not where the last read or Seek() left
+    // the position. A fallback write follows async writes and has to continue
+    // past them.
     LARGE_INTEGER offset;
-    offset.QuadPart = static_cast<LONGLONG>(current_file_position_ + total_written);
+    offset.QuadPart = static_cast<LONGLONG>(write_offset_ + total_written);
     overlapped.Offset = offset.LowPart;
     overlapped.OffsetHigh = offset.HighPart;
-    
+
     DWORD bytes_written = 0;
-    BOOL result = WriteFile(handle_, 
+    BOOL result = WriteFile(handle_,
                            data + total_written, 
                            static_cast<DWORD>(size - total_written), 
                            &bytes_written, 
@@ -914,13 +1051,7 @@ FileError WindowsFileOperations::WriteSequential(const std::uint8_t* data, std::
     total_written += bytes_written;
   }
 
-  // Update our tracked file position
-  current_file_position_ += total_written;
-  
-  // Update async_write_offset_ so Tell() returns correct position
-  // This is needed because Seek() sets async_write_offset_, and Tell()
-  // uses it if > 0. Without this update, Tell() would return a stale value.
-  async_write_offset_ += total_written;
+  write_offset_ += total_written;
 
   last_error_code_ = 0;
   return FileError::kSuccess;
@@ -1004,7 +1135,7 @@ FileError WindowsFileOperations::Seek(std::uint64_t position) {
   // reliable for subsequent synchronous operations on overlapped handles.
   
   // Update our tracked positions for both async writes and sync reads
-  async_write_offset_ = position;
+  write_offset_ = position;
   current_file_position_ = position;
   
   return FileError::kSuccess;
@@ -1017,8 +1148,8 @@ std::uint64_t WindowsFileOperations::Tell() const {
 
   // If async I/O has been used, return the async write offset
   // (overlapped I/O uses explicit offsets, not the file pointer)
-  if (async_write_offset_ > 0) {
-    return async_write_offset_;
+  if (write_offset_ > 0) {
+    return write_offset_;
   }
 
   LARGE_INTEGER zero = {};
@@ -1147,46 +1278,159 @@ int WindowsFileOperations::GetLastErrorCode() const {
   return last_error_code_;
 }
 
-WriteErrorClass WindowsFileOperations::ClassifyLastWriteError() const {
-  switch (last_error_code_) {
-    case ERROR_ACCESS_DENIED: {
-      // Probe Windows Defender Controlled Folder Access. If enabled, surface
-      // the dedicated category so the UI can point the user at the allow-list.
-      HKEY key;
-      LONG rc = RegOpenKeyExA(
-          HKEY_LOCAL_MACHINE,
-          "SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
-          0,
-          KEY_READ | KEY_WOW64_64KEY,
-          &key);
-      if (rc == ERROR_SUCCESS) {
-        DWORD value = 0;
-        DWORD size = sizeof(value);
-        DWORD type = 0;
-        rc = RegQueryValueExA(key, "EnableControlledFolderAccess", nullptr, &type,
-                              reinterpret_cast<LPBYTE>(&value), &size);
-        RegCloseKey(key);
-        if (rc == ERROR_SUCCESS && type == REG_DWORD && value == 1) {
-          return WriteErrorClass::kAccessDeniedControlledFolderAccess;
-        }
-      }
-      return WriteErrorClass::kAccessDenied;
-    }
-    case ERROR_DISK_FULL:
-      return WriteErrorClass::kDiskFull;
-    case ERROR_WRITE_PROTECT:
-      return WriteErrorClass::kWriteProtected;
-    case ERROR_SECTOR_NOT_FOUND:
-    case ERROR_CRC:
-      return WriteErrorClass::kMediaError;
-    case ERROR_INVALID_PARAMETER:
-      return WriteErrorClass::kInvalidParameter;
-    case ERROR_IO_DEVICE:
-      return WriteErrorClass::kIoDeviceError;
-    default:
-      return WriteErrorClass::kUnknown;
-  }
+namespace {
+
+// Where Defender records the Controlled Folder Access setting, and what the
+// values mean. Documented at
+// https://learn.microsoft.com/en-us/defender-endpoint/controlled-folder-access-configure
+//
+//   0  disabled
+//   1  enabled                       blocks protected folders and disk sectors
+//   2  audit mode                    logs, blocks nothing
+//   3  block disk modification only  blocks disk sectors
+//   4  audit disk modification only  logs disk-sector writes, blocks nothing
+constexpr const char *kCfaKey =
+    "SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\"
+    "Controlled Folder Access";
+constexpr const char *kCfaValue = "EnableControlledFolderAccess";
+
+// Whether a mode stops this application writing to a disk.
+//
+// Imager writes raw sectors rather than files in Documents, so the mode that
+// matters as much as "enabled" is "block disk modification only" -- which is
+// aimed squarely at what a disk imager does, and was read as "not enabled"
+// here. A user in that mode was told plain access denied and sent looking for
+// a file permission that was never the problem.
+//
+// The two audit modes log and allow, so a write that failed under one of them
+// failed for some other reason and must not be blamed on Defender.
+bool cfaModeBlocksDiskWrites(DWORD mode)
+{
+    return mode == 1 || mode == 3;
 }
+
+// Where the setting is read from.
+//
+// A test cannot write the real one: it lives under HKEY_LOCAL_MACHINE, it is
+// machine security policy, and turning Controlled Folder Access on would
+// block whatever else the machine is doing. Pointed somewhere writable
+// instead, so the reading -- the missing key, the missing value, the wrong
+// type, each mode -- can be exercised for real rather than assumed.
+struct CfaLocation {
+    HKEY root = HKEY_LOCAL_MACHINE;
+    std::string subkey = kCfaKey;
+};
+CfaLocation g_cfaLocation;
+
+// The mode Defender is in, or nothing where the setting is absent -- which is
+// every machine that has never turned it on.
+std::optional<DWORD> readControlledFolderAccessMode()
+{
+    HKEY key = nullptr;
+    if (RegOpenKeyExA(g_cfaLocation.root, g_cfaLocation.subkey.c_str(), 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+        return std::nullopt;
+
+    DWORD value = 0;
+    DWORD size = sizeof(value);
+    DWORD type = 0;
+    const LONG rc = RegQueryValueExA(key, kCfaValue, nullptr, &type,
+                                     reinterpret_cast<LPBYTE>(&value), &size);
+    RegCloseKey(key);
+
+    if (rc != ERROR_SUCCESS || type != REG_DWORD)
+        return std::nullopt;
+    return value;
+}
+
+// What a failed write means, given the error and whether Defender is standing
+// in the way. Separated from the registry read so every answer can be checked
+// without a machine configured each way -- and there are five ways.
+WriteErrorClass classifyWriteError(DWORD error, bool defenderBlocksDiskWrites)
+{
+    switch (error) {
+        case ERROR_ACCESS_DENIED:
+            // The same error code either way. Telling them apart is the whole
+            // point: one is answered by adding Imager to an allow-list, the
+            // other by looking at who owns the device.
+            return defenderBlocksDiskWrites
+                       ? WriteErrorClass::kAccessDeniedControlledFolderAccess
+                       : WriteErrorClass::kAccessDenied;
+        case ERROR_DISK_FULL:
+            return WriteErrorClass::kDiskFull;
+        case ERROR_WRITE_PROTECT:
+            return WriteErrorClass::kWriteProtected;
+        case ERROR_SECTOR_NOT_FOUND:
+        case ERROR_CRC:
+            return WriteErrorClass::kMediaError;
+        case ERROR_INVALID_PARAMETER:
+            return WriteErrorClass::kInvalidParameter;
+        case ERROR_IO_DEVICE:
+            return WriteErrorClass::kIoDeviceError;
+        default:
+            return WriteErrorClass::kUnknown;
+    }
+}
+
+} // namespace
+
+#ifdef FILEOPS_ENABLE_TEST_API
+// Controlled Folder Access cannot be turned on from a test -- it is machine
+// policy, and turning it on would block whatever else the machine is doing.
+// So the decision is reached directly instead, for every mode Defender has.
+namespace WindowsWriteErrorTesting {
+
+bool cfaModeBlocks(unsigned long mode) { return cfaModeBlocksDiskWrites(mode); }
+
+int classify(unsigned long error, bool defenderBlocks)
+{
+    return static_cast<int>(classifyWriteError(error, defenderBlocks));
+}
+
+// What this machine is actually set to, so a case can say which answer it is
+// entitled to expect rather than assuming Defender is off.
+bool defenderBlocksDiskWritesHere()
+{
+    const auto mode = readControlledFolderAccessMode();
+    return mode.has_value() && cfaModeBlocksDiskWrites(*mode);
+}
+
+// Read the setting from somewhere a test is allowed to write. Passing a null
+// subkey puts it back to the real one.
+void readCfaFrom(void *root, const char *subkey)
+{
+    if (!subkey) {
+        g_cfaLocation = CfaLocation{};
+        return;
+    }
+    g_cfaLocation.root = static_cast<HKEY>(root);
+    g_cfaLocation.subkey = subkey;
+}
+
+// The mode as the probe reads it, so a case can check the reading and not
+// only the deciding. -1 where there is no usable value.
+long cfaModeRead()
+{
+    const auto mode = readControlledFolderAccessMode();
+    return mode.has_value() ? static_cast<long>(*mode) : -1;
+}
+
+} // namespace WindowsWriteErrorTesting
+#endif
+
+WriteErrorClass WindowsFileOperations::ClassifyLastWriteError() const {
+    const DWORD error = static_cast<DWORD>(last_error_code_);
+
+    // Asked only where the answer could differ. Every other error means
+    // something Defender has no part in, and the registry read is not free.
+    bool defenderBlocks = false;
+    if (error == ERROR_ACCESS_DENIED) {
+        const auto mode = readControlledFolderAccessMode();
+        defenderBlocks = mode.has_value() && cfaModeBlocksDiskWrites(*mode);
+    }
+    return classifyWriteError(error, defenderBlocks);
+}
+
 
 // ============= Async I/O Implementation (using IOCP) =============
 
@@ -1225,7 +1469,7 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   // If async not enabled, IOCP not initialized, or in sync fallback mode, use sync
   if (async_queue_depth_ <= 1 || iocp_ == INVALID_HANDLE_VALUE || sync_fallback_mode_) {
     FileError result = WriteSequential(data, size);
-    // Note: WriteSequential already updates async_write_offset_
+    // Note: WriteSequential already updates write_offset_
     if (callback) callback(result, result == FileError::kSuccess ? size : 0);
     return result;
   }
@@ -1266,11 +1510,11 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   
   // Set up the offset for this write
   LARGE_INTEGER offset;
-  offset.QuadPart = static_cast<LONGLONG>(async_write_offset_);
+  offset.QuadPart = static_cast<LONGLONG>(write_offset_);
   ctx->overlapped.Offset = offset.LowPart;
   ctx->overlapped.OffsetHigh = offset.HighPart;
   
-  async_write_offset_ += size;
+  write_offset_ += size;
   
   // Track the pending context
   {
@@ -1298,7 +1542,13 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
         pending_contexts_.erase(&ctx->overlapped);
       }
       delete ctx;
-      
+
+      // Give the offset back. Nothing was written, and this write held the
+      // highest one assigned -- only this thread queues writes, so no later
+      // write has taken one. Keeping it would leave a hole the size of this
+      // buffer when the caller retries the write synchronously.
+      write_offset_ -= size;
+
       std::ostringstream oss;
       oss << "Async WriteFile failed, error: " << error;
       Log(oss.str());
@@ -1454,7 +1704,10 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
         &completion_key,
         &overlapped,
         timeout);
-    
+
+    // Captured at the source, for the reason given in ProcessCompletions().
+    DWORD completion_error = success ? ERROR_SUCCESS : GetLastError();
+
     if (overlapped == nullptr) {
       // Timeout with no completion - check if we should keep waiting
       if (pending_writes_.load() > 0 && !cancelled_.load()) {
@@ -1487,15 +1740,22 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
     write_latency_stats_.recordCompletion(ctx->submit_time);
     
     FileError error = FileError::kSuccess;
+
+    ApplyWriteFaultInjection(success, completion_error);
+
     if (!success) {
-      DWORD err = GetLastError();
+      DWORD err = completion_error;
       if (err == ERROR_OPERATION_ABORTED) {
         error = FileError::kCancelled;
+      } else if (ReissueAfterTransientFailure(ctx, err)) {
+        // Back in flight, keeping its slot in pending_writes_ and its buffer.
+        continue;
       } else {
         error = FileError::kWriteError;
         if (first_async_error_ == FileError::kSuccess) {
           first_async_error_ = error;
         }
+        Log("Async write failed during drain, error: " + std::to_string(err));
       }
     } else if (bytes_transferred != ctx->size) {
       error = FileError::kWriteError;
@@ -1664,10 +1924,10 @@ FileError WindowsFileOperations::AttemptSyncFallback() {
     return FileError::kSyncError;
   }
   
-  // Update async_write_offset_ to reflect completed writes
+  // Update write_offset_ to reflect completed writes
   if (!pendingWrites.empty()) {
     const auto& lastWrite = pendingWrites.back();
-    async_write_offset_ = lastWrite.offset + lastWrite.size;
+    write_offset_ = lastWrite.offset + lastWrite.size;
   }
   
   // Reset cancelled flag so future operations can proceed (in sync mode)

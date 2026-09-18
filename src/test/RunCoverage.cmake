@@ -456,9 +456,11 @@ else()
         # without it. Nothing in our own tree provokes it now.
         --gcov-ignore-errors no_working_dir_found)
 
-    set(_app_object_dir "${COVERAGE_BINARY_DIR}/CMakeFiles/rpi-imager.dir")
+    # Every binary a test drives as a subprocess rather than links. Their
+    # counters are real, and until they are read the sources reachable only
+    # through them read as never run.
+    set(_subprocess_targets rpi-imager rpi-imager-callback-relay)
     set(_library_tracefile "${COVERAGE_BINARY_DIR}/coverage-library.json")
-    set(_app_tracefile "${COVERAGE_BINARY_DIR}/coverage-app.json")
     set(_tracefile_args -a "${_library_tracefile}")
 
     # Pass one: everything the test binaries link, which is the whole suite's
@@ -469,6 +471,7 @@ else()
         COMMAND "${GCOVR_EXECUTABLE}"
                 ${_gcovr_parse_args}
                 --gcov-exclude-directories "rpi-imager\\.dir"
+                --gcov-exclude-directories "rpi-imager-callback-relay\\.dir"
                 "${COVERAGE_BINARY_DIR}"
                 --json "${_library_tracefile}"
         WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
@@ -478,28 +481,34 @@ else()
         message(FATAL_ERROR "Coverage: gcovr failed reading the test objects (${_gcovr_result})")
     endif()
 
-    # Pass two: the shipping binary, which cli_process_test drives as a
-    # subprocess. Skipped when it was never run, so a build that did not
-    # produce it does not fail the report.
-    file(GLOB_RECURSE _app_gcda "${_app_object_dir}/*.gcda")
-    if(_app_gcda)
-        list(LENGTH _app_gcda _app_gcda_count)
-        message(STATUS "Coverage: reading ${_app_gcda_count} object(s) from the shipping binary")
+    # Pass two: the binaries a test starts rather than links. cli_process_test
+    # drives the shipping binary, the only way to reach Cli::run();
+    # callback_relay_process_test drives the relay, whose whole file is a
+    # WIN32 executable nothing can link. Each is skipped when it was never
+    # run, so a build that did not produce one does not fail the report.
+    foreach(_target IN LISTS _subprocess_targets)
+        set(_object_dir "${COVERAGE_BINARY_DIR}/CMakeFiles/${_target}.dir")
+        set(_tracefile "${COVERAGE_BINARY_DIR}/coverage-${_target}.json")
+        file(GLOB_RECURSE _target_gcda "${_object_dir}/*.gcda")
+        if(NOT _target_gcda)
+            message(STATUS "Coverage: ${_target} was not run; its objects are not reported")
+            continue()
+        endif()
+        list(LENGTH _target_gcda _target_gcda_count)
+        message(STATUS "Coverage: reading ${_target_gcda_count} object(s) from ${_target}")
         execute_process(
             COMMAND "${GCOVR_EXECUTABLE}"
                     ${_gcovr_parse_args}
-                    "${_app_object_dir}"
-                    --json "${_app_tracefile}"
+                    "${_object_dir}"
+                    --json "${_tracefile}"
             WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
             RESULT_VARIABLE _gcovr_result
         )
         if(NOT _gcovr_result EQUAL 0)
-            message(FATAL_ERROR "Coverage: gcovr failed reading the shipping binary (${_gcovr_result})")
+            message(FATAL_ERROR "Coverage: gcovr failed reading ${_target} (${_gcovr_result})")
         endif()
-        list(APPEND _tracefile_args -a "${_app_tracefile}")
-    else()
-        message(STATUS "Coverage: the shipping binary was not run; reporting the test objects alone")
-    endif()
+        list(APPEND _tracefile_args -a "${_tracefile}")
+    endforeach()
 
     message(STATUS "Coverage: rendering report")
     execute_process(

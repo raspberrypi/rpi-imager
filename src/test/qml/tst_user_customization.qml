@@ -409,4 +409,80 @@ TestCase {
         tryVerify(function () { return !check.checked }, 3000,
                   "the second showing was not agreed to")
     }
+
+    // ── What comes back from a previous session ───────────────────────
+
+    // Builds the step again with a username already in the settings, which
+    // is the only way to reach the restore path: init() creates the step
+    // before a case can put anything there.
+    function rebuildWith(saved) {
+        step.destroy()
+        step = null
+        fakeContainer.customizationSettings = ({ sshUserName: saved })
+        fakeContainer.userConfigured = false
+        step = stepComponent.createObject(testCase)
+        verify(step, "the step was rebuilt")
+        return step
+    }
+
+    function usernameNotice() {
+        return findChild(step, "usernameRejectedNotice")
+    }
+
+    function test_a_saved_username_that_still_passes_is_filled_in() {
+        rebuildWith("pi")
+
+        compare(field("userNameField").text, "pi")
+        verify(!usernameNotice().visible, "with nothing to complain about")
+    }
+
+    function test_a_saved_username_the_rules_now_refuse_is_not_filled_in() {
+        // Assigning text does not run the validator -- Qt only clears
+        // acceptableInput, which nothing here reads -- so a username saved
+        // by an older version, edited into the settings file, or left behind
+        // by a tightening of the rules came back and was written out again.
+        // It becomes the account name in firstrun.sh, which runs as root.
+        rebuildWith("Root User")
+
+        compare(field("userNameField").text, "")
+        verify(usernameNotice().visible, "the step says what happened")
+        verify(usernameNotice().text.indexOf("Root User") >= 0,
+               "and names the value it refused: " + usernameNotice().text)
+    }
+
+    function test_a_refused_username_is_not_written_back_out() {
+        rebuildWith("0-starts-with-a-digit")
+
+        step.nextClicked()
+
+        verify(fakeContainer.customizationSettings.sshUserName === undefined
+                   || fakeContainer.customizationSettings.sshUserName === "",
+               "the bad value did not survive the step")
+    }
+
+    function test_what_is_quoted_back_is_printable_and_bounded() {
+        rebuildWith("bad\u0001\u0002name\u007f" + "y".repeat(200))
+
+        verify(usernameNotice().visible, "the step says what happened")
+        var shown = usernameNotice().text
+        verify(shown.length < 200, "the quote is bounded (" + shown.length + ")")
+        for (var i = 0; i < shown.length; ++i) {
+            var c = shown.charCodeAt(i)
+            verify(c >= 0x20 && c !== 0x7F, "printable at " + i + " (" + c + ")")
+        }
+    }
+
+    function test_what_is_quoted_back_is_quoted_rather_than_run() {
+        // The value comes out of the settings file, which a user can write by
+        // hand and an installer can write for them. Quoted back as rich text,
+        // an <img> in it is fetched the moment the notice appears -- the
+        // settings file calling home. The warning is the proof.
+        failOnWarning(/rpi-imager-notice-beacon/)
+        rebuildWith("<img src=\"rpi-imager-notice-beacon.png\"/>")
+
+        verify(usernameNotice().visible, "the step says what happened")
+        compare(usernameNotice().textFormat, Text.PlainText)
+        verify(usernameNotice().text.indexOf("<img") >= 0,
+               "and shows the characters: " + usernameNotice().text)
+    }
 }

@@ -61,6 +61,7 @@ WizardStepBase {
             visible: root.orgModeEnabled
 
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 font.pointSize: Style.fontSizeDescription
@@ -310,8 +311,10 @@ WizardStepBase {
             }
         }
 
-        // Listen for token cleared signal (when write completes)
-        function onConnectTokenCleared() {
+        // The token itself is gone either way, so the fields it filled are
+        // cleared for both reasons. Whether the step counts as configured is
+        // the container's to decide.
+        function onConnectTokenCleared(configurationInvalidated) {
             // Reset all Pi Connect customization state
             root.connectTokenReceived = false
             root.connectToken = ""
@@ -320,13 +323,13 @@ WizardStepBase {
             root.countdownSeconds = 25
             countdownTimer.stop()
             useTokenPill.checked = false
-            root.wizardContainer.piConnectEnabled = false
+            delete root.wizardContainer.customizationSettings.piConnectEnabled
+            if (configurationInvalidated)
+                root.wizardContainer.piConnectEnabled = false
             // Clear the text field
             if (fieldConnectToken) {
                 fieldConnectToken.text = ""
             }
-            // Clear from customization settings
-            delete root.wizardContainer.customizationSettings.piConnectEnabled
             // Rebuild focus order
             root.rebuildFocusOrder()
         }

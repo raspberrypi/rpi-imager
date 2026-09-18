@@ -158,6 +158,19 @@ class DiskFormatter {
       const std::string& file_path,
       std::uint64_t file_size_bytes);
 
+  // A file holding a FAT32 filesystem and nothing else -- no partition
+  // table, the filesystem starting at sector nought.
+  //
+  // This is the shape boot.img has: mkfs.vfat over a whole file is what the
+  // POSIX hosts produce, and what the bootloader and mtools both expect. The
+  // Windows build used to ask diskpart to attach the file as a virtual disk
+  // and partition it, which cannot work -- diskpart's `select vdisk` wants a
+  // real VHD with the footer that makes it one, not a file of the right
+  // length.
+  Result<void> FormatFilesystemOnly(
+      const std::string& file_path,
+      std::uint64_t file_size_bytes);
+
  private:
   static constexpr std::uint32_t kSectorSize = 512;
   static constexpr std::uint32_t kPartitionStartSector = 8192;  // 4MB offset

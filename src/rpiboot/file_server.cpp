@@ -237,8 +237,12 @@ bool FileServer::run(IUsbTransport& transport,
             return true;
         }
 
+        // What the device asked for, and whether it got it, only ever reached
+        // the progress callback -- so a bootstrap that stalled left a log
+        // saying nothing about which file it stalled on.
         switch (msg.command) {
         case FileCommand::GetFileSize:
+            qDebug() << "rpiboot: size?" << QString::fromStdString(filename);
             if (progress)
                 progress(filesServed, 0, "Querying: " + filename);
 
@@ -248,6 +252,7 @@ bool FileServer::run(IUsbTransport& transport,
 
         case FileCommand::ReadFile:
             ++filesServed;
+            qDebug() << "rpiboot: send " << QString::fromStdString(filename);
             if (progress)
                 progress(filesServed, 0, "Sending: " + filename);
 
@@ -256,6 +261,7 @@ bool FileServer::run(IUsbTransport& transport,
             break;
 
         case FileCommand::Done:
+            qDebug() << "rpiboot: device signalled done after" << filesServed << "file(s)";
             if (progress)
                 progress(filesServed, filesServed, "Device boot complete");
             return true;
@@ -280,6 +286,12 @@ bool FileServer::handleGetFileSize(IUsbTransport& transport,
     std::vector<uint8_t> data;
     if (!isMetadata) {
         data = resolver(filename);
+        // Answering "zero bytes" is how a file we do not have is reported, and
+        // the device simply moves on -- so the run fails somewhere later with
+        // nothing pointing back here.
+        if (data.empty())
+            qWarning() << "rpiboot: no such file, answering 0 bytes:"
+                       << QString::fromStdString(filename);
     }
 
     // Send the file size via a zero-data vendor control transfer.
@@ -529,8 +541,11 @@ std::vector<uint8_t> FileServer::readFileFromDisk(const std::filesystem::path& d
     if (ec)
         return {};
 
+    // Ask the path itself whether the first component is "..", rather than
+    // matching a prefix on the native string: that string is a wstring on
+    // Windows, and a directory genuinely named "..boot" is not an escape.
     const auto relative = resolved.lexically_relative(base);
-    if (relative.empty() || relative.native().rfind("..", 0) == 0) {
+    if (relative.empty() || *relative.begin() == std::filesystem::path("..")) {
         qWarning() << "rpiboot: refusing file request that escapes the firmware"
                       " directory:" << QString::fromStdString(filename);
         return {};

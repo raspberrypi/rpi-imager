@@ -7,6 +7,8 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <string>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <QtGlobal>
@@ -14,7 +16,13 @@
 #include <QUrl>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QElapsedTimer>
 #include "platformquirks.h"
+
+#ifdef Q_OS_WIN
+#include "vhd_device.h"
+#include <windows.h>
+#endif
 
 #include <cmath>
 
@@ -106,7 +114,118 @@ TEST_CASE("Path transformation roundtrip", "[platformquirks][path]") {
 namespace PlatformQuirks {
 namespace TestAPI {
     int parseDeviceNumber(const QString& device);
+    QByteArray freeTypePlatformArgs();
+    QString fontEngineFromPlatformArgs(const QByteArray &platformArgs);
+    bool nvidiaAdapterName(const std::string &deviceName);
+    bool queryNvidiaPresent();
 }
+}
+
+// ── the font engine the UI is drawn with ────────────────────────────────────
+//
+// Qt 6.11 defaults to DirectWrite, which corrupts uppercase button text on
+// some systems (#1648), so the platform string is rewritten to ask for
+// FreeType before QGuiApplication reads it. The rewrite has to leave whatever
+// the user already put in QT_QPA_PLATFORM intact, and none of it was covered:
+// a mistake here is not a crash but a window full of unreadable buttons.
+
+namespace {
+
+// Sets QT_QPA_PLATFORM for the duration, and puts back what was there.
+class PlatformEnv
+{
+public:
+    explicit PlatformEnv(const QByteArray &value) : _had(qEnvironmentVariableIsSet(kName))
+    {
+        if (_had)
+            _previous = qgetenv(kName);
+        if (value.isNull())
+            qunsetenv(kName);
+        else
+            qputenv(kName, value);
+    }
+    ~PlatformEnv()
+    {
+        if (_had)
+            qputenv(kName, _previous);
+        else
+            qunsetenv(kName);
+    }
+    PlatformEnv(const PlatformEnv &) = delete;
+    PlatformEnv &operator=(const PlatformEnv &) = delete;
+
+private:
+    static constexpr const char *kName = "QT_QPA_PLATFORM";
+    bool _had;
+    QByteArray _previous;
+};
+
+QByteArray argsFor(const QByteArray &platform)
+{
+    PlatformEnv env(platform);
+    return PlatformQuirks::TestAPI::freeTypePlatformArgs();
+}
+
+} // namespace
+
+TEST_CASE("With nothing set, the windows plugin is asked for FreeType",
+          "[platformquirks][windows][font]")
+{
+    CHECK(argsFor(QByteArray()) == "windows:fontengine=freetype");
+}
+
+TEST_CASE("A platform already asking for FreeType is left alone",
+          "[platformquirks][windows][font]")
+{
+    CHECK(argsFor("windows:fontengine=freetype") == "windows:fontengine=freetype");
+}
+
+TEST_CASE("Another font engine is replaced, not appended to",
+          "[platformquirks][windows][font]")
+{
+    // Two fontengine= settings would leave which one wins to the plugin.
+    const QByteArray got = argsFor("windows:fontengine=gdi");
+    INFO("got: " << got.toStdString());
+    CHECK(got == "windows:fontengine=freetype");
+    CHECK(got.count("fontengine=") == 1);
+}
+
+TEST_CASE("Other platform options are kept when the engine is replaced",
+          "[platformquirks][windows][font]")
+{
+    const QByteArray got = argsFor("windows:fontengine=gdi,dpiawareness=0");
+    INFO("got: " << got.toStdString());
+    CHECK(got.contains("dpiawareness=0"));
+    CHECK(got.contains("fontengine=freetype"));
+    CHECK(got.count("fontengine=") == 1);
+}
+
+TEST_CASE("A bare plugin name gains the option separator",
+          "[platformquirks][windows][font]")
+{
+    CHECK(argsFor("windows") == "windows:fontengine=freetype");
+}
+
+TEST_CASE("A platform naming only options is given the windows plugin",
+          "[platformquirks][windows][font]")
+{
+    const QByteArray got = argsFor("dpiawareness=0");
+    INFO("got: " << got.toStdString());
+    CHECK(got.startsWith("windows:"));
+    CHECK(got.contains("fontengine=freetype"));
+}
+
+TEST_CASE("The engine actually in force is reported back",
+          "[platformquirks][windows][font]")
+{
+    using PlatformQuirks::TestAPI::fontEngineFromPlatformArgs;
+    CHECK(fontEngineFromPlatformArgs("windows:fontengine=freetype") == QStringLiteral("freetype"));
+    CHECK(fontEngineFromPlatformArgs("windows:fontengine=gdi,dpiawareness=0")
+          == QStringLiteral("gdi"));
+    // nodirectwrite is the older spelling of the same request.
+    CHECK(fontEngineFromPlatformArgs("windows:nodirectwrite") == QStringLiteral("gdi"));
+    // And with nothing said, Qt picks DirectWrite -- the case #1648 is about.
+    CHECK(fontEngineFromPlatformArgs("windows") == QStringLiteral("directwrite (default)"));
 }
 
 TEST_CASE("Windows parseDeviceNumber parses PhysicalDrive paths", "[platformquirks][windows]") {
@@ -279,6 +398,40 @@ TEST_CASE("ejectDisk handles invalid device paths", "[platformquirks][disk]") {
     result = PlatformQuirks::ejectDisk("/dev/nonexistent_device_12345");
     CHECK(result == PlatformQuirks::DiskResult::InvalidDrive);
 }
+
+#ifdef Q_OS_WIN
+namespace {
+// Whether Windows still has a disk at this path.
+bool physicalDriveIsThere(const QString& path)
+{
+    HANDLE h = CreateFileW(reinterpret_cast<LPCWSTR>(path.utf16()),
+                           0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                           nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
+    CloseHandle(h);
+    return true;
+}
+} // namespace
+
+TEST_CASE("Ejecting a virtual disk detaches it", "[platformquirks][disk][vhd]") {
+    // A virtual disk is not removable media, so the eject IOCTL the card path
+    // uses has nothing to act on. Dismounting the volumes and stopping there
+    // leaves the disk attached with nothing mounted: it stays listed as a
+    // drive, and the file behind it cannot be attached again -- which reads
+    // to the user as an image that has been corrupted.
+    rpi_test::VhdDevice vhd(64);
+    if (!vhd.valid())
+        SKIP("attaching a virtual disk needs elevation: "
+             + vhd.reason().toStdString());
+
+    const QString path = vhd.path();
+    REQUIRE(physicalDriveIsThere(path));
+
+    CHECK(PlatformQuirks::ejectDisk(path) == PlatformQuirks::DiskResult::Success);
+    CHECK_FALSE(physicalDriveIsThere(path));
+}
+#endif
 
 // ============================================================================
 // Linux-specific tests
@@ -2415,7 +2568,14 @@ TEST_CASE("Run without elevation, nothing is repointed",
     INFO(r.out.toStdString());
     CHECK(r.value(QStringLiteral("AFTER_HOME"))
           == r.value(QStringLiteral("BEFORE_HOME")));
-    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME")).isEmpty());
+
+    // Unchanged, not empty. The probe inherits this process's environment,
+    // and the suite now sets XDG_CONFIG_HOME so that a test run writes its
+    // settings into the build tree rather than the developer's own. Asserting
+    // emptiness was really asserting something about the harness; what the
+    // case is named for is that an unelevated run repoints nothing.
+    CHECK(r.value(QStringLiteral("AFTER_XDG_CONFIG_HOME"))
+          == qEnvironmentVariable("XDG_CONFIG_HOME"));
 }
 #endif // ELEVATION_PROBE_BINARY
 #endif // Q_OS_LINUX
@@ -5160,24 +5320,22 @@ TEST_CASE("The URL stays a single argument", "[platformquirks][openurl]")
 
 namespace {
 
-// A stand-in program that records its arguments, one per line, and exits.
-bool writeArgumentRecorder(const QString& path, const QString& logPath,
-                           int exitCode = 0)
+// The recorder these cases launch: a real executable, built as
+// argument_recorder_probe. It was a shell script, which is unrunnable on
+// Windows, and then briefly a .cmd, which measured cmd.exe rather than the
+// code under test -- cmd splits its own command line, so a URL containing
+// "&id=abc" came back as two arguments whatever launchDetached had done.
+//
+// The log path travels in the environment so that everything on the command
+// line is a value under test.
+QString writeArgumentRecorder(const QString& logPath, int exitCode = 0)
 {
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        return false;
-    f.write("#!/bin/sh\n");
-    // %s and not %%s: QString::arg only replaces %1, so a doubled percent
-    // reaches the shell as a doubled percent and printf writes a literal
-    // "%s" for every argument.
-    f.write(QStringLiteral("for a in \"$@\"; do printf '%s\\n' \"$a\" >> '%1'; done\n")
-                .arg(logPath).toUtf8());
-    f.write(QStringLiteral("exit %1\n").arg(exitCode).toUtf8());
-    f.close();
-    return QFile::setPermissions(path,
-                                 QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                 QFileDevice::ExeOwner);
+    qputenv("RPI_RECORDER_LOG", logPath.toLocal8Bit());
+    if (exitCode != 0)
+        qputenv("RPI_RECORDER_EXIT", QByteArray::number(exitCode));
+    else
+        qunsetenv("RPI_RECORDER_EXIT");
+    return QStringLiteral(ARGUMENT_RECORDER_BINARY);
 }
 
 // What the recorder was told, once it has had a moment to run. The launch is
@@ -5207,13 +5365,13 @@ TEST_CASE("A program that starts is reported as started, with its arguments",
 {
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
-    const QString program = dir.filePath(QStringLiteral("recorder"));
     const QString log = dir.filePath(QStringLiteral("args.txt"));
-    REQUIRE(writeArgumentRecorder(program, log));
+    const QString recorder = writeArgumentRecorder(log);
+    REQUIRE_FALSE(recorder.isEmpty());
 
     const QString url =
         QStringLiteral("https://connect.raspberrypi.com/sign-in?next=%2Fdevices&id=abc");
-    CHECK(PlatformQuirks::launchDetached(program, QStringList() << url));
+    CHECK(PlatformQuirks::launchDetached(recorder, QStringList() << url));
 
     // One argument, whole. Joined into a command line for something else to
     // split again, a URL with an ampersand in it arrives cut in two.
@@ -5230,13 +5388,13 @@ TEST_CASE("Arguments are passed one at a time, not run together",
     // browser a single nonsensical argument.
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
-    const QString program = dir.filePath(QStringLiteral("recorder"));
     const QString log = dir.filePath(QStringLiteral("args.txt"));
-    REQUIRE(writeArgumentRecorder(program, log));
+    const QString recorder = writeArgumentRecorder(log);
+    REQUIRE_FALSE(recorder.isEmpty());
 
     const QStringList args{QStringLiteral("--user"), QStringLiteral("a user with spaces"),
                            QStringLiteral("xdg-open"), QStringLiteral("https://example.invalid/")};
-    CHECK(PlatformQuirks::launchDetached(program, args));
+    CHECK(PlatformQuirks::launchDetached(recorder, args));
 
     const QStringList got = recordedArguments(log);
     REQUIRE(got.size() == args.size());
@@ -5281,6 +5439,14 @@ TEST_CASE("A program that cannot be executed is reported too",
 TEST_CASE("The browser outlives the call and is nobody's child",
           "[platformquirks][launch]")
 {
+#ifdef _WIN32
+    // POSIX end to end: the recorder below is a #!/bin/sh script calling
+    // /bin/sleep, and the claim being tested -- that the grandchild is
+    // reparented to init and leaves nothing to reap -- describes a process
+    // model Windows does not have. CreateProcess leaves no zombie to begin
+    // with, so there is no Windows counterpart to assert.
+    SKIP("the double-fork orphan model is POSIX-only");
+#else
     // Detached means detached: the application must not be waiting on the
     // browser, and must not leave a zombie behind when it exits without
     // reaping one. The double fork is what arranges that, and a browser is
@@ -5317,6 +5483,7 @@ TEST_CASE("The browser outlives the call and is nobody's child",
 
     // It really did run, a second later, with nobody waiting.
     CHECK_FALSE(recordedArguments(log).isEmpty());
+#endif
 }
 
 #ifdef UNMOUNT_PROBE_BINARY
@@ -5684,3 +5851,153 @@ TEST_CASE("The chime falls through to whichever player the machine has",
     }
 }
 #endif  // BEEP_PROBE_BINARY
+
+// ── which adapter gets the software renderer ────────────────────────────────
+//
+// An NVIDIA card gets QSG_RHI_PREFER_SOFTWARE_RENDERER, so a name read wrongly
+// is either a window that does not draw or a machine put on the software
+// renderer for no reason. The names come from the controller as it describes
+// itself, which is why the marketing lines are matched and not just the vendor.
+
+TEST_CASE("NVIDIA adapters are recognised however they name themselves",
+          "[platformquirks][windows][gpu]")
+{
+    using PlatformQuirks::TestAPI::nvidiaAdapterName;
+    CHECK(nvidiaAdapterName("NVIDIA GeForce RTX 4090"));
+    CHECK(nvidiaAdapterName("NVIDIA Quadro P2000"));
+    CHECK(nvidiaAdapterName("NVIDIA Tesla V100"));
+    CHECK(nvidiaAdapterName("GeForce GTX 1080 Ti"));
+    // The vendor prefix is not always there, which is the reason the
+    // marketing names are matched at all.
+    CHECK(nvidiaAdapterName("Quadro K620"));
+}
+
+TEST_CASE("The adapter name is matched whatever its case",
+          "[platformquirks][windows][gpu]")
+{
+    using PlatformQuirks::TestAPI::nvidiaAdapterName;
+    CHECK(nvidiaAdapterName("nvidia geforce rtx 3060"));
+    CHECK(nvidiaAdapterName("NVIDIA GEFORCE RTX 3060"));
+    CHECK(nvidiaAdapterName("NvIdIa GeForce"));
+}
+
+TEST_CASE("Other vendors' adapters are left on the hardware renderer",
+          "[platformquirks][windows][gpu]")
+{
+    using PlatformQuirks::TestAPI::nvidiaAdapterName;
+    CHECK_FALSE(nvidiaAdapterName("Intel(R) UHD Graphics 630"));
+    CHECK_FALSE(nvidiaAdapterName("AMD Radeon RX 6700 XT"));
+    CHECK_FALSE(nvidiaAdapterName("Microsoft Basic Display Adapter"));
+    CHECK_FALSE(nvidiaAdapterName("VMware SVGA 3D"));
+    CHECK_FALSE(nvidiaAdapterName(""));
+}
+
+TEST_CASE("The video controller query answers without faulting",
+          "[platformquirks][windows][gpu]")
+{
+    // Read-only, and what it answers depends on the machine, so this asks only
+    // that the COM and WMI plumbing runs to the end and releases what it took.
+    // Called twice, because CoInitializeSecurity can only be set once per
+    // process and the second call has to survive being told so.
+    using PlatformQuirks::TestAPI::queryNvidiaPresent;
+    const bool first = queryNvidiaPresent();
+    const bool second = queryNvidiaPresent();
+    INFO("this machine reports an NVIDIA adapter: " << first);
+    CHECK(first == second);
+}
+
+// ============================================================================
+// Where ssh-keygen is
+// ============================================================================
+
+TEST_CASE("The ssh-keygen path is one that can actually be run",
+          "[platformquirks][sshkeygen]")
+{
+    // Windows keeps it under the system directory, and which name reaches
+    // that directory depends on the bitness of this process. The answer was
+    // SysNative unconditionally -- the WOW64 alias a 32-bit process uses,
+    // which does not exist at all for a 64-bit one. The shipping build is
+    // 64-bit, so the path was never there: Imager reported it had no
+    // ssh-keygen and the button that generates a key did nothing.
+    const QString path = PlatformQuirks::sshKeyGenPath();
+    INFO("path: " << path.toStdString());
+
+    if (path.isEmpty())
+        SKIP("this machine has no ssh-keygen, which is an answer in itself");
+
+    // Either a bare name to be found on PATH, or a path that is really there.
+    if (path.contains(QLatin1Char('/')))
+        CHECK(QFile::exists(path));
+    else
+        CHECK(path == QStringLiteral("ssh-keygen"));
+}
+
+TEST_CASE("The ssh-keygen path does not name the WOW64 alias to a 64-bit build",
+          "[platformquirks][sshkeygen]")
+{
+    // The specific mistake, named: SysNative resolves only for a 32-bit
+    // process, so a 64-bit build that returns it returns a path to nothing.
+    const QString path = PlatformQuirks::sshKeyGenPath();
+    if (path.isEmpty() || !path.contains(QStringLiteral("SysNative"), Qt::CaseInsensitive))
+        SUCCEED("not a SysNative path");
+    else
+        CHECK(sizeof(void *) == 4);
+}
+
+// ============================================================================
+// Elevation on Windows
+// ============================================================================
+// Windows elevates through the UAC manifest on the executable, not through a
+// policy file installed alongside it the way the Linux build does. The
+// platform layer has to say so rather than leave the answer to chance: a
+// caller told a policy could be installed would offer to install one, and
+// nothing would happen.
+
+TEST_CASE("Windows reports no elevation policy to install",
+          "[platformquirks][windows][elevation]")
+{
+    CHECK_FALSE(PlatformQuirks::hasElevationPolicyInstalled());
+    CHECK_FALSE(PlatformQuirks::installElevationPolicy());
+    CHECK_FALSE(PlatformQuirks::runElevatedPolicyInstaller());
+}
+
+TEST_CASE("Windows declines to re-exec itself elevated",
+          "[platformquirks][windows][elevation]")
+{
+    // The manifest asks for administrator, so the process is already elevated
+    // or it was never going to be. Answering yes here would start a second
+    // copy of Imager while the first was still running.
+    char program[] = "rpi-imager";
+    char *argv[] = {program, nullptr};
+    CHECK_FALSE(PlatformQuirks::tryElevate(1, argv));
+
+    // And the no-op that goes with it: nothing is started, and it returns.
+    CHECK_NOTHROW(PlatformQuirks::execElevated(QStringList{QStringLiteral("--version")}));
+}
+
+TEST_CASE("Windows has no application bundle", "[platformquirks][windows]")
+{
+    // The macOS notion. A caller that treated the answer as a path would
+    // build one from a null pointer.
+    CHECK_FALSE(PlatformQuirks::isElevatableBundle());
+    CHECK(PlatformQuirks::getBundlePath() == nullptr);
+}
+
+TEST_CASE("The URI scheme is registered by the installer, not at runtime",
+          "[platformquirks][windows]")
+{
+    // Answering false would have the caller report a failure to register
+    // something the installer already wrote to the registry.
+    CHECK(PlatformQuirks::registerUriScheme());
+}
+
+TEST_CASE("A URL is not handed to the shell", "[platformquirks][windows]")
+{
+    // Declining on purpose: launching through `cmd /c start` would pass the
+    // URL through the shell, where &, | and friends run commands. The caller
+    // falls back to QDesktopServices, which does not.
+    CHECK_FALSE(PlatformQuirks::openUrlExternally(
+        QUrl(QStringLiteral("https://www.raspberrypi.com/"))));
+    CHECK_FALSE(PlatformQuirks::openUrlExternally(
+        QUrl(QStringLiteral("https://example.com/\" & calc.exe & \""))));
+}

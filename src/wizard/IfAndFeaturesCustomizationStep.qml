@@ -134,6 +134,7 @@ WizardStepBase {
                             }
                             ImComboBox {
                                 id: comboSerial
+                                accessiblePurpose: labelSerial.text
                                 model: ListModel {
                                     id: serialModel
                                     ListElement { text: "Disabled" }

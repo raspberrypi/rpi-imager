@@ -20,6 +20,8 @@
 #include <QJsonObject>
 #include <QDebug>
 
+#include <cmath>
+
 namespace Drivelist {
 
 namespace {
@@ -117,10 +119,22 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     }
 
     // Parse size (can be string or number depending on lsblk version)
+    //
+    // Weighed rather than cast. lsblk is not hostile, but neither branch said
+    // what it would do with an answer it could not use: toULongLong() drops
+    // its ok flag, so a string that is not a number reads as nought, and a
+    // double outside the range of a uint64_t converts undefined. Both now
+    // land on nought deliberately, which the caller already treats as a size
+    // it does not know.
     if (bdev["size"].isString()) {
-        device.size = bdev["size"].toString().toULongLong();
+        bool ok = false;
+        const qulonglong parsed = bdev["size"].toString().toULongLong(&ok);
+        device.size = ok ? parsed : 0;
     } else {
-        device.size = static_cast<uint64_t>(bdev["size"].toDouble());
+        const double reported = bdev["size"].toDouble();
+        device.size = (std::isfinite(reported) && reported >= 0.0
+                       && reported < 18446744073709551616.0)
+                      ? static_cast<uint64_t>(reported) : 0;
     }
 
     // Detect connection type from subsystems

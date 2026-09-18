@@ -13,7 +13,9 @@
 #include <archive.h>
 #include <archive_entry.h>
 
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif
 #include <csignal>
 #include <cstring>
 #include <vector>
@@ -396,6 +398,14 @@ TEST_CASE("Reading an archive that is not there is reported",
 TEST_CASE("An archive that will not fit on disk is reported rather than truncated",
           "[rpiboot][bootfiles]")
 {
+#ifdef _WIN32
+    // RLIMIT_FSIZE and SIGXFSZ are how this provokes a short write without
+    // filling a disk, and Windows has neither: there is no per-process file
+    // size limit to lower and no signal to ignore. Forcing the same failure
+    // there needs a different lever -- a quota or a full volume -- so the
+    // case is skipped rather than quietly dropped from the run.
+    SKIP("RLIMIT_FSIZE has no Windows equivalent");
+#else
     const std::vector<uint8_t> small = {'s', 'm', 'a', 'l', 'l'};
     // Comfortably past the limit set below, so the failure lands in the entry
     // data rather than the header.
@@ -440,6 +450,7 @@ TEST_CASE("An archive that will not fit on disk is reported rather than truncate
     CHECK_FALSE(wrote);
     INFO("error: " << bf.lastError());
     CHECK_FALSE(bf.lastError().empty());
+#endif
 }
 
 // A tar with directory entries in it. rpi-eeprom firmware archives are laid
@@ -569,6 +580,66 @@ TEST_CASE("A name USTAR cannot hold fails the repack, with the name in the error
     CHECK_FALSE(bf.writeToFile(out));
     // Which entry stopped it, not just that something did.
     CHECK(bf.lastError().find(longName) != std::string::npos);
+}
+
+TEST_CASE("A long name that splits on a directory is repacked",
+          "[rpiboot][bootfiles]")
+{
+    // USTAR stores a pathname as prefix[155] + '/' + name[100], so a name
+    // well over 100 characters is storable as long as it has a separator in
+    // the right place. Refusing these would turn a package that is perfectly
+    // valid into a failure between signing the firmware and serving it --
+    // and the firmware trees really do nest this deep.
+    const std::string dir(120, 'd');
+    const std::string leaf(90, 'l');
+    const std::string splittable = dir + "/" + leaf;   // 211 characters
+    REQUIRE(splittable.size() > 100);
+    REQUIRE(splittable.size() <= 256);
+
+    auto tar = createPaxTarInMemory({
+        {"config.txt", {'o', 'k'}},
+        {splittable, {'y', 'e', 's'}},
+    });
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+    REQUIRE(bf.find(splittable) != nullptr);
+
+    QTemporaryDir dir2;
+    REQUIRE(dir2.isValid());
+    const std::string out = (dir2.path() + "/repacked.tar").toStdString();
+
+    INFO("error: " << bf.lastError());
+    CHECK(bf.writeToFile(out));
+
+    // And it really is in the archive that came out, under the same name.
+    Bootfiles back;
+    REQUIRE(back.extractFromFile(out));
+    const auto *data = back.find(splittable);
+    REQUIRE(data != nullptr);
+    CHECK(*data == std::vector<uint8_t>{'y', 'e', 's'});
+}
+
+TEST_CASE("A name longer than USTAR can hold at all fails the repack",
+          "[rpiboot][bootfiles]")
+{
+    // prefix[155] + '/' + name[100] is 256 characters and no arrangement of
+    // separators stores more. Refused before the split is looked for, so the
+    // search does not have to answer for a name it could never hold.
+    const std::string huge = std::string(200, 'a') + "/" + std::string(100, 'b');
+    REQUIRE(huge.size() > 256);
+
+    auto tar = createPaxTarInMemory({{huge, {'n', 'o'}}});
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const std::string out = (dir.path() + "/repacked.tar").toStdString();
+
+    CHECK_FALSE(bf.writeToFile(out));
+    CHECK(bf.lastError().find(huge) != std::string::npos);
 }
 
 // A package that was cut short in transfer. The header block arrived whole,

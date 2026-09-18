@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2026 Raspberry Pi Ltd
  */
+#include <limits>
 #include "pieeprom.h"
 
 #include <algorithm>
@@ -73,6 +74,19 @@ std::string Image::parse()
             s.filename = std::move(fn);
         }
 
+        // A FILE section's length covers its filename and reserved word
+        // before any content, so anything shorter is malformed. Without
+        // this, contentSize() computes length - 16 in unsigned arithmetic
+        // and a declared length of zero wraps to about 2^64, which
+        // readFile() then hands to a vector as a range.
+        if (magic == FILE_MAGIC && length < FILENAME_LEN + 4) {
+            std::ostringstream err;
+            err << "file section at 0x" << std::hex << offset
+                << " is too short for its header (length=" << std::dec
+                << length << ")";
+            return err.str();
+        }
+
         const size_t sectionEnd = offset + SECTION_HDR_LEN + length;
         if (sectionEnd > _bytes.size()) {
             std::ostringstream err;
@@ -102,9 +116,15 @@ std::optional<std::vector<uint8_t>> Image::readFile(std::string_view filename) c
     const Section* s = findFile(filename);
     if (!s)
         return std::nullopt;
-    auto begin = _bytes.begin() + static_cast<ptrdiff_t>(s->contentOffset());
-    auto end   = begin + static_cast<ptrdiff_t>(s->contentSize());
-    return std::vector<uint8_t>(begin, end);
+    // Belt and braces against the section table: parse() rejects a section
+    // that runs past the end, but this is the call that turns those two
+    // numbers into a range, and it should not be the one that trusts them.
+    const size_t from = s->contentOffset();
+    const size_t len  = s->contentSize();
+    if (from > _bytes.size() || len > _bytes.size() - from)
+        return std::nullopt;
+    const auto begin = _bytes.begin() + static_cast<ptrdiff_t>(from);
+    return std::vector<uint8_t>(begin, begin + static_cast<ptrdiff_t>(len));
 }
 
 std::string Image::writeFile(std::string_view filename, std::span<const uint8_t> newContent)
@@ -255,6 +275,13 @@ std::optional<uint32_t> parseBootOrder(std::string_view bootconf)
             val.remove_prefix(2);
             base = 16;
         }
+        // A value with nothing in it is not a boot order, and neither is one
+        // too long to hold. Unsigned overflow wraps rather than trapping, so
+        // without the check below BOOT_ORDER=0xffffffffff was accepted as a
+        // truncated order and could be written back to the device.
+        if (val.empty())
+            return std::nullopt;
+
         uint32_t v = 0;
         for (char c : val) {
             int digit = -1;
@@ -262,7 +289,12 @@ std::optional<uint32_t> parseBootOrder(std::string_view bootconf)
             else if (base == 16 && c >= 'a' && c <= 'f') digit = 10 + (c - 'a');
             else if (base == 16 && c >= 'A' && c <= 'F') digit = 10 + (c - 'A');
             if (digit < 0) return std::nullopt;
-            v = v * static_cast<uint32_t>(base) + static_cast<uint32_t>(digit);
+
+            const uint32_t b = static_cast<uint32_t>(base);
+            const uint32_t d = static_cast<uint32_t>(digit);
+            if (v > (std::numeric_limits<uint32_t>::max() - d) / b)
+                return std::nullopt;
+            v = v * b + d;
         }
         return v;
     }

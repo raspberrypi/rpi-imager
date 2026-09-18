@@ -12,6 +12,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <winioctl.h>
+#include <virtdisk.h>
 #include <wbemidl.h>
 #include <oleauto.h>
 #include <iphlpapi.h>
@@ -25,6 +26,9 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QString>
+#include <QFile>
+#include <QProcessEnvironment>
+#include <QDir>
 
 namespace {
     // Network monitoring state
@@ -65,6 +69,24 @@ namespace {
 }
 
 namespace PlatformQuirks {
+
+// Whether an adapter name is one of NVIDIA's.
+//
+// The answer decides whether QSG_RHI_PREFER_SOFTWARE_RENDERER is set, so a
+// name read wrongly is either a window that does not draw or a machine put on
+// the software renderer for nothing. Matched on the marketing names as well as
+// the vendor, because that is how the controller reports itself.
+static bool isNvidiaAdapterName(const std::string &deviceName) {
+    std::string lower = deviceName;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+
+    for (const char *needle : {"nvidia", "geforce", "quadro", "tesla", "rtx", "gtx"}) {
+        if (lower.find(needle) != std::string::npos)
+            return true;
+    }
+    return false;
+}
 
 static bool hasNvidiaGraphicsCard() {
     HRESULT hres;
@@ -186,17 +208,7 @@ static bool hasNvidiaGraphicsCard() {
             std::string deviceName(len - 1, 0);
             WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, -1, &deviceName[0], len, nullptr, nullptr);
             
-            // Convert to lowercase for case-insensitive comparison
-            std::string lowerDeviceName = deviceName;
-            std::transform(lowerDeviceName.begin(), lowerDeviceName.end(), lowerDeviceName.begin(), ::tolower);
-            
-            // Check if this is an NVIDIA device (case-insensitive)
-            if (lowerDeviceName.find("nvidia") != std::string::npos || 
-                lowerDeviceName.find("geforce") != std::string::npos ||
-                lowerDeviceName.find("quadro") != std::string::npos ||
-                lowerDeviceName.find("tesla") != std::string::npos ||
-                lowerDeviceName.find("rtx") != std::string::npos ||
-                lowerDeviceName.find("gtx") != std::string::npos) {
+            if (isNvidiaAdapterName(deviceName)) {
                 foundNvidia = true;
             }
         }
@@ -567,6 +579,31 @@ bool prefersReducedMotion() {
     return !animationsEnabled;
 }
 
+// The 64-bit system directory, whichever name reaches it from here.
+//
+// SysNative is the WOW64 alias a 32-bit process uses to get past the
+// redirection that points System32 at SysWOW64; it does not exist at all for
+// a 64-bit process. The shipping build is 64-bit, so the only path ever tried
+// was one that was never there: hasSshKeyGen() answered no on every 64-bit
+// Windows and generating a key did nothing at all.
+//
+// Both are tried, in the order that suits the common case, and the one that
+// is actually there wins.
+QString sshKeyGenPath() {
+    const QString windir = QDir::fromNativeSeparators(
+        QProcessEnvironment::systemEnvironment().value(QStringLiteral("windir")));
+    if (windir.isEmpty())
+        return {};
+
+    for (const QString& systemDir : {QStringLiteral("System32"), QStringLiteral("SysNative")}) {
+        const QString candidate =
+            windir + QLatin1Char('/') + systemDir + QStringLiteral("/OpenSSH/ssh-keygen.exe");
+        if (QFile::exists(candidate))
+            return candidate;
+    }
+    return {};
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // Windows uses PhysicalDrive paths which don't have a raw device equivalent.
     // Direct I/O is controlled via FILE_FLAG_NO_BUFFERING, not device path.
@@ -652,6 +689,98 @@ namespace {
                               &bytesReturned, NULL) != FALSE;
     }
     
+    // The file behind an attached virtual disk, or empty when the device is
+    // not one.
+    //
+    // Windows offers no way to ask a physical drive for its backing file; the
+    // dependency query is the documented route, and it answers only for a
+    // disk that has one, which is also how the device is recognised.
+    QString virtualDiskBackingFile(ULONG deviceNumber) {
+        const QString physicalPath =
+            QStringLiteral("\\\\.\\PhysicalDrive%1").arg(deviceNumber);
+        HANDLE disk = CreateFileW(
+            reinterpret_cast<LPCWSTR>(physicalPath.utf16()),
+            GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            NULL, OPEN_EXISTING, 0, NULL);
+        if (disk == INVALID_HANDLE_VALUE)
+            return QString();
+
+        // Typed enum rather than ULONG here, so the bitwise or has to be put
+        // back into it explicitly.
+        const GET_STORAGE_DEPENDENCY_FLAG flags =
+            static_cast<GET_STORAGE_DEPENDENCY_FLAG>(
+                GET_STORAGE_DEPENDENCY_FLAG_DISK_HANDLE
+                | GET_STORAGE_DEPENDENCY_FLAG_HOST_VOLUMES);
+
+        // Asked for its size first: the strings sit after the structure, so
+        // the entry count alone does not give it.
+        STORAGE_DEPENDENCY_INFO probe{};
+        probe.Version = STORAGE_DEPENDENCY_INFO_VERSION_2;
+        ULONG needed = 0;
+        DWORD rc = GetStorageDependencyInformation(disk, flags, sizeof(probe),
+                                                   &probe, &needed);
+        if (rc != ERROR_INSUFFICIENT_BUFFER || needed < sizeof(STORAGE_DEPENDENCY_INFO)) {
+            CloseHandle(disk);
+            return QString();
+        }
+
+        QByteArray buffer(static_cast<int>(needed), 0);
+        auto* info = reinterpret_cast<STORAGE_DEPENDENCY_INFO*>(buffer.data());
+        info->Version = STORAGE_DEPENDENCY_INFO_VERSION_2;
+        ULONG used = 0;
+        rc = GetStorageDependencyInformation(disk, flags, needed, info, &used);
+        CloseHandle(disk);
+        if (rc != ERROR_SUCCESS || info->NumberEntries == 0)
+            return QString();
+
+        const STORAGE_DEPENDENCY_INFO_TYPE_2& entry = info->Version2Entries[0];
+        if (!entry.HostVolumeName || !entry.DependentVolumeRelativePath)
+            return QString();
+
+        QString host = QString::fromWCharArray(entry.HostVolumeName);
+        QString relative = QString::fromWCharArray(entry.DependentVolumeRelativePath);
+        if (host.isEmpty() || relative.isEmpty())
+            return QString();
+
+        // The volume name ends in a separator and the relative path begins
+        // with one, so joining them unchanged gives a path that opens nothing.
+        while (host.endsWith(QLatin1Char('\\')))
+            host.chop(1);
+        if (!relative.startsWith(QLatin1Char('\\')))
+            relative.prepend(QLatin1Char('\\'));
+        return host + relative;
+    }
+
+    // Detach a virtual disk, which is what ejecting one means: the volumes go,
+    // the drive stops being listed, and the file can be attached again.
+    bool detachVirtualDisk(const QString& backingFile) {
+        VIRTUAL_STORAGE_TYPE storageType{};
+        storageType.DeviceId = VIRTUAL_STORAGE_TYPE_DEVICE_UNKNOWN;
+        storageType.VendorId = GUID{};  // VIRTUAL_STORAGE_TYPE_VENDOR_UNKNOWN
+
+        OPEN_VIRTUAL_DISK_PARAMETERS params{};
+        params.Version = OPEN_VIRTUAL_DISK_VERSION_1;
+        params.Version1.RWDepth = 1;  // OPEN_VIRTUAL_DISK_RW_DEPTH_DEFAULT
+
+        const std::wstring path = backingFile.toStdWString();
+        HANDLE vhd = INVALID_HANDLE_VALUE;
+        DWORD rc = OpenVirtualDisk(&storageType, path.c_str(),
+                                   VIRTUAL_DISK_ACCESS_DETACH,
+                                   OPEN_VIRTUAL_DISK_FLAG_NONE, &params, &vhd);
+        if (rc != ERROR_SUCCESS) {
+            qDebug() << "detachVirtualDisk: cannot open" << backingFile << "error" << rc;
+            return false;
+        }
+
+        rc = DetachVirtualDisk(vhd, DETACH_VIRTUAL_DISK_FLAG_NONE, 0);
+        CloseHandle(vhd);
+        if (rc != ERROR_SUCCESS) {
+            qDebug() << "detachVirtualDisk: cannot detach" << backingFile << "error" << rc;
+            return false;
+        }
+        return true;
+    }
+
     // Eject media from volume (card, not reader!)
     bool ejectMedia(HANDLE volume) {
         DWORD bytesReturned;
@@ -795,7 +924,26 @@ DiskResult ejectDisk(const QString& device) {
     }
 
     qDebug() << "ejectDisk: ejecting device" << deviceNumber;
-    
+
+    // A virtual disk is not removable media, so IOCTL_STORAGE_EJECT_MEDIA has
+    // nothing to act on and fails -- after the volumes below have already been
+    // dismounted. That left the disk attached with nothing mounted: Explorer
+    // showed no volumes, the imager still listed the drive, and attaching the
+    // file again failed because it was never detached, which reads as a
+    // corrupt image. Detaching is what ejecting one means.
+    const QString backingFile = virtualDiskBackingFile(static_cast<ULONG>(deviceNumber));
+    if (!backingFile.isEmpty()) {
+        qDebug() << "ejectDisk: device" << deviceNumber << "is a virtual disk backed by"
+                 << backingFile;
+        unmountDisk(device);
+        if (detachVirtualDisk(backingFile))
+            return DiskResult::Success;
+        // Left attached rather than stranded: the volumes are back in a
+        // moment when Windows rescans, and the user can detach it themselves.
+        qDebug() << "ejectDisk: could not detach the virtual disk";
+        return DiskResult::Error;
+    }
+
     // Get all logical drives
     DWORD drivesMask = GetLogicalDrives();
     if (drivesMask == 0) {
@@ -849,6 +997,23 @@ namespace TestAPI {
     int parseDeviceNumber(const QString& device) {
         return parseDeviceNumberImpl(device);
     }
+    // What the platform string becomes before QGuiApplication reads it. The
+    // rule it enforces is what keeps uppercase button text legible (#1648),
+    // and it has to survive whatever the user already had in QT_QPA_PLATFORM.
+    QByteArray freeTypePlatformArgs() {
+        return ensureWindowsFreeTypeFontEngine();
+    }
+    QString fontEngineFromPlatformArgs(const QByteArray &platformArgs) {
+        return windowsFontEngineFromPlatformArgs(platformArgs);
+    }
+    bool nvidiaAdapterName(const std::string &deviceName) {
+        return isNvidiaAdapterName(deviceName);
+    }
+    // The WMI query itself. Read-only, and the answer depends on the machine,
+    // so a case can only ask that it answers rather than what it answers.
+    bool queryNvidiaPresent() {
+        return hasNvidiaGraphicsCard();
+    }
 }
 #endif
 
@@ -881,5 +1046,12 @@ void logFontEngine()
     qDebug() << "Font engine:" << windowsFontEngineFromPlatformArgs(platform)
              << "(QT_QPA_PLATFORM =" << platform << ")";
 }
+
+} // namespace PlatformQuirks
+
+namespace PlatformQuirks {
+
+NativePermissionScope::NativePermissionScope() { qEnableNtfsPermissionChecks(); }
+NativePermissionScope::~NativePermissionScope() { qDisableNtfsPermissionChecks(); }
 
 } // namespace PlatformQuirks

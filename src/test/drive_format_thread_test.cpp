@@ -11,6 +11,7 @@
  * is worse than one that was left alone.
  */
 
+#include "platform_permissions.h"
 #include <catch2/catch_test_macros.hpp>
 
 #include "faulty_block_device.h"
@@ -20,6 +21,7 @@
 #include "driveformatthread.h"
 #include "disk_formatter.h"
 
+#include <QSet>
 #include <QCoreApplication>
 #include <QDeadlineTimer>
 #include <QEventLoop>
@@ -115,7 +117,8 @@ TEST_CASE("Formatting a path the user cannot write is refused", "[format]")
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write(QByteArray(1024, '\0'));
     f.close();
-    REQUIRE(f.setPermissions(QFileDevice::ReadOwner));
+    rpi_test::DeniedAccess denied(path, rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     TestableFormatThread t(path.toUtf8());
     const Outcome outcome = runToCompletion(t);
@@ -129,6 +132,14 @@ TEST_CASE("Formatting a path the user cannot write is refused", "[format]")
     // case is really about -- refused, told why, card untouched -- still
     // holds; only the wording is out of reach here.
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("unmount"));
+#elif defined(Q_OS_WIN)
+    // Windows never gets as far as the permission check either, and for the
+    // same kind of reason as macOS: the format path is addressed to a physical
+    // drive, and a file path is rejected as not being one before anything is
+    // opened. Refused, told why, card untouched still holds; the wording is
+    // the earlier refusal.
+    CHECK_THAT(outcome.errors[0].toStdString(),
+               ContainsSubstring("physical drive path"));
 #else
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("permission"));
 #endif
@@ -185,6 +196,11 @@ TEST_CASE("A device too small to format says so, through the thread", "[format]"
     // disk, so the refusal is the unmount one and the formatter's own reason
     // is never reached.
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("unmount"));
+#elif defined(Q_OS_WIN)
+    // And as in that case: a file path is not a physical drive, so the format
+    // is refused before it ever looks at how much room there is.
+    CHECK_THAT(outcome.errors[0].toStdString(),
+               ContainsSubstring("physical drive path"));
 #else
     CHECK_THAT(outcome.errors[0].toStdString(), ContainsSubstring("Insufficient space"));
 #endif
@@ -305,7 +321,7 @@ TEST_CASE("Formatting a device writes a partition table", "[format][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QByteArray dev = device.path().toLatin1();
 
     DriveFormatThread t(dev);
@@ -332,7 +348,7 @@ TEST_CASE("Formatting the same device twice is fine", "[format][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QByteArray dev = device.path().toLatin1();
 
     // Erasing a card that was already erased is ordinary, and must not trip
@@ -350,7 +366,7 @@ TEST_CASE("A formatted device reports its size", "[format][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QByteArray dev = device.path().toLatin1();
 
     DriveFormatThread t(dev);
@@ -654,4 +670,86 @@ TEST_CASE("The smallest accepted card still holds a valid FAT32", "[format][geom
         INFO("fsck said: " << fsckOutput.toStdString());
         CHECK(clean);
     }
+}
+
+// ── the message a failed format leaves on screen ────────────────────────────
+//
+// This mapping is the whole of what the user is told when a format fails, and
+// it has been wrong before: kCancelled had no case of its own and fell into
+// the default, so someone who had just pressed Cancel was told that something
+// unknown had gone wrong. The switch carries no `default:` now, so a new
+// FormatError without a message is a compiler warning rather than a surprise
+// in the field -- but nothing until now checked what any of them said.
+
+namespace {
+
+// getDeviceSize() and formatErrorToString() are protected, which is how the
+// rest of the suite reaches a thread's own decisions.
+class FormatProbe : public DriveFormatThread
+{
+public:
+    FormatProbe() : DriveFormatThread(QByteArray("//./PhysicalDrive999")) {}
+    using DriveFormatThread::formatErrorToString;
+    using DriveFormatThread::getDeviceSize;
+};
+
+} // namespace
+
+TEST_CASE("Every format error has a message of its own", "[driveformat]")
+{
+    FormatProbe probe;
+    const std::vector<rpi_imager::FormatError> all{
+        rpi_imager::FormatError::kFileOpenError,
+        rpi_imager::FormatError::kFileWriteError,
+        rpi_imager::FormatError::kFileSeekError,
+        rpi_imager::FormatError::kInvalidParameters,
+        rpi_imager::FormatError::kInsufficientSpace,
+        rpi_imager::FormatError::kCancelled,
+    };
+
+    QSet<QString> seen;
+    for (const auto e : all) {
+        const QString msg = probe.formatErrorToString(e);
+        INFO("error " << static_cast<int>(e) << ": " << msg.toStdString());
+        CHECK_FALSE(msg.isEmpty());
+        // Distinct, because two errors sharing a message is the same as
+        // having no message for one of them.
+        CHECK_FALSE(seen.contains(msg));
+        seen.insert(msg);
+    }
+    CHECK(seen.size() == int(all.size()));
+}
+
+TEST_CASE("Cancelling is not reported as an unknown failure", "[driveformat]")
+{
+    // The bug this mapping already had. A user who pressed Cancel and was
+    // told something unknown went wrong has no way to tell the two apart.
+    FormatProbe probe;
+    const QString msg = probe.formatErrorToString(rpi_imager::FormatError::kCancelled);
+    INFO(msg.toStdString());
+    CHECK_THAT(msg.toStdString(), !Catch::Matchers::ContainsSubstring("Unknown"));
+    CHECK_THAT(msg.toStdString(), Catch::Matchers::ContainsSubstring("ancel"));
+}
+
+TEST_CASE("A value outside the enumeration still says something",
+          "[driveformat]")
+{
+    // Reached only by a value from a newer build than this one. An empty
+    // string would leave the dialog blank.
+    FormatProbe probe;
+    const QString msg = probe.formatErrorToString(static_cast<rpi_imager::FormatError>(9999));
+    CHECK_FALSE(msg.isEmpty());
+}
+
+TEST_CASE("A device the drive list does not know falls back to a usable size",
+          "[driveformat]")
+{
+    // Sizing decides how much of the card the format writes over. Answering
+    // nought for a device that could not be found would format nothing at all
+    // and report success, so the fallback is deliberate -- pinned here so it
+    // stays deliberate.
+    FormatProbe probe;
+    const std::uint64_t size = probe.getDeviceSize(QByteArray("//./PhysicalDrive999"));
+    CHECK(size > 0);
+    CHECK(size == 64ULL * 1024 * 1024 * 1024);
 }

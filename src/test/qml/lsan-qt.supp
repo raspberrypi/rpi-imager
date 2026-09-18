@@ -1,0 +1,20 @@
+# Leaks that belong to the font stack, so a sweep's output is only about us.
+#
+# A storm feeds the interface names and descriptions holding characters the
+# default font has no glyph for. Drawing one makes Qt ask fontconfig for a
+# fallback, and FcFontMatch/FcFontRenderPrepare keep the pattern they build.
+# fontconfig is not instrumented here, so LeakSanitizer sees the allocation
+# and not what holds it.
+#
+# It is worth being exact about why this is not ours: every frame between the
+# allocation and QQuickTextMetrics::width() is inside libfontconfig or
+# QFontEngineMultiFontConfig, and the same 1867 bytes in 42 allocations are
+# reported on ten different seeds -- one fallback lookup, not a growing
+# structure. The larger reports vary with the state of the font cache in
+# XDG_CACHE_HOME, which is the same thing seen while the cache is cold.
+#
+# Anything else the check reports is ours to look at.
+leak:libfontconfig
+leak:FcFontMatch
+leak:FcFontRenderPrepare
+leak:QFontEngineMultiFontConfig

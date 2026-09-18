@@ -10,6 +10,7 @@
  */
 
 #include "../secureboot_crypto.h"
+#include "../asn1_length.h"
 
 #include <QByteArray>
 #include <QDebug>
@@ -19,26 +20,34 @@
 
 #include <Security/Security.h>
 
+#include <cstdint>
+#include <limits>
+
 namespace {
 
 // Read one DER tag-length header at `pos`, leaving `pos` on the contents.
+//
+// The length is read by the shared primitive rather than by a copy here. The
+// copy that used to stand in its place carried the same overflow as the one
+// in secureboot.cpp, and both had to be found and fixed separately; this way
+// fuzz_der covers the code this file runs rather than a sibling of it.
 bool derHeader(const QByteArray& der, int& pos, quint8& tag, int& length)
 {
-    if (pos + 2 > der.size())
+    // The shared reader works in int, which is what the rest of this parser
+    // uses. A key anywhere near that size is not one.
+    if (der.size() > std::numeric_limits<int>::max())
         return false;
+    if (pos < 0 || pos + 1 > der.size())
+        return false;
+
     tag = static_cast<quint8>(der.at(pos++));
-    const quint8 first = static_cast<quint8>(der.at(pos++));
-    if (first < 0x80) {
-        length = first;
-    } else {
-        const int count = first & 0x7F;
-        if (count == 0 || count > 4 || pos + count > der.size())
-            return false;
-        length = 0;
-        for (int i = 0; i < count; ++i)
-            length = (length << 8) | static_cast<quint8>(der.at(pos++));
-    }
-    return length >= 0 && pos + length <= der.size();
+    const int parsed = rpi_imager::asn1ParseLength(
+        reinterpret_cast<const uint8_t*>(der.constData()),
+        static_cast<int>(der.size()), &pos);
+    if (parsed < 0)
+        return false;
+    length = parsed;
+    return true;
 }
 
 // The RSAPrivateKey inside a PKCS#8 PrivateKeyInfo, or an empty result if
@@ -212,6 +221,61 @@ QByteArray extractRsaPubkeyBin(const QString& rsaKeyPath)
         return {};
     }
     return parseSubjectPublicKeyInfoDerToNE(der);
+}
+
+
+// Two openssl runs: one to make the private key, one to derive the public
+// half from it. Moved here from the provisioner, which called openssl
+// directly and so had no way to differ per platform -- Windows has none.
+bool generateRsaKeyPair(const QString& privateKeyPath, const QString& publicKeyPath)
+{
+    {
+        QProcess proc;
+        proc.start(QStringLiteral("openssl"),
+                   {QStringLiteral("genrsa"), QStringLiteral("-out"),
+                    privateKeyPath, QStringLiteral("2048")});
+        if (!proc.waitForStarted(5000)) {
+            qDebug() << "SecureBootCrypto: failed to start openssl for key generation";
+            return false;
+        }
+        if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
+            qDebug() << "SecureBootCrypto: openssl genrsa failed:"
+                     << proc.readAllStandardError();
+            return false;
+        }
+    }
+
+    {
+        QProcess proc;
+        proc.start(QStringLiteral("openssl"),
+                   {QStringLiteral("rsa"), QStringLiteral("-in"), privateKeyPath,
+                    QStringLiteral("-outform"), QStringLiteral("PEM"),
+                    QStringLiteral("-pubout"), QStringLiteral("-out"), publicKeyPath});
+        if (!proc.waitForStarted(5000)) {
+            qDebug() << "SecureBootCrypto: failed to start openssl for the public half";
+            // Never leave half a pair behind: the private key is a real RSA
+            // key, and Imager's own file chooser would offer it.
+            QFile::remove(privateKeyPath);
+            return false;
+        }
+        if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
+            qDebug() << "SecureBootCrypto: openssl rsa failed:"
+                     << proc.readAllStandardError();
+            QFile::remove(privateKeyPath);
+            return false;
+        }
+    }
+
+    // Asked for rather than assumed: openssl can exit zero having written
+    // nothing, and a caller told the pair exists is about to fuse the hash
+    // of a file that is not there.
+    if (!QFile::exists(privateKeyPath) || !QFile::exists(publicKeyPath)) {
+        qDebug() << "SecureBootCrypto: openssl reported success but wrote no key";
+        QFile::remove(privateKeyPath);
+        QFile::remove(publicKeyPath);
+        return false;
+    }
+    return true;
 }
 
 }  // namespace SecureBootCrypto

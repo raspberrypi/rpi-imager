@@ -4,7 +4,10 @@
  */
 
 #include "secureboot.h"
+
+#include <climits>
 #include "secureboot_crypto.h"
+#include "asn1_length.h"
 #include "devicewrapperfatpartition.h"
 #include "acceleratedcryptographichash.h"
 #include "bootimgcreator.h"
@@ -166,7 +169,12 @@ bool SecureBoot::generateBootSig(const QString &bootImgPath, const QString &rsaK
 
     // Create boot.sig file
     QFile sigFile(bootSigPath);
-    if (!sigFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    // Not QIODevice::Text. On Windows that turns every newline into a
+    // carriage return and a newline, and boot.sig is parsed by the
+    // bootloader -- three lines, each ending in one byte. The other
+    // platforms write LF, so a Windows-built signature was a different file
+    // for the same image.
+    if (!sigFile.open(QIODevice::WriteOnly)) {
         qDebug() << "SecureBoot::generateBootSig: failed to create" << bootSigPath;
         return false;
     }
@@ -224,21 +232,9 @@ QByteArray SecureBoot::generateConfigSig(const QByteArray &configText, const QSt
     return sig;
 }
 
-// Parse one ASN.1 length field at *off, advance *off past it, return length
-// or -1 on error.  Supports short form and long-form ≤ 4 bytes (covers all
-// realistic RSA-2048 keys).
-static int asn1ParseLength(const uint8_t *d, int len, int *off)
-{
-    if (*off >= len) return -1;
-    uint8_t b = d[(*off)++];
-    if (b < 0x80) return b;
-    int n = b & 0x7f;
-    if (n == 0 || n > 4 || *off + n > len) return -1;
-    int result = 0;
-    for (int i = 0; i < n; ++i)
-        result = (result << 8) | d[(*off)++];
-    return result;
-}
+// One copy of this, in asn1_length.h, because it was written twice and the
+// same overflow was in both. See the header for what it refuses and why.
+using rpi_imager::asn1ParseLength;
 
 QByteArray SecureBoot::extractRsaPubkeyBin(const QString &rsaKeyPath)
 {
@@ -251,81 +247,6 @@ QByteArray SecureBoot::extractRsaPubkeyBin(const QString &rsaKeyPath)
 // SecureBootCrypto::extractRsaPubkeyBin after they fetch the DER via
 // openssl.  Windows skips this entirely (CryptoAPI gives us the bytes in
 // the right order already).
-QByteArray SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE(const QByteArray& der)
-{
-    if (der.isEmpty()) {
-        qDebug() << "SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE: empty DER";
-        return {};
-    }
-
-    // SubjectPublicKeyInfo := SEQUENCE { AlgorithmIdentifier, BIT STRING }
-    // where the BIT STRING wraps an RSAPublicKey := SEQUENCE { N, E }.
-    const auto *d = reinterpret_cast<const uint8_t*>(der.constData());
-    const int dlen = der.size();
-    int i = 0;
-
-    auto fail = [](const char *why) -> QByteArray {
-        qDebug() << "SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE: DER parse:" << why;
-        return {};
-    };
-
-    if (i >= dlen || d[i++] != 0x30) return fail("expected SEQUENCE");
-    if (asn1ParseLength(d, dlen, &i) < 0) return fail("outer length");
-
-    // Skip AlgorithmIdentifier
-    if (i >= dlen || d[i++] != 0x30) return fail("expected algo SEQUENCE");
-    int algoLen = asn1ParseLength(d, dlen, &i);
-    if (algoLen < 0 || i + algoLen > dlen) return fail("algo length");
-    i += algoLen;
-
-    // BIT STRING wraps the RSAPublicKey
-    if (i >= dlen || d[i++] != 0x03) return fail("expected BIT STRING");
-    if (asn1ParseLength(d, dlen, &i) < 0) return fail("bit-string length");
-    if (i >= dlen || d[i++] != 0x00) return fail("expected 0 unused bits");
-
-    // RSAPublicKey SEQUENCE { N, E }
-    if (i >= dlen || d[i++] != 0x30) return fail("expected RSAPublicKey SEQUENCE");
-    if (asn1ParseLength(d, dlen, &i) < 0) return fail("rsa-pubkey length");
-
-    // INTEGER N
-    if (i >= dlen || d[i++] != 0x02) return fail("expected INTEGER N");
-    int nLen = asn1ParseLength(d, dlen, &i);
-    if (nLen < 0 || i + nLen > dlen) return fail("N length");
-    // Strip the leading 0x00 sign byte that ASN.1 prepends to keep N positive.
-    if (nLen > 0 && d[i] == 0x00) { ++i; --nLen; }
-    if (nLen != 256) {
-        qDebug() << "SecureBootCrypto::parseSubjectPublicKeyInfoDerToNE: expected 2048-bit key, got"
-                 << (nLen * 8) << "bits";
-        return {};
-    }
-    QByteArray nBE(reinterpret_cast<const char*>(d + i), nLen);
-    i += nLen;
-
-    // INTEGER E
-    if (i >= dlen || d[i++] != 0x02) return fail("expected INTEGER E");
-    int eLen = asn1ParseLength(d, dlen, &i);
-    if (eLen < 0 || eLen > 8 || i + eLen > dlen) return fail("E length");
-    QByteArray eBE(reinterpret_cast<const char*>(d + i), eLen);
-
-    // The bootloader expects raw N (256 bytes, little-endian) followed by
-    // raw E (8 bytes, little-endian).  Both are big-endian in DER.
-    QByteArray result;
-    result.reserve(264);
-    for (int j = nBE.size() - 1; j >= 0; --j)
-        result.append(nBE[j]);
-    while (result.size() < 256)
-        result.append(char(0));
-
-    QByteArray eLE;
-    for (int j = eBE.size() - 1; j >= 0; --j)
-        eLE.append(eBE[j]);
-    while (eLE.size() < 8)
-        eLE.append(char(0));
-    eLE.resize(8);
-    result.append(eLE);
-
-    return result;
-}
 
 QByteArray SecureBoot::signBootcode2712(const QByteArray &bootcode,
                                           const QString &rsaKeyPath,

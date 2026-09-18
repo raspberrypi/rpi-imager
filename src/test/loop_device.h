@@ -19,12 +19,15 @@
 #include <string>
 #include <vector>
 
+#ifndef _WIN32
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 namespace rpi_test {
 
+#ifndef _WIN32
 // Run a command, capturing stdout. Returns its exit status, or -1.
 inline int runCapture(const char* path, const std::vector<const char*>& argv,
                       std::string* out)
@@ -67,10 +70,18 @@ inline int runCapture(const char* path, const std::vector<const char*>& argv,
         *out = collected;
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
+#endif
 
 class LoopDevice {
 public:
-#ifdef __APPLE__
+#ifdef _WIN32
+    // There is no Windows equivalent worth the name. A VHD attached through
+    // Mount-DiskImage is the nearest thing, and it wants elevation plus a
+    // teardown this class cannot promise from a destructor. Constructed
+    // invalid instead, so every case needing one skips itself exactly as it
+    // does on a Linux host without CAP_SYS_ADMIN.
+    explicit LoopDevice(const std::string&) {}
+#elif defined(__APPLE__)
     // hdiutil attaches as the calling user, nodes owned by them: no
     // privilege, no chown, unlike Linux.
     explicit LoopDevice(const std::string& backingFile)
@@ -182,6 +193,7 @@ private:
     }
 #endif
 
+#ifndef _WIN32
     // Run losetup, directly when already root and via sudo -n otherwise.
     // Going straight to losetup matters for rootful CI containers and VMs,
     // where sudo is frequently not installed at all; -n on the fallback means
@@ -226,6 +238,7 @@ private:
                            [](unsigned char c) { return c >= '0' && c <= '9'; });
     }
 
+#endif
     std::string device_;
     std::string attached_;
 };

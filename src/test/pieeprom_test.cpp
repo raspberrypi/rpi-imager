@@ -223,6 +223,55 @@ TEST_CASE("rewriting bootconf shorter inserts PAD_MAGIC unless last section",
     CHECK(image.readBootConfText().value() == bootText);
 }
 
+// ══════════════════════════════════════════════════════════════
+// A FILE section shorter than its own header
+//
+// contentSize() is length minus the filename and reserved word, in unsigned
+// arithmetic. parse() checked only that the section fitted inside the image,
+// so a FILE section declaring a length of zero was accepted and the
+// subtraction wrapped to about 2^64. readFile() then built a vector from a
+// range that long and the process aborted on an uncaught length_error.
+// Found by fuzzing; the image arrives as a firmware download.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A file section too short for its own header is refused",
+          "[pieeprom][parse]")
+{
+    for (uint32_t length : {0u, 1u, 8u, 15u}) {
+        std::vector<uint8_t> img(1024, 0x00);
+        putBE32(img, 0, FILE_MAGIC);
+        putBE32(img, 4, length);
+
+        Image image(img);
+        const std::string err = image.parse();
+
+        INFO("declared length: " << length);
+        CHECK_FALSE(err.empty());
+        // And nothing readable was recorded from it.
+        CHECK(image.sections().empty());
+    }
+}
+
+TEST_CASE("The shortest legal file section carries no content", "[pieeprom][parse]")
+{
+    // 16 is the floor: filename (12) plus the reserved word (4), and no
+    // content at all. It must parse, and read back as empty rather than as
+    // the enormous span the underflow used to produce.
+    std::vector<uint8_t> img(1024, 0x00);
+    putBE32(img, 0, FILE_MAGIC);
+    putBE32(img, 4, FILENAME_LEN + 4);
+    std::memcpy(&img[8], "bootconf.txt", std::strlen("bootconf.txt"));
+
+    Image image(img);
+    const std::string err = image.parse();
+    INFO("error: " << err);
+    REQUIRE(err.empty());
+
+    const auto content = image.readFile("bootconf.txt");
+    REQUIRE(content.has_value());
+    CHECK(content->empty());
+}
+
 TEST_CASE("writeFile refuses content that would overflow next section",
           "[pieeprom][writeFile][negative]")
 {
@@ -247,6 +296,30 @@ TEST_CASE("parseBootOrder extracts hex value from bootconf.txt", "[pieeprom][boo
     CHECK(parseBootOrder("# comment\nBOOT_ORDER=0x1\n").value() == 0x1u);
     CHECK_FALSE(parseBootOrder("NO_BOOT_ORDER_HERE=1\n").has_value());
     CHECK_FALSE(parseBootOrder("BOOT_ORDER=garbage\n").has_value());
+}
+
+TEST_CASE("parseBootOrder refuses a value it cannot hold",
+          "[pieeprom][boot_order]")
+{
+    // Unsigned overflow wraps rather than trapping, so accumulating digits
+    // without a check turned a value too long for the field into a different
+    // one -- silently, and that value can be written back to the device.
+    // Found by building the fuzzers with -fsanitize=unsigned-integer-overflow.
+    CHECK_FALSE(parseBootOrder("BOOT_ORDER=0xffffffffff\n").has_value());
+    CHECK_FALSE(parseBootOrder("BOOT_ORDER=99999999999\n").has_value());
+    CHECK_FALSE(parseBootOrder("BOOT_ORDER=0x100000000\n").has_value());
+
+    // The widest it can hold is still accepted, in both bases.
+    CHECK(parseBootOrder("BOOT_ORDER=0xffffffff\n").value() == 0xffffffffu);
+    CHECK(parseBootOrder("BOOT_ORDER=4294967295\n").value() == 4294967295u);
+}
+
+TEST_CASE("parseBootOrder refuses a key with no value", "[pieeprom][boot_order]")
+{
+    // Nothing after the equals is not an order of zero.
+    CHECK_FALSE(parseBootOrder("BOOT_ORDER=\n").has_value());
+    CHECK_FALSE(parseBootOrder("BOOT_ORDER=   \n").has_value());
+    CHECK_FALSE(parseBootOrder("BOOT_ORDER=\r\n").has_value());
 }
 
 // composeBootOrder decides what the board tries to boot from after a flash.
@@ -544,4 +617,47 @@ TEST_CASE("fill at the end of the image ends the walk rather than failing",
         INFO("fill word 0x" << std::hex << fill);
         CHECK(image.parse().empty());
     }
+}
+
+// ── a section that points outside the image ─────────────────────────────────
+//
+// The EEPROM image is downloaded, so its headers are somebody else's numbers.
+// parse() checks a section's declared length, but the offset and size only
+// become a range when a section is read back -- and that read is where a
+// header pointing past the end would be turned into an out-of-bounds copy.
+
+TEST_CASE("A section reaching past the end of the image reads as nothing",
+          "[pieeprom][parse]")
+{
+    // A header whose declared length runs off the end. Truncating the image
+    // after parsing is the simplest way to arrange it, and it is what a
+    // half-finished download looks like.
+    std::vector<uint8_t> img = makeSyntheticImage("BOOT_ORDER=0xf41\n");
+    Image image(img);
+    REQUIRE(image.parse().empty());
+    REQUIRE(image.readFile("bootconf.txt").has_value());
+
+    std::vector<uint8_t> truncated(img.begin(), img.begin() + 32);
+    Image shortImage(truncated);
+    // Parsing may or may not object; what must not happen is a read that
+    // walks off the end of the buffer.
+    (void)shortImage.parse();
+    CHECK_FALSE(shortImage.readFile("bootconf.txt").has_value());
+}
+
+TEST_CASE("A file the image does not contain is refused by name",
+          "[pieeprom][parse]")
+{
+    std::vector<uint8_t> img = makeSyntheticImage("BOOT_ORDER=0xf41\n");
+    Image image(img);
+    REQUIRE(image.parse().empty());
+
+    // Reading names something that is not there.
+    CHECK_FALSE(image.readFile("pubkey.bin").has_value());
+
+    // And writing says so, naming the file rather than failing silently.
+    const std::string err = image.writeFile("pubkey.bin", std::vector<uint8_t>{1, 2, 3});
+    INFO("error: " << err);
+    CHECK_FALSE(err.empty());
+    CHECK(err.find("pubkey.bin") != std::string::npos);
 }

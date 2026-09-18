@@ -12,6 +12,8 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
+#include "platform_tools.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "fastboot/eeprom_signer.h"
@@ -339,7 +341,7 @@ TEST_CASE("A key of the wrong size is refused rather than signed with",
     // will not boot and no indication why -- so the length is checked here.
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
-    const QString tool = QStandardPaths::findExecutable(QStringLiteral("openssl"));
+    const QString tool = rpi_test::toolPath(QStringLiteral("openssl"));
     if (tool.isEmpty())
         SKIP("openssl is not available, so no short key can be made");
 

@@ -254,17 +254,17 @@ WizardStepBase {
                         id: customizationsColumn
                         width: parent.width
                         spacing: Style.spacingXSmall
-                        Text { text: "• " + CommonStrings.hostnameConfigured;      font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.hostnameConfigured;         Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.localeConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.localeConfigured;           Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.userAccountConfigured;   font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.userConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.wifiConfigured;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.wifiConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.sshEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.sshEnabled;                 Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.piConnectEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.piConnectEnabled;           Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.usbGadgetEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.featUsbGadgetEnabled;       Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.i2cEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifI2cEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.spiEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifSpiEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.onewireEnabled;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.if1WireEnabled;             Accessible.role: Accessible.ListItem; Accessible.name: text }
-                        Text { text: "• " + CommonStrings.serialConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifSerial !== "" && root.wizardContainer.ifSerial !== "Disabled"; Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.hostnameConfigured;      font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.hostnameConfigured;         Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.localeConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.localeConfigured;           Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.userAccountConfigured;   font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.userConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.wifiConfigured;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.wifiConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.sshEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.sshEnabled;                 Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.piConnectEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.piConnectEnabled;           Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.usbGadgetEnabled;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.featUsbGadgetEnabled;       Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.i2cEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifI2cEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.spiEnabled;              font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifSpiEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.onewireEnabled;          font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.if1WireEnabled;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { textFormat: Text.PlainText; text: "• " + CommonStrings.serialConfigured;        font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: root.wizardContainer.ifSerial !== "" && root.wizardContainer.ifSerial !== "Disabled"; Accessible.role: Accessible.ListItem; Accessible.name: text }
                     }
                 }
                 ScrollBar.vertical: ScrollBar {
@@ -293,6 +293,13 @@ WizardStepBase {
                 color: Style.formLabelColor
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
+                // Not every line here is a percentage: onPreparationStatusUpdate
+                // puts the writer's own steps in this same element, and a
+                // translation of one is as long as the language makes it.
+                // Text does not clip, so with no wrap mode a line wider
+                // than the column paints straight through the step and
+                // over the sidebar beside it.
+                wrapMode: Text.Wrap
                 Accessible.role: Accessible.StatusBar
             }
 
@@ -312,12 +319,19 @@ WizardStepBase {
                 visible: root.isWriting
                 Accessible.role: Accessible.ProgressBar
                 Accessible.name: qsTr("Write progress")
+                // The description is the only place the figure can go: the
+                // attached Accessible object carries no value, minimum or
+                // maximum in Qt 6.11, so the role is all a reader gets from
+                // the bar itself. Navigating to it reads the percentage from
+                // here; hearing it without navigating is what the
+                // announcements below are for.
                 Accessible.description: progressText.text
             }
             
             // Bottleneck status indicator - shows what's limiting progress
             Text {
                 id: bottleneckText
+                textFormat: Text.PlainText
                 text: {
                     if (root.bottleneckStatus !== "") {
                         if (root.writeThroughputKBps > 0) {
@@ -338,6 +352,7 @@ WizardStepBase {
             // Operation warning (e.g., sync fallback due to slow device)
             Text {
                 id: operationWarningText
+                textFormat: Text.PlainText
                 text: "⚠ " + root.operationWarning
                 font.pointSize: Style.fontSizeSmall
                 font.family: Style.fontFamily
@@ -466,6 +481,7 @@ WizardStepBase {
 
         Text {
             id: waitText
+            textFormat: Text.PlainText
             text: qsTr("Please wait... %1").arg(confirmDialog.countdown)
             font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
@@ -549,6 +565,88 @@ WizardStepBase {
         }
     }
 
+    // What was last spoken, so a percentage crawling from 41 to 42 does not
+    // interrupt whatever is being read. Reset when the phase changes, so
+    // verification starts announcing again from its own beginning.
+    property int lastSpokenDecile: -1
+    property int lastSpokenBlock: -1
+    property string lastSpokenPhase: ""
+
+    // Decides what to announce for this phase and percentage, and remembers
+    // it. Returns "" when there is nothing new to say. Kept apart from the
+    // speaking so a test can walk a run of percentages through it.
+    function progressAnnouncement(phase, percent) {
+        if (phase !== root.lastSpokenPhase) {
+            root.lastSpokenPhase = phase
+            root.lastSpokenDecile = -1
+            root.lastSpokenBlock = -1
+        }
+        // Not bounded at a hundred. It used to be, which meant that on a run
+        // whose total was understated the label said 200% and the screen
+        // reader said a hundred -- the one user who could not see the label
+        // was the one told nothing was wrong.
+        var shown = Math.max(0, Math.round(percent))
+        var decile = Math.floor(shown / 10)
+        if (decile === root.lastSpokenDecile)
+            return ""
+        root.lastSpokenDecile = decile
+        return phase === "verify" ? qsTr("Verifying, %1 percent").arg(shown)
+                                  : qsTr("Writing, %1 percent").arg(shown)
+    }
+
+    // The same, for a write whose total is not known -- a gzip over 4 GB
+    // says nothing about its size, so there is no percentage to count and
+    // the milestones are megabytes instead.
+    function bytesAnnouncement(megabytes) {
+        if (root.lastSpokenPhase !== "bytes") {
+            root.lastSpokenPhase = "bytes"
+            root.lastSpokenDecile = -1
+            root.lastSpokenBlock = -1
+        }
+        var block = Math.floor(Math.max(0, megabytes) / 256)
+        if (block === root.lastSpokenBlock)
+            return ""
+        root.lastSpokenBlock = block
+        return qsTr("Writing, %1 megabytes written").arg(Math.round(megabytes))
+    }
+
+    // Whether this run has already said the total was wrong.
+    property bool overrunReported: false
+
+    // A percentage past a hundred means the declared size was wrong.
+    //
+    // It is only ever shown when the size was called reliable -- an xz index,
+    // a zstd frame header, a raw file's own length, or an archive's declared
+    // total. The one format that cannot be trusted is already excluded: gzip
+    // records the original size modulo 4 GiB, so imagesizeparser refuses it
+    // as a divisor and the step counts megabytes instead. So an overrun here
+    // is not a limitation, it is one of those four being wrong.
+    //
+    // Which is why it is shown rather than clamped. It is the only sign
+    // anybody gets, and a figure nobody sees is a figure nobody reports -- so
+    // the label keeps it, the announcement says the same number, and both
+    // figures go to the log once per run for whoever reads the report. The
+    // bar is the one thing that cannot follow: it has a range, and above it
+    // it simply sits full.
+    function percentageOf(now, total) {
+        if (!(total > 0))
+            return 0
+        var percent = (now / total) * 100
+        if (percent > 100 && !root.overrunReported) {
+            root.overrunReported = true
+            console.warn("write progress past 100%: " + now
+                         + " bytes written against a declared total of " + total
+                         + " -- the image is larger than its container said")
+        }
+        return percent
+    }
+
+    function speak(message) {
+        if (message && message.length > 0
+                && ImageWriterSingleton.screenReaderActive)
+            ImageWriterSingleton.announceToScreenReader(message)
+    }
+
     function onDownloadProgress(now, total) {
         // Download progress is tracked for performance stats but not shown in UI
         // (the write progress is more accurate as it reflects actual data written to disk)
@@ -560,10 +658,12 @@ WizardStepBase {
                 // Show indeterminate progress with bytes written (in human-readable format)
                 var bytesWrittenMB = Math.round(now / (1024 * 1024))
                 progressText.text = qsTr("Writing... %1 MB written").arg(bytesWrittenMB)
+                root.speak(root.bytesAnnouncement(bytesWrittenMB))
             } else {
-                var progress = total > 0 ? (now / total) * 100 : 0
+                var progress = root.percentageOf(now, total)
                 progressBar.value = progress
                 progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
+                root.speak(root.progressAnnouncement("write", progress))
             }
         }
     }
@@ -571,15 +671,20 @@ WizardStepBase {
     function onVerifyProgress(now, total) {
         if (root.isWriting) {
             root.operationWarning = ""  // Clear write warnings during verification
-            var progress = total > 0 ? (now / total) * 100 : 0
+            var progress = root.percentageOf(now, total)
             progressBar.value = progress
             progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
+            root.speak(root.progressAnnouncement("verify", progress))
         }
     }
 
     function onPreparationStatusUpdate(msg) {
         if (root.isWriting) {
             progressText.text = msg
+            // These are the steps before any percentage exists -- mounting,
+            // unmounting, asking for authorisation -- and they are where a
+            // run appears to have stopped if nothing says otherwise.
+            root.speak(msg)
         }
     }
 
@@ -588,12 +693,14 @@ WizardStepBase {
         target: ImageWriterSingleton
         function onSuccess() {
             progressText.text = qsTr("Write completed successfully!")
+            root.speak(progressText.text)
 
             // Automatically advance to the done screen
             root.wizardContainer.nextStep()
         }
         function onError(msg) {
             progressText.text = qsTr("Write failed: %1").arg(msg)
+            root.speak(progressText.text)
         }
 
         function onFinalizing() {
@@ -621,7 +728,12 @@ WizardStepBase {
     }
     
     // Focus management - rebuild when visibility changes between phases
-    onIsWritingChanged: rebuildFocusOrder()
+    onIsWritingChanged: {
+        rebuildFocusOrder()
+        // A new run has nothing reported against it yet.
+        if (root.isWriting)
+            root.overrunReported = false
+    }
     onIsCompleteChanged: rebuildFocusOrder()
     onAnyCustomizationsAppliedChanged: rebuildFocusOrder()
     

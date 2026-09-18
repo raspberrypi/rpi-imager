@@ -95,9 +95,19 @@ BaseDialog {
         }
         if (s.indexOf("file://") === 0)
             return s
+        // Backslashes first: a path typed or pasted on Windows arrives with
+        // them, and every test below is written against forward slashes.
+        s = s.replace(/\\/g, "/")
         // Allow absolute paths
         if (s.indexOf("/") === 0)
             return "file://" + s
+        // A Windows absolute path is "C:/..." and does not start with a slash,
+        // so it used to fall through and come back as a bare path where the
+        // caller wanted a URL. Three slashes, not two: the drive letter belongs
+        // to the path, and "file://C:/x" puts it in the authority instead --
+        // QUrl reads that as a host named "c" with the path "/x".
+        if (/^[A-Za-z]:\//.test(s))
+            return "file:///" + s
         return s // fallback; caller may provide URL
     }
 
@@ -106,6 +116,11 @@ BaseDialog {
         var s = String(u || "").trim()
         if (s.indexOf("file://") === 0) {
             var p = s.substring(7)
+            // "file:///C:/x" leaves "/C:/x" once the scheme is off, and the
+            // leading slash is not part of the path -- shown to the user it
+            // reads as a directory that does not exist.
+            if (/^\/[A-Za-z]:/.test(p))
+                p = p.substring(1)
             return p.length > 0 ? p : "/"
         }
         return s
@@ -123,17 +138,20 @@ BaseDialog {
 
     // Return true if the given url/path resolves to filesystem root
     function _isRoot(u) {
-        var s = String(u || "").trim()
-        if (s.indexOf("file://") === 0) s = s.substring(7)
+        // Through _toDisplayPath rather than stripping the scheme here: taking
+        // seven characters off "file:///C:/" leaves "/C:/", which is not a path
+        // and never compares equal to anything.
+        var s = _toDisplayPath(u)
         // Normalize trailing slashes
         while (s.length > 1 && s.endsWith("/")) s = s.substring(0, s.length - 1)
-        return s === "/"
+        // "/" on Unix, "C:" once a drive path has had its trailing slash taken
+        // off. Both are the top of the tree, and _parentUrl has to stop there.
+        return s === "/" || /^[A-Za-z]:$/.test(s)
     }
 
     // Compute normalized parent folder URL without '..' segments
     function _parentUrl(u) {
-        var s = String(u || "").trim()
-        if (s.indexOf("file://") === 0) s = s.substring(7)
+        var s = _toDisplayPath(u)
         // Strip trailing slashes
         while (s.length > 1 && s.endsWith("/")) s = s.substring(0, s.length - 1)
         if (s === "/") return "file:///"
@@ -141,7 +159,10 @@ BaseDialog {
         if (slash <= 0) return "file:///"
         var parent = s.substring(0, slash)
         if (parent.length === 0) parent = "/"
-        return "file://" + parent
+        // Back through _toFileUrl rather than concatenating: "file://" + "C:/x"
+        // puts the drive letter in the authority, and QUrl then reads it as a
+        // host named "c" with the path "/x".
+        return _toFileUrl(parent)
     }
 
     function _canGoUp() { return !_isRoot(dialog.currentFolder) }
@@ -293,6 +314,7 @@ BaseDialog {
         
         Text {
             id: titleText
+            textFormat: Text.PlainText
             text: dialog.dialogTitle
             font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold

@@ -31,6 +31,31 @@ endif()
 
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
+# Nothing in a compile command names the macOS SDK: CMAKE_OSX_SYSROOT is left
+# empty, so no -isysroot is emitted and clang resolves the SDK itself. An OS
+# upgrade therefore changes no command line, nothing rebuilds, and the tree goes
+# on linking objects built against the old SDK beside ones built against the new
+# -- a "conflicting values" warning per object, and a mixed build nobody chose.
+# The build system cannot notice this, so notice it here.
+if(APPLE)
+    execute_process(COMMAND xcrun --show-sdk-version
+                    OUTPUT_VARIABLE RPI_IMAGER_SDK_VERSION
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    if(RPI_IMAGER_SDK_VERSION)
+        if(DEFINED RPI_IMAGER_CONFIGURED_SDK AND
+           NOT RPI_IMAGER_SDK_VERSION STREQUAL RPI_IMAGER_CONFIGURED_SDK)
+            message(FATAL_ERROR
+                "macOS SDK changed since this build tree was configured "
+                "(${RPI_IMAGER_CONFIGURED_SDK} -> ${RPI_IMAGER_SDK_VERSION}). "
+                "Delete the build directory and configure again -- the build "
+                "system cannot see the SDK, so it will not rebuild for it.")
+        endif()
+        set(RPI_IMAGER_CONFIGURED_SDK "${RPI_IMAGER_SDK_VERSION}" CACHE INTERNAL
+            "macOS SDK version this build tree was configured against")
+    endif()
+endif()
+
 project(rpi-imager LANGUAGES CXX C)
 
 find_package(Git QUIET)
@@ -69,11 +94,40 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # One place to define the Windows callback IPC port
 set(IMAGER_CALLBACK_PORT "49629" CACHE STRING "TCP port for rpi-imager callback relay on Windows")
 
+# Is this an instrumented build? Asked once, here, because both the
+# optimisation level and LTO below have to yield to it.
+#
+# The fuzzers count. Their -fsanitize flags are set per target rather than in
+# CMAKE_CXX_FLAGS, so the probe below cannot see them -- and leaving LTO on
+# builds the vendored archives as bitcode, which the link then cannot read
+# ("file format not recognized") because a target without -flto gets no
+# plugin. Declared here rather than beside add_subdirectory(test/fuzz) so that
+# it is known before this decision is made.
+option(RPI_IMAGER_FUZZERS "Build the libFuzzer harnesses (requires Clang)" OFF)
+
+string(FIND "${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS}" "-fsanitize" _rpi_sanitised)
+if(_rpi_sanitised GREATER_EQUAL 0 OR RPI_IMAGER_FUZZERS)
+    set(_rpi_instrumented TRUE)
+else()
+    set(_rpi_instrumented FALSE)
+endif()
+
 # Apply optimization flags globally to all targets (including bundled dependencies)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
     # Use -Os instead of -O3 for better code size vs performance balance
     # Enable function and data sections for dead code elimination
-    add_compile_options(-Os -ffunction-sections -fdata-sections)
+    #
+    # Except under a sanitiser. GCC 14 at -Os with -fsanitize=undefined calls
+    # std::__shared_ptr<std::filesystem::_Dir>'s defaulted constructor without
+    # emitting it, so anything reaching for a directory_iterator fails to
+    # link. -O1 sidesteps the bug and suits a sanitiser run better anyway.
+    if(NOT _rpi_instrumented)
+        add_compile_options(-Os)
+    else()
+        add_compile_options(-O1)
+        message(STATUS "Instrumented build: -O1 in place of -Os")
+    endif()
+    add_compile_options(-ffunction-sections -fdata-sections)
     
     # Enable dead code elimination at link time (for executables and shared libraries only)
     if(APPLE)
@@ -87,9 +141,20 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebI
         add_link_options(-Wl,--gc-sections)
     endif()
     
-    # Enable Link Time Optimization (LTO) for non-Windows targets
-    if(NOT WIN32)
+    # Enable Link Time Optimization (LTO) for non-Windows targets.
+    #
+    # Not under a sanitiser. This is set unconditionally rather than as a
+    # cache entry, so it overrode -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF on
+    # the command line and the vendored libraries were still built as LTO
+    # objects; linking them then needs the plugin that -fno-lto suppresses.
+    # The effect was that no sanitiser build could be configured at all,
+    # which is why UndefinedBehaviorSanitizer had never been run against
+    # this tree.
+    if(NOT WIN32 AND NOT _rpi_instrumented)
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    elseif(_rpi_instrumented)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
+        message(STATUS "Instrumented build: LTO disabled")
     endif()
     
     # Only add build-type specific flags (optimization and sections flags are already added globally above)
@@ -296,8 +361,8 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
-    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
-    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
+    "disk_formatter.cpp" "bootimgcreator.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
+    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "secureboot_crypto_common.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
     "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp"
     "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "eeprom_repo_override.cpp")
 
@@ -643,4 +708,12 @@ endif()
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(test)
+endif()
+
+# libFuzzer harnesses for the parsers that read input nobody vetted. Kept out
+# of BUILD_TESTING on purpose: they need Qt6::Core and the parser sources, not
+# Catch2 and the whole test tree, and asking for one should not build the
+# other. The option itself is declared above, where LTO is decided.
+if(RPI_IMAGER_FUZZERS)
+    add_subdirectory(test/fuzz)
 endif()

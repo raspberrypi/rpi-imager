@@ -7,8 +7,12 @@ include(FetchContent)
 FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.5.2
-    FIND_PACKAGE_ARGS NAMES Catch2
+    GIT_TAG v3.16.0
+    # Version floor, or find_package matches a system Catch2 v2 -- still the
+    # packaged one on Debian/Ubuntu -- and FetchContent skips the fetch. The
+    # suite is v3: catch_test_macros.hpp and Catch2WithMain are v3-only, so
+    # that build fails at the first #include rather than at configure time.
+    FIND_PACKAGE_ARGS 3 NAMES Catch2
 )
 
 FetchContent_MakeAvailable(Catch2)
@@ -16,6 +20,72 @@ FetchContent_MakeAvailable(Catch2)
 # Include Catch2 CMake utilities for test discovery
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
+
+# Where the DLLs a test binary needs at run time live.
+#
+# Windows resolves a DLL from PATH, having no rpath, so every test needs this --
+# and so does catch_discover_tests, which runs each binary at build time to
+# enumerate its cases. Without it a binary dies of STATUS_DLL_NOT_FOUND before
+# main(), reported only as "Error listing tests from executable".
+#
+# Qt's install paths rather than $<TARGET_FILE_DIR:Qt6::Core>, because the
+# QtQuickTest entries below are registered with add_test() and take this through
+# set_tests_properties(), where a generator expression is not dependable. Qt's
+# bin directory carries libgcc and libwinpthread beside the Qt DLLs.
+set(RPI_TEST_DLL_PATHS)
+if(WIN32)
+    list(APPEND RPI_TEST_DLL_PATHS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}")
+    if(MINGW64_ROOT)
+        list(APPEND RPI_TEST_DLL_PATHS "${MINGW64_ROOT}/bin")
+    endif()
+endif()
+
+# Where the tests find fonts.
+#
+# Qt ships none, and the offscreen plugin on Windows looks under
+# ${QT6_INSTALL_PREFIX}/lib/fonts, which Qt does not create. Linux has
+# fontconfig to fall back on; Windows has not, so QFontDatabase::families()
+# comes back empty and every glyph is a .notdef box.
+#
+# The product never meets this -- platformquirks_windows.cpp forces FreeType and
+# the real plugin reads the system fonts -- but -platform offscreen bypasses
+# that. Nothing failed to start, so the QtQuickTest run went green against a UI
+# with no text in it, every width assertion measuring identical tofu.
+set(RPI_TEST_FONT_ENV)
+if(WIN32)
+    if(DEFINED ENV{SystemRoot})
+        file(TO_CMAKE_PATH "$ENV{SystemRoot}/Fonts" _rpi_test_fontdir)
+    else()
+        set(_rpi_test_fontdir "C:/Windows/Fonts")
+    endif()
+    if(EXISTS "${_rpi_test_fontdir}")
+        set(RPI_TEST_FONT_ENV "QT_QPA_FONTDIR=${_rpi_test_fontdir}")
+    else()
+        message(WARNING
+                "No font directory at ${_rpi_test_fontdir}. The offscreen "
+                "platform ships no fonts, so QML tests that measure text will "
+                "be measuring .notdef boxes.")
+    endif()
+endif()
+
+# The same search path, plus the logging setting below, for tests registered
+# with add_test() rather than through Catch2. Takes one or more test names.
+function(rpi_set_windows_test_env)
+    if(NOT WIN32)
+        return()
+    endif()
+    set(_mod)
+    foreach(_dir IN LISTS RPI_TEST_DLL_PATHS)
+        list(APPEND _mod "PATH=path_list_prepend:${_dir}")
+    endforeach()
+    set_tests_properties(${ARGN} PROPERTIES ENVIRONMENT_MODIFICATION "${_mod}")
+    set_property(TEST ${ARGN} APPEND PROPERTY
+                 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
+    if(RPI_TEST_FONT_ENV)
+        set_property(TEST ${ARGN} APPEND PROPERTY
+                     ENVIRONMENT "${RPI_TEST_FONT_ENV}")
+    endif()
+endfunction()
 
 # Register a Catch2 binary's cases with CTest.
 #
@@ -38,13 +108,75 @@ function(rpi_discover_tests target)
     # One ENVIRONMENT list, not two: CMake keeps only the last of a repeated
     # property key, so appending a second would have dropped the first --
     # which on macOS is the interpose library the fault-injection tests need.
-    set(_test_env "RPI_IMAGER_TELEMETRY_URL=" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1")
+    #
+    # XDG_CONFIG_HOME as well: the imager keeps its settings in QSettings, and
+    # several paths write them -- setPersistedCustomisationSetting() is called
+    # whenever a customisation step is completed. Without this a test run
+    # rewrites the developer's own "Raspberry Pi Imager.conf", which holds
+    # their hostname, username and password hash. Pointed at the build tree,
+    # where it belongs.
+    #
+    # BROWSER too. Several screens offer a link, and openUrlExternally() goes
+    # through xdg-open, which launches whatever the developer has configured
+    # -- a chaos run clicking about opened a terminal browser at
+    # raspberrypi.com and held the test until it timed out. Pointed at true(1),
+    # which accepts the argument and does nothing.
+    # "off" rather than empty on Windows, and this is not a nicety: setting an
+    # environment variable to an empty string there deletes it, so the empty
+    # value below never reached the process and every fabricated write in this
+    # suite posted a download counter to the production endpoint -- the exact
+    # thing the comment above says was fixed.
+    if(WIN32)
+        set(_telemetry_off "RPI_IMAGER_TELEMETRY_URL=off")
+    else()
+        set(_telemetry_off "RPI_IMAGER_TELEMETRY_URL=")
+    endif()
+    set(_test_env "${_telemetry_off}" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1"
+                  "XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
+                  "BROWSER=true")
+    # Without this Qt's default handler on Windows sends qDebug/qWarning to the
+    # debugger rather than to stderr, so a test that fails under CTest comes
+    # back with an exit code and not one line of why. The QtQuickTest binary was
+    # the extreme case: thirteen seconds of work, a real assertion failure, and
+    # completely empty output.
+    if(WIN32)
+        list(APPEND _test_env "QT_FORCE_STDERR_LOGGING=1")
+    endif()
+    if(RPI_TEST_FONT_ENV)
+        list(APPEND _test_env "${RPI_TEST_FONT_ENV}")
+    endif()
     if(APPLE AND "FAULT_INJECTION" IN_LIST ARGN)
         add_dependencies(${target} faulty_io_interpose)
         list(APPEND _test_env "DYLD_INSERT_LIBRARIES=${RPI_FAULTY_INTERPOSE_LIB}")
     endif()
+    # Without this a freshly built binary cannot locate Qt6Core.dll, and the
+    # discovery run dies of STATUS_DLL_NOT_FOUND before main() -- silently, so
+    # all CMake reports is "Error listing tests from executable". Every test
+    # target failed to configure on Windows for want of it.
+    #
+    # DL_PATHS rather than another entry in _test_env: Catch2 puts these on PATH
+    # for its own discovery run and emits an ENVIRONMENT_MODIFICATION for each
+    # test it registers, so one setting covers both, where ENVIRONMENT would
+    # reach only the second.
+    set(_dl_paths)
+    if(WIN32)
+        set(_dl_paths DL_PATHS ${RPI_TEST_DLL_PATHS})
+    endif()
+    # RESOURCE_LOCK <name> serialises this binary's cases against anything
+    # holding the same lock, while the rest of the suite carries on. For a
+    # binary whose cases all want one machine-wide thing -- a fixed port, a
+    # device -- ctest -j otherwise lets them race, and the losers skip.
+    set(_lock)
+    list(FIND ARGN "RESOURCE_LOCK" _lock_idx)
+    if(NOT _lock_idx EQUAL -1)
+        math(EXPR _lock_value_idx "${_lock_idx} + 1")
+        list(GET ARGN ${_lock_value_idx} _lock_name)
+        set(_lock RESOURCE_LOCK ${_lock_name})
+    endif()
+
     catch_discover_tests(${target}
-        PROPERTIES SKIP_RETURN_CODE 4 ENVIRONMENT "${_test_env}")
+        ${_dl_paths}
+        PROPERTIES SKIP_RETURN_CODE 4 ENVIRONMENT "${_test_env}" ${_lock})
 endfunction()
 
 # Inert until a test arms it, so it costs every other test one atomic load
@@ -157,6 +289,21 @@ else()
     )
 endif()
 
+# boot.img is built in this process on every platform now -- the filesystem
+# by DiskFormatter and the files into it by DeviceWrapperFatPartition -- so
+# the creator brings those with it rather than shelling out to diskpart,
+# mtools or hdiutil. It is no longer chosen per platform, because there is
+# only one of it.
+set(PLATFORM_BOOTIMGCREATOR_SRC
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bootimgcreator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS})
+
 # The other four platform backends, chosen the same way.
 #
 # Eleven targets below named the linux/ sources directly, so the suite could
@@ -173,22 +320,64 @@ if(WIN32)
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/platformquirks_windows.cpp)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp)
-    set(PLATFORM_BOOTIMGCREATOR_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/bootimgcreator_windows.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/acceleratedcryptographichash_cng.cpp)
     set(PLATFORM_DRIVELIST_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp)
+
+    # The Windows backend sources no test target ever compiled. DiskpartUtil is
+    # called from platformquirks_windows.cpp, downloadthread.cpp and
+    # driveformatthread.cpp, and it in turn reaches WinFile and
+    # Drivelist::ListStorageDevices() -- so ten targets compiled cleanly and then
+    # failed at the link. Gathered into one library rather than three sources
+    # named across a dozen targets, so the next caller cannot reintroduce it.
+    #
+    # drivelist_windows.cpp appears here as well as in PLATFORM_DRIVELIST_SRC,
+    # and deliberately: a static archive gives up only the members needed to
+    # resolve something still undefined, so a target compiling it directly keeps
+    # its own object and never sees this copy.
+    add_library(rpi_windows_support STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/diskpart_util.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/winfile.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp)
+    # WinFile is a QObject.
+    set_target_properties(rpi_windows_support PROPERTIES AUTOMOC ON)
+    target_include_directories(rpi_windows_support PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(rpi_windows_support PUBLIC Qt6::Core setupapi)
+    target_compile_features(rpi_windows_support PRIVATE cxx_std_20)
+    # Reaches extractDiskNumber(), which is static otherwise -- the same hook
+    # platformquirks_windows.cpp offers for parseDeviceNumber(). Set here
+    # because this is where diskpart_util.cpp is compiled; a define on the test
+    # target that merely links the archive would come too late to affect it.
+    target_compile_definitions(rpi_windows_support PRIVATE DISKPART_ENABLE_TEST_API)
+
+    # Qt6::Gui sits among the system libraries because platformquirks_windows.cpp
+    # reads the "Make text bigger" accessibility setting through
+    # QFontDatabase::systemFont(). The application links Gui for its own reasons,
+    # so the dependency only ever surfaced here: ten test targets compile that
+    # backend against Qt6::Core alone and stopped at "QFont: No such file or
+    # directory". Neither the Linux nor the macOS backend wants it, which is why
+    # it belongs in this branch rather than in the common link list.
+    # setupapi for drivelist_windows.cpp, which calls
+    # SetupDiGetDeviceRegistryProperty and SetupDiGetDeviceInterfaceDetail. The
+    # application has carried it in EXTRALIBS all along; the tests linking the
+    # same backend had not.
+    # virtdisk for platformquirks_windows.cpp, which detaches a virtual disk
+    # rather than asking a non-removable device to eject its media. Every
+    # target compiling that backend needs it, not only the ones whose cases
+    # attach a VHD of their own.
     set(PLATFORM_BACKEND_LIBS
-        ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt)
+        ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt setupapi
+        virtdisk Qt6::Gui rpi_windows_support)
 elseif(APPLE)
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp)
-    set(PLATFORM_BOOTIMGCREATOR_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/bootimgcreator_macos.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/acceleratedcryptographichash_commoncrypto.cpp)
     set(PLATFORM_DRIVELIST_SRC
@@ -208,9 +397,8 @@ else()
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp)
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp)
-    set(PLATFORM_BOOTIMGCREATOR_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/bootimgcreator_linux.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
     set(PLATFORM_ACCEL_HASH_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/acceleratedcryptographichash_gnutls.cpp)
     set(PLATFORM_DRIVELIST_SRC
@@ -238,6 +426,10 @@ add_executable(fat_partition_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
     ${PLATFORM_FILE_OPS}
+    # Builds the partitioned scratch image these cases open when no real card
+    # is named in the environment, which is every automated run.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fat_partition_test.cpp
 )
 
@@ -289,6 +481,149 @@ add_custom_target(test_fat_partition
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "FAT partition test built - set FAT_TEST_MOUNT_PATH to run"
 )
+
+# ============================================================================
+# WinFile -- Windows only
+# ============================================================================
+# The Win32 handle wrapper the write path opens a device through, and what
+# DiskpartUtil locks and dismounts volumes with. It had no test at all: 0% of
+# its branches, in 221 lines that sit directly under the write.
+if(WIN32)
+    add_executable(winfile_test
+        winfile_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/winfile.cpp)
+    set_target_properties(winfile_test PROPERTIES AUTOMOC ON)
+    target_include_directories(winfile_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(winfile_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
+    target_compile_features(winfile_test PRIVATE cxx_std_20)
+    rpi_discover_tests(winfile_test)
+endif()
+
+# ============================================================================
+# SecureBootCrypto
+# ============================================================================
+# The RSA signing behind secure boot. Every case that reached it went through
+# rpi-eeprom-digest, which is a Linux tool, so the whole of this skipped on
+# Windows -- leaving the CryptoAPI implementation at half its branches with
+# nothing asserting it produces a signature a bootloader would take.
+#
+# Verified against openssl rather than a recorded blob: a signature is only
+# right if the public half can check it.
+add_executable(secureboot_crypto_test
+    secureboot_crypto_test.cpp
+    ${PLATFORM_SECUREBOOT_CRYPTO_SRC})
+target_include_directories(secureboot_crypto_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS})
+target_link_libraries(secureboot_crypto_test PRIVATE
+    Catch2::Catch2WithMain Qt6::Core ${GNUTLS_LIBRARIES})
+rpi_link_platform_backends(secureboot_crypto_test)
+target_compile_features(secureboot_crypto_test PRIVATE cxx_std_20)
+# Reaches the CryptoAPI and CNG failure paths, which no arrangement of
+# inputs can provoke.
+target_compile_definitions(secureboot_crypto_test PRIVATE
+    SECUREBOOT_CRYPTO_ENABLE_TEST_API)
+
+rpi_discover_tests(secureboot_crypto_test)
+
+# ============================================================================
+# The Windows file-operations backend -- Windows only
+# ============================================================================
+# file_operations_test covers the POSIX backend and is excluded here, which
+# left the 1,876 lines that actually write a card on Windows at 25% branch
+# coverage -- 752 branches, the largest single gap in the tree. This is the
+# Windows half: the open and close lifecycle, sequential and positioned I/O,
+# the asynchronous queue and its synchronous fallback.
+#
+# virtdisk for vhd_device.h, which the physical-drive cases attach.
+if(WIN32)
+    add_executable(file_operations_windows_test
+        file_operations_windows_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${PLATFORM_FILE_OPS})
+    set_target_properties(file_operations_windows_test PROPERTIES AUTOMOC ON)
+    target_include_directories(file_operations_windows_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(file_operations_windows_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core virtdisk)
+    rpi_link_platform_backends(file_operations_windows_test)
+    rpi_link_platform_file_ops(file_operations_windows_test)
+    target_compile_features(file_operations_windows_test PRIVATE cxx_std_20)
+    # Reaches FailNextWriteCompletions(), which rehearses a device refusing
+    # writes while Windows re-enumerates it. Safe to set on the target: this one
+    # compiles file_operations_windows.cpp itself rather than linking an archive.
+    target_compile_definitions(file_operations_windows_test PRIVATE FILEOPS_ENABLE_TEST_API)
+    rpi_discover_tests(file_operations_windows_test)
+endif()
+
+# ============================================================================
+# DiskpartUtil -- Windows only
+# ============================================================================
+# The code that wipes a card's partition table before a write, and locks and
+# dismounts its volumes on the way. It had no test of any kind: until the
+# support library above, no test target even compiled it.
+#
+# The device cases want a VHD attached, which needs an elevated process, so an
+# ordinary run exercises the parsing and skips the rest -- the same bargain
+# file_operations_test strikes with loop devices on Linux. virtdisk carries
+# CreateVirtualDisk and friends for vhd_device.h.
+if(WIN32)
+    # PLATFORM_QUIRKS_SRC as well: DiskpartUtil reaches
+    # PlatformQuirks::getEjectDevicePath() on both the unmount and clean paths.
+    # And the relay as the executable Windows starts, which is where the
+    # socket path lives. Depends on the relay target so it is there to run.
+    add_executable(callback_relay_process_test callback_relay_process_test.cpp)
+    target_include_directories(callback_relay_process_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(callback_relay_process_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core Qt6::Network)
+    target_compile_definitions(callback_relay_process_test PRIVATE
+        RPI_IMAGER_RELAY_EXE="$<TARGET_FILE:rpi-imager-callback-relay>")
+    add_dependencies(callback_relay_process_test rpi-imager-callback-relay)
+    target_compile_features(callback_relay_process_test PRIVATE cxx_std_20)
+    # Every case binds the relay's fixed port, so two at once means one of
+    # them skips rather than runs.
+    rpi_discover_tests(callback_relay_process_test RESOURCE_LOCK relay_callback_port)
+
+    # Reading the key out of a WLAN profile. The rest of that file wants the
+    # WLAN service and a wireless card; the decoding does not, and it is what
+    # decides the password written to the card.
+    add_executable(wlan_profile_xml_test wlan_profile_xml_test.cpp)
+    target_include_directories(wlan_profile_xml_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(wlan_profile_xml_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
+    target_compile_features(wlan_profile_xml_test PRIVATE cxx_std_20)
+    rpi_discover_tests(wlan_profile_xml_test)
+
+    # The callback relay is a WIN32 executable of its own, so nothing linked it
+    # and none of it was measured. What it accepts from the shell is the one
+    # place an outside application's string enters the product here.
+    add_executable(callback_relay_url_test callback_relay_url_test.cpp)
+    target_include_directories(callback_relay_url_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(callback_relay_url_test PRIVATE Catch2::Catch2WithMain)
+    target_compile_features(callback_relay_url_test PRIVATE cxx_std_20)
+    rpi_discover_tests(callback_relay_url_test)
+
+    add_executable(diskpart_util_test
+        diskpart_util_test.cpp
+        ${PLATFORM_QUIRKS_SRC})
+    target_include_directories(diskpart_util_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(diskpart_util_test PRIVATE
+        Catch2::Catch2WithMain Qt6::Core virtdisk)
+    rpi_link_platform_backends(diskpart_util_test)
+    target_compile_features(diskpart_util_test PRIVATE cxx_std_20)
+    rpi_discover_tests(diskpart_util_test)
+endif()
 
 # ============================================================================
 # Drivelist Tests
@@ -394,7 +729,27 @@ target_compile_options(platformquirks_test PRIVATE
 )
 
 # Register with CTest for automatic test discovery
+if(WIN32)
+    # virtdisk for vhd_device.h, reached through TestBlockDevice: a
+    # virtual disk is what stands in for a loop device here.
+    target_link_libraries(platformquirks_test PRIVATE virtdisk)
+endif()
+
 rpi_discover_tests(platformquirks_test)
+
+# A real executable for the launch cases to launch, on every platform. They used
+# to write a shell script, which cannot be run on Windows at all, and a .cmd
+# rewrite of it measured cmd.exe's command-line parsing rather than
+# launchDetached's -- a URL containing "&id=abc" came back as two arguments
+# whatever the code under test had done. An .exe is handed its arguments by the
+# OS and reports what it actually received.
+add_executable(argument_recorder_probe
+    ${CMAKE_CURRENT_SOURCE_DIR}/argument_recorder_probe.cpp)
+target_link_libraries(argument_recorder_probe PRIVATE Qt6::Core)
+target_compile_features(argument_recorder_probe PRIVATE cxx_std_20)
+add_dependencies(platformquirks_test argument_recorder_probe)
+target_compile_definitions(platformquirks_test PRIVATE
+    ARGUMENT_RECORDER_BINARY="$<TARGET_FILE:argument_recorder_probe>")
 
 # Custom target for manual running
 add_custom_target(test_platformquirks
@@ -530,11 +885,16 @@ add_custom_target(test_fastboot_protocol
 add_executable(sparse_encoder_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
+    # setBlockMap() is half of what the encoder does on a real write, and the
+    # only map it is ever handed came out of this parser. Qt comes with it:
+    # the bmap is XML.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
     sparse_encoder_test.cpp
 )
 
 target_link_libraries(sparse_encoder_test PRIVATE
     Catch2::Catch2WithMain
+    Qt6::Core
 )
 
 target_include_directories(sparse_encoder_test PRIVATE
@@ -679,6 +1039,7 @@ add_custom_target(test_eeprom_signer
     COMMENT "Running EEPROM signer tests"
 )
 
+if(NOT WIN32)
 # Tests for the real libusb transport, run against an emulated USB device
 # (see rpiboot_usb_device_test.cpp and data/usb_gadget_emulator.sh). Kept
 # separate from rpiboot_integration_test because that one wants a Compute
@@ -723,6 +1084,7 @@ catch_discover_tests(rpiboot_usb_device_test
         RESOURCE_LOCK usb_gadget_emulator
         TIMEOUT 300
 )
+endif()
 
 # Hardware integration tests (gated by RPIBOOT_TEST_DEVICE env var)
 add_executable(rpiboot_integration_test
@@ -818,62 +1180,63 @@ add_custom_target(test_rpiboot
 # Disk Formatter Tests
 # ============================================================================
 
-# Standalone test (not Catch2) — uses POSIX fork/exec for system tool validation
-if(NOT WIN32)
-    add_executable(disk_formatter_test
-        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../aligned_buffer.h
-        ${PLATFORM_FILE_OPS}
-        disk_formatter_test.cpp
-    )
+# Standalone test (not Catch2). The loop-device section is POSIX and is
+# compiled out elsewhere; everything else is arithmetic over the bytes a
+# format lays down, and had no counterpart on Windows while the whole binary
+# was skipped there.
+add_executable(disk_formatter_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../aligned_buffer.h
+    ${PLATFORM_FILE_OPS}
+    disk_formatter_test.cpp
+)
 
-    # Enable Qt MOC for Q_OBJECT classes (e.g. MacFile on macOS)
-    set_target_properties(disk_formatter_test PROPERTIES AUTOMOC ON)
+# Enable Qt MOC for Q_OBJECT classes (e.g. MacFile on macOS)
+set_target_properties(disk_formatter_test PROPERTIES AUTOMOC ON)
 
-    target_include_directories(disk_formatter_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..
-    )
+target_include_directories(disk_formatter_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
 
-    # Qt6::Core needed by platform file_operations (QFile, QDebug)
+# Qt6::Core needed by platform file_operations (QFile, QDebug)
+target_link_libraries(disk_formatter_test PRIVATE
+    Qt6::Core
+)
+
+target_compile_features(disk_formatter_test PRIVATE cxx_std_20)
+target_compile_options(disk_formatter_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+if(APPLE)
     target_link_libraries(disk_formatter_test PRIVATE
-        Qt6::Core
-    )
-
-    target_compile_features(disk_formatter_test PRIVATE cxx_std_20)
-    target_compile_options(disk_formatter_test PRIVATE
-        -Wall -Wextra -Wpedantic
-        $<$<CONFIG:Debug>:-g -O0>
-    )
-
-    if(APPLE)
-        target_link_libraries(disk_formatter_test PRIVATE
-            "-framework Security"
-            "-framework DiskArbitration"
-            "-framework CoreFoundation"
-        )
-    endif()
-
-    rpi_link_platform_file_ops(disk_formatter_test)
-
-    # Not Catch2, so rpi_discover_tests does not apply -- register it directly.
-    # Until now this binary was built but never registered, which left
-    # file_operations.cpp and the platform file_operations implementation with
-    # no test that actually runs. The TIMEOUT is a backstop: the loop-device
-    # section shells out, and while every sudo in it now passes -n, a wedged
-    # external tool should fail the suite rather than hang it.
-    add_test(NAME disk_formatter COMMAND disk_formatter_test)
-    set_tests_properties(disk_formatter PROPERTIES TIMEOUT 120)
-
-    add_custom_target(test_disk_formatter
-        COMMAND disk_formatter_test
-        DEPENDS disk_formatter_test
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Running disk formatter tests"
+        "-framework Security"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
     )
 endif()
+
+rpi_link_platform_file_ops(disk_formatter_test)
+
+# Not Catch2, so rpi_discover_tests does not apply -- register it directly.
+# Until now this binary was built but never registered, which left
+# file_operations.cpp and the platform file_operations implementation with
+# no test that actually runs. The TIMEOUT is a backstop: the loop-device
+# section shells out, and while every sudo in it now passes -n, a wedged
+# external tool should fail the suite rather than hang it.
+add_test(NAME disk_formatter COMMAND disk_formatter_test)
+set_tests_properties(disk_formatter PROPERTIES TIMEOUT 120)
+
+add_custom_target(test_disk_formatter
+    COMMAND disk_formatter_test
+    DEPENDS disk_formatter_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running disk formatter tests"
+)
 
 # ============================================================================
 # Device I/O Limits Diagnostic Test
@@ -1334,6 +1697,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             COMMENT "Rendering the embedded UI at each display profile"
         )
     endif()
+
+    # The desktop counterpart, sharing the same screenshot hook but none of the
+    # display fixtures: it photographs the published UI rather than judging a
+    # scale factor, so it wants the desktop layout and needs nothing synthesised
+    # about the panel. Its output is what the AppStream metainfo and the store
+    # listings point at, which is why it is a target you run and look at rather
+    # than a CTest test.
+    if(TARGET rpi-imager AND NOT BUILD_EMBEDDED AND ENABLE_TEST_HOOKS)
+        add_custom_target(screenshots_desktop
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/screenshots/shots.sh
+                    $<TARGET_FILE:rpi-imager>
+                    ${CMAKE_CURRENT_BINARY_DIR}/desktop_screenshots
+            DEPENDS rpi-imager
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Rendering the desktop UI, one PNG per wizard page"
+        )
+    endif()
 endif()
 
 # ============================================================================
@@ -1351,6 +1731,14 @@ endif()
 # where the host will not allow one, which is the normal case in containerised
 # CI. Verified against a KVM guest, where the loop cases do run.
 
+# Not on Windows. The cases are written against the POSIX backend throughout:
+# O_DIRECT, open/pread/ftruncate on descriptors, RLIMIT_NOFILE to force the
+# io_uring fallback, and a loop device for the block-device paths. None of
+# that has a Windows counterpart, and file_operations_windows.cpp is a
+# different implementation -- 1,876 lines of volume locking, dismount and
+# sector-aligned overlapped I/O -- that wants cases of its own rather than a
+# port of these. Guarded rather than half-ported, so the gap stays visible.
+if(NOT WIN32)
 add_executable(file_operations_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
@@ -1392,6 +1780,7 @@ target_compile_options(file_operations_test PRIVATE
 
 rpi_link_platform_file_ops(file_operations_test)
 rpi_discover_tests(file_operations_test FAULT_INJECTION)
+endif()
 
 add_custom_target(test_file_operations
     COMMAND file_operations_test
@@ -1551,6 +1940,161 @@ add_custom_target(test_performance_stats
 # and drives the same code against that: no device, no mount, no privileges,
 # and both FAT16 and FAT32. Cases skip themselves where mkfs.vfat is absent.
 
+if(WIN32)
+    # The filter parsing behind the native open dialog. Only the Windows
+    # backend has it; the dialog itself cannot be opened from a test, so the
+    # parsing is reached through a seam instead.
+    add_executable(native_file_dialog_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/nativefiledialog_windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../nativefiledialog.h
+        native_file_dialog_test.cpp
+    )
+
+    target_compile_definitions(native_file_dialog_test PRIVATE
+        NATIVEFILEDIALOG_ENABLE_TEST_API)
+
+    target_include_directories(native_file_dialog_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_link_libraries(native_file_dialog_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+        Qt6::Gui
+        ole32
+        shell32
+    )
+
+    target_compile_features(native_file_dialog_test PRIVATE cxx_std_20)
+
+    rpi_discover_tests(native_file_dialog_test)
+endif()
+
+add_executable(proxy_url_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../proxy_url.h
+    proxy_url_test.cpp
+)
+
+target_include_directories(proxy_url_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(proxy_url_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    Qt6::Network
+)
+
+target_compile_features(proxy_url_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(proxy_url_test)
+
+add_executable(image_options_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imageadvancedoptions.h
+    image_options_test.cpp
+)
+
+# Q_NAMESPACE, so moc has to see the header.
+set_target_properties(image_options_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(image_options_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(image_options_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(image_options_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(image_options_test)
+
+add_executable(secure_bytes_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../secure_bytes.h
+    secure_bytes_test.cpp
+)
+
+target_include_directories(secure_bytes_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(secure_bytes_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(secure_bytes_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(secure_bytes_test)
+
+add_executable(revision_code_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../embedded/revision_code.h
+    revision_code_test.cpp
+)
+
+target_include_directories(revision_code_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(revision_code_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(revision_code_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(revision_code_test)
+
+add_executable(settings_permissions_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.cpp
+    settings_permissions_test.cpp
+)
+
+target_include_directories(settings_permissions_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(settings_permissions_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_features(settings_permissions_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(settings_permissions_test)
+
+# Writing into a subdirectory, measured against mtools rather than against
+# this driver's own reading -- which has agreed with it while it put files in
+# the wrong place.
+add_executable(fat_subdirectory_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    fat_subdirectory_test.cpp
+)
+
+set_target_properties(fat_subdirectory_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(fat_subdirectory_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(fat_subdirectory_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+rpi_link_platform_file_ops(fat_subdirectory_test)
+target_compile_features(fat_subdirectory_test PRIVATE cxx_std_20)
+rpi_discover_tests(fat_subdirectory_test)
+
 add_executable(fat_partition_image_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
@@ -1651,6 +2195,41 @@ target_link_libraries(drive_list_item_test PRIVATE
 target_compile_features(drive_list_item_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(drive_list_item_test)
+
+# ============================================================================
+# The accelerated SHA-256
+# ============================================================================
+# The hash both sides of the write comparison are computed with. It had no
+# direct test on any platform: it was only ever exercised through the writer,
+# where a wrong digest on both sides still compares equal.
+
+add_executable(accelerated_hash_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../acceleratedcryptographichash.h
+    ${PLATFORM_ACCEL_HASH_SRC}
+    accelerated_hash_test.cpp
+)
+
+# The CNG backend releases its resources on every error path and again in the
+# destructor. The failures cannot be provoked -- they are the provider
+# refusing -- but the sequence can.
+target_compile_definitions(accelerated_hash_test PRIVATE ACCELERATED_HASH_ENABLE_TEST_API)
+
+target_include_directories(accelerated_hash_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GNUTLS_INCLUDE_DIRS}
+)
+
+target_link_libraries(accelerated_hash_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${GNUTLS_LIBRARIES}
+)
+
+rpi_link_platform_backends(accelerated_hash_test)
+
+target_compile_features(accelerated_hash_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(accelerated_hash_test)
 
 # ============================================================================
 # DeviceInfo on a desktop
@@ -1843,6 +2422,12 @@ rpi_link_platform_file_ops(drive_format_thread_test)
 
 target_compile_features(drive_format_thread_test PRIVATE cxx_std_20)
 
+if(WIN32)
+    # virtdisk for vhd_device.h, reached through TestBlockDevice: a
+    # virtual disk is what stands in for a loop device here.
+    target_link_libraries(drive_format_thread_test PRIVATE virtdisk)
+endif()
+
 rpi_discover_tests(drive_format_thread_test)
 
 # ── ImageWriter and the models behind the pickers ───────────────────────────
@@ -1979,6 +2564,12 @@ if(NOT BUILD_CLI_ONLY)
         add_dependencies(image_writer_test network_manager_psk_probe)
     endif()
     target_link_libraries(image_writer_test PRIVATE Catch2::Catch2 rpi_imager_testable)
+if(WIN32)
+        # virtdisk for vhd_device.h, reached through TestBlockDevice: a virtual
+        # disk is what stands in for a loop device here.
+        target_link_libraries(image_writer_test PRIVATE virtdisk)
+    endif()
+
     target_compile_definitions(image_writer_test PRIVATE
         IMAGER_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
     rpi_discover_tests(image_writer_test FAULT_INJECTION)
@@ -2025,7 +2616,8 @@ endif()
     set_target_properties(qml_load_test PROPERTIES AUTOMOC ON)
     target_link_libraries(qml_load_test PRIVATE Catch2::Catch2 rpi_imager_testable Qt6::Quick)
     target_compile_definitions(qml_load_test PRIVATE
-        IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}")
+        IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}"
+        IMAGER_QML_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
     rpi_discover_tests(qml_load_test)
 
     # Driven tests for the controls themselves: real clicks and keystrokes
@@ -2038,6 +2630,7 @@ endif()
             rpi_imager_testable Qt6::Quick Qt6::QuickTest)
         target_compile_definitions(qml_ui_test PRIVATE
             IMAGER_QML_MODULE_PARENT="${CMAKE_BINARY_DIR}"
+            IMAGER_QML_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
             QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
         add_test(NAME qml_ui_test
                  COMMAND qml_ui_test -platform offscreen)
@@ -2045,8 +2638,25 @@ endif()
         # thousand cases, seven minutes on a laptop. The suite-wide --timeout
         # that stops a deadlocked case from costing the whole run is far below
         # that, so this one says how long it honestly needs.
+        #
+        # The two URLs are the same pair rpi_discover_tests() sets for every
+        # Catch2 binary, and for the same reason: this suite drives the real
+        # ImageWriter singleton, so anything it reaches that reports a write
+        # or enrols a device would do so against production. Registered with
+        # add_test() rather than through that function, it was the one binary
+        # without them -- and it is the one that drives the wizard hardest.
+        # One ENVIRONMENT list, not three: CMake keeps only the last of a
+        # repeated property key.
+        # Nearly all the suite's wall time, ctest running the rest behind it.
+        # It timed out here at 1800.08s on 14 September 2026, and the cause
+        # was not the storms: nested OS icons were reaching Image.source
+        # unrouted, so Qt Quick fetched hundreds of them over the network.
+        # Routed, the same suite passes in 692.61s under UBSan on a machine
+        # also running three fuzzers. Left at 1800, which is now well over
+        # twice what it needs -- doubling it would have hidden the fetches
+        # rather than found them.
         set_tests_properties(qml_ui_test PROPERTIES
-            ENVIRONMENT "QT_QUICK_BACKEND=software"
+            ENVIRONMENT "QT_QUICK_BACKEND=software;RPI_IMAGER_TELEMETRY_URL=;RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
             TIMEOUT 1800)
 
         # The same binary again, on one file, on its own.
@@ -2064,7 +2674,19 @@ endif()
                  COMMAND qml_ui_test -platform offscreen
                          -input "${CMAKE_CURRENT_SOURCE_DIR}/qml/tst_device_selection_step.qml")
         set_tests_properties(qml_ui_test_device_selection_offline PROPERTIES
-            ENVIRONMENT "QT_QUICK_BACKEND=software")
+            ENVIRONMENT "QT_QUICK_BACKEND=software;RPI_IMAGER_TELEMETRY_URL=;RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true")
+
+        # These two are registered by hand rather than through
+        # rpi_discover_tests(), so nothing has given them a DLL search path. On
+        # Windows both exited 0xc0000135 before main(), which took the whole
+        # QtQuickTest suite -- 981 test functions behind two CTest entries --
+        # out of the run while reporting only two failures.
+        #
+        # ENVIRONMENT_MODIFICATION rather than an addition to ENVIRONMENT above:
+        # it prepends to the PATH the runner already has instead of replacing
+        # it, and it is a separate property, so neither of the two settings
+        # overwrites the other.
+        rpi_set_windows_test_env(qml_ui_test qml_ui_test_device_selection_offline)
 
         # `qml_coverage`: which of the QML actually ran.
         #
@@ -2227,6 +2849,27 @@ add_dependencies(device_info_test device_info_probe)
 
 rpi_discover_tests(device_info_test)
 
+# ── screenshot page list ────────────────────────────────────────────────────
+# The runner itself is a custom target below, but the list it is driven from
+# names steps in WizardContainer.qml and published names in the metainfo, and
+# is silently wrong when either moves. Reading three files costs nothing.
+add_executable(screenshot_pages_test screenshot_pages_test.cpp)
+
+target_link_libraries(screenshot_pages_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_compile_definitions(screenshot_pages_test PRIVATE
+    SCREENSHOT_PAGES_FILE="${CMAKE_CURRENT_SOURCE_DIR}/screenshots/pages.txt"
+    WIZARD_CONTAINER_QML="${CMAKE_CURRENT_SOURCE_DIR}/../wizard/WizardContainer.qml"
+    METAINFO_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml.in"
+)
+
+target_compile_features(screenshot_pages_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(screenshot_pages_test)
+
 # ── suspend inhibition ──────────────────────────────────────────────────────
 # The machine must not go to sleep while a card is being written, and letting
 # go of the inhibit must not hold the application open afterwards. The FIFO it
@@ -2235,9 +2878,15 @@ rpi_discover_tests(device_info_test)
 if(TARGET Qt6::DBus)
     add_executable(suspend_inhibitor_probe
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.cpp
         ${PLATFORM_QUIRKS_SRC}
         suspend_inhibitor_probe.cpp
     )
+
+    # LinuxSuspendInhibitor derives from SuspendInhibitor, so the probe needs
+    # the base's constructor and destructor, and AUTOMOC to emit the vtable
+    # entries its Q_OBJECT declares.
+    set_target_properties(suspend_inhibitor_probe PROPERTIES AUTOMOC ON)
 
     target_include_directories(suspend_inhibitor_probe PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -2255,6 +2904,7 @@ if(TARGET Qt6::DBus)
     # under dbus-run-session so the bus is private to the case.
     add_executable(gnome_inhibitor_probe
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/linux_suspend_inhibitor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.cpp
         ${PLATFORM_QUIRKS_SRC}
         gnome_inhibitor_probe.cpp
     )
@@ -2299,6 +2949,7 @@ endif()
 # for its forward delay before an address arrives. Getting the decision wrong
 # either warns on every managed switch or leaves the user watching a board
 # that looks like it has failed to reach the network.
+if(UNIX AND NOT APPLE)
 add_executable(stp_analyzer_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../linux/stpanalyzer.cpp
     stp_analyzer_test.cpp
@@ -2347,6 +2998,7 @@ if(TARGET Qt6::Network)
     add_dependencies(stp_analyzer_test stp_listener_probe)
     target_compile_definitions(stp_analyzer_test PRIVATE
         STP_LISTENER_PROBE_BINARY="$<TARGET_FILE:stp_listener_probe>")
+endif()
 endif()
 
 
@@ -2440,6 +3092,13 @@ rpi_link_platform_backends(download_thread_test)
 
 rpi_link_platform_file_ops(download_thread_test)
 
+if(WIN32)
+    # virtdisk for vhd_device.h, reached through TestBlockDevice: a virtual
+    # disk is what stands in for a loop device here.
+    target_link_libraries(download_thread_test PRIVATE virtdisk)
+endif()
+
+
 target_compile_features(download_thread_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(download_thread_test FAULT_INJECTION)
@@ -2460,6 +3119,9 @@ add_executable(download_extract_thread_test
     ${RPI_DOWNLOAD_PIPELINE_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/../downloadextractthread.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../localfileextractthread.cpp
+    # Sizing asks libarchive the same question the write does, and one case
+    # here sets the two verdicts side by side.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../imagesizeparser.cpp
     # The stub inhibitor rather than the DBus one: nothing here needs to stop
     # the machine suspending, and the real implementation wants a session bus.
     ${CMAKE_CURRENT_SOURCE_DIR}/../suspend_inhibitor.h
@@ -2493,6 +3155,12 @@ target_link_libraries(download_extract_thread_test PRIVATE
 rpi_link_platform_backends(download_extract_thread_test)
 
 rpi_link_platform_file_ops(download_extract_thread_test)
+
+if(WIN32)
+    # virtdisk for vhd_device.h: the mounted-FAT fixture attaches a virtual
+    # disk where the POSIX hosts take a loop device.
+    target_link_libraries(download_extract_thread_test PRIVATE virtdisk)
+endif()
 
 target_compile_features(download_extract_thread_test PRIVATE cxx_std_20)
 
@@ -2669,6 +3337,19 @@ rpi_link_platform_backends(secure_boot_provisioner_test)
 rpi_link_platform_file_ops(secure_boot_provisioner_test)
 
 target_compile_features(secure_boot_provisioner_test PRIVATE cxx_std_20)
+
+# A real executable rather than a shell script: Windows appends ".exe" to a
+# bare program name and nothing else, so a shebang script named "openssl" was
+# never found and the cases that plant one passed by taking the "not
+# installed" path instead.
+add_executable(fake_openssl_probe
+    fake_openssl_probe.cpp
+)
+target_compile_features(fake_openssl_probe PRIVATE cxx_std_20)
+
+target_compile_definitions(secure_boot_provisioner_test PRIVATE
+    FAKE_OPENSSL_BINARY="$<TARGET_FILE:fake_openssl_probe>")
+add_dependencies(secure_boot_provisioner_test fake_openssl_probe)
 
 rpi_discover_tests(secure_boot_provisioner_test)
 

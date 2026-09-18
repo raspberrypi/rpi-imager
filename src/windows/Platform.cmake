@@ -14,8 +14,15 @@ if(NOT CMAKE_DLLTOOL)
     message(STATUS "Found dlltool: ${CMAKE_DLLTOOL}")
 endif()
 
+# The OUTPUT is absolute, and has to be: src/test builds this same DEPENDENCIES
+# list into rpi_imager_testable, and a relative output is resolved against the
+# directory that consumes it -- so from src/test CMake went looking for
+# src/test/wlanapi_delayed.lib, found nothing, and failed the generate step
+# outright with "Cannot find source file". The application target never noticed,
+# because it is declared in this same scope. An absolute path is visible from
+# any directory, which is how rpi-imager.rc beside it has always worked.
 add_custom_command(
-    OUTPUT wlanapi_delayed.lib
+    OUTPUT ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib
     COMMAND ${CMAKE_DLLTOOL} --input-def "${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def"
             --output-delaylib "${CMAKE_BINARY_DIR}/wlanapi_delayed.lib" --dllname "wlanapi.dll"
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def
@@ -29,7 +36,6 @@ set(PLATFORM_SOURCES
     drivelist/drivelist_windows.cpp
     windows/winfile.cpp
     windows/winfile.h
-    windows/bootimgcreator_windows.cpp
     windows/secureboot_crypto_windows.cpp
     windows/diskpart_util.cpp
     windows/diskpart_util.h
@@ -54,9 +60,9 @@ endif()
 
 set(DEPENDENCIES
     ${CMAKE_BINARY_DIR}/rpi-imager.rc
-    wlanapi_delayed.lib
+    ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib
 )
-set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll crypt32 ole32 oleaut32 wbemuuid)
+set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll crypt32 ole32 oleaut32 wbemuuid virtdisk)
 
 # Add winusb for rpiboot support
 set(EXTRALIBS ${EXTRALIBS} winusb)

@@ -475,7 +475,9 @@ Item {
                     width: parent.width
                     spacing: Style.spacingXSmall
                     // Add right margin when scrollbar is visible to prevent overlap
-                    anchors.rightMargin: (sidebarScroll.contentHeight > sidebarScroll.height ? Style.scrollBarWidth : 0)
+                    // Unconditional: SelectionListView.qml records why the
+                    // conditional form fed back into the layout.
+                    anchors.rightMargin: Style.scrollBarWidth
                 
                 // Header
                 Text {
@@ -676,6 +678,7 @@ Item {
                                         anchors.leftMargin: Style.spacingMedium
                                         MarqueeText {
                                             id: subLabel
+                                            objectName: "sidebarSubstepLabel"
                                             Layout.fillWidth: true
                                             Layout.alignment: Qt.AlignVCenter
                                             text: subItem.modelData
@@ -1310,13 +1313,20 @@ Item {
             tokenConflictDialog.openWithToken(newToken)
         }
         
-        // Handle token cleared signal at container level to ensure it's always processed
-        // even when PiConnectCustomizationStep component is not loaded
-        function onConnectTokenCleared() {
-            // Reset Pi Connect state when token is cleared (e.g., after write completes)
-            // Note: Snapshot is already captured when entering writing step, so no need to capture here
-            root.piConnectEnabled = false
+        // Handled at container level so it is processed even when
+        // PiConnectCustomizationStep is not loaded.
+        function onConnectTokenCleared(configurationInvalidated) {
+            // What the generator reads goes either way: Connect setup emitted
+            // with no token behind it would reach the next card and fail to
+            // enrol there with nothing to explain it.
             delete root.customizationSettings.piConnectEnabled
+            // What the user configured is a separate question. A token
+            // consumed by a successful write leaves the step configured, and
+            // the sidebar and the completion summary both report it -- so
+            // clearing it here un-bolded the step as the write finished,
+            // beside a summary still listing Connect as enabled.
+            if (configurationInvalidated)
+                root.piConnectEnabled = false
         }
         
         // Handle repository URL received from deep link (rpi-imager://open?repo=...)

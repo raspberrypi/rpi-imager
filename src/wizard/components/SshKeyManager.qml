@@ -269,6 +269,7 @@ ColumnLayout {
                 
                 // Key text (truncated for display)
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     Layout.maximumWidth: parent ? parent.width - 100 : 500
                     text: {
@@ -397,15 +398,21 @@ ColumnLayout {
         dialogTitle: qsTr("Select SSH Public Key")
         nameFilters: CommonStrings.sshFiltersList
         Component.onCompleted: {
-            var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-            var url = "file://" + home + "/.ssh"
+            // writableLocation() already returns a url, so prefixing another
+            // scheme produced "file://file:///home/...", which names nothing.
+            var url = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+                      + "/.ssh"
             browseKeyFileDialog.currentFolder = url
             browseKeyFileDialog.folder = url
         }
         onAccepted: {
             if (selectedFile && selectedFile.toString().length > 0) {
-                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
-                var contents = ImageWriterSingleton.readFileContents(filePath)
+                // Handed over whole: readFileContents() converts a file:// URL
+                // itself, with QUrl rather than a string replace. Stripping the
+                // scheme here left "/C:/Users/..." on Windows and the key file
+                // read as empty.
+                var contents = ImageWriterSingleton.readFileContents(
+                                   selectedFile.toString())
                 if (contents && contents.length > 0) {
                     root.addKeysFromFile(contents)
                 }

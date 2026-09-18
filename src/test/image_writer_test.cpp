@@ -10,12 +10,24 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include "platform_permissions.h"
+
+#include "platform_privilege.h"
+
+#include <cmath>
+#include <limits>
+#include <vector>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/catch_session.hpp>
 
+#ifndef _WIN32
+// getpwuid() and the uid handling around it belong to the settings-permission
+// cases, which are themselves behind SETTINGS_PERMISSIONS_PROBE_BINARY -- the
+// probe is built only where `unshare -r` exists to run it.
 #include <unistd.h>
 #include <pwd.h>
+#endif
 
 #include "imagewriter.h"
 #include "platformquirks.h"
@@ -26,7 +38,9 @@
 #include "downloadthread.h"
 #include "file_operations.h"
 #include "app_resources.h"
+#include <QProcessEnvironment>
 #include "platform_tools.h"
+#include <QLocale>
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include "drivelistmodel.h"
@@ -49,6 +63,7 @@
 #include <QJsonParseError>
 #include <QProcess>
 #include "fixture_process.h"
+#include "test_scratch.h"
 #include <QDir>
 #include <QAccessible>
 #include <QSettings>
@@ -68,6 +83,12 @@
 #include <QVariant>
 #include <QVersionNumber>
 #include <QVariantMap>
+
+#include <chrono>
+#include <thread>
+
+#include "localfileextractthread.h"
+#include "platform_file_operations.h"
 
 using Catch::Matchers::ContainsSubstring;
 
@@ -126,7 +147,7 @@ TEST_CASE("Nothing is ready to write before an image and a drive are chosen",
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
     CHECK_FALSE(writer.readyToWrite());   // still no drive
 
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     CHECK(writer.readyToWrite());
 }
 
@@ -136,7 +157,7 @@ TEST_CASE("Clearing the drive makes it not ready again", "[imagewriter]")
     // with it, rather than leaving it live against a drive that is gone.
     ImageWriter writer(nullptr);
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     writer.setDst(QString(), 0);
@@ -187,7 +208,7 @@ TEST_CASE("An image larger than the card is refused before anything is written",
     SourceFile source;
     writer.setSrc(source.url(),
                   /*downloadLen=*/0, /*extrLen=*/8ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
 
     writer.startWrite();
 
@@ -205,7 +226,7 @@ TEST_CASE("An image that fits is not refused on capacity", "[imagewriter]")
 
     SourceFile source;
     writer.setSrc(source.url(), 0, 1ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     for (const QString &e : log.errors) {
@@ -229,7 +250,7 @@ TEST_CASE("An image exactly filling the card is allowed", "[imagewriter]")
     SourceFile source;
     const quint64 card = 4ull * 1024 * 1024 * 1024;
     writer.setSrc(source.url(), 0, card);
-    writer.setDst(QStringLiteral("/dev/null"), card);
+    writer.setDst(QProcess::nullDevice(), card);
     writer.startWrite();
 
     for (const QString &e : log.errors) {
@@ -248,7 +269,7 @@ TEST_CASE("An image one byte too big is refused", "[imagewriter]")
     SourceFile source;
     const quint64 card = 4ull * 1024 * 1024 * 1024;
     writer.setSrc(source.url(), 0, card + 1);
-    writer.setDst(QStringLiteral("/dev/null"), card);
+    writer.setDst(QProcess::nullDevice(), card);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -267,7 +288,7 @@ TEST_CASE("A card of unknown size does not trigger the capacity check",
 
     SourceFile source;
     writer.setSrc(source.url(), 0, 8ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 0);
+    writer.setDst(QProcess::nullDevice(), 0);
     writer.startWrite();
 
     for (const QString &e : log.errors) {
@@ -295,13 +316,13 @@ TEST_CASE("A drive that has gone is named as gone, not as never chosen",
     UiLog log(&writer);
 
     writer.setSrc(source.url(), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     // The signal the drive poller raises when the device it was watching
     // stops being listed.
     REQUIRE(QMetaObject::invokeMethod(&writer, "onSelectedDeviceRemoved",
-                                      Q_ARG(QString, QStringLiteral("/dev/null"))));
+                                      Q_ARG(QString, QProcess::nullDevice())));
     CHECK_FALSE(writer.readyToWrite());
 
     writer.startWrite();
@@ -323,7 +344,7 @@ TEST_CASE("Unplugging some other drive leaves the chosen one alone",
     UiLog log(&writer);
 
     writer.setSrc(source.url(), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     REQUIRE(QMetaObject::invokeMethod(&writer, "onSelectedDeviceRemoved",
@@ -359,7 +380,7 @@ TEST_CASE("A folder picked instead of an image is refused", "[imagewriter]")
     UiLog log(&writer);
 
     writer.setSrc(QUrl::fromLocalFile(dir.path()), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -370,7 +391,7 @@ TEST_CASE("A folder picked instead of an image is refused", "[imagewriter]")
 
 TEST_CASE("An image that cannot be read is refused", "[imagewriter]")
 {
-    if (geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which can read a file with no permissions at all");
 
     QTemporaryDir dir;
@@ -381,18 +402,19 @@ TEST_CASE("An image that cannot be read is refused", "[imagewriter]")
         REQUIRE(f.open(QIODevice::WriteOnly));
         f.write(QByteArray(1024, '\0'));
     }
-    REQUIRE(QFile::setPermissions(path, QFileDevice::Permissions()));
+    // Not setPermissions(): on Windows it cannot express "unreadable" at all
+    // and returns false, so this case used to fail in its own fixture without
+    // reaching the refusal it is about. DeniedAccess writes a deny ACE there
+    // and mode bits everywhere else, and puts them back in its destructor.
+    rpi_test::DeniedAccess denied(path, rpi_test::DeniedAccess::Read);
+    REQUIRE_DENIED(denied);
 
     ImageWriter writer(nullptr);
     UiLog log(&writer);
 
     writer.setSrc(QUrl::fromLocalFile(path), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
-
-    // Restored before the assertions, so a failing case still leaves a
-    // directory that can be removed.
-    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 
     REQUIRE(log.errors.size() == 1);
     INFO("reported: " << log.errors[0].toStdString());
@@ -422,7 +444,7 @@ TEST_CASE("An empty image file is refused rather than written as a blank card",
     UiLog log(&writer);
 
     writer.setSrc(QUrl::fromLocalFile(path), 0, 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -443,7 +465,7 @@ TEST_CASE("A source that is not there is named before the card is measured",
 
     const QString missing = QStringLiteral("/nonexistent-rpi-imager/gone.img");
     writer.setSrc(QUrl::fromLocalFile(missing), 0, 64ull * 1024 * 1024 * 1024);
-    writer.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     writer.startWrite();
 
     REQUIRE(log.errors.size() == 1);
@@ -547,9 +569,16 @@ TEST_CASE("The hardware and OS list models are reachable", "[imagewriter]")
 TEST_CASE("A settings file left unwritable is repaired, keeping what it held",
           "[imagewriter][settings]")
 {
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("root can write a file with no write bit, so the case this is "
              "about cannot arise");
+#ifdef Q_OS_WIN
+    // There is no settings file here to make unwritable. QSettings defaults to
+    // NativeFormat, which on Windows is the registry, so fileName() names a key
+    // rather than a path and the repair this case describes has nothing to act
+    // on -- which is also why settings_permissions.cpp is Q_OS_UNIX throughout.
+    SKIP("settings live in the registry on Windows, not in a file");
+#else
 
     QString path;
     {
@@ -594,6 +623,7 @@ TEST_CASE("A settings file left unwritable is repaired, keeping what it held",
     CHECK(after.isWritable());
     CHECK(after.value(QStringLiteral("imager/repository")).toString() ==
           QStringLiteral("https://example.invalid/os_list.json"));
+#endif
 }
 
 TEST_CASE("A disable_warnings flag found in the settings does not survive startup",
@@ -676,7 +706,7 @@ TEST_CASE("Another drive being unplugged leaves the choice alone",
     WriterWithRemoval writer;
     RemovalOutcome outcome(&writer);
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
     writer.onSelectedDeviceRemoved(QStringLiteral("/dev/somethingelse"));
@@ -692,10 +722,10 @@ TEST_CASE("The chosen drive being unplugged makes the write impossible and says 
     RemovalOutcome outcome(&writer);
     UiLog log(&writer);
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     REQUIRE(writer.readyToWrite());
 
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     // The screen is told, so it can drop the selection rather than leaving a
     // drive listed that is not there.
@@ -718,12 +748,12 @@ TEST_CASE("Unplugging after a successful write is just ejecting",
     // worked.
     WriterWithRemoval writer;
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onSuccess();
     RemovalOutcome outcome(&writer);
     UiLog log(&writer);
 
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     CHECK(outcome.selectedDeviceRemoved == 0);
     CHECK(outcome.cancelledPlain == 0);
@@ -741,11 +771,11 @@ TEST_CASE("Unplugging during preparation says the card went away",
     // user did.
     WriterWithRemoval writer;
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onFinalizing();   // a state the writer counts as in-progress
     RemovalOutcome outcome(&writer);
 
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     CHECK(outcome.cancelledByRemoval == 1);
     CHECK(outcome.cancelledPlain == 0);
@@ -765,12 +795,12 @@ TEST_CASE("A later cancellation is not still blamed on the card",
     // observed.
     WriterWithRemoval writer;
     writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")));
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onFinalizing();
-    writer.onSelectedDeviceRemoved(QStringLiteral("/dev/null"));
+    writer.onSelectedDeviceRemoved(QProcess::nullDevice());
 
     // A second write, cancelled by the user this time.
-    writer.setDst(QStringLiteral("/dev/null"), 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
     writer.onFinalizing();
     RemovalOutcome outcome(&writer);
     writer.onCancelled();
@@ -1057,7 +1087,7 @@ namespace {
 bool haveOpensslBinary()
 {
     QProcess p;
-    p.start(QStringLiteral("openssl"), {QStringLiteral("version")});
+    p.start(rpi_test::toolPath(QStringLiteral("openssl")), {QStringLiteral("version")});
     p.waitForFinished(10000);
     return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
 }
@@ -1067,7 +1097,7 @@ bool haveOpensslBinary()
 bool generateRsaKeyAt(const QString& path)
 {
     QProcess p;
-    p.start(QStringLiteral("openssl"),
+    p.start(rpi_test::toolPath(QStringLiteral("openssl")),
             {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
              QStringLiteral("2048")});
     if (!p.waitForFinished(60000))
@@ -1185,12 +1215,20 @@ TEST_CASE("Something that is not a key produces no fingerprint at all",
     // A public key where a private one is needed: the signer cannot use it,
     // so offering a fingerprint for it would be confirming a key that cannot
     // sign.
-    if (haveOpensslBinary()) {
+    // Skipped rather than quietly doing less, which is what the two cases
+    // above this one do and what the rest of the suite does 499 times over.
+    // Without openssl the check below never ran and the case still reported
+    // a pass, so a machine missing it was testing something narrower than
+    // the name says and nothing anywhere mentioned it.
+    if (!haveOpensslBinary())
+        SKIP("openssl is not installed, so no key pair can be generated");
+
+    {
         const QString priv = QDir(dir.path()).filePath(QStringLiteral("p.pem"));
         const QString pub = QDir(dir.path()).filePath(QStringLiteral("p.pub"));
         REQUIRE(generateRsaKeyAt(priv));
         QProcess p;
-        p.start(QStringLiteral("openssl"),
+        p.start(rpi_test::toolPath(QStringLiteral("openssl")),
                 {QStringLiteral("rsa"), QStringLiteral("-in"), priv,
                  QStringLiteral("-pubout"), QStringLiteral("-out"), pub});
         REQUIRE(p.waitForFinished(30000));
@@ -1628,10 +1666,7 @@ int main(int argc, char *argv[])
     qputenv("RPI_IMAGER_CONNECT_URL", QByteArray("http://127.0.0.1:1"));
     QGuiApplication app(argc, argv);
     initAppResources();
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("image_writer_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("image_writer_test"));
     return Catch::Session().run(argc, argv);
 }
 
@@ -1902,50 +1937,419 @@ TEST_CASE("The built-in entries survive filtering", "[imagewriter][oslist]")
 // rounding is how somebody picks a card believing it is big enough.
 // ══════════════════════════════════════════════════════════════
 
-TEST_CASE("Sizes are formatted in binary units", "[imagewriter][format]")
+namespace {
+
+// formatSize() renders through the default locale, so a case that pins a
+// figure has to pin the locale too. Without this the suite passes or fails
+// by the machine's LANG -- a German developer would see 1,5 GB where the
+// expectation says 1.5 GB, and the failure would look like a code fault.
+struct ScopedLocale {
+    QLocale previous;
+    explicit ScopedLocale(const QLocale &l) { QLocale::setDefault(l); }
+    ~ScopedLocale() { QLocale::setDefault(previous); }
+};
+
+const QLocale kBritish{QLocale::English, QLocale::UnitedKingdom};
+
+} // namespace
+
+
+TEST_CASE("Sizes are formatted in the units storage is sold in",
+          "[imagewriter][format]")
 {
+    ScopedLocale guard{kBritish};
     ImageWriter w(nullptr);
     CHECK(w.formatSize(0, 0) == QStringLiteral("0 B"));
     CHECK(w.formatSize(512, 0) == QStringLiteral("512 B"));
-    CHECK(w.formatSize(1024, 0) == QStringLiteral("1 KB"));
-    CHECK(w.formatSize(1024ull * 1024, 0) == QStringLiteral("1 MB"));
-    CHECK(w.formatSize(1024ull * 1024 * 1024, 0) == QStringLiteral("1 GB"));
-    CHECK(w.formatSize(1024ull * 1024 * 1024 * 1024, 0) == QStringLiteral("1 TB"));
+    CHECK(w.formatSize(1000, 0) == QStringLiteral("1 KB"));
+    CHECK(w.formatSize(1000ull * 1000, 0) == QStringLiteral("1 MB"));
+    CHECK(w.formatSize(1000ull * 1000 * 1000, 0) == QStringLiteral("1 GB"));
+    CHECK(w.formatSize(1000ull * 1000 * 1000 * 1000, 0) == QStringLiteral("1 TB"));
 }
 
 TEST_CASE("A size just below a unit boundary keeps the smaller unit",
           "[imagewriter][format]")
 {
-    // 1023 bytes is not "1 KB"; rounding it up would let a card look larger
+    ScopedLocale guard{kBritish};
+    // 999 bytes is not "1 KB"; rounding it up would let a card look larger
     // than it is right at the boundary that matters.
     ImageWriter w(nullptr);
-    CHECK(w.formatSize(1023, 0) == QStringLiteral("1023 B"));
-    CHECK_THAT(w.formatSize(1024ull * 1024 - 1, 1).toStdString(),
+    CHECK(w.formatSize(999, 0) == QStringLiteral("999 B"));
+    CHECK_THAT(w.formatSize(1000ull * 1000 - 1, 1).toStdString(),
                ContainsSubstring("KB"));
 }
 
 TEST_CASE("Decimal places are honoured", "[imagewriter][format]")
 {
+    ScopedLocale guard{kBritish};
     ImageWriter w(nullptr);
-    const QString oneAndAHalf = w.formatSize(1536ull * 1024 * 1024, 1);
+    const QString oneAndAHalf = w.formatSize(1500ull * 1000 * 1000, 1);
     INFO("1.5 GB rendered as: " << oneAndAHalf.toStdString());
     CHECK_THAT(oneAndAHalf.toStdString(), ContainsSubstring("1.5"));
     CHECK_THAT(oneAndAHalf.toStdString(), ContainsSubstring("GB"));
 }
 
-TEST_CASE("A realistic card size reads sensibly", "[imagewriter][format]")
+TEST_CASE("A card reads as the size printed on it", "[imagewriter][format]")
 {
-    // What a 32 GB card actually reports.
+    ScopedLocale guard{kBritish};
+    // The long-standing complaint this fixes: a card sold as 32 GB read as
+    // 29.8, because the divisor was 1024 and the label said GB. Users saw
+    // "the image requires at least 7.9 GB" over a card marked 8 GB and
+    // reasonably concluded the refusal was nonsense. It was not -- 8 GB of
+    // card is 8,000,000,000 bytes -- but only the units said so.
     ImageWriter w(nullptr);
-    const QString s = w.formatSize(31914983424ull, 1);
-    INFO("32 GB card rendered as: " << s.toStdString());
-    CHECK_THAT(s.toStdString(), ContainsSubstring("GB"));
-    CHECK_THAT(s.toStdString(), ContainsSubstring("29."));
+
+    const QString card32 = w.formatSize(31914983424ull, 1);
+    INFO("a 32 GB card renders as: " << card32.toStdString());
+    CHECK_THAT(card32.toStdString(), ContainsSubstring("31.9 GB"));
+
+    const QString card8 = w.formatSize(8000000000ull, 1);
+    INFO("an 8 GB card renders as: " << card8.toStdString());
+    CHECK_THAT(card8.toStdString(), ContainsSubstring("8 GB"));
+}
+
+TEST_CASE("What is displayed means what it says, at every size",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The property behind the two cases above, checked across the range
+    // rather than at a handful of points: read the figure back, multiply by
+    // the unit it was labelled with, and it has to be the number that went
+    // in -- to within the precision on show.
+    //
+    // A wrong divisor fails this everywhere, which is what the units bug
+    // was. So does a wrong label, a missing unit, and an overflow at the top
+    // of the range.
+    ImageWriter w(nullptr);
+
+    auto unitOf = [](const QString &suffix) -> quint64 {
+        if (suffix == QLatin1String("B"))  return 1ull;
+        if (suffix == QLatin1String("KB")) return 1000ull;
+        if (suffix == QLatin1String("MB")) return 1000ull * 1000;
+        if (suffix == QLatin1String("GB")) return 1000ull * 1000 * 1000;
+        if (suffix == QLatin1String("TB")) return 1000ull * 1000 * 1000 * 1000;
+        return 0;
+    };
+
+    std::vector<quint64> sizes{0, 1, 511, 512, 999, 1000, 1001};
+    for (quint64 unit : {1000ull, 1000ull * 1000, 1000ull * 1000 * 1000,
+                         1000ull * 1000 * 1000 * 1000}) {
+        for (quint64 mult : {1ull, 2ull, 7ull, 999ull}) {
+            sizes.push_back(unit * mult);
+            sizes.push_back(unit * mult + unit / 3);
+            sizes.push_back(unit * mult - 1);
+        }
+    }
+    // Real capacities and a real image, and the top of the range.
+    for (quint64 v : {8000000000ull, 16000000000ull, 31914983424ull,
+                      64000000000ull, 8482560409ull,
+                      std::numeric_limits<quint64>::max()})
+        sizes.push_back(v);
+
+    for (quint64 bytes : sizes) {
+        const QString rendered = w.formatSize(bytes, 1);
+        INFO(bytes << " rendered as " << rendered.toStdString());
+
+        const QStringList parts = rendered.split(QLatin1Char(' '));
+        REQUIRE(parts.size() == 2);
+        const quint64 unit = unitOf(parts.at(1));
+        REQUIRE(unit != 0);
+
+        bool ok = false;
+        const double shown = parts.at(0).toDouble(&ok);
+        REQUIRE(ok);
+        REQUIRE(shown >= 0.0);
+
+        // One decimal place, so the figure stands for the byte count to
+        // within a twentieth of its unit. Rounding at the top of a unit can
+        // carry into the next one, which is why the tolerance is taken from
+        // the unit shown.
+        const double back = shown * double(unit);
+        const double tolerance = double(unit) / 20.0 + 1.0;
+        CHECK(std::fabs(back - double(bytes)) <= tolerance);
+    }
+}
+
+TEST_CASE("Every decimal count a caller can pass still renders a size",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The count comes from the caller and QML callers are not bound to the
+    // default of one. Two pieces of the arithmetic depend on it: the rounding
+    // branch taken when it is zero or less, and the scale built by repeated
+    // multiplication when it is more. Both are done in quint64, so a figure
+    // that wraps comes back looking like an ordinary answer.
+    ImageWriter w(nullptr);
+
+    const auto unitOf = [](const QString &suffix) -> quint64 {
+        if (suffix == QLatin1String("B")) return 1;
+        if (suffix == QLatin1String("KB")) return 1000ull;
+        if (suffix == QLatin1String("MB")) return 1000ull * 1000;
+        if (suffix == QLatin1String("GB")) return 1000ull * 1000 * 1000;
+        if (suffix == QLatin1String("TB")) return 1000ull * 1000 * 1000 * 1000;
+        return 0;
+    };
+
+    const std::vector<quint64> sizes{
+        0, 1, 999, 1000, 1500,
+        8000000000ull, 31914983424ull,
+        1000000000000ull, 1999999999999ull,
+        std::numeric_limits<quint64>::max() - 1,
+        std::numeric_limits<quint64>::max(),
+    };
+
+    for (int decimals : {-3, -1, 0, 1, 2, 3, 6, 9, 18, 20, 40}) {
+        for (quint64 bytes : sizes) {
+            const QString rendered = w.formatSize(bytes, decimals);
+            INFO(bytes << " at " << decimals << " decimals renders as "
+                       << rendered.toStdString());
+
+            const QStringList parts = rendered.split(QLatin1Char(' '));
+            REQUIRE(parts.size() == 2);
+            const quint64 unit = unitOf(parts.at(1));
+            REQUIRE(unit != 0);
+
+            bool ok = false;
+            const double shown = parts.at(0).toDouble(&ok);
+            REQUIRE(ok);
+            REQUIRE(shown >= 0.0);
+
+            // Whatever the count, the figure has to stand for the byte count.
+            // Asking for none rounds to the nearest whole unit, so the
+            // tolerance is half a unit either way.
+            const double back = shown * double(unit);
+            const double tolerance = double(unit) / 2.0 + 1.0;
+            CHECK(std::fabs(back - double(bytes)) <= tolerance);
+        }
+    }
+}
+
+TEST_CASE("A size is written the way the reader's language writes numbers",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The figure is read against a number printed on a card, and a reader
+    // whose language puts a comma where English puts a point reads 1.5 GB as
+    // fifteen. The units are already decimal because cards are sold that way;
+    // the separator has to follow the reader for the same reason.
+    ImageWriter w(nullptr);
+    const quint64 oneAndAHalfGB = 1500ull * 1000 * 1000;
+
+    {
+        ScopedLocale german{QLocale(QLocale::German, QLocale::Germany)};
+        CHECK(w.formatSize(oneAndAHalfGB, 1) == QStringLiteral("1,5 GB"));
+    }
+    {
+        ScopedLocale french{QLocale(QLocale::French, QLocale::France)};
+        CHECK(w.formatSize(oneAndAHalfGB, 1) == QStringLiteral("1,5 GB"));
+    }
+    {
+        ScopedLocale british{kBritish};
+        CHECK(w.formatSize(oneAndAHalfGB, 1) == QStringLiteral("1.5 GB"));
+    }
+}
+
+
+TEST_CASE("An image too big for a card reads as bigger than the card",
+          "[imagewriter][format]")
+{
+    ScopedLocale guard{kBritish};
+    // The two figures the user compares. Whatever the units, the one that
+    // does not fit has to be the larger of the two on screen -- which is
+    // exactly what failed before: 7.9 against a card marked 8.
+    ImageWriter w(nullptr);
+    const quint64 cardBytes = 8000000000ull;          // an 8 GB card
+    const quint64 imageBytes = 8482560409ull;         // 7.9 GiB, which does not fit
+    REQUIRE(imageBytes > cardBytes);
+
+    const QString card = w.formatSize(cardBytes, 1);
+    const QString image = w.formatSize(imageBytes, 1);
+    INFO("card: " << card.toStdString() << ", image: " << image.toStdString());
+
+    const double cardNumber = card.split(QLatin1Char(' ')).first().toDouble();
+    const double imageNumber = image.split(QLatin1Char(' ')).first().toDouble();
+    CHECK(card.endsWith(QStringLiteral("GB")));
+    CHECK(image.endsWith(QStringLiteral("GB")));
+    CHECK(imageNumber > cardNumber);
 }
 
 // ══════════════════════════════════════════════════════════════
 // Settings
 // ══════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════
+// What a link from outside is allowed to say
+//
+// handleIncomingUrl() is reached from a registered URI scheme, so a web page
+// can hand these strings to the application. Two validators stand in front of
+// everything it then does: one decides what may become the repository the OS
+// list is fetched from, the other what may be kept as a Connect token. Both
+// are regular expressions, and a regular expression that disagrees with the
+// parser used afterwards is how a check gets walked past.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A repository link is only ever an ordinary web address",
+          "[imagewriter][deeplink]")
+{
+    ImageWriter w(nullptr);
+
+    // Pieces assembled into candidates rather than random bytes: acceptance
+    // has to happen often enough for the property to be worth holding, and
+    // random bytes almost never spell a URL.
+    const QStringList schemes = {
+        "https://", "http://", "HTTPS://", "file://", "javascript:",
+        "data:text/html,", "ftp://", "//", "https:/", "https:///", "https://///"
+    };
+    const QStringList hosts = {
+        "example.com", "", "a", "user:pw@example.com", "example.com:8443",
+        "[::1]", "exa mple.com", "example.com\\@evil.com", "éxample.com"
+    };
+    const QStringList paths = {
+        "/os_list.json", "/a/b.json", "/x." MANIFEST_EXTENSION, "/no-extension",
+        "/x.json/../y", "/<img src=x>.json", "/a.JSON", "/a.json%00.txt", "/.json"
+    };
+    const QStringList tails = { "", "?sig=abc", "#frag", "?a=1#b", " ", "\n" };
+
+    int accepted = 0, rejected = 0;
+    for (const QString &s : schemes)
+        for (const QString &h : hosts)
+            for (const QString &p : paths)
+                for (const QString &t : tails) {
+                    const QString url = s + h + p + t;
+                    if (!w.isValidRepoUrl(url)) { ++rejected; continue; }
+                    ++accepted;
+                    INFO("accepted: " << url.toStdString());
+
+                    // The property. Whatever the regular expression made of
+                    // it, the thing actually fetched is what QUrl parses --
+                    // and that must be an ordinary web address. A file: or
+                    // javascript: URL surviving here is the interesting
+                    // failure, not a malformed host.
+                    const QUrl parsed(url);
+                    const QString scheme = parsed.scheme().toLower();
+                    CHECK((scheme == QLatin1String("http")
+                           || scheme == QLatin1String("https")));
+                    CHECK_FALSE(parsed.isLocalFile());
+                }
+
+    // Both answers have to occur, or the loop above proves nothing.
+    CHECK(accepted > 0);
+    CHECK(rejected > 0);
+}
+
+TEST_CASE("A token from a link is the shape a token has",
+          "[imagewriter][deeplink]")
+{
+    ImageWriter w(nullptr);
+
+    const QStringList prefixes = { "rpuak_", "rpoak_", "rpuak", "RPUAK_", "", "x_" };
+    const QStringList payloads = {
+        "",
+        "123456789ABCDEFGHJKLMNPQ",                  // 24, all Base58
+        "123456789ABCDEFGHJKLMNP",                   // 23
+        "123456789ABCDEFGHJKLMNPQR",                 // 25
+        "123456789ABCDEFGHJKLMNP0",                  // 24 with a forbidden 0
+        "123456789ABCDEFGHJKLMNPO",                  // ... and O
+        "123456789ABCDEFGHJKLMNPI",                  // ... and I
+        "123456789ABCDEFGHJKLMNPl",                  // ... and l
+        "123456789ABCDEFGHJKLMN Q",                  // a space
+        "123456789ABCDEFGHJKLMN\nQ",                 // a newline
+    };
+
+    int loose = 0, strict = 0, refused = 0;
+    for (const QString &pre : prefixes)
+        for (const QString &pay : payloads) {
+            const QString token = pre + pay;
+            const bool ok = w.verifyAuthKey(token, false);
+            const bool okStrict = w.verifyAuthKey(token, true);
+            INFO("token: " << token.toStdString());
+
+            // Strict is the narrower question, so it can never say yes where
+            // the looser one says no. If it ever did, a key accepted at the
+            // stricter gate would be rejected at the gentler one.
+            if (okStrict)
+                CHECK(ok);
+
+            if (!ok) { ++refused; continue; }
+            ++loose;
+            if (okStrict) ++strict;
+
+            // What "accepted" is allowed to mean.
+            CHECK((token.startsWith(QStringLiteral("rpuak_"))
+                   || token.startsWith(QStringLiteral("rpoak_"))));
+            const QString body = token.mid(6);
+            CHECK(body.size() >= 24);
+            for (const QChar c : body) {
+                INFO("character: " << int(c.unicode()));
+                CHECK(QStringLiteral("0OIl").indexOf(c) < 0);
+                CHECK(c.isLetterOrNumber());
+            }
+            if (okStrict)
+                CHECK(body.size() == 24);
+        }
+
+    CHECK(loose > 0);
+    CHECK(strict > 0);
+    CHECK(refused > 0);
+}
+
+TEST_CASE("Only an ordinary web address is opened or fetched from",
+          "[imagewriter][openurl]")
+{
+    // Not every address reaching openUrl is ours. An OS list entry names its
+    // own page and the update check names a release, both fetched from a
+    // repository the user can point anywhere. The desktop picks a handler by
+    // scheme, so an entry naming file: opens a file manager and the platforms
+    // each keep schemes that reach something worse.
+    struct Case { const char *url; bool openable; };
+    const Case cases[] = {
+        { "https://www.raspberrypi.com/software/", true },
+        { "http://example.com/page", true },
+        { "HTTPS://EXAMPLE.COM/", true },
+        { "https://example.com/a/../b?q=1#f", true },
+
+        { "", false },
+        { "not a url at all", false },
+        { "/etc/passwd", false },
+        { "file:///etc/passwd", false },
+        { "javascript:alert(1)", false },
+        { "data:text/html,<script>", false },
+        { "ftp://example.com/x", false },
+        { "mailto:someone@example.com", false },
+        { "smb://server/share", false },
+        { "ms-msdt:/id", false },
+        { "vbscript:msgbox", false },
+        { "https://", false },
+        { "http:///nohost/path", false },
+    };
+
+    for (const Case &c : cases) {
+        const QUrl url(QString::fromUtf8(c.url));
+        INFO(c.url << " parsed as " << url.toString().toStdString());
+        CHECK(ImageWriter::isHttpUrl(url) == c.openable);
+    }
+}
+
+TEST_CASE("Announcing to a screen reader that is not there does nothing",
+          "[imagewriter][accessibility]")
+{
+    // The writing step calls this on every tenth of a write, every
+    // preparation message and every ending, whether or not anything is
+    // listening. A headless run, a CI machine and the great majority of
+    // real users have no screen reader at all, so the quiet path is the one
+    // that matters: it has to cost nothing and it has to be safe.
+    ImageWriter w(nullptr);
+
+    w.announceToScreenReader(QString());
+    w.announceToScreenReader(QStringLiteral(""));
+    w.announceToScreenReader(QStringLiteral("Writing, 40 percent"));
+    w.announceToScreenReader(QString(64 * 1024, QLatin1Char('a')));
+    w.announceToScreenReader(QStringLiteral("newline\nand a \x01 control"));
+    w.announceToScreenReader(QStringLiteral("<b>markup</b> and %1 and %% too"));
+
+    SUCCEED("no announcement reached a reader, and none of them threw");
+}
 
 TEST_CASE("Settings round-trip", "[imagewriter][settings]")
 {
@@ -3032,10 +3436,91 @@ WriteOutcome runWrite(ImageWriter &w, int timeoutMs = 120000)
     QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
     guard.start(timeoutMs);
 
-    w.startWrite();
+    // Started from inside the loop, not before it. startWrite() validates a
+    // local source before it spawns anything -- _localSourceError() answers
+    // for a path that is missing, not a file, unreadable or empty -- and
+    // calls onError() straight away. Called before exec(), that error sets
+    // the flags and then quits a loop that has not started, which is a
+    // no-op, so the case waited out its whole timeout. Two of them did:
+    // sixty seconds each, the slowest in the file outside QML, and the wait
+    // read as the writer being slow to report rather than the harness being
+    // deaf to it.
+    QTimer::singleShot(0, &w, [&w] { w.startWrite(); });
     loop.exec();
     return out;
 }
+
+// ── pacing ──────────────────────────────────────────────────────────────────
+// Three cases below are about what the writer does *while* a write runs: that
+// progress reaches the UI, that cancelling stops it, that skipping
+// verification still finishes. All three have to observe a write in flight,
+// and the destination is a file, which on any modern machine is memory. A 64MB
+// image can therefore land inside a single 100ms progress sample -- so the run
+// ends before the case can see or do anything, and it fails for being on a
+// fast host rather than for a fault in the code.
+//
+// Pacing the device fixes that at the source: the write takes as long as the
+// case says it does, on a laptop and on a build machine alike. dm-delay would
+// do the same for a real block device, but needs root, which the suite does
+// not have and should not want.
+
+class PacedDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    explicit PacedDevice(std::chrono::milliseconds perWrite) : _perWrite(perWrite) {}
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *data, std::size_t size) override
+    {
+        std::this_thread::sleep_for(_perWrite);
+        return rpi_imager::PlatformFileOperations::WriteSequential(data, size);
+    }
+
+    // The write loop takes this path instead when async I/O is on, so pacing
+    // only the synchronous one would leave the case as quick as it was.
+    rpi_imager::FileError AsyncWriteSequential(const std::uint8_t *data, std::size_t size,
+                                               rpi_imager::FileOperations::AsyncWriteCallback callback) override
+    {
+        std::this_thread::sleep_for(_perWrite);
+        return rpi_imager::PlatformFileOperations::AsyncWriteSequential(data, size,
+                                                                        std::move(callback));
+    }
+
+private:
+    std::chrono::milliseconds _perWrite;
+};
+
+class PacedLocalFileThread : public LocalFileExtractThread
+{
+public:
+    PacedLocalFileThread(const QByteArray &url, const QByteArray &dst, const QByteArray &hash,
+                         std::chrono::milliseconds perWrite, QObject *parent)
+        : LocalFileExtractThread(url, dst, hash, parent)
+    {
+        // DownloadThread's constructor has already put the platform
+        // implementation here; swapping it now is what the scripted-device
+        // cases elsewhere in the suite do.
+        _file = std::make_shared<PacedDevice>(perWrite);
+    }
+};
+
+// An ImageWriter that writes through a paced device. Everything else about the
+// run -- the thread, the signals, the state machine -- is the production path.
+class PacedImageWriter : public ImageWriter
+{
+public:
+    explicit PacedImageWriter(std::chrono::milliseconds perWrite)
+        : ImageWriter(nullptr), _perWrite(perWrite) {}
+
+protected:
+    DownloadExtractThread *createLocalFileThread(const QByteArray &url, const QByteArray &dst,
+                                                 const QByteArray &expectedHash) override
+    {
+        return new PacedLocalFileThread(url, dst, expectedHash, _perWrite, this);
+    }
+
+private:
+    std::chrono::milliseconds _perWrite;
+};
 
 // A small image of recognisable bytes, and somewhere to write it.
 class WriteFixture
@@ -3156,7 +3641,10 @@ TEST_CASE("The UI is told what is happening during a write",
     // point -- no progress, and nothing wrong. Several buffers' worth is
     // what a real image looks like and what the bar is there for.
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so the write spans several progress samples however fast the
+    // host is. Unpaced it can finish inside one, and the only sample taken
+    // catches the download counter moving with nothing yet written.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(false);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -3243,7 +3731,11 @@ TEST_CASE("Skipping verification leaves a finished write, not an abandoned one",
     // away a card that is already correctly written, and they would start
     // again for nothing.
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so a write progress signal arrives while there is still a write
+    // to skip the verification of. Unpaced the run can finish before one is
+    // delivered, leaving the skip never asked for and the case failing on
+    // its own precondition.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(true);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -3282,7 +3774,11 @@ TEST_CASE("Cancelling a write in progress reports cancelled, not success",
           "[imagewriter][write][cancel]")
 {
     LargeWriteFixture fx;
-    ImageWriter w(nullptr);
+    // Paced, so there is still a write to stop when the cancel arrives.
+    // Unpaced the run can be over before the first progress signal is
+    // delivered, and the case then fails for the write having succeeded --
+    // which, the write having genuinely finished, was the right answer.
+    PacedImageWriter w(std::chrono::milliseconds(25));
     w.setVerifyEnabled(false);
     w.setSrc(fx.sourceUrl(), 0, LargeWriteFixture::kSize);
     w.setDst(fx.target(), LargeWriteFixture::kSize);
@@ -3478,8 +3974,25 @@ public:
 
         _hash = QCryptographicHash::hash(_payload, QCryptographicHash::Sha256).toHex();
 
+        // Skipped rather than failed where the compressor is absent: whether
+        // this machine has gzip says nothing about the writer under test. The
+        // shell is looked up too -- "/bin/sh" is not a path that exists on
+        // Windows, so this failed there before it could even try.
+        const QString shell = rpi_test::shellPath();
+        if (shell.isEmpty())
+            SKIP("no POSIX shell available to build the fixture");
+        if (!rpi_test::haveTool(QString::fromLatin1(tool)))
+            SKIP(std::string("this machine has no ") + tool +
+                 ", so the compressed fixture cannot be built");
+
         QProcess p;
-        p.start(QStringLiteral("/bin/sh"),
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        QStringList search = env.value(QStringLiteral("PATH"))
+                                 .split(QDir::listSeparator(), Qt::SkipEmptyParts);
+        search += rpi_test::extraToolDirectories();
+        env.insert(QStringLiteral("PATH"), search.join(QDir::listSeparator()));
+        p.setProcessEnvironment(env);
+        p.start(shell,
                 {QStringLiteral("-c"),
                  QStringLiteral("%1 -k -f %2").arg(QString::fromLatin1(tool), raw)});
         REQUIRE(p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
@@ -5037,7 +5550,7 @@ TEST_CASE("An image is written to a real block device", "[imagewriter][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir dir;
@@ -5065,7 +5578,7 @@ TEST_CASE("A verified write to a real block device reads back clean", "[imagewri
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir dir;
@@ -5138,7 +5651,7 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir dir;
@@ -5173,7 +5686,7 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
     // where the OS would never run it. Ask an independent FAT reader whether
     // firstrun.sh is genuinely a file in the root, and whether it contains
     // what was asked for.
-    if (QFileInfo::exists(QStringLiteral("/usr/bin/mtype"))) {
+    if (rpi_test::haveTool(QStringLiteral("mtype"))) {
         // The image is a partitioned disk, so the filesystem does not start
         // at sector zero. Take the offset from the card's own partition table
         // rather than assuming it, so this keeps working if the fixture is
@@ -5196,7 +5709,7 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
         mtype.setProcessEnvironment(env);
         const QString atOffset =
             dev + QStringLiteral("@@") + QString::number(qint64(firstLba) * 512);
-        mtype.start(QStringLiteral("/usr/bin/mtype"),
+        mtype.start(rpi_test::toolPath(QStringLiteral("mtype")),
                     {QStringLiteral("-i"), atOffset, QStringLiteral("::firstrun.sh")});
         REQUIRE(mtype.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
 
@@ -6076,7 +6589,7 @@ TEST_CASE("A destination in a directory that does not exist is refused", "[image
 
 TEST_CASE("A destination the user cannot write is refused", "[imagewriter][dest]")
 {
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which can write a file with no permissions");
 
     QTemporaryDir dir;
@@ -6086,7 +6599,8 @@ TEST_CASE("A destination the user cannot write is refused", "[imagewriter][dest]
     REQUIRE(t.open(QIODevice::WriteOnly));
     REQUIRE(t.resize(qint64(kFixturePayload)));
     t.close();
-    REQUIRE(QFile::setPermissions(target, QFileDevice::ReadOwner));
+    rpi_test::DeniedAccess denied(target, rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     const WriteOutcome out = writeTo(target, kFixturePayload);
 
@@ -6095,8 +6609,6 @@ TEST_CASE("A destination the user cannot write is refused", "[imagewriter][dest]
     CHECK_FALSE(out.succeeded);
     CHECK(out.failed);
     CHECK_FALSE(out.errors.isEmpty());
-
-    QFile::setPermissions(target, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
 TEST_CASE("An empty destination is refused before anything starts", "[imagewriter][dest]")
@@ -6232,7 +6744,7 @@ TEST_CASE("Ejecting a real block device settles", "[imagewriter][eject][device]"
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     ImageWriter w(nullptr);
@@ -6247,7 +6759,7 @@ TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][devic
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     ImageWriter w(nullptr);
@@ -6288,18 +6800,28 @@ TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][devic
 
 namespace {
 
-// Points HOME at a scratch directory for as long as it is alive.
-class ScopedHome
+// An ImageWriter that keeps its SSH keys somewhere disposable.
+//
+// Redirecting HOME does not work on Windows: QDir::homePath() resolves
+// through the Win32 API there, not the environment, and setting HOME,
+// USERPROFILE, HOMEDRIVE and HOMEPATH together leaves it answering the real
+// profile unchanged -- measured, not assumed. So these cases used to check
+// the redirect had taken and skip when it had not, because the alternative
+// is writing an SSH key into the developer's own ~/.ssh, which is not a
+// thing a test may do to the person running it.
+//
+// _sshKeyDir() is virtual, so the directory can be named outright and the
+// cases run everywhere.
+class KeysInScratchDir : public ImageWriter
 {
 public:
-    explicit ScopedHome(const QString &path) : _saved(qgetenv("HOME"))
-    {
-        qputenv("HOME", path.toLocal8Bit());
-    }
-    ~ScopedHome() { qputenv("HOME", _saved); }
+    explicit KeysInScratchDir(const QString &dir) : ImageWriter(nullptr), _dir(dir) {}
+
+protected:
+    QString _sshKeyDir() override { return _dir; }
 
 private:
-    QByteArray _saved;
+    QString _dir;
 };
 
 } // namespace
@@ -6308,11 +6830,9 @@ TEST_CASE("With no key in place none is reported", "[imagewriter][sshkey]")
 {
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     CHECK_FALSE(w.hasPubKey());
     CHECK(w.getDefaultPubKey().isEmpty());
 }
@@ -6321,19 +6841,17 @@ TEST_CASE("An existing public key is read back verbatim", "[imagewriter][sshkey]
 {
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
+    REQUIRE(QDir().mkpath(keyDir));
     const QString key =
         QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABmarkerkey user@example");
-    QFile f(home.path() + QStringLiteral("/.ssh/id_rsa.pub"));
+    QFile f(keyDir + QStringLiteral("/id_rsa.pub"));
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write(key.toUtf8() + "\n");
     f.close();
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     REQUIRE(w.hasPubKey());
     // Byte-for-byte: a key mangled on the way through does not authenticate,
     // and the user finds out only after the card is written.
@@ -6342,45 +6860,41 @@ TEST_CASE("An existing public key is read back verbatim", "[imagewriter][sshkey]
 
 TEST_CASE("Generating a key creates a usable pair", "[imagewriter][sshkey]")
 {
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/ssh-keygen")))
+    if (!rpi_test::haveTool(QStringLiteral("ssh-keygen")))
         SKIP("ssh-keygen is not installed");
 
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     REQUIRE_FALSE(w.hasPubKey());
 
     w.generatePubKey();
 
     // Both halves, and the directory created if it was missing.
-    CHECK(QFile::exists(home.path() + QStringLiteral("/.ssh/id_rsa")));
+    CHECK(QFile::exists(keyDir + QStringLiteral("/id_rsa")));
     REQUIRE(w.hasPubKey());
     CHECK(w.getDefaultPubKey().startsWith(QStringLiteral("ssh-rsa ")));
 }
 
 TEST_CASE("Generating a key does not replace one already there", "[imagewriter][sshkey]")
 {
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/ssh-keygen")))
+    if (!rpi_test::haveTool(QStringLiteral("ssh-keygen")))
         SKIP("ssh-keygen is not installed");
 
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("HOME redirect did not take; refusing to touch the real ~/.ssh");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
+    REQUIRE(QDir().mkpath(keyDir));
     const QString key = QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABkeepme user@example");
-    QFile f(home.path() + QStringLiteral("/.ssh/id_rsa.pub"));
+    QFile f(keyDir + QStringLiteral("/id_rsa.pub"));
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write(key.toUtf8() + "\n");
     f.close();
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     w.generatePubKey();
 
     // Overwriting somebody's SSH key would be unforgivable.
@@ -6402,6 +6916,18 @@ TEST_CASE("Generating a key does not replace one already there", "[imagewriter][
 
 TEST_CASE("Every timezone offered is one the system knows", "[imagewriter][locale]")
 {
+#ifdef Q_OS_WIN
+    // The oracle here is the host's tz database, and on Windows that is the
+    // wrong one. Windows carries its own smaller set of zones, so genuine IANA
+    // entries the Pi accepts are reported unknown -- Antarctica/Troll is a real
+    // zone, in the list for a real reason, and absent from Windows.
+    //
+    // What the case is actually asserting is that the list matches the database
+    // on the *target*, which runs Linux. Checked wherever the host has the full
+    // IANA data, which is every other platform the suite runs on.
+    SKIP("the Windows tz database is smaller than IANA's, so it cannot judge "
+         "the list the Pi will be given");
+#else
     ImageWriter w(nullptr);
     const QStringList zones = w.getTimezoneList();
     REQUIRE(zones.size() > 100);
@@ -6423,6 +6949,7 @@ TEST_CASE("Every timezone offered is one the system knows", "[imagewriter][local
     }
     INFO("unrecognised: " << examples.join(QStringLiteral(", ")).toStdString());
     CHECK(unknown == 0);
+#endif
 }
 
 TEST_CASE("Every country offered is well formed", "[imagewriter][locale]")
@@ -6591,7 +7118,7 @@ TEST_CASE("Ignoring device limits reallocates the buffers", "[imagewriter][devic
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir served;
@@ -6669,6 +7196,12 @@ TEST_CASE("A zero-length image is refused rather than written", "[imagewriter][e
     const WriteOutcome out = runWrite(w, 60000);
     INFO("errors: " << out.errors.join(QStringLiteral(" | ")).toStdString());
     CHECK_FALSE(out.succeeded);
+    // Not succeeding is satisfied by saying nothing at all, which is the
+    // failure the comment above is about: the user is owed a reason, not
+    // just the absence of a card. Seventeen cases in this file already ask
+    // for one.
+    CHECK(out.failed);
+    CHECK_FALSE(out.errors.isEmpty());
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -7458,12 +7991,17 @@ Drivelist::DeviceDescriptor removableWithChildren(
     return d;
 }
 
+// The model keys a board on its USB port path, so a caller that means two
+// separate boards has to give them separate ports -- two nodes on one port
+// are one board that turned up twice.
 Drivelist::DeviceDescriptor rpibootDevice(const std::string &device,
-                                          const std::string &chip)
+                                          const std::string &chip,
+                                          const std::vector<uint8_t> &portPath = {})
 {
     Drivelist::DeviceDescriptor d = removable(device, "A board in USB boot");
     d.isRpiboot = true;
     d.rpibootChipName = chip;
+    d.usbPortPath = portPath;
     return d;
 }
 
@@ -7528,8 +8066,8 @@ TEST_CASE("The same board seen twice is still one chip", "[drivelist]")
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList().size() == 1);
@@ -7574,16 +8112,16 @@ TEST_CASE("Two different boards are both reported, in a settled order",
     rpi_test::SignalLog chips(&drives,
                               &DriveListModel::connectedRpibootChipsChanged);
 
-    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712"),
-                              rpibootDevice("/dev/sdb", "BCM2711") });
+    drives.processDriveList({ rpibootDevice("/dev/sdc", "BCM2712", {1, 2}),
+                              rpibootDevice("/dev/sdb", "BCM2711", {1, 3}) });
 
     REQUIRE(chips.count() == 1);
     CHECK(chips.at(0).at(0).toStringList()
           == QStringList{QStringLiteral("BCM2711"), QStringLiteral("BCM2712")});
 
     // The same pair the other way round is not a change.
-    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711"),
-                              rpibootDevice("/dev/sdc", "BCM2712") });
+    drives.processDriveList({ rpibootDevice("/dev/sdb", "BCM2711", {1, 3}),
+                              rpibootDevice("/dev/sdc", "BCM2712", {1, 2}) });
     CHECK(chips.count() == 1);
 }
 
@@ -7764,7 +8302,7 @@ TEST_CASE("A file that cannot be opened is told apart from one that is absent",
 {
     // A permissions problem and a typo need different fixes, and with no
     // dialog to interrogate the wording is all the operator has.
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which can read a file with no permissions");
 
     QTemporaryDir dir;
@@ -7774,7 +8312,8 @@ TEST_CASE("A file that cannot be opened is told apart from one that is absent",
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write("secret");
     f.close();
-    REQUIRE(QFile::setPermissions(path, QFileDevice::Permissions()));
+    rpi_test::DeniedAccess denied(path, rpi_test::DeniedAccess::Read);
+    REQUIRE_DENIED(denied);
 
     QByteArray contents;
     QString error;
@@ -7814,17 +8353,24 @@ TEST_CASE("A directory given where a file was wanted is refused",
 
 namespace {
 
+// mcopy alone: reading the image back is all mtools is wanted for here.
+//
+// This used to ask for mkfs.vfat as well, which no Windows machine has -- so
+// every case below skipped on this platform whatever else was true, including
+// when the suite ran elevated and BootImgCreator could actually have built
+// one. Which formatter the image needs is BootImgCreator's business, and
+// REQUIRE_BOOT_IMG_SUPPORT() asks each platform for the thing it really uses:
+// elevation on Windows, where it drives diskpart, and mkfs.vfat elsewhere.
 bool haveMtools()
 {
-    return rpi_test::haveTool(QStringLiteral("mkfs.vfat"))
-        && rpi_test::haveTool(QStringLiteral("mcopy"));
+    return rpi_test::haveTool(QStringLiteral("mcopy"));
 }
 
 // Read a file back out of the image with mtools.
 QByteArray readFromImage(const QString &image, const QString &path)
 {
     QProcess p;
-    p.start(QStringLiteral("mcopy"),
+    p.start(rpi_test::toolPath(QStringLiteral("mcopy")),
             {QStringLiteral("-i"), image, QStringLiteral("::") + path,
              QStringLiteral("-")});
     if (!p.waitForFinished(10000))
@@ -7836,22 +8382,27 @@ QByteArray readFromImage(const QString &image, const QString &path)
 QString listImage(const QString &image, const QString &dir = QString())
 {
     QProcess p;
-    p.start(QStringLiteral("mdir"),
+    p.start(rpi_test::toolPath(QStringLiteral("mdir")),
             {QStringLiteral("-i"), image, QStringLiteral("::") + dir});
     if (!p.waitForFinished(10000))
         return {};
     return QString::fromUtf8(p.readAllStandardOutput());
 }
 
-constexpr qint64 kBootImgSize = 8 * 1024 * 1024;
+// Matches the floor SecureBoot::createBootImg applies. Below it mkfs.vfat
+// still builds a FAT32, with a warning and fewer than the 65525 clusters the
+// spec requires, and mtools then refuses to read what it made -- so a smaller
+// image tests a shape the application never asks for and cannot be read back.
+constexpr qint64 kBootImgSize = 33 * 1024 * 1024;
 
 } // namespace
 
 TEST_CASE("A file put in the boot image can be read back out",
           "[bootimg]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7871,8 +8422,9 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
 {
     // The firmware tree is nested. A file flattened into the root is a file
     // the bootloader will not find.
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7889,8 +8441,9 @@ TEST_CASE("A file in a subdirectory lands at that path", "[bootimg]")
 
 TEST_CASE("Directories several deep are all created", "[bootimg]")
 {
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7909,8 +8462,9 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
 {
     // The directory is created once for the first file; the rest have to
     // land in it rather than being lost to an "already exists" failure.
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7930,8 +8484,9 @@ TEST_CASE("Several files sharing a directory all arrive", "[bootimg]")
 
 TEST_CASE("Root files and nested files coexist", "[bootimg]")
 {
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7953,8 +8508,9 @@ TEST_CASE("Binary content survives unchanged", "[bootimg]")
 {
     // The bootcode and firmware blobs are binary. A text-mode copy would
     // mangle them in ways that do not show up until the board fails to boot.
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -7985,8 +8541,9 @@ TEST_CASE("An empty set of files makes no image", "[bootimg]")
 
 TEST_CASE("The output directory is created if it is not there", "[bootimg]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8004,8 +8561,9 @@ TEST_CASE("The image is a filesystem, not just a sized file", "[bootimg]")
     // Read back with mdir, which is a different tool from the one that
     // wrote it -- so this checks the image really is mountable FAT32 rather
     // than that our own writer agrees with itself.
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!haveMtools())
-        SKIP("mtools, and a FAT formatter, are needed to build a boot image");
+        SKIP("mtools is needed to read the image back");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -8067,9 +8625,16 @@ public:
 // which is not the branch under test here.
 void layDownImage(const BootPartitionFixture &fx)
 {
+    // Found rather than assumed to be on PATH: MSYS2 and Git for Windows both
+    // ship xz, and neither puts its usr/bin on PATH. Skipped where there is
+    // none, because whether this machine can decompress says nothing about
+    // the customisation check under test.
+    const QString xzPath = rpi_test::toolPath(QStringLiteral("xz"));
+    if (xzPath.isEmpty())
+        SKIP("this machine has no xz, so the image cannot be laid down");
+
     QProcess xz;
-    xz.start(QStringLiteral("xz"),
-             {QStringLiteral("-dc"), fx.sourceUrl().toLocalFile()});
+    xz.start(xzPath, {QStringLiteral("-dc"), fx.sourceUrl().toLocalFile()});
     REQUIRE(xz.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
     const QByteArray image = xz.readAllStandardOutput();
     REQUIRE(image.size() > 0);
@@ -8093,10 +8658,16 @@ void putFileOnCard(const QString &imagePath, const QString &name,
     f.write(contents);
     f.close();
 
-    p.start(QStringLiteral("mcopy"),
+    p.start(rpi_test::toolPath(QStringLiteral("mcopy")),
             {QStringLiteral("-i"), imagePath + QStringLiteral("@@1M"),
              QStringLiteral("-o"), local, QStringLiteral("::") + name});
-    p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+    REQUIRE(p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
+    // Asserted rather than assumed. A silent failure here leaves the card
+    // without the file, and the case then fails on the verification it was
+    // written to exercise -- which reads as the product losing a file it
+    // wrote rather than the fixture never having put one there.
+    INFO("mcopy said: " << QString::fromUtf8(p.readAllStandardError()).toStdString());
+    REQUIRE(p.exitCode() == 0);
 }
 
 } // namespace
@@ -8104,7 +8675,7 @@ void putFileOnCard(const QString &imagePath, const QString &name,
 TEST_CASE("Customisation verification passes when the card matches",
           "[imagewriter][customisation-verify]")
 {
-    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+    if (rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty())
         SKIP("mtools is needed to place a file on the card");
 
     BootPartitionFixture fx;
@@ -8140,7 +8711,7 @@ TEST_CASE("Customisation verification fails when the contents differ",
 {
     // Same name, same length, different bytes: a digest check catches this
     // and a size check does not.
-    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+    if (rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty())
         SKIP("mtools is needed to place a file on the card");
 
     BootPartitionFixture fx;
@@ -8157,7 +8728,7 @@ TEST_CASE("Customisation verification fails when the contents differ",
 TEST_CASE("Customisation verification fails when the length differs",
           "[imagewriter][customisation-verify]")
 {
-    if (QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
+    if (rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty())
         SKIP("mtools is needed to place a file on the card");
 
     BootPartitionFixture fx;
@@ -8656,6 +9227,43 @@ TEST_CASE("A second error does not reach the user twice", "[imagewriter][removal
 
     REQUIRE(failed.count() == 1);
     CHECK(failed.at(0).at(0).toString() == QStringLiteral("the real problem"));
+}
+
+TEST_CASE("A test build can point the OS list somewhere else",
+          "[imagewriter][repo]")
+{
+    // The sibling of RPI_IMAGER_TELEMETRY_URL and RPI_IMAGER_CONNECT_URL,
+    // and there for their reason: the QML suite drives this class for real,
+    // so without it every Retry button fetched the production list.
+    struct ScopedOsListUrl {
+        QByteArray previous = qgetenv("RPI_IMAGER_OSLIST_URL");
+        bool had = qEnvironmentVariableIsSet("RPI_IMAGER_OSLIST_URL");
+        explicit ScopedOsListUrl(const QByteArray &v) { qputenv("RPI_IMAGER_OSLIST_URL", v); }
+        ~ScopedOsListUrl() {
+            if (had)
+                qputenv("RPI_IMAGER_OSLIST_URL", previous);
+            else
+                qunsetenv("RPI_IMAGER_OSLIST_URL");
+        }
+    };
+
+    {
+        ScopedOsListUrl unset{QByteArray()};
+        CHECK(ImageWriter::defaultOsListUrl() == QUrl(QString(OSLIST_URL)));
+    }
+
+    {
+        const QString elsewhere = QStringLiteral("file:///nowhere/os_list.json");
+        ScopedOsListUrl redirected{elsewhere.toUtf8()};
+        CHECK(ImageWriter::defaultOsListUrl() == QUrl(elsewhere));
+
+        // And it still reads as the ordinary repository. Otherwise the wizard
+        // announces "using data from", and the two QML cases that wait for
+        // customRepoHost() to empty after a reset never see it.
+        ImageWriter w(nullptr);
+        CHECK_FALSE(w.customRepo());
+        CHECK(w.customRepoHost().isEmpty());
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -10093,7 +10701,7 @@ TEST_CASE("Sync mode stays on for the rest of the session",
     w.restartWrite(QStringLiteral("first stall"));
     REQUIRE(w._forceSyncMode);
 
-    w.setDst(QStringLiteral("/dev/null"), 4ull * 1024 * 1024 * 1024);
+    w.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
     CHECK(w._forceSyncMode);
 }
 
@@ -10317,6 +10925,30 @@ public:
 };
 } // namespace
 
+TEST_CASE("A token says why it went, not only that it did",
+          "[imagewriter][connecttoken]")
+{
+    // The wizard does different things with the two. A key dropped because
+    // the OS or the card changed was never written with, so the step is not
+    // configured. One consumed by a successful write was, and the sidebar and
+    // the completion summary both report it -- reading the consumed case as
+    // an invalidation un-bolded the step as the write finished.
+    ConnectTokenWriter w;
+    std::vector<bool> reasons;
+    QObject::connect(&w, &ImageWriter::connectTokenCleared,
+                     [&reasons](bool invalidated) { reasons.push_back(invalidated); });
+
+    w.pretendOrgKeyWasMinted(QStringLiteral("rpoak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w.discardOrgMintedConnectToken();
+    REQUIRE(reasons.size() == 1);
+    CHECK(reasons[0]);
+
+    w.overwriteConnectToken(QStringLiteral("rpuak_2xVQqQ7mR4bT9pLzYnKwCdHf"));
+    w.clearConnectToken();
+    REQUIRE(reasons.size() == 2);
+    CHECK_FALSE(reasons[1]);
+}
+
 TEST_CASE("Changing the card throws away a key minted for the old one",
           "[imagewriter][connecttoken]")
 {
@@ -10526,6 +11158,15 @@ TEST_CASE("A key with no default of its own reads as off",
 #include "settings_permissions.h"
 #include <sys/stat.h>
 
+// secureSettingsFile() narrows the settings file to 0600 and its directory to
+// 0700, and these cases check exactly that. The mode bits are the POSIX half
+// of the function: access on Windows is an access list, which an octal
+// literal cannot describe, and what it reports there is covered in
+// settings_permissions_test.cpp instead.
+//
+// The empty-path case below stays in the run on every platform: refusing a
+// path that is not a path is not a POSIX question.
+#ifndef _WIN32
 namespace {
 // The mode bits, which QFile::permissions does not give back in a form that
 // can be compared against an octal literal.
@@ -10662,6 +11303,7 @@ TEST_CASE("A symlink at the settings path is not followed",
     CHECK_FALSE(result.created);
     CHECK_FALSE(result.secured);
 }
+#endif // !_WIN32 -- POSIX settings modes
 
 TEST_CASE("An empty path is refused rather than acted on",
           "[imagewriter][settingsperms]")
@@ -10681,6 +11323,11 @@ TEST_CASE("An empty path is refused rather than acted on",
 // applyQuirks() repointing HOME leads -- and leaves it root-owned. The file
 // on the machine this was written on is exactly that: root:root, mode 0664.
 
+// The whole settings-ownership story is POSIX: on Windows there is no
+// SUDO_UID or PKEXEC_UID to read, no uid to hand a file back to, and no mode
+// bits to narrow it with afterwards. The helpers below reach for lstat(),
+// getuid() and sudo to say so.
+#ifndef _WIN32
 namespace {
 bool havePasswordlessSudoForOwnership()
 {
@@ -11209,6 +11856,7 @@ TEST_CASE("The ownership sweep also reads the account from the environment",
     removeAsRoot(tmp.path());
 }
 #endif // SETTINGS_PERMISSIONS_PROBE_BINARY
+#endif // !_WIN32 -- settings ownership
 
 // ══════════════════════════════════════════════════════════════
 // Whether the secure-boot step is offered.
@@ -11618,6 +12266,24 @@ TEST_CASE("The value survives how the flash region is written",
         conf.append(QByteArray(64, '\0'));
         CHECK(rpi_eeprom::repoUrlFromBlconfig(conf) == expected);
     }
+
+    SECTION("padding with no newline before it, which is the usual shape")
+    {
+        // A fixed-size region written short. There is no reason for the
+        // writer to leave a newline between the value and the rest of the
+        // region, and the section above only passes because it does: the
+        // padding becomes a line of its own and never touches the value.
+        QByteArray conf = "IMAGER_REPO_URL=https://images.example.invalid/os.json";
+        conf.append(QByteArray(64, '\0'));
+        CHECK(rpi_eeprom::repoUrlFromBlconfig(conf) == expected);
+    }
+
+    SECTION("erased flash after the text, which is 0xFF rather than nought")
+    {
+        QByteArray conf = "IMAGER_REPO_URL=https://images.example.invalid/os.json";
+        conf.append(QByteArray(64, '\xFF'));
+        CHECK(rpi_eeprom::repoUrlFromBlconfig(conf) == expected);
+    }
 }
 
 TEST_CASE("A key with nothing after it is not an override to nowhere",
@@ -11652,6 +12318,37 @@ TEST_CASE("With two of them, the last is taken", "[imagewriter][eeprom]")
               "IMAGER_REPO_URL=https://first.invalid/os.json\n"
               "IMAGER_REPO_URL=https://second.invalid/os.json\n")
           == QStringLiteral("https://second.invalid/os.json"));
+}
+
+TEST_CASE("A mark in front of the value does not smuggle whitespace past",
+          "[imagewriter][eeprom]")
+{
+    // Found by fuzzing, in forty-eight bytes.
+    //
+    // The value is trimmed as bytes, and a byte order mark is not
+    // whitespace -- so the trim steps over it and stops. fromUtf8() then
+    // removes the mark, and whatever was behind it is on the front of the
+    // answer. Here that is a vertical tab.
+    const QByteArray bom = QByteArrayLiteral("\xEF\xBB\xBF");
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "\vhttps://images.example.invalid/os.json\n")
+          == QStringLiteral("https://images.example.invalid/os.json"));
+
+    // The same from the other end, and with the ordinary whitespace the
+    // byte-level trim does catch, to show the two agree.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "  https://images.example.invalid/os.json \t\n")
+          == QStringLiteral("https://images.example.invalid/os.json"));
+
+    // A mark and whitespace and nothing else is not a value. Before the
+    // second emptiness check this returned a string of whitespace, which
+    // the caller would have taken for a repository.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "\v\n").isEmpty());
+
+    // And a mark alone, which decodes to nothing at all.
+    CHECK(rpi_eeprom::repoUrlFromBlconfig(
+              "IMAGER_REPO_URL=" + bom + "\n").isEmpty());
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -11874,6 +12571,144 @@ TEST_CASE("A row that is not there yields nothing rather than reading past the e
     CHECK_FALSE(m.data(m.index(0, 0), OSListModel::NameRole).isValid());
     CHECK_FALSE(m.data(m.index(-1, 0), OSListModel::NameRole).isValid());
     CHECK_FALSE(m.data(m.index(5, 0), OSListModel::UrlRole).isValid());
+}
+
+TEST_CASE("A role the delegate does not know about answers nothing",
+          "[imagewriter][oslist]")
+{
+    // QML asks for whatever a delegate names. A role number with nothing
+    // behind it has to come back invalid rather than as the last field that
+    // happened to be read.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+    QVector<OSListModel::OS> rows{fullyPopulatedEntry()};
+    model.applyRows(std::move(rows));
+
+    QAbstractListModel &m = model;
+    REQUIRE(m.rowCount(QModelIndex()) == 1);
+    CHECK_FALSE(m.data(m.index(0, 0), Qt::UserRole + 9999).isValid());
+    CHECK_FALSE(m.data(m.index(0, 0), Qt::DisplayRole).isValid());
+}
+
+TEST_CASE("Marking the first entry recommended labels exactly one",
+          "[imagewriter][oslist]")
+{
+    // The label goes on the first real entry and nowhere else. Two entries
+    // carrying it is a list that recommends two different images.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    QVector<OSListModel::OS> rows;
+    for (int i = 0; i < 3; ++i) {
+        OSListModel::OS os = fullyPopulatedEntry();
+        os.name = QStringLiteral("Image %1").arg(i);
+        os.description = QStringLiteral("Description %1").arg(i);
+        // An entry with sub-items is a category rather than an image, and is
+        // passed over; these are images.
+        os.subitemsJson.clear();
+        rows.append(os);
+    }
+    model.applyRows(std::move(rows));
+    model.markFirstAsRecommended();
+
+    QAbstractListModel &m = model;
+    REQUIRE(m.rowCount(QModelIndex()) == 3);
+
+    int labelled = 0;
+    for (int i = 0; i < 3; ++i) {
+        const QString description =
+            m.data(m.index(i, 0), OSListModel::DescriptionRole).toString();
+        INFO("row " << i << ": " << description.toStdString());
+        if (description.contains(QStringLiteral("Recommended")))
+            ++labelled;
+    }
+    CHECK(labelled == 1);
+}
+
+TEST_CASE("Marking twice does not label the same entry twice",
+          "[imagewriter][oslist]")
+{
+    // The list is re-marked whenever it is refiltered, and the label is text
+    // inside the description -- so without the pass that strips the old one
+    // first, a description gains "(Recommended)" again on every refresh.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    OSListModel::OS os = fullyPopulatedEntry();
+    os.subitemsJson.clear();
+    QVector<OSListModel::OS> rows{os};
+    model.applyRows(std::move(rows));
+
+    QAbstractListModel &m = model;
+    model.markFirstAsRecommended();
+    const QString once =
+        m.data(m.index(0, 0), OSListModel::DescriptionRole).toString();
+
+    model.markFirstAsRecommended();
+    model.markFirstAsRecommended();
+    const QString thrice =
+        m.data(m.index(0, 0), OSListModel::DescriptionRole).toString();
+
+    INFO("once:   " << once.toStdString());
+    INFO("thrice: " << thrice.toStdString());
+    CHECK(once == thrice);
+    CHECK(once.count(QStringLiteral("Recommended")) == 1);
+}
+
+TEST_CASE("A category with images under it is not recommended",
+          "[imagewriter][oslist]")
+{
+    // An entry carrying sub-items is a heading that opens a submenu, not
+    // something that can be written to a card. Recommending it would put the
+    // label on a row that writes nothing when it is chosen.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    OSListModel::OS category = fullyPopulatedEntry();
+    category.name = QStringLiteral("Raspberry Pi OS (other)");
+    category.subitemsJson = QStringLiteral("[{\"name\":\"nested\"}]");
+
+    OSListModel::OS image = fullyPopulatedEntry();
+    image.name = QStringLiteral("Raspberry Pi OS Lite");
+    image.description = QStringLiteral("A port of Debian, no desktop");
+    image.subitemsJson.clear();
+
+    QVector<OSListModel::OS> rows{category, image};
+    model.applyRows(std::move(rows));
+    model.markFirstAsRecommended();
+
+    QAbstractListModel &m = model;
+    // The first real entry is passed over, and marking stops there rather
+    // than moving on to the image behind it.
+    for (int i = 0; i < 2; ++i) {
+        const QString description =
+            m.data(m.index(i, 0), OSListModel::DescriptionRole).toString();
+        INFO("row " << i << ": " << description.toStdString());
+        CHECK_FALSE(description.contains(QStringLiteral("Recommended")));
+    }
+}
+
+TEST_CASE("A label left over from another run is not kept alongside the new one",
+          "[imagewriter][oslist]")
+{
+    // What arrives from the OS list itself. An entry whose description
+    // already ends in a recommendation -- from a cached list, or from the
+    // server -- must not end up carrying two.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    OSListModel::OS os = fullyPopulatedEntry();
+    os.description = QStringLiteral("A port of Debian (Recommended)");
+    os.subitemsJson.clear();
+    QVector<OSListModel::OS> rows{os};
+    model.applyRows(std::move(rows));
+    model.markFirstAsRecommended();
+
+    QAbstractListModel &m = model;
+    const QString description =
+        m.data(m.index(0, 0), OSListModel::DescriptionRole).toString();
+    INFO("description: " << description.toStdString());
+    CHECK(description.count(QStringLiteral("Recommended")) == 1);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -12536,13 +13371,25 @@ TEST_CASE("A board on the bus is left alone unless rpiboot is enabled",
     // plugged in for some other reason must not have its boot ROM driven, and
     // the drive list must keep scanning.
     BootstrapProbe w;
+
+    // Said rather than assumed. setDebugRpiboot() is sticky -- it writes
+    // debug_rpiboot into QSettings and the constructor reads it back -- and
+    // the scratch settings file is shared by every process of this binary.
+    // Under ctest -j a sibling case that enables rpiboot writes it while this
+    // one is starting, so the state under test arrived from another process.
+    // That is what made this the one case in the suite failing under -j and
+    // passing on its own.
+    w.setDebugRpiboot(false);
+
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
-    const auto before = drives->scanMode();
 
     w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
 
-    CHECK(drives->scanMode() == before);
+    // Not paused, rather than unchanged from a value read a moment earlier:
+    // the poll thread moves between Normal and Slow on its own, so a snapshot
+    // taken beforehand can differ for reasons the call had no part in.
+    CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
 
 TEST_CASE("Bootstrapping a board pauses the drive scan, and finishing resumes it",
@@ -13473,7 +14320,7 @@ TEST_CASE("A text scale the user set overrides what the desktop reports",
     // because the desktop's answer did not suit them. Only a sane factor is
     // honoured: a stored 40 would make the interface unusable and
     // unrecoverable, since the control to put it back would be off-screen.
-    QSettings settings(QStringLiteral("Raspberry Pi"), QStringLiteral("Raspberry Pi Imager"));
+    QSettings settings;   // this process's own, like the code under test
     const QVariant saved = settings.value(QStringLiteral("textScaleFactor"));
 
     PlatformHelper helper;
@@ -13944,7 +14791,7 @@ TEST_CASE("Mounting the source media read-only is refused without privilege",
     // image off a stick cannot alter it. Run without privilege -- which is
     // how Imager runs until the write itself -- mount refuses, and the
     // caller has to see that rather than go on to read an empty directory.
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, where the mount would be attempted for real");
 
     QTemporaryDir dir;
@@ -14170,8 +15017,11 @@ TEST_CASE("The download counter goes where it is pointed, or nowhere",
     // to a working one from inside the test that set it.
     WriteFixture fx;
 
-    SECTION("set but empty reports nothing") {
-        qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray());
+    SECTION("asked for silence, it reports nothing") {
+        // "off", not empty: qputenv with an empty value deletes the variable on
+        // Windows, so the case could not set up the state it was testing and
+        // the writer fell through to the production endpoint.
+        qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray("off"));
         ImageWriter w(nullptr);
         w.setVerifyEnabled(false);
         w.setSrc(QUrl(QStringLiteral("https://example.invalid/os.img")), 0,
@@ -14202,7 +15052,7 @@ TEST_CASE("The download counter goes where it is pointed, or nowhere",
     }
 
     // Back to silence for everything after this.
-    qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray());
+    qputenv("RPI_IMAGER_TELEMETRY_URL", QByteArray("off"));
 }
 
 #include "connect_device_registrar.h"

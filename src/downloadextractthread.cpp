@@ -97,19 +97,15 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     // which amplifies queue pressure on devices with low queue depth. See #1592.
     {
         auto limits = rpi_imager::FileOperations::QueryDeviceIOLimits(_filename.toStdString());
-        if (limits.max_transfer_bytes > 0 && limits.max_transfer_bytes < writeBufferSizeHint)
+        const size_t capped = rpi_imager::CapWriteBufferToDevice(
+            writeBufferSizeHint, limits.max_transfer_bytes, pageSize);
+        if (capped != writeBufferSizeHint)
         {
-            size_t deviceMaxBytes = limits.max_transfer_bytes;
-            // Align down to page boundary for O_DIRECT / FILE_FLAG_NO_BUFFERING compatibility
-            deviceMaxBytes = (deviceMaxBytes / pageSize) * pageSize;
-            if (deviceMaxBytes >= pageSize)
-            {
-                qDebug() << "Capping write buffer from" << writeBufferSizeHint
-                         << "to" << deviceMaxBytes << "bytes"
-                         << "(device max transfer:" << limits.max_transfer_bytes << ")";
-                writeBufferSizeHint = deviceMaxBytes;
-                _writeBufferSize = deviceMaxBytes;
-            }
+            qDebug() << "Capping write buffer from" << writeBufferSizeHint
+                     << "to" << capped << "bytes"
+                     << "(device max transfer:" << limits.max_transfer_bytes << ")";
+            writeBufferSizeHint = capped;
+            _writeBufferSize = capped;
         }
     }
 

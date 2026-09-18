@@ -220,6 +220,59 @@ TEST_CASE("A path that cannot be opened is refused up front", "[cachewriter]")
     CHECK_FALSE(writer.isActive());
 }
 
+TEST_CASE("Opening a second time while active is refused", "[cachewriter]")
+{
+    // One writer, one file. Taking the second path would leave the first
+    // file open with a thread still hashing into it, and the caller holding
+    // a writer that reports success for a file it is not writing.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString first = QDir(dir.path()).filePath(QStringLiteral("first.img"));
+    const QString second = QDir(dir.path()).filePath(QStringLiteral("second.img"));
+
+    AsyncCacheWriter writer;
+    REQUIRE(writer.open(first, 1024));
+    CHECK_FALSE(writer.open(second, 1024));
+
+    // The refusal left the first one alone rather than half-closing it.
+    CHECK(writer.isActive());
+    const QByteArray payload = payloadOfSize(4096, 21);
+    CHECK(writer.write(payload.constData(), size_t(payload.size())));
+
+    writer.finish();
+    REQUIRE(waitFor([&] { return !writer.isActive(); }));
+    CHECK(QFile::exists(first));
+    CHECK_FALSE(QFile::exists(second));
+}
+
+TEST_CASE("A preallocation that cannot be met does not fail the cache",
+          "[cachewriter]")
+{
+    // The size is a hint: reserving it up front keeps the file in one piece
+    // on disk. Nothing depends on it succeeding, and treating a refusal as
+    // fatal would turn "this volume will not reserve an exabyte" into "no
+    // cached copy", on every download.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("cached.img"));
+
+    AsyncCacheWriter writer;
+    // Larger than any volume this will run on, so the reservation is refused.
+    REQUIRE(writer.open(path, qint64(1) << 60));
+    REQUIRE(writer.isActive());
+
+    const QByteArray payload = payloadOfSize(64 * 1024, 22);
+    REQUIRE(writer.write(payload.constData(), size_t(payload.size())));
+    writer.finish();
+    REQUIRE(waitFor([&] { return !writer.isActive(); }));
+
+    // And what came out is the image, not an exabyte of holes.
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    CHECK(f.readAll() == payload);
+    CHECK_FALSE(writer.hasError());
+}
+
 TEST_CASE("A cancelled cache leaves nothing behind", "[cachewriter]")
 {
     QTemporaryDir dir;

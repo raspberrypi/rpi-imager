@@ -36,6 +36,37 @@
 #include <wincrypt.h>
 #include <bcrypt.h>
 
+#include <atomic>
+
+#ifdef SECUREBOOT_CRYPTO_ENABLE_TEST_API
+// Make one CryptoAPI or CNG call report failure, chosen by position.
+//
+// The providers refusing is not something a test can arrange, and until it
+// could, none of the failure paths below had ever run -- on code that signs
+// the firmware a board will boot, where a half-built answer returned as a
+// signature is worse than no answer at all. One ordinal counts both kinds of
+// call, so arming each in turn walks every path in the order they happen.
+namespace {
+std::atomic<int> g_failAtCall{-1};
+std::atomic<int> g_callOrdinal{0};
+
+bool cryptoCallShouldFail()
+{
+    const int ordinal = g_callOrdinal.fetch_add(1);
+    const int at = g_failAtCall.load();
+    return at >= 0 && ordinal == at;
+}
+} // namespace
+
+// CryptoAPI answers BOOL, CNG answers NTSTATUS.
+#define RPI_CRYPT_BOOL(expr) (cryptoCallShouldFail() ? FALSE : (expr))
+#define RPI_CRYPT_NT(expr) \
+    (cryptoCallShouldFail() ? static_cast<NTSTATUS>(0xC0000001L) : (expr))
+#else
+#define RPI_CRYPT_BOOL(expr) (expr)
+#define RPI_CRYPT_NT(expr) (expr)
+#endif
+
 namespace {
 
 // RAII guards for CryptoAPI handles — every entry-point has many failure
@@ -84,18 +115,18 @@ bool loadPemRsaPrivateKey(HCRYPTPROV hProv, const QString& pemPath,
     // PEM → DER: strip "-----BEGIN ... -----" header/footer and base64-decode
     // the body.  CRYPT_STRING_BASE64HEADER does both in one call.
     DWORD derLen = 0;
-    if (!CryptStringToBinaryA(pem.constData(), pem.size(),
+    if (!RPI_CRYPT_BOOL(CryptStringToBinaryA(pem.constData(), pem.size(),
                                 CRYPT_STRING_BASE64HEADER, nullptr, &derLen,
-                                nullptr, nullptr)) {
+                                nullptr, nullptr))) {
         qDebug() << "SecureBootCrypto/win: PEM decode (size) failed, GLE="
                  << GetLastError();
         return false;
     }
     QByteArray der(static_cast<int>(derLen), Qt::Uninitialized);
-    if (!CryptStringToBinaryA(pem.constData(), pem.size(),
+    if (!RPI_CRYPT_BOOL(CryptStringToBinaryA(pem.constData(), pem.size(),
                                 CRYPT_STRING_BASE64HEADER,
                                 reinterpret_cast<BYTE*>(der.data()), &derLen,
-                                nullptr, nullptr)) {
+                                nullptr, nullptr))) {
         qDebug() << "SecureBootCrypto/win: PEM decode failed, GLE=" << GetLastError();
         return false;
     }
@@ -161,8 +192,8 @@ QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPa
     // CryptStringToBinary + CryptDecodeObjectEx + CryptImportKey handle
     // PKCS#1 and PKCS#8 PEM envelopes cleanly; CNG by itself doesn't.
     CryptProvHandle prov;
-    if (!CryptAcquireContextW(&prov.h, nullptr, nullptr, PROV_RSA_AES,
-                                CRYPT_VERIFYCONTEXT | CRYPT_SILENT)) {
+    if (!RPI_CRYPT_BOOL(CryptAcquireContextW(&prov.h, nullptr, nullptr, PROV_RSA_AES,
+                                CRYPT_VERIFYCONTEXT | CRYPT_SILENT))) {
         qDebug() << "SecureBootCrypto/win: CryptAcquireContext failed, GLE="
                  << GetLastError();
         return {};
@@ -182,22 +213,22 @@ QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPa
     // key handle directly, no container required, and emits big-endian
     // signatures so we don't need the byte-reverse the CryptoAPI path did.
     DWORD privBlobLen = 0;
-    if (!CryptExportKey(key.h, 0, PRIVATEKEYBLOB, 0, nullptr, &privBlobLen)) {
+    if (!RPI_CRYPT_BOOL(CryptExportKey(key.h, 0, PRIVATEKEYBLOB, 0, nullptr, &privBlobLen))) {
         qDebug() << "SecureBootCrypto/win: CryptExportKey(PRIVATEKEYBLOB) size failed, GLE="
                  << GetLastError();
         return {};
     }
     QByteArray privBlob(static_cast<int>(privBlobLen), Qt::Uninitialized);
-    if (!CryptExportKey(key.h, 0, PRIVATEKEYBLOB, 0,
-                         reinterpret_cast<BYTE*>(privBlob.data()), &privBlobLen)) {
+    if (!RPI_CRYPT_BOOL(CryptExportKey(key.h, 0, PRIVATEKEYBLOB, 0,
+                         reinterpret_cast<BYTE*>(privBlob.data()), &privBlobLen))) {
         qDebug() << "SecureBootCrypto/win: CryptExportKey(PRIVATEKEYBLOB) failed, GLE="
                  << GetLastError();
         return {};
     }
 
     BCryptAlgHandle alg;
-    NTSTATUS st = BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_RSA_ALGORITHM,
-                                                nullptr, 0);
+    NTSTATUS st = RPI_CRYPT_NT(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_RSA_ALGORITHM,
+                                                nullptr, 0));
     if (!BCRYPT_SUCCESS(st)) {
         qDebug() << "SecureBootCrypto/win: BCryptOpenAlgorithmProvider(RSA) failed, NTSTATUS=0x"
                  << QString::number(static_cast<quint32>(st), 16);
@@ -205,10 +236,10 @@ QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPa
     }
 
     BCryptKeyHandle bcryptKey;
-    st = BCryptImportKeyPair(alg.h, nullptr, LEGACY_RSAPRIVATE_BLOB,
+    st = RPI_CRYPT_NT(BCryptImportKeyPair(alg.h, nullptr, LEGACY_RSAPRIVATE_BLOB,
                               &bcryptKey.h,
                               reinterpret_cast<PUCHAR>(privBlob.data()),
-                              privBlob.size(), 0);
+                              privBlob.size(), 0));
     if (!BCRYPT_SUCCESS(st)) {
         qDebug() << "SecureBootCrypto/win: BCryptImportKeyPair(LEGACY_RSAPRIVATE_BLOB) failed, NTSTATUS=0x"
                  << QString::number(static_cast<quint32>(st), 16);
@@ -224,17 +255,17 @@ QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPa
     auto* digestPtr = reinterpret_cast<PUCHAR>(
         const_cast<char*>(sha256Digest.constData()));
     ULONG sigLen = 0;
-    st = BCryptSignHash(bcryptKey.h, &padInfo, digestPtr, sha256Digest.size(),
-                         nullptr, 0, &sigLen, BCRYPT_PAD_PKCS1);
+    st = RPI_CRYPT_NT(BCryptSignHash(bcryptKey.h, &padInfo, digestPtr, sha256Digest.size(),
+                         nullptr, 0, &sigLen, BCRYPT_PAD_PKCS1));
     if (!BCRYPT_SUCCESS(st)) {
         qDebug() << "SecureBootCrypto/win: BCryptSignHash size query failed, NTSTATUS=0x"
                  << QString::number(static_cast<quint32>(st), 16);
         return {};
     }
     QByteArray sig(static_cast<int>(sigLen), Qt::Uninitialized);
-    st = BCryptSignHash(bcryptKey.h, &padInfo, digestPtr, sha256Digest.size(),
+    st = RPI_CRYPT_NT(BCryptSignHash(bcryptKey.h, &padInfo, digestPtr, sha256Digest.size(),
                          reinterpret_cast<PUCHAR>(sig.data()), sig.size(),
-                         &sigLen, BCRYPT_PAD_PKCS1);
+                         &sigLen, BCRYPT_PAD_PKCS1));
     if (!BCRYPT_SUCCESS(st)) {
         qDebug() << "SecureBootCrypto/win: BCryptSignHash failed, NTSTATUS=0x"
                  << QString::number(static_cast<quint32>(st), 16);
@@ -246,8 +277,8 @@ QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPa
 QByteArray extractRsaPubkeyBin(const QString& rsaKeyPath)
 {
     CryptProvHandle prov;
-    if (!CryptAcquireContextW(&prov.h, nullptr, nullptr, PROV_RSA_AES,
-                                CRYPT_VERIFYCONTEXT | CRYPT_SILENT)) {
+    if (!RPI_CRYPT_BOOL(CryptAcquireContextW(&prov.h, nullptr, nullptr, PROV_RSA_AES,
+                                CRYPT_VERIFYCONTEXT | CRYPT_SILENT))) {
         qDebug() << "SecureBootCrypto/win: CryptAcquireContext failed, GLE="
                  << GetLastError();
         return {};
@@ -307,3 +338,207 @@ QByteArray extractRsaPubkeyBin(const QString& rsaKeyPath)
 }
 
 }  // namespace SecureBootCrypto
+
+
+// ---------------------------------------------------------------------------
+// Making a key pair, without openssl
+// ---------------------------------------------------------------------------
+// The provisioner used to shell out to `openssl genrsa` and `openssl rsa`.
+// Windows does not ship openssl, so on a machine carrying neither Git for
+// Windows nor MSYS -- which is most of them -- generating a secure boot key
+// simply failed. The signing half of this file was ported to CNG for exactly
+// that reason; this is the half that was left behind.
+
+namespace {
+
+// DER wrapped as PEM the way openssl writes it: base64 in 64-character lines
+// between the armour for `label`.
+QByteArray derToPem(const BYTE* der, DWORD derLen, const char* label)
+{
+    DWORD b64Len = 0;
+    if (!CryptBinaryToStringA(der, derLen, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF,
+                              nullptr, &b64Len))
+        return {};
+    QByteArray b64(static_cast<int>(b64Len), Qt::Uninitialized);
+    if (!CryptBinaryToStringA(der, derLen, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF,
+                              b64.data(), &b64Len))
+        return {};
+    b64.resize(static_cast<int>(qstrlen(b64.constData())));
+
+    QByteArray pem;
+    pem += "-----BEGIN ";
+    pem += label;
+    pem += "-----\n";
+    for (int i = 0; i < b64.size(); i += 64) {
+        pem += b64.mid(i, 64);
+        pem += '\n';
+    }
+    pem += "-----END ";
+    pem += label;
+    pem += "-----\n";
+    return pem;
+}
+
+bool writeWholeFile(const QString& path, const QByteArray& bytes)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qDebug() << "SecureBootCrypto/win: cannot write" << path;
+        return false;
+    }
+    const bool ok = f.write(bytes) == bytes.size();
+    f.close();
+    return ok;
+}
+
+} // namespace
+
+namespace SecureBootCrypto {
+
+bool generateRsaKeyPair(const QString& privateKeyPath, const QString& publicKeyPath)
+{
+    BCryptAlgHandle alg;
+    NTSTATUS st = RPI_CRYPT_NT(BCryptOpenAlgorithmProvider(&alg.h, BCRYPT_RSA_ALGORITHM,
+                                                           nullptr, 0));
+    if (!BCRYPT_SUCCESS(st)) {
+        qDebug() << "SecureBootCrypto/win: BCryptOpenAlgorithmProvider(RSA) failed, NTSTATUS=0x"
+                 << QString::number(static_cast<quint32>(st), 16);
+        return false;
+    }
+
+    BCryptKeyHandle key;
+    st = RPI_CRYPT_NT(BCryptGenerateKeyPair(alg.h, &key.h, 2048, 0));
+    if (!BCRYPT_SUCCESS(st)) {
+        qDebug() << "SecureBootCrypto/win: BCryptGenerateKeyPair failed, NTSTATUS=0x"
+                 << QString::number(static_cast<quint32>(st), 16);
+        return false;
+    }
+    st = RPI_CRYPT_NT(BCryptFinalizeKeyPair(key.h, 0));
+    if (!BCRYPT_SUCCESS(st)) {
+        qDebug() << "SecureBootCrypto/win: BCryptFinalizeKeyPair failed, NTSTATUS=0x"
+                 << QString::number(static_cast<quint32>(st), 16);
+        return false;
+    }
+
+    // LEGACY_RSAPRIVATE_BLOB is the CryptoAPI PRIVATEKEYBLOB layout, which is
+    // what CryptEncodeObjectEx turns into a PKCS#1 RSAPrivateKey -- the same
+    // bridge the signing path uses, in the other direction.
+    ULONG privLen = 0;
+    st = RPI_CRYPT_NT(BCryptExportKey(key.h, nullptr, LEGACY_RSAPRIVATE_BLOB,
+                                      nullptr, 0, &privLen, 0));
+    if (!BCRYPT_SUCCESS(st)) {
+        qDebug() << "SecureBootCrypto/win: BCryptExportKey(private) size failed";
+        return false;
+    }
+    QByteArray privBlob(static_cast<int>(privLen), Qt::Uninitialized);
+    st = RPI_CRYPT_NT(BCryptExportKey(key.h, nullptr, LEGACY_RSAPRIVATE_BLOB,
+                                      reinterpret_cast<PUCHAR>(privBlob.data()),
+                                      privLen, &privLen, 0));
+    if (!BCRYPT_SUCCESS(st)) {
+        qDebug() << "SecureBootCrypto/win: BCryptExportKey(private) failed";
+        return false;
+    }
+
+    LocalFreePtr privDer;
+    DWORD privDerLen = 0;
+    if (!RPI_CRYPT_BOOL(CryptEncodeObjectEx(X509_ASN_ENCODING, PKCS_RSA_PRIVATE_KEY,
+                                            privBlob.constData(),
+                                            CRYPT_ENCODE_ALLOC_FLAG, nullptr,
+                                            &privDer.p, &privDerLen))) {
+        qDebug() << "SecureBootCrypto/win: encoding the private key failed, GLE="
+                 << GetLastError();
+        return false;
+    }
+
+    ULONG pubLen = 0;
+    st = RPI_CRYPT_NT(BCryptExportKey(key.h, nullptr, LEGACY_RSAPUBLIC_BLOB,
+                                      nullptr, 0, &pubLen, 0));
+    if (!BCRYPT_SUCCESS(st)) {
+        qDebug() << "SecureBootCrypto/win: BCryptExportKey(public) size failed";
+        return false;
+    }
+    QByteArray pubBlob(static_cast<int>(pubLen), Qt::Uninitialized);
+    st = RPI_CRYPT_NT(BCryptExportKey(key.h, nullptr, LEGACY_RSAPUBLIC_BLOB,
+                                      reinterpret_cast<PUCHAR>(pubBlob.data()),
+                                      pubLen, &pubLen, 0));
+    if (!BCRYPT_SUCCESS(st)) {
+        qDebug() << "SecureBootCrypto/win: BCryptExportKey(public) failed";
+        return false;
+    }
+
+    // PKCS#1 RSAPublicKey first, then wrapped as a SubjectPublicKeyInfo.
+    // SPKI is what `openssl rsa -pubout` writes, and the SHA-256 of its DER
+    // is fused into the device and cannot be changed afterwards -- so the
+    // encoding has to match exactly, down to the explicit ASN.1 NULL the RSA
+    // algorithm identifier carries.
+    LocalFreePtr rsaPubDer;
+    DWORD rsaPubDerLen = 0;
+    if (!RPI_CRYPT_BOOL(CryptEncodeObjectEx(X509_ASN_ENCODING, RSA_CSP_PUBLICKEYBLOB,
+                                            pubBlob.constData(),
+                                            CRYPT_ENCODE_ALLOC_FLAG, nullptr,
+                                            &rsaPubDer.p, &rsaPubDerLen))) {
+        qDebug() << "SecureBootCrypto/win: encoding the public key failed, GLE="
+                 << GetLastError();
+        return false;
+    }
+
+    static BYTE asnNull[] = {0x05, 0x00};
+    CERT_PUBLIC_KEY_INFO info{};
+    info.Algorithm.pszObjId = const_cast<LPSTR>(szOID_RSA_RSA);
+    info.Algorithm.Parameters.cbData = sizeof(asnNull);
+    info.Algorithm.Parameters.pbData = asnNull;
+    info.PublicKey.cbData = rsaPubDerLen;
+    info.PublicKey.pbData = rsaPubDer.p;
+    info.PublicKey.cUnusedBits = 0;
+
+    LocalFreePtr spkiDer;
+    DWORD spkiDerLen = 0;
+    if (!RPI_CRYPT_BOOL(CryptEncodeObjectEx(X509_ASN_ENCODING, X509_PUBLIC_KEY_INFO,
+                                            &info, CRYPT_ENCODE_ALLOC_FLAG, nullptr,
+                                            &spkiDer.p, &spkiDerLen))) {
+        qDebug() << "SecureBootCrypto/win: wrapping the public key failed, GLE="
+                 << GetLastError();
+        return false;
+    }
+
+    const QByteArray privPem = derToPem(privDer.p, privDerLen, "RSA PRIVATE KEY");
+    const QByteArray pubPem = derToPem(spkiDer.p, spkiDerLen, "PUBLIC KEY");
+    if (privPem.isEmpty() || pubPem.isEmpty()) {
+        qDebug() << "SecureBootCrypto/win: base64 of the key failed";
+        return false;
+    }
+
+    if (!writeWholeFile(privateKeyPath, privPem))
+        return false;
+    if (!writeWholeFile(publicKeyPath, pubPem)) {
+        // Never leave half a pair behind: the private key is a real RSA key,
+        // and Imager's own file chooser would offer it.
+        QFile::remove(privateKeyPath);
+        return false;
+    }
+    return true;
+}
+
+}  // namespace SecureBootCrypto
+
+#ifdef SECUREBOOT_CRYPTO_ENABLE_TEST_API
+namespace SecureBootCryptoTesting {
+
+// Arm the call at `ordinal` to fail, or -1 to disarm. Resets the counter, so
+// the ordinal is counted from the next entry point rather than from process
+// start.
+void failAtCall(int ordinal)
+{
+    g_callOrdinal.store(0);
+    g_failAtCall.store(ordinal);
+}
+
+// How many guarded calls the last run made, so a case can walk every one
+// without a hard-coded count that goes stale.
+int callsMade()
+{
+    return g_callOrdinal.load();
+}
+
+} // namespace SecureBootCryptoTesting
+#endif

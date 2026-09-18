@@ -283,4 +283,45 @@ TestCase {
         compare(field.text, "hunter2",
                "the keystroke went into the field, not the button")
     }
+
+    // -- What a screen reader is told it has landed on --------------------
+
+    function test_the_field_says_what_it_is_for() {
+        // The wrapper is ignored on purpose -- two accessible interfaces for
+        // one control crashed VoiceOver -- so everything a reader is given
+        // has to be on the inner field. Without it, tabbing into a password
+        // box announces nothing at all: not the label, not the box.
+        const field = create({ placeholderText: "Enter password" })
+
+        compare(field.Accessible.ignored, true,
+                "the wrapper stays out of the way")
+        compare(field.textField.Accessible.name, "Enter password")
+        compare(field.textField.Accessible.role, Accessible.EditableText)
+    }
+
+    function test_the_name_survives_being_a_password() {
+        // Qt clears the accessible name whenever Accessible.passwordEdit is
+        // true -- in either declaration order, and even when the name is
+        // assigned after. Setting it is what left these boxes silent, so
+        // this fails if it comes back.
+        const field = create({ placeholderText: "Re-enter password" })
+        compare(field.textField.echoMode, TextInput.Password,
+                "the field really is masked")
+        verify(field.textField.Accessible.name.length > 0,
+               "and still announces itself")
+
+        field.passwordVisible = true
+        waitForRendering(field)
+        compare(field.textField.echoMode, TextInput.Normal)
+        compare(field.textField.Accessible.name, "Re-enter password",
+                "the name does not depend on whether it is revealed")
+    }
+
+    function test_the_description_says_how_to_reveal_it() {
+        const field = create({ placeholderText: "Enter password", text: "x" })
+        waitForRendering(field)
+        const desc = field.textField.Accessible.description
+        verify(desc.indexOf("F2") >= 0,
+               "the shortcut is announced: " + desc)
+    }
 }

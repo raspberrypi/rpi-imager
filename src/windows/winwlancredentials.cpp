@@ -11,6 +11,8 @@
 #include <delayimp.h>
 #include <QDebug>
 #include <QRegularExpression>
+
+#include "wlan_profile_xml.h"
 #ifndef WLAN_PROFILE_GET_PLAINTEXT_KEY
 #define WLAN_PROFILE_GET_PLAINTEXT_KEY 4
 #endif
@@ -31,35 +33,20 @@ FARPROC WINAPI dllDelayNotifyHook(unsigned dliNotify, PDelayLoadInfo)
 
 PfnDliHook __pfnDliNotifyHook2 = dllDelayNotifyHook;
 
-inline QString unescapeXml(QString str)
-{
-    static const char *table[] = {
-        "&lt;", "<",
-        "&gt;", ">",
-        "&quot;", "\"",
-        "&apos;", "'",
-        "&amp;", "&"
-    };
-    int tableLen = sizeof(table) / sizeof(table[0]);
-
-    for (int i=0; i < tableLen; i+=2)
-    {
-        str.replace(table[i], table[i+1]);
-    }
-
-    return str;
-}
 
 WinWlanCredentials::~WinWlanCredentials()
 {
-    // Securely erase credentials from memory to prevent recovery
-    // from core dumps, swap, or cold-boot attacks.
-    if (!_psk.isEmpty()) {
-        SecureZeroMemory(_psk.data(), _psk.size());
-        _psk.clear();
-    }
+    // The passphrase is wiped where it lives, which is the whole point: it
+    // must not survive in a core dump, in swap, or in memory handed back to
+    // the allocator and read by whatever gets it next.
+    _psk.wipe();
+
+    // The SSID is not a secret and is not shared with anyone by the time we
+    // get here, so const_cast is enough to clear it without detaching into a
+    // fresh copy and zeroing that instead.
     if (!_ssid.isEmpty()) {
-        SecureZeroMemory(_ssid.data(), _ssid.size());
+        rpi_imager::secureZero(const_cast<char *>(_ssid.constData()),
+                               static_cast<size_t>(_ssid.size()));
         _ssid.clear();
     }
 }
@@ -133,12 +120,12 @@ WinWlanCredentials::WinWlanCredentials()
                                           NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
                         {
                             QString xml = QString::fromWCharArray(xmlstr);
-                            QRegularExpression rx("<keyMaterial>(.+)</keyMaterial>");
-                            QRegularExpressionMatch match = rx.match(xml);
-
-                            if (match.hasMatch()) {
-                                _psk = unescapeXml(match.captured(1)).toLatin1();
-                            }
+                            QByteArray psk = rpi_wlan::pskFromProfileXml(xml);
+                            _psk.assign(psk);
+                            // The intermediate goes too: it held the same
+                            // passphrase, and it is ours alone to clear.
+                            rpi_imager::secureZero(psk.data(), psk.size());
+                            psk.clear();
 
                             // Zero the local XML string that contains the plaintext PSK
                             // inside <keyMaterial> tags before it goes out of scope.
@@ -171,15 +158,17 @@ QByteArray WinWlanCredentials::getSSID()
 
 QByteArray WinWlanCredentials::getPSK()
 {
-    return _psk;
+    // A copy, sharing nothing with our storage -- so wiping ours later
+    // cannot reach into the caller's, and the caller cannot keep ours alive.
+    return _psk.copy();
 }
 
 QByteArray WinWlanCredentials::getPSKForSSID(const QByteArray &ssid)
 {
     // Windows implementation caches both SSID and PSK during construction
     // If requested SSID matches cached SSID, return cached PSK
-    if (ssid == _ssid && !_psk.isEmpty()) {
-        return _psk;
+    if (ssid == _ssid && !_psk.empty()) {
+        return _psk.copy();
     }
     // Otherwise, return empty (would need to re-query Windows WLAN API)
     return QByteArray();

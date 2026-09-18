@@ -14,7 +14,12 @@
 
 #include "rpiboot/test/mock_usb_transport.h"
 #include <atomic>
+#include "platform_paths.h"
+#include "platform_privilege.h"
+#include "platform_permissions.h"
 #include <catch2/catch_test_macros.hpp>
+
+#include "platform_tools.h"
 #include <catch2/generators/catch_generators.hpp>
 
 #include "rpiboot/secure_boot_provisioner.h"
@@ -47,7 +52,7 @@ using rpiboot::ChipGeneration;
 
 namespace {
 
-bool haveOpenssl() { return QFileInfo::exists(QStringLiteral("/usr/bin/openssl")); }
+bool haveOpenssl() { return rpi_test::haveTool(QStringLiteral("openssl")); }
 
 class ScratchDir
 {
@@ -100,7 +105,7 @@ QByteArray readFile(const fs::path &path)
 QByteArray publicKeyDerViaOpenssl(const fs::path &publicKeyPath)
 {
     QProcess proc;
-    proc.start(QStringLiteral("/usr/bin/openssl"),
+    proc.start(rpi_test::toolPath(QStringLiteral("openssl")),
                {QStringLiteral("rsa"), QStringLiteral("-pubin"), QStringLiteral("-in"),
                 QString::fromStdString(publicKeyPath.string()), QStringLiteral("-outform"),
                 QStringLiteral("DER")});
@@ -112,9 +117,14 @@ QByteArray publicKeyDerViaOpenssl(const fs::path &publicKeyPath)
 
 } // namespace
 
+// Skips where there is no openssl at all; where there is one, puts it where
+// the code under test can find it. The provisioner starts openssl by bare
+// name, so PATH is all it can search -- and Git for Windows keeps its copy
+// off PATH deliberately, so the tool is present and invisible.
 #define REQUIRE_OPENSSL()                                                                          \
     if (!haveOpenssl())                                                                            \
-    SKIP("openssl is not installed, so no key pair can be generated")
+        SKIP("openssl is not installed, so no key pair can be generated");                         \
+    rpi_test::ToolOnPath _opensslOnPath(QStringLiteral("openssl"))
 
 // ---------------------------------------------------------------------------
 // Key generation
@@ -144,7 +154,7 @@ TEST_CASE("SecureBootProvisioner generates a usable key pair", "[secureboot-otp]
 
     // And openssl has to accept the private key, not just the file shape.
     QProcess check;
-    check.start(QStringLiteral("/usr/bin/openssl"),
+    check.start(rpi_test::toolPath(QStringLiteral("openssl")),
                 {QStringLiteral("rsa"), QStringLiteral("-in"),
                  QString::fromStdString(priv.string()), QStringLiteral("-noout"),
                  QStringLiteral("-check")});
@@ -155,8 +165,10 @@ TEST_CASE("SecureBootProvisioner generates a usable key pair", "[secureboot-otp]
 TEST_CASE("SecureBootProvisioner key generation fails on an unwritable path",
           "[secureboot-otp]")
 {
-    const fs::path priv{"/nonexistent-rpi-imager-dir/deeper/private.pem"};
-    const fs::path pub{"/nonexistent-rpi-imager-dir/deeper/public.pem"};
+    const fs::path priv{
+        rpi_test::unwritablePath(QStringLiteral("private.pem")).toStdString()};
+    const fs::path pub{
+        rpi_test::unwritablePath(QStringLiteral("public.pem")).toStdString()};
 
     // Reporting success without writing a key would leave the caller about
     // to fuse a hash of nothing.
@@ -458,6 +470,7 @@ QByteArray sectionOf(const fs::path &image, const QString &name)
 
 TEST_CASE("SecureBootProvisioner prepares a signed recovery image", "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     ScratchDir scratch;
     const fs::path recovery = scratch.path(QStringLiteral("recovery"));
     seedRecoveryDir(recovery);
@@ -479,6 +492,7 @@ TEST_CASE("SecureBootProvisioner prepares a signed recovery image", "[secureboot
 
 TEST_CASE("Signed recovery turns secure boot on and self-update off", "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // ENABLE_SELF_UPDATE=1 on a secure-boot device lets the bootloader
     // replace itself with an image the customer key has not signed, which
     // is how a provisioned module stops booting.
@@ -504,6 +518,7 @@ TEST_CASE("Signed recovery turns secure boot on and self-update off", "[securebo
 TEST_CASE("Signed recovery embeds the public key of the key it was given",
           "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // The brick condition. The hash burned into OTP comes from this embedded
     // key, so if it does not track the private key passed in -- if it were
     // stale, cached, or hardcoded -- the user ends up holding a key the
@@ -545,6 +560,7 @@ TEST_CASE("Signed recovery embeds the public key of the key it was given",
 TEST_CASE("Signed recovery signature carries hash, timestamp and RSA proof",
           "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // The recovery binary verifies pieeprom.sig before flashing on a
     // secure-boot device, so all three lines have to be there. Dropping the
     // rsa2048 line would leave the image unflashable on exactly the devices
@@ -577,6 +593,7 @@ TEST_CASE("Signed recovery signature carries hash, timestamp and RSA proof",
 
 TEST_CASE("Signed recovery rejects an unsupported chip generation", "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     ScratchDir scratch;
     const fs::path recovery = scratch.path(QStringLiteral("recovery"));
     seedRecoveryDir(recovery);
@@ -594,6 +611,7 @@ TEST_CASE("Signed recovery rejects an unsupported chip generation", "[secureboot
 
 TEST_CASE("Signed recovery rejects a corrupt original image", "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // A truncated or non-EEPROM file must be refused rather than patched
     // into something that gets flashed.
     ScratchDir scratch;
@@ -758,6 +776,7 @@ void seedRecoveryDirWith(const fs::path &dir, const std::vector<uint8_t> &img)
 TEST_CASE("Counter-signing appends a signature to the bootcode in the EEPROM",
           "[secureboot-otp][countersign]")
 {
+    REQUIRE_OPENSSL();
     ScratchDir scratch;
     const fs::path recovery = scratch.path(QStringLiteral("secure-boot-recovery5"));
     seedRecoveryDirWith(recovery, makeCounterSignableEeprom());
@@ -788,6 +807,7 @@ TEST_CASE("Counter-signing appends a signature to the bootcode in the EEPROM",
 TEST_CASE("Counter-signing without it asked for leaves the bootcode alone",
           "[secureboot-otp][countersign]")
 {
+    REQUIRE_OPENSSL();
     // The counterpart: a CM4, or a CM5 whose OTP is not fused, must not have
     // its firmware rewritten. Signing unconditionally would change what gets
     // written to every board, not just the ones that need it.
@@ -811,6 +831,7 @@ TEST_CASE("Counter-signing without it asked for leaves the bootcode alone",
 TEST_CASE("An AB image has its bootsys counter-signed as well",
           "[secureboot-otp][countersign]")
 {
+    REQUIRE_OPENSSL();
     // bootsys is the second blob the ROM checks. Signing bootcode.bin and
     // stopping there produces an image the imager considers finished and the
     // board refuses, with nothing to say which of the two was wrong.
@@ -856,6 +877,7 @@ TEST_CASE("An AB image has its bootsys counter-signed as well",
 TEST_CASE("An AB image with an empty bootsys is refused rather than half-signed",
           "[secureboot-otp][countersign]")
 {
+    REQUIRE_OPENSSL();
     // A bootsys section that is there but carries nothing. Signing what is
     // not there and writing the result would produce an image the board
     // rejects; refusing leaves the original where it can be looked at.
@@ -894,6 +916,7 @@ TEST_CASE("An AB image with an empty bootsys is refused rather than half-signed"
 TEST_CASE("An original with no bootcode is refused before anything is signed",
           "[secureboot-otp][countersign]")
 {
+    REQUIRE_OPENSSL();
     // A truncated download, or an image built for a different chip. There is
     // nothing to counter-sign, and proceeding would write an EEPROM with an
     // empty first stage.
@@ -948,20 +971,67 @@ private:
 };
 
 // Write an executable stand-in for openssl into `directory`.
-bool plantFakeOpenssl(const QString &directory, const QByteArray &body)
+// What the stand-in openssl should do; see fake_openssl_probe.cpp.
+enum class FakeOpenssl {
+    Succeed,      // exit 0 having written and printed nothing
+    GenrsaOnly,   // write the key genrsa asks for, refuse everything else
+};
+
+// Put a copy of the stand-in in the tool directory under the name the code
+// under test looks for, and select what it does.
+//
+// A real executable rather than a shell script: Windows appends ".exe" to a
+// bare program name and nothing else, so a file called "openssl" holding a
+// shebang was never found there -- and every case below passed by taking the
+// "openssl is not installed" path rather than the one it is named after.
+class FakeOpensslOnPath
 {
-    const QString path = QDir(directory).filePath(QStringLiteral("openssl"));
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly))
-        return false;
-    f.write(QByteArray("#!/bin/sh\n") + body);
-    f.close();
-    return f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                            QFileDevice::ExeOwner);
-}
+public:
+    FakeOpensslOnPath(const QString &directory, FakeOpenssl behaviour)
+        : _saved(qgetenv("RPI_FAKE_OPENSSL"))
+    {
+        const QString suffix =
+            QFileInfo(QStringLiteral(FAKE_OPENSSL_BINARY)).suffix();
+        QString name = QStringLiteral("openssl");
+        if (!suffix.isEmpty())
+            name += QLatin1Char('.') + suffix;
+
+        _planted = QDir(directory).filePath(name);
+        QFile::remove(_planted);
+        _ok = QFile::copy(QStringLiteral(FAKE_OPENSSL_BINARY), _planted);
+        if (_ok) {
+            QFile::setPermissions(_planted,
+                                  QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                      QFileDevice::ExeOwner);
+        }
+        qputenv("RPI_FAKE_OPENSSL", behaviour == FakeOpenssl::Succeed
+                                        ? QByteArrayLiteral("succeed")
+                                        : QByteArrayLiteral("genrsa-only"));
+    }
+
+    ~FakeOpensslOnPath() { qputenv("RPI_FAKE_OPENSSL", _saved); }
+
+    FakeOpensslOnPath(const FakeOpensslOnPath &) = delete;
+    FakeOpensslOnPath &operator=(const FakeOpensslOnPath &) = delete;
+
+    bool ok() const { return _ok; }
+
+private:
+    QByteArray _saved;
+    QString _planted;
+    bool _ok = false;
+};
 
 } // namespace
 
+// Key generation shells out to openssl on the POSIX hosts and does not on
+// Windows, which makes the key with CNG instead -- so these three describe a
+// dependency Windows no longer has. Guarded rather than deleted: they still
+// say what must happen where openssl is the tool doing the work.
+//
+// The Windows equivalents are in secureboot_crypto_test.cpp, where each CNG
+// and CryptoAPI call is made to refuse in turn.
+#ifndef Q_OS_WIN
 TEST_CASE("Key generation with no openssl installed fails rather than pretending",
           "[secureboot-otp]")
 {
@@ -992,13 +1062,10 @@ TEST_CASE("A private key is not left behind when the public half cannot be made"
     const QString tools = toolDir.dir();
 
     // genrsa writes the file it was asked for; every other subcommand fails.
-    REQUIRE(plantFakeOpenssl(tools,
-                             "if [ \"$1\" = genrsa ]; then\n"
-                             "  : > \"$3\"\n"
-                             "  exit 0\n"
-                             "fi\n"
-                             "echo 'fake openssl: refusing' >&2\n"
-                             "exit 1\n"));
+    // genrsa writes the file it was asked for; every other subcommand
+    // fails, which is the second call in generateKeyPair.
+    FakeOpensslOnPath fake(tools, FakeOpenssl::GenrsaOnly);
+    REQUIRE(fake.ok());
 
     const fs::path priv = scratch.path(QStringLiteral("private.pem"));
     const fs::path pub = scratch.path(QStringLiteral("public.pem"));
@@ -1023,7 +1090,8 @@ TEST_CASE("An openssl that reports success but writes nothing is not believed",
     ScratchDir toolDir;
     const QString tools = toolDir.dir();
 
-    REQUIRE(plantFakeOpenssl(tools, "exit 0\n"));
+    FakeOpensslOnPath fake(tools, FakeOpenssl::Succeed);
+    REQUIRE(fake.ok());
 
     const fs::path priv = scratch.path(QStringLiteral("private.pem"));
     const fs::path pub = scratch.path(QStringLiteral("public.pem"));
@@ -1078,28 +1146,60 @@ TEST_CASE("An openssl that succeeds but prints nothing is not believed",
     // to be checked rather than the status.
     ScratchDir toolDir;
     const QString tools = toolDir.dir();
-    REQUIRE(plantFakeOpenssl(tools, "exit 0\n"));
+    FakeOpensslOnPath fake(tools, FakeOpenssl::Succeed);
+    REQUIRE(fake.ok());
 
     PathOverride only(tools);
     CHECK(SecureBootCrypto::extractRsaPubkeyBin(QStringLiteral("/any.pem")).isEmpty());
 }
 
-TEST_CASE("The OTP key hash is not computed without openssl", "[secureboot-otp]")
+#endif  // !Q_OS_WIN -- the openssl-dependent key generation
+
+
+TEST_CASE("The OTP key hash is taken without needing openssl", "[secureboot-otp]")
 {
-    // This hash is what gets fused into the device, permanently. Producing a
-    // wrong one -- or a zero one -- burns a board to a key nobody holds, so
-    // the only safe answer when the tool is missing is no answer.
+    // The hash used to come from `openssl rsa -pubin -outform DER`. That DER
+    // is the body of the PEM, so it is decoded in-process instead -- and the
+    // hash is now available on a machine with no openssl at all, which is
+    // every stock Windows one.
+    //
+    // secureboot_crypto_test.cpp holds those bytes to openssl's own: a
+    // different encoding is a different hash, fused into a board for good.
     ScratchDir scratch;
     ScratchDir toolDir;
+    const fs::path priv = scratch.path(QStringLiteral("private.pem"));
+    const fs::path pub = scratch.path(QStringLiteral("public.pem"));
+    REQUIRE(SecureBootProvisioner::generateKeyPair(priv, pub));
+
+    // Nothing on PATH at all, openssl included.
+    PathOverride only(toolDir.dir());
+    const auto hash = SecureBootProvisioner::calculateOtpKeyHash(pub);
+    REQUIRE(hash.has_value());
+
+    // A real hash, not a zero one: burning a board to the hash of nothing
+    // would look like success until it refused to boot.
+    bool anySet = false;
+    for (uint8_t b : *hash)
+        anySet = anySet || b != 0;
+    CHECK(anySet);
+}
+
+TEST_CASE("The OTP key hash is refused for a file that is not a public key",
+          "[secureboot-otp]")
+{
+    // Producing a wrong hash -- or the hash of nothing -- burns a board to a
+    // key nobody holds. The armour alone is not enough to believe.
+    ScratchDir scratch;
     const fs::path pub = scratch.path(QStringLiteral("public.pem"));
     {
         QFile f(QString::fromStdString(pub.string()));
         REQUIRE(f.open(QIODevice::WriteOnly));
         f.write("-----BEGIN PUBLIC KEY-----\nnot a key\n-----END PUBLIC KEY-----\n");
     }
-
-    PathOverride only(toolDir.dir());
     CHECK_FALSE(SecureBootProvisioner::calculateOtpKeyHash(pub).has_value());
+
+    const fs::path missing = scratch.path(QStringLiteral("absent.pem"));
+    CHECK_FALSE(SecureBootProvisioner::calculateOtpKeyHash(missing).has_value());
 }
 
 TEST_CASE("An OTP key hash is not made from an empty DER", "[secureboot-otp]")
@@ -1110,7 +1210,8 @@ TEST_CASE("An OTP key hash is not made from an empty DER", "[secureboot-otp]")
     ScratchDir scratch;
     ScratchDir toolDir;
     const QString tools = toolDir.dir();
-    REQUIRE(plantFakeOpenssl(tools, "exit 0\n"));
+    FakeOpensslOnPath fake(tools, FakeOpenssl::Succeed);
+    REQUIRE(fake.ok());
 
     const fs::path pub = scratch.path(QStringLiteral("public.pem"));
     {
@@ -1154,11 +1255,9 @@ TEST_CASE("A boot image too small for its files is refused rather than handed ov
     // and sized before anything is copied into it, so a swallowed failure
     // returns a correctly-sized image with a file missing -- and a board
     // will not come up from that. Here the payload simply does not fit.
-    if (QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
-                                       {QStringLiteral("/sbin"), QStringLiteral("/usr/sbin")})
-            .isEmpty() ||
-        QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty())
-        SKIP("mkfs.vfat and mtools are needed to build a boot image");
+    REQUIRE_BOOT_IMG_SUPPORT();
+    if (!rpi_test::haveTool(QStringLiteral("mcopy")))
+        SKIP("mtools is needed to put the files into the image");
 
     ScratchDir scratch;
     const QString out = QDir(scratch.dir()).filePath(QStringLiteral("boot.img"));
@@ -1181,10 +1280,7 @@ TEST_CASE("A boot image is not claimed when there is nowhere to stage its files"
     // Deleting the isValid() check does not make this fail: the file-open
     // guard below it refuses too. The check is defence in depth, so what is
     // pinned here is the refusal, not which of the two produced it.
-    if (QStandardPaths::findExecutable(QStringLiteral("mkfs.vfat"),
-                                       {QStringLiteral("/sbin"), QStringLiteral("/usr/sbin")})
-            .isEmpty())
-        SKIP("mkfs.vfat is needed to build a boot image");
+    REQUIRE_BOOT_IMG_SUPPORT();
 
     // Built before TMPDIR is moved, since it wants a real temp directory.
     ScratchDir scratch;
@@ -1245,6 +1341,7 @@ TEST_CASE("A recovery image is not built with a key that cannot sign",
 TEST_CASE("A recovery image that cannot be written down is reported",
           "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // Signing succeeds and then the result cannot be saved -- a read-only
     // volume, or a directory whose permissions changed under a long
     // provisioning run. Reporting success here would leave the caller
@@ -1260,17 +1357,13 @@ TEST_CASE("A recovery image that cannot be written down is reported",
     REQUIRE(SecureBootProvisioner::generateKeyPair(key, pub));
 
     // Readable and searchable, but nothing new may be created in it.
-    REQUIRE(QFile::setPermissions(QString::fromStdString(recovery.string()),
-                                  QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+    rpi_test::DeniedAccess denied(QString::fromStdString(recovery.string()),
+                                  rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     std::string err;
     const bool ok = SecureBootProvisioner::prepareSignedRecovery(
         ChipGeneration::BCM2711, recovery, key, /*counterSignFirmware=*/false, err);
-
-    // Put it back before any assertion can leave the directory unremovable.
-    QFile::setPermissions(QString::fromStdString(recovery.string()),
-                          QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                          QFileDevice::ExeOwner);
 
     INFO("error: " << err);
     CHECK_FALSE(ok);
@@ -1348,6 +1441,7 @@ void seedRecoveryDirWithout(const fs::path &dir, const char *omit)
 TEST_CASE("An EEPROM missing a section the provisioner must rewrite is refused",
           "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // The three sections are spliced in one after another, and each has its
     // own report. Which one is missing is the whole diagnostic: an image
     // without pubkey.bin cannot carry the customer key, and an image
@@ -1380,6 +1474,7 @@ TEST_CASE("An EEPROM missing a section the provisioner must rewrite is refused",
 TEST_CASE("Counter-signing an EEPROM whose bootcode will not take it is refused",
           "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // The BCM2712 arm: once the OTP hash is fused the boot ROM checks the
     // second-stage bootcode against the customer key too, so it is
     // re-signed and spliced back in. The signed blob is larger than what it
@@ -1406,6 +1501,7 @@ TEST_CASE("Counter-signing an EEPROM whose bootcode will not take it is refused"
 
 TEST_CASE("A signature file that cannot be created is reported", "[secureboot-otp]")
 {
+    REQUIRE_OPENSSL();
     // Everything up to the signature succeeds and then pieeprom.sig cannot
     // be written -- here because something is already in its way. The
     // recovery verifies that file before flashing, so an image saved
@@ -1451,7 +1547,7 @@ TEST_CASE("A key of the wrong size is refused before anything is written",
 
     const auto bigKey = scratch.path(QStringLiteral("rsa4096.pem"));
     QProcess gen;
-    gen.start(QStringLiteral("/usr/bin/openssl"),
+    gen.start(rpi_test::toolPath(QStringLiteral("openssl")),
               {QStringLiteral("genrsa"), QStringLiteral("-out"),
                QString::fromStdString(bigKey.string()), QStringLiteral("4096")});
     REQUIRE(gen.waitForFinished(60000));

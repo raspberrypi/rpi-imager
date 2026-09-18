@@ -436,6 +436,11 @@ bool prefersReducedMotion() {
     return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
 }
 
+// On PATH, which is where every distribution and macOS put it.
+QString sshKeyGenPath() {
+    return QStringLiteral("ssh-keygen");
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // On macOS, use raw disk device (/dev/rdisk) for direct I/O.
     // This bypasses the macOS buffer cache and provides significantly
@@ -515,5 +520,13 @@ void logFontEngine()
 {
     qDebug() << "Font engine: Core Text";
 }
+
+} // namespace PlatformQuirks
+
+namespace PlatformQuirks {
+
+// The stat bits are already the answer here.
+NativePermissionScope::NativePermissionScope() = default;
+NativePermissionScope::~NativePermissionScope() = default;
 
 } // namespace PlatformQuirks

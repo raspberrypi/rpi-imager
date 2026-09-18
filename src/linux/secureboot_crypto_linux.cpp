@@ -16,6 +16,7 @@
 #include <QByteArray>
 #include <QDebug>
 #include <QProcess>
+#include <QFile>
 #include <QString>
 #include <QStringList>
 
@@ -84,6 +85,61 @@ QByteArray extractRsaPubkeyBin(const QString& rsaKeyPath)
         return {};
     }
     return parseSubjectPublicKeyInfoDerToNE(der);
+}
+
+
+// Two openssl runs: one to make the private key, one to derive the public
+// half from it. Moved here from the provisioner, which called openssl
+// directly and so had no way to differ per platform -- Windows has none.
+bool generateRsaKeyPair(const QString& privateKeyPath, const QString& publicKeyPath)
+{
+    {
+        QProcess proc;
+        proc.start(QStringLiteral("openssl"),
+                   {QStringLiteral("genrsa"), QStringLiteral("-out"),
+                    privateKeyPath, QStringLiteral("2048")});
+        if (!proc.waitForStarted(5000)) {
+            qDebug() << "SecureBootCrypto: failed to start openssl for key generation";
+            return false;
+        }
+        if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
+            qDebug() << "SecureBootCrypto: openssl genrsa failed:"
+                     << proc.readAllStandardError();
+            return false;
+        }
+    }
+
+    {
+        QProcess proc;
+        proc.start(QStringLiteral("openssl"),
+                   {QStringLiteral("rsa"), QStringLiteral("-in"), privateKeyPath,
+                    QStringLiteral("-outform"), QStringLiteral("PEM"),
+                    QStringLiteral("-pubout"), QStringLiteral("-out"), publicKeyPath});
+        if (!proc.waitForStarted(5000)) {
+            qDebug() << "SecureBootCrypto: failed to start openssl for the public half";
+            // Never leave half a pair behind: the private key is a real RSA
+            // key, and Imager's own file chooser would offer it.
+            QFile::remove(privateKeyPath);
+            return false;
+        }
+        if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
+            qDebug() << "SecureBootCrypto: openssl rsa failed:"
+                     << proc.readAllStandardError();
+            QFile::remove(privateKeyPath);
+            return false;
+        }
+    }
+
+    // Asked for rather than assumed: openssl can exit zero having written
+    // nothing, and a caller told the pair exists is about to fuse the hash
+    // of a file that is not there.
+    if (!QFile::exists(privateKeyPath) || !QFile::exists(publicKeyPath)) {
+        qDebug() << "SecureBootCrypto: openssl reported success but wrote no key";
+        QFile::remove(privateKeyPath);
+        QFile::remove(publicKeyPath);
+        return false;
+    }
+    return true;
 }
 
 }  // namespace SecureBootCrypto

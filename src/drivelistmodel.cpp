@@ -7,6 +7,7 @@
 #include "rpiboot/rpiboot_types.h"
 #include "config.h"
 #include "drivelist/drivelist.h"
+#include "rpiboot/rpiboot_scanner.h"
 #include <QSet>
 #include <QDebug>
 
@@ -31,7 +32,7 @@ DriveListModel::DriveListModel(QObject *parent)
 
     // Enumerate drives in separate thread, but process results in UI thread
     connect(&_thread, &DriveListModelPollThread::newDriveList,
-            this, &DriveListModel::processDriveList);
+            this, &DriveListModel::onPolledDriveList);
     
     // Forward performance event signal
     connect(&_thread, &DriveListModelPollThread::eventDriveListPoll,
@@ -270,14 +271,48 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         qDebug() << "Drive added:" << info.device;
     }
 
-    // Extract connected rpiboot chip names and notify if changed
-    QStringList newChips;
+    // Update the per-port chip map and notify if the set of connected chips
+    // changed.  Both device states a Pi passes through under imager's control
+    // name their silicon — rpiboot from the USB PID, fastboot from the
+    // gadget's revision-processor — and the map is keyed on the USB port path
+    // so the two are recognised as one device rather than as one appearing as
+    // the other disappears.
+    QSet<QString> portsThisPoll;
     for (const auto &i : l) {
-        if (i.isRpiboot && !i.rpibootChipName.empty()) {
-            QString chip = QString::fromStdString(i.rpibootChipName);
-            if (!newChips.contains(chip))
-                newChips.append(chip);
+        if (!i.isRpiboot && !i.isFastbootStorage)
+            continue;
+
+        const auto &portPath = i.isRpiboot ? i.usbPortPath : i.fastbootPortPath;
+        const QString port = QString::fromStdString(rpiboot::portPathToString(portPath));
+        portsThisPoll.insert(port);
+        if (!i.rpibootChipName.empty())
+            _chipByPort[port] = QString::fromStdString(i.rpibootChipName);
+    }
+
+    // Forget the ports that are gone.  A port whose device is mid-bootstrap is
+    // kept: it is off the bus while the gadget boots, and dropping it there is
+    // what makes the annotation blink.  Seeing the port again ends the hold —
+    // by then whichever mode it came back in has named the chip itself.
+    for (auto it = _chipByPort.begin(); it != _chipByPort.end(); ) {
+        if (portsThisPoll.contains(it.key())) {
+            _bootstrapPorts.remove(it.key());
+            ++it;
+            continue;
         }
+        auto hold = _bootstrapPorts.find(it.key());
+        if (hold != _bootstrapPorts.end() && --hold.value() > 0) {
+            ++it;
+            continue;
+        }
+        if (hold != _bootstrapPorts.end())
+            _bootstrapPorts.erase(hold);
+        it = _chipByPort.erase(it);
+    }
+
+    QStringList newChips;
+    for (const auto &chip : _chipByPort) {
+        if (!newChips.contains(chip))
+            newChips.append(chip);
     }
     newChips.sort();
     if (newChips != _connectedRpibootChips) {
@@ -286,13 +321,30 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
     }
 }
 
+void DriveListModel::onPolledDriveList(std::vector<Drivelist::DeviceDescriptor> l)
+{
+    if (!_polling)
+        return;
+    processDriveList(std::move(l));
+}
+
+void DriveListModel::setBootstrapInFlight(const QString &portPathKey, bool inFlight)
+{
+    if (inFlight)
+        _bootstrapPorts[portPathKey] = kBootstrapHoldPolls;
+    else
+        _bootstrapPorts.remove(portPathKey);
+}
+
 void DriveListModel::startPolling()
 {
+    _polling = true;
     _thread.start();
 }
 
 void DriveListModel::stopPolling()
 {
+    _polling = false;
     _thread.stop();
 }
 

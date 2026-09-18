@@ -162,6 +162,7 @@ BaseDialog {
                 }
                 
                 Text {
+                    textFormat: Text.PlainText
                     text: Math.round(asyncQueueDepthSlider.value)
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
@@ -174,6 +175,7 @@ BaseDialog {
             
             // Memory usage estimate
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 Layout.leftMargin: Style.spacingLarge
                 visible: chkAsyncIO.checked
@@ -339,6 +341,7 @@ BaseDialog {
 
                 Text {
                     id: gadgetPathText
+                    textFormat: Text.PlainText
                     text: gadgetPathText.gadgetPath || qsTr("(default)")
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
@@ -391,8 +394,14 @@ BaseDialog {
                     // and reopened, and a plain path after. The same setting
                     // rendered two ways depending on how recently it was
                     // chosen.
+                    //
+                    // Through the dialog's own _toDisplayPath rather than a
+                    // string replace: taking seven characters off
+                    // "file:///C:/gadget.img" leaves "/C:/gadget.img", which is
+                    // not a path -- the label showed it and the writer could
+                    // not open it.
                     gadgetPathText.gadgetPath =
-                        selectedFile.toString().replace(/^file:\/\//, "")
+                        gadgetFileDialog._toDisplayPath(selectedFile)
                 }
             }
 
@@ -469,6 +478,7 @@ BaseDialog {
 
                     Text {
                         id: statusText
+                        textFormat: Text.PlainText
                         text: {
                             var lines = [];
                             var depth = Math.round(asyncQueueDepthSlider.value);

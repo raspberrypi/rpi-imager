@@ -15,6 +15,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "platform_permissions.h"
+#include "platform_privilege.h"
+
 #include <algorithm>
 #include <atomic>
 #include "downloadthread.h"
@@ -54,13 +57,17 @@ using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
 #include <QTimer>
 #include <QUuid>
 
+#include <condition_variable>
+#include <mutex>
 #include <memory>
 
 #include "fixture_process.h"
 #include "local_http_server.h"
 #include "asynccachewriter.h"
+#include "test_scratch.h"
 
 #include <QTemporaryDir>
+#include <QUrl>
 
 namespace {
 
@@ -184,7 +191,7 @@ std::unique_ptr<DownloadThread> makeDownload(const ScratchDir &scratch, const QB
     // standing in for a block device, which is never created by the writer.
     REQUIRE(writeFile(dest, QByteArray(payload.size() + (1024 * 1024), '\0')));
 
-    const QByteArray url = QByteArray("file://") + source.toUtf8();
+    const QByteArray url = QUrl::fromLocalFile(source).toEncoded();
     return std::make_unique<DownloadThread>(url, dest.toUtf8(), expectedHash);
 }
 
@@ -344,7 +351,7 @@ TEST_CASE("DownloadThread reports a destination it cannot open", "[download]")
     const QString source = scratch.filePath(QStringLiteral("src.img"));
     REQUIRE(writeFile(source, patternOfSize(4096, 1)));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       "/nonexistent-rpi-imager-dir/deeper/dest.img", "");
 
     const Outcome outcome = runToCompletion(dt);
@@ -529,10 +536,15 @@ TEST_CASE("DownloadThread writes a cache copy alongside the target", "[download]
 
     // And the hash it reports must be of what it actually wrote -- a cache
     // entry filed under the wrong digest is worse than no cache at all.
-    if (!reportedHash.isEmpty()) {
-        CHECK(reportedHash ==
-              QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
-    }
+    //
+    // Required, not skipped when absent. The two lines above have already
+    // shown the cache file exists and holds the payload, so the write
+    // happened; an empty hash after that means the signal never fired or
+    // fired with nothing, and both are the thing this guards against. Behind
+    // a test for emptiness, the check was skipped exactly when it mattered.
+    REQUIRE_FALSE(reportedHash.isEmpty());
+    CHECK(reportedHash ==
+          QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
 }
 
 TEST_CASE("DownloadThread survives a cache file it cannot open", "[download][cache]")
@@ -899,7 +911,7 @@ TEST_CASE("DownloadThread writes config.txt into the boot partition", "[download
     const QString dest = scratch.filePath(QStringLiteral("cust-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // initFormat is not optional: the whole customisation pass is gated on it
     // being set, so an empty one silently skips every edit below.
@@ -933,7 +945,7 @@ TEST_CASE("DownloadThread writes cmdline and firstrun into the boot partition",
 
     const QByteArray firstrun = "#!/bin/bash\necho provisioned\nrm -f /boot/firstrun.sh\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation(QByteArray(), "quiet splash", firstrun, QByteArray(), QByteArray(),
                              "systemd", ImageOptions::AdvancedOptions());
@@ -970,7 +982,7 @@ TEST_CASE("DownloadThread writes cloud-init files into the boot partition",
     const QByteArray userData = "#cloud-config\nhostname: testpi\n";
     const QByteArray networkData = "version: 2\nethernets:\n  eth0:\n    dhcp4: true\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), userData, networkData,
                              "cloudinit", ImageOptions::AdvancedOptions());
@@ -1001,7 +1013,7 @@ TEST_CASE("DownloadThread leaves the image alone when nothing is customised",
     const QString dest = scratch.filePath(QStringLiteral("plain-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // No customisation at all: the whole reopen-and-edit pass must be
     // skipped rather than run with empty values, which would still rewrite
@@ -1162,7 +1174,7 @@ TEST_CASE("A device node that has gone is reported, not waited on",
     const QByteArray target = "/dev/nonexistent-rpi-imager-target";
     REQUIRE_FALSE(QFileInfo::exists(QString::fromUtf8(target)));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), target, QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), target, QByteArray());
     dt.setVerifyEnabled(false);
 
     const Outcome outcome = runToCompletion(dt, 60000);
@@ -1227,7 +1239,7 @@ TEST_CASE("An image download will not be redirected into a local file",
     const QByteArray blank(secret.size() + (1024 * 1024), '\0');
     REQUIRE(writeFile(dest, blank));
 
-    const QByteArray target = QByteArray("file://") + local.toUtf8();
+    const QByteArray target = QUrl::fromLocalFile(local).toEncoded();
     DownloadThread dt(server.redirectTo(target), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -1389,12 +1401,12 @@ TEST_CASE("DownloadThread caches an image fetched over HTTP", "[download][http][
 
 namespace {
 
-bool haveOpenssl() { return QFileInfo::exists(QStringLiteral("/usr/bin/openssl")); }
+bool haveOpenssl() { return rpi_test::haveTool(QStringLiteral("openssl")); }
 
 bool generateRsaKey(const QString &path)
 {
     QProcess openssl;
-    openssl.start(QStringLiteral("/usr/bin/openssl"),
+    openssl.start(rpi_test::toolPath(QStringLiteral("openssl")),
                   {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
                    QStringLiteral("2048")});
     openssl.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
@@ -1416,6 +1428,7 @@ void setConfiguredRsaKey(const QString &path)
 
 TEST_CASE("A signing key that is not a key stops the write", "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     // Secure boot means the Pi will only run an image it can check the
     // signature of. If the signing step fails and the write finishes anyway,
     // the card is written, looks finished, and the board refuses to boot from
@@ -1436,7 +1449,7 @@ TEST_CASE("A signing key that is not a key stops the write", "[download][secureb
     const QString dest = scratch.filePath(QStringLiteral("sb-bad-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1470,6 +1483,7 @@ TEST_CASE("A signing key that is not a key stops the write", "[download][secureb
 
 TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!rpi_test::haveFatFormatter())
         SKIP(rpi_test::noFatFormatterReason());
     if (!haveOpenssl())
@@ -1485,7 +1499,7 @@ TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secur
     const QString dest = scratch.filePath(QStringLiteral("sb-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1512,6 +1526,7 @@ TEST_CASE("DownloadThread signs a boot image for secure boot", "[download][secur
 TEST_CASE("Secure boot does not throw away the user's own settings",
           "[download][secureboot][customise]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     // Packaging for secure boot empties the boot partition: every file that
     // was on it is read out, packed into boot.img, and then deleted from the
     // filesystem so that boot.img and boot.sig are all that remain. The
@@ -1540,7 +1555,7 @@ TEST_CASE("Secure boot does not throw away the user's own settings",
         "/usr/lib/userconf-pi/userconf 'pi' '$5$notarealhash'\n"
         "rm -f /boot/firstrun.sh\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), firstrun, QByteArray(), QByteArray(),
                              "systemd", ImageOptions::EnableSecureBoot);
@@ -1574,6 +1589,7 @@ TEST_CASE("Secure boot does not throw away the user's own settings",
 TEST_CASE("Secure boot keeps every cloud-init file and not just the first",
           "[download][secureboot][customise]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     // cloud-init needs three files together: user-data for the configuration,
     // network-config for the network, and meta-data, without which the
     // NoCloud datasource is not detected at all and the other two are never
@@ -1597,7 +1613,7 @@ TEST_CASE("Secure boot keeps every cloud-init file and not just the first",
     const QByteArray userData = "hostname: securepi\nusers:\n  - name: pi\n";
     const QByteArray networkData = "version: 2\nethernets:\n  eth0:\n    dhcp4: true\n";
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), userData, networkData,
                              "cloudinit", ImageOptions::EnableSecureBoot);
@@ -1627,6 +1643,7 @@ TEST_CASE("Secure boot keeps every cloud-init file and not just the first",
 TEST_CASE("DownloadThread refuses secure boot with no key configured",
           "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!rpi_test::haveFatFormatter())
         SKIP(rpi_test::noFatFormatterReason());
 
@@ -1638,7 +1655,7 @@ TEST_CASE("DownloadThread refuses secure boot with no key configured",
     const QString dest = scratch.filePath(QStringLiteral("sb-nokey-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1657,6 +1674,7 @@ TEST_CASE("DownloadThread refuses secure boot with no key configured",
 TEST_CASE("DownloadThread refuses secure boot with a key that is not there",
           "[download][secureboot]")
 {
+    REQUIRE_BOOT_IMG_SUPPORT();
     if (!rpi_test::haveFatFormatter())
         SKIP(rpi_test::noFatFormatterReason());
 
@@ -1668,7 +1686,7 @@ TEST_CASE("DownloadThread refuses secure boot with a key that is not there",
     const QString dest = scratch.filePath(QStringLiteral("sb-gone-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("arm_64bit=1", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::EnableSecureBoot);
@@ -1706,7 +1724,7 @@ TEST_CASE("DownloadThread verifies the customisation it wrote", "[download][cust
     const QByteArray hash =
         QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex();
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), hash);
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), hash);
     dt.setVerifyEnabled(true);
     dt.setImageCustomisation("dtparam=audio=on", "console=tty1",
                              "#!/bin/sh\nexit 0\n", QByteArray(), QByteArray(), "systemd",
@@ -1744,7 +1762,7 @@ TEST_CASE("DownloadThread verifies cloud-init customisation", "[download][custom
     const QByteArray hash =
         QCryptographicHash::hash(readFile(source), QCryptographicHash::Sha256).toHex();
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), hash);
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), hash);
     dt.setVerifyEnabled(true);
     dt.setImageCustomisation(QByteArray(), QByteArray(), QByteArray(),
                              "#cloud-config\nhostname: verified\n",
@@ -1770,7 +1788,7 @@ TEST_CASE("DownloadThread applies rpi-preseed customisation", "[download][custom
     const QString dest = scratch.filePath(QStringLiteral("preseed-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // The third init format, alongside systemd and cloudinit; it writes a
     // different file set again.
@@ -1824,7 +1842,7 @@ TEST_CASE("DownloadThread reports a device that fails partway through a write",
     const QString source = scratch.filePath(QStringLiteral("faulty-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -1861,7 +1879,7 @@ TEST_CASE("DownloadThread reports a faulty device under async I/O",
     const QString source = scratch.filePath(QStringLiteral("faulty-async-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // With async submission the failure arrives as a negative completion on
@@ -1896,7 +1914,7 @@ TEST_CASE("DownloadThread writes successfully within the good region",
     const QString source = scratch.filePath(QStringLiteral("good-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // Buffered, synchronous writes.
@@ -1930,7 +1948,7 @@ TEST_CASE("An image larger than the device is refused, not half-written",
     const QString source = scratch.filePath(QStringLiteral("oversized-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setDebugAsyncIO(false);
@@ -2101,7 +2119,6 @@ int main(int argc, char *argv[])
     // The secure-boot cases read the signing key path from QSettings. Test
     // mode plus a scoped name keeps that in a throwaway file rather than the
     // developer's real imager configuration.
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
     // Scoped to this process, not just to test mode. catch_discover_tests
     // runs every TEST_CASE as its own process, so `ctest -j4` has several
     // of these alive at once -- and a settings file shared between them is
@@ -2109,13 +2126,9 @@ int main(int argc, char *argv[])
     // secureboot_rsa_key, so one process would see another's: the case
     // that expects no key found a valid one, the write it expected to be
     // refused went ahead, and the failure looked like a timing flake.
-    QCoreApplication::setApplicationName(
-        QStringLiteral("download_thread_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("download_thread_test"));
     const int rc = Catch::Session().run(argc, argv);
 
-    // One settings file per process would otherwise pile up.
-    QFile::remove(QSettings().fileName());
     return rc;
 }
 
@@ -2160,7 +2173,7 @@ TEST_CASE("DownloadThread skips customisation without an init format",
     const QString dest = scratch.filePath(QStringLiteral("noinit-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(56 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // Settings supplied, but no init format. The pass is gated on the format
     // as well as the content, so nothing is written -- worth pinning, because
@@ -2199,7 +2212,7 @@ TEST_CASE("DownloadThread detects a card that lies about its capacity",
     const QString source = scratch.filePath(QStringLiteral("counterfeit-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
@@ -2227,7 +2240,7 @@ TEST_CASE("DownloadThread can be told to skip the end-of-device check",
     const QString source = scratch.filePath(QStringLiteral("skipend-src.img"));
     REQUIRE(writeFile(source, payload));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(),
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(),
                       device.path().toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     // The escape hatch for a device that legitimately refuses writes at the
@@ -4144,6 +4157,27 @@ public:
     ScopedSystemProxy(const ScopedSystemProxy &) = delete;
     ScopedSystemProxy &operator=(const ScopedSystemProxy &) = delete;
 
+    // Whether setting http_proxy actually configures a proxy on this platform.
+    //
+    // detectSystemProxy() asks QNetworkProxyFactory::systemProxyForQuery(),
+    // and on Windows that reads the WinINet settings out of the registry --
+    // the environment variable is not consulted, so nothing this fixture does
+    // reaches the code under test. The alternative, writing the machine's real
+    // proxy configuration, is not something a test may do to the developer
+    // running it.
+    //
+    // Worth saying plainly: a Windows user who sets http_proxy for the CLI
+    // does not get a proxy. That is a gap in the product rather than in the
+    // test, and it is the reason these cases cannot run here.
+    static bool configurable()
+    {
+#ifdef Q_OS_WIN
+        return false;
+#else
+        return true;
+#endif
+    }
+
 private:
     QByteArray _saved;
 };
@@ -4168,6 +4202,8 @@ void attemptDownloadThroughProxy(const ScratchDir &scratch, const QString &destN
 
 TEST_CASE("The system's HTTP proxy is the one used", "[download][http][proxy]")
 {
+    if (!ScopedSystemProxy::configurable())
+        SKIP("http_proxy is not where Windows keeps its proxy settings");
     ScopedSystemProxy proxy("http://127.0.0.1:3128");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-http-dest.img"));
@@ -4185,6 +4221,8 @@ TEST_CASE("A SOCKS proxy is asked for by the scheme that resolves through it",
     // socks5h, not socks5. Behind a SOCKS proxy the names being fetched are
     // usually only resolvable on the far side of it, and resolving locally
     // fails before a connection is attempted.
+    if (!ScopedSystemProxy::configurable())
+        SKIP("http_proxy is not where Windows keeps its proxy settings");
     ScopedSystemProxy proxy("socks5://127.0.0.1:1080");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-socks-dest.img"));
@@ -4199,6 +4237,8 @@ TEST_CASE("A proxy that wants a password gets one", "[download][http][proxy]")
 {
     // An authenticating proxy is the common corporate arrangement. Dropping
     // the credentials turns every download into a 407 the user cannot act on.
+    if (!ScopedSystemProxy::configurable())
+        SKIP("http_proxy is not where Windows keeps its proxy settings");
     ScopedSystemProxy proxy("http://bob:secret@127.0.0.1:3128");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-auth-dest.img"));
@@ -4240,7 +4280,7 @@ TEST_CASE("Customising an image with no boot partition fails rather than skippin
     const QString dest = scratch.filePath(QStringLiteral("no-boot-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(8 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
     dt.setImageCustomisation("dtoverlay=disable-bt", QByteArray(), QByteArray(), QByteArray(),
                              QByteArray(), "systemd", ImageOptions::AdvancedOptions());
@@ -4274,7 +4314,7 @@ TEST_CASE("An image with no boot partition is still written when nothing is cust
     const QString dest = scratch.filePath(QStringLiteral("plain-dest.img"));
     REQUIRE(writeFile(dest, QByteArray(8 * 1024 * 1024, '\0')));
 
-    DownloadThread dt(QByteArray("file://") + source.toUtf8(), dest.toUtf8(), QByteArray());
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), QByteArray());
     dt.setVerifyEnabled(false);
 
     const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
@@ -4495,21 +4535,22 @@ TEST_CASE("Caching stops when the writer behind it has failed", "[download][cach
     // inside curl's write callback -- stalling it stalls the download. The
     // flag goes down, the file is left for the destructor, and the bytes
     // keep moving.
-    if (::geteuid() == 0)
+    if (rpi_test::isPrivileged())
         SKIP("running as root, which the mode bits do not stop");
 
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
     const QString locked = dir.filePath(QStringLiteral("locked"));
     REQUIRE(QDir().mkpath(locked));
-    REQUIRE(QFile::setPermissions(locked, QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+    // Mode bits cannot say "no new files here" on Windows; a deny ACE can, and
+    // DeniedAccess puts it back in its destructor rather than leaving a
+    // directory the suite cannot clean up after a failed assertion.
+    rpi_test::DeniedAccess denied(locked, rpi_test::DeniedAccess::Write);
+    REQUIRE_DENIED(denied);
 
     CacheStateThread dt{QByteArray("http://example.invalid/x.img"), QByteArray(), QByteArray()};
     dt._asyncCacheWriter = std::make_unique<AsyncCacheWriter>();
     const bool opened = dt._asyncCacheWriter->open(locked + QStringLiteral("/cache.img"), 0);
-
-    QFile::setPermissions(locked, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                      QFileDevice::ExeOwner);
 
     // The failure is reported by open() rather than by the error flag: the
     // flag is for a writer that got going and then failed on its own
@@ -4571,4 +4612,444 @@ TEST_CASE("A UNC path is corrected before curl is given it", "[download]")
     // Reported rather than silently dropped: the user chose that share.
     INFO("error: " << reported.toStdString());
     CHECK_FALSE(reported.isEmpty());
+}
+
+// ============================================================================
+// A card that stops taking data part-way
+// ============================================================================
+// The faulty-device cases above build a real block device that returns EIO
+// past a point, with device-mapper over a loop device. That needs Linux and
+// passwordless sudo, and there is no counterpart on Windows -- so the
+// reporting they check has never run here, although none of it is
+// platform-specific: it is DownloadThread deciding that a partly written card
+// is not a finished one.
+//
+// This reaches the same decision through the device interface instead, which
+// every platform shares.
+
+namespace {
+
+// Takes the first `goodBytes` and refuses everything after.
+class FailsPartwayDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    FailsPartwayDevice(std::uint64_t size, std::uint64_t goodBytes)
+        : _size(size), _good(goodBytes)
+    {
+    }
+
+    rpi_imager::FileError OpenDevice(const std::string &) override
+    {
+        _open = true;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError CreateTestFile(const std::string &, std::uint64_t) override
+    {
+        return rpi_imager::FileError::kSuccess;
+    }
+    bool IsOpen() const override { return _open; }
+    rpi_imager::FileError Close() override
+    {
+        _open = false;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError GetSize(std::uint64_t &size) override
+    {
+        size = _size;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError Flush() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        _pos = position;
+        return rpi_imager::FileError::kSuccess;
+    }
+    std::uint64_t Tell() const override { return _pos; }
+
+    // Synchronous only. The asynchronous path has its own cases above, and
+    // this one is about what the caller does with a refusal.
+    bool IsAsyncIOSupported() const override { return false; }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t size) override
+    {
+        if (_pos + size > _good) {
+            ++_refusals;
+            return rpi_imager::FileError::kWriteError;
+        }
+        _pos += size;
+        _accepted += size;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ReadSequential(std::uint8_t *, std::size_t, std::size_t &read) override
+    {
+        read = 0;
+        return rpi_imager::FileError::kReadError;
+    }
+
+    std::uint64_t accepted() const { return _accepted; }
+    int refusals() const { return _refusals; }
+
+private:
+    std::uint64_t _size;
+    std::uint64_t _good;
+    std::uint64_t _pos = 0;
+    std::uint64_t _accepted = 0;
+    int _refusals = 0;
+    bool _open = false;
+};
+
+class WriterOnFailingCard : public DownloadThread
+{
+public:
+    WriterOnFailingCard(const QByteArray &url, std::uint64_t size, std::uint64_t goodBytes)
+        : DownloadThread(url, "fake-device", "")
+    {
+        device = std::make_shared<FailsPartwayDevice>(size, goodBytes);
+        _file = device;
+    }
+
+    std::shared_ptr<FailsPartwayDevice> device;
+};
+
+} // namespace
+
+TEST_CASE("A card that stops taking data is not reported as written",
+          "[download][partialwrite]")
+{
+    // The whole point of the faulty-device cases: a write that got under way
+    // and then failed must not come back as a success. It would leave a card
+    // holding the first part of an image, which boots far enough to look like
+    // the image is at fault.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(8 * 1024 * 1024, 107);
+    const QString source = scratch.filePath(QStringLiteral("partial-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    WriterOnFailingCard dt(QUrl::fromLocalFile(source).toEncoded().constData(),
+                           64 * 1024 * 1024, 2 * 1024 * 1024);
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK_FALSE(outcome.succeeded);
+    CHECK_FALSE(outcome.errorMessage.isEmpty());
+
+    // And it really did refuse rather than never being asked, which would
+    // make the case pass for the wrong reason.
+    CHECK(dt.device->refusals() > 0);
+}
+
+TEST_CASE("A card that takes everything is reported as written",
+          "[download][partialwrite]")
+{
+    // The other side, so the case above is not passing because this harness
+    // cannot succeed at all.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(4 * 1024 * 1024, 109);
+    const QString source = scratch.filePath(QStringLiteral("whole-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    WriterOnFailingCard dt(QUrl::fromLocalFile(source).toEncoded().constData(),
+                           64 * 1024 * 1024, 64 * 1024 * 1024);
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK(outcome.succeeded);
+    CHECK(dt.device->refusals() == 0);
+    CHECK(dt.device->accepted() >= payload.size());
+}
+
+// ============================================================================
+// Cancelling while the end of the device is being zeroed
+// ============================================================================
+// Before the image goes down, a megabyte of zeroes is written to the end of
+// the card. On a counterfeit card -- one reporting a capacity it does not
+// have -- that write never returns, which is how the fake capacity is caught;
+// it is wrapped in a timeout with a cancel flag for exactly that reason.
+//
+// The cancel arm detaches the worker and returns while the write is still
+// blocked, so everything the worker touches has to outlive the thread that
+// gave up on it. It did not: a raw device pointer and a pointer into a local
+// buffer were both dangling by the time the worker unblocked, and cancelling
+// early in a write could take the process down. Nothing reached that arm,
+// because provoking it needs a device that blocks on demand.
+
+namespace {
+
+// Writes normally until one lands at or past `blockFrom`, and holds that one
+// until it is let go.
+class StallsAtEndOfDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    StallsAtEndOfDevice(std::uint64_t size, std::uint64_t blockFrom)
+        : _size(size), _blockFrom(blockFrom)
+    {
+    }
+
+    ~StallsAtEndOfDevice() override { release(); }
+
+    rpi_imager::FileError OpenDevice(const std::string &) override
+    {
+        _open = true;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError CreateTestFile(const std::string &, std::uint64_t) override
+    {
+        return rpi_imager::FileError::kSuccess;
+    }
+    bool IsOpen() const override { return _open; }
+    rpi_imager::FileError Close() override
+    {
+        _open = false;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError GetSize(std::uint64_t &size) override
+    {
+        size = _size;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError Flush() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        _pos = position;
+        return rpi_imager::FileError::kSuccess;
+    }
+    std::uint64_t Tell() const override { return _pos; }
+    bool IsAsyncIOSupported() const override { return false; }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t size) override
+    {
+        if (_pos >= _blockFrom) {
+            _stalled.store(true);
+            // Let go eventually whatever happens: this worker is detached, so
+            // a wait with no end would leave a thread running past the case.
+            std::unique_lock<std::mutex> lock(_mutex);
+            _wake.wait_for(lock, std::chrono::seconds(20),
+                           [this] { return _released.load(); });
+            _stalled.store(false);
+            return rpi_imager::FileError::kWriteError;
+        }
+        _pos += size;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ReadSequential(std::uint8_t *, std::size_t, std::size_t &read) override
+    {
+        read = 0;
+        return rpi_imager::FileError::kReadError;
+    }
+
+    bool stalled() const { return _stalled.load(); }
+
+    void release()
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _released.store(true);
+        }
+        _wake.notify_all();
+    }
+
+private:
+    std::uint64_t _size;
+    std::uint64_t _blockFrom;
+    std::uint64_t _pos = 0;
+    bool _open = false;
+    std::atomic<bool> _stalled{false};
+    std::atomic<bool> _released{false};
+    std::mutex _mutex;
+    std::condition_variable _wake;
+};
+
+class WriterOnStallingCard : public DownloadThread
+{
+public:
+    WriterOnStallingCard(const QByteArray &url, std::uint64_t size, std::uint64_t blockFrom)
+        : DownloadThread(url, "fake-device", "")
+    {
+        device = std::make_shared<StallsAtEndOfDevice>(size, blockFrom);
+        _file = device;
+    }
+
+    std::shared_ptr<StallsAtEndOfDevice> device;
+};
+
+} // namespace
+
+TEST_CASE("Cancelling while the end of the device is stalled is survivable",
+          "[download][partialwrite]")
+{
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(4 * 1024 * 1024, 113);
+    const QString source = scratch.filePath(QStringLiteral("stall-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    constexpr std::uint64_t kCardSize = 64 * 1024 * 1024;
+    // The end-of-device write is the only one that lands this far in.
+    auto dt = std::make_unique<WriterOnStallingCard>(
+        QUrl::fromLocalFile(source).toEncoded().constData(), kCardSize,
+        kCardSize - (2 * 1024 * 1024));
+    dt->setVerifyEnabled(false);
+
+    auto stalling = dt->device;
+
+    QEventLoop loop;
+    bool finished = false;
+    QObject::connect(dt.get(), &DownloadThread::success, &loop,
+                     [&]() { finished = true; loop.quit(); });
+    QObject::connect(dt.get(), &DownloadThread::error, &loop,
+                     [&](const QString &) { finished = true; loop.quit(); });
+    QObject::connect(dt.get(), &DownloadThread::finished, &loop,
+                     [&]() { finished = true; loop.quit(); });
+
+    dt->start();
+
+    // Wait for the write to be in the hands of the stalling device, so the
+    // cancel lands on the arm under test rather than before it.
+    for (int i = 0; i < 400 && !stalling->stalled(); ++i)
+        QThread::msleep(25);
+    REQUIRE(stalling->stalled());
+
+    CHECK_NOTHROW(dt->cancelDownload());
+
+    QTimer::singleShot(kWriteTimeoutMs, &loop, &QEventLoop::quit);
+    loop.exec();
+    CHECK(finished);
+    CHECK_FALSE(dt->successfull());
+
+    // Let the detached worker finish before anything it points at is
+    // released. Destroying the thread object with a worker still inside the
+    // device is the crash this case exists for, and the release has to happen
+    // whether the assertions above passed or not.
+    stalling->release();
+    dt->wait(30000);
+}
+
+// ============================================================================
+// The write that catches a counterfeit card
+// ============================================================================
+
+namespace {
+
+// Records where every write landed, and accepts them all.
+class RecordingDevice : public rpi_imager::PlatformFileOperations
+{
+public:
+    explicit RecordingDevice(std::uint64_t size) : _size(size) {}
+
+    rpi_imager::FileError OpenDevice(const std::string &) override
+    {
+        _open = true;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError CreateTestFile(const std::string &, std::uint64_t) override
+    {
+        return rpi_imager::FileError::kSuccess;
+    }
+    bool IsOpen() const override { return _open; }
+    rpi_imager::FileError Close() override
+    {
+        _open = false;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError GetSize(std::uint64_t &size) override
+    {
+        size = _size;
+        return rpi_imager::FileError::kSuccess;
+    }
+    rpi_imager::FileError Flush() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError ForceSync() override { return rpi_imager::FileError::kSuccess; }
+    rpi_imager::FileError Seek(std::uint64_t position) override
+    {
+        _pos = position;
+        return rpi_imager::FileError::kSuccess;
+    }
+    std::uint64_t Tell() const override { return _pos; }
+    bool IsAsyncIOSupported() const override { return false; }
+
+    rpi_imager::FileError WriteSequential(const std::uint8_t *, std::size_t size) override
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _writes.push_back({_pos, size});
+        }
+        _pos += size;
+        return rpi_imager::FileError::kSuccess;
+    }
+
+    rpi_imager::FileError ReadSequential(std::uint8_t *, std::size_t, std::size_t &read) override
+    {
+        read = 0;
+        return rpi_imager::FileError::kReadError;
+    }
+
+    // Whether anything was written covering `offset`.
+    bool wroteAt(std::uint64_t offset) const
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        for (const auto &w : _writes)
+            if (offset >= w.first && offset < w.first + w.second)
+                return true;
+        return false;
+    }
+
+private:
+    std::uint64_t _size;
+    std::uint64_t _pos = 0;
+    bool _open = false;
+    mutable std::mutex _mutex;
+    std::vector<std::pair<std::uint64_t, std::size_t>> _writes;
+};
+
+class WriterOnRecordingCard : public DownloadThread
+{
+public:
+    WriterOnRecordingCard(const QByteArray &url, std::uint64_t size)
+        : DownloadThread(url, "fake-device", "")
+    {
+        device = std::make_shared<RecordingDevice>(size);
+        _file = device;
+    }
+
+    std::shared_ptr<RecordingDevice> device;
+};
+
+} // namespace
+
+TEST_CASE("The end of the card is written before the image is",
+          "[download][counterfeit]")
+{
+    // A card reporting a capacity it does not have never returns from a write
+    // to the end of that capacity. That write is the whole of the detection,
+    // and on Windows it did not happen at all -- the block it lives in was
+    // compiled out, so a counterfeit card was written as though it were real
+    // and failed later, or silently.
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(2 * 1024 * 1024, 117);
+    const QString source = scratch.filePath(QStringLiteral("counterfeit-src.img"));
+    REQUIRE(writeFile(source, payload));
+
+    constexpr std::uint64_t kCardSize = 64 * 1024 * 1024;
+    constexpr std::uint64_t kMegabyte = 1024 * 1024;
+
+    WriterOnRecordingCard dt(QUrl::fromLocalFile(source).toEncoded().constData(),
+                             kCardSize);
+    dt.setVerifyEnabled(false);
+
+    const Outcome outcome = runToCompletion(dt, kWriteTimeoutMs);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+
+    // The first megabyte, which takes the old partition table with it.
+    CHECK(dt.device->wroteAt(0));
+    // And the last, which carries the backup GPT header and is the write a
+    // counterfeit card never answers.
+    CHECK(dt.device->wroteAt(kCardSize - kMegabyte));
+    CHECK(dt.device->wroteAt(kCardSize - 1));
 }

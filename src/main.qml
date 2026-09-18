@@ -499,6 +499,11 @@ ApplicationWindow {
             // Strip file:// prefix for the C++ call
             if (filePath.indexOf("file://") === 0) {
                 filePath = filePath.substring(7)
+                // "file:///C:/report.json" leaves "/C:/report.json", and the
+                // leading slash is not part of the path -- exportPerformanceData
+                // could not open it, so choosing somewhere to save wrote nothing.
+                if (/^\/[A-Za-z]:/.test(filePath))
+                    filePath = filePath.substring(1)
             }
             if (filePath.length > 0) {
                 console.log("Saving performance data to:", filePath)

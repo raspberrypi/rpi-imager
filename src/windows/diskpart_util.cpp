@@ -12,7 +12,9 @@
 #include <QThread>
 #include <QElapsedTimer>
 #include <regex>
+#include <charconv>
 #include <chrono>
+#include <limits>
 #include <utility>
 
 #include <windows.h>
@@ -102,9 +104,38 @@ static bool extractDiskNumber(const QByteArray &device, int &diskNumber)
         return false;
     }
     
-    diskNumber = std::stoi(m[1].str());
+    // The capture is unbounded, so a path can carry more digits than an int
+    // holds. std::stoi threw std::out_of_range on those, and nothing here is
+    // prepared for that: every caller returns a DiskpartResult and reports
+    // failure in it, so an exception unwound straight out of the write path
+    // instead. Reachable from the command line, where the destination is a
+    // positional argument that arrives unchecked.
+    //
+    // An unusable number is now refused the same way an unparseable path is.
+    const std::string digits = m[1].str();
+    unsigned long long value = 0;
+    const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != digits.data() + digits.size())
+        return false;
+    if (value > static_cast<unsigned long long>(std::numeric_limits<int>::max()))
+        return false;
+
+    diskNumber = static_cast<int>(value);
     return true;
 }
+
+// Test API for unit testing internal functions, as in platformquirks_windows.cpp.
+//
+// This one decides which disk `clean` is aimed at, so it is worth reaching
+// directly rather than only through cleanDisk(), which would need a real
+// physical drive to say anything at all.
+#ifdef DISKPART_ENABLE_TEST_API
+namespace TestAPI {
+    bool extractDiskNumber(const QByteArray &device, int &diskNumber) {
+        return ::DiskpartUtil::extractDiskNumber(device, diskNumber);
+    }
+}
+#endif
 
 DiskpartResult unmountVolumes(const QByteArray &device, LockedVolumes &locked, TimingCallback timingCallback)
 {

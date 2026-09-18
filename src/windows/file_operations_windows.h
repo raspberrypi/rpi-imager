@@ -109,7 +109,14 @@ class WindowsFileOperations : public FileOperations {
   std::atomic<int> pending_writes_;
   std::atomic<bool> cancelled_;  // Flag to cancel pending async I/O
   FileError first_async_error_;
-  std::uint64_t async_write_offset_;
+  // Where the next sequential write goes. Both write paths read and advance
+  // this one counter, because either can follow the other: an async write that
+  // fails is retried synchronously, and the synchronous write has to land where
+  // the async queue had got to. It used to take its offset from
+  // current_file_position_, which only reads and Seek() ever moved, so a
+  // fallback after any async write rewound to the last seek and overwrote what
+  // had already been written.
+  std::uint64_t write_offset_;
   std::uint64_t current_file_position_;  // Track position for overlapped sync reads
   HANDLE iocp_;  // I/O Completion Port handle
   
@@ -121,6 +128,7 @@ class WindowsFileOperations : public FileOperations {
     std::size_t size;
     WindowsFileOperations* self;
     std::chrono::steady_clock::time_point submit_time;  // For latency tracking
+    int retries = 0;  // Transient completion failures reissued so far
   };
   
   mutable std::mutex pending_mutex_;
@@ -128,15 +136,79 @@ class WindowsFileOperations : public FileOperations {
   
   // Note: write_latency_stats_ is inherited from FileOperations base class
   
-  FileError LockVolume();
+  FileError LockVolume(const std::string& path);
   FileError UnlockVolume();
   FileError OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags = FILE_ATTRIBUTE_NORMAL, DWORD share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE);
   
   static bool IsPhysicalDrivePath(const std::string& path);
+
+  // Only a physical drive can be transiently held; a file cannot.
+  bool OpenFailureMayBeTransient(const std::string& path) const override
+  {
+    if (!IsPhysicalDrivePath(path))
+      return false;
+    const int err = last_error_code_;
+    return err == ERROR_ACCESS_DENIED || err == ERROR_SHARING_VIOLATION ||
+           err == ERROR_NOT_READY;
+  }
   
+#ifdef FILEOPS_ENABLE_TEST_API
+ public:
+  // Make the next `count` write completions come back as failures carrying
+  // `error`, whatever the device actually did.
+  //
+  // The reissue path is otherwise unreachable from a test. It answers the
+  // device refusing writes while Windows re-enumerates it after a partition
+  // table rewrite, and no scratch file or attached VHD can be persuaded to
+  // answer ERROR_NOT_READY on demand. Injecting at the completion leaves the
+  // rest genuine: the reissued write goes to the real device.
+  void FailNextWriteCompletions(unsigned long error, int count) {
+    injected_write_error_ = error;
+    injected_write_failures_.store(count);
+  }
+
+  int RemainingInjectedWriteFailures() const { return injected_write_failures_.load(); }
+
+  // Replay the pending writes synchronously, as the emergency path does.
+  //
+  // Its only caller is a five-minute timeout inside WaitForPendingWrites,
+  // reached when writes stop completing altogether. No case can wait that
+  // long and none can stop a scratch file completing, so the replay -- which
+  // must put every outstanding buffer back at the offset it was given -- had
+  // no cover at all.
+  FileError ReplayPendingWritesSynchronously() { return AttemptSyncFallback(); }
+
+ private:
+  unsigned long injected_write_error_ = 0;
+  std::atomic<int> injected_write_failures_{0};
+#endif
+
+  // Turn a completion into the injected failure, if one is armed. Compiled
+  // away entirely unless the test API is enabled.
+  void ApplyWriteFaultInjection(BOOL& success, DWORD& error) {
+#ifdef FILEOPS_ENABLE_TEST_API
+    if (success && injected_write_failures_.load() > 0) {
+      injected_write_failures_.fetch_sub(1);
+      success = FALSE;
+      error = static_cast<DWORD>(injected_write_error_);
+    }
+#else
+    (void)success;
+    (void)error;
+#endif
+  }
+
   bool InitIOCP();
   void CleanupIOCP();
   void ProcessCompletions(bool wait);
+
+  // Put a write that came back with a transient error onto the wire again, at
+  // the offset it was already assigned. Returns true if it is in flight once
+  // more, in which case it keeps its slot in pending_writes_ and its callback
+  // has not run -- so the buffer it points at is still owned by us. Returns
+  // false if the error was not transient, the attempts are used up or the write
+  // was cancelled, and the caller reports the failure as it always did.
+  bool ReissueAfterTransientFailure(AsyncWriteContext* ctx, DWORD error);
   FileError AttemptSyncFallback() override;
   bool DrainAndSwitchToSync(int timeoutSeconds) override;
   

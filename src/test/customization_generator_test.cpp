@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include "platform_tools.h"
 #include "customization_generator.h"
 #include "dependencies/sha256crypt/sha256crypt.h"
 #include "dependencies/yescrypt/yescrypt_wrapper.h"
@@ -43,7 +44,14 @@ namespace {
 QString throughTheShell(const QString &value, bool *ran)
 {
     QProcess sh;
-    sh.start(QStringLiteral("/bin/sh"),
+    // The quoting under test is for a script that runs on the Pi, so it is worth
+    // checking wherever the suite runs -- but "/bin/sh" is not a path on
+    // Windows. shellPath() finds the sh that Git for Windows and MSYS2 install;
+    // without one there is no way to ask a shell what it made of the quoting.
+    const QString shell = rpi_test::shellPath();
+    if (shell.isEmpty())
+        SKIP("no POSIX shell available to interpret the quoting");
+    sh.start(shell,
              {QStringLiteral("-c"),
               QStringLiteral("printf %s ") + CustomisationGenerator::shellQuote(value)});
     *ran = sh.waitForFinished(10000) && sh.exitStatus() == QProcess::NormalExit;
@@ -92,7 +100,14 @@ TEST_CASE("A quoted value is a single shell word", "[customization][shellquoting
     // that arrives as two arguments configures the wrong network and drops
     // the rest on the floor, with nothing to say so.
     QProcess sh;
-    sh.start(QStringLiteral("/bin/sh"),
+    // The quoting under test is for a script that runs on the Pi, so it is worth
+    // checking wherever the suite runs -- but "/bin/sh" is not a path on
+    // Windows. shellPath() finds the sh that Git for Windows and MSYS2 install;
+    // without one there is no way to ask a shell what it made of the quoting.
+    const QString shell = rpi_test::shellPath();
+    if (shell.isEmpty())
+        SKIP("no POSIX shell available to interpret the quoting");
+    sh.start(shell,
              {QStringLiteral("-c"),
               QStringLiteral("set -- ")
                   + CustomisationGenerator::shellQuote(
@@ -122,8 +137,15 @@ TEST_CASE("CustomisationGenerator handles hostname configuration", "[customizati
     
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("CURRENT_HOSTNAME=$(cat /etc/hostname"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("raspberrypi-sys-mods/imager_custom"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("set_hostname testpi"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("echo testpi >/etc/hostname"));
+
+    // The hostname is carried in a variable now, assigned once and quoted
+    // once, rather than written into each of the three commands as it was
+    // typed -- see "A hostname is quoted like every other field".
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("IMAGER_HOSTNAME='testpi'"));
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("set_hostname \"$IMAGER_HOSTNAME\""));
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("echo \"$IMAGER_HOSTNAME\" >/etc/hostname"));
 }
 
 TEST_CASE("CustomisationGenerator sets FIRSTUSER variables early", "[customization]") {
@@ -195,7 +217,14 @@ TEST_CASE("CustomisationGenerator handles yescrypt password format", "[customiza
     // Check that yescrypt password is properly passed through
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/usr/lib/userconf-pi/userconf"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("$y$j9T$"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("echo \"$FIRSTUSER:$y$j9T$"));
+    // The hash holds $ signs, so inside double quotes the shell
+    // expanded them: "$FIRSTUSER:$y$j9T$..." lost $y and $j9T before
+    // chpasswd ever saw it. It is assigned in single quotes now and
+    // expanded by name.
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("echo \"$FIRSTUSER:$IMAGER_PASS\""));
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("IMAGER_PASS='$y$j9T$"));
 }
 
 // Regression test for issue #1627. A password pasted from a browser or password
@@ -320,7 +349,14 @@ TEST_CASE("CustomisationGenerator handles sha256crypt password format", "[custom
     // Check that sha256crypt password is properly passed through
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/usr/lib/userconf-pi/userconf"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("$5$rounds=5000$"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("echo \"$FIRSTUSER:$5$rounds=5000$"));
+    // The hash holds $ signs, so inside double quotes the shell
+    // expanded them: "$FIRSTUSER:$y$j9T$..." lost $y and $j9T before
+    // chpasswd ever saw it. It is assigned in single quotes now and
+    // expanded by name.
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("echo \"$FIRSTUSER:$IMAGER_PASS\""));
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("IMAGER_PASS='$5$rounds=5000$"));
 }
 
 TEST_CASE("CustomisationGenerator handles timezone and keyboard at end", "[customization]") {
@@ -393,11 +429,21 @@ TEST_CASE("CustomisationGenerator reference script comparison", "[customization]
     
     SECTION("User management matches reference") {
         REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/usr/lib/userconf-pi/userconf"));
-        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("echo \"$FIRSTUSER:$5$salt$hash"));
-        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("if [ \"$FIRSTUSER\" != \"testuserfoobar\" ]; then"));
-        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("usermod -l \"testuserfoobar\" \"$FIRSTUSER\""));
-        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("usermod -m -d \"/home/testuserfoobar\" \"testuserfoobar\""));
-        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("groupmod -n \"testuserfoobar\" \"$FIRSTUSER\""));
+        // The hash holds $ signs, so inside double quotes the shell
+    // expanded them: "$FIRSTUSER:$y$j9T$..." lost $y and $j9T before
+    // chpasswd ever saw it. It is assigned in single quotes now and
+    // expanded by name.
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("echo \"$FIRSTUSER:$IMAGER_PASS\""));
+    REQUIRE_THAT(scriptStr.toStdString(),
+                 ContainsSubstring("IMAGER_PASS='$5$salt$hash"));
+        // The name rides in a variable now, assigned once and quoted once --
+        // see "A user name cannot run a command from firstrun.sh".
+        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("IMAGER_USER='testuserfoobar'"));
+        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("if [ \"$FIRSTUSER\" != \"$IMAGER_USER\" ]; then"));
+        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("usermod -l \"$IMAGER_USER\" \"$FIRSTUSER\""));
+        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("usermod -m -d \"/home/$IMAGER_USER\" \"$IMAGER_USER\""));
+        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("groupmod -n \"$IMAGER_USER\" \"$FIRSTUSER\""));
     }
     
     SECTION("Locale configuration matches reference") {
@@ -1066,7 +1112,7 @@ TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no use
     // Should generate users section even without explicit username
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("[ systemctl, enable, --now, ssh ]"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: pi"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"pi\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh-ed25519"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
@@ -1198,7 +1244,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with hostname",
     
     // Don't let cloud-init manage DNS
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_resolv_conf: false"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: testpi"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: \"testpi\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_etc_hosts: true"));
     // Note: preserve_hostname is NOT set - cloud-init's per-instance behavior
     // (via unique instance-id) ensures hostname is only set once
@@ -1217,7 +1263,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with timezone",
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings);
     QString yaml = QString::fromUtf8(userdata);
     
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: Europe/London"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: \"Europe/London\""));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with keyboard layout", "[cloudinit][userdata]") {
@@ -1242,7 +1288,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("[ systemctl, enable, --now, ssh ]"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"testuser\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     // Password hash should be quoted for proper YAML parsing
@@ -1262,7 +1308,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with user crede
     
     // User configuration MUST be generated even without SSH
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: localuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"localuser\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$5$fakesalt$fakehash456\""));
@@ -1302,7 +1348,7 @@ TEST_CASE("CustomisationGenerator cloud-init passwordless sudo when explicitly e
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "testuser");
     QString yaml = QString::fromUtf8(userdata);
 
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"testuser\""));
     // sudo: user property for standard cloud-init
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
     // runcmd fallback for implementations that don't process sudo: user property
@@ -1322,7 +1368,7 @@ TEST_CASE("CustomisationGenerator cloud-init no passwordless sudo by default", "
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "testuser");
     QString yaml = QString::fromUtf8(userdata);
 
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"testuser\""));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
     // Regression test: the singular `user:` block is merged over the distro's
     // default_user from /etc/cloud/cloud.cfg, which carries
@@ -1418,7 +1464,11 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
     
     // Check config directory is created
-    QString expectedInstallDir = QString("install -o testuser -m 700 -d /home/testuser/") + PI_CONNECT_CONFIG_PATH;
+    // Each argument derived from the user's name is quoted for the shell
+    // now -- see "A user name cannot run a command from firstrun.sh" for the
+    // same change on the other side.
+    QString expectedInstallDir = QString("install -o 'testuser' -m 700 -d '/home/testuser/")
+                                 + PI_CONNECT_CONFIG_PATH + QString("'");
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedInstallDir.toStdString()));
     
     // Check deploy key file is written via printf in runcmd (not write_files)
@@ -1442,11 +1492,11 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect-wayvnc.service"));
     
     // Check ownership is set correctly
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chown -R testuser:testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chown -R 'testuser:testuser'"));
     
     // Check systemd linger is set up for auto-start
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/var/lib/systemd/linger"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -m 0644 /dev/null /var/lib/systemd/linger/testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -m 0644 /dev/null '/var/lib/systemd/linger/testuser'"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi", "[cloudinit][network]") {
@@ -1635,7 +1685,7 @@ TEST_CASE("Independent step: Hostname only", "[cloudinit][independent][hostname]
     
     // Hostname configuration MUST be generated
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_resolv_conf: false"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: mypi"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: \"mypi\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_etc_hosts: true"));
     // preserve_hostname is NOT set - per-instance behavior handles this
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("preserve_hostname"));
@@ -1667,7 +1717,7 @@ TEST_CASE("Independent step: Timezone only", "[cloudinit][independent][locale]")
     QString yaml = QString::fromUtf8(userdata);
     
     // Timezone configuration MUST be generated
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: America/New_York"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: \"America/New_York\""));
     
     // No other customization should be present
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
@@ -1719,7 +1769,7 @@ TEST_CASE("Independent step: Locale (timezone + keyboard)", "[cloudinit][indepen
     QString yaml = QString::fromUtf8(userdata);
     
     // Both locale settings MUST be generated
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: Europe/Paris"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: \"Europe/Paris\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("keyboard:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("layout: \"fr\""));
     
@@ -1742,7 +1792,7 @@ TEST_CASE("Independent step: User credentials only (no SSH)", "[cloudinit][indep
     
     // User configuration MUST be generated independently of SSH
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: alice"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"alice\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$6$rounds=4096$salt$hashvalue\""));
@@ -1843,7 +1893,7 @@ TEST_CASE("Independent step: SSH with public keys only", "[cloudinit][independen
     
     // User section is created for SSH key deployment (using currentUser fallback)
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: defaultuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"defaultuser\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-ed25519"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
@@ -1959,13 +2009,13 @@ TEST_CASE("Independent step: Pi Connect only (with required user)", "[cloudinit]
     
     // User configuration MUST be generated
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: connectuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"connectuser\""));
     
     // Pi Connect configuration MUST be generated
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("pi-connect-deploy-token-xyz"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(PI_CONNECT_CONFIG_PATH));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -o connectuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -o 'connectuser'"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chown"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect.service"));
     
@@ -1997,9 +2047,9 @@ TEST_CASE("Combined steps: User + Hostname (no SSH)", "[cloudinit][combined]") {
     QString yaml = QString::fromUtf8(userdata);
     
     // Both must be generated
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: workstation"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: \"workstation\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: developer"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"developer\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd:"));
     
     // SSH not enabled
@@ -2022,7 +2072,7 @@ TEST_CASE("Combined steps: User + WiFi (no SSH)", "[cloudinit][combined]") {
     
     // User config must be generated
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("  name: wifiuser"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("  name: \"wifiuser\""));
     
     // WiFi config must be generated
     REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("\"OfficeWiFi\":"));
@@ -2043,10 +2093,10 @@ TEST_CASE("Combined steps: All locale + User (no SSH)", "[cloudinit][combined]")
     QString yaml = QString::fromUtf8(userdata);
     
     // All must be generated
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: Asia/Tokyo"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: \"Asia/Tokyo\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("layout: \"jp\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: jpuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"jpuser\""));
     
     // SSH not enabled
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
@@ -2065,7 +2115,7 @@ TEST_CASE("Combined steps: User + Interfaces (no SSH)", "[cloudinit][combined]")
     
     // User must be generated
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: iotuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("  name: \"iotuser\""));
     
     // Interfaces must be generated
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi:"));
@@ -2096,11 +2146,11 @@ TEST_CASE("Combined steps: Full customization without SSH", "[cloudinit][combine
     QString netcfgYaml = QString::fromUtf8(netcfg);
     
     // All user-data customizations must be present
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("hostname: fullpi"));
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("timezone: Europe/Berlin"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("hostname: \"fullpi\""));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("timezone: \"Europe/Berlin\""));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("layout: \"de\""));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("  name: fulluser"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("  name: \"fulluser\""));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("passwd:"));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("rpi:"));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("i2c: true"));
@@ -2134,11 +2184,11 @@ TEST_CASE("Combined steps: Full customization with SSH", "[cloudinit][combined]"
     QString netcfgYaml = QString::fromUtf8(netcfg);
     
     // All user-data customizations must be present
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("hostname: sshpi"));
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("timezone: UTC"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("hostname: \"sshpi\""));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("timezone: \"UTC\""));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("layout: \"us\""));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("user:"));
-    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("  name: sshuser"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("  name: \"sshuser\""));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("passwd:"));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("rpi:"));
     REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("spi: true"));
@@ -2689,9 +2739,14 @@ QString pythonThatParses(const char *language)
         return *cached;
 
     QStringList candidates{QStringLiteral("/usr/bin/python3")};
-    const QString onPath = QStandardPaths::findExecutable(QStringLiteral("python3"));
-    if (!onPath.isEmpty() && !candidates.contains(onPath))
-        candidates << onPath;
+    // findExecutable("python3") finds nothing on Windows, where the
+    // interpreter is called python -- and pythonPath() has already checked
+    // that whatever it names actually runs.
+    for (const QString &onPath : {QStandardPaths::findExecutable(QStringLiteral("python3")),
+                                  rpi_test::pythonPath()}) {
+        if (!onPath.isEmpty() && !candidates.contains(onPath))
+            candidates << onPath;
+    }
 
     QString usable;
     for (const QString &python : std::as_const(candidates)) {
@@ -2922,6 +2977,218 @@ TEST_CASE("An empty SSID is treated as valid rather than hex-encoded",
     const std::string text = QString::fromUtf8(script).toStdString();
 
     REQUIRE_THAT(text, !ContainsSubstring("ssid=hex:"));
+}
+
+TEST_CASE("A country code that is not one never reaches the kernel line",
+          "[customisation][injection]")
+{
+    // The value is appended to cmdline.txt as
+    // cfg80211.ieee80211_regdom=<value>, and cmdline.txt is one line of
+    // kernel parameters separated by spaces. A value carrying a space adds
+    // parameters -- init=/bin/sh among them, which is a root shell as PID 1
+    // before anything else runs, with no password.
+    using rpi_imager::CustomisationGenerator;
+
+    // What a country code is.
+    CHECK(CustomisationGenerator::sanitisedCountryCode(QStringLiteral("GB"))
+          == QStringLiteral("GB"));
+    CHECK(CustomisationGenerator::sanitisedCountryCode(QStringLiteral("de"))
+          == QStringLiteral("de"));
+    // Trimmed first, so surrounding space is not what makes one invalid.
+    CHECK(CustomisationGenerator::sanitisedCountryCode(QStringLiteral("  US  "))
+          == QStringLiteral("US"));
+    CHECK(CustomisationGenerator::sanitisedCountryCode(QStringLiteral("GB "))
+          == QStringLiteral("GB"));
+
+    // What it is not.
+    const char *refused[] = {
+        "GB init=/bin/sh",          // the one that matters
+        "GB\ninit=/bin/sh",
+        "G",
+        "GBR",
+        "G1",
+        "G-",
+        "",
+        " ",
+    };
+    for (const char *bad : refused) {
+        INFO("value: " << bad);
+        const QString got =
+            CustomisationGenerator::sanitisedCountryCode(QString::fromUtf8(bad));
+        CHECK(got.isEmpty());
+    }
+}
+
+TEST_CASE("A user name cannot run a command from a cloud-init runcmd",
+          "[customisation][injection]")
+{
+    // Each of these is a shell command inside a double-quoted document
+    // scalar, and the name reached them as a bare word. Inside those double
+    // quotes a backtick still runs, so the shell read the name rather than
+    // being handed it -- the same defect as the block in firstrun.sh.
+    QVariantMap settings;
+    settings["sshUserName"] = QStringLiteral("pi`touch /tmp/pwned`");
+    settings["piConnectEnabled"] = true;
+
+    const QString yaml = QString::fromUtf8(
+        rpi_imager::CustomisationGenerator::generateCloudInitUserData(
+            settings, QStringLiteral("tok"), false, true,
+            QStringLiteral("pi`touch /tmp/pwned`")));
+
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
+
+    // Wherever the name appears in a command it must be inside single
+    // quotes, where a backtick is a character like any other. Not
+    // necessarily with a quote either side of it: it also appears within
+    // quoted paths, as '/home/<name>/.config/...'. So the quoting state at
+    // that point is what is asked, by walking the line.
+    const QString payload = QStringLiteral("pi`touch /tmp/pwned`");
+    const QStringList lines = yaml.split(u'\n');
+    int seen = 0;
+    for (const QString &l : lines) {
+        if (!l.contains(payload))
+            continue;
+        ++seen;
+        INFO("line: " << l.toStdString());
+
+        bool inQuote = false;
+        for (int i = 0; i < l.size(); ++i) {
+            if (l.at(i) == u'\'') {
+                inQuote = !inQuote;
+                continue;
+            }
+            if (!l.mid(i, payload.size()).compare(payload))
+                CHECK(inQuote);
+        }
+    }
+    CHECK(seen > 0);
+}
+
+TEST_CASE("A user name cannot run a command from firstrun.sh",
+          "[customisation][injection]")
+{
+    // The name was quoted on the userconf line and written into nine more
+    // exactly as it was given. Inside double quotes a backtick still runs,
+    // so this did not have to break out of anything -- it simply ran, as
+    // root on first boot.
+    QVariantMap s;
+    s["sshUserName"] = QStringLiteral("pi`touch /tmp/pwned`");
+    s["password"] = QStringLiteral("secret");
+
+    const QString script = QString::fromUtf8(
+        rpi_imager::CustomisationGenerator::generateSystemdScript(s, QString()));
+
+    // Exactly one line names it, and that line is a single-quoted
+    // assignment, where a backtick is a character like any other.
+    QStringList naming;
+    for (const QString &l : script.split(u'\n'))
+        if (l.contains(QStringLiteral("/tmp/pwned")))
+            naming << l;
+
+    INFO("lines naming it:\n" << naming.join(u'\n').toStdString());
+    REQUIRE(naming.size() == 1);
+    CHECK(naming.at(0).trimmed()
+          == QStringLiteral("IMAGER_USER='pi`touch /tmp/pwned`'"));
+
+    // And the commands that used to carry it now expand it instead.
+    CHECK(script.contains(QStringLiteral("usermod -l \"$IMAGER_USER\"")));
+    CHECK(script.contains(QStringLiteral("groupmod -n \"$IMAGER_USER\"")));
+}
+
+TEST_CASE("A hostname cannot add a key to the cloud-init document",
+          "[customisation][injection]")
+{
+    // cloud-init's user-data is YAML, and a scalar written bare ends at the
+    // newline in it. hostname, timezone and the user's name all went in
+    // bare, so a hostname carrying a newline added whatever followed as a
+    // key of its own -- runcmd among them, which cloud-init runs as root on
+    // first boot.
+    QVariantMap s;
+    s["hostname"] = QStringLiteral("pi\nruncmd:\n - touch /tmp/pwned");
+
+    const QString yaml = QString::fromUtf8(
+        rpi_imager::CustomisationGenerator::generateCloudInitUserData(s, QString()));
+
+    const QStringList lines = yaml.split(u'\n');
+    CHECK_FALSE(lines.contains(QStringLiteral("runcmd:")));
+    CHECK_FALSE(lines.contains(QStringLiteral(" - touch /tmp/pwned")));
+
+    // It is still the hostname, carried as one escaped scalar.
+    CHECK(yaml.contains(QStringLiteral("hostname: \"pi\\nruncmd:")));
+}
+
+TEST_CASE("A timezone and a user name cannot either",
+          "[customisation][injection]")
+{
+    QVariantMap s;
+    s["timezone"] = QStringLiteral("Europe/London\nruncmd:\n - id");
+    s["sshUserName"] = QStringLiteral("pi\nruncmd:\n - id");
+    s["password"] = QStringLiteral("secret");
+
+    const QString yaml = QString::fromUtf8(
+        rpi_imager::CustomisationGenerator::generateCloudInitUserData(s, QString()));
+
+    const QStringList lines = yaml.split(u'\n');
+    CHECK_FALSE(lines.contains(QStringLiteral("runcmd:")));
+    CHECK_FALSE(lines.contains(QStringLiteral(" - id")));
+}
+
+TEST_CASE("A key holding the here-document delimiter cannot end it",
+          "[customisation][injection]")
+{
+    // A here-document ends at the first line equal to its delimiter, and the
+    // authorized_keys block put the user's keys straight into one. A value
+    // carrying a line "EOF" closed it there, and everything after became
+    // script -- in a file that runs as root on first boot.
+    QVariantMap s;
+    s["sshEnabled"] = true;
+    s["sysname"] = QStringLiteral("pi");
+    s["sshAuthorizedKeys"] =
+        QStringLiteral("ssh-rsa AAAAB3\nEOF\ntouch /tmp/pwned\n");
+
+    const QByteArray script =
+        rpi_imager::CustomisationGenerator::generateSystemdScript(s, QString());
+    const QString text = QString::fromUtf8(script);
+
+    // Whatever delimiter it chose, no line of the key material may equal it.
+    static const QRegularExpression opener(QStringLiteral("<<'([^']*)'"));
+    auto it = opener.globalMatch(text);
+    bool sawOne = false;
+    while (it.hasNext()) {
+        const QString delimiter = it.next().captured(1);
+        INFO("delimiter: " << delimiter.toStdString());
+        sawOne = true;
+        CHECK(delimiter != QStringLiteral("EOF"));
+    }
+    CHECK(sawOne);
+
+    // And the line that would have been a command is still file content: it
+    // sits before the delimiter that ends the document.
+    const int pwned = text.indexOf(QStringLiteral("touch /tmp/pwned"));
+    REQUIRE(pwned > 0);
+    const int ends = text.indexOf(QStringLiteral("\nEOF1\n"));
+    CHECK(ends > pwned);
+}
+
+TEST_CASE("A hostname is quoted like every other field",
+          "[customisation][injection]")
+{
+    // It was the one field in the file that went in as it was typed, while
+    // the username, the password, the SSID, the keymap and the timezone all
+    // go through shellQuote(). A hostname carrying a newline ended the
+    // command and the rest became lines of their own.
+    QVariantMap s;
+    s["hostname"] = QStringLiteral("good\nreboot\n");
+
+    const QByteArray script =
+        rpi_imager::CustomisationGenerator::generateSystemdScript(s, QString());
+    const QString text = QString::fromUtf8(script);
+
+    // The terminators are gone, so there is no line to become a command.
+    CHECK_FALSE(text.contains(QStringLiteral("\nreboot\n")));
+    // And what is left is carried in a variable, assigned once and quoted.
+    CHECK(text.contains(QStringLiteral("IMAGER_HOSTNAME='goodreboot'")));
+    CHECK(text.contains(QStringLiteral("set_hostname \"$IMAGER_HOSTNAME\"")));
 }
 
 TEST_CASE("Bytes that are not UTF-8 are escaped for cloud-init, not passed through",

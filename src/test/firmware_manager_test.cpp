@@ -169,7 +169,7 @@ TEST_CASE("FirmwareManager builds a fastboot manifest", "[firmware]")
     }
 }
 
-TEST_CASE("FirmwareManager downloads the same fastboot payload for either chip",
+TEST_CASE("FirmwareManager downloads each chip's own fastboot gadget",
           "[firmware]")
 {
     TestableFirmwareManager fm;
@@ -180,18 +180,29 @@ TEST_CASE("FirmwareManager downloads the same fastboot payload for either chip",
     REQUIRE_FALSE(for2711.empty());
     REQUIRE_FALSE(for2712.empty());
 
-    // The manifest is deliberately chip-independent here: both CM4 and CM5
-    // pull the same fastboot bootfiles.bin, and the chip only decides which
-    // member is pulled out of that TAR afterwards -- bootcode4.bin for
-    // BCM2711, bootcode5.bin for BCM2712. So the download list matching is
-    // the correct answer, and validateCacheForDevice() is what actually keeps
-    // one chip from using the other's extracted bootcode.
+    // Only the gadget is chip-specific: rpi-sb-provisioner ships one per
+    // device family, and we know the family from the USB PID we enumerated
+    // on, so there is no reason to pull the other family's device trees.
+    // Everything else -- config.txt and bootfiles.bin -- stays shared, and
+    // the chip only decides which bootcode is extracted from that TAR
+    // afterwards, which validateCacheForDevice() is what enforces.
     REQUIRE(for2711.size() == for2712.size());
+
+    std::vector<std::size_t> differing;
     for (std::size_t i = 0; i < for2711.size(); ++i) {
-        INFO("entry " << i);
-        CHECK(for2711[i].url == for2712[i].url);
-        CHECK(for2711[i].localPath == for2712[i].localPath);
+        if (for2711[i].url != for2712[i].url
+            || for2711[i].localPath != for2712[i].localPath)
+            differing.push_back(i);
     }
+    REQUIRE(differing.size() == 1);
+
+    const auto &gadget2711 = for2711[differing.front()];
+    const auto &gadget2712 = for2712[differing.front()];
+
+    CHECK(gadget2711.url.find("fastboot-gadget-pi4-family.img") != std::string::npos);
+    CHECK(gadget2711.localPath == "fastboot/fastboot-gadget-pi4-family.img");
+    CHECK(gadget2712.url.find("fastboot-gadget-pi5-family.img") != std::string::npos);
+    CHECK(gadget2712.localPath == "fastboot/fastboot-gadget-pi5-family.img");
 }
 
 TEST_CASE("FirmwareManager builds a secure-boot recovery manifest", "[firmware]")
@@ -465,14 +476,12 @@ TEST_CASE("FirmwareManager clearing an already-empty cache is harmless", "[firmw
 
 namespace {
 
-bool haveTar() { return QFileInfo::exists(QStringLiteral("/usr/bin/tar")) ||
-                        QFileInfo::exists(QStringLiteral("/bin/tar")); }
+// Asked of the platform rather than by testing two Unix paths, which no
+// Windows machine has -- so every case behind this skipped there, saying tar
+// was not installed on a machine that has two of them.
+bool haveTar() { return rpi_test::haveTool(QStringLiteral("tar")); }
 
-QString tarPath()
-{
-    return QFileInfo::exists(QStringLiteral("/usr/bin/tar")) ? QStringLiteral("/usr/bin/tar")
-                                                             : QStringLiteral("/bin/tar");
-}
+QString tarPath() { return rpi_test::toolPath(QStringLiteral("tar")); }
 
 // Build versionDir/fastboot/bootfiles.bin as a TAR holding the named members.
 bool buildBootfilesTar(const fs::path &versionDir, const std::vector<std::string> &members)
@@ -481,8 +490,12 @@ bool buildBootfilesTar(const fs::path &versionDir, const std::vector<std::string
     fs::create_directories(staging);
     fs::create_directories(versionDir / "fastboot");
 
-    QStringList args{QStringLiteral("-cf"),
-                     QString::fromStdString((versionDir / "fastboot" / "bootfiles.bin").string()),
+    // -f names the archive relative to the working directory: GNU tar reads a
+    // colon before the first slash as the host:path form it once used for
+    // remote archives, so an absolute Windows path sends it looking for a host
+    // called "C". -C takes one safely, that argument not being parsed the same
+    // way.
+    QStringList args{QStringLiteral("-cf"), QStringLiteral("bootfiles.bin"),
                      QStringLiteral("-C"), QString::fromStdString(staging.string())};
     for (const auto &m : members) {
         writeFile(staging / m, std::string(4096, 'F'));
@@ -490,6 +503,7 @@ bool buildBootfilesTar(const fs::path &versionDir, const std::vector<std::string
     }
 
     QProcess tar;
+    tar.setWorkingDirectory(QString::fromStdString((versionDir / "fastboot").string()));
     tar.start(tarPath(), args);
     tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
     fs::remove_all(staging);
@@ -749,7 +763,7 @@ public:
             "s = socketserver.TCPServer(('127.0.0.1', 0), h)\n"
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
-        _proc.start(QStringLiteral("/usr/bin/python3"),
+        _proc.start(rpi_test::pythonPath(),
                     {QStringLiteral("-c"), QString::fromUtf8(kScript), root});
         if (!_proc.waitForStarted(10000))
             return;
@@ -820,6 +834,11 @@ void layOutFirmware(const QString &root)
         {"mass-storage-gadget64/config.txt",  "gadget config"},
         // firmware/bootfiles.bin is written separately below: it has to be a
         // real tar, because the bootcode is extracted from inside it.
+        // One gadget per device family, plus the unsuffixed image the
+        // provisioner keeps as the fallback for a station that cannot tell
+        // what it has connected.
+        {"host-support/fastboot-gadget-pi4-family.img", "pi4 fastboot gadget"},
+        {"host-support/fastboot-gadget-pi5-family.img", "pi5 fastboot gadget"},
         {"host-support/fastboot-gadget.img",  "fastboot gadget"},
         {"host-support/fastboot-gadget.2710-bootfiles-bin", "2710 bootfiles"},
         {"firmware-2711/versions.txt",        "2024-09-23  1727086800  abc  latest\n"},
@@ -845,12 +864,16 @@ void layOutFirmware(const QString &root)
         f.close();
     }
     QDir().mkpath(QDir(root).filePath(QStringLiteral("firmware")));
+    // -f relative, -C absolute: GNU tar reads a colon before the first slash
+    // in -f as the host:path form it once used for remote archives, so a
+    // Windows path sends it looking for a host called "C". -C is not parsed
+    // that way. Which tar answers to the name varies -- Windows ships bsdtar,
+    // which has no such reading -- so the invocation cannot depend on it.
     QProcess tar;
-    tar.setWorkingDirectory(workDir);
-    tar.start(QStringLiteral("tar"),
-              {QStringLiteral("-cf"),
-               QDir(root).filePath(QStringLiteral("firmware/bootfiles.bin")),
-               QStringLiteral("2712")});
+    tar.setWorkingDirectory(QDir(root).filePath(QStringLiteral("firmware")));
+    tar.start(rpi_test::toolPath(QStringLiteral("tar")),
+              {QStringLiteral("-cf"), QStringLiteral("bootfiles.bin"),
+               QStringLiteral("-C"), workDir, QStringLiteral("2712")});
     REQUIRE(tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs));
     REQUIRE(tar.exitCode() == 0);
 }
@@ -997,7 +1020,7 @@ size_t countOccurrences(const std::string &haystack, const std::string &needle)
 // into rpiboot again rather than into whatever it would normally boot. That is
 // arranged by appending two settings to the recovery's config.txt, and the
 // order of the two is load-bearing: config.txt is read top to bottom, and a
-// recovery_reboot reached before set_boot_order reboots the device before the
+// recovery_reboot reached before set_reboot_order reboots the device before the
 // override has been seen. The device then powers up into normal boot, the
 // imager sits waiting for a device that is never coming back, and nothing
 // says why.
@@ -1047,15 +1070,17 @@ TEST_CASE("A recovery config gains both settings, boot order first",
     const std::string out = readAll(cfg);
     INFO("config.txt:\n" << out);
 
-    const auto orderAt = out.find("set_boot_order=0x3");
+    const auto orderAt = out.find("set_reboot_order=0x3");
     const auto rebootAt = out.find("recovery_reboot=1");
     REQUIRE(orderAt != std::string::npos);
     REQUIRE(rebootAt != std::string::npos);
     CHECK(orderAt < rebootAt);
 
-    // What upstream shipped is still there.
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
-    CHECK(out.find("[all]") != std::string::npos);
+    CHECK(out.find("program_pubkey=1") != std::string::npos);
+    // Whatever upstream shipped is gone: recovery.bin is not the bootloader
+    // and takes only these directives, so the template is not served to it.
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
+    CHECK(out.find("[all]") == std::string::npos);
 }
 
 TEST_CASE("Settings already in the file are moved rather than duplicated",
@@ -1069,7 +1094,7 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     const auto cfg = sbrConfigFor(versionDir, ChipGeneration::BCM2712,
                                   "recovery_reboot=1\n"
                                   "[all]\n"
-                                  "  set_boot_order=0xf41\n"
+                                  "  set_reboot_order=0xf41\n"
                                   "arm_64bit=1\n");
 
     TestableFirmwareManager fm;
@@ -1079,11 +1104,11 @@ TEST_CASE("Settings already in the file are moved rather than duplicated",
     INFO("config.txt:\n" << out);
 
     // Exactly one of each, ours, in our order.
-    CHECK(countOccurrences(out, "set_boot_order=") == 1);
+    CHECK(countOccurrences(out, "set_reboot_order=") == 1);
     CHECK(countOccurrences(out, "recovery_reboot=") == 1);
     CHECK(out.find("0xf41") == std::string::npos);
-    CHECK(out.find("set_boot_order=0x3") < out.find("recovery_reboot=1"));
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
+    CHECK(out.find("set_reboot_order=0x3") < out.find("recovery_reboot=1"));
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
 }
 
 TEST_CASE("Running twice leaves the file as it was after once",
@@ -1109,8 +1134,8 @@ TEST_CASE("Running twice leaves the file as it was after once",
 TEST_CASE("A recovery config with Windows line endings is rewritten as LF",
           "[firmware][sbr]")
 {
-    // The bootloader wants LF. A stray CR left on a kept line would ride
-    // along into the rewritten file.
+    // The bootloader wants LF, and what we write has to be LF whatever the
+    // file it replaces was.
     ScratchDir scratch;
     const std::filesystem::path versionDir = scratch.path();
     const auto cfg = sbrConfigFor(versionDir, ChipGeneration::BCM2712,
@@ -1122,22 +1147,23 @@ TEST_CASE("A recovery config with Windows line endings is rewritten as LF",
     const std::string out = readAll(cfg);
     INFO("config.txt:\n" << out);
     CHECK(out.find('\r') == std::string::npos);
-    CHECK(out.find("arm_64bit=1") != std::string::npos);
+    CHECK(out.find("arm_64bit=1") == std::string::npos);
     CHECK(countOccurrences(out, "recovery_reboot=") == 1);
 }
 
 TEST_CASE("A recovery config that is not there yet is not an error",
           "[firmware][sbr]")
 {
-    // First run: the download has not happened. The caller comes back after
-    // the download loop, so this has to be a benign no-op rather than a
-    // failure that aborts provisioning.
+    // Nothing is downloaded to build on any more, so an absent file is the
+    // normal case rather than a first-run one: the directory and the config
+    // are both created here.
     ScratchDir scratch;
     const std::filesystem::path versionDir = scratch.path();
 
     TestableFirmwareManager fm;
     CHECK(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
     CHECK(fm.lastError().empty());
+    CHECK(std::filesystem::exists(versionDir / "secure-boot-recovery5" / "config.txt"));
 }
 
 TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
@@ -1154,8 +1180,8 @@ TEST_CASE("The recovery directory depends on the chip", "[firmware][sbr]")
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2711));
 
-    CHECK(readAll(older).find("set_boot_order=0x3") != std::string::npos);
-    CHECK(readAll(newer).find("set_boot_order=0x3") == std::string::npos);
+    CHECK(readAll(older).find("set_reboot_order=0x3") != std::string::npos);
+    CHECK(readAll(newer).find("set_reboot_order=0x3") == std::string::npos);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1451,7 +1477,14 @@ TEST_CASE("A CM4 recovery manifest asks only for CM4 firmware", "[firmware][sbr]
     // The recovery subdirectory is the unsuffixed one; secure-boot-recovery5
     // is the CM5 spelling and nothing here may use it.
     CHECK(manifestHas(m, "secure-boot-recovery/boot.conf"));
-    CHECK(manifestHas(m, "secure-boot-recovery/config.txt"));
+
+    // config.txt is written rather than fetched. usbboot ships it as a template
+    // -- two live settings and two dozen commented-out examples -- and serving
+    // that whole to recovery.bin, which is not the bootloader and understands
+    // almost none of it, is what the change in 429c7a8b stopped doing. That
+    // commit updated the CM5 side of this and left the CM4 twin asserting a
+    // download that no longer happens.
+    CHECK_FALSE(manifestHas(m, "secure-boot-recovery/config.txt"));
 
     const std::string pieeprom = manifestUrlFor(m, "secure-boot-recovery/pieeprom.original.bin");
     CHECK(pieeprom.find("firmware-2711/latest/pieeprom-2024-09-23.bin") != std::string::npos);
@@ -1488,6 +1521,10 @@ TEST_CASE("A CM3 fastboot manifest uses the self-contained bundle", "[firmware]"
 
     // No separate gadget kernel and no separate config: the bundle carries
     // both, and asking for them would 404.
+    // No gadget image of any name: not a family one, and not the unsuffixed
+    // fallback either. The self-contained fastboot-gadget.2710-bootfiles-bin
+    // is the bundle itself, checked above, and is meant to be here.
+    CHECK(manifestJoined(m).find("fastboot-gadget-") == std::string::npos);
     CHECK_FALSE(manifestHas(m, "fastboot/fastboot-gadget.img"));
     CHECK_FALSE(manifestHas(m, "fastboot/config.txt"));
 
@@ -1735,7 +1772,7 @@ TEST_CASE("Fetching firmware reports progress the whole way", "[firmware][fetch]
     // the within-file fraction is computed the right way round.
     {
         QFile big(QDir(served.path()).filePath(
-            QStringLiteral("host-support/fastboot-gadget.img")));
+            QStringLiteral("host-support/fastboot-gadget-pi5-family.img")));
         REQUIRE(big.open(QIODevice::WriteOnly | QIODevice::Truncate));
         const QByteArray chunk(1 << 20, 'g');
         for (int i = 0; i < 24; ++i)
@@ -1865,8 +1902,12 @@ qint64 sizeOf(const std::filesystem::path &p)
 QByteArray tarMember(const std::filesystem::path &archive, const QString &member)
 {
     QProcess tar;
-    tar.start(QStringLiteral("tar"),
-              {QStringLiteral("-xOf"), QString::fromStdString(archive.string()), member});
+    // Named relative to its own directory, for the reason above.
+    tar.setWorkingDirectory(
+        QString::fromStdString(archive.parent_path().string()));
+    tar.start(rpi_test::toolPath(QStringLiteral("tar")),
+              {QStringLiteral("-xOf"),
+               QString::fromStdString(archive.filename().string()), member});
     if (!tar.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
         return {};
     if (tar.exitCode() != 0)
@@ -2190,6 +2231,13 @@ TEST_CASE("A sidecar that no longer matches gets the new bytes", "[firmware][eta
 
 TEST_CASE("A cache directory that cannot be written to is reported", "[firmware]")
 {
+#ifdef _WIN32
+    // The lever this case pulls is a POSIX mode bit, and Windows has no
+    // equivalent: access there is decided by an ACL, which chmod(2) cannot
+    // express, and a directory marked read-only still accepts new files.
+    // Skipped rather than dropped, so the run still accounts for it.
+    SKIP("POSIX mode bits do not gate writes on Windows");
+#else
     // A cache on a full or read-only filesystem. The download has to say so
     // rather than leave a zero-length file where firmware should be.
     if (::geteuid() == 0)
@@ -2207,10 +2255,18 @@ TEST_CASE("A cache directory that cannot be written to is reported", "[firmware]
     CHECK_FALSE(fm.lastError().empty());
 
     ::chmod(holder.c_str(), 0700);
+#endif
 }
 
 TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
 {
+#ifdef _WIN32
+    // The lever this case pulls is a POSIX mode bit, and Windows has no
+    // equivalent: access there is decided by an ACL, which chmod(2) cannot
+    // express, and a directory marked read-only still accepts new files.
+    // Skipped rather than dropped, so the run still accounts for it.
+    SKIP("POSIX mode bits do not gate writes on Windows");
+#else
     // The bootcode is extracted from the bootfiles TAR into the version
     // directory. If that write fails the board would be sent whatever was
     // there before, so it has to stop rather than carry on.
@@ -2225,7 +2281,7 @@ TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
     {
         ::archive *a = archive_write_new();
         archive_write_set_format_ustar(a);
-        archive_write_open_filename(a, (versionDir / "fastboot" / "bootfiles.bin").c_str());
+        archive_write_open_filename(a, (versionDir / "fastboot" / "bootfiles.bin").string().c_str());
         const std::string payload = "bootcode bytes";
         ::archive_entry *e = archive_entry_new();
         archive_entry_set_pathname(e, "2712/bootcode5.bin");
@@ -2251,24 +2307,24 @@ TEST_CASE("A bootcode that cannot be written out is reported", "[firmware]")
     CHECK(fm.lastError().find("bootcode5.bin") != std::string::npos);
 
     ::chmod(versionDir.c_str(), 0700);
+#endif
 }
 
 TEST_CASE("Boot-order lines already in the recovery config are replaced, not repeated",
           "[firmware]")
 {
-    // config.txt is read top to bottom and set_boot_order has to be seen
+    // config.txt is read top to bottom and set_reboot_order has to be seen
     // before recovery_reboot, or the bootloader reboots before applying the
     // override and the board comes up in normal boot instead of rpiboot.
-    // Upstream's own config may carry either key, so they are stripped and
-    // re-appended in order rather than left where they were found.
+    // Whatever was there before is discarded: the file is written outright.
     ScratchDir dir;
     const fs::path versionDir = dir.path() / "v1";
     const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
     writeFile(configPath,
               "recovery_reboot=1\n"
-              "  set_boot_order=0x1\n"
+              "  set_reboot_order=0x1\n"
               "arm_64bit=1\r\n"
-              "set_boot_order=0xf41\n");
+              "set_reboot_order=0xf41\n");
 
     TestableFirmwareManager fm;
     REQUIRE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
@@ -2280,46 +2336,41 @@ TEST_CASE("Boot-order lines already in the recovery config are replaced, not rep
         lines.push_back(line);
 
     REQUIRE(lines.size() == 3);
-    CHECK(lines[0] == "arm_64bit=1");   // the CR was stripped with it
-    CHECK(lines[1] == "set_boot_order=0x3");
+    CHECK(lines[0] == "program_pubkey=1");
+    CHECK(lines[1] == "set_reboot_order=0x3");
     CHECK(lines[2] == "recovery_reboot=1");
 }
 
-TEST_CASE("A recovery config that cannot be read or rewritten is reported", "[firmware]")
+TEST_CASE("A recovery config that cannot be written is reported", "[firmware]")
 {
+#ifdef _WIN32
+    // The lever this case pulls is a POSIX mode bit, and Windows has no
+    // equivalent: access there is decided by an ACL, which chmod(2) cannot
+    // express, and a directory marked read-only still accepts new files.
+    // Skipped rather than dropped, so the run still accounts for it.
+    SKIP("POSIX mode bits do not gate writes on Windows");
+#else
     if (::geteuid() == 0)
         SKIP("running as root, which the mode bits do not stop");
 
-    SECTION("unreadable") {
+    // The file is written outright rather than read and amended, so the only
+    // way it can fail is the write.  Silently leaving whatever was there
+    // would send a board into normal boot when recovery was asked for.
+    for (const auto mode : {0000, 0400}) {
         ScratchDir dir;
         const fs::path versionDir = dir.path() / "v1";
         const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
         writeFile(configPath, "arm_64bit=1\n");
-        REQUIRE(::chmod(configPath.c_str(), 0000) == 0);
+        REQUIRE(::chmod(configPath.c_str(), static_cast<mode_t>(mode)) == 0);
 
         TestableFirmwareManager fm;
+        INFO("mode " << std::oct << mode);
         CHECK_FALSE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
-        CHECK(fm.lastError().find("Cannot read") != std::string::npos);
+        CHECK(fm.lastError().find("Cannot write") != std::string::npos);
 
         ::chmod(configPath.c_str(), 0600);
     }
-
-    SECTION("read-only") {
-        // Readable, so the upstream lines are gathered, and then the rewrite
-        // is refused. Silently keeping the original would send a board into
-        // normal boot when the user asked for recovery.
-        ScratchDir dir;
-        const fs::path versionDir = dir.path() / "v1";
-        const fs::path configPath = versionDir / "secure-boot-recovery5" / "config.txt";
-        writeFile(configPath, "arm_64bit=1\n");
-        REQUIRE(::chmod(configPath.c_str(), 0400) == 0);
-
-        TestableFirmwareManager fm;
-        CHECK_FALSE(fm.ensureSbrReenumerates(versionDir, ChipGeneration::BCM2712));
-        CHECK(fm.lastError().find("Cannot rewrite") != std::string::npos);
-
-        ::chmod(configPath.c_str(), 0600);
-    }
+#endif
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2362,7 +2413,7 @@ void writeBootfilesTar(const fs::path &path, const std::string &entry)
     fs::create_directories(path.parent_path());
     ::archive *a = archive_write_new();
     archive_write_set_format_ustar(a);
-    archive_write_open_filename(a, path.c_str());
+    archive_write_open_filename(a, path.string().c_str());
 
     const std::string payload(4096, '\xa5');
     ::archive_entry *e = archive_entry_new();
@@ -2389,7 +2440,8 @@ TEST_CASE("A fastboot firmware set is fetched, cached and validated",
     ScratchDir served;
     // Laid out as the upstream repositories are, because the manifest builds
     // its URLs from those paths.
-    writeFile(served.path() / "host-support" / "fastboot-gadget.img", "gadget bytes");
+    writeFile(served.path() / "host-support" / "fastboot-gadget-pi5-family.img",
+              "gadget bytes");
     writeFile(served.path() / "mass-storage-gadget64" / "config.txt", "arm_64bit=1\n");
     writeBootfilesTar(served.path() / "firmware" / "bootfiles.bin", "2712/bootcode5.bin");
 
@@ -2408,7 +2460,7 @@ TEST_CASE("A fastboot firmware set is fetched, cached and validated",
     REQUIRE_FALSE(dir.empty());
 
     // Every manifest file landed where the file server will look for it.
-    CHECK(fs::exists(dir / "fastboot" / "fastboot-gadget.img"));
+    CHECK(fs::exists(dir / "fastboot" / "fastboot-gadget-pi5-family.img"));
     CHECK(fs::exists(dir / "fastboot" / "config.txt"));
     CHECK(fs::exists(dir / "fastboot" / "bootfiles.bin"));
 
@@ -2431,11 +2483,12 @@ TEST_CASE("A fastboot set is counter-signed and re-packed for a fused board",
     // uploaded over USB.
     if (!rpi_test::havePython())
         SKIP("python3 is not installed, so no local server can be started");
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/openssl")))
+    if (!rpi_test::haveTool(QStringLiteral("openssl")))
         SKIP("openssl is not installed, so no key can be generated");
 
     ScratchDir served;
-    writeFile(served.path() / "host-support" / "fastboot-gadget.img", "gadget bytes");
+    writeFile(served.path() / "host-support" / "fastboot-gadget-pi5-family.img",
+              "gadget bytes");
     writeFile(served.path() / "mass-storage-gadget64" / "config.txt", "arm_64bit=1\n");
     writeBootfilesTar(served.path() / "firmware" / "bootfiles.bin", "2712/bootcode5.bin");
 
@@ -2445,7 +2498,7 @@ TEST_CASE("A fastboot set is counter-signed and re-packed for a fused board",
     ScratchDir keys;
     const auto key = keys.path() / "signing.pem";
     QProcess gen;
-    gen.start(QStringLiteral("/usr/bin/openssl"),
+    gen.start(rpi_test::toolPath(QStringLiteral("openssl")),
               {QStringLiteral("genrsa"), QStringLiteral("-out"),
                QString::fromStdString(key.string()), QStringLiteral("2048")});
     REQUIRE(gen.waitForFinished(60000));
@@ -2562,7 +2615,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     // application.
     if (!rpi_test::havePython())
         SKIP("python3 is not installed, so no local server can be started");
-    if (!QFileInfo::exists(QStringLiteral("/usr/bin/openssl")))
+    if (!rpi_test::haveTool(QStringLiteral("openssl")))
         SKIP("openssl is not installed, so no key can be generated");
 
     ScratchDir served;
@@ -2587,7 +2640,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     ScratchDir keys;
     const auto key = keys.path() / "customer.pem";
     QProcess gen;
-    gen.start(QStringLiteral("/usr/bin/openssl"),
+    gen.start(rpi_test::toolPath(QStringLiteral("openssl")),
               {QStringLiteral("genrsa"), QStringLiteral("-out"),
                QString::fromStdString(key.string()), QStringLiteral("2048")});
     REQUIRE(gen.waitForFinished(60000));
@@ -2621,7 +2674,7 @@ TEST_CASE("A secure-boot recovery set resolves its version and signs the EEPROM"
     QFile config(QString::fromStdString((sub / "config.txt").string()));
     REQUIRE(config.open(QIODevice::ReadOnly));
     const QByteArray body = config.readAll();
-    CHECK(body.contains("set_boot_order=0x3"));
+    CHECK(body.contains("set_reboot_order=0x3"));
     CHECK(body.contains("recovery_reboot=1"));
 
     // And the bootcode was counter-signed from the unsigned baseline.

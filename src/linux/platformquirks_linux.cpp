@@ -1698,6 +1698,11 @@ bool prefersReducedMotion() {
     return false;
 }
 
+// On PATH, which is where every distribution and macOS put it.
+QString sshKeyGenPath() {
+    return QStringLiteral("ssh-keygen");
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // Linux uses the same device path for both buffered and direct I/O.
     // Direct I/O is controlled via O_DIRECT flag, not device path.
@@ -2308,5 +2313,13 @@ void applyEmbeddedDisplayScaling()
                       << " (logical canvas " << qRound(logicalWidth) << "x" << qRound(logicalHeight)
                       << (tiles ? ", tiles exactly)" : ", does not tile exactly)");
 }
+
+} // namespace PlatformQuirks
+
+namespace PlatformQuirks {
+
+// The stat bits are already the answer here.
+NativePermissionScope::NativePermissionScope() = default;
+NativePermissionScope::~NativePermissionScope() = default;
 
 } // namespace PlatformQuirks
