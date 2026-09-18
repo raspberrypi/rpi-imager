@@ -13225,16 +13225,24 @@ TEST_CASE("A board on the bus is left alone unless rpiboot is enabled",
     // plugged in for some other reason must not have its boot ROM driven, and
     // the drive list must keep scanning.
     BootstrapProbe w;
+
+    // Said rather than assumed. setDebugRpiboot() is sticky -- it writes
+    // debug_rpiboot into QSettings and the constructor reads it back -- and
+    // the scratch settings file is shared by every process of this binary.
+    // Under ctest -j a sibling case that enables rpiboot writes it while this
+    // one is starting, so the state under test arrived from another process.
+    // That is what made this the one case in the suite failing under -j and
+    // passing on its own.
+    w.setDebugRpiboot(false);
+
     DriveListModel *drives = w.getDriveList();
     REQUIRE(drives);
 
     w.onRpibootDeviceDetected(QStringLiteral("usb:250-250"), 250, 250, {250, 250}, 0x2711);
 
-    // Not paused, rather than unchanged from a value read a moment earlier.
-    // The poll thread is running and moves between Normal and Slow on its own,
-    // so a snapshot taken before the call can differ afterwards for reasons
-    // that have nothing to do with it -- which is what made this the one case
-    // in the suite that failed under ctest -j and passed on its own.
+    // Not paused, rather than unchanged from a value read a moment earlier:
+    // the poll thread moves between Normal and Slow on its own, so a snapshot
+    // taken beforehand can differ for reasons the call had no part in.
     CHECK(drives->scanMode() != DriveListModelPollThread::ScanMode::Paused);
 }
 

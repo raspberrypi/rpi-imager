@@ -70,6 +70,11 @@ qt/language_filters.json
 # Debian release tooling (local paths; see debian/release.conf.example)
 /.debian/
 /out/
+# Claude Code's per-checkout settings and its scheduler lock. Local to
+# whoever is working here, and .vscode and .idea above are ignored for the
+# same reason.
+.claude/
+
 # gcov's per-source output. gcovr runs gcov with the tree as its working
 # directory and gcov writes a <source>##<hash>.gcov beside it, so a coverage
 # run leaves a couple of hundred untracked files behind -- enough to bury a

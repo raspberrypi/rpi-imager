@@ -618,3 +618,46 @@ TEST_CASE("fill at the end of the image ends the walk rather than failing",
         CHECK(image.parse().empty());
     }
 }
+
+// ── a section that points outside the image ─────────────────────────────────
+//
+// The EEPROM image is downloaded, so its headers are somebody else's numbers.
+// parse() checks a section's declared length, but the offset and size only
+// become a range when a section is read back -- and that read is where a
+// header pointing past the end would be turned into an out-of-bounds copy.
+
+TEST_CASE("A section reaching past the end of the image reads as nothing",
+          "[pieeprom][parse]")
+{
+    // A header whose declared length runs off the end. Truncating the image
+    // after parsing is the simplest way to arrange it, and it is what a
+    // half-finished download looks like.
+    std::vector<uint8_t> img = makeSyntheticImage("BOOT_ORDER=0xf41\n");
+    Image image(img);
+    REQUIRE(image.parse().empty());
+    REQUIRE(image.readFile("bootconf.txt").has_value());
+
+    std::vector<uint8_t> truncated(img.begin(), img.begin() + 32);
+    Image shortImage(truncated);
+    // Parsing may or may not object; what must not happen is a read that
+    // walks off the end of the buffer.
+    (void)shortImage.parse();
+    CHECK_FALSE(shortImage.readFile("bootconf.txt").has_value());
+}
+
+TEST_CASE("A file the image does not contain is refused by name",
+          "[pieeprom][parse]")
+{
+    std::vector<uint8_t> img = makeSyntheticImage("BOOT_ORDER=0xf41\n");
+    Image image(img);
+    REQUIRE(image.parse().empty());
+
+    // Reading names something that is not there.
+    CHECK_FALSE(image.readFile("pubkey.bin").has_value());
+
+    // And writing says so, naming the file rather than failing silently.
+    const std::string err = image.writeFile("pubkey.bin", std::vector<uint8_t>{1, 2, 3});
+    INFO("error: " << err);
+    CHECK_FALSE(err.empty());
+    CHECK(err.find("pubkey.bin") != std::string::npos);
+}

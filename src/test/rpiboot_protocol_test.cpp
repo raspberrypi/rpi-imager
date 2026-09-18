@@ -10,6 +10,9 @@
 #include <QFileInfo>
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <thread>
+#include <QElapsedTimer>
 
 #include "platform_tools.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -1791,4 +1794,75 @@ TEST_CASE("A board revision that is not a number keeps its raw value",
     CHECK(*raw == "not-hex");
     // The session carried on.
     CHECK(server.metadata().serialNumber.value_or("") == "ABC123");
+}
+
+// ── when the board stops answering ──────────────────────────────────────────
+//
+// The device going quiet is how a sideload both succeeds and fails. It stops
+// answering because it rebooted into the next stage -- which is the whole
+// point -- or because the cable is bad. Telling those apart is what these
+// paths do, and the message the user is left with is all they have to go on.
+//
+// No hardware needed: the mock answers -1 once its queue runs dry, which is
+// exactly what a vanished device looks like to the transport.
+
+TEST_CASE("A board that never answers at all is reported, not waited on",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // Nothing served, so there is nothing to interpret as a reboot. Waiting a
+    // grace window here would leave the user staring at a progress bar for a
+    // minute over a cable that was never plugged in properly.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("config.txt", "enable_uart=1\n");
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    QElapsedTimer elapsed;
+    elapsed.start();
+    CHECK_FALSE(server.run(mock, fw.path(), nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    CHECK_FALSE(server.lastError().empty());
+    // Named as a disconnect, so the user is sent to the cable rather than to
+    // the image they chose.
+    CHECK(server.lastError().find("disconnected") != std::string::npos);
+    // An IO error is fatal rather than retried -- the device is gone, and
+    // three seconds of retries followed by a minute of grace would be a
+    // minute of nothing over a cable that was never seated.
+    CHECK(elapsed.elapsed() < 30000);
+}
+
+TEST_CASE("A board that goes quiet after serving files may have rebooted",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // The successful ending. The device stops answering because it is no
+    // longer the device -- it has become the next stage -- and the caller
+    // says so by setting the flag the scanner shares.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("bootcode4.bin", "firmware");
+
+    // ReadFile, not GetFileSize: a size query is answered without a file
+    // leaving the host, and it is files served that make a later silence
+    // worth interpreting as a reboot.
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "bootcode4.bin"));
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    // Set from another thread while the grace window is polling, which is how
+    // the scanner reports the device coming back on the same port path.
+    std::thread confirm([&cancelled]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        cancelled.store(true);
+    });
+
+    const bool ok = server.run(mock, fw.path(), nullptr, cancelled, nullptr,
+                               /*requireReEnumConfirmation=*/true);
+    confirm.join();
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
 }

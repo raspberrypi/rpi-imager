@@ -1547,3 +1547,53 @@ TEST_CASE("A transport that names no endpoints falls back to the usual pair",
     // interface: both come back empty rather than with something invented.
     CHECK(mock.initDiagnostics().isEmpty());
 }
+
+// ── when the transfer goes wrong partway ────────────────────────────────────
+//
+// A flash that fails midway is the case a user actually meets: the cable moves,
+// the board resets, the device answers something this host has never heard of.
+// What the protocol does then is refuse and say where it got to, and none of
+// those paths had been walked.
+
+TEST_CASE("A bulk write that fails partway names the command and the offset",
+          "[fastboot][protocol]")
+{
+    MockUsbTransport mock;
+    std::vector<uint8_t> payload(64 * 1024, 0xCC);
+
+    char sizeHex[9];
+    snprintf(sizeHex, sizeof(sizeHex), "%08x", static_cast<unsigned>(payload.size()));
+    mock.queueBulkReadResponse(makeResponse("DATA", sizeHex));
+    mock.queueBulkReadResponse(makeResponse("OKAY", ""));
+
+    // Every write refused, so the failure lands on the first data chunk
+    // rather than on the command that set the transfer up.
+    mock.failNextBulkWrites(99);
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+
+    const bool ok = fb.download(mock, std::span<const uint8_t>(payload), nullptr, cancelled);
+    CHECK_FALSE(ok);
+
+    INFO("error: " << fb.lastError());
+    CHECK_FALSE(fb.lastError().empty());
+}
+
+TEST_CASE("A response prefix this host does not know is a failure, not a pass",
+          "[fastboot][protocol]")
+{
+    // A device speaking a newer protocol, or a stray packet. Treating an
+    // unrecognised prefix as anything but a failure would carry on flashing
+    // against a device that did not agree to it.
+    MockUsbTransport mock;
+    mock.queueBulkReadResponse(makeResponse("WAT?", "something"));
+
+    FastbootProtocol fb;
+    const auto resp = fb.sendCommand(mock, "getvar:version", 3000);
+
+    CHECK(resp.type == Response::Fail);
+    INFO("message: " << resp.message);
+    // Named, so a bug report says what the device actually said.
+    CHECK(resp.message.find("Unknown response prefix") != std::string::npos);
+}
