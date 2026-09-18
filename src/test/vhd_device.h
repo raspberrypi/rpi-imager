@@ -51,10 +51,25 @@ public:
     // device and `mount` that the POSIX hosts use.
     enum Mounting { NoDriveLetter, AllowDriveLetter };
 
+    // Who owns the attachment.
+    //
+    // HandleBound ties it to this object's handle, so a case that crashes or
+    // is killed leaves nothing attached to the machine. It is the right
+    // default and what almost every case wants.
+    //
+    // Permanent is what Explorer, Disk Management and Mount-VHD produce, and
+    // the only shape a *separate* handle can detach: DetachVirtualDisk on a
+    // handle-bound attachment answers ERROR_NOT_READY. A case exercising code
+    // that detaches a disk it did not attach has to ask for this, and accepts
+    // that a crash mid-case leaves the disk attached until it is detached by
+    // hand.
+    enum Lifetime { HandleBound, Permanent };
+
     // Fixed rather than dynamically expanding: the write paths under test care
     // about the size the disk reports, and a dynamic VHD reports its maximum
     // while occupying almost nothing, which is the one way the two differ.
-    explicit VhdDevice(quint64 megabytes = 64, Mounting mounting = NoDriveLetter)
+    explicit VhdDevice(quint64 megabytes = 64, Mounting mounting = NoDriveLetter,
+                       Lifetime lifetime = HandleBound)
     {
         _file = QDir(QDir::tempPath()).filePath(
             QStringLiteral("rpi-imager-test-%1.vhd")
@@ -88,12 +103,18 @@ public:
             return;
         }
 
-        // No PERMANENT_LIFETIME: the attachment is tied to this handle, so a
-        // case that crashes or is killed leaves no VHD bound to the machine.
-        rc = ::AttachVirtualDisk(_handle, nullptr,
-                                 mounting == NoDriveLetter
-                                     ? ATTACH_VIRTUAL_DISK_FLAG_NO_DRIVE_LETTER
-                                     : ATTACH_VIRTUAL_DISK_FLAG_NONE,
+        // Handle-bound by default, so a case that crashes or is killed leaves
+        // no VHD attached to the machine. Permanent only where a case needs a
+        // separate handle to be able to detach it.
+        ATTACH_VIRTUAL_DISK_FLAG attachFlags =
+            mounting == NoDriveLetter ? ATTACH_VIRTUAL_DISK_FLAG_NO_DRIVE_LETTER
+                                      : ATTACH_VIRTUAL_DISK_FLAG_NONE;
+        if (lifetime == Permanent) {
+            attachFlags = static_cast<ATTACH_VIRTUAL_DISK_FLAG>(
+                attachFlags | ATTACH_VIRTUAL_DISK_FLAG_PERMANENT_LIFETIME);
+        }
+
+        rc = ::AttachVirtualDisk(_handle, nullptr, attachFlags,
                                  0, nullptr, nullptr);
         if (rc != ERROR_SUCCESS) {
             _reason = describe(QStringLiteral("AttachVirtualDisk"), rc);

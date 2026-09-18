@@ -575,11 +575,26 @@ TEST_CASE("A failed open of a physical drive is worth retrying",
     if (!vhd.valid())
         SKIP("no virtual disk: " + vhd.reason().toStdString());
 
-    // The other half of the retry decision: a drive is classified as retryable
-    // where a file is not.
+    // The answer comes from the error the last open failed with, so there has
+    // to have been one. Asked of a backend that has never tried, it correctly
+    // says no -- which is what this case used to do, and it proved nothing.
+    ExclusiveHolder holder(vhd.path());
+    REQUIRE(holder.held());
+
     auto ops = FileOperations::Create();
-    const bool retryable = ops->OpenFailureMayBeTransient(vhd.path().toStdString());
-    CHECK(retryable);
+    REQUIRE(ops->OpenDevice(vhd.path().toStdString()) != FileError::kSuccess);
+
+    // A drive held by something else is worth trying again; the holder is
+    // usually an indexer or a scanner and lets go by itself.
+    CHECK(ops->OpenFailureMayBeTransient(vhd.path().toStdString()));
+
+    // Where a file is not, whatever it failed with.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString missing = QDir(dir.path()).filePath(QStringLiteral("not-here.img"));
+    auto fileOps = FileOperations::Create();
+    REQUIRE(fileOps->OpenDevice(missing.toStdString()) != FileError::kSuccess);
+    CHECK_FALSE(fileOps->OpenFailureMayBeTransient(missing.toStdString()));
 }
 
 // ============================================================================
