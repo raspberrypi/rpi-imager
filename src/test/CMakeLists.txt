@@ -595,9 +595,22 @@ if(WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR}/..)
     target_link_libraries(callback_relay_process_test PRIVATE
         Catch2::Catch2WithMain Qt6::Core Qt6::Network)
+    # Stands in for rpi-imager.exe where the relay falls back to starting one.
+    # The real binary asks for administrator, so launching it would put a UAC
+    # prompt in front of the suite. See relay_launch_probe.cpp.
+    add_executable(relay_launch_probe WIN32 relay_launch_probe.cpp)
+    target_link_libraries(relay_launch_probe PRIVATE shlwapi)
+    # wWinMain rather than WinMain, as the relay's own target does.
+    if(MINGW)
+        target_link_options(relay_launch_probe PRIVATE -municode)
+    endif()
+    target_compile_features(relay_launch_probe PRIVATE cxx_std_20)
+
     target_compile_definitions(callback_relay_process_test PRIVATE
-        RPI_IMAGER_RELAY_EXE="$<TARGET_FILE:rpi-imager-callback-relay>")
-    add_dependencies(callback_relay_process_test rpi-imager-callback-relay)
+        RPI_IMAGER_RELAY_EXE="$<TARGET_FILE:rpi-imager-callback-relay>"
+        RPI_RELAY_LAUNCH_PROBE="$<TARGET_FILE:relay_launch_probe>")
+    add_dependencies(callback_relay_process_test rpi-imager-callback-relay
+                     relay_launch_probe)
     target_compile_features(callback_relay_process_test PRIVATE cxx_std_20)
     # Every case binds the relay's fixed port, so two at once means one of
     # them skips rather than runs.

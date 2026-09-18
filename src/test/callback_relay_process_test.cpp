@@ -19,10 +19,16 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QByteArray>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QTemporaryDir>
+#include <QThread>
 
 namespace {
 
@@ -160,4 +166,138 @@ TEST_CASE("A relay started with no argument does nothing and says so",
     REQUIRE(relay.waitForFinished(15000));
     CHECK(relay.exitCode() == 0);
     CHECK(imager.awaitDelivery(1500).isEmpty());
+}
+
+// ── starting an Imager that is not already running ──────────────────────────
+//
+// With nothing listening, the relay starts the Imager beside it and hands the
+// URL over as an argument. That is Pi Connect sign-in for anybody whose
+// Imager is not open, and none of it ran: reaching it means launching the
+// real binary, which asks for administrator and would put a UAC prompt in
+// front of the suite.
+//
+// So the relay is copied somewhere of its own and given a stand-in to launch.
+// What that proves is what the relay decides -- which directory it looks in,
+// what it passes on, and when it declines -- not what the Imager then does.
+
+namespace {
+
+// A directory holding a copy of the relay, and optionally something for it to
+// start. Named to match what the relay looks for beside itself.
+class RelayScratch
+{
+public:
+    RelayScratch()
+    {
+        if (!_dir.isValid())
+            return;
+        _relay = QDir(_dir.path()).filePath(QStringLiteral("relay.exe"));
+        _copied = QFile::copy(relayPath(), _relay);
+        _record = QDir(_dir.path()).filePath(QStringLiteral("launched.txt"));
+    }
+
+    bool isReady() const { return _dir.isValid() && _copied; }
+
+    // Put the stand-in where the relay will look for the Imager.
+    bool installProbe()
+    {
+        return QFile::copy(QStringLiteral(RPI_RELAY_LAUNCH_PROBE),
+                           QDir(_dir.path()).filePath(QStringLiteral("rpi-imager.exe")));
+    }
+
+    int run(const QString &url)
+    {
+        QProcess relay;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("RPI_RELAY_PROBE_OUTPUT"), _record);
+        relay.setProcessEnvironment(env);
+        relay.start(_relay, {url});
+        if (!relay.waitForStarted(5000))
+            return -1;
+        if (!relay.waitForFinished(15000)) {
+            relay.kill();
+            relay.waitForFinished(5000);
+            return -1;
+        }
+        return relay.exitCode();
+    }
+
+    // What the stand-in was started with, once it has had a moment to write.
+    // ShellExecuteEx returns before the child has run, so this waits rather
+    // than reading an empty file and calling it a failure to launch.
+    QByteArray launchedWith(int timeoutMs = 10000) const
+    {
+        QElapsedTimer waited;
+        waited.start();
+        while (waited.elapsed() < timeoutMs) {
+            QFile f(_record);
+            if (f.open(QIODevice::ReadOnly)) {
+                const QByteArray got = f.readAll();
+                if (!got.isEmpty())
+                    return got;
+            }
+            QThread::msleep(100);
+        }
+        return {};
+    }
+
+private:
+    QTemporaryDir _dir;
+    QString _relay, _record;
+    bool _copied = false;
+};
+
+// Nothing on the relay's port, so the send fails and the fallback runs. A
+// real Imager holding it would take the URL instead and the launch would
+// never be reached.
+bool portIsFree()
+{
+    QTcpServer probe;
+    if (!probe.listen(QHostAddress::LocalHost, kRelayPort))
+        return false;
+    probe.close();
+    return true;
+}
+
+} // namespace
+
+TEST_CASE("With no Imager listening, the relay starts the one beside it",
+          "[relay][process][launch]")
+{
+    REQUIRE_RELAY();
+    if (!portIsFree())
+        SKIP("port 49629 is taken, so the relay would deliver rather than launch");
+
+    RelayScratch scratch;
+    if (!scratch.isReady())
+        SKIP("the relay could not be copied to a directory of its own");
+    REQUIRE(scratch.installProbe());
+
+    const QString url = QStringLiteral("rpi-imager://open?token=launched123");
+    CHECK(scratch.run(url) == 0);
+
+    // The URL reaches it as one argument. Quoted by ShellExecuteEx, so the
+    // check is for the URL within the command line rather than equal to it.
+    const QByteArray started = scratch.launchedWith();
+    INFO("command line: " << started.toStdString());
+    CHECK_FALSE(started.isEmpty());
+    CHECK(started.contains(url.toUtf8()));
+}
+
+TEST_CASE("A relay with no Imager beside it launches nothing",
+          "[relay][process][launch]")
+{
+    // The guard against starting whatever happens to be in the working
+    // directory. Nothing is installed here, so the relay has to find the
+    // Imager missing and stop.
+    REQUIRE_RELAY();
+    if (!portIsFree())
+        SKIP("port 49629 is taken, so the relay would deliver rather than launch");
+
+    RelayScratch scratch;
+    if (!scratch.isReady())
+        SKIP("the relay could not be copied to a directory of its own");
+
+    CHECK(scratch.run(QStringLiteral("rpi-imager://open?token=nothing")) == 0);
+    CHECK(scratch.launchedWith(1500).isEmpty());
 }
