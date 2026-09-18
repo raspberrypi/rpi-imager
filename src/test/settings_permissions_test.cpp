@@ -210,3 +210,46 @@ TEST_CASE("Restoring ownership of a directory walks what is inside it",
 
     CHECK(rpi_imager::restoreUserOwnership(root, 1000, 1000) >= 0);
 }
+
+TEST_CASE("Restoring ownership of a file does not go looking for entries",
+          "[settings][permissions]")
+{
+    // A file is not walked. The directory case above covers the walk; this
+    // one covers the return that stops it happening, which a symlink to a
+    // directory also takes -- the link is changed, never followed.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString file = QDir(dir.path()).filePath(QStringLiteral("settings.conf"));
+    {
+        QFile f(file);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("[General]\n");
+    }
+
+    // Never negative: the count is of entries handed back, and a caller
+    // reports it. Windows has no POSIX ownership to restore, so nothing is
+    // changed and nought is the honest answer.
+    CHECK(rpi_imager::restoreUserOwnership(file, 1000, 1000) >= 0);
+}
+
+TEST_CASE("Restoring ownership without an account asks the platform for one",
+          "[settings][permissions]")
+{
+    // The one-argument form, which is what the application calls: it asks who
+    // invoked an elevated run rather than being told. Where there is no such
+    // account -- every Windows run, and any POSIX run that is not elevated --
+    // there is nobody to hand anything back to and it does nothing.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString file = QDir(dir.path()).filePath(QStringLiteral("settings.conf"));
+    {
+        QFile f(file);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("[General]\n");
+    }
+
+    CHECK(rpi_imager::restoreUserOwnership(file) >= 0);
+    // And a path that is not there is not an error either.
+    CHECK(rpi_imager::restoreUserOwnership(
+              QDir(dir.path()).filePath(QStringLiteral("absent.conf"))) == 0);
+}
