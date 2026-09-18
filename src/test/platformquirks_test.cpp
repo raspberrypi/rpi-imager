@@ -19,6 +19,11 @@
 #include <QElapsedTimer>
 #include "platformquirks.h"
 
+#ifdef Q_OS_WIN
+#include "vhd_device.h"
+#include <windows.h>
+#endif
+
 #include <cmath>
 
 #include <QProcess>
@@ -393,6 +398,40 @@ TEST_CASE("ejectDisk handles invalid device paths", "[platformquirks][disk]") {
     result = PlatformQuirks::ejectDisk("/dev/nonexistent_device_12345");
     CHECK(result == PlatformQuirks::DiskResult::InvalidDrive);
 }
+
+#ifdef Q_OS_WIN
+namespace {
+// Whether Windows still has a disk at this path.
+bool physicalDriveIsThere(const QString& path)
+{
+    HANDLE h = CreateFileW(reinterpret_cast<LPCWSTR>(path.utf16()),
+                           0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                           nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
+    CloseHandle(h);
+    return true;
+}
+} // namespace
+
+TEST_CASE("Ejecting a virtual disk detaches it", "[platformquirks][disk][vhd]") {
+    // A virtual disk is not removable media, so the eject IOCTL the card path
+    // uses has nothing to act on. Dismounting the volumes and stopping there
+    // leaves the disk attached with nothing mounted: it stays listed as a
+    // drive, and the file behind it cannot be attached again -- which reads
+    // to the user as an image that has been corrupted.
+    rpi_test::VhdDevice vhd(64);
+    if (!vhd.valid())
+        SKIP("attaching a virtual disk needs elevation: "
+             + vhd.reason().toStdString());
+
+    const QString path = vhd.path();
+    REQUIRE(physicalDriveIsThere(path));
+
+    CHECK(PlatformQuirks::ejectDisk(path) == PlatformQuirks::DiskResult::Success);
+    CHECK_FALSE(physicalDriveIsThere(path));
+}
+#endif
 
 // ============================================================================
 // Linux-specific tests
