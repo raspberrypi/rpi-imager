@@ -18,6 +18,7 @@
 #include "platform_tools.h"
 
 #include "connect_device_registrar.h"
+#include "fake_connect_api.h"
 #include "fastboot/fastboot_protocol.h"
 #include "rpiboot/test/mock_usb_transport.h"
 
@@ -29,6 +30,7 @@
 #include <QProcess>
 #include <QUuid>
 
+using rpi_test::FakeApiServer;
 using rpiboot::testing::MockUsbTransport;
 
 namespace {
@@ -53,79 +55,6 @@ public:
 
 private:
     QString _path;
-};
-
-// A localhost stand-in for the Connect management API.
-//
-// It answers every POST with a canned status and body, so a case can choose
-// what the server does without needing the real service.
-class FakeApiServer
-{
-public:
-    FakeApiServer(int status, const QByteArray &body)
-        : FakeApiServer(status, body, 1)
-    {
-    }
-
-    // The body repeated, for the sizes argv cannot carry.
-    //
-    // Windows caps the whole command line at 32,767 characters, script and
-    // all, so the unit passed here has to stay small however large the body
-    // is meant to be -- a 64 KB unit does not start the server at all, and
-    // the case that wanted eight megabytes skipped itself on every run.
-    FakeApiServer(int status, const QByteArray &body, int repeat)
-    {
-        // Well under the cap, with the script and the other arguments to fit
-        // alongside it. A larger body is expressed as a bigger repeat.
-        REQUIRE(body.size() <= 4096);
-
-        static const char *kScript =
-            "import http.server, socketserver, sys\n"
-            "status = int(sys.argv[1])\n"
-            "body = sys.argv[2].encode() * int(sys.argv[3])\n"
-            "class H(http.server.BaseHTTPRequestHandler):\n"
-            "    def do_POST(self):\n"
-            "        n = int(self.headers.get('content-length', 0))\n"
-            "        self.rfile.read(n)\n"
-            "        self.send_response(status)\n"
-            "        self.send_header('content-type', 'application/json')\n"
-            "        self.send_header('content-length', str(len(body)))\n"
-            "        self.end_headers()\n"
-            "        self.wfile.write(body)\n"
-            "    def log_message(self, *a): pass\n"
-            "socketserver.TCPServer.allow_reuse_address = True\n"
-            "s = socketserver.TCPServer(('127.0.0.1', 0), H)\n"
-            "print(s.server_address[1], flush=True)\n"
-            "s.serve_forever()\n";
-
-        _process.start(rpi_test::pythonPath(),
-                       {QStringLiteral("-c"), QString::fromUtf8(kScript),
-                        QString::number(status), QString::fromUtf8(body),
-                        QString::number(repeat)});
-        if (!_process.waitForStarted(10000))
-            return;
-        if (_process.waitForReadyRead(10000))
-            _port = _process.readLine().trimmed().toInt();
-    }
-
-    ~FakeApiServer()
-    {
-        _process.kill();
-        _process.waitForFinished(5000);
-    }
-
-    FakeApiServer(const FakeApiServer &) = delete;
-    FakeApiServer &operator=(const FakeApiServer &) = delete;
-
-    bool isRunning() const { return _port > 0; }
-    QString baseUrl() const
-    {
-        return QStringLiteral("http://127.0.0.1:%1").arg(_port);
-    }
-
-private:
-    QProcess _process;
-    int _port = 0;
 };
 
 // Build a mock device that answers the two fastboot commands the flow issues:
@@ -171,11 +100,7 @@ void queueHappyDevice(MockUsbTransport &mock)
 
 } // namespace
 
-#define REQUIRE_SERVER(server)                                                                     \
-    if (!havePython())                                                                             \
-        SKIP("python3 is not installed, so no local API server can be started");                   \
-    if (!(server).isRunning())                                                                     \
-    SKIP("the local API server did not start")
+#define REQUIRE_SERVER(server) RPI_REQUIRE_FAKE_API(server)
 
 // ---------------------------------------------------------------------------
 // Enablement
