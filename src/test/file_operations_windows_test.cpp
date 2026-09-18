@@ -37,6 +37,10 @@
 #include <QUuid>
 
 #include <memory>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -242,6 +246,106 @@ TEST_CASE("Asynchronous writes complete and read back unchanged", "[fileops-win]
     CHECK(got == data);
 }
 
+// A queue with enough on it that the wait has something to do.
+//
+// One small write completes before anything can look, so the drain loop --
+// the completion port wait, the context lookup, the callbacks -- was never
+// entered by any case. Depth and count are chosen so writes are still in
+// flight when the wait begins.
+namespace {
+struct QueuedWrites {
+    std::vector<std::vector<std::uint8_t>> buffers;
+    std::atomic<int> completed{0};
+    std::atomic<int> failed{0};
+};
+
+// Returns false when the backend has no async path, so a case can skip.
+bool fillTheQueue(ScratchDevice &dev, QueuedWrites &out, int writes, std::size_t each)
+{
+    if (!dev->IsAsyncIOSupported())
+        return false;
+    dev->SetAsyncQueueDepth(32);
+    out.buffers.reserve(writes);
+    for (int i = 0; i < writes; ++i) {
+        out.buffers.push_back(pattern(each, static_cast<std::uint8_t>(i)));
+        const auto &buf = out.buffers.back();
+        const FileError queued = dev->AsyncWriteSequential(
+            buf.data(), buf.size(),
+            [&out](FileError e, std::uint64_t) {
+                if (e == FileError::kSuccess)
+                    out.completed.fetch_add(1);
+                else
+                    out.failed.fetch_add(1);
+            });
+        if (queued != FileError::kSuccess)
+            return false;
+    }
+    return true;
+}
+} // namespace
+
+TEST_CASE("Waiting drains a queue that is still in flight", "[fileops-win]")
+{
+    ScratchDevice dev(48u * 1024 * 1024);
+    QueuedWrites queued;
+    if (!fillTheQueue(dev, queued, 96, 256 * 1024))
+        SKIP("this backend has no asynchronous path to exercise");
+
+    // Without something still on the wire the wait returns down its empty
+    // path and the case proves nothing, so this is the premise rather than a
+    // nicety.
+    const int inFlight = dev->GetPendingWriteCount();
+    INFO("writes still in flight when the wait began: " << inFlight);
+    CHECK(inFlight > 0);
+
+    REQUIRE(dev->WaitForPendingWrites() == FileError::kSuccess);
+
+    // Every write is accounted for, and none is still owed a callback: a
+    // context left in the table is a buffer the caller has been told nothing
+    // about and cannot free.
+    CHECK(dev->GetPendingWriteCount() == 0);
+    CHECK(queued.completed.load() + queued.failed.load() == 96);
+    CHECK(queued.failed.load() == 0);
+}
+
+TEST_CASE("Cancelling a queue in flight drains it rather than leaking",
+          "[fileops-win]")
+{
+    // What pressing Cancel mid-write reaches. The writes already on the wire
+    // cannot be recalled, so they have to be waited out and their callbacks
+    // run -- returning early would free buffers the device is still reading.
+    ScratchDevice dev(48u * 1024 * 1024);
+    QueuedWrites queued;
+    if (!fillTheQueue(dev, queued, 96, 256 * 1024))
+        SKIP("this backend has no asynchronous path to exercise");
+
+    dev->CancelAsyncIO();
+    const FileError waited = dev->WaitForPendingWrites();
+    CHECK((waited == FileError::kSuccess || waited == FileError::kCancelled));
+
+    CHECK(dev->GetPendingWriteCount() == 0);
+    CHECK(queued.completed.load() + queued.failed.load() == 96);
+}
+
+TEST_CASE("The pending list is ordered by where each write goes",
+          "[fileops-win]")
+{
+    // The order matters to the sync fallback, which continues from the lowest
+    // offset that has not landed. Asked of an empty queue elsewhere; asked
+    // here of one with writes on it.
+    ScratchDevice dev(16u * 1024 * 1024);
+    QueuedWrites queued;
+    if (!fillTheQueue(dev, queued, 24, 128 * 1024))
+        SKIP("this backend has no asynchronous path to exercise");
+
+    const auto sorted = dev->GetPendingWritesSorted();
+    for (std::size_t i = 1; i < sorted.size(); ++i)
+        CHECK(sorted[i - 1].offset <= sorted[i].offset);
+
+    REQUIRE(dev->WaitForPendingWrites() == FileError::kSuccess);
+    CHECK(dev->GetPendingWritesSorted().empty());
+}
+
 TEST_CASE("Waiting with nothing outstanding returns at once", "[fileops-win]")
 {
     ScratchDevice dev;
@@ -351,6 +455,100 @@ TEST_CASE("A physical drive opens and reports the size the OS gives it",
     // capacity check is made against, and a file length is not it.
     CHECK(size >= 60u * 1024 * 1024);
     CHECK(ops->Close() == FileError::kSuccess);
+}
+
+// A holder that looks like an indexer or a scanner: write access, shared for
+// reading only, so an open asking for write is refused.
+namespace {
+class ExclusiveHolder
+{
+public:
+    explicit ExclusiveHolder(const QString &devicePath)
+    {
+        const std::wstring wide = devicePath.toStdWString();
+        _handle = CreateFileW(wide.c_str(), GENERIC_READ | GENERIC_WRITE,
+                              FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    }
+    ~ExclusiveHolder()
+    {
+        if (_handle != INVALID_HANDLE_VALUE)
+            CloseHandle(_handle);
+    }
+    ExclusiveHolder(const ExclusiveHolder &) = delete;
+    ExclusiveHolder &operator=(const ExclusiveHolder &) = delete;
+    bool held() const { return _handle != INVALID_HANDLE_VALUE; }
+
+private:
+    HANDLE _handle = INVALID_HANDLE_VALUE;
+};
+
+qint64 millisecondsFor(const std::function<void()> &work)
+{
+    const auto started = std::chrono::steady_clock::now();
+    work();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now() - started)
+        .count();
+}
+} // namespace
+
+TEST_CASE("A drive something else holds is waited for, not given up on",
+          "[fileops-win][vhd]")
+{
+    // A just-written removable disk is often held for a moment by Explorer
+    // re-scanning it, an anti-virus scanner or the search indexer. Dropping
+    // straight to a shared open would let Windows mount the partition about to
+    // be written and raise "You need to format the disk" mid-write, so the
+    // open backs off and asks again before it settles for sharing.
+    rpi_test::VhdDevice vhd(64);
+    if (!vhd.valid())
+        SKIP("attaching a virtual disk needs elevation: " + vhd.reason().toStdString());
+
+    ExclusiveHolder holder(vhd.path());
+    REQUIRE(holder.held());
+
+    auto ops = FileOperations::Create();
+    FileError err = FileError::kSuccess;
+    const qint64 ms = millisecondsFor([&] {
+        err = ops->OpenDevice(vhd.path().toStdString());
+    });
+
+    // The holder never lets go, so even the shared fallback is refused.
+    CHECK(err != FileError::kSuccess);
+    CHECK_FALSE(ops->IsOpen());
+    // And it was not refused at once: the six backoffs are a little over six
+    // seconds all told, so anything under five means the loop was skipped.
+    INFO("open took " << ms << "ms");
+    CHECK(ms >= 5000);
+}
+
+TEST_CASE("An open waiting for a drive gives up when cancelled",
+          "[fileops-win][vhd]")
+{
+    // The backoff above outlasts a caller that has already pressed Cancel, so
+    // it is checked between sleeps rather than only between attempts.
+    rpi_test::VhdDevice vhd(64);
+    if (!vhd.valid())
+        SKIP("attaching a virtual disk needs elevation: " + vhd.reason().toStdString());
+
+    ExclusiveHolder holder(vhd.path());
+    REQUIRE(holder.held());
+
+    auto ops = FileOperations::Create();
+    std::thread canceller([&] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        ops->CancelAsyncIO();
+    });
+
+    FileError err = FileError::kSuccess;
+    const qint64 ms = millisecondsFor([&] {
+        err = ops->OpenDevice(vhd.path().toStdString());
+    });
+    canceller.join();
+
+    CHECK(err != FileError::kSuccess);
+    INFO("open took " << ms << "ms");
+    CHECK(ms < 5000);
 }
 
 TEST_CASE("A failed open of a physical drive is worth retrying",
