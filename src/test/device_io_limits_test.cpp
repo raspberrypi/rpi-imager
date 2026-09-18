@@ -21,6 +21,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winioctl.h>
+
+#include "timeout_utils.h"
+
+#include <filesystem>
+#include <system_error>
 #endif
 
 using rpi_imager::FileOperations;
@@ -279,6 +284,98 @@ TEST_CASE("A path that is not a block device reports nothing",
 }
 
 #endif // __linux__
+
+#ifdef _WIN32
+
+// ── the pre-open query on Windows ───────────────────────────────────────────
+//
+// The query decides the write buffer size and the async queue depth before
+// the device is opened, so a wrong answer here is a slow write or one split
+// into sub-requests. The whole body was unreachable: the only case entering
+// it is the diagnostic above, which Catch2 hides behind its "." tag and CTest
+// therefore never runs.
+//
+// It opens the drive with zero access, which is what makes these runnable
+// without elevation -- a property query needs no rights to the device.
+
+TEST_CASE("A path that is not a physical drive is not queried",
+          "[device_io_limits]")
+{
+    // The guard that keeps a property IOCTL off a file. Without it the query
+    // would open whatever the path names and ask a filesystem for its
+    // adapter descriptor.
+    const std::string file =
+        (std::filesystem::temp_directory_path()
+         / ("rpi-imager-notadrive-" + std::to_string(::GetCurrentProcessId()))).string();
+    { std::ofstream f(file); f << "x"; }
+
+    for (const std::string &path : {file, std::string(), std::string("\\\\.\\C:"),
+                                    std::string("C:\\Windows"),
+                                    std::string("PHYSICALDRIVE0")}) {
+        INFO("path: " << path);
+        const auto limits = FileOperations::QueryDeviceIOLimits(path);
+        CHECK(limits.max_transfer_bytes == 0);
+        CHECK(limits.suggested_queue_depth == 0);
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(file, ec);
+}
+
+TEST_CASE("A drive path is recognised whatever its case", "[device_io_limits]")
+{
+    // Drivelist hands the path back as Windows spells it, and nothing
+    // guarantees that spelling. A case-sensitive prefix test would drop the
+    // limits silently and fall back to the RAM heuristic.
+    const auto upper = FileOperations::QueryDeviceIOLimits("\\\\.\\PHYSICALDRIVE0");
+    const auto lower = FileOperations::QueryDeviceIOLimits("\\\\.\\physicaldrive0");
+    CHECK(upper.max_transfer_bytes == lower.max_transfer_bytes);
+    CHECK(upper.suggested_queue_depth == lower.suggested_queue_depth);
+}
+
+TEST_CASE("A drive that is not there reports nothing rather than failing",
+          "[device_io_limits]")
+{
+    // The query runs before the write, on a path the user may have unplugged.
+    const auto limits = FileOperations::QueryDeviceIOLimits("\\\\.\\PHYSICALDRIVE97");
+    CHECK(limits.max_transfer_bytes == 0);
+    CHECK(limits.suggested_queue_depth == 0);
+}
+
+TEST_CASE("The system drive answers with limits a write can be sized from",
+          "[device_io_limits]")
+{
+    // Against real hardware, so the values themselves are whatever the
+    // machine reports. What is asserted is that they can be used: a maximum
+    // transfer below a page cannot be aligned down to anything, and a queue
+    // depth the device could not service would be queue pressure rather than
+    // throughput.
+    //
+    // Opened here as well, with the zero access the query uses, so a machine
+    // that will not hand over its system drive skips rather than passing on
+    // the defaults it would also return for a path it never looked at.
+    const HANDLE probe = ::CreateFileA("\\\\.\\PHYSICALDRIVE0", 0,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                       nullptr, OPEN_EXISTING, 0, nullptr);
+    if (probe == INVALID_HANDLE_VALUE)
+        SKIP("PHYSICALDRIVE0 cannot be opened, so the query has nothing to ask");
+    ::CloseHandle(probe);
+
+    const auto limits = FileOperations::QueryDeviceIOLimits("\\\\.\\PHYSICALDRIVE0");
+    INFO("max_transfer_bytes: " << limits.max_transfer_bytes
+         << ", suggested_queue_depth: " << limits.suggested_queue_depth);
+
+    if (limits.max_transfer_bytes > 0) {
+        CHECK(limits.max_transfer_bytes >= 4096);
+        CHECK(limits.max_transfer_bytes <= 256u * 1024 * 1024);
+    }
+    if (limits.suggested_queue_depth > 0) {
+        CHECK(limits.suggested_queue_depth >= rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth);
+        CHECK(limits.suggested_queue_depth <= 4096);
+    }
+}
+
+#endif // _WIN32
 
 // ── capping the write buffer to what the device takes ───────────────────────
 //
