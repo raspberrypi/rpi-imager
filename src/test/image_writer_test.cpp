@@ -1990,6 +1990,33 @@ TEST_CASE("Decimal places are honoured", "[imagewriter][format]")
     CHECK_THAT(oneAndAHalf.toStdString(), ContainsSubstring("GB"));
 }
 
+TEST_CASE("A size is written in the digits the reader's locale uses",
+          "[imagewriter][format]")
+{
+    // The whole part goes through QLocale::toString(), which maps digits
+    // itself; the fractional part is assembled here and would otherwise stay
+    // in Latin digits, giving a reader of Arabic or Bengali a figure in two
+    // numbering systems either side of the decimal point.
+    const QLocale arabic{QLocale::Arabic, QLocale::Egypt};
+    const QString zero = arabic.zeroDigit();
+    if (zero.size() != 1 || zero == QStringLiteral("0"))
+        SKIP("this Qt renders Arabic in Latin digits, so there is nothing to map");
+
+    ScopedLocale guard{arabic};
+    ImageWriter w(nullptr);
+
+    // 1.5 GB: one whole unit and a fractional part that has to be mapped.
+    const QString rendered = w.formatSize(1500ull * 1000 * 1000, 1);
+    INFO("1.5 GB in Arabic digits: " << rendered.toStdString());
+
+    const char16_t base = zero.at(0).unicode();
+    const QString five = QString(QChar(static_cast<char16_t>(base + 5)));
+    CHECK_THAT(rendered.toStdString(),
+               ContainsSubstring((arabic.decimalPoint() + five).toStdString()));
+    // And no Latin digit survived alongside it.
+    CHECK_FALSE(rendered.contains(QRegularExpression(QStringLiteral("[0-9]"))));
+}
+
 TEST_CASE("A card reads as the size printed on it", "[imagewriter][format]")
 {
     ScopedLocale guard{kBritish};
