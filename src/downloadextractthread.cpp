@@ -776,8 +776,27 @@ void DownloadExtractThread::extractMultiFileRun()
     
     // Configure decompression options for optimal performance
     _configureArchiveOptions(a);
-    
+
     archive_read_open(a, this, NULL, &DownloadExtractThread::_archive_read, &DownloadExtractThread::_archive_close);
+
+    // The rollback below has to run after this, not before: when extraction
+    // fails part-way the write handle still holds the entry it was filling,
+    // and Windows will not delete an open file. Safe to call twice, so the
+    // cleanup section can close handles the catch has already released.
+    auto closeArchives = [&a, &ext] {
+        if (ext)
+        {
+            if (archive_write_close(ext) != ARCHIVE_OK)
+                qDebug() << "Warning: Failed to properly close archive write handle";
+            archive_write_free(ext);
+            ext = nullptr;
+        }
+        if (a)
+        {
+            archive_read_free(a);
+            a = nullptr;
+        }
+    };
 
     try
     {
@@ -912,7 +931,10 @@ void DownloadExtractThread::extractMultiFileRun()
             _asyncCacheWriter->cancel();
         }
 
+        closeArchives();
+
         qDebug() << "Deleting extracted files";
+        QStringList notRemoved;
         for (const auto& filename : filesExtracted)
         {
             QFileInfo fi(filename);
@@ -920,7 +942,10 @@ void DownloadExtractThread::extractMultiFileRun()
             if (!path.isEmpty() && path != "." && !dirExtracted.contains(path))
                 dirExtracted.append(path);
 
-            QFile::remove(filename);
+            // The entry names are relative, so this still depends on the
+            // working directory being the target; it is restored below.
+            if (!QFile::remove(filename) && QFile::exists(filename))
+                notRemoved.append(filename);
         }
         for (int idx = dirExtracted.count()-1; idx >= 0; idx--)
         {
@@ -928,6 +953,10 @@ void DownloadExtractThread::extractMultiFileRun()
             d.rmdir(dirExtracted[idx]);
         }
         qDebug() << filesExtracted << dirExtracted;
+        // A card left holding part of a failed write looks written and will
+        // not boot, so say which files survived rather than leaving it silent.
+        if (!notRemoved.isEmpty())
+            qDebug() << "Could not delete after a failed extraction:" << notRemoved;
 
         if (!_cancelled)
         {
@@ -947,12 +976,8 @@ void DownloadExtractThread::extractMultiFileRun()
     // Ensure proper cleanup sequence
     
     // 1. Close libarchive handles properly (this should flush any pending writes)
-    if (archive_write_close(ext) != ARCHIVE_OK) {
-        qDebug() << "Warning: Failed to properly close archive write handle";
-    }
-    archive_read_free(a);
-    archive_write_free(ext);
-    
+    closeArchives();
+
     // 2. Change back to original directory BEFORE sync to avoid holding references
     QDir::setCurrent(currentDir);
     
