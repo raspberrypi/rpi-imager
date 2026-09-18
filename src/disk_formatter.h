@@ -242,6 +242,25 @@ class DiskFormatter {
                                        std::uint16_t reserved_sectors,
                                        std::uint8_t num_fats);
 
+#ifdef DISKFORMATTER_ENABLE_TEST_API
+ public:
+  // The arithmetic above, reachable on its own.
+  //
+  // It decides the cluster count, and a volume whose count falls in the wrong
+  // band is read as a FAT16 by everything that opens it. Driving it through a
+  // whole format only reaches the sizes a format is given; asked directly it
+  // can be held to the degenerate ones too.
+  static Fat32Geometry GeometryForTest(std::uint32_t partition_sectors,
+                                       std::uint32_t sectors_per_cluster,
+                                       std::uint16_t reserved_sectors,
+                                       std::uint8_t num_fats) {
+    return ComputeGeometry(partition_sectors, sectors_per_cluster,
+                           reserved_sectors, num_fats);
+  }
+
+ private:
+#endif
+
   // Whether a partition this size can hold a FAT32 at all, at the cluster
   // size CalculateFat32Config would pick for it.
   bool CanHoldFat32(std::uint32_t partition_sectors) const;

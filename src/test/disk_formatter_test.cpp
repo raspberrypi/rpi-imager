@@ -200,6 +200,7 @@ class DiskFormatterTest {
     all_passed &= TestPartitionTableAndFilesystemAgree();
     all_passed &= TestAcceptedDevicesGetAValidFat32();
     all_passed &= TestFatIsWrittenInBoundedPieces();
+    all_passed &= TestGeometryRefusesDegenerateSizes();
     
     if (all_passed) {
       std::cout << "All tests passed!\n";
@@ -211,6 +212,79 @@ class DiskFormatterTest {
   }
 
  private:
+  // The geometry on its own, including the sizes a format never reaches.
+  //
+  // The cluster count decides the FAT type. Below 65,525 a volume is a FAT16
+  // to every driver that opens it, whatever the boot sector says it is -- so
+  // a geometry that quietly returns a smaller count than the caller assumed
+  // produces a card the bootloader cannot read.
+  static bool TestGeometryRefusesDegenerateSizes() {
+    std::cout << "Testing FAT32 geometry on degenerate sizes...\n";
+
+    constexpr std::uint16_t kReserved = 32;
+    constexpr std::uint8_t kFats = 2;
+
+    // A partition no larger than the sectors reserved before the data has
+    // nowhere to put a FAT, let alone a cluster.
+    for (std::uint32_t sectors : {0u, 1u, 16u, 31u, 32u}) {
+      const auto g = DiskFormatter::GeometryForTest(sectors, 1, kReserved, kFats);
+      if (g.sectors_per_fat != 0 || g.cluster_count != 0) {
+        std::cout << "  x " << sectors << " sectors gave fat=" << g.sectors_per_fat
+                  << " clusters=" << g.cluster_count
+                  << ", expected nothing at all\n";
+        return false;
+      }
+    }
+
+    // Just past the reserved sectors there is room to describe a FAT but not
+    // to hold the data it would index, so the count is nought rather than a
+    // number the boot sector could not honour.
+    const auto tiny = DiskFormatter::GeometryForTest(33, 1, kReserved, kFats);
+    if (tiny.cluster_count != 0) {
+      std::cout << "  x 33 sectors gave " << tiny.cluster_count
+                << " clusters, expected none\n";
+      return false;
+    }
+
+    // And a real size works out to something a FAT32 driver will accept.
+    const std::uint32_t sectors_64mb = (64u * 1024 * 1024) / 512;
+    const auto ok = DiskFormatter::GeometryForTest(sectors_64mb, 1, kReserved, kFats);
+    if (ok.sectors_per_fat == 0 || ok.cluster_count < 65525) {
+      std::cout << "  x 64MB gave fat=" << ok.sectors_per_fat
+                << " clusters=" << ok.cluster_count
+                << ", expected at least 65525\n";
+      return false;
+    }
+
+    // The FATs have to fit inside the partition they index: two of them plus
+    // the reserved sectors cannot reach past the end.
+    const std::uint64_t overhead =
+        std::uint64_t{kReserved} + std::uint64_t{kFats} * ok.sectors_per_fat;
+    if (overhead >= sectors_64mb) {
+      std::cout << "  x overhead " << overhead << " does not fit in "
+                << sectors_64mb << " sectors\n";
+      return false;
+    }
+
+    // More space never means fewer clusters. A geometry that is not
+    // monotonic has a size where growing the card shrinks the volume.
+    std::uint32_t previous = 0;
+    for (std::uint32_t mb : {33u, 48u, 64u, 96u, 128u, 256u}) {
+      const std::uint32_t sectors = (mb * 1024u * 1024u) / 512u;
+      const auto g = DiskFormatter::GeometryForTest(sectors, 1, kReserved, kFats);
+      if (g.cluster_count < previous) {
+        std::cout << "  x " << mb << "MB gave " << g.cluster_count
+                  << " clusters, fewer than the size below it (" << previous
+                  << ")\n";
+        return false;
+      }
+      previous = g.cluster_count;
+    }
+
+    std::cout << "✅ Geometry refuses degenerate sizes and grows with the card\n";
+    return true;
+  }
+
   static bool TestBasicFormatting() {
     std::cout << "Testing basic formatting...\n";
     
