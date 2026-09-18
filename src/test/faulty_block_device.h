@@ -246,6 +246,22 @@ private:
 // runner supplied it, otherwise one provisioned here. Refuses anything that
 // is not a loop device however it arrived, so a mistyped environment variable
 // cannot point the write path at a real disk.
+// Why no scratch block device could be had, in the terms of the host that
+// could not provide one.
+inline const char *noScratchBlockDeviceReason()
+{
+#ifdef _WIN32
+    return "no scratch block device: attaching a virtual disk needs an "
+           "elevated process, and this one is not";
+#elif defined(Q_OS_MACOS)
+    return "no scratch block device: hdiutil could not attach one; or set "
+           "RPI_IMAGER_TEST_BLOCK_DEVICE";
+#else
+    return "no scratch block device: needs passwordless sudo; or set "
+           "RPI_IMAGER_TEST_BLOCK_DEVICE";
+#endif
+}
+
 class TestBlockDevice
 {
 public:

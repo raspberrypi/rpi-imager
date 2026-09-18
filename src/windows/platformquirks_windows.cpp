@@ -26,6 +26,8 @@
 #include <QFontDatabase>
 #include <QString>
 #include <QFile>
+#include <QProcessEnvironment>
+#include <QDir>
 
 namespace {
     // Network monitoring state
@@ -574,6 +576,31 @@ bool prefersReducedMotion() {
     BOOL animationsEnabled = TRUE;
     SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animationsEnabled, 0);
     return !animationsEnabled;
+}
+
+// The 64-bit system directory, whichever name reaches it from here.
+//
+// SysNative is the WOW64 alias a 32-bit process uses to get past the
+// redirection that points System32 at SysWOW64; it does not exist at all for
+// a 64-bit process. The shipping build is 64-bit, so the only path ever tried
+// was one that was never there: hasSshKeyGen() answered no on every 64-bit
+// Windows and generating a key did nothing at all.
+//
+// Both are tried, in the order that suits the common case, and the one that
+// is actually there wins.
+QString sshKeyGenPath() {
+    const QString windir = QDir::fromNativeSeparators(
+        QProcessEnvironment::systemEnvironment().value(QStringLiteral("windir")));
+    if (windir.isEmpty())
+        return {};
+
+    for (const QString& systemDir : {QStringLiteral("System32"), QStringLiteral("SysNative")}) {
+        const QString candidate =
+            windir + QLatin1Char('/') + systemDir + QStringLiteral("/OpenSSH/ssh-keygen.exe");
+        if (QFile::exists(candidate))
+            return candidate;
+    }
+    return {};
 }
 
 QString getWriteDevicePath(const QString& devicePath) {

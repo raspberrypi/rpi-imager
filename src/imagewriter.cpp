@@ -3507,21 +3507,20 @@ bool ImageWriter::hasPubKey()
 
 QString ImageWriter::_sshKeyGen()
 {
-#ifdef Q_OS_WIN
-    QString windir = QProcessEnvironment::systemEnvironment().value("windir");
-    return QDir::fromNativeSeparators(windir+"\\SysNative\\OpenSSH\\ssh-keygen.exe");
-#else
-    return "ssh-keygen";
-#endif
+    return PlatformQuirks::sshKeyGenPath();
 }
 
 bool ImageWriter::hasSshKeyGen()
 {
-#ifdef Q_OS_WIN
-    return QFile::exists(_sshKeyGen());
-#else
-    return !isEmbeddedMode();
-#endif
+    // Embedded builds ship without it whatever any path says.
+    if (isEmbeddedMode())
+        return false;
+
+    const QString keygen = _sshKeyGen();
+    if (keygen.isEmpty())
+        return false;
+    // A bare name is looked up on PATH; a path has to be what it claims.
+    return !keygen.contains(QLatin1Char('/')) || QFile::exists(keygen);
 }
 
 void ImageWriter::generatePubKey()

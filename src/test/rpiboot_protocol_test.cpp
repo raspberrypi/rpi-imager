@@ -10,6 +10,8 @@
 #include <QFileInfo>
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <string>
+#include <set>
 #include <chrono>
 #include <thread>
 #include <QElapsedTimer>
@@ -1865,4 +1867,82 @@ TEST_CASE("A board that goes quiet after serving files may have rebooted",
 
     INFO("error: " << server.lastError());
     CHECK(ok);
+}
+
+// ============================================================================
+// What each chip generation is called
+// ============================================================================
+// Four lookups turn a generation into a string, and three of them are load
+// bearing: the directory prefix picks which firmware inside bootfiles.bin the
+// board is served, and the gadget family slug picks which fastboot package it
+// is sent. A case answering for the wrong board sends firmware that will not
+// run on it, which is not something the board can report back.
+//
+// Only the generations reached by whatever else the suite happened to do were
+// covered. Here every one is walked through every lookup.
+
+TEST_CASE("Every chip generation has a name, a prefix and a family",
+          "[rpiboot][types]")
+{
+    using rpiboot::ChipGeneration;
+
+    struct Expected {
+        ChipGeneration gen;
+        const char *name;
+        const char *prefix;
+        const char *family;
+        const char *description;
+    };
+    static const Expected kAll[] = {
+        {ChipGeneration::BCM2836_7, "BCM2836/7", "2836", "",
+         "Compute Module 3 (USB Boot)"},
+        {ChipGeneration::BCM2711, "BCM2711", "2711", "pi4-family",
+         "Compute Module 4 (USB Boot)"},
+        {ChipGeneration::BCM2712, "BCM2712", "2712", "pi5-family",
+         "Compute Module 5 (USB Boot)"},
+    };
+
+    for (const Expected &e : kAll) {
+        INFO("generation " << static_cast<unsigned>(e.gen));
+        CHECK(rpiboot::chipGenerationName(e.gen) == e.name);
+        // The directory inside bootfiles.bin. Wrong here and the board is
+        // handed another board's firmware.
+        CHECK(rpiboot::chipDirectoryPrefix(e.gen) == e.prefix);
+        CHECK(rpiboot::fastbootGadgetFamilySlug(e.gen) == e.family);
+        CHECK(rpiboot::deviceDescription(e.gen) == e.description);
+    }
+}
+
+TEST_CASE("No two chip generations share a directory prefix",
+          "[rpiboot][types]")
+{
+    // They index into one archive. Two generations answering the same would
+    // serve one board the other's firmware with nothing to show for it.
+    using rpiboot::ChipGeneration;
+    static const ChipGeneration kAll[] = {
+        ChipGeneration::BCM2836_7, ChipGeneration::BCM2711, ChipGeneration::BCM2712};
+
+    std::set<std::string> prefixes;
+    for (ChipGeneration gen : kAll) {
+        const std::string prefix(rpiboot::chipDirectoryPrefix(gen));
+        INFO("prefix " << prefix);
+        CHECK_FALSE(prefix.empty());
+        CHECK(prefixes.insert(prefix).second);
+    }
+}
+
+TEST_CASE("A USB product id maps only to the generation that owns it",
+          "[rpiboot][types]")
+{
+    using rpiboot::ChipGeneration;
+    CHECK(rpiboot::chipGenerationFromPid(0x2764) == ChipGeneration::BCM2836_7);
+    CHECK(rpiboot::chipGenerationFromPid(0x2711) == ChipGeneration::BCM2711);
+    CHECK(rpiboot::chipGenerationFromPid(0x2712) == ChipGeneration::BCM2712);
+
+    // Anything else is a device that is not one of ours. Guessing would put
+    // a stranger's device in the drive list and offer to write to it.
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0x0000).has_value());
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0x2710).has_value());
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0x2713).has_value());
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0xFFFF).has_value());
 }

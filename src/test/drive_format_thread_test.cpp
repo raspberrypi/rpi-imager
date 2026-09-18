@@ -321,7 +321,7 @@ TEST_CASE("Formatting a device writes a partition table", "[format][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QByteArray dev = device.path().toLatin1();
 
     DriveFormatThread t(dev);
@@ -348,7 +348,7 @@ TEST_CASE("Formatting the same device twice is fine", "[format][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QByteArray dev = device.path().toLatin1();
 
     // Erasing a card that was already erased is ordinary, and must not trip
@@ -366,7 +366,7 @@ TEST_CASE("A formatted device reports its size", "[format][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QByteArray dev = device.path().toLatin1();
 
     DriveFormatThread t(dev);

@@ -5550,7 +5550,7 @@ TEST_CASE("An image is written to a real block device", "[imagewriter][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir dir;
@@ -5578,7 +5578,7 @@ TEST_CASE("A verified write to a real block device reads back clean", "[imagewri
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir dir;
@@ -5651,7 +5651,7 @@ TEST_CASE("Customisation reaches a real card", "[imagewriter][device]")
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir dir;
@@ -6744,7 +6744,7 @@ TEST_CASE("Ejecting a real block device settles", "[imagewriter][eject][device]"
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     ImageWriter w(nullptr);
@@ -6759,7 +6759,7 @@ TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][devic
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     ImageWriter w(nullptr);
@@ -6800,29 +6800,28 @@ TEST_CASE("Erase formats a card through the writer", "[imagewriter][erase][devic
 
 namespace {
 
-// Points HOME at a scratch directory for as long as it is alive.
-// Points QDir::homePath() somewhere disposable, where the platform allows it.
+// An ImageWriter that keeps its SSH keys somewhere disposable.
 //
-// It does not on Windows. QDir::homePath() resolves through the Win32 API
-// there, not the environment: setting HOME, USERPROFILE, HOMEDRIVE and
-// HOMEPATH together leaves it answering the real profile unchanged. Measured,
-// not assumed -- a probe setting all four reported "C:/Users/<name>" before
-// and after.
+// Redirecting HOME does not work on Windows: QDir::homePath() resolves
+// through the Win32 API there, not the environment, and setting HOME,
+// USERPROFILE, HOMEDRIVE and HOMEPATH together leaves it answering the real
+// profile unchanged -- measured, not assumed. So these cases used to check
+// the redirect had taken and skip when it had not, because the alternative
+// is writing an SSH key into the developer's own ~/.ssh, which is not a
+// thing a test may do to the person running it.
 //
-// So the cases below check the redirect took and refuse to go on when it did
-// not. What they would otherwise do is write an SSH key into the developer's
-// own ~/.ssh, which is not a thing a test may do to the person running it.
-class ScopedHome
+// _sshKeyDir() is virtual, so the directory can be named outright and the
+// cases run everywhere.
+class KeysInScratchDir : public ImageWriter
 {
 public:
-    explicit ScopedHome(const QString &path) : _saved(qgetenv("HOME"))
-    {
-        qputenv("HOME", path.toLocal8Bit());
-    }
-    ~ScopedHome() { qputenv("HOME", _saved); }
+    explicit KeysInScratchDir(const QString &dir) : ImageWriter(nullptr), _dir(dir) {}
+
+protected:
+    QString _sshKeyDir() override { return _dir; }
 
 private:
-    QByteArray _saved;
+    QString _dir;
 };
 
 } // namespace
@@ -6831,12 +6830,9 @@ TEST_CASE("With no key in place none is reported", "[imagewriter][sshkey]")
 {
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("QDir::homePath() does not follow the environment on this "
-             "platform, so the real ~/.ssh would be the one written to");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     CHECK_FALSE(w.hasPubKey());
     CHECK(w.getDefaultPubKey().isEmpty());
 }
@@ -6845,20 +6841,17 @@ TEST_CASE("An existing public key is read back verbatim", "[imagewriter][sshkey]
 {
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("QDir::homePath() does not follow the environment on this "
-             "platform, so the real ~/.ssh would be the one written to");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
+    REQUIRE(QDir().mkpath(keyDir));
     const QString key =
         QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABmarkerkey user@example");
-    QFile f(home.path() + QStringLiteral("/.ssh/id_rsa.pub"));
+    QFile f(keyDir + QStringLiteral("/id_rsa.pub"));
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write(key.toUtf8() + "\n");
     f.close();
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     REQUIRE(w.hasPubKey());
     // Byte-for-byte: a key mangled on the way through does not authenticate,
     // and the user finds out only after the card is written.
@@ -6872,18 +6865,15 @@ TEST_CASE("Generating a key creates a usable pair", "[imagewriter][sshkey]")
 
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("QDir::homePath() does not follow the environment on this "
-             "platform, so the real ~/.ssh would be the one written to");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     REQUIRE_FALSE(w.hasPubKey());
 
     w.generatePubKey();
 
     // Both halves, and the directory created if it was missing.
-    CHECK(QFile::exists(home.path() + QStringLiteral("/.ssh/id_rsa")));
+    CHECK(QFile::exists(keyDir + QStringLiteral("/id_rsa")));
     REQUIRE(w.hasPubKey());
     CHECK(w.getDefaultPubKey().startsWith(QStringLiteral("ssh-rsa ")));
 }
@@ -6895,19 +6885,16 @@ TEST_CASE("Generating a key does not replace one already there", "[imagewriter][
 
     QTemporaryDir home;
     REQUIRE(home.isValid());
-    ScopedHome scoped(home.path());
-    if (QDir::homePath() != home.path())
-        SKIP("QDir::homePath() does not follow the environment on this "
-             "platform, so the real ~/.ssh would be the one written to");
+    const QString keyDir = home.filePath(QStringLiteral(".ssh"));
 
-    REQUIRE(QDir().mkpath(home.path() + QStringLiteral("/.ssh")));
+    REQUIRE(QDir().mkpath(keyDir));
     const QString key = QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABkeepme user@example");
-    QFile f(home.path() + QStringLiteral("/.ssh/id_rsa.pub"));
+    QFile f(keyDir + QStringLiteral("/id_rsa.pub"));
     REQUIRE(f.open(QIODevice::WriteOnly));
     f.write(key.toUtf8() + "\n");
     f.close();
 
-    ImageWriter w(nullptr);
+    KeysInScratchDir w(keyDir);
     w.generatePubKey();
 
     // Overwriting somebody's SSH key would be unforgivable.
@@ -7131,7 +7118,7 @@ TEST_CASE("Ignoring device limits reallocates the buffers", "[imagewriter][devic
 {
     rpi_imager::testing::TestBlockDevice device(64);
     if (!device.isReady())
-        SKIP("no scratch block device: needs passwordless sudo on Linux, or hdiutil on macOS; or set RPI_IMAGER_TEST_BLOCK_DEVICE");
+        SKIP(rpi_imager::testing::noScratchBlockDeviceReason());
     const QString dev = device.path();
 
     QTemporaryDir served;
@@ -12560,6 +12547,144 @@ TEST_CASE("A row that is not there yields nothing rather than reading past the e
     CHECK_FALSE(m.data(m.index(0, 0), OSListModel::NameRole).isValid());
     CHECK_FALSE(m.data(m.index(-1, 0), OSListModel::NameRole).isValid());
     CHECK_FALSE(m.data(m.index(5, 0), OSListModel::UrlRole).isValid());
+}
+
+TEST_CASE("A role the delegate does not know about answers nothing",
+          "[imagewriter][oslist]")
+{
+    // QML asks for whatever a delegate names. A role number with nothing
+    // behind it has to come back invalid rather than as the last field that
+    // happened to be read.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+    QVector<OSListModel::OS> rows{fullyPopulatedEntry()};
+    model.applyRows(std::move(rows));
+
+    QAbstractListModel &m = model;
+    REQUIRE(m.rowCount(QModelIndex()) == 1);
+    CHECK_FALSE(m.data(m.index(0, 0), Qt::UserRole + 9999).isValid());
+    CHECK_FALSE(m.data(m.index(0, 0), Qt::DisplayRole).isValid());
+}
+
+TEST_CASE("Marking the first entry recommended labels exactly one",
+          "[imagewriter][oslist]")
+{
+    // The label goes on the first real entry and nowhere else. Two entries
+    // carrying it is a list that recommends two different images.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    QVector<OSListModel::OS> rows;
+    for (int i = 0; i < 3; ++i) {
+        OSListModel::OS os = fullyPopulatedEntry();
+        os.name = QStringLiteral("Image %1").arg(i);
+        os.description = QStringLiteral("Description %1").arg(i);
+        // An entry with sub-items is a category rather than an image, and is
+        // passed over; these are images.
+        os.subitemsJson.clear();
+        rows.append(os);
+    }
+    model.applyRows(std::move(rows));
+    model.markFirstAsRecommended();
+
+    QAbstractListModel &m = model;
+    REQUIRE(m.rowCount(QModelIndex()) == 3);
+
+    int labelled = 0;
+    for (int i = 0; i < 3; ++i) {
+        const QString description =
+            m.data(m.index(i, 0), OSListModel::DescriptionRole).toString();
+        INFO("row " << i << ": " << description.toStdString());
+        if (description.contains(QStringLiteral("Recommended")))
+            ++labelled;
+    }
+    CHECK(labelled == 1);
+}
+
+TEST_CASE("Marking twice does not label the same entry twice",
+          "[imagewriter][oslist]")
+{
+    // The list is re-marked whenever it is refiltered, and the label is text
+    // inside the description -- so without the pass that strips the old one
+    // first, a description gains "(Recommended)" again on every refresh.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    OSListModel::OS os = fullyPopulatedEntry();
+    os.subitemsJson.clear();
+    QVector<OSListModel::OS> rows{os};
+    model.applyRows(std::move(rows));
+
+    QAbstractListModel &m = model;
+    model.markFirstAsRecommended();
+    const QString once =
+        m.data(m.index(0, 0), OSListModel::DescriptionRole).toString();
+
+    model.markFirstAsRecommended();
+    model.markFirstAsRecommended();
+    const QString thrice =
+        m.data(m.index(0, 0), OSListModel::DescriptionRole).toString();
+
+    INFO("once:   " << once.toStdString());
+    INFO("thrice: " << thrice.toStdString());
+    CHECK(once == thrice);
+    CHECK(once.count(QStringLiteral("Recommended")) == 1);
+}
+
+TEST_CASE("A category with images under it is not recommended",
+          "[imagewriter][oslist]")
+{
+    // An entry carrying sub-items is a heading that opens a submenu, not
+    // something that can be written to a card. Recommending it would put the
+    // label on a row that writes nothing when it is chosen.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    OSListModel::OS category = fullyPopulatedEntry();
+    category.name = QStringLiteral("Raspberry Pi OS (other)");
+    category.subitemsJson = QStringLiteral("[{\"name\":\"nested\"}]");
+
+    OSListModel::OS image = fullyPopulatedEntry();
+    image.name = QStringLiteral("Raspberry Pi OS Lite");
+    image.description = QStringLiteral("A port of Debian, no desktop");
+    image.subitemsJson.clear();
+
+    QVector<OSListModel::OS> rows{category, image};
+    model.applyRows(std::move(rows));
+    model.markFirstAsRecommended();
+
+    QAbstractListModel &m = model;
+    // The first real entry is passed over, and marking stops there rather
+    // than moving on to the image behind it.
+    for (int i = 0; i < 2; ++i) {
+        const QString description =
+            m.data(m.index(i, 0), OSListModel::DescriptionRole).toString();
+        INFO("row " << i << ": " << description.toStdString());
+        CHECK_FALSE(description.contains(QStringLiteral("Recommended")));
+    }
+}
+
+TEST_CASE("A label left over from another run is not kept alongside the new one",
+          "[imagewriter][oslist]")
+{
+    // What arrives from the OS list itself. An entry whose description
+    // already ends in a recommendation -- from a cached list, or from the
+    // server -- must not end up carrying two.
+    ImageWriter writer(nullptr);
+    OSListModel model(writer);
+
+    OSListModel::OS os = fullyPopulatedEntry();
+    os.description = QStringLiteral("A port of Debian (Recommended)");
+    os.subitemsJson.clear();
+    QVector<OSListModel::OS> rows{os};
+    model.applyRows(std::move(rows));
+    model.markFirstAsRecommended();
+
+    QAbstractListModel &m = model;
+    const QString description =
+        m.data(m.index(0, 0), OSListModel::DescriptionRole).toString();
+    INFO("description: " << description.toStdString());
+    CHECK(description.count(QStringLiteral("Recommended")) == 1);
 }
 
 // ══════════════════════════════════════════════════════════════════════════

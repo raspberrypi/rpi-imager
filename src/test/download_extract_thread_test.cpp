@@ -33,12 +33,14 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QUuid>
 
 #include <memory>
+#include <string>
 
 #include <unistd.h>
 
@@ -57,6 +59,7 @@
 #include "vhd_device.h"
 #include "windows/diskpart_util.h"
 #include <windows.h>
+#include <winioctl.h>
 #endif
 
 namespace {
@@ -1353,15 +1356,15 @@ public:
         if (disk.isEmpty())
             return;
 
-        // Letters already in use, so the one that appears can be told from
-        // the ones that were always there.
-        const DWORD before = ::GetLogicalDrives();
-
         _vhd = std::make_unique<rpi_test::VhdDevice>(
             quint64(megabytes) + 8, rpi_test::VhdDevice::AllowDriveLetter);
         if (!_vhd->valid())
             return;
         _loop = _vhd->path();
+
+        int diskNumber = -1;
+        if (!diskNumberOf(_loop, &diskNumber))
+            return;
 
         if (!writeToPhysicalDrive(_loop, disk))
             return;
@@ -1371,7 +1374,7 @@ public:
         if (!DiskpartUtil::rescanDisk(_loop.toLatin1()).success)
             return;
 
-        const char letter = waitForNewDriveLetter(before);
+        const char letter = waitForOurDriveLetter(diskNumber);
         if (letter == 0)
             return;
 
@@ -1417,22 +1420,60 @@ private:
         return ok;
     }
 
-    // The letter the Mount Manager gave the volume that just appeared, or
-    // nought if none did. Polled because the assignment is asynchronous and
-    // happens after the rescan returns.
-    static char waitForNewDriveLetter(DWORD before)
+    // Which disk \\.\PhysicalDriveN is.
+    static bool diskNumberOf(const QString &path, int *number)
     {
-        for (int i = 0; i < 100; ++i) {
-            const DWORD now = ::GetLogicalDrives();
-            const DWORD added = now & ~before;
-            if (added) {
-                for (int bit = 0; bit < 26; ++bit)
-                    if (added & (1u << bit))
-                        return char('A' + bit);
+        static const QRegularExpression re(
+            QStringLiteral("physicaldrive([0-9]+)$"), QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpressionMatch m = re.match(path);
+        if (!m.hasMatch())
+            return false;
+        bool ok = false;
+        *number = m.captured(1).toInt(&ok);
+        return ok;
+    }
+
+    // The letter the Mount Manager gave our volume, or nought if it never got
+    // one. Polled because the assignment is asynchronous and happens after
+    // the rescan returns.
+    //
+    // Each candidate is asked which disk it belongs to rather than taking
+    // whichever letter is new. Under `ctest -j` another case can attach a
+    // disk of its own in the same window, and taking the new letter would
+    // hand this one somebody else's volume to write an image into.
+    static char waitForOurDriveLetter(int diskNumber)
+    {
+        for (int attempt = 0; attempt < 100; ++attempt) {
+            const DWORD mask = ::GetLogicalDrives();
+            for (int bit = 2; bit < 26; ++bit) {   // C onwards; A and B are floppies
+                if (!(mask & (1u << bit)))
+                    continue;
+                if (volumeDiskNumber(char('A' + bit)) == diskNumber)
+                    return char('A' + bit);
             }
             QThread::msleep(100);
         }
         return 0;
+    }
+
+    // -1 when the letter cannot be asked, which includes every volume this
+    // process may not open.
+    static int volumeDiskNumber(char letter)
+    {
+        const std::wstring path = std::wstring(L"\\\\.\\") + wchar_t(letter) + L":";
+        HANDLE volume = ::CreateFileW(path.c_str(), 0,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                      OPEN_EXISTING, 0, nullptr);
+        if (volume == INVALID_HANDLE_VALUE)
+            return -1;
+
+        STORAGE_DEVICE_NUMBER number{};
+        DWORD returned = 0;
+        const BOOL ok = ::DeviceIoControl(volume, IOCTL_STORAGE_GET_DEVICE_NUMBER,
+                                          nullptr, 0, &number, sizeof(number),
+                                          &returned, nullptr);
+        ::CloseHandle(volume);
+        return ok ? int(number.DeviceNumber) : -1;
     }
 
 public:

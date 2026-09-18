@@ -15,6 +15,8 @@
 #include <QStringList>
 #include <QProcess>
 #include <QStandardPaths>
+#include <QDir>
+#include <QFileInfo>
 
 #include <QtGlobal>
 
@@ -119,6 +121,52 @@ inline QString shellPath()
 }
 
 inline bool haveShell() { return !shellPath().isEmpty(); }
+
+// Put a tool the suite found where a child process will find it too.
+//
+// toolPath() looks in places PATH does not -- Git for Windows and MSYS keep
+// their usr/bin and mingw64/bin off it deliberately, so as not to shadow
+// Windows' own find.exe and sort.exe. That is fine for a fixture calling the
+// tool by its full path, and no use at all to the code under test, which
+// starts it by bare name and so searches PATH alone.
+//
+// Without this a case guarded on haveTool() passes its guard and then fails
+// inside the product, which reads as the product being broken rather than as
+// the tool being somewhere PATH cannot see.
+class ToolOnPath
+{
+public:
+    explicit ToolOnPath(const QString &name) : _saved(qgetenv("PATH"))
+    {
+        const QString found = toolPath(name);
+        if (found.isEmpty())
+            return;
+        const QByteArray dir =
+            QDir::toNativeSeparators(QFileInfo(found).absolutePath()).toLocal8Bit();
+        if (_saved.split(kPathSeparator).contains(dir))
+            return;   // already reachable; leave the environment alone
+        qputenv("PATH", dir + kPathSeparator + _saved);
+        _changed = true;
+    }
+
+    ~ToolOnPath()
+    {
+        if (_changed)
+            qputenv("PATH", _saved);
+    }
+
+    ToolOnPath(const ToolOnPath &) = delete;
+    ToolOnPath &operator=(const ToolOnPath &) = delete;
+
+private:
+#ifdef Q_OS_WIN
+    static constexpr char kPathSeparator = ';';
+#else
+    static constexpr char kPathSeparator = ':';
+#endif
+    QByteArray _saved;
+    bool _changed = false;
+};
 
 } // namespace rpi_test
 

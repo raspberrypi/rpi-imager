@@ -202,3 +202,112 @@ TEST_CASE("Two keys do not produce the same public blob",
     REQUIRE_FALSE(blobB.isEmpty());
     CHECK(blobA != blobB);
 }
+
+// ============================================================================
+// When the provider refuses
+// ============================================================================
+// Signing goes through a dozen CryptoAPI and CNG calls, each with its own
+// failure path, and none of those paths had ever run: a provider refusing is
+// not something a test can arrange. They matter more here than most -- this
+// signs the firmware a board will boot, and a half-built answer handed back
+// as a signature is worse than no answer at all.
+//
+// One call is made to fail at a time, chosen by position, and every one of
+// them has to give an empty answer rather than a short signature, a crash, or
+// an exception out of a routine whose callers only check for empty.
+
+#ifdef SECUREBOOT_CRYPTO_ENABLE_TEST_API
+
+namespace SecureBootCryptoTesting {
+void failAtCall(int ordinal);
+int callsMade();
+}
+
+namespace {
+
+// Disarms itself, so a case that fails part-way does not leave the injection
+// armed for whatever runs next in this binary.
+struct ArmedFailure
+{
+    explicit ArmedFailure(int ordinal) { SecureBootCryptoTesting::failAtCall(ordinal); }
+    ~ArmedFailure() { SecureBootCryptoTesting::failAtCall(-1); }
+};
+
+} // namespace
+
+TEST_CASE("Signing refuses rather than returning a part-made signature",
+          "[secureboot][crypto][inject]")
+{
+    REQUIRE_OPENSSL();
+    RsaKey key;
+
+    const QByteArray digest =
+        QCryptographicHash::hash(QByteArrayLiteral("bootconf contents"),
+                                 QCryptographicHash::Sha256);
+    REQUIRE(digest.size() == 32);
+
+    // How many guarded calls a clean run makes, so every one is covered
+    // without a count here that goes stale when one is added.
+    int calls = 0;
+    {
+        ArmedFailure none(-1);
+        REQUIRE_FALSE(SecureBootCrypto::rsaSignSha256(digest, key.path).isEmpty());
+        calls = SecureBootCryptoTesting::callsMade();
+    }
+    INFO("guarded calls in a clean signing run: " << calls);
+    REQUIRE(calls > 0);
+
+    for (int ordinal = 0; ordinal < calls; ++ordinal) {
+        INFO("failing call " << ordinal << " of " << calls);
+        ArmedFailure armed(ordinal);
+        QByteArray sig;
+        REQUIRE_NOTHROW(sig = SecureBootCrypto::rsaSignSha256(digest, key.path));
+        CHECK(sig.isEmpty());
+    }
+}
+
+TEST_CASE("Extracting the public key refuses rather than returning part of one",
+          "[secureboot][crypto][inject]")
+{
+    // The same story on the other entry point. What this returns is spliced
+    // into the boot image, so a short or truncated blob is a board that will
+    // not verify its own firmware.
+    REQUIRE_OPENSSL();
+    RsaKey key;
+
+    int calls = 0;
+    {
+        ArmedFailure none(-1);
+        REQUIRE_FALSE(SecureBootCrypto::extractRsaPubkeyBin(key.path).isEmpty());
+        calls = SecureBootCryptoTesting::callsMade();
+    }
+    INFO("guarded calls in a clean extraction: " << calls);
+    REQUIRE(calls > 0);
+
+    for (int ordinal = 0; ordinal < calls; ++ordinal) {
+        INFO("failing call " << ordinal << " of " << calls);
+        ArmedFailure armed(ordinal);
+        QByteArray blob;
+        REQUIRE_NOTHROW(blob = SecureBootCrypto::extractRsaPubkeyBin(key.path));
+        CHECK(blob.isEmpty());
+    }
+}
+
+TEST_CASE("With nothing armed the signature is still correct",
+          "[secureboot][crypto][inject]")
+{
+    // The injection is compiled into this build, so it is worth showing it
+    // does nothing when it is not armed -- otherwise the cases above could be
+    // passing because signing never works here at all.
+    REQUIRE_OPENSSL();
+    RsaKey key;
+    ArmedFailure none(-1);
+
+    const QByteArray digest =
+        QCryptographicHash::hash(QByteArrayLiteral("unarmed"),
+                                 QCryptographicHash::Sha256);
+    const QByteArray sig = SecureBootCrypto::rsaSignSha256(digest, key.path);
+    CHECK(sig.size() == 512);
+}
+
+#endif // SECUREBOOT_CRYPTO_ENABLE_TEST_API
