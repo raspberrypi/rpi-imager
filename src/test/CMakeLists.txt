@@ -724,6 +724,31 @@ if(WIN32)
     rpi_discover_tests(drivelist_enum_failure_test)
 endif()
 
+# The formatter when it cannot get a buffer.
+#
+# Same reason as above for a binary of its own: --wrap applies to everything
+# linked with it, so every aligned allocation in here goes through the
+# injector. Qt6::Core because the case uses QTemporaryDir.
+if(WIN32)
+    add_executable(disk_formatter_alloc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${PLATFORM_FILE_OPS}
+        aligned_alloc_fault.cpp
+        disk_formatter_alloc_test.cpp
+    )
+    target_link_libraries(disk_formatter_alloc_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+    )
+    target_link_options(disk_formatter_alloc_test PRIVATE
+        -Wl,--wrap=__imp__aligned_malloc)
+    target_include_directories(disk_formatter_alloc_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(disk_formatter_alloc_test PRIVATE cxx_std_20)
+    rpi_discover_tests(disk_formatter_alloc_test)
+endif()
+
 # Custom target for manual running
 add_custom_target(test_drivelist
     COMMAND drivelist_test
