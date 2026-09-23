@@ -942,25 +942,29 @@ TEST_CASE("An async write refused in the drain says what refused it",
           rpi_imager::WriteErrorClass::kWriteProtected);
 }
 
-TEST_CASE("An async write refused while the queue is full says what refused it",
+TEST_CASE("An async write refused before the drain says what refused it",
           "[fileops-win][transient]")
 {
     ScratchDevice dev;
     if (!dev->IsAsyncIOSupported())
         SKIP("this backend has no asynchronous path to exercise");
 
-    // Two slots, so the third write collects the refusal before the drain.
     dev->SetAsyncQueueDepth(2);
     backend(dev).FailNextWriteCompletions(ERROR_CRC, 1);
 
+    // Which write is refused depends on when the first completes: a scratch
+    // file finishes before the second write polls, a slow card only in the
+    // wait for a slot before the third. The refusal is checked before either,
+    // so the second write is always accepted and the fourth never is.
     const auto block = pattern(4096, 31);
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 2; ++i) {
         REQUIRE(dev->AsyncWriteSequential(block.data(), block.size(), nullptr) ==
                 FileError::kSuccess);
     }
-    // Refused, so the queue saw the failure first.
-    CHECK(dev->AsyncWriteSequential(block.data(), block.size(), nullptr) ==
-          FileError::kWriteError);
+    FileError refusal = dev->AsyncWriteSequential(block.data(), block.size(), nullptr);
+    if (refusal == FileError::kSuccess)
+        refusal = dev->AsyncWriteSequential(block.data(), block.size(), nullptr);
+    CHECK(refusal == FileError::kWriteError);
 
     CHECK(dev->WaitForPendingWrites() == FileError::kWriteError);
     CHECK(backend(dev).GetLastErrorCode() == static_cast<int>(ERROR_CRC));
