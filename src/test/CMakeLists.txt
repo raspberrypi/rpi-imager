@@ -2108,6 +2108,8 @@ target_link_libraries(fat_subdirectory_test PRIVATE
 )
 
 rpi_link_platform_file_ops(fat_subdirectory_test)
+# macfile.cpp calls the Authorization API, which is in Security.
+rpi_link_platform_backends(fat_subdirectory_test)
 target_compile_features(fat_subdirectory_test PRIVATE cxx_std_20)
 rpi_discover_tests(fat_subdirectory_test)
 
