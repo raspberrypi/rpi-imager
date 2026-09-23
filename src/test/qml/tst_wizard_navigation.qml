@@ -781,6 +781,23 @@ TestCase {
         verify(wiz.piConnectEnabled, "but the step still reads as configured")
     }
 
+    function test_a_token_that_no_longer_applies_resets_connect_here() {
+        // The other reason: an OS or storage change drops a key minted for
+        // something no longer selected. Nothing was written with it, so the
+        // step is not configured.
+        ImageWriterSingleton.handleIncomingUrl(
+            "rpi-imager://connect?auth_key=rpuak_abcdefghijkmnpqrstuvwxyz")
+        wiz.piConnectEnabled = true
+        wiz.customizationSettings.piConnectEnabled = true
+
+        ImageWriterSingleton.connectTokenCleared(true)
+
+        tryVerify(function () { return wiz.piConnectEnabled === false }, 3000)
+        verify(wiz.customizationSettings.piConnectEnabled === undefined,
+               "and it is gone from what the generator is given")
+        ImageWriterSingleton.clearConnectToken()
+    }
+
     // -- The customisation substeps ----------------------------------------
 
     function test_the_base_substeps_are_always_offered() {
