@@ -14,7 +14,16 @@
  * The log path arrives in RPI_RECORDER_LOG rather than as an argument, so
  * everything on the command line is a value under test and nothing has to be
  * skipped when counting.
+ *
+ * Qt only on Windows, where it is what turns the UTF-16 command line into
+ * arguments. Elsewhere Qt's arguments are argv as it stands, and this stands
+ * in for xdg-open or runuser -- programs that must not need the application's
+ * libraries, which is why launchDetached() strips LD_LIBRARY_PATH before
+ * starting them. A recorder linked against that Qt could not start without
+ * the very variable the code under test removes.
  */
+
+#ifdef _WIN32
 
 #include <QCoreApplication>
 #include <QByteArray>
@@ -47,3 +56,30 @@ int main(int argc, char **argv)
     const int wanted = qEnvironmentVariableIntValue("RPI_RECORDER_EXIT", &ok);
     return ok ? wanted : 0;
 }
+
+#else
+
+#include <cstdio>
+#include <cstdlib>
+
+int main(int argc, char **argv)
+{
+    const char *logPath = std::getenv("RPI_RECORDER_LOG");
+    if (!logPath || !*logPath)
+        return 2;
+
+    std::FILE *log = std::fopen(logPath, "a");
+    if (!log)
+        return 3;
+
+    for (int i = 1; i < argc; ++i) {
+        std::fputs(argv[i], log);
+        std::fputc('\n', log);
+    }
+    std::fclose(log);
+
+    const char *wanted = std::getenv("RPI_RECORDER_EXIT");
+    return wanted ? std::atoi(wanted) : 0;
+}
+
+#endif

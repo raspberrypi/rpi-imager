@@ -747,7 +747,10 @@ rpi_discover_tests(platformquirks_test)
 # OS and reports what it actually received.
 add_executable(argument_recorder_probe
     ${CMAKE_CURRENT_SOURCE_DIR}/argument_recorder_probe.cpp)
-target_link_libraries(argument_recorder_probe PRIVATE Qt6::Core)
+# Qt on Windows only: see the probe for why the POSIX build must not need it.
+if(WIN32)
+    target_link_libraries(argument_recorder_probe PRIVATE Qt6::Core)
+endif()
 target_compile_features(argument_recorder_probe PRIVATE cxx_std_20)
 add_dependencies(platformquirks_test argument_recorder_probe)
 target_compile_definitions(platformquirks_test PRIVATE
