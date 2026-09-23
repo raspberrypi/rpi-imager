@@ -1713,6 +1713,9 @@ TEST_CASE("A write waiting for a queue slot answers a cancel",
   ops->Close();
 }
 
+// io_uring completions wait for the caller. GCD collects them itself, so
+// on macOS a drain with nobody consuming still finishes.
+#ifdef __linux__
 TEST_CASE("A drain that never makes progress gives up", "[file-ops]") {
   // The watchdog calls DrainAndSwitchToSync when a write has stopped moving,
   // and it deliberately does not consume the completion queue itself -- the
@@ -1759,6 +1762,7 @@ TEST_CASE("A drain that never makes progress gives up", "[file-ops]") {
   CHECK(ops->IsInSyncFallbackMode());
   ops->Close();
 }
+#endif
 
 TEST_CASE("A drain waits while the queue is still going down",
           "[file-ops][faulty][slow]") {
