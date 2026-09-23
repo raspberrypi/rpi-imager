@@ -561,6 +561,24 @@ TEST_CASE("A board that never leaves the port has not rebooted",
     CHECK_FALSE(found.load());
 }
 
+TEST_CASE("One missed scan is not the reboot", "[rpiboot][sbr]")
+{
+    // The scanner runs beside the file server, so a single scan can come
+    // back empty while the board is still sitting there mid-write. Taking
+    // that for the reboot cancels a bootloader rewrite in progress.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.bus.bootDevices = { device(1, 4, {1, 2}) };
+    t.bus.onScan = [&t](int n) {
+        if (n == 2) t.bus.bootDevices.clear();
+        if (n >= 3) t.bus.bootDevices = { device(1, 4, {1, 2}) };
+        if (n >= 6) t.cancel();
+    };
+
+    std::atomic<bool> found{false};
+    CHECK_FALSE(t.pollForRpibootReturn(found, /*priorDeviceAddress=*/4));
+    CHECK_FALSE(found.load());
+}
+
 TEST_CASE("A board still at its old address has not come back yet",
           "[rpiboot][sbr]")
 {
