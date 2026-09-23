@@ -2795,6 +2795,32 @@ bool parsesAs(const QByteArray &document, const char *language, QString *error)
     return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
 }
 
+// Loads a network-config with python3 and returns the Wi-Fi access-point
+// names it holds, each as the hex of its UTF-8 encoding.
+QString parsedAccessPointsHex(const QByteArray &document)
+{
+    QTemporaryDir dir;
+    if (!dir.isValid())
+        return {};
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("document"));
+    {
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly))
+            return {};
+        f.write(document);
+    }
+
+    QProcess proc;
+    proc.start(pythonThatParses("yaml"),
+               {QStringLiteral("-c"),
+                QStringLiteral("import sys,yaml; d=yaml.safe_load(open(sys.argv[1],'rb').read()); "
+                               "print(' '.join(k.encode('utf-8').hex() "
+                               "for k in d['network']['wifis']['wlan0']['access-points']))"),
+                path});
+    proc.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
+    return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+}
+
 // Settings with values chosen to be awkward for a document format.
 QVariantMap awkwardSettings()
 {
@@ -2843,6 +2869,36 @@ TEST_CASE("Generated cloud-init network config is valid YAML", "[customisation][
     INFO("document:\n" << QString::fromUtf8(yaml).left(1200).toStdString());
     INFO("parser said: " << error.toStdString());
     CHECK(parsesAs(yaml, "yaml", &error));
+}
+
+TEST_CASE("A non-ASCII SSID is written into network-config as UTF-8",
+          "[customisation][wifi]")
+{
+    // YAML reads \xHH as the code point U+00HH, not as a byte, so writing
+    // each byte of a UTF-8 SSID that way hands cloud-init a double-encoded
+    // name it will never find (#1743).
+    for (const QString &ssid : {QStringLiteral("Café Wi-Fi"), QStringLiteral("Домашняя сеть")}) {
+        const QByteArray yaml =
+            CustomisationGenerator::generateCloudInitNetworkConfig(exoticWifiSettings(ssid), false);
+        INFO("document:\n" << yaml.toStdString());
+        CHECK(yaml.contains("\"" + ssid.toUtf8() + "\":"));
+    }
+}
+
+TEST_CASE("A non-ASCII SSID parses back to the same bytes", "[customisation][parse][wifi]")
+{
+    if (pythonThatParses("yaml").isEmpty())
+        SKIP("no python3 with PyYAML here, so the output cannot be parsed");
+
+    // The last one holds characters YAML cannot take literally in a quoted
+    // scalar: U+0085 and U+2028 are line breaks there and would be folded.
+    for (const QString &ssid : {QStringLiteral("Café Wi-Fi"), QStringLiteral("Домашняя сеть"),
+                                QStringLiteral("Wi-Fi 📶"), QStringLiteral("a\u0085b c")}) {
+        const QByteArray yaml =
+            CustomisationGenerator::generateCloudInitNetworkConfig(exoticWifiSettings(ssid), false);
+        INFO("document:\n" << yaml.toStdString());
+        CHECK(parsedAccessPointsHex(yaml) == QString::fromLatin1(ssid.toUtf8().toHex()));
+    }
 }
 
 TEST_CASE("Generated rpi-preseed is valid TOML", "[customisation][parse]")
