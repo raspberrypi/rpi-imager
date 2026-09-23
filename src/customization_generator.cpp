@@ -276,10 +276,34 @@ QString CustomisationGenerator::resolveWifiPskCrypt(const QVariantMap& settings,
 
 QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
 {
+    // YAML's \xHH and \uHHHH escapes name code points, not bytes, so escaping
+    // each byte of a UTF-8 sequence double-encodes it (#1743). Valid UTF-8 is
+    // written through as characters instead; only octets that are not UTF-8
+    // fall back to one \xHH per byte, as YAML has no way to carry raw bytes.
+    const bool utf8 = isValidUtf8(value);
     QByteArray result;
     result.reserve(value.size() * 2);
 
-    for (unsigned char byte : value) {
+    for (qsizetype i = 0; i < value.size(); ++i) {
+        const unsigned char byte = value[i];
+        if (utf8 && byte >= 0x80) {
+            // Valid UTF-8, so the lead byte gives the sequence length.
+            const qsizetype len = byte >= 0xF0 ? 4 : byte >= 0xE0 ? 3 : 2;
+            char32_t cp = byte & (0x7F >> len);
+            for (qsizetype k = 1; k < len; ++k)
+                cp = (cp << 6) | (static_cast<unsigned char>(value[i + k]) & 0x3F);
+            // C1 controls (U+0085 and U+2028/9 are line breaks, folded inside
+            // a quoted scalar), the BOM and U+FFFE/F can't be written literally.
+            if (cp < 0xA0 || cp == 0x2028 || cp == 0x2029 || cp == 0xFEFF
+                || cp == 0xFFFE || cp == 0xFFFF) {
+                result += cp < 0x100 ? "\\x" : "\\u";
+                result += QByteArray::number(uint(cp), 16).rightJustified(cp < 0x100 ? 2 : 4, '0');
+            } else {
+                result += value.mid(i, len);
+            }
+            i += len - 1;
+            continue;
+        }
         switch (byte) {
         case '\\':
             result += "\\\\";
@@ -1014,8 +1038,8 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         }
         
         push(QStringLiteral("      access-points:"), netcfg);
-        // Escape SSID octets for YAML double-quoted string context. High bytes and
-        // controls use \\xHH so netplan receives the exact IEEE 802.11 SSID bytes.
+        // Escape SSID octets for YAML double-quoted string context. UTF-8 is
+        // written as-is so netplan receives the exact IEEE 802.11 SSID bytes.
         {
             QByteArray keyLine("        \"");
             keyLine += yamlEscapeSsidOctets(ssidOctets);
