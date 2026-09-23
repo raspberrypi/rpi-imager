@@ -4164,14 +4164,14 @@ public:
     // the environment variable is not consulted, so nothing this fixture does
     // reaches the code under test. The alternative, writing the machine's real
     // proxy configuration, is not something a test may do to the developer
-    // running it.
+    // running it. macOS likewise reads System Settings, not the environment.
     //
     // Worth saying plainly: a Windows user who sets http_proxy for the CLI
     // does not get a proxy. That is a gap in the product rather than in the
     // test, and it is the reason these cases cannot run here.
     static bool configurable()
     {
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
         return false;
 #else
         return true;
@@ -4203,7 +4203,7 @@ void attemptDownloadThroughProxy(const ScratchDir &scratch, const QString &destN
 TEST_CASE("The system's HTTP proxy is the one used", "[download][http][proxy]")
 {
     if (!ScopedSystemProxy::configurable())
-        SKIP("http_proxy is not where Windows keeps its proxy settings");
+        SKIP("http_proxy is not where this platform keeps its proxy settings");
     ScopedSystemProxy proxy("http://127.0.0.1:3128");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-http-dest.img"));
@@ -4222,7 +4222,7 @@ TEST_CASE("A SOCKS proxy is asked for by the scheme that resolves through it",
     // usually only resolvable on the far side of it, and resolving locally
     // fails before a connection is attempted.
     if (!ScopedSystemProxy::configurable())
-        SKIP("http_proxy is not where Windows keeps its proxy settings");
+        SKIP("http_proxy is not where this platform keeps its proxy settings");
     ScopedSystemProxy proxy("socks5://127.0.0.1:1080");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-socks-dest.img"));
@@ -4238,7 +4238,7 @@ TEST_CASE("A proxy that wants a password gets one", "[download][http][proxy]")
     // An authenticating proxy is the common corporate arrangement. Dropping
     // the credentials turns every download into a 407 the user cannot act on.
     if (!ScopedSystemProxy::configurable())
-        SKIP("http_proxy is not where Windows keeps its proxy settings");
+        SKIP("http_proxy is not where this platform keeps its proxy settings");
     ScopedSystemProxy proxy("http://bob:secret@127.0.0.1:3128");
     ScratchDir scratch;
     attemptDownloadThroughProxy(scratch, QStringLiteral("proxy-auth-dest.img"));
