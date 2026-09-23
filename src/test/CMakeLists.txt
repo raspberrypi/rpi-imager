@@ -523,9 +523,11 @@ target_link_libraries(secureboot_crypto_test PRIVATE
 rpi_link_platform_backends(secureboot_crypto_test)
 target_compile_features(secureboot_crypto_test PRIVATE cxx_std_20)
 # Reaches the CryptoAPI and CNG failure paths, which no arrangement of
-# inputs can provoke.
-target_compile_definitions(secureboot_crypto_test PRIVATE
-    SECUREBOOT_CRYPTO_ENABLE_TEST_API)
+# inputs can provoke. Only the Windows backend has the hooks.
+if(WIN32)
+    target_compile_definitions(secureboot_crypto_test PRIVATE
+        SECUREBOOT_CRYPTO_ENABLE_TEST_API)
+endif()
 
 rpi_discover_tests(secureboot_crypto_test)
 
