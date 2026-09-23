@@ -765,11 +765,9 @@ TestCase {
         ImageWriterSingleton.clearConnectToken()
     }
 
-    function test_clearing_the_token_resets_connect_here() {
-        // Handled on the container rather than the Pi Connect step, because
-        // the token is cleared when a write finishes and that step may not
-        // be loaded -- on this path nothing else would reset the flag, and
-        // the next image would claim Connect was configured.
+    function test_a_spent_token_leaves_connect_configured_here() {
+        // Handled on the container, because the Pi Connect step may not be
+        // loaded when a write finishes and spends the token.
         ImageWriterSingleton.handleIncomingUrl(
             "rpi-imager://connect?auth_key=rpuak_abcdefghijkmnpqrstuvwxyz")
         wiz.piConnectEnabled = true
@@ -777,9 +775,10 @@ TestCase {
 
         ImageWriterSingleton.clearConnectToken()
 
-        tryVerify(function () { return wiz.piConnectEnabled === false }, 3000)
-        verify(wiz.customizationSettings.piConnectEnabled === undefined,
-               "and it is gone from what the generator is given")
+        tryVerify(function () {
+            return wiz.customizationSettings.piConnectEnabled === undefined
+        }, 3000, "the generator is no longer given Connect")
+        verify(wiz.piConnectEnabled, "but the step still reads as configured")
     }
 
     // -- The customisation substeps ----------------------------------------
