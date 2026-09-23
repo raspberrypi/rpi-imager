@@ -303,12 +303,15 @@ TEST_CASE("Elevation is reported from the effective user, not guessed",
     const bool elevated = PlatformQuirks::hasElevatedPrivileges();
     INFO("Running with elevated privileges: " << elevated);
 
-#ifdef Q_OS_UNIX
+#if defined(Q_OS_LINUX)
     // The whole of the Linux implementation, and the one thing the answer
     // has to agree with: the write path refuses without it, so an answer
     // that drifted from the real euid would either block a run that would
     // have worked or start one that cannot.
     CHECK(elevated == (::geteuid() == 0));
+#elif defined(Q_OS_MACOS)
+    // authopen elevates each device open, so nothing is refused up front.
+    CHECK(elevated);
 #else
     CHECK((elevated == true || elevated == false));   // no euid to compare to
 #endif
