@@ -1900,20 +1900,26 @@ FileError WindowsFileOperations::AttemptSyncFallback() {
             " after " + std::to_string(writesCompleted) + "/" + std::to_string(pendingWrites.size()) + " writes");
         return FileError::kTimeout;
       } else if (waitResult != WAIT_OBJECT_0) {
+        const DWORD waitError = GetLastError();
         CloseHandle(syncOverlapped.hEvent);
         Log("Sync fallback: wait failed at offset " + std::to_string(pw.offset));
+        last_error_code_ = static_cast<int>(waitError);
         return FileError::kWriteError;
       }
       
       // Get the result
       if (!GetOverlappedResult(handle_, &syncOverlapped, &bytesWritten, FALSE)) {
+        const DWORD resultError = GetLastError();
         CloseHandle(syncOverlapped.hEvent);
         Log("Sync fallback: GetOverlappedResult failed at offset " + std::to_string(pw.offset));
+        last_error_code_ = static_cast<int>(resultError);
         return FileError::kWriteError;
       }
     } else if (!writeResult) {
+      const DWORD writeError = GetLastError();
       CloseHandle(syncOverlapped.hEvent);
       Log("Sync fallback: write failed at offset " + std::to_string(pw.offset));
+      last_error_code_ = static_cast<int>(writeError);
       return FileError::kWriteError;
     }
     
@@ -1922,6 +1928,7 @@ FileError WindowsFileOperations::AttemptSyncFallback() {
     if (bytesWritten != pw.size) {
       Log("Sync fallback: partial write at offset " + std::to_string(pw.offset) + 
           ", expected " + std::to_string(pw.size) + ", wrote " + std::to_string(bytesWritten));
+      last_error_code_ = 0;
       return FileError::kWriteError;
     }
     
