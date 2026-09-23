@@ -30,6 +30,42 @@ foreach(_required
 endforeach()
 
 # ---------------------------------------------------------------------------
+# Whether the branch figure can be trusted
+# ---------------------------------------------------------------------------
+# --exclude-throw-branches only drops the branches gcov marks "(throw)", and
+# gcov's text output marks them only where they ran. Every object compiled
+# from a source then adds back the unwind edges it never ran: GCC 11 counted
+# downloadthread.cpp at 3,187 branches against about 2,000 real ones. gcov's
+# JSON marks every one, but gcovr only reads the JSON format GCC 14
+# introduced, and falls back to text before it. The version line announcing
+# that format is the capability itself.
+set(_branches_trustworthy TRUE)
+if(NOT COVERAGE_FLAVOUR STREQUAL "llvm")
+    if(DEFINED ENV{GCOV} AND NOT "$ENV{GCOV}" STREQUAL "")
+        separate_arguments(_gcov_command NATIVE_COMMAND "$ENV{GCOV}")
+    else()
+        set(_gcov_command gcov)
+    endif()
+    execute_process(
+        COMMAND ${_gcov_command} --version
+        OUTPUT_VARIABLE _gcov_version_text
+        ERROR_QUIET
+        RESULT_VARIABLE _gcov_version_result
+    )
+    if(NOT _gcov_version_result EQUAL 0
+       OR NOT _gcov_version_text MATCHES "JSON format version:")
+        set(_branches_trustworthy FALSE)
+        string(REGEX MATCH "^[^\n]*" _gcov_version_line "${_gcov_version_text}")
+        message(WARNING
+            "Coverage: ${_gcov_command} (${_gcov_version_line}) has no JSON "
+            "format gcovr reads, so it cannot exclude exception branches that "
+            "never ran. The branch figure will read far lower than it is -- use "
+            "GCC 14 or later for a branch number worth quoting. Line and "
+            "function figures are unaffected.")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # Scope
 # ---------------------------------------------------------------------------
 # Exclusion-based rather than an allow-list of files, so a new core source is
@@ -589,7 +625,18 @@ foreach(_line IN LISTS _summary_lines)
     endif()
     string(APPEND _summary_out "${_line}\n")
 endforeach()
+# The summary travels without the build log, so it carries the caveat itself.
+if(NOT _branches_trustworthy)
+    string(PREPEND _summary_out
+        "NOTE: gcov before GCC 14 -- exception branches are counted, so the\n"
+        "branch figures below understate coverage. Lines are unaffected.\n")
+endif()
 file(WRITE "${COVERAGE_OUTPUT_DIR}/summary.txt" "${_summary_out}")
 
 message(STATUS "Coverage: HTML   ${COVERAGE_OUTPUT_DIR}/index.html")
 message(STATUS "Coverage: text   ${COVERAGE_OUTPUT_DIR}/summary.txt")
+if(NOT _branches_trustworthy)
+    message(WARNING
+        "Coverage: the branch figure above counts exception branches, because "
+        "${_gcov_command} predates GCC 14. Do not quote it.")
+endif()
