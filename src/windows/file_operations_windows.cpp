@@ -648,7 +648,9 @@ FileError WindowsFileOperations::WriteAtOffset(
         result = TRUE;
         error = ERROR_SUCCESS;
       } else {
-        error = GetLastError();
+        // The helper already recorded the I/O error; GetLastError() here can
+        // have been clobbered by its own CancelIoEx.
+        error = static_cast<DWORD>(last_error_code_);
       }
     }
 
