@@ -2065,7 +2065,8 @@ TEST_CASE("Statistics from a write that never happened are zero, not stale",
 // write has to stop for -- but it is worth saying, because losing read-ahead
 // on a verification pass turns a two-minute read into a much longer one. A
 // FIFO is the case the kernel refuses: it has no page cache to advise about,
-// so both calls come back ESPIPE.
+// so both calls come back ESPIPE. Linux only: macOS has no posix_fadvise.
+#ifdef __linux__
 TEST_CASE("Advice the kernel will not take is logged, not fatal", "[file-ops]") {
   const std::string path = scratch().file("advice.fifo");
   ::unlink(path.c_str());
@@ -2085,6 +2086,7 @@ TEST_CASE("Advice the kernel will not take is logged, not fatal", "[file-ops]") 
   CHECK(ops->Close() == FileError::kSuccess);
   ::unlink(path.c_str());
 }
+#endif
 
 // The two places that ask the kernel about a handle it no longer has. Both
 // arms exist because a card pulled mid-write leaves exactly this state, and
