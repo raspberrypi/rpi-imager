@@ -136,6 +136,12 @@ class WindowsFileOperations : public FileOperations {
   
   // Note: write_latency_stats_ is inherited from FileOperations base class
   
+  // Record the Win32 error behind a write failure so ClassifyLastWriteError()
+  // can name it. Async completions arrive after the failing call has returned
+  // and later writes may still succeed, so the first error is kept rather than
+  // the most recent one.
+  void LatchWriteError(DWORD error);
+
   FileError LockVolume(const std::string& path);
   FileError UnlockVolume();
   FileError OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags = FILE_ATTRIBUTE_NORMAL, DWORD share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE);

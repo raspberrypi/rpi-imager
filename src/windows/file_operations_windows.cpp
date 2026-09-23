@@ -235,6 +235,7 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
         if (first_async_error_ == FileError::kSuccess) {
           first_async_error_ = error;
         }
+        LatchWriteError(err);
         std::ostringstream oss;
         oss << "Async write failed, error: " << err;
         Log(oss.str());
@@ -1059,7 +1060,11 @@ FileError WindowsFileOperations::WriteSequential(const std::uint8_t* data, std::
 
   write_offset_ += total_written;
 
-  last_error_code_ = 0;
+  // Do not clear an error already latched from an async completion: the caller
+  // learns about it from first_async_error_ and still needs it classified.
+  if (first_async_error_ == FileError::kSuccess) {
+    last_error_code_ = 0;
+  }
   return FileError::kSuccess;
 }
 
@@ -1282,6 +1287,12 @@ int WindowsFileOperations::GetHandle() const {
 
 int WindowsFileOperations::GetLastErrorCode() const {
   return last_error_code_;
+}
+
+void WindowsFileOperations::LatchWriteError(DWORD error) {
+  if (last_error_code_ == 0) {
+    last_error_code_ = static_cast<int>(error);
+  }
 }
 
 namespace {
@@ -1555,6 +1566,7 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
       // buffer when the caller retries the write synchronously.
       write_offset_ -= size;
 
+      LatchWriteError(error);
       std::ostringstream oss;
       oss << "Async WriteFile failed, error: " << error;
       Log(oss.str());
@@ -1761,6 +1773,7 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
         if (first_async_error_ == FileError::kSuccess) {
           first_async_error_ = error;
         }
+        LatchWriteError(err);
         Log("Async write failed during drain, error: " + std::to_string(err));
       }
     } else if (bytes_transferred != ctx->size) {
@@ -1939,6 +1952,7 @@ FileError WindowsFileOperations::AttemptSyncFallback() {
   // Reset cancelled flag so future operations can proceed (in sync mode)
   cancelled_.store(false);
   first_async_error_ = FileError::kSuccess;
+  last_error_code_ = 0;
   
   Log("Sync fallback successful - continuing in sync mode");
   return FileError::kSuccess;
