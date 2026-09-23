@@ -5852,6 +5852,8 @@ TEST_CASE("The chime falls through to whichever player the machine has",
 }
 #endif  // BEEP_PROBE_BINARY
 
+#if defined(Q_OS_WIN) && defined(PLATFORMQUIRKS_ENABLE_TEST_API)
+
 // ── which adapter gets the software renderer ────────────────────────────────
 //
 // An NVIDIA card gets QSG_RHI_PREFER_SOFTWARE_RENDERER, so a name read wrongly
@@ -5906,6 +5908,8 @@ TEST_CASE("The video controller query answers without faulting",
     CHECK(first == second);
 }
 
+#endif  // Q_OS_WIN && PLATFORMQUIRKS_ENABLE_TEST_API
+
 // ============================================================================
 // Where ssh-keygen is
 // ============================================================================
@@ -5943,6 +5947,8 @@ TEST_CASE("The ssh-keygen path does not name the WOW64 alias to a 64-bit build",
     else
         CHECK(sizeof(void *) == 4);
 }
+
+#ifdef Q_OS_WIN
 
 // ============================================================================
 // Elevation on Windows
@@ -6001,3 +6007,5 @@ TEST_CASE("A URL is not handed to the shell", "[platformquirks][windows]")
     CHECK_FALSE(PlatformQuirks::openUrlExternally(
         QUrl(QStringLiteral("https://example.com/\" & calc.exe & \""))));
 }
+
+#endif  // Q_OS_WIN
