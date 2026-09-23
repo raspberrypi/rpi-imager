@@ -739,7 +739,7 @@ TEST_CASE("A refusal reaches the reissue path from the queue as well as the drai
 }
 
 // ============================================================================
-// The synchronous write, refused
+// Refused synchronous writes
 // ============================================================================
 // WriteAtOffset is what the write path falls back to where the asynchronous
 // queue is not in use, and it sorts the failures it gets into ones worth
@@ -864,6 +864,88 @@ TEST_CASE("An error with no category of its own is not given one",
     ScratchDevice dev;
     REQUIRE(writeRefusedWith(dev, ERROR_NOT_SUPPORTED, 8) == FileError::kWriteError);
     CHECK(backend(dev).ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kUnknown);
+}
+
+TEST_CASE("A write that came right on a retry leaves no error behind",
+          "[fileops-win][transient]")
+{
+    // A refusal it recovered from is not an error.
+    ScratchDevice dev;
+    REQUIRE(writeRefusedWith(dev, ERROR_NOT_READY, 1) == FileError::kSuccess);
+    CHECK(backend(dev).GetLastErrorCode() == 0);
+    CHECK(backend(dev).ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kUnknown);
+}
+
+// ============================================================================
+// Refused asynchronous writes
+// ============================================================================
+// Async failures recorded no Win32 error, so the user was never told why.
+
+namespace {
+
+// One write never fills the queue, so the drain reads its refusal.
+void refuseInTheDrain(ScratchDevice &dev, unsigned long error)
+{
+    dev->SetAsyncQueueDepth(4);
+    backend(dev).FailNextWriteCompletions(error, 1);
+    const auto data = pattern(8192, 29);
+    REQUIRE(dev->AsyncWriteSequential(data.data(), data.size(), nullptr) ==
+            FileError::kSuccess);
+    REQUIRE(dev->WaitForPendingWrites() == FileError::kWriteError);
+}
+
+} // namespace
+
+TEST_CASE("An async write refused in the drain says what refused it",
+          "[fileops-win][transient]")
+{
+    ScratchDevice dev;
+    if (!dev->IsAsyncIOSupported())
+        SKIP("this backend has no asynchronous path to exercise");
+    refuseInTheDrain(dev, ERROR_WRITE_PROTECT);
+    CHECK(backend(dev).GetLastErrorCode() == static_cast<int>(ERROR_WRITE_PROTECT));
+    CHECK(backend(dev).ClassifyLastWriteError() ==
+          rpi_imager::WriteErrorClass::kWriteProtected);
+}
+
+TEST_CASE("An async write refused while the queue is full says what refused it",
+          "[fileops-win][transient]")
+{
+    ScratchDevice dev;
+    if (!dev->IsAsyncIOSupported())
+        SKIP("this backend has no asynchronous path to exercise");
+
+    // Two slots, so the third write collects the refusal before the drain.
+    dev->SetAsyncQueueDepth(2);
+    backend(dev).FailNextWriteCompletions(ERROR_CRC, 1);
+
+    const auto block = pattern(4096, 31);
+    for (int i = 0; i < 3; ++i) {
+        REQUIRE(dev->AsyncWriteSequential(block.data(), block.size(), nullptr) ==
+                FileError::kSuccess);
+    }
+    // Refused, so the queue saw the failure first.
+    CHECK(dev->AsyncWriteSequential(block.data(), block.size(), nullptr) ==
+          FileError::kWriteError);
+
+    CHECK(dev->WaitForPendingWrites() == FileError::kWriteError);
+    CHECK(backend(dev).GetLastErrorCode() == static_cast<int>(ERROR_CRC));
+    CHECK(backend(dev).ClassifyLastWriteError() == rpi_imager::WriteErrorClass::kMediaError);
+}
+
+TEST_CASE("A write that succeeds after an async refusal does not hide it",
+          "[fileops-win][transient]")
+{
+    ScratchDevice dev;
+    if (!dev->IsAsyncIOSupported())
+        SKIP("this backend has no asynchronous path to exercise");
+    refuseInTheDrain(dev, ERROR_WRITE_PROTECT);
+
+    const auto more = pattern(4096, 37);
+    REQUIRE(dev->WriteSequential(more.data(), more.size()) == FileError::kSuccess);
+    CHECK(backend(dev).GetLastErrorCode() == static_cast<int>(ERROR_WRITE_PROTECT));
+    CHECK(backend(dev).ClassifyLastWriteError() ==
+          rpi_imager::WriteErrorClass::kWriteProtected);
 }
 
 TEST_CASE("A cancelled device abandons a write it was retrying",
