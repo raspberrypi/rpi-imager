@@ -33,18 +33,6 @@
 #include <string>
 #include <vector>
 
-// Stub: the linked platform secureboot_crypto_*.cpp on Linux/macOS
-// also defines extractRsaPubkeyBin, which calls parseSubjectPublicKeyInfoDerToNE.
-// That real implementation lives in secureboot.cpp, which has a large
-// transitive dependency graph (devicewrapperfatpartition, etc.) we don't
-// want to drag into a focused unit-test binary. Our tests only exercise
-// rsaSignSha256, so an empty stub satisfies the linker.
-#if !defined(_WIN32)
-namespace SecureBootCrypto {
-QByteArray parseSubjectPublicKeyInfoDerToNE(const QByteArray&) { return {}; }
-}
-#endif
-
 using namespace fastboot;
 
 namespace {
