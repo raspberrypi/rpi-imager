@@ -6,6 +6,9 @@
 #include "platformhelper.h"
 #include "platformquirks.h"
 
+#ifndef CLI_ONLY_BUILD
+// QAccessible is Qt GUI, which the CLI build does not link. With no window
+// there is nothing for an assistive technology to attach to either.
 #include <QAccessible>
 #include <QPointer>
 
@@ -61,6 +64,7 @@ private:
 };
 
 } // namespace
+#endif
 
 bool PlatformHelper::hasNetworkConnectivity() const
 {
@@ -111,11 +115,17 @@ bool PlatformHelper::prefersReducedMotion() const
 
 void PlatformHelper::ensureAccessibilityObserver() const
 {
+#ifndef CLI_ONLY_BUILD
     AccessibilityWatcher::instance().watch(const_cast<PlatformHelper *>(this));
+#endif
 }
 
 bool PlatformHelper::assistiveTechnologyActive() const
 {
+#ifdef CLI_ONLY_BUILD
+    return false;
+#else
     ensureAccessibilityObserver();
     return QAccessible::isActive();
+#endif
 }
