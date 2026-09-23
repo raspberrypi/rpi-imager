@@ -454,7 +454,13 @@ else()
         # working directory" failure, which before the pruning above was not
         # an edge case but the single loudest thing in the run -- and fatal
         # without it. Nothing in our own tree provokes it now.
-        --gcov-ignore-errors no_working_dir_found)
+        --gcov-ignore-errors no_working_dir_found
+        # gcovr refuses any count above 2^32 as the garbage gcc bug 68080
+        # produces, and stops without a report. Scanning a FAT runs the
+        # cluster loop in devicewrapperfatpartition.cpp about 6.9 billion
+        # times, which is real. The bug's values sit near 2^64, so a higher
+        # bar still catches them.
+        --gcov-suspicious-hits-threshold 1099511627776)
 
     # Every binary a test drives as a subprocess rather than links. Their
     # counters are real, and until they are read the sources reachable only
