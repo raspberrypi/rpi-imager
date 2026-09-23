@@ -116,6 +116,12 @@ namespace SecureBootCrypto {
 
 QByteArray rsaSignSha256(const QByteArray& sha256Digest, const QString& rsaKeyPath)
 {
+    if (sha256Digest.size() != 32) {
+        qDebug() << "SecureBootCrypto/mac: expected 32-byte SHA-256 input, got"
+                 << sha256Digest.size();
+        return {};
+    }
+
     QFile keyFile(rsaKeyPath);
     if (!keyFile.open(QIODevice::ReadOnly)) {
         qDebug() << "SecureBootCrypto/mac: cannot open key" << rsaKeyPath;
