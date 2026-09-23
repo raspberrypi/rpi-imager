@@ -701,6 +701,9 @@ FileError WindowsFileOperations::WriteAtOffset(
     CloseHandle(overlapped.hEvent);
 
     if (written == 0) {
+      // No Win32 error accompanies this; clear any code left by a retried
+      // attempt so it is not mistaken for the cause.
+      last_error_code_ = 0;
       Log("WriteAtOffset: WriteFile returned 0 bytes written");
       
       if (retry_count < max_retries) {
@@ -719,6 +722,7 @@ FileError WindowsFileOperations::WriteAtOffset(
     retry_count = 0; // Reset retry count on successful write
   }
  
+  last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
