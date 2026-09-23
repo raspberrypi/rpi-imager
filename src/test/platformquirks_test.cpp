@@ -22,6 +22,8 @@
 #ifdef Q_OS_WIN
 #include "vhd_device.h"
 #include <windows.h>
+#else
+#include <unistd.h>  // geteuid(), used well before the POSIX block below
 #endif
 
 #include <cmath>
