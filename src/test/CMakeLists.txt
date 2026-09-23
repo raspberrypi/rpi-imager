@@ -176,7 +176,18 @@ function(rpi_discover_tests target)
 
     catch_discover_tests(${target}
         ${_dl_paths}
-        PROPERTIES SKIP_RETURN_CODE 4 ENVIRONMENT "${_test_env}" ${_lock})
+        TEST_LIST ${target}_TESTS
+        PROPERTIES SKIP_RETURN_CODE 4 ${_lock})
+
+    # Not through PROPERTIES: Catch2 re-splits a list-valued property there,
+    # so ENVIRONMENT kept only its first entry and ctest read the rest as
+    # property names. Applied after discovery instead, as one argument.
+    set(_env_script "${CMAKE_CURRENT_BINARY_DIR}/${target}_env.cmake")
+    file(WRITE "${_env_script}"
+        "foreach(_t IN LISTS ${target}_TESTS)\n"
+        "  set_tests_properties(\"\${_t}\" PROPERTIES ENVIRONMENT [==[${_test_env}]==])\n"
+        "endforeach()\n")
+    set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES "${_env_script}")
 endfunction()
 
 # Inert until a test arms it, so it costs every other test one atomic load
