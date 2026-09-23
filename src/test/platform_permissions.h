@@ -29,6 +29,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDevice>
+#include <QFileInfo>
 #include <QProcess>
 #include <QString>
 #include <QtGlobal>
@@ -53,6 +54,20 @@ inline bool icacls(const QStringList &args)
     if (!p.waitForFinished(30000))
         return false;
     return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+} // namespace detail
+#else
+namespace detail {
+
+// A directory without its execute bit cannot be searched, so nothing inside it
+// can even be stat()ed -- which is not "unwritable", and on the way back
+// leaves a scratch directory that cannot be emptied.
+inline QFileDevice::Permissions searchBits(const QString &path)
+{
+    if (QFileInfo(path).isDir())
+        return QFileDevice::ExeOwner | QFileDevice::ExeUser;
+    return {};
 }
 
 } // namespace detail
@@ -93,7 +108,8 @@ inline bool denyWrite(const QString &path)
                            QString::fromLatin1(detail::kEveryoneSid()) +
                                QStringLiteral(":(WD,AD)")});
 #else
-    return QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::ReadUser);
+    return QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::ReadUser |
+                                           detail::searchBits(path));
 #endif
 }
 
@@ -108,7 +124,8 @@ inline void restoreAccess(const QString &path)
                     QString::fromLatin1(detail::kEveryoneSid())});
 #else
     QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                    QFileDevice::ReadUser | QFileDevice::WriteUser);
+                                    QFileDevice::ReadUser | QFileDevice::WriteUser |
+                                    detail::searchBits(path));
 #endif
 }
 
