@@ -2760,6 +2760,49 @@ if(TARGET settings_permissions_probe)
     add_dependencies(image_writer_test settings_permissions_probe)
 endif()
 
+# image_writer_test's [.system-locale] cases, each started in the locale it
+# is about. They are hidden from discovery because, run in the developer's
+# own locale, they would check nothing. Linux only: Windows and macOS take
+# the language from the OS rather than from these variables.
+#
+# ENVIRONMENT_MODIFICATION rather than ENVIRONMENT for the locale: an LC_ALL
+# or LC_MESSAGES the runner has outranks LANG, and only this property can
+# unset them. Its operations apply in order, so a LANGUAGE passed in replaces
+# the unset before it.
+if(UNIX AND NOT APPLE)
+    function(rpi_system_locale_test name case)
+        set(_test "image_writer_test system locale: ${name}")
+        add_test(NAME "${_test}" COMMAND image_writer_test "${case}")
+        set(_mods "LC_ALL=unset:" "LC_MESSAGES=unset:" "LANGUAGE=unset:" ${ARGN})
+        set_tests_properties("${_test}" PROPERTIES
+            SKIP_RETURN_CODE 4
+            ENVIRONMENT "RPI_IMAGER_TELEMETRY_URL=;RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
+            ENVIRONMENT_MODIFICATION "${_mods}")
+    endfunction()
+
+    rpi_system_locale_test("en_GB" "A British desktop starts in English"
+        "LANG=set:en_GB.UTF-8")
+    # What Debian, Ubuntu and Raspberry Pi OS set for a UK install, and the
+    # list that has en-US in it
+    rpi_system_locale_test("en_GB, LANGUAGE=en_GB:en" "A British desktop starts in English"
+        "LANG=set:en_GB.UTF-8" "LANGUAGE=set:en_GB:en")
+    rpi_system_locale_test("pt_PT, LANGUAGE=pt_PT:pt" "A Portuguese desktop starts in Portuguese"
+        "LANG=set:pt_PT.UTF-8" "LANGUAGE=set:pt_PT:pt")
+    rpi_system_locale_test("de_AT" "An Austrian desktop starts in German"
+        "LANG=set:de_AT.UTF-8")
+    rpi_system_locale_test("pt_BR, LANGUAGE=pt_BR:pt" "A Brazilian desktop starts in Brazilian Portuguese"
+        "LANG=set:pt_BR.UTF-8" "LANGUAGE=set:pt_BR:pt")
+    if(NOT BUILD_EMBEDDED)
+        # The embedded build ships no Chinese translation
+        rpi_system_locale_test("zh_TW" "A Taiwanese desktop starts in Traditional Chinese"
+            "LANG=set:zh_TW.UTF-8")
+    endif()
+    if(BUILD_EMBEDDED)
+        rpi_system_locale_test("C.UTF-8, embedded" "An embedded build with no locale starts in English"
+            "LANG=set:C.UTF-8")
+    endif()
+endif()
+
     # The command line, run as a subprocess.
     #
     # Cli::run() builds its own QCoreApplication, so it cannot be called from
