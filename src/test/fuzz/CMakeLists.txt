@@ -149,8 +149,7 @@ rpi_add_fuzzer(fuzz_imagesize        SOURCES ${SRC}/imagesizeparser.cpp
                                           ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES})
 # The generator derives the account credential, so it needs the bundled
 # password hashing: sha256crypt as a source and yescrypt as a library, exactly
-# as customization_generator_test does. QPasswordDigestor is in Qt Network
-# rather than Core.
+# as customization_generator_test does.
 #
 # Two targets over the same code, because they run at wildly different
 # speeds: the quoting property manages tens of thousands of executions a
@@ -160,12 +159,12 @@ rpi_add_fuzzer(fuzz_imagesize        SOURCES ${SRC}/imagesizeparser.cpp
 rpi_add_fuzzer(fuzz_customisation
     SOURCES ${SRC}/customization_generator.cpp
             ${SRC}/dependencies/sha256crypt/sha256crypt.c
-    LIBS Qt6::Network ${YESCRYPT_LIBRARIES})
+    LIBS ${YESCRYPT_LIBRARIES})
 
 rpi_add_fuzzer(fuzz_customisation_gen
     SOURCES ${SRC}/customization_generator.cpp
             ${SRC}/dependencies/sha256crypt/sha256crypt.c
-    LIBS Qt6::Network ${YESCRYPT_LIBRARIES})
+    LIBS ${YESCRYPT_LIBRARIES})
 
 # The bootloader configuration in flash, which can name the OS list
 # repository. Text followed by whatever the region held before.

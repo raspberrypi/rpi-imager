@@ -177,13 +177,9 @@ WizardStepBase {
         if (pwd.length === 0) return qsTr("Enter a password");
 
         // Detailed validity (mirrors isValidWifiPassword)
-        // 64 hex is allowed => if it's 64 chars but not hex, say invalid chars
-        var isHex = isHex64(pwd);
-        if (!isHex) {
-            if (pwd.length < 8) return qsTr("Password is too short (min 8 characters)");
-            if (pwd.length > 63) return qsTr("Password is too long (max 63 characters)");
-            if (!isAsciiPrintable(pwd)) return qsTr("Password contains unsupported characters");
-        }
+        if (pwd.length < 8) return qsTr("Password is too short (min 8 characters)");
+        if (pwd.length > 63) return qsTr("Password is too long (max 63 characters)");
+        if (!isAsciiPrintable(pwd)) return qsTr("Password contains unsupported characters");
 
         // Always enforce match when either field has content (like user customization step)
         if ((conf.length > 0 || pwd.length > 0) && pwd !== conf)
@@ -312,8 +308,8 @@ WizardStepBase {
                         accessibleDescription: {
                             var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
                             return canKeep 
-                                ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
-                                : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
+                                ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters.")
+                                : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters. You will need to re-enter it in the next field to confirm.")
                         }
                     }
 
@@ -405,7 +401,7 @@ WizardStepBase {
     }
     ]
     
-    // WPA2/3 PSK validation helpers
+    // WPA2/3 passphrase validation helpers
     function isAsciiPrintable(text) {
         for (var i = 0; i < text.length; i++) {
             var code = text.charCodeAt(i)
@@ -416,28 +412,9 @@ WizardStepBase {
         return true
     }
 
-    function isHex64(text) {
-        if (text.length !== 64) {
-            return false
-        }
-        for (var i = 0; i < text.length; i++) {
-            var code = text.charCodeAt(i)
-            var isDigit = code >= 48 && code <= 57  // 0-9
-            var isLower = code >= 97 && code <= 102 // a-f
-            var isUpper = code >= 65 && code <= 70  // A-F
-            if (!(isDigit || isLower || isUpper)) {
-                return false
-            }
-        }
-        return true
-    }
-
     function isValidWifiPassword(text) {
         if (!text || text.length === 0) {
             // Allow open networks
-            return true
-        }
-        if (isHex64(text)) {
             return true
         }
         // 8–63 ASCII printable characters
