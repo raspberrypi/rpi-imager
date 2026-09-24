@@ -42,25 +42,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     s["sysname"] = value;
     s["password"] = value;
     s["wifiSSID"] = value;
-    // PBKDF2 is 4096 rounds of HMAC-SHA1 and it runs several times per
-    // input, which held this target to eleven executions a second.
-    //
-    // What it guards is not what this target is for. A passphrase of a
-    // length that gets derived (8..63) comes out as hex either way, so the
-    // quoting downstream sees hex whether the derivation ran or not; a
-    // value outside that range is passed through raw, and that is the case
-    // where the quoting has something to do -- and it never enters PBKDF2.
-    // Handing it a PSK already derived skips the rounds without losing the
-    // escaping this target exists to exercise.
-    //
-    // Not always, because the derivation and the length test around it are
-    // ours too. One input in sixteen takes the plaintext path.
-    if ((size % 16) == 0)
-        s["wifiPassword"] = value;
-    else
-        s["wifiPasswordCrypt"] = QStringLiteral(
-            "0123456789abcdef0123456789abcdef"
-            "0123456789abcdef0123456789abcdef");
+    s["wifiPassword"] = value;
     s["wifiCountry"] = value;
     s["timezone"] = value;
     s["keyboardLayout"] = value;
