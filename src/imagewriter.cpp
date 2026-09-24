@@ -366,8 +366,13 @@ ImageWriter::ImageWriter(QObject *parent)
     for (auto it = langnames.cbegin(); it != langnames.cend(); ++it)
         _translations.insert(it.value(), it.key());
 
-    _currentLangcode = translationForLocale(QLocale(), langnames.keys());
-    _currentLang = langnames.value(_currentLangcode);
+    // Only on a match, or the embedded build's English default above is lost
+    const QString localeLangcode = translationForLocale(QLocale(), langnames.keys());
+    if (!localeLangcode.isEmpty())
+    {
+        _currentLangcode = localeLangcode;
+        _currentLang = langnames.value(localeLangcode);
+    }
 
     // Connect to CacheManager signals
     connect(_cacheManager, &CacheManager::cacheFileUpdated,
@@ -4520,27 +4525,37 @@ QString ImageWriter::translationForLocale(const QLocale &locale, const QStringLi
         return QString();
     };
 
-    const QStringList uiLanguages = locale.uiLanguages();
+    /* One entry at a time, and each settled before the next is looked at.
+       Qt adds a likely region to every bare language in LANGUAGE, so a UK
+       desktop's en_GB:en arrives as en-Latn-GB, en-GB, en-Latn-US, en-US,
+       en-Latn, en. Matching whole tags across the list first gave that
+       desktop en-US, and pt_PT:pt pt-BR.
 
-    // Whole tags first, most preferred first: "pt-BR" is tried before "pt"
-    for (const QString &tag : uiLanguages)
+       Within an entry the region is tried before the bare language, and a
+       script subtag is passed over on the way: the first entry for Brazil is
+       pt-Latn-BR, and for Taiwan zh-Hant-TW, but the translations are pt-BR
+       and zh-TW. */
+    for (const QString &tag : locale.uiLanguages())
     {
-        const QString langcode = find(tag);
+        const QStringList subtags = tag.split('-');
+        const QString &language = subtags.first();
+
+        // A region is two letters or three digits; a script is four letters
+        for (qsizetype i = 1; i < subtags.size(); ++i)
+        {
+            const QString &subtag = subtags.at(i);
+            if (subtag.size() == 2 || (subtag.size() == 3 && subtag.at(0).isDigit()))
+            {
+                const QString langcode = find(language + '-' + subtag);
+                if (!langcode.isEmpty())
+                    return langcode;
+                break;
+            }
+        }
+
+        const QString langcode = find(language);
         if (!langcode.isEmpty())
             return langcode;
-    }
-
-    // Then each cut back a subtag at a time, for a list without the bare
-    // language in it: "de-AT" gets "de"
-    for (QString tag : uiLanguages)
-    {
-        for (qsizetype dash = tag.lastIndexOf('-'); dash > 0; dash = tag.lastIndexOf('-'))
-        {
-            tag.truncate(dash);
-            const QString langcode = find(tag);
-            if (!langcode.isEmpty())
-                return langcode;
-        }
     }
 
     return QString();
