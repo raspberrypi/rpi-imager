@@ -409,7 +409,7 @@ int main(int argc, char *argv[])
     }
 
     // Before anything reads or writes a setting. The file holds the crypt
-    // hash of the Pi's account password, the derived WPA PSK, and in
+    // hash of the Pi's account password, the Wi-Fi passphrase, and in
     // organisation mode a Connect API key -- and QSettings would create it
     // world-readable. Narrows an existing one too, which is what carries the
     // fix onto an installation that already has the file.
