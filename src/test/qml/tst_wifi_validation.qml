@@ -29,7 +29,7 @@ TestCase {
         id: settingsStub
         property string wifiSSID: ""
         property string wifiMode: "secure"
-        property string wifiPasswordCrypt: ""
+        property string wifiPassword: ""
         property bool wifiHidden: false
         property int wifiSsidOctetsBase: 0
     }

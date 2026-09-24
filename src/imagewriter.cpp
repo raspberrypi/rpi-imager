@@ -4342,24 +4342,6 @@ bool ImageWriter::savedUserPasswordUsableWithCurrentOs(const QString &cryptHash)
     return rpi_imager::CustomisationGenerator::osUsesYescrypt(_osReleaseDate);
 }
 
-QString ImageWriter::deriveWifiPsk(const QString &ssid, const QString &plaintext)
-{
-    // Strip CR/LF before measuring the length. ImTextField scrubs control
-    // characters out of the field, so the UI should never send them, but this is
-    // the same trust boundary cryptPassword() guards: a trailing newline would
-    // push a 63-character passphrase to 64 and flip the branch below, returning
-    // the plaintext verbatim as though it were a pre-computed PSK.
-    const QString password = rpi_imager::CustomisationGenerator::stripLineTerminators(plaintext);
-    if (password.isEmpty())
-        return QString();
-    // Passphrase length per WPA spec is 8..63; anything else is taken to be a
-    // pre-computed PSK and returned verbatim.
-    const bool isPassphrase = (password.length() >= 8 && password.length() < 64);
-    return isPassphrase
-        ? rpi_imager::CustomisationGenerator::pbkdf2(password.toUtf8(), ssid.toUtf8())
-        : password;
-}
-
 QString ImageWriter::wifiSsidOctetsBase64(const QString &ssid) const
 {
     return QString::fromLatin1(ssid.toUtf8().toBase64());
@@ -4382,6 +4364,12 @@ QVariantMap ImageWriter::getSavedCustomisationSettings()
     QVariantMap result;
 
     _settings.beginGroup("imagecustomization");
+    // Earlier versions stored a derived PMK. It is equivalent to the
+    // passphrase for WPA2, so it is deleted rather than kept around.
+    if (_settings.contains(QStringLiteral("wifiPasswordCrypt"))) {
+        _settings.remove(QStringLiteral("wifiPasswordCrypt"));
+        _settings.sync();
+    }
     const QStringList keys = _settings.childKeys();
     for (const QString &key : keys) {
         result.insert(key, _settings.value(key));

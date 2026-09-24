@@ -75,33 +75,31 @@ TestCase {
         child("wifiPasswordConfirmField").text = pwd
     }
 
-    // ── The passphrase must not be stored ─────────────────────────────
+    // ── The passphrase is stored, not a derived key ───────────────────
+    //
+    // A PSK derived here only works for WPA2: NetworkManager needs the
+    // passphrase itself to negotiate WPA3/SAE.
 
-    function test_only_the_derived_key_is_stored() {
+    function test_the_passphrase_is_stored_in_the_clear() {
         enter("My Network", passphrase)
 
         step.nextClicked()
 
         var s = fakeContainer.customizationSettings
         compare(s.wifiSSID, "My Network")
-        verify(s.wifiPasswordCrypt, "a key was derived")
-        verify(s.wifiPasswordCrypt !== passphrase, "and it is not the passphrase")
-        for (var key in s)
-            verify(String(s[key]) !== passphrase,
-                   "no key holds the passphrase (" + key + ")")
+        compare(s.wifiPassword, passphrase)
+        verify(s.wifiPasswordCrypt === undefined, "no key was derived")
         verify(fakeContainer.wifiConfigured)
     }
 
-    function test_the_passphrase_is_not_persisted_either() {
-        // The saved settings outlive the session and go to disk.
+    function test_the_passphrase_is_persisted() {
         enter("My Network", passphrase)
 
         step.nextClicked()
 
         var saved = ImageWriterSingleton.getSavedCustomisationSettings()
-        verify(String(JSON.stringify(saved)).indexOf(passphrase) === -1,
-               "the passphrase is nowhere in the saved settings")
-        verify(saved.wifiPasswordCrypt, "but the derived key is")
+        compare(saved.wifiPassword, passphrase)
+        verify(saved.wifiPasswordCrypt === undefined, "and no derived key is")
     }
 
     // ── A key belongs to its network ──────────────────────────────────
@@ -111,27 +109,27 @@ TestCase {
         // image describes an open network with a passphrase attached.
         enter("My Network", passphrase)
         step.nextClicked()
-        verify(fakeContainer.customizationSettings.wifiPasswordCrypt)
+        verify(fakeContainer.customizationSettings.wifiPassword)
 
         step.wifiMode = "open"
         step.nextClicked()
 
-        verify(fakeContainer.customizationSettings.wifiPasswordCrypt === undefined)
+        verify(fakeContainer.customizationSettings.wifiPassword === undefined)
     }
 
     function test_revisiting_the_same_network_keeps_the_saved_key() {
-        // Coming back to this step shows the password blank, because only the
-        // derived key was kept. Blank has to mean "keep it" for the same
-        // network, or every revisit silently drops the credentials.
+        // Coming back to this step shows the password blank. Blank has to
+        // mean "keep it" for the same network, or every revisit silently
+        // drops the credentials.
         enter("My Network", passphrase)
         step.nextClicked()
-        var first = fakeContainer.customizationSettings.wifiPasswordCrypt
+        var first = fakeContainer.customizationSettings.wifiPassword
         verify(first)
 
         enter("My Network", "")
         step.nextClicked()
 
-        compare(fakeContainer.customizationSettings.wifiPasswordCrypt, first,
+        compare(fakeContainer.customizationSettings.wifiPassword, first,
                 "the key survived a revisit")
     }
 
@@ -141,26 +139,24 @@ TestCase {
         // and cannot be explained by looking at the image.
         enter("My Network", passphrase)
         step.nextClicked()
-        verify(fakeContainer.customizationSettings.wifiPasswordCrypt)
+        verify(fakeContainer.customizationSettings.wifiPassword)
 
         enter("A Different Network", "")
         step.nextClicked()
 
         compare(fakeContainer.customizationSettings.wifiSSID, "A Different Network")
-        verify(fakeContainer.customizationSettings.wifiPasswordCrypt === undefined,
+        verify(fakeContainer.customizationSettings.wifiPassword === undefined,
                "the previous network's key was not carried over")
     }
 
     function test_a_new_passphrase_replaces_the_old_key() {
         enter("My Network", passphrase)
         step.nextClicked()
-        var first = fakeContainer.customizationSettings.wifiPasswordCrypt
-
         enter("My Network", "an entirely different passphrase")
         step.nextClicked()
 
-        verify(fakeContainer.customizationSettings.wifiPasswordCrypt !== first,
-               "the key was re-derived")
+        compare(fakeContainer.customizationSettings.wifiPassword,
+                "an entirely different passphrase")
     }
 
     // ── Clearing the network ──────────────────────────────────────────
@@ -176,7 +172,7 @@ TestCase {
 
         var s = fakeContainer.customizationSettings
         verify(s.wifiSSID === undefined, "the network name is gone")
-        verify(s.wifiPasswordCrypt === undefined, "so is the key")
+        verify(s.wifiPassword === undefined, "so is the key")
         verify(s.wifiSsidOctetsBase64 === undefined)
         verify(s.wifiHidden === undefined)
         verify(!fakeContainer.wifiConfigured)
@@ -264,11 +260,7 @@ TestCase {
         step.nextClicked()
 
         compare(fakeContainer.customizationSettings.wifiSSID, "Pi Towers")
-        // wifiPasswordCrypt, which is the name the key is written under. A
-        // first draft asserted on "wifiPassword", a property that never
-        // exists, so it passed however the tab behaved -- caught by the tab
-        // being disabled and the case not noticing.
-        verify(fakeContainer.customizationSettings.wifiPasswordCrypt === undefined,
+        verify(fakeContainer.customizationSettings.wifiPassword === undefined,
                "no key was written for a network that has none")
     }
 
