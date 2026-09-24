@@ -3416,6 +3416,77 @@ TEST_CASE("A regional translation falls back on its language", "[imagewriter][lo
     CHECK(QCoreApplication::translate(context, source) == QLatin1String(source));
 }
 
+/* The [.system-locale] cases run only by name, from CTest entries that start
+ * this binary with LANG and LANGUAGE set for them (see CMakeLists.txt).
+ *
+ * Qt reads the system locale from the environment once, at startup, and adds
+ * a likely region to each bare language in LANGUAGE: en_GB:en comes out as
+ * en-GB, en-US, en. A QLocale("en_GB") built inside a test has no such
+ * entries, so only a process started in the locale sees the list a Linux
+ * desktop really hands Qt. Tests built from QLocale objects all passed while
+ * British desktops were being started in American English.
+ */
+static void requireSystemLocale(const std::string &name)
+{
+    const QLocale system = QLocale::system();
+    INFO("uiLanguages: " << system.uiLanguages().join(QStringLiteral(", ")).toStdString());
+    // Run in any other locale, the case would be checking the runner's
+    REQUIRE(system.name().toStdString() == name);
+}
+
+TEST_CASE("A British desktop starts in English", "[.system-locale]")
+{
+    requireSystemLocale("en_GB");
+    ImageWriter w(nullptr);
+    CHECK(w.getCurrentLanguage().toStdString() == "English");
+}
+
+TEST_CASE("A Portuguese desktop starts in Portuguese", "[.system-locale]")
+{
+    // Qt's likely region for a bare "pt" is Brazil
+    requireSystemLocale("pt_PT");
+    ImageWriter w(nullptr);
+    CHECK(w.getCurrentLanguage().toStdString() == "português");
+}
+
+TEST_CASE("An Austrian desktop starts in German", "[.system-locale]")
+{
+    // There is no de-AT translation, so this needs the language's
+    requireSystemLocale("de_AT");
+    ImageWriter w(nullptr);
+    CHECK(w.getCurrentLanguage().toStdString() == "Deutsch");
+}
+
+TEST_CASE("A Brazilian desktop starts in Brazilian Portuguese",
+          "[.system-locale]")
+{
+    // Qt's first entry is pt-Latn-BR; the translation is pt-BR (#1572)
+    requireSystemLocale("pt_BR");
+    ImageWriter w(nullptr);
+    CHECK(w.getCurrentLanguage().toStdString() == "português (Brasil)");
+}
+
+TEST_CASE("A Taiwanese desktop starts in Traditional Chinese",
+          "[.system-locale]")
+{
+    requireSystemLocale("zh_TW");
+    ImageWriter w(nullptr);
+    CHECK(w.getCurrentLanguage().toStdString() == "繁體中文");
+}
+
+#if defined(BUILD_EMBEDDED)
+TEST_CASE("An embedded build with no locale starts in English",
+          "[.system-locale]")
+{
+    // A Pi booted into the embedded imager commonly has LANG=C.UTF-8. No
+    // translation matches "C", and the constructor's English default is all
+    // that stands between that and a language menu with nothing selected.
+    requireSystemLocale("C");
+    ImageWriter w(nullptr);
+    CHECK(w.getCurrentLanguage().toStdString() == "English");
+}
+#endif
+
 TEST_CASE("Changing the keyboard layout takes effect", "[imagewriter][locale]")
 {
     // This is written into the customisation, so it is what the board comes
