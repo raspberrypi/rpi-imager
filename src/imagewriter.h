@@ -440,15 +440,14 @@ public:
     // module; rpi-preseed configures them natively via raspi-config.
     Q_INVOKABLE bool imageSupportsInterfaceCustomisation();
 
-    // Derive account/Wi-Fi credentials from plaintext for the UI. Hashing is
+    // Hash the account password from plaintext for the UI. Hashing is
     // delegated to CustomisationGenerator (the single home for credential
-    // derivation); the UI hands over plaintext, gets back only the hashed/derived
-    // form, and never retains the plaintext in long-lived state. This keeps the
+    // derivation); the UI hands over plaintext, gets back only the hash, and
+    // never retains the plaintext in long-lived state. This keeps the
     // plaintext's RAM lifetime bounded to the input field (needed for the
-    // show-password toggle) and guarantees only hashes reach disk or the
-    // generator. Both return an empty string for empty input.
+    // show-password toggle) and guarantees only the hash reaches disk or the
+    // generator. Returns an empty string for empty input.
     Q_INVOKABLE QString hashUserPassword(const QString &plaintext);
-    Q_INVOKABLE QString deriveWifiPsk(const QString &ssid, const QString &plaintext);
     Q_INVOKABLE QString wifiSsidOctetsBase64(const QString &ssid) const;
 
     // Whether a stored account-password hash can authenticate on the currently
