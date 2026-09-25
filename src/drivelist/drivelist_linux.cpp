@@ -18,6 +18,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
+#include <QSet>
 #include <QDebug>
 
 #include <cmath>
@@ -63,9 +65,42 @@ void walkStorageChildren(DeviceDescriptor& device, QStringList& labels, const QJ
 }
 
 /**
- * @brief Parse a single block device from JSON
+ * @brief Match an eMMC hardware boot partition, e.g. /dev/mmcblk0boot0
+ *
+ * Captures the device the boot partition belongs to.
  */
-std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool embeddedMode)
+const QRegularExpression& emmcBootPartition()
+{
+    static const QRegularExpression bootPartition(QStringLiteral("^(/dev/mmcblk\\d+)boot\\d+$"));
+    return bootPartition;
+}
+
+/**
+ * @brief Find the MMC devices that are eMMC rather than SD cards
+ *
+ * eMMC has hardware boot partitions, which the kernel lists as disks of their
+ * own (mmcblk0boot0, mmcblk0boot1) next to the device they belong to. An SD
+ * card never has them.
+ */
+QSet<QString> findEmmcDevices(const QJsonArray& blockDevices)
+{
+    QSet<QString> emmcDevices;
+    for (const auto& item : blockDevices) {
+        const QRegularExpressionMatch match =
+            emmcBootPartition().match(item.toObject()["kname"].toString());
+        if (match.hasMatch()) {
+            emmcDevices.insert(match.captured(1));
+        }
+    }
+    return emmcDevices;
+}
+
+/**
+ * @brief Parse a single block device from JSON
+ * @param emmcDevices Names of the devices that are eMMC, from findEmmcDevices()
+ */
+std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool embeddedMode,
+                                                 const QSet<QString>& emmcDevices)
 {
     DeviceDescriptor device;
 
@@ -83,7 +118,7 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     }
 
     // Skip eMMC boot partitions (special hardware boot areas)
-    if (name.contains("boot") && name.contains("mmcblk")) {
+    if (emmcBootPartition().match(name).hasMatch()) {
         return std::nullopt;
     }
 
@@ -173,9 +208,16 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     addIfNotEmpty(bdev["vendor"].toString());
     addIfNotEmpty(bdev["model"].toString());
 
-    // Special case for internal SD card reader
-    if (name == "/dev/mmcblk0" && descParts.isEmpty()) {
-        descParts.append(QObject::tr("Internal SD card reader"));
+    // Internal MMC devices have no vendor or model to go by. eMMC is soldered
+    // to the board, often as the system drive, so it must not be passed off
+    // as a card reader: that invites overwriting it.
+    static const QRegularExpression mmcDevice(QStringLiteral("^/dev/mmcblk\\d+$"));
+    if (mmcDevice.match(name).hasMatch() && descParts.isEmpty()) {
+        if (emmcDevices.contains(name)) {
+            descParts.append(QObject::tr("Internal eMMC storage"));
+        } else {
+            descParts.append(QObject::tr("Internal SD card reader"));
+        }
     }
 
     // Fallback for loop devices with no label/vendor/model
@@ -322,12 +364,13 @@ std::vector<DeviceDescriptor> devicesFromLsblkOutput(
     }
 
     const QJsonArray blockDevices = doc.object().value("blockdevices").toArray();
+    const QSet<QString> emmcDevices = findEmmcDevices(blockDevices);
 
     // Reserve capacity to avoid reallocations during enumeration
     deviceList.reserve(static_cast<size_t>(blockDevices.size()));
 
     for (const auto& item : blockDevices) {
-        auto device = parseBlockDevice(item.toObject(), embeddedMode);
+        auto device = parseBlockDevice(item.toObject(), embeddedMode, emmcDevices);
         if (device) {
             deviceList.push_back(std::move(*device));
         }

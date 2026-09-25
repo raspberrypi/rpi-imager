@@ -499,6 +499,214 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices.empty());
     }
 
+    SECTION("Names an internal SD card reader that has nothing else to go by")
+    {
+        // mmcblk0 with no label, vendor or model: most often a laptop's PCIe
+        // SD card reader.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:pci",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].description == "Internal SD card reader");
+    }
+
+    SECTION("Names eMMC as eMMC, not as an SD card reader")
+    {
+        // An eMMC system drive was offered as "Internal SD card reader" and
+        // got overwritten (#1658). The boot partitions the kernel lists next
+        // to it are what tell it apart from an SD card.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:pci",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "62537072640",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null,
+                "children": [
+                    {"kname":"/dev/mmcblk0p1","type":"part","label":"bootfs",
+                     "mountpoint":null},
+                    {"kname":"/dev/mmcblk0p2","type":"part","label":"rootfs",
+                     "mountpoint":null}
+                ]
+            },{
+                "kname": "/dev/mmcblk0boot0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:pci",
+                "ro": true,
+                "rm": false,
+                "hotplug": false,
+                "size": "4194304",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk0boot1",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:pci",
+                "ro": true,
+                "rm": false,
+                "hotplug": false,
+                "size": "4194304",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].device == "/dev/mmcblk0");
+        CHECK(devices[0].description == "Internal eMMC storage (bootfs, rootfs)");
+    }
+
+    SECTION("Tells eMMC and an SD card reader apart on the same machine")
+    {
+        // The SD card reader at mmcblk0 and eMMC at mmcblk1, with the boot
+        // partitions listed ahead of the device they belong to.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk1boot0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": true,
+                "rm": false,
+                "hotplug": false,
+                "size": "4194304",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk1",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "31268536320",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+
+        REQUIRE(devices.size() == 2);
+        CHECK(devices[0].device == "/dev/mmcblk0");
+        CHECK(devices[0].description == "Internal SD card reader");
+        CHECK(devices[1].device == "/dev/mmcblk1");
+        CHECK(devices[1].description == "Internal eMMC storage");
+    }
+
+    SECTION("Names an SD card reader after eMMC at mmcblk0")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "31268536320",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk0boot0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": true,
+                "rm": false,
+                "hotplug": false,
+                "size": "4194304",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk1",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false,
+                "rm": false,
+                "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+
+        REQUIRE(devices.size() == 2);
+        CHECK(devices[0].device == "/dev/mmcblk0");
+        CHECK(devices[0].description == "Internal eMMC storage");
+        CHECK(devices[1].device == "/dev/mmcblk1");
+        CHECK(devices[1].description == "Internal SD card reader");
+    }
+
     SECTION("Marks loop devices as virtual")
     {
         const std::string json = R"({
