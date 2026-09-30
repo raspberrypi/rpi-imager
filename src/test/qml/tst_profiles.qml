@@ -198,6 +198,7 @@ TestCase {
 
     function test_profile_dialog_fits_window_and_keyboard_focus(data) {
         testCase.height = data.height
+        verify(ImageWriterSingleton.saveCustomisationProfile("", "QML profile focus", {hostname: "focus-pi"}))
         wiz.openProfiles(true)
         tryCompare(dialog, "opened", true)
         verify(dialog.x >= 0)
@@ -212,7 +213,10 @@ TestCase {
         }
         control("profileNameField").forceActiveFocus()
         keyClick(Qt.Key_Tab)
-        verify(!control("profileNameField").activeFocus)
-
+        verify(control("renameProfileButton").activeFocus)
+        var renamePosition = control("renameProfileButton").mapToItem(testCase, 0, 0)
+        var footerPosition = control("closeProfilesButton").mapToItem(testCase, 0, 0)
+        verify(renamePosition.y + control("renameProfileButton").height <= footerPosition.y,
+               "keyboard focus scrolls the management controls into view")
     }
 }
