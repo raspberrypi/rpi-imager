@@ -96,16 +96,16 @@ BaseDialog {
         if (s.indexOf("file://") === 0)
             return s
         // Allow absolute paths
-        if (s.indexOf("/") === 0)
-            return "file://" + s
+        if (s.indexOf("/") === 0 || /^[A-Za-z]:[\\/]/.test(s) || s.indexOf("\\\\") === 0)
+            return String(ImageWriter.fileUrlFromLocalPath(s))
         return s // fallback; caller may provide URL
     }
 
-    // Convert a URL to a display path (strip file:// scheme)
+    // Decode a file URL for display and for joining typed filenames.
     function _toDisplayPath(u) {
         var s = String(u || "").trim()
         if (s.indexOf("file://") === 0) {
-            var p = s.substring(7)
+            var p = ImageWriter.localPathFromUrl(s)
             return p.length > 0 ? p : "/"
         }
         return s

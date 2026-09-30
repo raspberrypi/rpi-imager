@@ -137,6 +137,38 @@ TestCase {
         compare(d._toFileUrl("file:///home/pi/os.img"), "file:///home/pi/os.img")
     }
 
+    function test_typed_filenames_survive_a_url_round_trip_data() {
+        return [
+            { tag: "hash", name: "perf#1.json" },
+            { tag: "percent", name: "100% key.pub" },
+            { tag: "query", name: "perf?1.json" },
+            { tag: "unicode", name: "clé.pub" }
+        ]
+    }
+
+    function test_typed_filenames_survive_a_url_round_trip(data) {
+        const d = create({})
+        const path = "/home/pi/" + data.name
+        compare(ImageWriter.localPathFromUrl(d._toFileUrl(path)), path)
+    }
+
+    function test_a_windows_drive_path_becomes_a_local_file_url() {
+        if (Qt.platform.os !== "windows")
+            skip("Windows drive paths")
+        const d = create({})
+        const path = "C:/Users/pi/perf#1.json"
+        compare(ImageWriter.localPathFromUrl(d._toFileUrl(path)), path)
+        compare(ImageWriter.localPathFromUrl(d._toFileUrl("C:\\Users\\pi\\perf#1.json")), path)
+    }
+
+    function test_a_save_path_decodes_its_folder_before_joining_the_filename() {
+        const d = create({ currentFolder: "file:///home/pi/images%20%232" })
+        d._currentFilename = "perf#1.json"
+        const path = "/home/pi/images #2/perf#1.json"
+        compare(d._buildFilePath(), path)
+        compare(ImageWriter.localPathFromUrl(d._toFileUrl(d._buildFilePath())), path)
+    }
+
     function test_an_empty_path_yields_nothing() {
         const d = create({})
         compare(d._toFileUrl(""), "")
@@ -153,8 +185,8 @@ TestCase {
         const home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
         const homePath = home.indexOf("file://") === 0 ? home.substring(7) : home
 
-        compare(d._toFileUrl("~"), "file://" + homePath)
-        compare(d._toFileUrl("~/os.img"), "file://" + homePath + "/os.img")
+        compare(ImageWriter.localPathFromUrl(d._toFileUrl("~")), homePath)
+        compare(ImageWriter.localPathFromUrl(d._toFileUrl("~/os.img")), homePath + "/os.img")
     }
 
     function test_a_url_becomes_a_display_path() {
@@ -257,14 +289,8 @@ TestCase {
 
     // -- Folder names people actually have ---------------------------------
     //
-    // A URL escapes what a path does not, and _toDisplayPath() strips the
-    // scheme with a substring rather than decoding. Whether the two
-    // round-trip decides whether a folder with a space in its name can be
-    // navigated into and saved to at all, and "Raspberry Pi images" is a
-    // name somebody has. They do round-trip today, because QML's url to
-    // string conversion does not percent-encode these. That is worth
-    // holding still: switching to an encoded form anywhere upstream would
-    // put %20 in front of the user and into the path handed to the writer.
+    // Decode the folder URL before displaying it or joining a filename.
+    // Otherwise escaped characters become part of the path handed to the writer.
 
     function test_a_folder_name_with_a_space_survives_the_round_trip() {
         const d = create({})
@@ -280,7 +306,7 @@ TestCase {
 
     function test_a_folder_name_with_a_hash_survives_the_round_trip() {
         const d = create({})
-        const url = Qt.resolvedUrl("file:///home/pi/images #2")
+        const url = d._toFileUrl("/home/pi/images #2")
         compare(d._toDisplayPath(url), "/home/pi/images #2")
     }
 

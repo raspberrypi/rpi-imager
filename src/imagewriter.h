@@ -273,6 +273,7 @@ public:
        "file://" off the url is not the same thing: that leaves "/C:/..." on
        Windows, and "%23" for a '#' in the name everywhere. */
     Q_INVOKABLE QString localPathFromUrl(const QUrl &url) const;
+    Q_INVOKABLE QUrl fileUrlFromLocalPath(const QString &path) const;
 
     /// Which kind of write startWrite() is about to start.
     ///

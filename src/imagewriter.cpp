@@ -488,6 +488,11 @@ QString ImageWriter::localPathFromUrl(const QUrl &url) const
     return url.toString(QUrl::PreferLocalFile);
 }
 
+QUrl ImageWriter::fileUrlFromLocalPath(const QString &path) const
+{
+    return QUrl::fromLocalFile(QDir::fromNativeSeparators(path));
+}
+
 ImageWriter::~ImageWriter()
 {
     // Stop network monitoring first - the callback captures 'this' pointer

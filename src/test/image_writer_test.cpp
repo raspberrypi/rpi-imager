@@ -8268,7 +8268,10 @@ TEST_CASE("The url a file picker hands back becomes the path it names",
             f.close();
 
             // Through a string, the way a url property reaches C++ from QML
-            const QString url = QUrl::fromLocalFile(path).toString();
+            const QUrl fileUrl = w.fileUrlFromLocalPath(path);
+            CHECK_FALSE(fileUrl.hasFragment());
+            CHECK_FALSE(fileUrl.hasQuery());
+            const QString url = fileUrl.toString();
             const QString back = w.localPathFromUrl(QUrl(url));
             CHECK(back == path);
             CHECK(w.readFileContents(back)
