@@ -1779,6 +1779,84 @@ TEST_CASE("A write waiting for a queue slot answers a cancel",
   ops->Close();
 }
 
+#ifdef __APPLE__
+TEST_CASE("A cancel on macOS waits only for the write already running",
+          "[file-ops][faulty][slow]") {
+  // GCD runs the queue serially, so a drain that waited for every queued
+  // write would take the whole queue's worth of delays. And no callback may
+  // run once the drain returns: the caller frees their buffers then.
+  using rpi_imager::testing::canInjectFaults;
+  using rpi_imager::testing::FaultyDevice;
+
+  if (!canInjectFaults())
+    SKIP("fault injection is unavailable (needs the ctest-inserted interposer)");
+
+  constexpr int kDelayMs = 1000;
+  FaultyDevice device(64, FaultyDevice::SlowWrites{kDelayMs});
+  if (!device.isReady())
+    SKIP("the delaying device could not be created");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(device.path().toStdString()) == FileError::kSuccess);
+  if (!ops->IsAsyncIOSupported())
+    SKIP("async I/O is not available, so there is no queue to drain");
+
+  constexpr int kDepth = 8;
+  REQUIRE(ops->SetAsyncQueueDepth(kDepth));
+
+  constexpr std::size_t kChunk = 64u * 1024;
+  auto buffer = alignedBuffer(kChunk, 0x5A);
+  REQUIRE(buffer);
+
+  std::atomic<bool> drained{false};
+  std::atomic<int> late{0};
+  std::atomic<int> cancelled{0};
+  std::atomic<int> succeeded{0};
+  std::atomic<int> failed{0};
+  auto note = [&](FileError e, std::size_t) {
+    if (drained.load())
+      ++late;
+    if (e == FileError::kCancelled)
+      ++cancelled;
+    else if (e == FileError::kSuccess)
+      ++succeeded;
+    else
+      ++failed;
+  };
+
+  for (int i = 0; i < kDepth; ++i)
+    REQUIRE(ops->AsyncWriteSequential(buffer.get(), kChunk, note) ==
+            FileError::kSuccess);
+
+  // Let the first write get into its delay.
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  const auto start = std::chrono::steady_clock::now();
+  ops->CancelAsyncIO();
+  const FileError result = ops->WaitForPendingWrites();
+  drained.store(true);
+  const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - start)
+                          .count();
+
+  // Give a stray block time to run, so a late callback would be seen.
+  std::this_thread::sleep_for(std::chrono::milliseconds(kDelayMs + 500));
+
+  INFO("drained in " << waited << "ms; " << cancelled.load() << " cancelled, "
+                     << succeeded.load() << " completed, " << failed.load()
+                     << " failed");
+  CHECK(result == FileError::kCancelled);
+  CHECK(ops->GetPendingWriteCount() == 0);
+  CHECK(late.load() == 0);
+  CHECK(failed.load() == 0);
+  CHECK(cancelled.load() + succeeded.load() == kDepth);
+  CHECK(cancelled.load() >= kDepth - 1);
+  // A whole queue would be kDepth * kDelayMs.
+  CHECK(waited < 2500);
+
+  ops->Close();
+}
+#endif
+
 // io_uring completions wait for the caller. GCD collects them itself, so
 // on macOS a drain with nobody consuming still finishes.
 #ifdef __linux__
