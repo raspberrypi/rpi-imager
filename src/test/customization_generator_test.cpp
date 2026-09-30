@@ -3298,3 +3298,134 @@ TEST_CASE("A null byte in an SSID is escaped rather than truncating the name",
     CHECK(escaped.contains("\\0"));
     CHECK(escaped.contains("after"));
 }
+
+namespace {
+QByteArray hotspotProfile(const QByteArray &payload)
+{
+    const auto match = QRegularExpression(QStringLiteral("printf '%s' '([A-Za-z0-9+/=]+)'"))
+                           .match(QString::fromUtf8(payload));
+    REQUIRE(match.hasMatch());
+    return QByteArray::fromBase64(match.captured(1).toLatin1());
+}
+}
+
+TEST_CASE("Hotspot customisation creates a protected offline AP in each format",
+          "[customization][hotspot]")
+{
+    QVariantMap settings;
+    settings["wifiNetworkMode"] = "hotspot";
+    settings["wifiSSID"] = QString::fromUtf8("My Pi's café;\\network");
+    settings["wifiPassword"] = "hotspot-password";
+    settings["wifiMode"] = "secure";
+    settings["wifiHidden"] = true; // Client-only setting must not hide the AP.
+    const QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    const QByteArray cloud = CustomisationGenerator::generateCloudInitUserData(settings, {}, true);
+    const QByteArray preseed = CustomisationGenerator::generateRpiPreseedToml(settings);
+    const QByteArray expectedKey = QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1,
+        "hotspot-password", settings["wifiSSID"].toString().toUtf8(), 4096, 32).toHex();
+
+    for (const QByteArray &payload : {script, cloud}) {
+        const QByteArray profile = hotspotProfile(payload);
+        CHECK(profile.contains("mode=ap\n"));
+        CHECK(profile.contains("method=shared\naddress1=10.42.0.1/24"));
+        CHECK(profile.contains("hidden=false\n"));
+        CHECK(profile.contains("autoconnect=true\n"));
+        CHECK(profile.contains("key-mgmt=wpa-psk\n"));
+        CHECK(profile.contains("psk=" + expectedKey + '\n'));
+        CHECK_FALSE(payload.contains("hotspot-password"));
+        CHECK(payload.contains("install -m 600 /dev/null"));
+        QByteArray octets;
+        for (unsigned char byte : settings["wifiSSID"].toString().toUtf8())
+            octets += QByteArray::number(byte) + ';';
+        CHECK(profile.contains("ssid=" + octets + '\n'));
+    }
+    CHECK_FALSE(script.contains("imager_custom set_wlan"));
+    CHECK_FALSE(script.contains("network={"));
+    CHECK(cloud.contains("nmcli connection reload"));
+    CHECK(preseed.contains("[runcmd]\nearly = ["));
+    CHECK(preseed.contains("[wlan]"));
+    CHECK(preseed.contains("password = \"" + expectedKey + "\""));
+    CHECK(preseed.contains("password_encrypted = true"));
+    CHECK(preseed.contains("ssid_hex = \"" + settings["wifiSSID"].toString().toUtf8().toHex() + "\""));
+    CHECK_FALSE(preseed.left(preseed.indexOf("[wlan]")).contains(expectedKey));
+    CHECK(preseed.contains("hidden = false"));
+    CHECK(preseed.contains("nmcli --offline connection modify"));
+    CHECK_FALSE(preseed.contains("hotspot-password"));
+    const auto network = CustomisationGenerator::generateCloudInitNetworkConfig(settings, true);
+    CHECK(network.contains("ethernets:"));
+    CHECK_FALSE(network.contains("wifis:"));
+}
+
+TEST_CASE("Open hotspots omit security and stale keys; disabled hotspots emit nothing",
+          "[customization][hotspot]")
+{
+    QVariantMap settings;
+    settings["wifiNetworkMode"] = "hotspot";
+    settings["wifiSSID"] = "Open Pi";
+    settings["wifiMode"] = "open";
+    settings["wifiPasswordCrypt"] = QString(64, QChar('a'));
+    for (const auto &payload : {
+             CustomisationGenerator::generateSystemdScript(settings),
+             CustomisationGenerator::generateCloudInitUserData(settings, {}, true)}) {
+        const auto profile = hotspotProfile(payload);
+        CHECK_FALSE(profile.contains("[wifi-security]"));
+        CHECK_FALSE(profile.contains("psk="));
+        CHECK(profile.contains("mode=ap"));
+    }
+    const auto preseed = CustomisationGenerator::generateRpiPreseedToml(settings);
+    CHECK(preseed.contains("nmcli --offline connection modify"));
+    CHECK_FALSE(preseed.contains("password ="));
+    CHECK_FALSE(preseed.contains("802-11-wireless-security"));
+    settings["wifiConfigured"] = false;
+    CHECK_FALSE(CustomisationGenerator::generateSystemdScript(settings).contains("imager-hotspot"));
+    CHECK(CustomisationGenerator::generateCloudInitUserData(settings, {}, true).isEmpty());
+    CHECK(CustomisationGenerator::generateRpiPreseedToml(settings).isEmpty());
+}
+
+TEST_CASE("Invalid hotspot names and keys cannot turn into client profiles or keyfile syntax",
+          "[customization][hotspot]")
+{
+    QVariantMap settings;
+    settings["wifiNetworkMode"] = "hotspot";
+    settings["wifiMode"] = "secure";
+    settings["wifiSSID"] = "Pi";
+    settings["wifiPasswordCrypt"] = "bad\n[connection]\nid=injected";
+    CHECK_FALSE(CustomisationGenerator::generateSystemdScript(settings).contains("imager-hotspot"));
+    CHECK_FALSE(CustomisationGenerator::generateSystemdScript(settings).contains("set_wlan"));
+    CHECK(CustomisationGenerator::generateRpiPreseedToml(settings).isEmpty());
+    settings["wifiPasswordCrypt"] = QString(64, QChar('a'));
+    settings["wifiSSID"] = QString(33, QChar('x'));
+    CHECK_FALSE(CustomisationGenerator::generateSystemdScript(settings).contains("imager-hotspot"));
+    CHECK(CustomisationGenerator::generateCloudInitUserData(settings, {}, true).isEmpty());
+    CHECK(CustomisationGenerator::generateRpiPreseedToml(settings).isEmpty());
+}
+
+TEST_CASE("The hotspot install command writes the exact keyfile with owner-only permissions",
+          "[customization][hotspot][shellquoting]")
+{
+    const QString shell = rpi_test::shellPath();
+    if (shell.isEmpty()) SKIP("no POSIX shell available");
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    QVariantMap settings;
+    settings["wifiNetworkMode"] = "hotspot";
+    settings["wifiMode"] = "open";
+    settings["wifiSSID"] = "Pi $(touch should-not-exist)";
+    const QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString command;
+    for (const auto &line : QString::fromUtf8(script).split('\n'))
+        if (line.startsWith("umask 077;")) command = line;
+    REQUIRE_FALSE(command.isEmpty());
+    command.replace("/etc/NetworkManager/system-connections", dir.path() + "/connections");
+    command.replace("rfkill unblock wifi", ":");
+    QProcess process;
+    process.start(shell, {"-c", command});
+    REQUIRE(process.waitForFinished(10000));
+    REQUIRE(process.exitCode() == 0);
+    QFile profile(dir.path() + "/connections/imager-hotspot.nmconnection");
+    REQUIRE(profile.open(QIODevice::ReadOnly));
+    CHECK(profile.readAll() == hotspotProfile(script));
+#ifndef Q_OS_WIN
+    CHECK_FALSE(profile.permissions() & (QFile::ReadGroup | QFile::WriteGroup | QFile::ReadOther | QFile::WriteOther));
+#endif
+}

@@ -15628,3 +15628,21 @@ TEST_CASE("A cache that fails its check is not written; the download happens ins
     REQUIRE(written.open(QIODevice::ReadOnly));
     CHECK(written.read(image.size()) == image);
 }
+
+TEST_CASE("Hotspot customisation is offered only for NetworkManager-capable OS formats",
+          "[imagewriter][customisation][hotspot]")
+{
+    ImageWriter writer(nullptr);
+    selectImageWithFormat(writer, "systemd", "2023-05-03");
+    CHECK_FALSE(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "systemd", "2023-10-10");
+    CHECK(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "cloudinit");
+    CHECK_FALSE(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "cloudinit-rpi");
+    CHECK(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "rpi-preseed");
+    CHECK(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "none");
+    CHECK_FALSE(writer.imageSupportsWifiHotspot());
+}

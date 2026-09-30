@@ -4450,6 +4450,15 @@ bool ImageWriter::imageSupportsCcRpi()
     return _initFormat == "cloudinit-rpi";
 }
 
+bool ImageWriter::imageSupportsWifiHotspot()
+{
+    // Raspberry Pi OS moved to NetworkManager with Bookworm. Generic
+    // cloud-init images may use networkd, which cannot create this hotspot.
+    return _initFormat == "cloudinit-rpi" || _initFormat == "rpi-preseed"
+        || (_initFormat == "systemd"
+            && (_osReleaseDate.isEmpty() || _osReleaseDate >= QStringLiteral("2023-10-10")));
+}
+
 bool ImageWriter::imageSupportsInterfaceCustomisation()
 {
     return _initFormat == "cloudinit-rpi" || _initFormat == "rpi-preseed";

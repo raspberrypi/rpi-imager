@@ -176,6 +176,8 @@ public:
     static bool isYescryptHash(const QString& cryptHash);
 
 private:
+    // Install an offline-capable NetworkManager AP profile without storing a passphrase.
+    static QString wifiHotspotSetupCommand(const QVariantMap& settings);
 
     /**
      * @brief Resolve the crypted account password from settings.

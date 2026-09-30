@@ -274,6 +274,44 @@ QString CustomisationGenerator::resolveWifiPskCrypt(const QVariantMap& settings,
     return isPassphrase ? pbkdf2(plain.toUtf8(), ssidOctets) : plain;
 }
 
+QString CustomisationGenerator::wifiHotspotSetupCommand(const QVariantMap& settings)
+{
+    const bool configured = settings.value("wifiConfigured", true).toBool();
+    const QByteArray ssid = ssidOctetsFromSettings(settings, configured);
+    if (settings.value("wifiNetworkMode").toString() != QLatin1String("hotspot")
+        || ssid.isEmpty() || ssid.size() > 32)
+        return {};
+
+    const bool open = settings.value("wifiMode").toString() == QLatin1String("open");
+    const QString psk = open ? QString() : resolveWifiPskCrypt(settings, ssid, configured);
+    // Only a raw WPA2 key reaches the keyfile. This also rejects malformed
+    // settings supplied outside the wizard instead of inserting keyfile syntax.
+    if (!open && (psk.length() != 64
+        || !QRegularExpression(QStringLiteral("^[0-9a-fA-F]{64}$")).match(psk).hasMatch()))
+        return {};
+
+    QByteArray profile = "[connection]\nid=imager-hotspot\ntype=wifi\ninterface-name=wlan0\n"
+                         "autoconnect=true\nautoconnect-priority=100\n\n"
+                         "[wifi]\nmode=ap\nband=bg\nssid=";
+    // NetworkManager keyfiles accept SSIDs as decimal byte arrays. This avoids
+    // interpreting semicolons, backslashes or newlines in a network name.
+    for (unsigned char byte : ssid)
+        profile += QByteArray::number(byte) + ';';
+    profile += "\nhidden=false\n\n[ipv4]\nmethod=shared\naddress1=10.42.0.1/24\n\n"
+               "[ipv6]\nmethod=disabled\n";
+    if (!open)
+        profile += "\n[wifi-security]\nkey-mgmt=wpa-psk\nproto=rsn;\npairwise=ccmp;\n"
+                   "group=ccmp;\npsk=" + psk.toLatin1() + "\n";
+
+    return QStringLiteral("umask 077; install -d -m 755 /etc/NetworkManager/system-connections && "
+                          "install -m 600 /dev/null /etc/NetworkManager/system-connections/imager-hotspot.nmconnection && "
+                          "printf '%s' ")
+        + shellQuote(QString::fromLatin1(profile.toBase64()))
+        + QStringLiteral(" | base64 -d > /etc/NetworkManager/system-connections/imager-hotspot.nmconnection"
+                         " && chmod 600 /etc/NetworkManager/system-connections/imager-hotspot.nmconnection"
+                         " && rfkill unblock wifi");
+}
+
 QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
 {
     // YAML's \xHH and \uHHHH escapes name code points, not bytes, so escaping
@@ -518,7 +556,10 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("chmod 0440 ") + shellQuote(sudoersFile), script);
     }
 
-    if (!ssidOctets.isEmpty()) {
+    const QString hotspotSetup = wifiHotspotSetupCommand(s);
+    if (!hotspotSetup.isEmpty()) {
+        line(hotspotSetup, script);
+    } else if (!ssidOctets.isEmpty() && s.value("wifiNetworkMode").toString() != QLatin1String("hotspot")) {
         const bool useImagerCustom = ssidOctetsSafeForImagerCustom(ssidOctets);
         // Prefer imager_custom set_wlan when the SSID is shell-safe UTF-8; otherwise
         // write wpa_supplicant.conf directly with hex/raw octets.
@@ -874,10 +915,12 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     
     // Determine if we need runcmd section
     // Only create runcmd if we actually have commands to add
+    const QString hotspotSetup = wifiHotspotSetupCommand(settings);
+    bool needsRuncmdForHotspot = !hotspotSetup.isEmpty();
     bool needsRuncmdForWifi = !wifiCountry.isEmpty() && ssidOctets.isEmpty();
     bool needsRuncmdForPiConnect = piConnectEnabled && !cleanToken.isEmpty();
     bool needsRuncmdForSsh = sshEnabled;
-    bool needsRuncmd = needsRuncmdForPiConnect || needsRuncmdForWifi || needsRuncmdForSudo || needsRuncmdForSsh;
+    bool needsRuncmd = needsRuncmdForHotspot || needsRuncmdForPiConnect || needsRuncmdForWifi || needsRuncmdForSudo || needsRuncmdForSsh;
 
     if (needsRuncmd) {
         push(QString(), cloud);
@@ -909,6 +952,11 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             push(QStringLiteral("  - [ sh, -c, \"") + yamlEscapeString(command)
                  + QStringLiteral("\" ]"), cloud);
         };
+
+        if (needsRuncmdForHotspot) {
+            runcmd(hotspotSetup);
+            runcmd(QStringLiteral("nmcli connection reload && nmcli --wait 30 connection up id imager-hotspot"));
+        }
 
         if (needsRuncmdForSudo) {
             const QString sudoersFile = QStringLiteral("/etc/sudoers.d/010_") + effectiveUser + QStringLiteral("-nopasswd");
@@ -1028,6 +1076,9 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         push(QStringLiteral("      dhcp4: true"), netcfg);
         push(QStringLiteral("      dhcp6: true"), netcfg);
         push(QStringLiteral("      optional: true"), netcfg);
+
+        if (settings.value("wifiNetworkMode").toString() == QLatin1String("hotspot"))
+            return netcfg;
 
         push(QStringLiteral("  wifis:"), netcfg);
         push(QStringLiteral("    wlan0:"), netcfg);
@@ -1165,17 +1216,42 @@ QByteArray CustomisationGenerator::generateRpiPreseedToml(const QVariantMap& s,
         push(QString(), body);
     }
 
+    const QString hotspotSetup = wifiHotspotSetupCommand(s);
+    const bool hotspot = s.value("wifiNetworkMode").toString() == QLatin1String("hotspot");
+    if (!hotspotSetup.isEmpty()) {
+        // Keep the key in [wlan].password, which preseed redacts from logs and
+        // support bundles. Its early phase then converts the native profile
+        // offline, before NetworkManager starts, without logging credentials.
+        QString command = QStringLiteral(
+            "umask 077; nmcli --offline connection modify connection.id imager-hotspot "
+            "connection.interface-name wlan0 connection.autoconnect yes connection.autoconnect-priority 100 "
+            "802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.hidden no "
+            "ipv4.method shared ipv4.addresses 10.42.0.1/24 ipv6.method disabled");
+        if (s.value("wifiMode").toString() != QLatin1String("open"))
+            command += QStringLiteral(" 802-11-wireless-security.proto rsn "
+                                      "802-11-wireless-security.pairwise ccmp 802-11-wireless-security.group ccmp");
+        command += QStringLiteral(
+            " < /etc/NetworkManager/system-connections/preconfigured.nmconnection"
+            " > /etc/NetworkManager/system-connections/imager-hotspot.nmconnection"
+            " && chmod 600 /etc/NetworkManager/system-connections/imager-hotspot.nmconnection"
+            " && rm /etc/NetworkManager/system-connections/preconfigured.nmconnection"
+            " && rfkill unblock wifi");
+        push(QStringLiteral("[runcmd]"), body);
+        push(QStringLiteral("early = [") + tomlQuote(command) + QStringLiteral("]"), body);
+        push(QString(), body);
+    }
+
     // ---- [wlan] ----
     const bool wifiConfigured = s.value("wifiConfigured", true).toBool();
     const QByteArray ssidOctets = ssidOctetsFromSettings(s, wifiConfigured);
-    if (!ssidOctets.isEmpty()) {
+    if (!ssidOctets.isEmpty() && (!hotspot || !hotspotSetup.isEmpty())) {
         // TOML strings must be valid UTF-8. A normal SSID goes into wlan.ssid;
         // an exotic non-UTF-8 SSID (arbitrary 802.11 octets) can't be a TOML
         // string, so we hand the raw octets to rpi-preseed as lowercase hex via
         // wlan.ssid_hex, which it decodes and writes as a NetworkManager
         // byte-array SSID.
-        const bool ssidIsUtf8 = isValidUtf8(ssidOctets);
-        const bool hidden = wifiConfigured
+        const bool ssidIsUtf8 = !hotspot && isValidUtf8(ssidOctets);
+        const bool hidden = wifiConfigured && !hotspot
                                 ? (s.value("wifiHidden").toBool() || s.value("wifiSSIDHidden").toBool())
                                 : false;
         const QString country = s.value("recommendedWifiCountry").toString().trimmed();
@@ -1188,7 +1264,8 @@ QByteArray CustomisationGenerator::generateRpiPreseedToml(const QVariantMap& s,
         QString psk;
         bool pskEncrypted = false;
         if (!openNetwork) {
-            psk = wifiConfigured ? s.value("wifiPasswordCrypt").toString() : QString();
+            psk = hotspot ? resolveWifiPskCrypt(s, ssidOctets, wifiConfigured)
+                          : (wifiConfigured ? s.value("wifiPasswordCrypt").toString() : QString());
             if (!psk.isEmpty()) {
                 pskEncrypted = true;
             } else {
