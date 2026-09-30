@@ -1162,7 +1162,7 @@ void DownloadExtractThread::_pushQueue(const char *data, size_t len)
             if (_ringBuffer->isCancelled() || _cancelled) {
                 return;
             }
-            // Poll for async I/O completions while waiting (prevents deadlock)
+            // Linux ignores this producer-thread poll; only the writing thread reaps io_uring.
             if (_file && _file->IsAsyncIOSupported()) {
                 _file->PollAsyncCompletions();
             }

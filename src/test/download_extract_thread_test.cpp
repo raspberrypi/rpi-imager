@@ -263,6 +263,61 @@ TEST_CASE("DownloadExtractThread decompresses a gzip image onto the target", "[e
     CHECK(readFile(scratch.filePath(QStringLiteral("gz-dest.img"))).left(image.size()) == image);
 }
 
+#ifdef __linux__
+TEST_CASE("DownloadExtractThread writes with as many buffer slots as queued writes",
+          "[extract][async]")
+{
+    auto ops = rpi_imager::FileOperations::Create();
+    if (!ops->IsAsyncIOSupported())
+        SKIP("io_uring is not available");
+    if (!haveTool(QStringLiteral("gzip")))
+        SKIP("gzip is not installed");
+
+    class EqualDepthExtract : public DownloadExtractThread
+    {
+    public:
+        EqualDepthExtract(const QByteArray &url, const QByteArray &dest)
+            : DownloadExtractThread(url, dest, {}, nullptr, 5000)
+        {
+            setDebugAsyncIO(true);
+            setDebugAsyncQueueDepth(4);
+            setVerifyEnabled(false);
+        }
+
+        int initialQueueDepth = 0;
+
+    protected:
+        void _onDevicePrepared() override
+        {
+            DownloadExtractThread::_onDevicePrepared();
+            initialQueueDepth = _file->GetAsyncQueueDepth();
+            _writeBufferSize = 64 * 1024;
+            _writeRingBuffer = std::make_shared<RingBuffer>(
+                4, _writeBufferSize,
+                SystemMemoryManager::instance().getSystemPageSize(), 5000);
+        }
+    };
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(2 * 1024 * 1024, 1731);
+    const QString raw = scratch.filePath(QStringLiteral("equal-depth.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("gzip"), {QStringLiteral("-1"), raw}));
+    const QString dest = scratch.filePath(QStringLiteral("equal-depth-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + 2 * 1024 * 1024, '\0')));
+
+    EqualDepthExtract dt(QByteArray("file://") + (raw + QStringLiteral(".gz")).toUtf8(),
+                         dest.toUtf8());
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+    const Outcome outcome = runToCompletion(dt, 15000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(dt.initialQueueDepth == 4);
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+    CHECK(readFile(dest).left(image.size()) == image);
+}
+#endif
+
 TEST_CASE("DownloadExtractThread decompresses a zipped image onto the target", "[extract]")
 {
     if (!haveTool(QStringLiteral("zip")))
