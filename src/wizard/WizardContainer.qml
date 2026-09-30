@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../qmlcomponents"
+import "dialogs"
 
 import RpiImager
 
@@ -999,6 +1000,76 @@ Item {
         }
     }
     
+    property string activeProfileId: ""
+
+    function openProfiles(saving) {
+        if (isWriting || !customizationSupported)
+            return
+        profilesDialog.saving = saving
+        profilesDialog.open()
+    }
+
+    function loadProfile(id) {
+        if (isWriting || !customizationSupported)
+            return false
+        var profile = ImageWriterSingleton.customisationProfile(id)
+        if (!profile.settings)
+            return false
+        var restored = profile.settings
+        // Interface forms can be skipped entirely on an incompatible OS or
+        // board, so remove unsupported values before they reach the generator.
+        var interfaces = {
+            enableI2C: "i2c", enableSPI: "spi", enable1Wire: "onewire",
+            enableSerial: "serial", enableUsbGadget: "usb_otg"
+        }
+        for (var key in interfaces) {
+            if (!ccRpiAvailable || !ifAndFeaturesAvailable ||
+                    !ImageWriterSingleton.checkHWAndSWCapability(interfaces[key]))
+                delete restored[key]
+        }
+        customizationSettings = restored
+        activeProfileId = id
+        // A profile replaces the whole configuration, including any per-device
+        // state left by the previous project. Every form will validate its own
+        // restored values against the currently selected OS and board.
+        hostnameConfigured = false
+        localeConfigured = false
+        userConfigured = false
+        wifiConfigured = false
+        sshEnabled = false
+        secureBootEnabled = false
+        piConnectEnabled = false
+        ImageWriterSingleton.setSetting("connect_org_enabled", false)
+        ImageWriterSingleton.clearConnectToken()
+        ImageWriterSingleton.setImageCustomisation("", "", "", "", "")
+        ifI2cEnabled = false
+        ifSpiEnabled = false
+        if1WireEnabled = false
+        ifSerial = ""
+        featUsbGadgetEnabled = false
+        writeAnotherMode = false
+        invalidateStepsFrom(firstCustomizationStep)
+        markStepPermissible(firstCustomizationStep)
+        // Keep the legacy remembered settings in sync, so step-level edits
+        // cannot accidentally bring credentials from the previous project back.
+        var remembered = Object.assign({}, customizationSettings)
+        delete remembered.enableI2C
+        delete remembered.enableSPI
+        delete remembered.enable1Wire
+        delete remembered.enableSerial
+        delete remembered.enableUsbGadget
+        ImageWriterSingleton.setSavedCustomisationSettings(remembered)
+        jumpToStep(firstCustomizationStep)
+        return true
+    }
+
+    ProfilesDialog {
+        id: profilesDialog
+        objectName: "profilesDialog"
+        parent: root.overlayRootRef ? root.overlayRootRef : root
+        wizardContainer: root
+    }
+
     // Step components
     Component {
         id: languageSelectionStep
@@ -1540,6 +1611,7 @@ Item {
     }
     
     function resetWizard() {
+        activeProfileId = ""
         // Reset all wizard state to initial values
         // Start at OS selection if offline, device selection if online
         currentStep = hasNetworkConnectivity ? 0 : 1
@@ -1614,6 +1686,7 @@ Item {
     // so the answer has to be the same everywhere: nothing the user configured
     // is configured any more, and the wizard goes straight to the write.
     function skipAllCustomisation() {
+        activeProfileId = ""
         hostnameConfigured = false
         localeConfigured = false
         userConfigured = false
