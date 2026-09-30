@@ -18,6 +18,7 @@
 #include <QTemporaryDir>
 #include <QFile>
 #include <QDir>
+#include <map>
 #include <optional>
 #include "drivelist.h"
 
@@ -32,6 +33,9 @@ using Catch::Matchers::ContainsSubstring;
 namespace Drivelist::testing {
 #ifdef Q_OS_LINUX
 std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput, bool embeddedMode = false);
+std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput,
+                                                     const std::map<std::string, std::string>& mmcTypes,
+                                                     bool embeddedMode = false);
 std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode = false);
 std::optional<QByteArray> runLsblk();
 #endif
@@ -611,6 +615,120 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[0].size == 32010928128);
         CHECK(devices[0].isReadOnly == false);
         CHECK(devices[0].isRemovable == true);
+    }
+
+    SECTION("Names an SD card in an internal reader")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, {{"/dev/mmcblk0", "SD"}});
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].description == "Internal SD card reader");
+    }
+
+    SECTION("Names eMMC as eMMC, not as an SD card reader")
+    {
+        // #1658: eMMC offered as a card reader got overwritten. No boot
+        // partitions listed: the kernel doesn't always expose them.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "62537072640",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null,
+                "children": [
+                    {"kname":"/dev/mmcblk0p1","type":"part","label":"bootfs",
+                     "mountpoint":null},
+                    {"kname":"/dev/mmcblk0p2","type":"part","label":"rootfs",
+                     "mountpoint":null}
+                ]
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, {{"/dev/mmcblk0", "MMC"}});
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].description == "Internal eMMC storage (bootfs, rootfs)");
+    }
+
+    SECTION("Tells eMMC and an SD card apart at any index")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "15634268160",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk1",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk2",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31268536320",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, {{"/dev/mmcblk0", "MMC"},
+                                                     {"/dev/mmcblk1", "SD"},
+                                                     {"/dev/mmcblk2", "MMC"}});
+
+        REQUIRE(devices.size() == 3);
+        CHECK(devices[0].description == "Internal eMMC storage");
+        CHECK(devices[1].description == "Internal SD card reader");
+        CHECK(devices[2].description == "Internal eMMC storage");
+    }
+
+    SECTION("Names an MMC device of unknown type without claiming SD")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json);
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].description == "Internal MMC storage");
     }
 
     SECTION("Marks a removable SD card carrying root as a system drive")
