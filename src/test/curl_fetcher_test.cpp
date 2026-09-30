@@ -309,10 +309,7 @@ TEST_CASE("CurlFetcher reports the effective URL", "[curl-fetcher]")
 TEST_CASE("A local file is reported as fetched from where it was asked for",
           "[curl-fetcher]")
 {
-    // A file: url is not redirected, but curl writes it back in its own form:
-    // on Windows "file:///C:/..." comes back as "file://C:/...", where the
-    // drive letter parses as a host. Reported as a redirect, it replaced a
-    // local custom repository with a URL that no longer loads.
+    // This catches the regression on Windows, where curl normalises the drive URL.
     ScratchDir scratch;
     const QString path = scratch.filePath(QStringLiteral("os_list.json"));
     REQUIRE(writeFile(path, "{}"));
@@ -336,10 +333,30 @@ TEST_CASE("A URL curl only tidies is not reported as a redirect", "[curl-fetcher
     CurlFetcher fetcher;
     const QUrl requested =
         QUrl::fromLocalFile(scratch.path() + QStringLiteral("/./os_list.json"));
-    REQUIRE(requested.toString().contains(QStringLiteral("/./")));
+    if (!requested.toString().contains(QStringLiteral("/./")))
+        SKIP("Qt normalised the file URL before curl received it");
     const FetchResult result = fetchAndWait(fetcher, requested);
 
     REQUIRE(result.finished);
+    CHECK(result.effectiveUrl == requested);
+}
+
+TEST_CASE("An HTTP URL curl only tidies keeps its requested URL", "[curl-fetcher]")
+{
+    ScratchDir scratch;
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("os_list.json")), "{}"));
+    LocalHttpServer server(scratch.path());
+    REQUIRE_SERVER(server);
+    const QUrl requested = server.urlFor(QStringLiteral("./os_list.json"));
+    if (!requested.toString().contains(QStringLiteral("/./")))
+        SKIP("Qt normalised the HTTP URL before curl received it");
+
+    CurlFetcher fetcher;
+    const FetchResult result = fetchAndWait(fetcher, requested);
+
+    REQUIRE(result.finished);
+    CHECK_FALSE(result.failed);
+    CHECK(result.data == QByteArray("{}"));
     CHECK(result.effectiveUrl == requested);
 }
 

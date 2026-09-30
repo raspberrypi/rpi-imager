@@ -2458,18 +2458,7 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url,
     // Track if this is the top-level OS list request
     bool isTopLevelRequest = (url == osListUrl());
     
-    // If this is the top-level custom repo request and the URL was redirected,
-    // update _repo to reflect the final URL. This ensures "Using data from X"
-    // shows the actual server that served the data, not the original redirect source.
-    // This is a security consideration - users should see where data actually came from.
-    // Only where a redirect is a thing that can happen. Adopting the effective
-    // URL is meant to show which server actually served the data, which means
-    // nothing for a file:// repository -- and on Windows it actively breaks one:
-    // curl hands the effective URL back in a form QUrl reparses with the drive
-    // letter as the authority, so "file:///C:/list.json" was stored as
-    // "file://c/list.json". The first fetch succeeded, the corrupted URL went
-    // into _repo, and every fetch after it failed -- including the one behind
-    // the Retry button.
+    // Only HTTP(S) redirects can change which server supplies a custom repository.
     const QString repoScheme = url.scheme().toLower();
     const bool redirectsApply = (repoScheme == QLatin1String("http") ||
                                  repoScheme == QLatin1String("https"));
