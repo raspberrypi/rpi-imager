@@ -43,6 +43,7 @@ struct Store
 TEST_CASE("Secret keys are recognised by name in any group", "[settingssecrets]")
 {
     CHECK(SecretSettings::isSecret(kWifi));
+    CHECK(SecretSettings::isSecret(QStringLiteral("imagecustomization/wifiPasswordCrypt")));
     CHECK(SecretSettings::isSecret(QStringLiteral("imagecustomization/sshUserPassword")));
     CHECK(SecretSettings::isSecret(QStringLiteral("imagecustomization/sshAuthorizedKeys")));
     CHECK(SecretSettings::isSecret(kOrgKey));
@@ -167,3 +168,29 @@ TEST_CASE("DPAPI sealing round-trips and rejects altered ciphertext",
 }
 
 #endif // _WIN32
+
+TEST_CASE("Hotspot keys use the protected account-aware secret store", "[settingssecrets][hotspot]")
+{
+    Store s;
+    REQUIRE(s.dir.isValid());
+    const QString key = QStringLiteral("imagecustomization/wifiPasswordCrypt");
+    const QString psk(64, QLatin1Char('a'));
+    SecretSettings owner(s.settings, true);
+    owner.setValue(key, psk);
+    CHECK(owner.group(QStringLiteral("imagecustomization")).value(QStringLiteral("wifiPasswordCrypt")) == psk);
+#ifdef _WIN32
+    CHECK(rpi_imager::isSealed(s.raw(key).toString()));
+    CHECK_FALSE(s.onDisk().contains(psk.toLatin1()));
+#endif
+    const QVariant stored = s.raw(key);
+    SecretSettings visitor(s.settings, false);
+    CHECK_FALSE(visitor.value(key).isValid());
+    visitor.setValue(key, QString(64, QLatin1Char('b')));
+    CHECK(visitor.value(key).toString() == QString(64, QLatin1Char('b')));
+    CHECK(s.raw(key) == stored);
+    visitor.remove(key);
+    CHECK_FALSE(visitor.value(key).isValid());
+    CHECK(s.raw(key) == stored);
+    SecretSettings next(s.settings, true);
+    CHECK(next.value(key).toString() == psk);
+}
