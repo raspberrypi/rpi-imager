@@ -115,11 +115,8 @@ void MacOSFileOperations::CleanupAsyncIO() {
   // Wait for pending writes before cleanup
   WaitForPendingWrites();
 
-  // ...and then wait for them again, because the wait above gives up as soon
-  // as the write is cancelled -- by design, so a user who has pressed cancel
-  // is not made to sit through the rest of the queue. What it leaves behind
-  // is blocks still running on the queue, each holding a slot of the
-  // semaphore and each still touching this object.
+  // ...and again, because a cancelled wait gives up at its emergency timeout
+  // with blocks still holding semaphore slots and touching this object.
   if (pending_writes_.load() > 0) {
     constexpr auto kDrainLimit = std::chrono::seconds(30);
     const auto deadline = std::chrono::steady_clock::now() + kDrainLimit;
@@ -850,6 +847,12 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
         Log("WaitForPendingWrites: EMERGENCY timeout after " + std::to_string(totalWaitMs / 1000) + 
             "s with " + std::to_string(remaining) + " writes still pending - forcing sync fallback");
         
+        // Fallback would replay a cancelled job and zero the count under
+        // blocks still in flight.
+        if (cancelled_.load()) {
+          return FileError::kCancelled;
+        }
+
         lock.unlock();
         return AttemptSyncFallback();
       }
