@@ -10,7 +10,6 @@
 #include <QPointer>
 #include <QDebug>
 #include <curl/curl.h>
-#include <cstring>
 
 /**
  * Worker task that fetches data using libcurl in a thread pool.
@@ -88,13 +87,7 @@ public:
             }
             qDebug() << "CurlFetcher: fetch failed for" << _url.toString() << "-" << error;
         } else {
-            // Success - get the effective URL after any redirects.
-            //
-            // Only a redirect counts. curl also writes back a URL it followed
-            // nowhere in its own form -- "file:///C:/os.json" comes back as
-            // "file://C:/os.json" on Windows, where the drive letter then
-            // parses as a host -- and taking that for a redirect replaced a
-            // working local repository with one that no longer loads.
+            // URL normalisation alone does not mean curl followed a redirect.
             long redirectCount = 0;
             curl_easy_getinfo(curl, CURLINFO_REDIRECT_COUNT, &redirectCount);
             char *effectiveUrl = nullptr;
