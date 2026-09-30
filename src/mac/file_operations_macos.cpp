@@ -106,6 +106,7 @@ void MacOSFileOperations::InitAsyncIO() {
     async_write_offset_ = 0;
     pending_writes_.store(0);
     cancelled_.store(false);
+    discard_queued_.store(false);
     first_async_error_.store(FileError::kSuccess);
     Log("Initialized async I/O with queue depth " + std::to_string(async_queue_depth_));
   }
@@ -734,13 +735,18 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   rpi_imager::WriteLatencyStats* stats = &write_latency_stats_;
   MacOSFileOperations* self = this;
   dispatch_async(async_queue_, ^{
-    ssize_t written = self->PwriteAligned(data, size, write_offset);
+    // The queue is serial, so without this a cancel waits out every write
+    // queued ahead of the drain.
+    const bool discard = self->discard_queued_.load();
+    ssize_t written = discard ? 0 : self->PwriteAligned(data, size, write_offset);
     
     // Record completion latency (thread-safe via atomic operations)
     stats->recordCompletion(submit_time);
     
     FileError result = FileError::kSuccess;
-    if (written < 0 || static_cast<size_t>(written) != size) {
+    if (discard) {
+      result = FileError::kCancelled;
+    } else if (written < 0 || static_cast<size_t>(written) != size) {
       result = FileError::kWriteError;
       // Store first error
       FileError expected = FileError::kSuccess;
@@ -786,6 +792,7 @@ void MacOSFileOperations::CancelAsyncIO() {
   // Set cancellation flag - this will cause AsyncWriteSequential to return
   // immediately with kCancelled, and will unblock any semaphore waits
   cancelled_.store(true);
+  discard_queued_.store(true);
   
   // Wake up WaitForPendingWrites if blocked
   {

@@ -110,6 +110,9 @@ class MacOSFileOperations : public FileOperations {
   int async_queue_depth_;
   std::atomic<int> pending_writes_;
   std::atomic<bool> cancelled_;
+  // User cancel only: AttemptSyncFallback() also sets cancelled_, and its
+  // replay needs queued blocks to keep their buffers until they run.
+  std::atomic<bool> discard_queued_{false};
   std::atomic<FileError> first_async_error_;
   dispatch_queue_t async_queue_;
   dispatch_semaphore_t queue_semaphore_;  // Limits in-flight writes
