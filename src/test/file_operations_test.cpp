@@ -360,6 +360,7 @@ TEST_CASE("Draining to sync mode completes once completions are consumed", "[fil
   CHECK(readBack(path, static_cast<std::uint64_t>(kWrites) * kChunk, kChunk) == tail);
 }
 
+#ifdef __linux__
 TEST_CASE("The writing thread reaps completions while it waits for a buffer",
           "[file-ops]") {
   // Regression test for #1731. With zero-copy writes every in-flight write
@@ -368,6 +369,11 @@ TEST_CASE("The writing thread reaps completions while it waits for a buffer",
   // thread runs out of slots before the queue is full, and waits for a free
   // one calling nothing but PollAsyncCompletions(). If that call reaps
   // nothing, no callback runs, no slot is freed, and the write stalls at 0%.
+  constexpr int kDepth = 4;
+  constexpr std::size_t kChunk = 64 * 1024;
+  std::vector<std::vector<std::uint8_t>> buffers;
+  buffers.reserve(kDepth);
+  std::atomic<int> returned{0};
   auto ops = FileOperations::Create();
   if (!ops->IsAsyncIOSupported()) {
     SKIP("async I/O is not available in this build (no liburing, or too old)");
@@ -375,16 +381,10 @@ TEST_CASE("The writing thread reaps completions while it waits for a buffer",
 
   const std::string path = makeImage("reap-while-waiting.img");
   REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
-  constexpr int kDepth = 4;
   REQUIRE(ops->SetAsyncQueueDepth(kDepth));
-
-  constexpr std::size_t kChunk = 64 * 1024;
 
   // One buffer per queue slot, as the extract thread has when the ring buffer
   // is exactly as deep as the queue. Each callback hands its buffer back.
-  std::vector<std::vector<std::uint8_t>> buffers;
-  buffers.reserve(kDepth);
-  std::atomic<int> returned{0};
   for (int i = 0; i < kDepth; ++i) {
     buffers.push_back(pattern(kChunk, static_cast<std::uint8_t>(0xA0 + i)));
     REQUIRE(ops->AsyncWriteSequential(
@@ -398,14 +398,12 @@ TEST_CASE("The writing thread reaps completions while it waits for a buffer",
   const int inFlight = ops->GetPendingWriteCount();
   REQUIRE(inFlight > 0);
 
-#ifdef __linux__
   // io_uring's completion queue has a single consumer, so a poll from another
   // thread (the progress watchdog runs on the main thread) must not reap,
   // even once the kernel has finished the writes.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   std::thread([&ops]() { ops->PollAsyncCompletions(); }).join();
   CHECK(ops->GetPendingWriteCount() == inFlight);
-#endif
 
   // The writing thread waits for a buffer the way the extract thread does:
   // by polling, and nothing else.
@@ -425,6 +423,7 @@ TEST_CASE("The writing thread reaps completions while it waits for a buffer",
     CHECK(readBack(path, static_cast<std::uint64_t>(i) * kChunk, kChunk) == buffers[i]);
   }
 }
+#endif
 
 TEST_CASE("Opening a path that does not exist fails cleanly", "[file-ops]") {
   auto ops = FileOperations::Create();

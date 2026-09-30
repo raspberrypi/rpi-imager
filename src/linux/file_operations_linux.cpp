@@ -400,6 +400,7 @@ FileError LinuxFileOperations::GetSize(std::uint64_t& size) {
 FileError LinuxFileOperations::Close() {
   // Wait for any pending async writes
   WaitForPendingWrites();
+  cq_owner_thread_.store(std::thread::id{}, std::memory_order_relaxed);
   
   if (fd_ >= 0) {
     if (close(fd_) != 0) {
@@ -791,8 +792,7 @@ void LinuxFileOperations::PollAsyncCompletions() {
   // in a loop whose only way to make progress is this call. If it reaped
   // nothing, no callback would run and no slot would ever be freed: the write
   // stalls at 0% until the ring buffer stall timeout. See #1731.
-  if (io_uring_available_ && ring_ != nullptr && pending_writes_.load() > 0 &&
-      cq_owner_thread_.load(std::memory_order_relaxed) == std::this_thread::get_id()) {
+  if (cq_owner_thread_.load(std::memory_order_relaxed) == std::this_thread::get_id()) {
     ProcessCompletions(false);  // Non-blocking poll
   }
 #endif
