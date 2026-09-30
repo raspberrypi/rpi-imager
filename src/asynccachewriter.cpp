@@ -183,7 +183,18 @@ void AsyncCacheWriter::finish()
     
     // Wait for thread to complete
     wait();
-    
+
+    // The preallocation is only a guess at the size. Where it succeeded and
+    // the stream came up short, what lies past the last write is reserved
+    // zeroes, and a cache file carrying them does not match the hash below.
+    if (!_hasError && _file.size() != _bytesWritten && !_file.resize(_bytesWritten)) {
+        qDebug() << "AsyncCacheWriter: Failed to trim to" << _bytesWritten
+                 << "bytes -" << _file.errorString();
+        _hasError = true;
+        emit error(tr("Cache write error: %1").arg(_file.errorString()));
+        cleanup();
+    }
+
     if (!_hasError) {
         // Flush and close the file
         _file.flush();

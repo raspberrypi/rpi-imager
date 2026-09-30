@@ -373,6 +373,7 @@ WizardStepBase {
 
                     Text {
                         id: pwdHint
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         Layout.columnSpan: 1
                         visible: root.showPw

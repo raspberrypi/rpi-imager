@@ -10,6 +10,13 @@
 #include <QFileInfo>
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <string>
+#include <set>
+#include <chrono>
+#include <thread>
+#include <QElapsedTimer>
+
+#include "platform_tools.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "rpiboot/test/mock_usb_transport.h"
@@ -325,6 +332,31 @@ TEST_CASE("chipGenerationName returns readable names", "[rpiboot][types]")
 {
     CHECK(chipGenerationName(ChipGeneration::BCM2711) == "BCM2711");
     CHECK(chipGenerationName(ChipGeneration::BCM2712) == "BCM2712");
+}
+
+TEST_CASE("fastbootGadgetFamilySlug names the provisioner's per-family gadgets", "[rpiboot][types]")
+{
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2711) == "pi4-family");
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2712) == "pi5-family");
+    // 2710-class parts take the self-contained bootfiles tarball and never ask
+    // for a boot.img, which is why no pi3-family gadget is shipped.
+    CHECK(fastbootGadgetFamilySlug(ChipGeneration::BCM2836_7).empty());
+}
+
+TEST_CASE("chipGenerationFromRevisionProcessor reads the fastboot getvar", "[rpiboot][types]")
+{
+    CHECK(chipGenerationFromRevisionProcessor("0x4") == ChipGeneration::BCM2712);
+    CHECK(chipGenerationFromRevisionProcessor("0x3") == ChipGeneration::BCM2711);
+    // BCM2836 and BCM2837 are one generation to imager, as they are one PID.
+    CHECK(chipGenerationFromRevisionProcessor("0x1") == ChipGeneration::BCM2836_7);
+    CHECK(chipGenerationFromRevisionProcessor("0x2") == ChipGeneration::BCM2836_7);
+    // The field is documented as "0x" plus hex, but accept a bare digit too.
+    CHECK(chipGenerationFromRevisionProcessor("4") == ChipGeneration::BCM2712);
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("0x0").has_value()); // BCM2835
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("0x5").has_value()); // future part
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("").has_value());
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("0x").has_value());
+    CHECK_FALSE(chipGenerationFromRevisionProcessor("nonsense").has_value());
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -661,8 +693,8 @@ TEST_CASE("A sideload reports its progress the whole way through", "[rpiboot][pr
 
 TEST_CASE("A bootfiles archive is preferred and disk is the fallback", "[rpiboot][protocol]")
 {
-    const QString tar = QFileInfo::exists(QStringLiteral("/usr/bin/tar"))
-                            ? QStringLiteral("/usr/bin/tar")
+    const QString tar = rpi_test::haveTool(QStringLiteral("tar"))
+                            ? rpi_test::toolPath(QStringLiteral("tar"))
                             : QStringLiteral("/bin/tar");
     if (!QFileInfo::exists(tar))
         SKIP("tar is not installed, so no bootfiles archive can be built");
@@ -683,9 +715,14 @@ TEST_CASE("A bootfiles archive is preferred and disk is the fallback", "[rpiboot
         std::ofstream f(staging / "gadget.bin", std::ios::binary);
         f.write(fromArchive.data(), static_cast<std::streamsize>(fromArchive.size()));
     }
+    // -f relative to the working directory: GNU tar reads a colon before the
+    // first slash as the host:path form it once used for remote archives, so
+    // an absolute Windows path sends it looking for a host called "C". -C
+    // takes one safely, that argument not being parsed the same way.
     QProcess tarProc;
-    tarProc.start(tar, {QStringLiteral("-cf"),
-                        QString::fromStdString((fw.path() / "fastboot" / "bootfiles.bin").string()),
+    tarProc.setWorkingDirectory(
+        QString::fromStdString((fw.path() / "fastboot").string()));
+    tarProc.start(tar, {QStringLiteral("-cf"), QStringLiteral("bootfiles.bin"),
                         QStringLiteral("-C"), QString::fromStdString(staging.string()),
                         QStringLiteral("gadget.bin")});
     tarProc.waitForFinished(30000);
@@ -1759,4 +1796,153 @@ TEST_CASE("A board revision that is not a number keeps its raw value",
     CHECK(*raw == "not-hex");
     // The session carried on.
     CHECK(server.metadata().serialNumber.value_or("") == "ABC123");
+}
+
+// ── when the board stops answering ──────────────────────────────────────────
+//
+// The device going quiet is how a sideload both succeeds and fails. It stops
+// answering because it rebooted into the next stage -- which is the whole
+// point -- or because the cable is bad. Telling those apart is what these
+// paths do, and the message the user is left with is all they have to go on.
+//
+// No hardware needed: the mock answers -1 once its queue runs dry, which is
+// exactly what a vanished device looks like to the transport.
+
+TEST_CASE("A board that never answers at all is reported, not waited on",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // Nothing served, so there is nothing to interpret as a reboot. Waiting a
+    // grace window here would leave the user staring at a progress bar for a
+    // minute over a cable that was never plugged in properly.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("config.txt", "enable_uart=1\n");
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    QElapsedTimer elapsed;
+    elapsed.start();
+    CHECK_FALSE(server.run(mock, fw.path(), nullptr, cancelled));
+
+    INFO("error: " << server.lastError());
+    CHECK_FALSE(server.lastError().empty());
+    // Named as a disconnect, so the user is sent to the cable rather than to
+    // the image they chose.
+    CHECK(server.lastError().find("disconnected") != std::string::npos);
+    // An IO error is fatal rather than retried -- the device is gone, and
+    // three seconds of retries followed by a minute of grace would be a
+    // minute of nothing over a cable that was never seated.
+    CHECK(elapsed.elapsed() < 30000);
+}
+
+TEST_CASE("A board that goes quiet after serving files may have rebooted",
+          "[rpiboot][fileserver][disconnect]")
+{
+    // The successful ending. The device stops answering because it is no
+    // longer the device -- it has become the next stage -- and the caller
+    // says so by setting the flag the scanner shares.
+    MockUsbTransport mock;
+    TempFirmwareDir fw;
+    fw.writeFile("bootcode4.bin", "firmware");
+
+    // ReadFile, not GetFileSize: a size query is answered without a file
+    // leaving the host, and it is files served that make a later silence
+    // worth interpreting as a reboot.
+    mock.queueBulkReadResponse(makeFileMessage(FileCommand::ReadFile, "bootcode4.bin"));
+
+    std::atomic<bool> cancelled{false};
+    FileServer server;
+
+    // Set from another thread while the grace window is polling, which is how
+    // the scanner reports the device coming back on the same port path.
+    std::thread confirm([&cancelled]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        cancelled.store(true);
+    });
+
+    const bool ok = server.run(mock, fw.path(), nullptr, cancelled, nullptr,
+                               /*requireReEnumConfirmation=*/true);
+    confirm.join();
+
+    INFO("error: " << server.lastError());
+    CHECK(ok);
+}
+
+// ============================================================================
+// What each chip generation is called
+// ============================================================================
+// Four lookups turn a generation into a string, and three of them are load
+// bearing: the directory prefix picks which firmware inside bootfiles.bin the
+// board is served, and the gadget family slug picks which fastboot package it
+// is sent. A case answering for the wrong board sends firmware that will not
+// run on it, which is not something the board can report back.
+//
+// Only the generations reached by whatever else the suite happened to do were
+// covered. Here every one is walked through every lookup.
+
+TEST_CASE("Every chip generation has a name, a prefix and a family",
+          "[rpiboot][types]")
+{
+    using rpiboot::ChipGeneration;
+
+    struct Expected {
+        ChipGeneration gen;
+        const char *name;
+        const char *prefix;
+        const char *family;
+        const char *description;
+    };
+    static const Expected kAll[] = {
+        {ChipGeneration::BCM2836_7, "BCM2836/7", "2836", "",
+         "Compute Module 3 (USB Boot)"},
+        {ChipGeneration::BCM2711, "BCM2711", "2711", "pi4-family",
+         "Compute Module 4 (USB Boot)"},
+        {ChipGeneration::BCM2712, "BCM2712", "2712", "pi5-family",
+         "Compute Module 5 (USB Boot)"},
+    };
+
+    for (const Expected &e : kAll) {
+        INFO("generation " << static_cast<unsigned>(e.gen));
+        CHECK(rpiboot::chipGenerationName(e.gen) == e.name);
+        // The directory inside bootfiles.bin. Wrong here and the board is
+        // handed another board's firmware.
+        CHECK(rpiboot::chipDirectoryPrefix(e.gen) == e.prefix);
+        CHECK(rpiboot::fastbootGadgetFamilySlug(e.gen) == e.family);
+        CHECK(rpiboot::deviceDescription(e.gen) == e.description);
+    }
+}
+
+TEST_CASE("No two chip generations share a directory prefix",
+          "[rpiboot][types]")
+{
+    // They index into one archive. Two generations answering the same would
+    // serve one board the other's firmware with nothing to show for it.
+    using rpiboot::ChipGeneration;
+    static const ChipGeneration kAll[] = {
+        ChipGeneration::BCM2836_7, ChipGeneration::BCM2711, ChipGeneration::BCM2712};
+
+    std::set<std::string> prefixes;
+    for (ChipGeneration gen : kAll) {
+        const std::string prefix(rpiboot::chipDirectoryPrefix(gen));
+        INFO("prefix " << prefix);
+        CHECK_FALSE(prefix.empty());
+        CHECK(prefixes.insert(prefix).second);
+    }
+}
+
+TEST_CASE("A USB product id maps only to the generation that owns it",
+          "[rpiboot][types]")
+{
+    using rpiboot::ChipGeneration;
+    CHECK(rpiboot::chipGenerationFromPid(0x2764) == ChipGeneration::BCM2836_7);
+    CHECK(rpiboot::chipGenerationFromPid(0x2711) == ChipGeneration::BCM2711);
+    CHECK(rpiboot::chipGenerationFromPid(0x2712) == ChipGeneration::BCM2712);
+
+    // Anything else is a device that is not one of ours. Guessing would put
+    // a stranger's device in the drive list and offer to write to it.
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0x0000).has_value());
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0x2710).has_value());
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0x2713).has_value());
+    CHECK_FALSE(rpiboot::chipGenerationFromPid(0xFFFF).has_value());
 }

@@ -158,6 +158,26 @@ TestCase {
         verify(!step.nextButtonEnabled, "so there is nothing to move on to")
     }
 
+    function test_a_drive_reporting_no_size_is_not_offered_at_all() {
+        // Where the capacity check would otherwise be skipped.
+        //
+        // The refusal is "if (_devLen && _extrLen > _devLen)", so nought for
+        // a device length makes it false and any image fits. Nothing in the
+        // delegate guards that -- the unselectable rule names read-only, not
+        // size -- because the drive never gets this far: the model drops a
+        // zero-sized device, keeping fastboot storage, which reports none.
+        //
+        // That is also what the drive list now does with a size lsblk gives
+        // that cannot be used, so an unreadable size means the drive is not
+        // offered rather than offered without a check.
+        TestDrives.set([card({ device: "/dev/sdc",
+                              description: "Reader with no card",
+                              size: 0 })])
+        const l = list()
+        tryVerify(function() { return l.count === 0 }, 3000,
+                  "no row for a drive with no size (" + l.count + ")")
+    }
+
     function test_clicking_a_system_drive_asks_first() {
         // The one row where a click is a question rather than an answer: the
         // disk the machine is running from. Choosing it takes typing its name

@@ -34,6 +34,22 @@ QByteArray rsaSignSha256(const QByteArray& sha256Digest,
 // Returns empty on failure.
 QByteArray extractRsaPubkeyBin(const QString& rsaKeyPath);
 
+// Generate an RSA-2048 key pair and write it as PEM: the private key at
+// `privateKeyPath` (PKCS#1 or PKCS#8, whichever the platform produces) and
+// the public key at `publicKeyPath` as a SubjectPublicKeyInfo -- the same
+// shape `openssl rsa -pubout` writes, because the SHA-256 of that DER is
+// what gets fused into a device's OTP and cannot be changed afterwards.
+//
+// Returns false and leaves neither file behind on failure. The private key
+// in particular must not be left on disk half-made: it is a real RSA key,
+// and Imager's own file chooser would offer it.
+bool generateRsaKeyPair(const QString& privateKeyPath, const QString& publicKeyPath);
+
+// The DER SubjectPublicKeyInfo behind a public-key PEM -- what
+// `openssl rsa -pubin -outform DER` prints, and what the OTP hash is taken
+// over. Empty when the file is not a public key PEM.
+QByteArray publicKeyPemToDer(const QString& publicKeyPath);
+
 // Parse a DER-encoded SubjectPublicKeyInfo (e.g. `openssl pkey -pubout
 // -outform DER` output) into the 264-byte (N little-endian || E
 // little-endian) blob the boot ROM expects.  Pure ASN.1 parsing, no

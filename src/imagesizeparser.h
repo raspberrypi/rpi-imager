@@ -21,6 +21,13 @@
 namespace imagesize {
 
 // .xz: read the stream footer and index.
+// Ceiling handed to liblzma when decoding an .xz index. liblzma's own guard
+// against an index claiming more records than the file could hold; passing
+// UINT64_MAX switched it off and a crafted 60-byte file asked for petabytes.
+// A genuine index is a few bytes per block, so this is far above any real
+// image and far below anything that could exhaust memory.
+inline constexpr quint64 kXzIndexMemLimit = 64u * 1024u * 1024u;
+
 quint64 parseXz(const QString &path);
 
 // .gz: the ISIZE trailer, which is the original size modulo 2^32, corrected

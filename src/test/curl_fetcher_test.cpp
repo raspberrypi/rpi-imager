@@ -12,6 +12,8 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "platform_tools.h"
+
 #include "curlfetcher.h"
 
 #include <QByteArray>
@@ -48,7 +50,7 @@ private:
     QString _path;
 };
 
-bool havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
+bool havePython() { return rpi_test::havePython(); }
 
 // A localhost HTTP server serving one directory, torn down with the object.
 class LocalHttpServer
@@ -66,7 +68,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), directory});
         if (!_process.waitForStarted(10000))
             return;
@@ -116,7 +118,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), target});
         if (!_process.waitForStarted(10000))
             return;

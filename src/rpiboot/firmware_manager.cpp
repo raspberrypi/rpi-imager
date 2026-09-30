@@ -43,6 +43,15 @@ bool overwriteCopy(const std::filesystem::path& src,
     return std::filesystem::copy_file(src, dest, ec);
 }
 
+// Name of the fastboot gadget rpi-sb-provisioner ships for this chip's
+// device family, used both as the upstream filename under host-support/ and
+// as the cache filename under fastboot/.  Only called for the chips that take
+// a separate boot.img (BCM2711/BCM2712), so the slug is never empty here.
+std::string fastbootGadgetFilename(ChipGeneration chip)
+{
+    return "fastboot-gadget-" + std::string(fastbootGadgetFamilySlug(chip)) + ".img";
+}
+
 // Capture the ETag from a curl response.  Used to populate a sidecar file
 // next to each cached download so the next session can issue a conditional
 // GET (If-None-Match) and skip the body transfer when the upstream hasn't
@@ -132,18 +141,31 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
             // BCM2711/BCM2712: fastboot gadget kernel + config are separate from
             // bootfiles.bin; bootcode is extracted from the TAR at cache time.
             //
+            // The gadget fetched is the one for this chip's device family, not
+            // the all-devices fastboot-gadget.img: rpi-sb-provisioner ships one
+            // per family and serves that (get_fastboot_gadget()), keeping the
+            // unsuffixed image only as the fallback for a station that cannot
+            // tell what it has connected.  We always can — the USB PID we
+            // enumerated the device on *is* the family — so there is no reason
+            // to push the other families' device trees and firmware over USB.
+            //
             // The upstream gadget is cached under its own name
-            // (fastboot-gadget.img); the active boot.img the file_server
-            // uploads is rematerialised on every run by ensureAvailable() —
-            // either copied from this cached upstream or from the user's
-            // current custom gadget.  Custom gadgets are session-only in the
-            // UI, so they must not leak into the persistent cache.
-            entries.push_back({provisioner + "host-support/fastboot-gadget.img",
-                               "fastboot/fastboot-gadget.img"});
+            // (fastboot-gadget-<family>.img); the active boot.img the
+            // file_server uploads is rematerialised on every run by
+            // ensureAvailable() — either copied from this cached upstream or
+            // from the user's current custom gadget.  Custom gadgets are
+            // session-only in the UI, so they must not leak into the
+            // persistent cache.
+            const std::string gadget = fastbootGadgetFilename(chip);
+            entries.push_back({provisioner + "host-support/" + gadget,
+                               "fastboot/" + gadget});
             entries.push_back({usbboot + "mass-storage-gadget64/config.txt",
                                "fastboot/config.txt"});
+            // Fetched to .original, not bootfiles.bin: the latter is derived
+            // per run, and a derived file cannot also be the one the
+            // conditional GET refreshes.
             entries.push_back({usbboot + "firmware/bootfiles.bin",
-                               "fastboot/bootfiles.bin"});
+                               "fastboot/bootfiles.bin.original"});
         }
         break;
 
@@ -161,7 +183,6 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
             // usbboot/secure-boot-recovery/bootcode4.bin is a git-symlink
             // (29 bytes via raw HTTP) — the real binary lives at the root
             // as bootcode4.bin (entry above), no need for a second copy.
-            entries.push_back({usbboot + sub + "config.txt",            sub + "config.txt"});
             const std::string pieepromUrl = eepromVersion
                 ? eeprom + "firmware-2711/latest/pieeprom-" + *eepromVersion + ".bin"
                 : std::string();
@@ -169,7 +190,6 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
         } else if (chip == ChipGeneration::BCM2712) {
             const std::string sub = "secure-boot-recovery5/";
             entries.push_back({usbboot + sub + "boot.conf",              sub + "boot.conf"});
-            entries.push_back({usbboot + sub + "config.txt",              sub + "config.txt"});
             const std::string pieepromUrl = eepromVersion
                 ? eeprom + "firmware-2712/latest/pieeprom-" + *eepromVersion + ".bin"
                 : std::string();
@@ -216,6 +236,9 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
                 std::ifstream in(sidecar);
                 std::string cached;
                 if (std::getline(in, cached) && !cached.empty()) {
+                    // A cache the old code wrote carries the CR.
+                    if (cached.back() == '\r')
+                        cached.pop_back();
                     qWarning() << "FirmwareManager: rpi-eeprom version fetch failed,"
                                   "falling back to cached version"
                                << QString::fromStdString(cached);
@@ -245,6 +268,8 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         if (std::filesystem::exists(sidecar)) {
             std::ifstream in(sidecar);
             std::getline(in, cached);
+            if (!cached.empty() && cached.back() == '\r')
+                cached.pop_back();
         }
         if (cached != *eepromVersion) {
             std::error_code purgeEc;
@@ -267,8 +292,9 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     //     bytes, never inherited from a different binary;
     //   - copy_file below always creates a fresh destination (no stale-cache
     //     edge cases on Windows).
-    // The cached upstream gadget lives under its own name (fastboot-gadget.img)
-    // and remains intact, so this isn't a network re-fetch — just a copy.
+    // The cached upstream gadget lives under its own name
+    // (fastboot-gadget-<family>.img) and remains intact, so this isn't a
+    // network re-fetch — just a copy.
     if (mode == SideloadMode::Fastboot) {
         std::error_code purgeEc;
         std::filesystem::remove(versionDir / "fastboot" / "boot.img", purgeEc);
@@ -364,7 +390,9 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         auto sidecar = versionDir / sub / ".eeprom-version";
         std::error_code sidecarEc;
         std::filesystem::create_directories(sidecar.parent_path(), sidecarEc);
-        std::ofstream out(sidecar, std::ios::trunc);
+        // Binary: a text-mode stream turns the newline into CRLF on Windows,
+        // so the same version wrote different bytes on different platforms.
+        std::ofstream out(sidecar, std::ios::trunc | std::ios::binary);
         if (out)
             out << *eepromVersion << '\n';
     }
@@ -372,7 +400,7 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     // 3b. Materialise fastboot/boot.img for BCM2711/BCM2712 fastboot runs.
     // The active boot.img is rebuilt from scratch on every run (see step 1b):
     //   - if the user provided a custom gadget, copy from that file;
-    //   - otherwise, copy from the cached upstream fastboot-gadget.img.
+    //   - otherwise, copy from this family's cached upstream gadget.
     // BCM2836_7 doesn't ship a separate boot.img (it uses a self-contained
     // bootfiles.bin bundle) — skip cleanly when the manifest doesn't include
     // an upstream gadget and no custom is set.
@@ -381,16 +409,42 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         auto gadgetDest = versionDir / "fastboot" / "boot.img";
         std::filesystem::create_directories(gadgetDest.parent_path(), ec);
 
+        const auto legacyGadget = versionDir / "fastboot" / "fastboot-gadget.img";
+
         std::filesystem::path gadgetSrc;
         if (!_customFastbootGadget.empty()) {
             gadgetSrc = _customFastbootGadget;
             qDebug() << "FirmwareManager: using custom fastboot gadget:"
                      << QString::fromStdString(_customFastbootGadget);
         } else {
-            gadgetSrc = versionDir / "fastboot" / "fastboot-gadget.img";
+            const std::string gadget = fastbootGadgetFilename(chip);
+            gadgetSrc = versionDir / "fastboot" / gadget;
             if (!std::filesystem::exists(gadgetSrc)) {
-                _lastError = "Cached fastboot-gadget.img missing — cannot materialise boot.img";
-                return {};
+                // A cache populated before per-family gadgets holds only the
+                // all-devices image, and offline that is all there is to boot
+                // from.  It carries every family's device trees rather than
+                // this one's, which is wasteful but not wrong, so prefer it to
+                // failing the run outright.
+                if (std::filesystem::exists(legacyGadget)) {
+                    qWarning() << "FirmwareManager:" << QString::fromStdString(gadget)
+                               << "not cached — falling back to the all-devices "
+                                  "fastboot-gadget.img";
+                    gadgetSrc = legacyGadget;
+                } else {
+                    _lastError = "Cached " + gadget + " missing — cannot materialise boot.img";
+                    return {};
+                }
+            } else {
+                // The all-devices image is ~3MB larger than any family's and
+                // nothing fetches it any more, so a cache carrying both is
+                // holding one copy for nothing.  Drop it once the gadget that
+                // replaced it is on disk.
+                std::error_code legacyEc;
+                if (std::filesystem::remove(legacyGadget, legacyEc))
+                    qDebug() << "FirmwareManager: removed superseded "
+                                "fastboot/fastboot-gadget.img from the cache";
+                std::filesystem::remove(versionDir / "fastboot" / "fastboot-gadget.img.etag",
+                                        legacyEc);
             }
         }
 
@@ -405,23 +459,22 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
     // 3c. Extract the correct bootcode from bootfiles.bin for chips that
     // need it (BCM2711 → bootcode4.bin, BCM2712 → bootcode5.bin).
     //
-    // If a re-provisioning run on a previous invocation re-packed
-    // bootfiles.bin (with a counter-signed bootcode inside), we kept the
-    // upstream tar at bootfiles.bin.original.  Restore from .original
-    // before extracting so we always read the unsigned upstream bootcode
-    // — extracting from a signed blob and re-signing on top of that
-    // would chain-sign and the ROM would reject the result.
+    // bootfiles.bin is derived, so rebuild from .original: a re-provisioning
+    // run leaves a counter-signed bootcode in it, and signing that again
+    // chain-signs what the ROM rejects.
     if (needsBootcodeExtraction) {
         auto bundlePath     = versionDir / "fastboot" / "bootfiles.bin";
         auto bundleOriginal = versionDir / "fastboot" / "bootfiles.bin.original";
-        if (std::filesystem::exists(bundleOriginal)) {
-            std::error_code restoreEc;
-            overwriteCopy(bundleOriginal, bundlePath, restoreEc);
-            if (restoreEc) {
-                _lastError = "Failed to restore bootfiles.bin from .original: "
-                           + restoreEc.message();
-                return {};
-            }
+        if (!std::filesystem::exists(bundleOriginal)) {
+            _lastError = "Upstream bootfiles.bin.original missing from the cache";
+            return {};
+        }
+        std::error_code restoreEc;
+        overwriteCopy(bundleOriginal, bundlePath, restoreEc);
+        if (restoreEc) {
+            _lastError = "Failed to restore bootfiles.bin from .original: "
+                       + restoreEc.message();
+            return {};
         }
         if (!extractBootcodeFromBootfiles(versionDir, chip))
             return {};  // _lastError set by helper
@@ -520,19 +573,6 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
             auto bundlePath = versionDir / "fastboot" / "bootfiles.bin";
             auto bundleOriginal = versionDir / "fastboot" / "bootfiles.bin.original";
 
-            // Preserve a pristine copy of the upstream tar on first encounter.
-            // This protects against re-signing-an-already-signed blob across
-            // repeated runs; we always re-baseline from .original below.
-            std::error_code preserveEc;
-            if (!std::filesystem::exists(bundleOriginal)) {
-                std::filesystem::copy_file(bundlePath, bundleOriginal, preserveEc);
-                if (preserveEc) {
-                    _lastError = "Failed to preserve bootfiles.bin.original: "
-                               + preserveEc.message();
-                    return {};
-                }
-            }
-
             // Read the pristine tar, splice in the signed bootcode, write
             // back to bootfiles.bin (overwriting any previous-run output).
             Bootfiles bundle;
@@ -623,7 +663,7 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         return {};
     }
 
-    // 5. SBR: rewrite recovery config.txt so the device re-enumerates back
+    // 5. SBR: write the recovery config.txt so the device re-enumerates back
     // into rpiboot after writing the EEPROM.  Without this, the device boots
     // into the OS post-recovery and our SBR scanner would time out.
     if (mode == SideloadMode::SecureBootRecovery && !ensureSbrReenumerates(versionDir, chip))
@@ -909,65 +949,28 @@ bool FirmwareManager::ensureSbrReenumerates(const std::filesystem::path& version
                                 ? "secure-boot-recovery5"
                                 : "secure-boot-recovery";
     auto configPath = versionDir / sub / "config.txt";
-    if (!std::filesystem::exists(configPath)) {
-        // First-run case: file not downloaded yet.  Caller invokes us again
-        // after the download loop, so this is a benign no-op.
-        return true;
-    }
 
-    std::ifstream in(configPath);
-    if (!in) {
-        _lastError = "Cannot read SBR config.txt: " + configPath.string();
-        return false;
-    }
+    std::error_code ec;
+    std::filesystem::create_directories(configPath.parent_path(), ec);
 
-    // Strip any pre-existing set_boot_order= or recovery_reboot= lines.
-    // We re-append them in the required order at the end of the file so
-    // we don't have to reason about the section the upstream put them in
-    // (config.txt is processed top-to-bottom; recovery_reboot must be
-    // reached *after* set_boot_order has been observed, otherwise the
-    // bootloader reboots before applying our boot-order override and the
-    // device powers up into normal boot instead of back into rpiboot).
-    auto isOverrideKey = [](const std::string& line) {
-        auto trimStart = line.find_first_not_of(" \t");
-        if (trimStart == std::string::npos)
-            return false;
-        std::string_view rest(line.data() + trimStart, line.size() - trimStart);
-        return rest.starts_with("set_boot_order=") ||
-               rest.starts_with("recovery_reboot=");
-    };
-
-    std::vector<std::string> kept;
-    kept.reserve(64);
-    std::string line;
-    while (std::getline(in, line)) {
-        // Tolerate CRLF input — strip the trailing \r so our re-write is
-        // pure LF (matches what the bootloader expects).
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        if (isOverrideKey(line))
-            continue;
-        kept.push_back(std::move(line));
-    }
-    in.close();
-
+    // Written whole, not appended to upstream's template of commented-out
+    // examples: recovery.bin takes only a few directives.  This matches what
+    // rpi-sb-bootstrap.sh builds, in the same order -- the boot order must be
+    // set before the reboot is asked for.
     std::ofstream out(configPath, std::ios::binary | std::ios::trunc);
     if (!out) {
-        _lastError = "Cannot rewrite SBR config.txt: " + configPath.string();
+        _lastError = "Cannot write SBR config.txt: " + configPath.string();
         return false;
     }
-    for (const auto& l : kept)
-        out << l << '\n';
-    // Order is load-bearing: set_boot_order must precede recovery_reboot.
-    out << "set_boot_order=0x3\n";
-    out << "recovery_reboot=1\n";
+    out << "program_pubkey=1\n"
+        << "set_reboot_order=0x3\n"
+        << "recovery_reboot=1\n";
     if (!out) {
         _lastError = "Write failed on SBR config.txt: " + configPath.string();
         return false;
     }
-    qDebug() << "FirmwareManager: rewrote" << QString::fromStdString(configPath.string())
-             << "with set_boot_order=0x3 + recovery_reboot=1"
-             << "(kept" << kept.size() << "upstream line(s))";
+    qDebug() << "FirmwareManager: wrote" << QString::fromStdString(configPath.string())
+             << "with program_pubkey=1 + set_reboot_order=0x3 + recovery_reboot=1";
     return true;
 }
 

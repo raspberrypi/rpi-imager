@@ -18,6 +18,7 @@
 #include "writeprogresswatchdog.h"
 #include "downloadthread.h"
 #include "signal_log.h"
+#include "test_scratch.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -133,10 +134,7 @@ int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("write_progress_watchdog_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("write_progress_watchdog_test"));
     return Catch::Session().run(argc, argv);
 }
 

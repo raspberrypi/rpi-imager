@@ -13,39 +13,67 @@
 #include <shlobj.h>
 #include <vector>
 
+#include <deque>
+
 namespace {
-// Convert Qt filter format to COMDLG_FILTERSPEC array for IFileDialog
-std::vector<COMDLG_FILTERSPEC> convertQtFilterToFileDialog(const QString &qtFilter, 
-                                                            std::vector<std::wstring> &storage)
+// Convert Qt filter format to COMDLG_FILTERSPEC array for IFileDialog.
+//
+// The specs hold bare pointers into `storage`, so `storage` has to outlive
+// them -- and, less obviously, must not move what is already in it. A vector
+// reallocates as it grows, and a short string keeps its characters inside the
+// string object, so growing the vector moved the text of every filter added
+// so far and left the pointers in the earlier specs addressing freed memory.
+// Two filters was enough, which is what Imager passes. A deque never moves an
+// element that is already in it.
+std::vector<COMDLG_FILTERSPEC> convertQtFilterToFileDialog(const QString &qtFilter,
+                                                           std::deque<std::wstring> &storage)
 {
     std::vector<COMDLG_FILTERSPEC> filters;
-    
+
     if (qtFilter.isEmpty()) {
         return filters;
     }
-    
+
     // Qt filter format: "Description (*.ext1 *.ext2);;Another (*.ext3)"
     QStringList filterList = qtFilter.split(";;");
-    
+
     for (const QString &filter : filterList) {
         QString description = filter.section('(', 0, 0).trimmed();
         QString extensions = filter.section('(', 1, 1).section(')', 0, 0);
-        
+
         // IFileDialog expects semicolons between extensions (already space-separated in Qt format)
         extensions = extensions.replace(" ", ";");
-        
-        // Store strings in vector to keep them alive
+
+        // Stored here so the specs have something to point at.
         storage.push_back(description.toStdWString());
         storage.push_back(extensions.toStdWString());
-        
+
         COMDLG_FILTERSPEC spec;
         spec.pszName = storage[storage.size() - 2].c_str();
         spec.pszSpec = storage[storage.size() - 1].c_str();
         filters.push_back(spec);
     }
-    
+
     return filters;
 }
+} // anonymous namespace
+
+#ifdef NATIVEFILEDIALOG_ENABLE_TEST_API
+// The filter string decides what the dialog offers to open. It is parsed and
+// the results handed to IFileDialog as pointers, which is the part that was
+// wrong and the part no dialog can be opened to check.
+namespace NativeFileDialogTesting {
+
+std::vector<COMDLG_FILTERSPEC> convertFilter(const QString &qtFilter,
+                                             std::deque<std::wstring> &storage)
+{
+    return convertQtFilterToFileDialog(qtFilter, storage);
+}
+
+} // namespace NativeFileDialogTesting
+#endif
+
+namespace {
 
 // Helper class to ensure COM is initialized and cleaned up properly
 class ComInitializer
@@ -128,7 +156,7 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     
     // Set file type filters
     if (!filter.isEmpty()) {
-        std::vector<std::wstring> filterStorage;
+        std::deque<std::wstring> filterStorage;
         std::vector<COMDLG_FILTERSPEC> filters = convertQtFilterToFileDialog(filter, filterStorage);
         if (!filters.empty()) {
             pfd->SetFileTypes(static_cast<UINT>(filters.size()), filters.data());

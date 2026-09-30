@@ -94,6 +94,7 @@ Item {
             // Optional help link under the label
             Text {
                 id: helpText
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
                 // See ImOptionButton: a url property is a JS object in Qt 6,

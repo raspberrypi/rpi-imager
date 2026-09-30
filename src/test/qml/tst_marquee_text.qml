@@ -166,4 +166,21 @@ TestCase {
         const m = create({ text: testCase.longName })
         compare(m.children[0].Accessible.ignored, true)
     }
+
+    // -- Markup in a name is a name, not markup ----------------------------
+
+    function test_markup_in_a_name_is_shown_rather_than_run() {
+        // The strings this draws come from a repository and from a device's
+        // own firmware, neither of which anybody vetted. Drawn as rich text,
+        // a name is parsed: an <img> in a USB product string is fetched, and
+        // the fetch is the disclosure. The warning is the proof -- a label
+        // that only shows the characters never asks for anything.
+        failOnWarning(/rpi-imager-marquee-beacon/)
+        const m = create({ text: "<b>SD</b> <img src=\"rpi-imager-marquee-beacon.png\"/>" })
+        const label = m.children[0]
+        compare(label.textFormat, Text.PlainText)
+        compare(label.text, m.text)
+        verify(m.Accessible.name.indexOf("<img") >= 0,
+               "and the characters are still all there")
+    }
 }

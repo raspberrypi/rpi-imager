@@ -22,9 +22,31 @@ ComboBox {
     activeFocusOnTab: true
     focusPolicy: Qt.TabFocus
     
+    // What this control is for, which the label beside it carries. A label
+    // is not associated with the control in any way an assistive technology
+    // can follow, so nothing of it is read out when focus arrives: without
+    // this the announcement was the value alone -- "English", never
+    // "Language, English". Pass the label's own text and let the colon be
+    // dealt with below, so the wording stays one translatable string.
+    property string accessiblePurpose: ""
+
+    readonly property string _purposeWithoutColon: {
+        var t = accessiblePurpose.trim()
+        // Several languages end the label with their own punctuation, so
+        // trim by character rather than by looking for ":".
+        while (t.length > 0 && ":：﹕︓ 	".indexOf(t.charAt(t.length - 1)) >= 0)
+            t = t.substring(0, t.length - 1)
+        return t
+    }
+
     // Accessibility properties
     Accessible.role: Accessible.ComboBox
-    Accessible.name: currentText
+    // Purpose first, then value: the order a screen reader user needs them
+    // in, and the comma is where it pauses. Translatable as a whole, because
+    // that order is not the same in every language.
+    Accessible.name: _purposeWithoutColon.length > 0
+                     ? qsTr("%1, %2").arg(_purposeWithoutColon).arg(currentText)
+                     : currentText
     Accessible.description: indicateError ? "Error: Invalid selection" : ""
     Accessible.editable: editable
     Accessible.focused: activeFocus
@@ -252,6 +274,7 @@ ComboBox {
                 z: 1
                 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.left: parent.left
                     anchors.leftMargin: Style.spacingTiny
                     anchors.verticalCenter: parent.verticalCenter
@@ -262,6 +285,7 @@ ComboBox {
                 }
                 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.right: parent.right
                     anchors.rightMargin: Style.spacingTiny
                     anchors.verticalCenter: parent.verticalCenter
@@ -308,7 +332,12 @@ ComboBox {
                 required property int originalIndex
                 required property int index
                 
-                width: parent ? parent.width : 0
+                // Not parent.width. A delegate's parent is the view's
+                // contentItem, whose width is derived from the delegates in
+                // it, so asking it for a width closes a loop: Qt detects it,
+                // abandons the binding and leaves the delegate whatever
+                // width it last had. The view itself is anchored and knows.
+                width: filterDelegate.ListView.view ? filterDelegate.ListView.view.width : 0
                 height: root.itemHeight
                 padding: 0
                 leftPadding: Style.spacingTiny
@@ -401,7 +430,9 @@ ComboBox {
                 antialiasing: true
                 
                 anchors.margins: 2
-                anchors.rightMargin: 2 + (dropdownList.contentHeight > dropdownList.height ? Style.scrollBarWidth : 0)
+                // Unconditional: SelectionListView.qml records why the
+                // conditional form fed back into the layout.
+                anchors.rightMargin: 2 + Style.scrollBarWidth
             }
             
             ScrollBar.vertical: ScrollBar {

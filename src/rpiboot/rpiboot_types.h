@@ -166,6 +166,50 @@ inline std::string_view chipDirectoryPrefix(ChipGeneration gen)
     return "";
 }
 
+// Slug naming the per-family fastboot gadget that rpi-sb-provisioner ships
+// in host-support/, matching get_device_family_slug() there.  Each gadget
+// carries only the device trees and start firmware its family can load, so
+// the one for the connected part is several megabytes smaller than the
+// all-devices image and is the artefact the provisioner itself serves.
+//
+// BCM2836_7 has no slug: a 2710-class part is served the self-contained
+// fastboot-gadget.2710-bootfiles-bin and never asks for a boot.img, which is
+// why the provisioner stopped shipping a pi3-family gadget at all.
+inline std::string_view fastbootGadgetFamilySlug(ChipGeneration gen)
+{
+    switch (gen) {
+    case ChipGeneration::BCM2836_7: return "";
+    case ChipGeneration::BCM2711:   return "pi4-family";
+    case ChipGeneration::BCM2712:   return "pi5-family";
+    }
+    return "";
+}
+
+// Chip generation from rpi-fastbootd's "revision-processor" getvar -- the
+// processor field of the board revision code, reported as "0x" followed by
+// one uppercase hex digit.  This is how a device already running the fastboot
+// gadget names its silicon; the USB PID that identifies it in rpiboot mode is
+// gone by then, replaced by the gadget's borrowed 18d1:4e40.
+//
+// Field values are the revision-code processor IDs: 0 BCM2835, 1 BCM2836,
+// 2 BCM2837, 3 BCM2711, 4 BCM2712.  BCM2836 and BCM2837 fold into the one
+// generation imager tracks, and BCM2835 is deliberately unsupported.
+inline std::optional<ChipGeneration> chipGenerationFromRevisionProcessor(std::string_view value)
+{
+    if (value.starts_with("0x") || value.starts_with("0X"))
+        value.remove_prefix(2);
+    if (value.size() != 1)
+        return std::nullopt;
+
+    switch (value[0]) {
+    case '1':
+    case '2': return ChipGeneration::BCM2836_7;
+    case '3': return ChipGeneration::BCM2711;
+    case '4': return ChipGeneration::BCM2712;
+    default:  return std::nullopt;
+    }
+}
+
 // Friendly device description for the UI (e.g. drive-list delegate)
 inline std::string deviceDescription(ChipGeneration gen)
 {

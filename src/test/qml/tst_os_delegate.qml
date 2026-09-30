@@ -80,7 +80,9 @@ TestCase {
                 "release_date": "2026-01-01",
                 "extract_size": 1048576,
                 "image_download_size": 524288,
-                "extract_sha256": "aa11"
+                "extract_sha256": "aa11",
+                "website": "https://example.invalid/alpha/",
+                "tooltip": "What the repository says about Alpha"
             },
             {
                 "name": "Test OS Beta",
@@ -503,5 +505,196 @@ TestCase {
                   "with the entries in the list to choose from")
 
         restoreRepository()
+    }
+
+    function test_the_offline_retry_can_be_reached_without_a_mouse() {
+        // The case above presses it with the pointer. The step registered
+        // only its list view in the focus ring, and when the fetch failed
+        // that list is empty -- so the one control that could put the screen
+        // right was the one thing a keyboard could not get to.
+        const name = "os_delegate_offline_ring.json"
+        const url = TestFiles.write(name, JSON.stringify({}))
+        verify(url !== "", "wrote a repository holding nothing")
+        ImageWriterSingleton.refreshOsListFrom(url)
+        tryVerify(function () {
+            return ImageWriterSingleton.isOsListUnavailable
+        }, 10000, "the list is unavailable")
+
+        const retry = findChild(step, "osListRetryButton")
+        verify(retry, "the banner offers a way to try again")
+        tryVerify(function () { return retry.visible && retry.height > 0 },
+                  3000, "and it is on screen")
+
+        var reached = false
+        step.forceActiveFocus()
+        for (var i = 0; i < 24 && !reached; ++i) {
+            keyClick(Qt.Key_Tab)
+            wait(1)
+            if (step.Window.activeFocusItem === retry)
+                reached = true
+        }
+        verify(reached, "Retry is in the keyboard ring")
+
+        restoreRepository()
+    }
+
+    SignalSpy {
+        id: webSpy
+        signalName: "webPressed"
+    }
+
+    function indexOfRow(l, wanted) {
+        for (let i = 0; i < l.count; i++) {
+            const item = l.itemAtIndex(i)
+            if (item && item.name === wanted)
+                return i
+        }
+        fail("no row named '" + wanted + "'")
+        return -1
+    }
+
+    function test_the_page_can_be_opened_without_a_mouse() {
+        // The icon sits in a delegate, and a delegate is not in the tab
+        // ring: a list is one stop and the arrows move within it. Without a
+        // key on the list, the page was reachable with a pointer and no
+        // other way at all.
+        const l = osList()
+        const alpha = rowNamed(l, "Test OS Alpha")
+
+        // Watched at the signal rather than at the opener: a delegate's
+        // functions cannot be replaced from here, and the real one hands a
+        // URL to the desktop -- BROWSER=true makes that harmless, not absent.
+        webSpy.target = l
+        webSpy.clear()
+
+        l.forceActiveFocus()
+        l.currentIndex = indexOfRow(l, "Test OS Alpha")
+        waitForRendering(step)
+
+        keyClick(Qt.Key_Return, Qt.ControlModifier)
+        compare(webSpy.count, 1, "Control and Enter asked for the entry's page")
+        compare(webSpy.signalArguments[0][1], alpha,
+                "and asked for the row that was current")
+
+        // A bare Enter is still selection, not the page.
+        keyClick(Qt.Key_Return)
+        compare(webSpy.count, 1, "a plain Enter did not open it")
+    }
+
+    function test_the_list_says_how_to_open_a_page() {
+        const l = osList()
+        const name = l.Accessible.name
+        verify(name.indexOf("Control") >= 0,
+               "the list says the page can be opened: " + name)
+    }
+
+    function test_the_list_says_how_to_get_into_a_category_and_out() {
+        // The two announcements are a pair: one screen tells the user how to
+        // descend, the other how to come back. Only the second existed, so a
+        // reader was told the way out of somewhere it never said how to
+        // enter.
+        const l = osList()
+        const name = l.Accessible.name
+        verify(name.indexOf("Right") >= 0,
+               "the list says how to open a category: " + name)
+        verify(name.indexOf("Enter") >= 0 && name.indexOf("arrow keys") >= 0,
+               "and still says the rest of it: " + name)
+    }
+
+    // -- What the repository says about an entry ----------------------------
+    //
+    // Both fields were parsed, stored, exposed as roles and drawn by nothing.
+    // The tooltip is on the row, and the page is a sixteen-point icon at the
+    // end of it -- shown only on the entries that have one, so the rows that
+    // do not are exactly as they were.
+
+    function linkIn(row) {
+        return findChild(row, "osWebsiteLink")
+    }
+
+    function test_an_entry_with_a_page_offers_a_way_to_reach_it() {
+        const l = osList()
+        const alpha = rowNamed(l, "Test OS Alpha")
+
+        const link = linkIn(alpha)
+        verify(link, "the row has the link")
+        verify(link.visible, "and it is on screen")
+        verify(link.width > 0 && link.height > 0, "with a size to click")
+    }
+
+    function test_an_entry_with_no_page_offers_nothing_and_takes_no_room() {
+        const l = osList()
+        const beta = rowNamed(l, "Test OS Beta")
+
+        const link = linkIn(beta)
+        verify(link, "the item is there")
+        verify(!link.visible, "but nothing is shown for an entry with no page")
+    }
+
+    function test_the_link_is_announced_rather_than_being_mouse_only() {
+        const l = osList()
+        const link = linkIn(rowNamed(l, "Test OS Alpha"))
+
+        verify(link.Accessible.name.indexOf("Test OS Alpha") >= 0,
+               "the announcement names the entry: " + link.Accessible.name)
+        verify(link.Accessible.description.length > 0,
+               "and says what pressing it does")
+    }
+
+    function test_reaching_the_page_is_not_choosing_the_entry() {
+        // The row beneath selects on press, so a link that did not consume
+        // its own click would change the user's choice on the way to a
+        // browser. BROWSER=true in the test environment means nothing is
+        // launched.
+        const l = osList()
+        const link = linkIn(rowNamed(l, "Test OS Alpha"))
+
+        fakeContainer.selectedOsName = ""
+        mouseClick(link)
+
+        compare(fakeContainer.selectedOsName, "",
+                "clicking the link did not choose the operating system")
+    }
+
+    function test_an_entry_naming_something_other_than_a_page_data() {
+        return [
+            { tag: "javascript", url: "javascript:alert(1)" },
+            { tag: "file",       url: "file:///etc/passwd" },
+            { tag: "data",       url: "data:text/html,hello" },
+            { tag: "smb",        url: "smb://server/share" },
+            { tag: "mailto",     url: "mailto:someone@example.invalid" },
+            { tag: "scheme",     url: "https://" },
+            { tag: "bare",       url: "example.invalid/alpha/" },
+            { tag: "empty",      url: "" }
+        ]
+    }
+
+    function test_an_entry_naming_something_other_than_a_page(data) {
+        // The address is repository text, and opening one hands it to the
+        // desktop, which picks a handler by scheme: a file manager, or on
+        // some platforms something worse. An entry naming anything but a
+        // page shows no link at all, rather than a link that refuses.
+        const l = osList()
+        const alpha = rowNamed(l, "Test OS Alpha")
+        const link = linkIn(alpha)
+        verify(link.visible, "the link is there before the address changes")
+
+        alpha.website = data.url
+        verify(!alpha.websiteOpenable, "not a page: " + data.url)
+        verify(!link.visible, "so nothing is offered")
+
+        alpha.website = "https://example.invalid/alpha/"
+        verify(link.visible, "and it comes back for one that is")
+    }
+
+    function test_the_tooltip_is_what_the_repository_wrote() {
+        const l = osList()
+        const alpha = rowNamed(l, "Test OS Alpha")
+
+        compare(alpha.tooltip, "What the repository says about Alpha",
+                "the row carries the text")
+
+        const beta = rowNamed(l, "Test OS Beta")
+        compare(beta.tooltip, "", "and an entry without one carries nothing")
     }
 }

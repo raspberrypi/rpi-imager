@@ -7,6 +7,7 @@
 #include "rpiboot_protocol.h"
 #include "bootloader_image.h"
 #include "../secureboot.h"
+#include "../secureboot_crypto.h"
 #include "../acceleratedcryptographichash.h"
 
 #include <QFile>
@@ -20,80 +21,29 @@ namespace rpiboot {
 bool SecureBootProvisioner::generateKeyPair(const std::filesystem::path& privateKeyPath,
                                               const std::filesystem::path& publicKeyPath)
 {
-    QString privPath = QString::fromStdString(privateKeyPath.string());
-    QString pubPath = QString::fromStdString(publicKeyPath.string());
-
-    // Step 1: Generate RSA-2048 private key
-    //   openssl genrsa -out <private.pem> 2048
-    {
-        QProcess proc;
-        proc.start("openssl", {"genrsa", "-out", privPath, "2048"});
-        if (!proc.waitForStarted(5000)) {
-            qDebug() << "SecureBootProvisioner: failed to start openssl for key generation";
-            return false;
-        }
-        if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
-            qDebug() << "SecureBootProvisioner: openssl genrsa failed:"
-                     << proc.readAllStandardError();
-            return false;
-        }
-    }
-
-    // Step 2: Extract public key from private key
-    //   openssl rsa -in <private.pem> -outform PEM -pubout -out <public.pem>
-    {
-        QProcess proc;
-        proc.start("openssl", {"rsa", "-in", privPath, "-outform", "PEM",
-                                "-pubout", "-out", pubPath});
-        if (!proc.waitForStarted(5000)) {
-            qDebug() << "SecureBootProvisioner: failed to start openssl for public key extraction";
-            // Clean up the private key we just created
-            QFile::remove(privPath);
-            return false;
-        }
-        if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
-            qDebug() << "SecureBootProvisioner: openssl rsa failed:"
-                     << proc.readAllStandardError();
-            QFile::remove(privPath);
-            return false;
-        }
-    }
-
-    // Verify both files were created
-    if (!std::filesystem::exists(privateKeyPath) || !std::filesystem::exists(publicKeyPath)) {
-        qDebug() << "SecureBootProvisioner: key files not created";
-        return false;
-    }
-
-    qDebug() << "SecureBootProvisioner: generated RSA-2048 key pair at"
-             << privPath << "and" << pubPath;
-    return true;
+    // Asked of the platform rather than of openssl. Windows ships no openssl
+    // and makes the key with CNG; the others still shell out, but from behind
+    // this call rather than in front of it.
+    return SecureBootCrypto::generateRsaKeyPair(
+        QString::fromStdString(privateKeyPath.string()),
+        QString::fromStdString(publicKeyPath.string()));
 }
 
 std::optional<std::array<uint8_t, 32>> SecureBootProvisioner::calculateOtpKeyHash(
     const std::filesystem::path& publicKeyPath)
 {
-    // The OTP key hash is SHA-256 of the DER-encoded public key (SubjectPublicKeyInfo).
-    // Extract the raw public key in DER format using openssl:
-    //   openssl rsa -pubin -in <public.pem> -outform DER
-    QString pubPath = QString::fromStdString(publicKeyPath.string());
-
-    QProcess proc;
-    proc.start("openssl", {"rsa", "-pubin", "-in", pubPath, "-outform", "DER"});
-    if (!proc.waitForStarted(5000)) {
-        qDebug() << "SecureBootProvisioner: failed to start openssl for public key DER extraction";
-        return std::nullopt;
-    }
-    proc.closeWriteChannel();
-    if (!proc.waitForFinished(30000) || proc.exitCode() != 0) {
-        qDebug() << "SecureBootProvisioner: openssl DER extraction failed:"
-                 << proc.readAllStandardError();
-        return std::nullopt;
-    }
-
-    QByteArray derData = proc.readAllStandardOutput();
+    // The OTP key hash is SHA-256 of the DER-encoded public key
+    // (SubjectPublicKeyInfo). That DER is the body of the PEM, so decoding it
+    // here gives exactly what `openssl rsa -pubin -outform DER` would print,
+    // without needing an openssl to print it -- Windows ships none.
+    //
+    // This hash is fused into the device and cannot be changed afterwards, so
+    // it is worth saying plainly what it is taken over.
+    const QByteArray derData = SecureBootCrypto::publicKeyPemToDer(
+        QString::fromStdString(publicKeyPath.string()));
     if (derData.isEmpty()) {
-        qDebug() << "SecureBootProvisioner: empty DER output from openssl";
+        qDebug() << "SecureBootProvisioner: no public key DER in"
+                 << QString::fromStdString(publicKeyPath.string());
         return std::nullopt;
     }
 
@@ -188,7 +138,9 @@ static bool writePieepromSig(const std::filesystem::path& bootImgPath,
     }
 
     QFile f(QString::fromStdString(sigPath.string()));
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+    // Not QIODevice::Text: pieeprom.sig is read by the recovery image,
+    // which wants the bytes written here and not Windows line endings.
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         errOut = "Cannot write " + sigPath.string();
         return false;
     }

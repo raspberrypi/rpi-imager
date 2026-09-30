@@ -49,6 +49,7 @@ bool OSListModel::reload()
 
     QVector<OS> next;
     next.reserve(list.count());
+    int unusableSizes = 0;
 
     for (const auto value : list) {
         const QJsonObject obj = value.toObject();
@@ -69,8 +70,19 @@ bool OSListModel::reload()
             os.capabilities.append(cap.toString());
         }
 
-        os.extractSize = obj["extract_size"].toDouble();
-        os.imageDownloadSize = obj["image_download_size"].toDouble();
+        os.extractSize = oslist::byteCountFromJson(obj["extract_size"]);
+        os.imageDownloadSize = oslist::byteCountFromJson(obj["image_download_size"]);
+
+        // A size that was there and could not be used is worth saying once.
+        // Nought is also what an absent field gives, so the two are told
+        // apart here rather than in the helper: without this the only sign
+        // is a row that declines to quote a figure, which reads like an
+        // ordinary entry.
+        if ((obj.contains(QLatin1String("extract_size")) && os.extractSize == 0)
+            || (obj.contains(QLatin1String("image_download_size"))
+                && os.imageDownloadSize == 0)) {
+            ++unusableSizes;
+        }
 
         os.random = obj["random"].toBool();
 
@@ -78,15 +90,9 @@ bool OSListModel::reload()
         os.bmapUrl = obj["bmap_url"].toString();
         // Icon source: rewrite to image provider to avoid network head-of-line blocking
         {
-            const QString rawIcon = obj["icon"].toString();
-            const QString sanitized = oslist::sanitizeIconSource(rawIcon);
-            if (!sanitized.isEmpty()) {
-                // If already qrc or local relative, keep as-is. For http(s), route via image://icons/
-                if (sanitized.startsWith("http://") || sanitized.startsWith("https://")) {
-                    os.icon = QStringLiteral("image://icons/") + sanitized;
-                } else {
-                    os.icon = sanitized;
-                }
+            const QString routed = oslist::iconSourceFor(obj["icon"].toString());
+            if (!routed.isEmpty()) {
+                os.icon = routed;
             }
         }
         os.initFormat = obj["init_format"].toString();
@@ -99,6 +105,13 @@ bool OSListModel::reload()
         os.enableRPiConnect = obj.value("enable_rpi_connect").toBool(false);
 
         next.append(os);
+    }
+
+    if (unusableSizes > 0) {
+        qWarning() << "OSListModel:" << unusableSizes
+                   << "entries declared a size that could not be used"
+                   << "(negative, past 2^64, or not a number) -- those rows"
+                   << "show no download figure";
     }
 
     // Mark the first OS as recommended after architecture sorting. Done on
@@ -185,6 +198,19 @@ void OSListModel::applyRows(QVector<OS> &&next)
             emit dataChanged(index(i), index(i));
         }
     }
+}
+
+QVariantMap OSListModel::get(int row) const
+{
+    QVariantMap out;
+    if (row < 0 || row >= _osList.size())
+        return out;
+
+    const QModelIndex idx = index(row, 0);
+    const QHash<int, QByteArray> roles = roleNames();
+    for (auto it = roles.cbegin(); it != roles.cend(); ++it)
+        out.insert(QString::fromUtf8(it.value()), data(idx, it.key()));
+    return out;
 }
 
 void OSListModel::softRefresh()

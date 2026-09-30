@@ -62,7 +62,14 @@ Item {
     // Single rendered element: elides when static, shows full text and animates x when scrolling
     Text {
         id: label
+        // The element actually drawn, as opposed to the properties set on the
+        // wrapper. A case that asserts on the wrapper cannot tell whether the
+        // font reached the glyphs.
+        objectName: "marqueeTextLabel"
         text: root.text
+        // Names come from a repository and from device firmware. AutoText
+        // would read markup in one as rich text and fetch what an <img> names.
+        textFormat: Text.PlainText
         font: textMetrics.font
         color: root.color
         width: root.width

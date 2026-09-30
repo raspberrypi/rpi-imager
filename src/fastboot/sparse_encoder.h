@@ -69,10 +69,22 @@ static_assert(sizeof(SparseChunkHeader) == 12);
 // Uses OR-accumulate over uint64_t — auto-vectorises to SSE2/AVX2/NEON.
 inline bool isBlockZero(const uint8_t* data)
 {
-    const auto* p = reinterpret_cast<const uint64_t*>(data);
+    // memcpy rather than a cast: `data` is a buffer curl handed over, at
+    // whatever alignment curl chose, and reading it through a uint64_t* when
+    // it is not 8-byte aligned is undefined. Found by UBSan on 14 September
+    // 2026 at two addresses ending 0b and 75, arriving through
+    // _curl_write_callback -> _writeData -> _writeFileZeroSkip.
+    //
+    // The cast is the more dangerous for the vectorisation this function
+    // exists to get: a compiler entitled to assume the alignment the cast
+    // asserts may emit instructions that require it. memcpy of a whole
+    // uint64_t lowers to the same load and keeps the promise.
     uint64_t acc = 0;
-    for (int i = 0; i < static_cast<int>(SPARSE_BLK_SZ / sizeof(uint64_t)); ++i)
-        acc |= p[i];
+    for (int i = 0; i < static_cast<int>(SPARSE_BLK_SZ / sizeof(uint64_t)); ++i) {
+        uint64_t v;
+        std::memcpy(&v, data + i * sizeof(uint64_t), sizeof(v));
+        acc |= v;
+    }
     return acc == 0;
 }
 
@@ -80,14 +92,18 @@ inline bool isBlockZero(const uint8_t* data)
 // On success, writes the fill value to *fillValue.
 inline bool isBlockFill(const uint8_t* data, uint32_t* fillValue)
 {
-    const auto* p32 = reinterpret_cast<const uint32_t*>(data);
-    uint32_t val = p32[0];
+    // Same reasoning as isBlockZero: the buffer's alignment is not ours to
+    // assume, and both reads here are through it.
+    uint32_t val;
+    std::memcpy(&val, data, sizeof(val));
     // Build 64-bit pattern and XOR-accumulate
     uint64_t pattern = (static_cast<uint64_t>(val) << 32) | val;
-    const auto* p64 = reinterpret_cast<const uint64_t*>(data);
     uint64_t diff = 0;
-    for (int i = 0; i < static_cast<int>(SPARSE_BLK_SZ / sizeof(uint64_t)); ++i)
-        diff |= (p64[i] ^ pattern);
+    for (int i = 0; i < static_cast<int>(SPARSE_BLK_SZ / sizeof(uint64_t)); ++i) {
+        uint64_t v;
+        std::memcpy(&v, data + i * sizeof(uint64_t), sizeof(v));
+        diff |= (v ^ pattern);
+    }
     if (diff == 0) {
         *fillValue = val;
         return true;

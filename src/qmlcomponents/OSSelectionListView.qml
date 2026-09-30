@@ -15,6 +15,11 @@ SelectionListView {
     // Additional signals for OS-specific navigation
     signal rightPressed(int index, var item, var modelData)
     signal leftPressed()
+    // The row an entry's web page hangs off. The icon that opens it sits in
+    // a delegate, and a delegate is not in the tab ring -- a list is one
+    // stop and the arrows move within it -- so without a key here the page
+    // is reachable with a pointer and no other way.
+    signal webPressed(int index, var item)
     
     // Additional properties for OS selection
     property var osSelectionHandler: null
@@ -46,6 +51,24 @@ SelectionListView {
     Keys.onLeftPressed: function(event) {
         root.leftPressed()
         event.accepted = true
+    }
+
+    // A shortcut rather than Keys.onPressed: the base already declares the
+    // specific handlers on this same attachment, and a Keys.onPressed added
+    // here alongside them is never called. Enabled only while the list has
+    // focus, so it belongs to the list and not to the window.
+    //
+    // Control and Return rather than a letter: the list has no type-to-find,
+    // but a bare letter is what one would be, and this should not be in its
+    // way if one ever arrives.
+    Shortcut {
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: root.activeFocus
+        onActivated: {
+            if (root.currentIndex !== -1)
+                root.webPressed(root.currentIndex,
+                                root.itemAtIndex(root.currentIndex))
+        }
     }
     
     // Helper function to handle OS selection (shared by single and double click)

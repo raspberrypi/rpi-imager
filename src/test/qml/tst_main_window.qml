@@ -766,10 +766,10 @@ TestCase {
         const name = "perf-export.json"
         // Written and removed again, so the export is what creates it and the
         // assertion cannot pass on a file that was already there.
-        //
-        // Its url is the one the dialog would hand back. "file://" put in
-        // front of a path is only a url when the path starts with a slash: on
-        // Windows it makes the drive letter the host.
+        // The url TestFiles hands back, not one rebuilt from the path:
+        // "file://" + "C:/..." has two slashes where three are needed, so QUrl
+        // reads the drive letter as a host and the dialog passes on
+        // "file://c/Users/...", which names nothing.
         const url = TestFiles.write(name, "placeholder")
         verify(url !== "", "the scratch file works")
 

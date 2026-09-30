@@ -181,6 +181,31 @@ Result<void> DiskFormatter::FormatFile(
                     PartitionSectorsFor(file_size_bytes));
 }
 
+Result<void> DiskFormatter::FormatFilesystemOnly(
+    const std::string& file_path,
+    std::uint64_t file_size_bytes) {
+
+  const std::uint64_t total_sectors = file_size_bytes / kSectorSize;
+  if (total_sectors > 0xFFFFFFFFULL) {
+    return Result<void>(FormatError::kInvalidParameters);
+  }
+  // The same floor as the partitioned entry points: below this the geometry
+  // has nothing sensible to produce, and FAT32 is defined by its cluster
+  // count rather than by what the boot sector claims.
+  if (!CanHoldFat32(static_cast<std::uint32_t>(total_sectors))) {
+    return Result<void>(FormatError::kInsufficientSpace);
+  }
+
+  FileError error = file_ops_->CreateTestFile(file_path, file_size_bytes);
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
+  }
+
+  // From sector nought, over the whole file: no partition table to describe
+  // it and none expected.
+  return WriteFat32(0, static_cast<std::uint32_t>(total_sectors));
+}
+
 Result<void> DiskFormatter::WriteMbr(
     std::uint64_t device_size_bytes) const {
   

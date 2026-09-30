@@ -158,6 +158,19 @@ class DiskFormatter {
       const std::string& file_path,
       std::uint64_t file_size_bytes);
 
+  // A file holding a FAT32 filesystem and nothing else -- no partition
+  // table, the filesystem starting at sector nought.
+  //
+  // This is the shape boot.img has: mkfs.vfat over a whole file is what the
+  // POSIX hosts produce, and what the bootloader and mtools both expect. The
+  // Windows build used to ask diskpart to attach the file as a virtual disk
+  // and partition it, which cannot work -- diskpart's `select vdisk` wants a
+  // real VHD with the footer that makes it one, not a file of the right
+  // length.
+  Result<void> FormatFilesystemOnly(
+      const std::string& file_path,
+      std::uint64_t file_size_bytes);
+
  private:
   static constexpr std::uint32_t kSectorSize = 512;
   static constexpr std::uint32_t kPartitionStartSector = 8192;  // 4MB offset
@@ -228,6 +241,25 @@ class DiskFormatter {
                                        std::uint32_t sectors_per_cluster,
                                        std::uint16_t reserved_sectors,
                                        std::uint8_t num_fats);
+
+#ifdef DISKFORMATTER_ENABLE_TEST_API
+ public:
+  // The arithmetic above, reachable on its own.
+  //
+  // It decides the cluster count, and a volume whose count falls in the wrong
+  // band is read as a FAT16 by everything that opens it. Driving it through a
+  // whole format only reaches the sizes a format is given; asked directly it
+  // can be held to the degenerate ones too.
+  static Fat32Geometry GeometryForTest(std::uint32_t partition_sectors,
+                                       std::uint32_t sectors_per_cluster,
+                                       std::uint16_t reserved_sectors,
+                                       std::uint8_t num_fats) {
+    return ComputeGeometry(partition_sectors, sectors_per_cluster,
+                           reserved_sectors, num_fats);
+  }
+
+ private:
+#endif
 
   // Whether a partition this size can hold a FAT32 at all, at the cluster
   // size CalculateFat32Config would pick for it.

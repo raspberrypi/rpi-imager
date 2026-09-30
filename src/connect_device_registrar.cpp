@@ -85,12 +85,34 @@ QString extractSignature(const std::vector<std::string> &infoLines)
     return {};
 }
 
+// The management API answers with a small JSON object. A megabyte is far
+// more than any of them, and far less than a server that means harm can
+// send: the endpoint is named by a setting, so what comes back is chosen by
+// whoever that setting points at.
+constexpr qsizetype kMaxResponseBytes = 1024 * 1024;
+
+// How much of a body is worth putting in front of somebody. The parse-failure
+// message quotes what came back, which is useful when it is a line of HTML
+// from a proxy and useless when it is a megabyte.
+constexpr qsizetype kMaxQuotedBytes = 256;
+
 size_t curlWriteToByteArray(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
     auto *out = static_cast<QByteArray *>(userdata);
     const size_t n = size * nmemb;
-    out->append(ptr, static_cast<int>(n));
+    if (out->size() + static_cast<qsizetype>(n) > kMaxResponseBytes)
+        return 0;   // short write: curl gives up with CURLE_WRITE_ERROR
+    out->append(ptr, static_cast<qsizetype>(n));
     return n;
+}
+
+// A body as a string, cut to something a message can carry.
+QString quotedBody(const QByteArray &body)
+{
+    if (body.size() <= kMaxQuotedBytes)
+        return QString::fromUtf8(body);
+    return QString::fromUtf8(body.left(kMaxQuotedBytes))
+           + QStringLiteral("... (%1 bytes)").arg(body.size());
 }
 
 } // namespace
@@ -349,7 +371,7 @@ ConnectDeviceRegistrar::AuthKeyResult ConnectDeviceRegistrar::requestAuthKey(
             r.errorMessage = serverMessage;
         } else {
             const QString detail = serverMessage.isEmpty()
-                ? QString::fromUtf8(responseBody)
+                ? quotedBody(responseBody)
                 : serverMessage;
             r.errorMessage = QStringLiteral(
                 "Connect API auth-key request failed (HTTP %1): %2")
@@ -362,7 +384,7 @@ ConnectDeviceRegistrar::AuthKeyResult ConnectDeviceRegistrar::requestAuthKey(
     QJsonDocument doc = QJsonDocument::fromJson(responseBody, &jerr);
     if (!doc.isObject()) {
         r.errorMessage = QStringLiteral(
-            "Connect API returned non-object body: %1").arg(QString::fromUtf8(responseBody));
+            "Connect API returned non-object body: %1").arg(quotedBody(responseBody));
         return r;
     }
     const QJsonObject obj = doc.object();

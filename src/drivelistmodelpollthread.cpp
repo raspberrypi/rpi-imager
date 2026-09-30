@@ -238,6 +238,25 @@ void DriveListModelPollThread::appendFastbootDevices(std::vector<Drivelist::Devi
                     auto product = fb.getVar(*transport, "product");
                     cache.productName = product.value_or("Compute Module");
 
+                    // Name the silicon while we have the device open. The
+                    // USB PID that identifies a chip generation belongs to
+                    // rpiboot mode and is gone by now — the gadget
+                    // enumerates on Google's borrowed 18d1:4e40 — so the
+                    // board revision code's processor field is what a
+                    // fastboot-mode device can be identified from. Without
+                    // it the "Connected via USB" annotation on the device
+                    // list would drop the moment the gadget took over from
+                    // rpiboot, which is exactly when the device is most
+                    // definitely connected.
+                    auto revProcessor = fb.getVar(*transport, "revision-processor");
+                    if (revProcessor) {
+                        if (auto gen = rpiboot::chipGenerationFromRevisionProcessor(*revProcessor))
+                            cache.chipName = std::string(rpiboot::chipGenerationName(*gen));
+                        else
+                            qDebug() << "Fastboot: unrecognised revision-processor"
+                                     << QString::fromStdString(*revProcessor);
+                    }
+
                     // Query block devices (comma-separated list)
                     auto blockDevStr = fb.getVar(*transport, "block-devices");
                     if (blockDevStr) {
@@ -276,6 +295,7 @@ void DriveListModelPollThread::appendFastbootDevices(std::vector<Drivelist::Devi
 
                     qDebug() << "Fastboot cache: new device" << QString::fromStdString(ppKey)
                              << "product=" << QString::fromStdString(cache.productName)
+                             << "chip=" << QString::fromStdString(cache.chipName)
                              << "storage count=" << cache.storage.size();
                     _fastbootCache[ppKey] = std::move(cache);
                 }
@@ -312,6 +332,7 @@ void DriveListModelPollThread::appendFastbootDevices(std::vector<Drivelist::Devi
                     else if (typeLabel == "scsi") typeLabel = "SCSI";
                     dd.description = cache.productName + " " + typeLabel;
 
+                    dd.rpibootChipName = cache.chipName;
                     dd.isFastbootStorage = true;
                     dd.fastbootId = cache.fastbootId;
                     dd.fastbootBlockDevice = stor.blockDevice;

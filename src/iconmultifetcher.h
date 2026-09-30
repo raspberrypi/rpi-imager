@@ -52,13 +52,13 @@ public:
      * Results are delivered via the response's onFetchComplete slot.
      * Thread-safe.
      */
-    void queueFetch(IconImageResponse *response, const QUrl &url);
+    void queueFetch(quint64 requestId, const QUrl &url);
     
     /**
      * Cancel a pending fetch. If the fetch is in progress, it will be aborted.
      * Thread-safe.
      */
-    void cancelFetch(IconImageResponse *response);
+    void cancelFetch(quint64 requestId);
     
     /**
      * Clear the in-memory icon cache.
@@ -80,9 +80,25 @@ public:
     
     ~IconMultiFetcher() override;
 
+
     // Cache configuration
     static constexpr qsizetype MaxCacheBytes = 32 * 1024 * 1024; // 32 MB cache limit
     static constexpr int MaxCacheEntries = 500; // Also limit entry count
+
+signals:
+    /*
+     * A fetch has finished, named by the id its caller gave.
+     *
+     * An id and two strings, never a pointer. The fetcher used to hold
+     * QPointers to IconImageResponse and null-check them before posting --
+     * which is not a guard: QObject clears a QPointer without taking this
+     * class's mutex, so the response could go between the test and the call,
+     * and the test itself races the destruction. With an id there is nothing
+     * to dereference here and nothing to lock; whoever owns the responses
+     * looks the id up on its own thread.
+     */
+    void fetchFinished(quint64 requestId, const QString &urlKey,
+                       const QString &error);
 
 private:
     explicit IconMultiFetcher(QObject *parent = nullptr);
@@ -142,14 +158,14 @@ private:
     
     // Pending requests queue (protected by _mutex)
     struct PendingRequest {
-        QPointer<IconImageResponse> response;  // QPointer to detect deletion
+        quint64 id = 0;
         QUrl url;
         QString urlKey;  // Pre-computed to avoid repeated QUrl::toString() allocations
     };
     QQueue<PendingRequest> _pendingRequests;
     
     // Cancellation set (protected by _mutex)
-    QSet<IconImageResponse*> _cancelledResponses;
+    QSet<quint64> _cancelledResponses;
     
     // Active transfers: easy handle -> transfer data (only accessed from _thread)
     struct TransferData {
@@ -157,7 +173,7 @@ private:
         QString urlKey;  // Pre-computed to avoid repeated allocations
         QByteArray buffer;
         char errorBuffer[CURL_ERROR_SIZE];
-        QList<QPointer<IconImageResponse>> waitingResponses; // QPointer to detect deletion
+        QList<quint64> waitingIds;   // ids, so nothing here can dangle
     };
     QHash<CURL*, TransferData*> _activeTransfers;
     

@@ -1,0 +1,18 @@
+# Valgrind suppressions for things inside Qt, so a run's output is about us.
+#
+# Only one entry so far, and it is worth being exact about why it is not ours:
+# every frame is inside libQt6Core. QProcess starts a child through vforkfd,
+# which reaps it with waitid() and a null infop -- legal, because it passes
+# WNOWAIT and wants only the status, but Memcheck checks the pointer before it
+# checks the flags and reports it against whichever test happened to spawn a
+# process. It fires once per run regardless of what the test did afterwards.
+#
+# Anything else Memcheck reports is ours to look at.
+{
+   Qt QProcess: vforkfd reaps with a null waitid infop
+   Memcheck:Param
+   waitid(infop)
+   fun:syscall
+   fun:vforkfd
+   ...
+}

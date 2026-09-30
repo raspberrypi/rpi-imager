@@ -220,6 +220,15 @@ namespace TimeoutDefaults {
     constexpr int kRingBufferStallTimeoutMs = 90000;
     constexpr int kRingBufferStallEventThresholdMs = 50; // Minimum stall to record as event
     
+    // === Transient write-error recovery ===
+    // A device can refuse writes for a few seconds after its partition table is
+    // rewritten, while the OS re-enumerates it: on Windows that is
+    // ERROR_NOT_READY, and it arrives on the first write of the image rather
+    // than at open, because opening a drive does not touch the medium. Reissue
+    // the write rather than failing the whole image for it.
+    constexpr int kTransientWriteRetries = 5;
+    constexpr int kTransientWriteBackoffMs = 100;  // Doubled per attempt: ~3.1s over five
+
     // === Adaptive recovery thresholds ===
     constexpr int kHighLatencyThresholdMs = 10000;  // Per-write latency triggering depth reduction
     constexpr int kSlowProgressThresholdSeconds = 10; // Seconds without progress before reducing depth

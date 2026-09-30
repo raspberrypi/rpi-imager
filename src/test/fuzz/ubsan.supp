@@ -1,0 +1,21 @@
+# Unsigned wraps that are deliberate, so a run's output is only about us.
+#
+# -fsanitize=unsigned-integer-overflow reports defined behaviour, which means
+# every hash and every sentinel built by subtraction shows up. Three do:
+#
+#   Qt's qHash mixes by wrapping on purpose, in a header every container
+#   instantiates, so it appears in any target that puts bytes in a QHash.
+#
+#   ZSTD_CONTENTSIZE_ERROR and _UNKNOWN are (0ULL - 2) and (0ULL - 1), and
+#   the comparison expands the macro at the point of use.
+#
+#   libstdc++ compares two strings of different lengths by wrapping:
+#   _S_compare does difference_type(__n1 - __n2), so comparing "" with any
+#   four-character key reports 0 - 4. Every std::string comparison of unequal
+#   lengths goes through it, which is every lookup in a std::map keyed on one.
+#
+# Anything else the check reports is ours to look at.
+unsigned-integer-overflow:qhashfunctions.h
+unsigned-integer-overflow:imagesizeparser.cpp
+unsigned-integer-overflow:basic_string.h
+unsigned-integer-overflow:basic_string.tcc

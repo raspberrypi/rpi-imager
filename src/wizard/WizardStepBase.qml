@@ -149,6 +149,7 @@ FocusScope {
             // Embedded mode network info on the left
             Text {
                 id: networkInfoLabel
+                textFormat: Text.PlainText
                 text: root.networkInfoText
                 font.pointSize: Style.fontSizeCaption
                 font.family: Style.fontFamily

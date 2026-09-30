@@ -318,6 +318,126 @@ TEST_CASE("An icon with an unrecognised scheme is passed through", "[oslist][ico
           == "image://icons/https://example.com/i.png");
 }
 
+// ══════════════════════════════════════════════════════════════
+// Icon routing
+
+TEST_CASE("A remote icon is routed through the image provider", "[oslist][icon]")
+{
+    // The provider is the whole point: IconMultiFetcher caches, holds the
+    // scheme allow-list, and stops one slow icon host blocking the rest. An
+    // Image pointed straight at the URL gets none of that.
+    CHECK(oslist::iconSourceFor("https://example.com/i.png")
+          == "image://icons/https://example.com/i.png");
+    CHECK(oslist::iconSourceFor("http://example.com/i.png")
+          == "image://icons/http://example.com/i.png");
+}
+
+TEST_CASE("A remote icon is routed whatever case its scheme is written in",
+          "[oslist][icon]")
+{
+    // Schemes are case-insensitive. sanitizeIconSource() lowers this one to
+    // validate it and then returns the string it was handed, and both models
+    // used to route on startsWith("https://") -- so this validated as remote
+    // and went to QML unrouted.
+    CHECK(oslist::iconSourceFor("HTTPS://example.com/i.png")
+          == "image://icons/HTTPS://example.com/i.png");
+    CHECK(oslist::iconSourceFor("Http://example.com/i.png")
+          == "image://icons/Http://example.com/i.png");
+}
+
+TEST_CASE("A local icon is left alone", "[oslist][icon]")
+{
+    CHECK(oslist::iconSourceFor("icons/raspios.png") == "../icons/raspios.png");
+    CHECK(oslist::iconSourceFor("qrc:/icons/raspios.png") == "qrc:/icons/raspios.png");
+    CHECK(oslist::iconSourceFor("file:///home/user/i.png") == "file:///home/user/i.png");
+}
+
+TEST_CASE("An icon the sanitiser rejects is not routed", "[oslist][icon]")
+{
+    // Order matters: routing a rejected icon would reinstate the fetch the
+    // sanitiser removed it to prevent.
+    CHECK(oslist::iconSourceFor("file://server/share/i.png").isEmpty());
+    CHECK(oslist::iconSourceFor("https:///i.png").isEmpty());
+    CHECK(oslist::iconSourceFor(QString()).isEmpty());
+}
+
+TEST_CASE("Routing an icon twice changes nothing", "[oslist][icon]")
+{
+    // The model is rebuilt from a list that has already been through here,
+    // and "image" is not a remote scheme, so the second pass is a no-op
+    // rather than image://icons/image://icons/...
+    const QString once = oslist::iconSourceFor("https://example.com/i.png");
+    CHECK(oslist::iconSourceFor(once) == once);
+}
+
+TEST_CASE("A nested entry's icon is routed too", "[oslist][icon]")
+{
+    // The defect this pins. Past parseOSJson the subitems are a JSON string
+    // that OSSelectionStep flattens in JavaScript, and that code rebases a
+    // relative "icons/..." and does nothing else -- so a nested remote icon
+    // reached Image.source raw and was fetched by Qt Quick. 254 of the
+    // production list's 257 remote icons are nested; the three that are not
+    // are the flagship Raspberry Pi OS builds.
+    const auto root = objFromJson(R"({
+        "os_list": [{"name": "Category", "icon": "https://example.com/cat.png",
+                     "subitems": [
+            {"name": "A", "icon": "https://example.com/a.png"},
+            {"name": "B", "icon": "icons/b.png"}
+        ]}]
+    })");
+
+    const auto parsed = oslist::parseOSJson(root);
+    REQUIRE(parsed.size() == 1);
+    const auto subs = subitemsOf(parsed[0]);
+    REQUIRE(subs.size() == 2);
+    CHECK(subs[0].toObject()["icon"].toString()
+          == "image://icons/https://example.com/a.png");
+    CHECK(subs[1].toObject()["icon"].toString() == "../icons/b.png");
+}
+
+TEST_CASE("A key that differs only by a byte-order mark is still an icon",
+          "[oslist][icon]")
+{
+    // Found by fuzz_oslist in three minutes. "\ufefficon" is a different key
+    // to contains("icon") here, and the same key once subitems_json has been
+    // through toJson and back -- which is the form the picker parses. Routing
+    // before that round-trip therefore missed it and the URL arrived raw.
+    const auto root = objFromJson(
+        "{\"os_list\":[{\"name\":\"Cat\",\"subitems\":["
+        "{\"name\":\"A\",\"\xef\xbb\xbf" "icon\":"
+        "\"https://example.com/a.png\"}]}]}");
+
+    const auto parsed = oslist::parseOSJson(root);
+    REQUIRE(parsed.size() == 1);
+    const auto subs = subitemsOf(parsed[0]);
+    REQUIRE(subs.size() == 1);
+    CHECK(subs[0].toObject()["icon"].toString()
+          == "image://icons/https://example.com/a.png");
+}
+
+TEST_CASE("Routing reaches an icon two levels down", "[oslist][icon]")
+{
+    // OSSelectionStep re-stringifies any "subitems" it meets while
+    // flattening, so a rule applied to the first level alone would leak at
+    // the second.
+    const auto root = objFromJson(R"({
+        "os_list": [{"name": "Top", "subitems": [
+            {"name": "Middle", "subitems": [
+                {"name": "Leaf", "icon": "https://example.com/leaf.png"}
+            ]}
+        ]}]
+    })");
+
+    const auto parsed = oslist::parseOSJson(root);
+    REQUIRE(parsed.size() == 1);
+    const auto middle = subitemsOf(parsed[0]);
+    REQUIRE(middle.size() == 1);
+    const auto leaves = middle[0].toObject()["subitems"].toArray();
+    REQUIRE(leaves.size() == 1);
+    CHECK(leaves[0].toObject()["icon"].toString()
+          == "image://icons/https://example.com/leaf.png");
+}
+
 TEST_CASE("An empty icon stays empty", "[oslist][icon]")
 {
     CHECK(oslist::sanitizeIconSource(QString()).isEmpty());
@@ -334,6 +454,48 @@ TEST_CASE("qrc and local file icons are allowed", "[oslist][icon]")
 TEST_CASE("A bare relative icon path is left for QML to resolve", "[oslist][icon]")
 {
     CHECK(oslist::sanitizeIconSource("images/x.png") == "images/x.png");
+}
+
+TEST_CASE("A list member that is not an entry is pruned", "[oslist]")
+{
+    // toObject() answers an empty object for anything that is not one, and
+    // an empty object has no init_format, which is valid -- so a stray null,
+    // number, string or array in the list survived as a nameless entry and
+    // was drawn as a blank row in the picker. Pruning is what this function
+    // is for.
+    const QJsonArray list{
+        QJsonValue(QJsonValue::Null),
+        QJsonValue(42),
+        QJsonValue(QStringLiteral("not an entry")),
+        QJsonValue(QJsonArray{}),
+        QJsonObject{{QStringLiteral("name"), QStringLiteral("A real one")}},
+    };
+
+    const QJsonArray kept = oslist::filterInvalidInitFormats(list);
+    REQUIRE(kept.size() == 1);
+    CHECK(kept.at(0).toObject().value(QStringLiteral("name")).toString()
+          == QStringLiteral("A real one"));
+}
+
+TEST_CASE("Filtering an entry does not add fields to it", "[oslist]")
+{
+    // On a non-const QJsonObject the subscript returns a mutable reference,
+    // and reading a key that is not there inserts it. Every entry without an
+    // init_format came out of the filter carrying "init_format": null -- a
+    // field the repository never sent, added to untrusted data by the
+    // function whose job is to take things out of it.
+    const QJsonObject original{
+        {QStringLiteral("name"), QStringLiteral("Plain")},
+        {QStringLiteral("url"), QStringLiteral("https://example.invalid/a.img.xz")},
+    };
+
+    const QJsonArray kept = oslist::filterInvalidInitFormats(QJsonArray{original});
+    REQUIRE(kept.size() == 1);
+
+    const QJsonObject after = kept.at(0).toObject();
+    CHECK_FALSE(after.contains(QStringLiteral("init_format")));
+    CHECK_FALSE(after.contains(QStringLiteral("subitems")));
+    CHECK(after == original);
 }
 
 TEST_CASE("Subitems are handed to the model as an encoded string", "[oslist]")
@@ -359,4 +521,76 @@ TEST_CASE("An entry with no subitems gains no encoded key", "[oslist]")
     const auto parsed = oslist::parseOSJson(root);
     REQUIRE(parsed.size() == 1);
     CHECK_FALSE(parsed[0].toObject().contains("subitems_json"));
+}
+
+// ---------------------------------------------------------------------------
+// Byte counts out of the list
+// ---------------------------------------------------------------------------
+
+TEST_CASE("A byte count out of the list is a whole number in range", "[oslist]")
+{
+    // The ordinary case, and the boundaries either side of it.
+    CHECK(oslist::byteCountFromJson(QJsonValue(4294967296.0)) == 4294967296ULL);
+    CHECK(oslist::byteCountFromJson(QJsonValue(0)) == 0);
+    CHECK(oslist::byteCountFromJson(QJsonValue(1)) == 1);
+}
+
+TEST_CASE("A byte count the repository made up is refused", "[oslist]")
+{
+    // JSON numbers are doubles and the repository is a setting -- one the
+    // bootloader's own flash can name -- so each of these can arrive.
+    // Converting any of them to quint64 is undefined, and on this
+    // architecture it saturates: -1 became 0, which is the answer that makes
+    // the capacity check pass on a card of any size at all.
+    CHECK(oslist::byteCountFromJson(QJsonValue(-1)) == 0);
+    CHECK(oslist::byteCountFromJson(QJsonValue(-4294967296.0)) == 0);
+    CHECK(oslist::byteCountFromJson(QJsonValue(1e30)) == 0);
+    CHECK(oslist::byteCountFromJson(QJsonValue(-1e30)) == 0);
+
+    // 2^64 itself and one step above the largest double below it. A double
+    // cannot hold UINT64_MAX, so a bound written as "<= max" rounds up and
+    // lets these through.
+    CHECK(oslist::byteCountFromJson(QJsonValue(18446744073709551616.0)) == 0);
+
+    // Not numbers at all.
+    CHECK(oslist::byteCountFromJson(QJsonValue(QStringLiteral("12345"))) == 0);
+    CHECK(oslist::byteCountFromJson(QJsonValue()) == 0);
+    CHECK(oslist::byteCountFromJson(QJsonValue(true)) == 0);
+}
+
+TEST_CASE("A size the list gives as a fraction is taken as it is", "[oslist]")
+{
+    // No repository writes one, but a double can carry it and truncating is
+    // the same thing the old cast did. What matters is that it is in range.
+    CHECK(oslist::byteCountFromJson(QJsonValue(1024.7)) == 1024);
+}
+
+// The one-argument form is what the model actually calls, and which locale it
+// asks for is the whole question: a reader who picks Deutsch in the
+// application used to be shown the list in whatever language the machine was
+// installed in, with everything around it translated.
+TEST_CASE("The OS list follows the language the reader chose", "[oslist]")
+{
+    const QJsonObject root = objFromJson(R"({
+        "os_list":    [{"name": "generic"}],
+        "os_list_de": [{"name": "german"}],
+        "os_list_fr": [{"name": "french"}]
+    })");
+
+    const QLocale restore = QLocale();
+
+    QLocale::setDefault(QLocale(QStringLiteral("de_DE")));
+    CHECK(namesOf(oslist::getListForLocale(root)) == QStringList{"german"});
+
+    // And it follows a change, which is what changeLanguage() does before
+    // replaceTranslator() asks for the list to be rebuilt.
+    QLocale::setDefault(QLocale(QStringLiteral("fr_FR")));
+    CHECK(namesOf(oslist::getListForLocale(root)) == QStringList{"french"});
+
+    // A language the repository does not carry falls back rather than
+    // emptying the list.
+    QLocale::setDefault(QLocale(QStringLiteral("ja_JP")));
+    CHECK(namesOf(oslist::getListForLocale(root)) == QStringList{"generic"});
+
+    QLocale::setDefault(restore);
 }

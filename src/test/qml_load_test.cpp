@@ -21,10 +21,13 @@
 #include "oslistmodel.h"
 #include "urlfmt.h"
 #include "app_resources.h"
+#include "test_scratch.h"
 
 #include <QDir>
 #include <QDirIterator>
+#include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -88,6 +91,17 @@ public:
         const QString dest = _dir.path() + QStringLiteral("/RpiImager");
         if (!copyTree(moduleDir(), dest))
             return;
+        // The fonts and icons live in src/qml.qrc under the same
+        // "/qt/qml/RpiImager" prefix, so in the application they sit beside
+        // Style.qml in the resource system. Dropping the `prefer` line below
+        // moves the module onto disk and leaves them behind, which silently
+        // costs the UI its fonts. See copyQrcAssets() in qml_ui_test.cpp.
+        for (const QString &sub : {QStringLiteral("fonts"), QStringLiteral("icons")}) {
+            const QString from =
+                QStringLiteral(IMAGER_QML_ASSET_DIR) + QLatin1Char('/') + sub;
+            if (QDir(from).exists() && !copyTree(from, dest + QLatin1Char('/') + sub))
+                return;
+        }
 
         QFile in(dest + QStringLiteral("/qmldir"));
         if (!in.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -145,10 +159,7 @@ int main(int argc, char *argv[])
     qputenv("QT_QUICK_BACKEND", "software");
     QGuiApplication app(argc, argv);
     initAppResources();
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
-    QCoreApplication::setApplicationName(
-        QStringLiteral("qml_load_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("qml_load_test"));
     return Catch::Session().run(argc, argv);
 }
 
@@ -196,6 +207,114 @@ TEST_CASE("Every QML component in the module resolves", "[qml]")
     }
     INFO("errors:\n" << broken.join(QStringLiteral("\n")).toStdString());
     CHECK(broken.isEmpty());
+}
+
+TEST_CASE("Every label that draws a computed string says it is plain",
+          "[qml][textformat]")
+{
+    // QQuickText leaves textFormat at Text.AutoText, which parses anything
+    // tag-shaped as rich text -- and rich text fetches what an <img> in it
+    // names. Several of these labels draw a repository's words, a device's
+    // firmware, or a settings file written by hand, so a product string could
+    // call home the moment a row is drawn.
+    //
+    // A literal or a bare qsTr() is ours and cannot carry a surprise. Anything
+    // computed has to declare its format: PlainText for the great majority,
+    // StyledText for the few that really are markup.
+    if (!moduleBuilt())
+        SKIP("the QML module has not been generated; build the application target");
+
+    QDir dir(moduleDir());
+    QStringList files;
+    QDirIterator it(dir.absolutePath(), {QStringLiteral("*.qml")}, QDir::Files,
+                    QDirIterator::Subdirectories);
+    while (it.hasNext())
+        files << it.next();
+    files.sort();
+    REQUIRE(files.size() > 20);
+
+    static const QRegularExpression opensBlock(
+        QStringLiteral("^(\\s*)(?:Text|Label)\\s*\\{\\s*$"));
+    static const QRegularExpression opensInline(
+        QStringLiteral("\\b(?:Text|Label)\\s*\\{[^}]*\\btext:"));
+    static const QRegularExpression bindsText(QStringLiteral("^\\s*text:\\s*(.*)$"));
+
+    // Ours, and therefore safe: a string literal, or a qsTr() with nothing
+    // substituted into it.
+    const auto isOurs = [](QString value) {
+        value = value.trimmed();
+        while (value.endsWith(QLatin1Char(';')))
+            value.chop(1);
+        if (value.startsWith(QLatin1Char('"')) && value.endsWith(QLatin1Char('"')))
+            return true;
+        return value.startsWith(QStringLiteral("qsTr("))
+               && value.endsWith(QLatin1Char(')'))
+               && !value.contains(QStringLiteral(".arg("));
+    };
+
+    QStringList offences;
+    int examined = 0;
+
+    for (const QString &path : files) {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+        const QStringList lines =
+            QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'));
+        const QString name = QFileInfo(path).fileName();
+
+        for (int i = 0; i < lines.size(); ++i) {
+            const QString &line = lines.at(i);
+
+            // One on a line: everything is in front of us already.
+            const QRegularExpressionMatch inlineMatch = opensInline.match(line);
+            if (inlineMatch.hasMatch() && line.contains(QLatin1Char('}'))) {
+                ++examined;
+                const int at = line.indexOf(QStringLiteral("text:"));
+                QString value = line.mid(at + 5);
+                value = value.section(QLatin1Char(';'), 0, 0);
+                if (!isOurs(value) && !line.contains(QStringLiteral("textFormat")))
+                    offences << QStringLiteral("%1:%2 %3").arg(name)
+                                    .arg(i + 1).arg(value.trimmed());
+                continue;
+            }
+
+            const QRegularExpressionMatch open = opensBlock.match(line);
+            if (!open.hasMatch())
+                continue;
+
+            const int indent = open.captured(1).size();
+            QString value;
+            bool declared = false;
+            for (int j = i + 1; j < lines.size(); ++j) {
+                const QString &body = lines.at(j);
+                const QString trimmed = body.trimmed();
+                int leading = 0;
+                while (leading < body.size() && body.at(leading).isSpace())
+                    ++leading;
+                if (trimmed.startsWith(QLatin1Char('}')) && leading <= indent)
+                    break;
+                if (body.contains(QStringLiteral("textFormat")))
+                    declared = true;
+                const QRegularExpressionMatch bind = bindsText.match(body);
+                if (bind.hasMatch() && value.isEmpty())
+                    value = bind.captured(1);
+            }
+            if (value.isEmpty())
+                continue;
+            ++examined;
+            if (!isOurs(value) && !declared)
+                offences << QStringLiteral("%1:%2 %3").arg(name)
+                                .arg(i + 1).arg(value.trimmed());
+        }
+    }
+
+    // Without this the case passes on an empty walk, which is exactly what a
+    // renamed module directory would give it.
+    CHECK(examined > 50);
+    INFO("labels drawing a computed string with no textFormat:\n"
+         << offences.join(QStringLiteral("\n")).toStdString());
+    CHECK(offences.isEmpty());
 }
 
 TEST_CASE("The main window loads", "[qml]")

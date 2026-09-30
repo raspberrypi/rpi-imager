@@ -18,10 +18,12 @@
 #include <QTemporaryDir>
 #include <QFile>
 #include <QDir>
+#include <map>
 #include <optional>
 #include "drivelist.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <set>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace Drivelist;
@@ -31,6 +33,9 @@ using Catch::Matchers::ContainsSubstring;
 namespace Drivelist::testing {
 #ifdef Q_OS_LINUX
 std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput, bool embeddedMode = false);
+std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput,
+                                                     const std::map<std::string, std::string>& mmcTypes,
+                                                     bool embeddedMode = false);
 std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode = false);
 std::optional<QByteArray> runLsblk();
 #endif
@@ -612,6 +617,120 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[0].isRemovable == true);
     }
 
+    SECTION("Names an SD card in an internal reader")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, {{"/dev/mmcblk0", "SD"}});
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].description == "Internal SD card reader");
+    }
+
+    SECTION("Names eMMC as eMMC, not as an SD card reader")
+    {
+        // #1658: eMMC offered as a card reader got overwritten. No boot
+        // partitions listed: the kernel doesn't always expose them.
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "62537072640",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null,
+                "children": [
+                    {"kname":"/dev/mmcblk0p1","type":"part","label":"bootfs",
+                     "mountpoint":null},
+                    {"kname":"/dev/mmcblk0p2","type":"part","label":"rootfs",
+                     "mountpoint":null}
+                ]
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, {{"/dev/mmcblk0", "MMC"}});
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].description == "Internal eMMC storage (bootfs, rootfs)");
+    }
+
+    SECTION("Tells eMMC and an SD card apart at any index")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "15634268160",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk1",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            },{
+                "kname": "/dev/mmcblk2",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31268536320",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, {{"/dev/mmcblk0", "MMC"},
+                                                     {"/dev/mmcblk1", "SD"},
+                                                     {"/dev/mmcblk2", "MMC"}});
+
+        REQUIRE(devices.size() == 3);
+        CHECK(devices[0].description == "Internal eMMC storage");
+        CHECK(devices[1].description == "Internal SD card reader");
+        CHECK(devices[2].description == "Internal eMMC storage");
+    }
+
+    SECTION("Names an MMC device of unknown type without claiming SD")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/mmcblk0",
+                "type": "disk",
+                "subsystems": "block:mmc:mmc_host:platform",
+                "ro": false, "rm": false, "hotplug": false,
+                "size": "31914983424",
+                "phy-sec": 512, "log-sec": 512,
+                "label": "", "vendor": "", "model": "",
+                "mountpoint": null
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json);
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].description == "Internal MMC storage");
+    }
+
     SECTION("Marks a removable SD card carrying root as a system drive")
     {
         // The most common Raspberry Pi setup there is: booted from the SD
@@ -819,6 +938,82 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[0].mountpoints[0] == "/media/user/boot");
         CHECK(devices[0].mountpoints[1] == "/media/user/rootfs");
     }
+}
+
+
+// ============================================================================
+// Sizes lsblk reports
+//
+// Two branches, because lsblk gives the size as a number on some versions and
+// a string on others. Neither said what it would do with an answer it could
+// not use: toULongLong() drops its ok flag, and a double outside the range of
+// a uint64_t converts undefined. Both now land on nought, which the caller
+// already treats as a size it does not know.
+// ============================================================================
+
+namespace {
+
+std::string oneDeviceWithSize(const std::string &sizeLiteral)
+{
+    return R"({"blockdevices":[{
+        "kname": "/dev/sda",
+        "subsystems": "block:scsi:usb",
+        "size": )" + sizeLiteral + R"(,
+        "ro": false,
+        "rm": true,
+        "mountpoint": null
+    }]})";
+}
+
+} // namespace
+
+TEST_CASE("A size lsblk gives as a number is taken", "[drivelist][linux][size]")
+{
+    auto devices = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("32010928128"), false);
+    REQUIRE(devices.size() == 1);
+    CHECK(devices[0].size == 32010928128ULL);
+}
+
+TEST_CASE("A size lsblk gives as a string is taken", "[drivelist][linux][size]")
+{
+    auto devices = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("\"32010928128\""), false);
+    REQUIRE(devices.size() == 1);
+    CHECK(devices[0].size == 32010928128ULL);
+}
+
+TEST_CASE("A size that cannot be used reads as unknown, not as rubbish",
+          "[drivelist][linux][size]")
+{
+    // Worth being exact about which of these the old code got wrong on this
+    // machine: only the second. Reverting the fix and running this case
+    // fails on 1e30 alone.
+    //
+    // A string that is not a number already answered nought, because
+    // toULongLong() returns nought when it fails and Qt does not do partial
+    // parses. Below zero already answered nought too, because aarch64
+    // saturates a negative double to nought on conversion. Both are pinned
+    // anyway: they are nought by accident of this architecture rather than
+    // by decision, and the conversion is undefined, so another target is
+    // free to answer differently.
+    auto text = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("\"not-a-size\""), false);
+    REQUIRE(text.size() == 1);
+    CHECK(text[0].size == 0);
+
+    // This is the one that was wrong: past what a uint64_t holds, aarch64
+    // saturates upward instead, so the drive list carried a capacity nobody
+    // reported and nothing downstream could tell it was invented.
+    auto huge = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("1e30"), false);
+    REQUIRE(huge.size() == 1);
+    CHECK(huge[0].size == 0);
+
+    auto negative = Drivelist::testing::parseLinuxBlockDevices(
+        oneDeviceWithSize("-1"), false);
+    REQUIRE(negative.size() == 1);
+    CHECK(negative[0].size == 0);
 }
 
 #endif // Q_OS_LINUX
@@ -1106,3 +1301,199 @@ TEST_CASE("An lsblk that answers is believed", "[drivelist][linux][timeout]")
     CHECK_THAT(out->toStdString(), ContainsSubstring("blockdevices"));
 }
 #endif // Q_OS_LINUX
+
+#if defined(Q_OS_WIN) && defined(DRIVELIST_ENABLE_TEST_API)
+
+#include <windows.h>
+#include <winioctl.h>
+
+// ── the Windows drive list's own decisions ──────────────────────────────────
+//
+// None of these had a test. What they decide is which drives the picker
+// offers, and the cost of getting it wrong is not symmetric: hiding the user's
+// SD card is an annoyance, offering them the disk Windows is running from is
+// the end of their afternoon.
+
+namespace Drivelist {
+namespace testing {
+std::string windowsBusTypeToString(int busType);
+bool isWindowsSystemDevice(const std::vector<std::string>& mountpoints);
+std::string windowsWcharToUtf8(const wchar_t* wstr);
+bool windowsEqualsIgnoreCase(const std::string& a, const std::string& b);
+bool windowsContainsIgnoreCase(const std::set<std::string>& s, const std::string& value);
+}
+}
+
+namespace {
+
+// The drive Windows is installed on, taken from the API rather than assumed
+// to be C: -- it usually is, and a test that only passes there is not one.
+std::string systemDriveRoot()
+{
+    const QString home = QDir::homePath();
+    if (home.size() < 2 || home.at(1) != QLatin1Char(':'))
+        return {};
+    return (home.left(2) + QStringLiteral("\\")).toStdString();
+}
+
+// A letter with nothing mounted on it.
+std::string sparedriveRoot()
+{
+    const DWORD mask = GetLogicalDrives();
+    for (int letter = 'Z'; letter >= 'D'; --letter) {
+        if (!(mask & (1u << (letter - 'A'))))
+            return std::string(1, char(letter)) + ":\\";
+    }
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("The drive Windows runs from is recognised as a system device",
+          "[drivelist][windows]")
+{
+    const std::string root = systemDriveRoot();
+    if (root.empty())
+        SKIP("could not work out which drive Windows is installed on");
+    INFO("system drive: " << root);
+    CHECK(Drivelist::testing::isWindowsSystemDevice({root}));
+}
+
+TEST_CASE("The system drive is recognised whatever case it is given in",
+          "[drivelist][windows]")
+{
+    std::string root = systemDriveRoot();
+    if (root.empty())
+        SKIP("could not work out which drive Windows is installed on");
+    // Windows paths are case-insensitive, and a mountpoint can reach us in
+    // either case. Matching only one of them would offer the system disk.
+    root[0] = static_cast<char>(::tolower(static_cast<unsigned char>(root[0])));
+    INFO("system drive, lowercased: " << root);
+    CHECK(Drivelist::testing::isWindowsSystemDevice({root}));
+}
+
+TEST_CASE("A drive with nothing of Windows on it is not a system device",
+          "[drivelist][windows]")
+{
+    const std::string spare = sparedriveRoot();
+    if (spare.empty())
+        SKIP("every drive letter is in use, so none is free to stand in");
+    INFO("spare letter: " << spare);
+    CHECK_FALSE(Drivelist::testing::isWindowsSystemDevice({spare}));
+}
+
+TEST_CASE("A device with no mountpoints at all is not a system device",
+          "[drivelist][windows]")
+{
+    // A freshly inserted card that Windows has not lettered yet. Answering
+    // true would hide exactly the drive the user came to write.
+    CHECK_FALSE(Drivelist::testing::isWindowsSystemDevice({}));
+}
+
+TEST_CASE("Bus types are named as the picker expects", "[drivelist][windows]")
+{
+    using Drivelist::testing::windowsBusTypeToString;
+    // USB and SD are what removable media arrive as, and the picker filters
+    // on the string, so these two matter more than the rest put together.
+    CHECK(windowsBusTypeToString(BusTypeUsb) == "USB");
+    CHECK(windowsBusTypeToString(BusTypeSd) == "SD");
+    CHECK(windowsBusTypeToString(BusTypeNvme) == "NVME");
+    CHECK(windowsBusTypeToString(BusTypeSata) == "SATA");
+    CHECK(windowsBusTypeToString(BusTypeFileBackedVirtual) == "FILEBACKEDVIRTUAL");
+}
+
+TEST_CASE("Every bus type Windows reports has a name of its own",
+          "[drivelist][windows]")
+{
+    // The picker filters on these strings, so a wrong one puts a drive in
+    // the wrong category: an internal NVMe offered as removable media, or a
+    // card reader left out of the list entirely.
+    using Drivelist::testing::windowsBusTypeToString;
+
+    struct Bus {
+        int value;
+        const char *name;
+    };
+    static const Bus kBuses[] = {
+        {BusTypeUnknown, "UNKNOWN"},   {BusTypeScsi, "SCSI"},
+        {BusTypeAtapi, "ATAPI"},       {BusTypeAta, "ATA"},
+        {BusType1394, "1394"},         {BusTypeSsa, "SSA"},
+        {BusTypeFibre, "FIBRE"},       {BusTypeUsb, "USB"},
+        {BusTypeRAID, "RAID"},         {BusTypeiScsi, "iSCSI"},
+        {BusTypeSas, "SAS"},           {BusTypeSata, "SATA"},
+        {BusTypeSd, "SD"},             {BusTypeMmc, "MMC"},
+        {BusTypeVirtual, "VIRTUAL"},   {BusTypeFileBackedVirtual, "FILEBACKEDVIRTUAL"},
+        {BusTypeSpaces, "SPACES"},     {BusTypeNvme, "NVME"},
+        {BusTypeSCM, "SCM"},           {BusTypeUfs, "UFS"},
+    };
+
+    std::set<std::string> names;
+    for (const Bus &bus : kBuses) {
+        INFO("bus type " << bus.value);
+        const std::string name = windowsBusTypeToString(bus.value);
+        CHECK(name == bus.name);
+        // And no two share a name, or the filter cannot tell them apart.
+        CHECK(names.insert(name).second);
+    }
+}
+
+TEST_CASE("A bus type outside the enumeration is named, not left empty",
+          "[drivelist][windows]")
+{
+    // A value from a newer Windows than this was built against. An empty
+    // string would read as a drive with no bus at all.
+    CHECK_FALSE(Drivelist::testing::windowsBusTypeToString(9999).empty());
+}
+
+TEST_CASE("A device name outside Latin-1 survives the conversion",
+          "[drivelist][windows][i18n]")
+{
+    // The friendly name comes from the registry as UTF-16 and reaches the
+    // picker as UTF-8. A manufacturer writing its own name in its own script
+    // is ordinary, and a mangled one is what the user has to choose between.
+    const std::wstring name = L"測試 USB диск";
+    const std::string got = Drivelist::testing::windowsWcharToUtf8(name.c_str());
+    // Compared against Qt's own UTF-8 of the same string rather than a byte
+    // literal, so the case says what it means without depending on how this
+    // file is encoded.
+    CHECK(got == QString::fromStdWString(name).toStdString());
+}
+
+TEST_CASE("An empty or absent device name converts to nothing",
+          "[drivelist][windows]")
+{
+    CHECK(Drivelist::testing::windowsWcharToUtf8(nullptr).empty());
+    CHECK(Drivelist::testing::windowsWcharToUtf8(L"").empty());
+}
+
+TEST_CASE("A device name is converted without a trailing null",
+          "[drivelist][windows]")
+{
+    // The length is passed explicitly rather than -1, so the terminator is
+    // not part of the result. A string carrying one compares unequal to the
+    // same name read anywhere else.
+    const std::string got = Drivelist::testing::windowsWcharToUtf8(L"SanDisk");
+    CHECK(got == "SanDisk");
+    CHECK(got.size() == 7);
+}
+
+TEST_CASE("Driver names are compared without regard to case",
+          "[drivelist][windows]")
+{
+    using Drivelist::testing::windowsEqualsIgnoreCase;
+    CHECK(windowsEqualsIgnoreCase("USBSTOR", "usbstor"));
+    CHECK(windowsEqualsIgnoreCase("SdBus", "SDBUS"));
+    CHECK_FALSE(windowsEqualsIgnoreCase("USBSTOR", "USBSTORX"));
+    CHECK_FALSE(windowsEqualsIgnoreCase("scsi", "sata"));
+    CHECK(windowsEqualsIgnoreCase("", ""));
+}
+
+TEST_CASE("Set membership ignores case too", "[drivelist][windows]")
+{
+    const std::set<std::string> drivers{"USBSTOR", "SDBUS", "UASPSTOR"};
+    CHECK(Drivelist::testing::windowsContainsIgnoreCase(drivers, "usbstor"));
+    CHECK(Drivelist::testing::windowsContainsIgnoreCase(drivers, "SdBus"));
+    CHECK_FALSE(Drivelist::testing::windowsContainsIgnoreCase(drivers, "nvme"));
+    CHECK_FALSE(Drivelist::testing::windowsContainsIgnoreCase({}, "usbstor"));
+}
+#endif

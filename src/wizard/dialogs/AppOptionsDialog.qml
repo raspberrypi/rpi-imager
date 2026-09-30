@@ -292,6 +292,7 @@ BaseDialog {
     // Version display - only shown when window has no decorations (no title bar)
     Text {
         id: versionText
+        textFormat: Text.PlainText
         text: qsTr("Version: %1").arg(ImageWriterSingleton.constantVersion())
         font.pointSize: Style.fontSizeCaption
         font.family: Style.fontFamily

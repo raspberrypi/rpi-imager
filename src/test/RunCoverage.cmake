@@ -30,6 +30,42 @@ foreach(_required
 endforeach()
 
 # ---------------------------------------------------------------------------
+# Whether the branch figure can be trusted
+# ---------------------------------------------------------------------------
+# --exclude-throw-branches only drops the branches gcov marks "(throw)", and
+# gcov's text output marks them only where they ran. Every object compiled
+# from a source then adds back the unwind edges it never ran: GCC 11 counted
+# downloadthread.cpp at 3,187 branches against about 2,000 real ones. gcov's
+# JSON marks every one, but gcovr only reads the JSON format GCC 14
+# introduced, and falls back to text before it. The version line announcing
+# that format is the capability itself.
+set(_branches_trustworthy TRUE)
+if(NOT COVERAGE_FLAVOUR STREQUAL "llvm")
+    if(DEFINED ENV{GCOV} AND NOT "$ENV{GCOV}" STREQUAL "")
+        separate_arguments(_gcov_command NATIVE_COMMAND "$ENV{GCOV}")
+    else()
+        set(_gcov_command gcov)
+    endif()
+    execute_process(
+        COMMAND ${_gcov_command} --version
+        OUTPUT_VARIABLE _gcov_version_text
+        ERROR_QUIET
+        RESULT_VARIABLE _gcov_version_result
+    )
+    if(NOT _gcov_version_result EQUAL 0
+       OR NOT _gcov_version_text MATCHES "JSON format version:")
+        set(_branches_trustworthy FALSE)
+        string(REGEX MATCH "^[^\n]*" _gcov_version_line "${_gcov_version_text}")
+        message(WARNING
+            "Coverage: ${_gcov_command} (${_gcov_version_line}) has no JSON "
+            "format gcovr reads, so it cannot exclude exception branches that "
+            "never ran. The branch figure will read far lower than it is -- use "
+            "GCC 14 or later for a branch number worth quoting. Line and "
+            "function figures are unaffected.")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # Scope
 # ---------------------------------------------------------------------------
 # Exclusion-based rather than an allow-list of files, so a new core source is
@@ -434,6 +470,16 @@ else()
         # have to make the allocation fail.
         --exclude-throw-branches
         --exclude-unreachable-branches
+        # A counter large enough to look like gcov's overflow bug, when it is
+        # merely a hot loop. allocateCluster() scans the whole FAT, and the
+        # suite formats enough filesystems to reach seven billion iterations
+        # of it -- at which point gcovr refuses the whole report rather than
+        # the one line, and the run is lost after the suite has been paid for.
+        --gcov-ignore-parse-errors=suspicious_hits.warn_once_per_file
+        # Objects whose working directory gcovr cannot infer. It resolves
+        # nearly all of them; the few it cannot are not worth forfeiting the
+        # other ninety-odd sources over.
+        --gcov-ignore-errors=no_working_dir_found
         # Qt's registration macros. Q_ENUM and its relatives expand to
         # meta-object glue the runtime touches only when something looks the
         # type up by name, so mostly they sit at zero for the life of the
@@ -454,11 +500,19 @@ else()
         # working directory" failure, which before the pruning above was not
         # an edge case but the single loudest thing in the run -- and fatal
         # without it. Nothing in our own tree provokes it now.
-        --gcov-ignore-errors no_working_dir_found)
+        --gcov-ignore-errors no_working_dir_found
+        # gcovr refuses any count above 2^32 as the garbage gcc bug 68080
+        # produces, and stops without a report. Scanning a FAT runs the
+        # cluster loop in devicewrapperfatpartition.cpp about 6.9 billion
+        # times, which is real. The bug's values sit near 2^64, so a higher
+        # bar still catches them.
+        --gcov-suspicious-hits-threshold 1099511627776)
 
-    set(_app_object_dir "${COVERAGE_BINARY_DIR}/CMakeFiles/rpi-imager.dir")
+    # Every binary a test drives as a subprocess rather than links. Their
+    # counters are real, and until they are read the sources reachable only
+    # through them read as never run.
+    set(_subprocess_targets rpi-imager rpi-imager-callback-relay)
     set(_library_tracefile "${COVERAGE_BINARY_DIR}/coverage-library.json")
-    set(_app_tracefile "${COVERAGE_BINARY_DIR}/coverage-app.json")
     set(_tracefile_args -a "${_library_tracefile}")
 
     # Pass one: everything the test binaries link, which is the whole suite's
@@ -469,6 +523,7 @@ else()
         COMMAND "${GCOVR_EXECUTABLE}"
                 ${_gcovr_parse_args}
                 --gcov-exclude-directories "rpi-imager\\.dir"
+                --gcov-exclude-directories "rpi-imager-callback-relay\\.dir"
                 "${COVERAGE_BINARY_DIR}"
                 --json "${_library_tracefile}"
         WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
@@ -478,28 +533,34 @@ else()
         message(FATAL_ERROR "Coverage: gcovr failed reading the test objects (${_gcovr_result})")
     endif()
 
-    # Pass two: the shipping binary, which cli_process_test drives as a
-    # subprocess. Skipped when it was never run, so a build that did not
-    # produce it does not fail the report.
-    file(GLOB_RECURSE _app_gcda "${_app_object_dir}/*.gcda")
-    if(_app_gcda)
-        list(LENGTH _app_gcda _app_gcda_count)
-        message(STATUS "Coverage: reading ${_app_gcda_count} object(s) from the shipping binary")
+    # Pass two: the binaries a test starts rather than links. cli_process_test
+    # drives the shipping binary, the only way to reach Cli::run();
+    # callback_relay_process_test drives the relay, whose whole file is a
+    # WIN32 executable nothing can link. Each is skipped when it was never
+    # run, so a build that did not produce one does not fail the report.
+    foreach(_target IN LISTS _subprocess_targets)
+        set(_object_dir "${COVERAGE_BINARY_DIR}/CMakeFiles/${_target}.dir")
+        set(_tracefile "${COVERAGE_BINARY_DIR}/coverage-${_target}.json")
+        file(GLOB_RECURSE _target_gcda "${_object_dir}/*.gcda")
+        if(NOT _target_gcda)
+            message(STATUS "Coverage: ${_target} was not run; its objects are not reported")
+            continue()
+        endif()
+        list(LENGTH _target_gcda _target_gcda_count)
+        message(STATUS "Coverage: reading ${_target_gcda_count} object(s) from ${_target}")
         execute_process(
             COMMAND "${GCOVR_EXECUTABLE}"
                     ${_gcovr_parse_args}
-                    "${_app_object_dir}"
-                    --json "${_app_tracefile}"
+                    "${_object_dir}"
+                    --json "${_tracefile}"
             WORKING_DIRECTORY "${COVERAGE_BINARY_DIR}"
             RESULT_VARIABLE _gcovr_result
         )
         if(NOT _gcovr_result EQUAL 0)
-            message(FATAL_ERROR "Coverage: gcovr failed reading the shipping binary (${_gcovr_result})")
+            message(FATAL_ERROR "Coverage: gcovr failed reading ${_target} (${_gcovr_result})")
         endif()
-        list(APPEND _tracefile_args -a "${_app_tracefile}")
-    else()
-        message(STATUS "Coverage: the shipping binary was not run; reporting the test objects alone")
-    endif()
+        list(APPEND _tracefile_args -a "${_tracefile}")
+    endforeach()
 
     message(STATUS "Coverage: rendering report")
     execute_process(
@@ -574,7 +635,18 @@ foreach(_line IN LISTS _summary_lines)
     endif()
     string(APPEND _summary_out "${_line}\n")
 endforeach()
+# The summary travels without the build log, so it carries the caveat itself.
+if(NOT _branches_trustworthy)
+    string(PREPEND _summary_out
+        "NOTE: gcov before GCC 14 -- exception branches are counted, so the\n"
+        "branch figures below understate coverage. Lines are unaffected.\n")
+endif()
 file(WRITE "${COVERAGE_OUTPUT_DIR}/summary.txt" "${_summary_out}")
 
 message(STATUS "Coverage: HTML   ${COVERAGE_OUTPUT_DIR}/index.html")
 message(STATUS "Coverage: text   ${COVERAGE_OUTPUT_DIR}/summary.txt")
+if(NOT _branches_trustworthy)
+    message(WARNING
+        "Coverage: the branch figure above counts exception branches, because "
+        "${_gcov_command} predates GCC 14. Do not quote it.")
+endif()

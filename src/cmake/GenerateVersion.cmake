@@ -11,8 +11,15 @@ find_package(Git QUIET)
 set(VERSION_STR "0.0.0-unknown")
 
 if(GIT_EXECUTABLE)
+    # Only release tags count. Without --match, `git describe` takes whichever
+    # tag is nearest, so a developer marking their own working branch becomes
+    # the product version -- and IMAGER_VERSION_STR feeds the update check,
+    # which reads an unparseable version as "older than everything" and offers
+    # an upgrade to whatever the server lists. Both prefixes are allowed
+    # because this repository carries 1.6.1 as well as v1.6.2.
     execute_process(
         COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
+                --match "v[0-9]*" --match "[0-9]*"
         WORKING_DIRECTORY "${SOURCE_DIR}"
         OUTPUT_VARIABLE GIT_DESCRIBE
         OUTPUT_STRIP_TRAILING_WHITESPACE

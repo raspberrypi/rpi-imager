@@ -508,4 +508,40 @@ TestCase {
 
         ImageWriterSingleton.setCustomRepo(previousRepo)
     }
+    function test_the_retry_button_can_be_reached_without_a_mouse() {
+        // The case above presses Retry with the pointer, which says nothing
+        // about the ring. When the fetch failed it is the only control on the
+        // screen that does anything, and the step registered only its list --
+        // which is empty -- so a keyboard user arrived at a screen with
+        // nothing to reach and no way off it.
+        //
+        // Same precondition as the other offline cases: the state is
+        // process-wide and cannot be forced back once a list has been
+        // fetched, because an empty repository leaves the rows already in
+        // the model where they are.
+        if (!requireNoList())
+            return
+
+        const step = stepComponent.createObject(testCase)
+        verify(step, "the step was created")
+        waitForRendering(step)
+
+        const retry = findChild(step, "deviceListRetryButton")
+        verify(retry, "the offline screen offers a way to try again")
+        tryVerify(function () { return retry.visible && retry.height > 0 },
+                  3000, "and it is on screen")
+
+        var reached = false
+        step.forceActiveFocus()
+        for (var i = 0; i < 24 && !reached; ++i) {
+            keyClick(Qt.Key_Tab)
+            wait(1)
+            if (step.Window.activeFocusItem === retry)
+                reached = true
+        }
+        verify(reached, "Retry is in the keyboard ring")
+
+        step.destroy()
+    }
+
 }

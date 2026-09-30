@@ -91,7 +91,14 @@ TextField {
     Accessible.description: ""
     Accessible.editable: true
     Accessible.focused: activeFocus
-    Accessible.passwordEdit: echoMode === TextInput.Password
+    // Accessible.passwordEdit is deliberately not set. Qt clears the
+    // accessible name whenever it is true -- whatever order the two are
+    // declared in, and even when the name is assigned afterwards -- which
+    // left every password box in the wizard announcing nothing at all. What
+    // it protects is already covered: echoMode masks the display, so the
+    // text a reader is offered is the bullets, and the name here is the
+    // placeholder rather than the secret. ImPasswordField says "Password is
+    // hidden" in its description.
 
     // Context menu for right-click with cut/copy/paste
     MouseArea {

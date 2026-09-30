@@ -21,6 +21,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winioctl.h>
+
+#include "timeout_utils.h"
+
+#include <filesystem>
+#include <system_error>
 #endif
 
 using rpi_imager::FileOperations;
@@ -279,3 +284,169 @@ TEST_CASE("A path that is not a block device reports nothing",
 }
 
 #endif // __linux__
+
+#ifdef _WIN32
+
+// ── the pre-open query on Windows ───────────────────────────────────────────
+//
+// The query decides the write buffer size and the async queue depth before
+// the device is opened, so a wrong answer here is a slow write or one split
+// into sub-requests. The whole body was unreachable: the only case entering
+// it is the diagnostic above, which Catch2 hides behind its "." tag and CTest
+// therefore never runs.
+//
+// It opens the drive with zero access, which is what makes these runnable
+// without elevation -- a property query needs no rights to the device.
+
+TEST_CASE("A path that is not a physical drive is not queried",
+          "[device_io_limits]")
+{
+    // The guard that keeps a property IOCTL off a file. Without it the query
+    // would open whatever the path names and ask a filesystem for its
+    // adapter descriptor.
+    const std::string file =
+        (std::filesystem::temp_directory_path()
+         / ("rpi-imager-notadrive-" + std::to_string(::GetCurrentProcessId()))).string();
+    { std::ofstream f(file); f << "x"; }
+
+    for (const std::string &path : {file, std::string(), std::string("\\\\.\\C:"),
+                                    std::string("C:\\Windows"),
+                                    std::string("PHYSICALDRIVE0")}) {
+        INFO("path: " << path);
+        const auto limits = FileOperations::QueryDeviceIOLimits(path);
+        CHECK(limits.max_transfer_bytes == 0);
+        CHECK(limits.suggested_queue_depth == 0);
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(file, ec);
+}
+
+TEST_CASE("A drive path is recognised whatever its case", "[device_io_limits]")
+{
+    // Drivelist hands the path back as Windows spells it, and nothing
+    // guarantees that spelling. A case-sensitive prefix test would drop the
+    // limits silently and fall back to the RAM heuristic.
+    const auto upper = FileOperations::QueryDeviceIOLimits("\\\\.\\PHYSICALDRIVE0");
+    const auto lower = FileOperations::QueryDeviceIOLimits("\\\\.\\physicaldrive0");
+    CHECK(upper.max_transfer_bytes == lower.max_transfer_bytes);
+    CHECK(upper.suggested_queue_depth == lower.suggested_queue_depth);
+}
+
+TEST_CASE("A drive that is not there reports nothing rather than failing",
+          "[device_io_limits]")
+{
+    // The query runs before the write, on a path the user may have unplugged.
+    const auto limits = FileOperations::QueryDeviceIOLimits("\\\\.\\PHYSICALDRIVE97");
+    CHECK(limits.max_transfer_bytes == 0);
+    CHECK(limits.suggested_queue_depth == 0);
+}
+
+TEST_CASE("The system drive answers with limits a write can be sized from",
+          "[device_io_limits]")
+{
+    // Against real hardware, so the values themselves are whatever the
+    // machine reports. What is asserted is that they can be used: a maximum
+    // transfer below a page cannot be aligned down to anything, and a queue
+    // depth the device could not service would be queue pressure rather than
+    // throughput.
+    //
+    // Opened here as well, with the zero access the query uses, so a machine
+    // that will not hand over its system drive skips rather than passing on
+    // the defaults it would also return for a path it never looked at.
+    const HANDLE probe = ::CreateFileA("\\\\.\\PHYSICALDRIVE0", 0,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                       nullptr, OPEN_EXISTING, 0, nullptr);
+    if (probe == INVALID_HANDLE_VALUE)
+        SKIP("PHYSICALDRIVE0 cannot be opened, so the query has nothing to ask");
+    ::CloseHandle(probe);
+
+    const auto limits = FileOperations::QueryDeviceIOLimits("\\\\.\\PHYSICALDRIVE0");
+    INFO("max_transfer_bytes: " << limits.max_transfer_bytes
+         << ", suggested_queue_depth: " << limits.suggested_queue_depth);
+
+    if (limits.max_transfer_bytes > 0) {
+        CHECK(limits.max_transfer_bytes >= 4096);
+        CHECK(limits.max_transfer_bytes <= 256u * 1024 * 1024);
+    }
+    if (limits.suggested_queue_depth > 0) {
+        CHECK(limits.suggested_queue_depth >= rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth);
+        CHECK(limits.suggested_queue_depth <= 4096);
+    }
+}
+
+#endif // _WIN32
+
+// ── capping the write buffer to what the device takes ───────────────────────
+//
+// A buffer larger than the device's maximum transfer is split by the OS into
+// sub-requests, which is the queue pressure the cap exists to avoid (#1592).
+// The alignment is the part that bites: the write is made with
+// FILE_FLAG_NO_BUFFERING on Windows and O_DIRECT on Linux, and both refuse a
+// length that is not a whole number of pages -- so a cap that is not aligned
+// down trades a slow write for one that fails outright.
+//
+// None of this was covered. It needs a device that reports a small maximum,
+// which no test machine here has, so the arithmetic was unreachable while
+// living inside the constructor.
+
+TEST_CASE("A device that takes less than was asked for caps the buffer",
+          "[device_io_limits][buffer]")
+{
+    // 256 KB device maximum against a 1 MB hint, 4 KB pages.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 256 * 1024, 4096)
+          == 256 * 1024u);
+}
+
+TEST_CASE("A device that takes more than was asked for changes nothing",
+          "[device_io_limits][buffer]")
+{
+    CHECK(rpi_imager::CapWriteBufferToDevice(64 * 1024, 1024 * 1024, 4096)
+          == 64 * 1024u);
+    // And exactly equal is not a cap either.
+    CHECK(rpi_imager::CapWriteBufferToDevice(64 * 1024, 64 * 1024, 4096)
+          == 64 * 1024u);
+}
+
+TEST_CASE("A device reporting no maximum leaves the hint alone",
+          "[device_io_limits][buffer]")
+{
+    // Which is what every platform answers when it cannot find out.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 0, 4096)
+          == 1024 * 1024u);
+}
+
+TEST_CASE("The cap is aligned down to a whole number of pages",
+          "[device_io_limits][buffer]")
+{
+    // 100000 is not a multiple of 4096; 98304 is the page below it. Handing
+    // the unaligned figure to a no-buffering write is what fails.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 100000, 4096) == 98304u);
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 100000, 4096) % 4096 == 0);
+}
+
+TEST_CASE("A maximum below one page is refused rather than rounded to nothing",
+          "[device_io_limits][buffer]")
+{
+    // Aligning 2048 down to a 4096 page leaves zero, and a zero-length buffer
+    // is not a smaller write, it is no write at all.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 2048, 4096)
+          == 1024 * 1024u);
+    // Exactly one page is the smallest cap that means anything.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 4096, 4096) == 4096u);
+}
+
+TEST_CASE("A page size of zero does not divide by it",
+          "[device_io_limits][buffer]")
+{
+    // getSystemPageSize() should never answer zero, and the whole write path
+    // is built in this constructor -- so if it ever did, the crash would be
+    // before the first byte and with nothing said.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 4096, 0) == 1024 * 1024u);
+}
+
+TEST_CASE("A large page size still caps sensibly", "[device_io_limits][buffer]")
+{
+    // 64 KB pages, as some systems use.
+    CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 200000, 65536) == 196608u);
+}

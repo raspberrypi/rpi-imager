@@ -180,6 +180,9 @@ public:
     /**
      * @brief System information captured at session start (no unique identifiers)
      */
+    // Holds QStrings, so clear it by assignment and never by memset: zeroing
+    // the bytes overwrites their internal pointers without running any
+    // destructor, leaking every string the previous session set.
     struct SystemInfo {
         // Memory
         quint64 totalMemoryBytes;

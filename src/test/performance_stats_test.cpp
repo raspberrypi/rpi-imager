@@ -15,6 +15,8 @@
 
 #include "performancestats.h"
 
+#include <QMetaEnum>
+
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -701,4 +703,69 @@ TEST_CASE("Every event type is exported under a name of its own",
     }
 
     CHECK(seen.size() == static_cast<int>(PerformanceStats::EventType::_Count));
+}
+
+// ============================================================================
+// Naming what was measured
+// ============================================================================
+// Every event, phase and session state goes out with its name on it. The
+// names come from the meta-object system, so an enumerator that is not
+// registered is reported as a bare number and the line it appears in stops
+// meaning anything to whoever reads it later.
+
+TEST_CASE("Every event type can be named", "[perfstats][enums]")
+{
+    const QMetaEnum meta = QMetaEnum::fromType<PerformanceStats::EventType>();
+    REQUIRE(meta.isValid());
+
+    for (int i = 0; i < static_cast<int>(PerformanceStats::EventType::_Count); ++i) {
+        INFO("event " << i);
+        const char *name = meta.valueToKey(i);
+        REQUIRE(name != nullptr);
+        CHECK(QByteArray(name).size() > 0);
+    }
+}
+
+TEST_CASE("The event sentinel counts the events before it", "[perfstats][enums]")
+{
+    // _Count sizes the arrays the statistics live in. An enumerator added
+    // after it, or a value assigned by hand, would leave those arrays short
+    // and the writes past the end would land in whatever followed.
+    const QMetaEnum meta = QMetaEnum::fromType<PerformanceStats::EventType>();
+    REQUIRE(meta.isValid());
+
+    // Every key except _Count itself is a real event, and their values run
+    // from nought without a gap.
+    int realEvents = 0;
+    for (int k = 0; k < meta.keyCount(); ++k) {
+        if (QByteArray(meta.key(k)) == QByteArrayLiteral("_Count"))
+            continue;
+        INFO("key " << meta.key(k) << " = " << meta.value(k));
+        CHECK(meta.value(k) == realEvents);
+        ++realEvents;
+    }
+    CHECK(realEvents == static_cast<int>(PerformanceStats::EventType::_Count));
+}
+
+TEST_CASE("Every phase and session state can be named", "[perfstats][enums]")
+{
+    const QMetaEnum phases = QMetaEnum::fromType<PerformanceStats::Phase>();
+    REQUIRE(phases.isValid());
+    for (auto p : {PerformanceStats::Phase::Idle, PerformanceStats::Phase::Downloading,
+                   PerformanceStats::Phase::Decompressing, PerformanceStats::Phase::Writing,
+                   PerformanceStats::Phase::Verifying, PerformanceStats::Phase::Finalising}) {
+        INFO("phase " << static_cast<int>(p));
+        CHECK(phases.valueToKey(static_cast<int>(p)) != nullptr);
+    }
+
+    const QMetaEnum states = QMetaEnum::fromType<PerformanceStats::SessionState>();
+    REQUIRE(states.isValid());
+    for (auto s : {PerformanceStats::SessionState::NeverStarted,
+                   PerformanceStats::SessionState::InProgress,
+                   PerformanceStats::SessionState::Succeeded,
+                   PerformanceStats::SessionState::Failed,
+                   PerformanceStats::SessionState::Cancelled}) {
+        INFO("state " << static_cast<int>(s));
+        CHECK(states.valueToKey(static_cast<int>(s)) != nullptr);
+    }
 }

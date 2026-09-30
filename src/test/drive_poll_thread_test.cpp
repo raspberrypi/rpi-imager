@@ -348,15 +348,19 @@ std::vector<uint8_t> okay(const std::string &payload)
     return {r.begin(), r.end()};
 }
 
-// Answers the getvar sequence a confirmed Pi is asked: product, the block
-// device list, then a size and a type for each device on it.
+// Answers the getvar sequence a confirmed Pi is asked: product, the revision
+// code's processor field, the block device list, then a size and a type for
+// each device on it. The responses are a queue rather than a lookup, so every
+// getvar the scan makes has to be answered here in the order it is asked.
 void queuePiWithStorage(rpiboot::testing::MockUsbTransport &m,
                         const std::string &product,
                         const std::vector<std::tuple<std::string, std::string,
-                                                     std::string>> &devices)
+                                                     std::string>> &devices,
+                        const std::string &revisionProcessor = "4")
 {
     m.setInterfaceString(rpiboot::FASTBOOT_INTERFACE_DESCRIPTOR);
     m.queueBulkReadResponse(okay(product));
+    m.queueBulkReadResponse(okay(revisionProcessor));
 
     std::string list;
     for (const auto &[name, size, type] : devices) {

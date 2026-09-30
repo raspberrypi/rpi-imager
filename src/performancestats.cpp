@@ -27,7 +27,8 @@ PerformanceStats::PerformanceStats(QObject *parent)
 {
     std::memset(_phaseStartTimes, 0, sizeof(_phaseStartTimes));
     std::memset(_lastSampleTime, 0, sizeof(_lastSampleTime));
-    std::memset(&_systemInfo, 0, sizeof(_systemInfo));
+    // Assigned, not memset: SystemInfo holds QStrings. See its declaration.
+    _systemInfo = SystemInfo{};
 }
 
 void PerformanceStats::startSession(const QString &imageName, quint64 imageSize, const QString &deviceName)
@@ -76,7 +77,7 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
     _verifyTotal = 0;
     
     _hasSystemInfo = false;
-    std::memset(&_systemInfo, 0, sizeof(_systemInfo));
+    _systemInfo = SystemInfo{};
     
     // Start/restart the session timer for this cycle
     _sessionTimer.start();
@@ -119,7 +120,7 @@ void PerformanceStats::reset()
     
     _nextEventId = 1;
     _hasSystemInfo = false;
-    std::memset(&_systemInfo, 0, sizeof(_systemInfo));
+    _systemInfo = SystemInfo{};
     
     qDebug() << "PerformanceStats: Reset all data";
 }

@@ -237,7 +237,11 @@ if __name__ == "__main__":
                     device["capabilities"] = sorted(merged_caps)
     # Sort the output OSes into the same order as the input OSes
     os_order = list(online_os_entries.keys())
-    local_data["os_list"] = sorted(local_os_entries.values(), key=lambda x: os_order.index(os.path.basename(x["url"])))
+    local_data["os_list"] = [
+        local_os_entries[name]
+        for name in os_order
+        if name in local_os_entries
+    ]
 
     # Add capabilities to OS entries if specified
     if args.capabilities:

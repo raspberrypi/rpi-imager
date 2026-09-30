@@ -237,6 +237,79 @@ TEST_CASE("The sequential cursor handles repeated and skipped blocks", "[bmap]")
 // Wire format
 // ══════════════════════════════════════════════════════════════
 
+TEST_CASE("A range that cannot be read is refused, not read as block zero",
+          "[bmap]")
+{
+    // toULongLong() answers zero for anything it cannot read, and the two
+    // numbers were taken without asking whether it had. A damaged begin
+    // became block 0; a damaged end became one, leaving begin past end --
+    // and a range like that is stepped over by both lookups, so the encoder
+    // is told those blocks are unmapped and writes nothing where their data
+    // should have gone. The card comes back with a hole in it and nothing
+    // reports a problem, which is the same ending the truncation check
+    // upstream exists to prevent.
+    const auto refuses = [](const char *rangeText) {
+        fastboot::BlockMap map;
+        std::string err;
+        const std::string xml =
+            std::string("<?xml version=\"1.0\" ?>\n<bmap version=\"2.0\">\n"
+                        "<BlockSize>4096</BlockSize>\n<BlocksCount>200</BlocksCount>\n"
+                        "<BlockMap>\n<Range>") + rangeText
+            + "</Range>\n</BlockMap>\n</bmap>\n";
+        INFO("range: " << rangeText);
+        const bool ok = map.parse(xml, &err);
+        CHECK_FALSE(ok);
+        CHECK_FALSE(err.empty());
+        CHECK(map.ranges().empty());
+    };
+
+    refuses("not-a-number");
+    refuses("10-not-a-number");
+    refuses("not-a-number-20");
+    refuses("");
+    refuses("20-10");          // end before begin
+    refuses("10-9");           // the inclusive end one below the begin
+}
+
+TEST_CASE("Overlapping ranges are refused", "[bmap]")
+{
+    // isMapped() binary searches for the last range beginning at or before
+    // the block and asks only that one; isMappedSequential() walks to the
+    // first whose end is past it. Given two ranges covering the same block
+    // they answer differently -- which a fuzz run found by asking both.
+    fastboot::BlockMap map;
+    std::string err;
+    const std::string xml =
+        "<?xml version=\"1.0\" ?>\n<bmap version=\"2.0\">\n"
+        "<BlockSize>4096</BlockSize>\n<BlocksCount>200</BlocksCount>\n"
+        "<BlockMap>\n<Range>0-59</Range>\n<Range>0-9</Range>\n"
+        "</BlockMap>\n</bmap>\n";
+
+    CHECK_FALSE(map.parse(xml, &err));
+    CHECK(err.find("overlap") != std::string::npos);
+    CHECK(map.ranges().empty());
+}
+
+TEST_CASE("The two ways of asking agree on every block", "[bmap]")
+{
+    // One is used by the encoder and one is not, but they answer the same
+    // question and a public API that answers it two ways has to answer it
+    // once. Out-of-order input used to make them differ.
+    fastboot::BlockMap map;
+    std::string err;
+    const std::string xml =
+        "<?xml version=\"1.0\" ?>\n<bmap version=\"2.0\">\n"
+        "<BlockSize>4096</BlockSize>\n<BlocksCount>200</BlocksCount>\n"
+        "<BlockMap>\n<Range>50-59</Range>\n<Range>0-9</Range>\n"
+        "<Range>20-29</Range>\n</BlockMap>\n</bmap>\n";
+
+    REQUIRE(map.parse(xml, &err));
+    for (uint64_t i = 0; i < 200; ++i) {
+        INFO("block " << i);
+        CHECK(map.isMappedSequential(i) == map.isMapped(i));
+    }
+}
+
 TEST_CASE("Serialisation produces the header fastbootd expects", "[bmap]")
 {
     BlockMap map;
@@ -280,3 +353,81 @@ TEST_CASE("An empty bmap serialises to a header with no ranges", "[bmap]")
     CHECK(le32(wire, 0) == BMAP_WIRE_MAGIC);
     CHECK(le32(wire, 8) == 0);
 }
+
+// ---------------------------------------------------------------------------
+// Figures the file chose
+// ---------------------------------------------------------------------------
+
+TEST_CASE("A BlockSize that will not read is refused", "[bmap]")
+{
+    // toULongLong() answers zero for anything it cannot read, and zero is
+    // the one value that cannot be a block size: every block number becomes
+    // byte offset zero, so the whole map points at the start of the card.
+    fastboot::BlockMap map;
+    std::string err;
+    CHECK_FALSE(map.parse(bmapDoc("<Range>0-3</Range>", "not-a-number"), &err));
+    CHECK_THAT(err, Catch::Matchers::ContainsSubstring("BlockSize"));
+
+    std::string err2;
+    fastboot::BlockMap zeroed;
+    CHECK_FALSE(zeroed.parse(bmapDoc("<Range>0-3</Range>", "0"), &err2));
+}
+
+TEST_CASE("A BlocksCount that will not read is refused", "[bmap]")
+{
+    fastboot::BlockMap map;
+    std::string err;
+    CHECK_FALSE(map.parse(bmapDoc("<Range>0-3</Range>", "4096", "twelve"), &err));
+    CHECK_THAT(err, Catch::Matchers::ContainsSubstring("BlocksCount"));
+}
+
+TEST_CASE("The figures are read from the layout bmap-tools really writes", "[bmap]")
+{
+    // bmaptool pads the values inside their elements:
+    //
+    //     <BlockSize> 4096 </BlockSize>
+    //
+    // The ranges were already trimmed before being read, which looks like
+    // somebody meeting this -- but the counts above them never were, and
+    // they were right not to be: QString::toULongLong() skips the padding
+    // on its own. Pinned here because the parser now relies on that, and
+    // a bmap whose block size read as nought would point the whole map at
+    // the start of the card.
+    fastboot::BlockMap map;
+    std::string err;
+    REQUIRE(map.parse(bmapDoc(" <Range> 0-3 </Range>\n",
+                              " 4096 ", " 100 ", " 4 "), &err));
+    CHECK(map.blockSize() == 4096);
+    CHECK(map.blockCount() == 100);
+    CHECK(map.mappedBlockCount() == 4);
+    CHECK(map.isMapped(0));
+    CHECK(map.isMapped(3));
+}
+
+TEST_CASE("A block past what the device's format holds is refused", "[bmap]")
+{
+    // The wire format has 32-bit block numbers and serialize() wrote them
+    // with a plain cast, so 4294967296 came out as block 0: the device was
+    // told to write that range's data at the start of the card, and to
+    // leave the blocks it names alone. Nothing said so.
+    fastboot::BlockMap map;
+    std::string err;
+    CHECK_FALSE(map.parse(
+        bmapDoc("<Range>4294967296-4294967300</Range>", "4096", "5000000000"), &err));
+    CHECK_THAT(err, Catch::Matchers::ContainsSubstring("device"));
+
+    // The last block the format can carry is still accepted.
+    fastboot::BlockMap edge;
+    std::string err2;
+    REQUIRE(edge.parse(
+        bmapDoc("<Range>4294967294-4294967295</Range>", "4096", "5000000000"), &err2));
+    CHECK(edge.isMapped(4294967295ULL));
+}
+
+TEST_CASE("A BlockSize past the wire format is refused", "[bmap]")
+{
+    fastboot::BlockMap map;
+    std::string err;
+    CHECK_FALSE(map.parse(bmapDoc("<Range>0-3</Range>", "4294967296"), &err));
+}
+

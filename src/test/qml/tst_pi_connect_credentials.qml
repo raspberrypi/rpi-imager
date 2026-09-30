@@ -225,10 +225,9 @@ TestCase {
 
     // -- Wiping the token when the write is done ---------------------------
 
-    function test_a_spent_token_is_wiped_from_everywhere() {
-        // The token is single-use and is cleared when the write completes.
-        // Anything left behind would be offered to the next card, where it no
-        // longer works -- and the Pi would fail to enrol with no explanation.
+    // A token goes for two reasons, and they want different things of the
+    // wizard. Both wipe the token; only one means the step was never set up.
+    function primeASpentToken() {
         build({})
         ImageWriterSingleton.connectTokenReceived("token-from-the-browser")
         fakeContainer.piConnectEnabled = true
@@ -237,21 +236,49 @@ TestCase {
         // to 25 below would hold whether or not anything reset it.
         step.countdownSeconds = 0
         verify(step.connectTokenReceived)
+    }
 
-        ImageWriterSingleton.connectTokenCleared()
-
+    function verifyTheTokenIsGone() {
         verify(!step.connectTokenReceived, "the token is no longer held")
         compare(step.connectToken, "", "nor its text")
         verify(!step.tokenFromBrowser, "nor where it came from")
         verify(!step.tokenFieldEnabled, "the field is locked again")
         compare(step.countdownSeconds, 25, "and the wait is back to the start")
-        verify(!fakeContainer.piConnectEnabled,
-               "the wizard no longer claims Connect is set up")
         verify(fakeContainer.customizationSettings.piConnectEnabled === undefined,
                "and it is removed from what the generator is given, rather "
                + "than left set to false")
 
         const field = child("connectTokenField")
         compare(String(field.text), "", "and the field is empty")
+    }
+
+    function test_a_spent_token_is_wiped_from_everywhere() {
+        // Consumed by a successful write. The token is single-use, and
+        // anything left behind would be offered to the next card, where it no
+        // longer works -- the Pi would fail to enrol with no explanation.
+        primeASpentToken()
+
+        ImageWriterSingleton.connectTokenCleared(false)
+
+        verifyTheTokenIsGone()
+        // But the step was configured, and the write that just finished had
+        // it. The sidebar bolds this step from that flag and the completion
+        // summary lists it, so clearing it here left the two disagreeing on
+        // the same screen.
+        verify(fakeContainer.piConnectEnabled,
+               "the wizard still reports what it wrote")
+    }
+
+    function test_a_token_that_no_longer_applies_unsets_the_step() {
+        // Dropped because the OS or the storage changed, so the key was
+        // minted for something that is no longer selected. Nothing was
+        // written with it, and the step is not set up.
+        primeASpentToken()
+
+        ImageWriterSingleton.connectTokenCleared(true)
+
+        verifyTheTokenIsGone()
+        verify(!fakeContainer.piConnectEnabled,
+               "the wizard no longer claims Connect is set up")
     }
 }

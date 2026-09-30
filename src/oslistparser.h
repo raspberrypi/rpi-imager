@@ -17,6 +17,7 @@
 #define OSLISTPARSER_H
 
 #include <QJsonArray>
+#include <QJsonValue>
 #include <QJsonObject>
 #include <QString>
 
@@ -46,10 +47,32 @@ QJsonArray parseOSJson(const QJsonObject &root);
 // `preferredArchitecture` come first.
 void applyArchitectureSorting(QJsonArray &list, const QString &preferredArchitecture);
 
-// Allow known-good icon forms and drop malformed ones, so a bad repository
-// entry cannot turn into a runtime fetch of something unexpected. Returns an
-// empty string for anything rejected.
+// Drop the icon forms that would turn a bad repository entry into a fetch of
+// something unexpected -- a remote URL with no host, and a file URL naming
+// one, whose local path is a UNC path and on Windows an SMB authentication
+// attempt. Returns an empty string for those. It is not an allow-list: an
+// unrecognised scheme is passed through on purpose, since QML may know one
+// this does not and the alternative is dropping icons that would have worked.
+// A test pins that choice.
 QString sanitizeIconSource(const QString &raw);
+
+// sanitizeIconSource(), then the routing every caller used to repeat: a
+// remote icon becomes an "image://icons/" source so it is fetched by
+// IconMultiFetcher rather than by Qt Quick. Returns an empty string for
+// anything the sanitiser rejects.
+QString iconSourceFor(const QString &raw);
+
+// A byte count out of the OS list, or nothing.
+//
+// JSON numbers are doubles, and the repository is a setting -- one the
+// bootloader's own flash can name -- so "extract_size": -1 and 1e30 are both
+// things that can arrive. Converting either to quint64 is undefined, and on
+// this architecture it saturates silently: -1 becomes 0, which is the answer
+// that makes the capacity check pass on any card at all.
+//
+// Anything that is not a whole number in range comes back as 0, which the
+// callers already read as "size unknown".
+quint64 byteCountFromJson(const QJsonValue &value);
 
 } // namespace oslist
 

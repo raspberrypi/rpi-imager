@@ -369,3 +369,48 @@ TEST_CASE("a payload that outgrows its own section is refused before the next on
     // bootconf.txt is intact: the refusal happened before anything was written.
     CHECK(img.getFile(QStringLiteral("bootconf.txt")).contains("BOOT_ORDER"));
 }
+
+// A FILE section's recorded length covers the 12-byte filename, 4 metadata
+// bytes and then the payload. getFile() subtracted those 16 without first
+// checking there were 16 to subtract, and QByteArray::mid() reads a negative
+// length as "everything from here on". A section claiming eight bytes
+// therefore handed back the remainder of the EEPROM as bootsys, which the
+// provisioner counter-signs and writes to a part that accepts one image.
+//
+// Same shape as the underflow in fastboot/pieeprom.cpp, in the other of the
+// two EEPROM readers this tree carries.
+
+TEST_CASE("a file section shorter than its own header yields no payload",
+          "[bootloader_image][refuse]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QByteArray payload(2000, '\xCD');
+    const auto good = makeABImage(payload);
+
+    // The control: an intact image still gives its bootsys back, so a later
+    // empty result means the guard fired and not that the case stopped
+    // reaching getFile() at all.
+    {
+        BootloaderImage img;
+        REQUIRE(img.load(writeTemp(dir, good)));
+        CHECK(img.getFile(QStringLiteral("bootsys")) == payload);
+    }
+
+    auto bytes = good;
+    // bootsys sits at the read-only boundary. Shrink its recorded length to
+    // below the 16 bytes of filename and metadata it is obliged to carry.
+    constexpr size_t kBootsys = READ_ONLY;
+    putBE32(bytes, kBootsys + 4, 8u);
+    // Parsing walks on from the header plus that length, so the next eight
+    // bytes have to end the walk rather than look like a corrupt section.
+    putBE32(bytes, kBootsys + 16, 0xffffffffu);
+
+    BootloaderImage img;
+    REQUIRE(img.load(writeTemp(dir, bytes)));
+
+    const QByteArray bootsys = img.getFile(QStringLiteral("bootsys"));
+    INFO("returned " << bootsys.size() << " bytes from an 8-byte section");
+    CHECK(bootsys.isEmpty());
+}

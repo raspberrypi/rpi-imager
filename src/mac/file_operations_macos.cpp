@@ -115,11 +115,8 @@ void MacOSFileOperations::CleanupAsyncIO() {
   // Wait for pending writes before cleanup
   WaitForPendingWrites();
 
-  // ...and then wait for them again, because the wait above gives up as soon
-  // as the write is cancelled -- by design, so a user who has pressed cancel
-  // is not made to sit through the rest of the queue. What it leaves behind
-  // is blocks still running on the queue, each holding a slot of the
-  // semaphore and each still touching this object.
+  // ...and again, because a cancelled wait gives up at its emergency timeout
+  // with blocks still holding semaphore slots and touching this object.
   if (pending_writes_.load() > 0) {
     constexpr auto kDrainLimit = std::chrono::seconds(30);
     const auto deadline = std::chrono::steady_clock::now() + kDrainLimit;
@@ -796,9 +793,9 @@ void MacOSFileOperations::CancelAsyncIO() {
     completion_cv_.notify_all();
   }
   
-  // Note: We can't cancel already-dispatched GCD blocks, but they will
-  // complete relatively quickly. The key is unblocking the semaphore wait
-  // in AsyncWriteSequential so the caller can respond to cancellation.
+  // Already-dispatched GCD blocks cannot be cancelled. WaitForPendingWrites()
+  // must still drain them before their buffers or dispatch resources are
+  // destroyed.
 }
 
 std::vector<FileOperations::PendingWriteInfo> MacOSFileOperations::GetPendingWritesSorted() const {
@@ -825,17 +822,20 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
-  // Wait for pending writes to complete or be cancelled.
+  // Wait for every dispatched write and its callback to complete. Cancellation
+  // prevents new submissions, but GCD cannot cancel blocks already on the queue;
+  // returning early would let Close()/CleanupAsyncIO() destroy the file and
+  // semaphore while those blocks are still using them.
   // 
   // DESIGN: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
-  // This function simply waits, responding to cancellation. We keep a very long safety-net
+  // This function simply drains the queue. We keep a very long safety-net
   // timeout (5 minutes) only as emergency fallback if cancellation somehow fails.
   constexpr int kEmergencyTimeoutMs = 300000;  // 5 minute emergency fallback
   constexpr int kPollIntervalMs = 500;
   int totalWaitMs = 0;
   
   std::unique_lock<std::mutex> lock(completion_mutex_);
-  while (pending_writes_.load() > 0 && !cancelled_.load()) {
+  while (pending_writes_.load() > 0) {
     auto result = completion_cv_.wait_for(lock, std::chrono::milliseconds(kPollIntervalMs));
     
     if (result == std::cv_status::timeout) {
@@ -847,6 +847,12 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
         Log("WaitForPendingWrites: EMERGENCY timeout after " + std::to_string(totalWaitMs / 1000) + 
             "s with " + std::to_string(remaining) + " writes still pending - forcing sync fallback");
         
+        // Fallback would replay a cancelled job and zero the count under
+        // blocks still in flight.
+        if (cancelled_.load()) {
+          return FileError::kCancelled;
+        }
+
         lock.unlock();
         return AttemptSyncFallback();
       }
@@ -859,7 +865,7 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
     }
   }
   
-  if (cancelled_.load() && pending_writes_.load() > 0) {
+  if (cancelled_.load()) {
     return FileError::kCancelled;
   }
   
@@ -1054,4 +1060,4 @@ std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
   return std::make_unique<MacOSFileOperations>();
 }
 
-} // namespace rpi_imager 
+} // namespace rpi_imager

@@ -6,6 +6,9 @@
 #include "platformhelper.h"
 #include "platformquirks.h"
 
+#ifndef CLI_ONLY_BUILD
+// QAccessible is Qt GUI, which the CLI build does not link. With no window
+// there is nothing for an assistive technology to attach to either.
 #include <QAccessible>
 #include <QPointer>
 
@@ -61,6 +64,7 @@ private:
 };
 
 } // namespace
+#endif
 
 bool PlatformHelper::hasNetworkConnectivity() const
 {
@@ -80,7 +84,14 @@ bool PlatformHelper::isScrollInverted(bool qtInvertedFlag) const
 qreal PlatformHelper::textScaleFactor() const
 {
     // Check for user override in settings first
-    QSettings settings("Raspberry Pi", "Raspberry Pi Imager");
+    //
+    // The default constructor, like every other reader in the tree. Naming
+    // the organisation and application here resolved to the same file in
+    // production -- main.cpp and cli.cpp set exactly those two strings --
+    // but it ignored whatever identity the process actually has, so under
+    // test it wrote a settings file shared by every concurrent test process
+    // instead of the scoped one, and nothing cleaned it up.
+    QSettings settings;
     QVariant override = settings.value("textScaleFactor");
     if (override.isValid()) {
         bool ok = false;
@@ -104,11 +115,17 @@ bool PlatformHelper::prefersReducedMotion() const
 
 void PlatformHelper::ensureAccessibilityObserver() const
 {
+#ifndef CLI_ONLY_BUILD
     AccessibilityWatcher::instance().watch(const_cast<PlatformHelper *>(this));
+#endif
 }
 
 bool PlatformHelper::assistiveTechnologyActive() const
 {
+#ifdef CLI_ONLY_BUILD
+    return false;
+#else
     ensureAccessibilityObserver();
     return QAccessible::isActive();
+#endif
 }

@@ -15,7 +15,10 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "platform_tools.h"
+
 #include "connect_device_registrar.h"
+#include "fake_connect_api.h"
 #include "fastboot/fastboot_protocol.h"
 #include "rpiboot/test/mock_usb_transport.h"
 
@@ -27,11 +30,12 @@
 #include <QProcess>
 #include <QUuid>
 
+using rpi_test::FakeApiServer;
 using rpiboot::testing::MockUsbTransport;
 
 namespace {
 
-bool havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
+bool havePython() { return rpi_test::havePython(); }
 
 class ScratchDir
 {
@@ -51,63 +55,6 @@ public:
 
 private:
     QString _path;
-};
-
-// A localhost stand-in for the Connect management API.
-//
-// It answers every POST with a canned status and body, so a case can choose
-// what the server does without needing the real service.
-class FakeApiServer
-{
-public:
-    FakeApiServer(int status, const QByteArray &body)
-    {
-        static const char *kScript =
-            "import http.server, socketserver, sys\n"
-            "status = int(sys.argv[1])\n"
-            "body = sys.argv[2].encode()\n"
-            "class H(http.server.BaseHTTPRequestHandler):\n"
-            "    def do_POST(self):\n"
-            "        n = int(self.headers.get('content-length', 0))\n"
-            "        self.rfile.read(n)\n"
-            "        self.send_response(status)\n"
-            "        self.send_header('content-type', 'application/json')\n"
-            "        self.send_header('content-length', str(len(body)))\n"
-            "        self.end_headers()\n"
-            "        self.wfile.write(body)\n"
-            "    def log_message(self, *a): pass\n"
-            "socketserver.TCPServer.allow_reuse_address = True\n"
-            "s = socketserver.TCPServer(('127.0.0.1', 0), H)\n"
-            "print(s.server_address[1], flush=True)\n"
-            "s.serve_forever()\n";
-
-        _process.start(QStringLiteral("/usr/bin/python3"),
-                       {QStringLiteral("-c"), QString::fromUtf8(kScript),
-                        QString::number(status), QString::fromUtf8(body)});
-        if (!_process.waitForStarted(10000))
-            return;
-        if (_process.waitForReadyRead(10000))
-            _port = _process.readLine().trimmed().toInt();
-    }
-
-    ~FakeApiServer()
-    {
-        _process.kill();
-        _process.waitForFinished(5000);
-    }
-
-    FakeApiServer(const FakeApiServer &) = delete;
-    FakeApiServer &operator=(const FakeApiServer &) = delete;
-
-    bool isRunning() const { return _port > 0; }
-    QString baseUrl() const
-    {
-        return QStringLiteral("http://127.0.0.1:%1").arg(_port);
-    }
-
-private:
-    QProcess _process;
-    int _port = 0;
 };
 
 // Build a mock device that answers the two fastboot commands the flow issues:
@@ -153,11 +100,7 @@ void queueHappyDevice(MockUsbTransport &mock)
 
 } // namespace
 
-#define REQUIRE_SERVER(server)                                                                     \
-    if (!havePython())                                                                             \
-        SKIP("python3 is not installed, so no local API server can be started");                   \
-    if (!(server).isRunning())                                                                     \
-    SKIP("the local API server did not start")
+#define REQUIRE_SERVER(server) RPI_REQUIRE_FAKE_API(server)
 
 // ---------------------------------------------------------------------------
 // Enablement
@@ -249,6 +192,50 @@ TEST_CASE("Registrar reports a malformed API response", "[connect]")
     // as success would write an empty secret into the image.
     CHECK_FALSE(result.ok);
     CHECK(result.secret.isEmpty());
+}
+
+TEST_CASE("Registrar refuses an endless response body", "[connect]")
+{
+    // The endpoint is named by a setting, and what it returns is whatever it
+    // chooses to return. The write callback appended every byte of it to a
+    // QByteArray with nothing weighing the total, and the non-object branch
+    // then put the whole thing into a message the interface shows.
+    //
+    // Eight megabytes here, which is small for a server that means it; the
+    // shape is what matters.
+    FakeApiServer server(201, QByteArray(1024, 'x'), 8 * 1024);
+    REQUIRE_SERVER(server);
+
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.requestAuthKey(QStringLiteral("flood"), 1);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.secret.isEmpty());
+    // Bounded, and small enough to put in front of somebody.
+    CHECK(result.errorMessage.size() < 4096);
+    INFO("message: " << result.errorMessage.toStdString());
+    CHECK_FALSE(result.errorMessage.isEmpty());
+}
+
+TEST_CASE("Registrar quotes only the head of a body it cannot parse",
+          "[connect]")
+{
+    // Under the cap, so it arrives whole -- but the message that quotes it
+    // is read by a person, and four kilobytes of proxy HTML is not a message.
+    FakeApiServer server(201, QByteArray(4096, 'y'));
+    REQUIRE_SERVER(server);
+
+    ConnectDeviceRegistrar registrar(QStringLiteral("rpck_not_a_real_key"),
+                                     QStringLiteral("imager"), server.baseUrl());
+
+    const auto result = registrar.requestAuthKey(QStringLiteral("verbose"), 1);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.errorMessage.size() < 1024);
+    // And it says how much there was, so the figure is not simply lost.
+    CHECK(result.errorMessage.contains(QStringLiteral("4096 bytes")));
 }
 
 TEST_CASE("Registrar reports a response missing the secret", "[connect]")

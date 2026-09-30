@@ -71,6 +71,32 @@ TestCase {
 
     // -- The ring is built from the registered groups ----------------------
 
+    function test_a_press_outside_does_not_dismiss_it() {
+        // Popup's default policy closes on a press outside as well as on
+        // Escape. A failed write raises a dialog on a window that may be
+        // buried behind others, and the click that brings the window
+        // forward would then dismiss the message unread -- with the step
+        // behind it showing nothing about the failure either.
+        //
+        // So: CloseOnEscape only. Removing closePolicy from BaseDialog
+        // fails this.
+        const d = create({})
+        d.open()
+        tryVerify(function () { return d.opened }, 3000, "it opened")
+
+        // Top-left corner, which the dialog does not cover.
+        mouseClick(testCase, 4, 4)
+        wait(150)
+        verify(d.opened, "still open after a press outside it")
+
+        // Escape is not a close here either -- BaseDialog hands it to the
+        // owner, which is how a dialog in front of an irreversible write
+        // decides for itself what cancelling means.
+        keyClick(Qt.Key_Escape)
+        tryVerify(function () { return d.escapeCount === 1 }, 3000,
+                  "Escape still reaches the owner")
+    }
+
     function test_the_registered_items_become_the_tab_order() {
         const d = create({})
         compare(d.one.KeyNavigation.tab, d.two)

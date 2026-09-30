@@ -221,7 +221,9 @@ struct DeviceDescriptor {
     bool isRpiboot = false;              ///< Device is a Broadcom SoC in USB boot mode
     uint16_t rpibootPid = 0;            ///< USB Product ID for chip identification
     std::vector<uint8_t> usbPortPath;   ///< USB port numbers for multi-device tracking
-    std::string rpibootChipName;        ///< Human-readable chip name (e.g. "BCM2711")
+    std::string rpibootChipName;        ///< Human-readable chip name (e.g. "BCM2711");
+                                        ///< also set on fastboot entries, from the
+                                        ///< gadget's revision-processor getvar
 
     // Fastboot storage fields (block device on a fastboot-mode Compute Module)
     bool isFastbootStorage = false;      ///< Device is a block device queried via fastboot

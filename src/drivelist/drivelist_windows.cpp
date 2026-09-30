@@ -1045,6 +1045,21 @@ bool isWindowsSystemDevice(const std::vector<std::string>& mountpoints)
     return isSystemDevice(mountpoints);
 }
 
+std::string windowsWcharToUtf8(const wchar_t* wstr)
+{
+    return wcharToUtf8(wstr);
+}
+
+bool windowsEqualsIgnoreCase(const std::string& a, const std::string& b)
+{
+    return equalsIgnoreCase(a, b);
+}
+
+bool windowsContainsIgnoreCase(const std::set<std::string>& s, const std::string& value)
+{
+    return containsIgnoreCase(s, value);
+}
+
 } // namespace testing
 
 #endif // DRIVELIST_ENABLE_TEST_API

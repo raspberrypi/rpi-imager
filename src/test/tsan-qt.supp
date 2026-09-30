@@ -25,3 +25,13 @@ race:QMutex
 race:QCoreApplicationPrivate
 race:QObjectPrivate
 race:QEventDispatcher
+
+# Per-thread bookkeeping Qt allocates on the worker and frees on the main
+# thread after the join. TSan marks the worker "(finished)", which is the
+# tell: the happens-before edge exists and sits inside libQt6Core. Seen at
+# test-discovery time, where it is worse than noise -- CatchAddTests runs the
+# binary to list its cases, TSan's exit code 66 fails the step, and the build
+# stops with no tests registered for that target.
+race:QThreadData
+race:initBindingStatus
+race:QThreadStorageData

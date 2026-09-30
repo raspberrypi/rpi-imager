@@ -13,12 +13,18 @@
 #include "drivelist.h"
 #include "embedded_config.h"
 
+#include <functional>
+#include <map>
 #include <optional>
+#include <QFile>
 #include <QProcess>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QDebug>
+
+#include <cmath>
 
 namespace Drivelist {
 
@@ -60,10 +66,25 @@ void walkStorageChildren(DeviceDescriptor& device, QStringList& labels, const QJ
     }
 }
 
+// The kernel's card type for an MMC block device ("MMC", "SD"), or empty
+// if unknown.
+using MmcTypeLookup = std::function<QString(const QString& kname)>;
+
+// Boot partitions can't tell eMMC from SD: they aren't always exposed.
+QString readMmcType(const QString& kname)
+{
+    QFile file(QStringLiteral("/sys/block/%1/device/type").arg(kname.section('/', -1)));
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    return QString::fromLatin1(file.read(16)).trimmed();
+}
+
 /**
  * @brief Parse a single block device from JSON
  */
-std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool embeddedMode)
+std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool embeddedMode,
+                                                 const MmcTypeLookup& mmcType)
 {
     DeviceDescriptor device;
 
@@ -117,10 +138,22 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     }
 
     // Parse size (can be string or number depending on lsblk version)
+    //
+    // Weighed rather than cast. lsblk is not hostile, but neither branch said
+    // what it would do with an answer it could not use: toULongLong() drops
+    // its ok flag, so a string that is not a number reads as nought, and a
+    // double outside the range of a uint64_t converts undefined. Both now
+    // land on nought deliberately, which the caller already treats as a size
+    // it does not know.
     if (bdev["size"].isString()) {
-        device.size = bdev["size"].toString().toULongLong();
+        bool ok = false;
+        const qulonglong parsed = bdev["size"].toString().toULongLong(&ok);
+        device.size = ok ? parsed : 0;
     } else {
-        device.size = static_cast<uint64_t>(bdev["size"].toDouble());
+        const double reported = bdev["size"].toDouble();
+        device.size = (std::isfinite(reported) && reported >= 0.0
+                       && reported < 18446744073709551616.0)
+                      ? static_cast<uint64_t>(reported) : 0;
     }
 
     // Detect connection type from subsystems
@@ -159,9 +192,19 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     addIfNotEmpty(bdev["vendor"].toString());
     addIfNotEmpty(bdev["model"].toString());
 
-    // Special case for internal SD card reader
-    if (name == "/dev/mmcblk0" && descParts.isEmpty()) {
-        descParts.append(QObject::tr("Internal SD card reader"));
+    // Only claim a card reader when the kernel says SD: eMMC passed off as
+    // one invites overwriting the system drive (#1658). An unknown type
+    // still gets a name, which the system drive confirmation needs.
+    static const QRegularExpression mmcDevice(QStringLiteral("^/dev/mmcblk\\d+$"));
+    if (descParts.isEmpty() && mmcDevice.match(name).hasMatch()) {
+        const QString type = mmcType(name);
+        if (type == QLatin1String("MMC")) {
+            descParts.append(QObject::tr("Internal eMMC storage"));
+        } else if (type == QLatin1String("SD")) {
+            descParts.append(QObject::tr("Internal SD card reader"));
+        } else {
+            descParts.append(QObject::tr("Internal MMC storage"));
+        }
     }
 
     // Fallback for loop devices with no label/vendor/model
@@ -280,7 +323,8 @@ std::optional<QByteArray> executeLsblk()
 // that returned an empty list where this one returns the sentinel, so the
 // behaviour a user actually meets was the one nothing checked.
 std::vector<DeviceDescriptor> devicesFromLsblkOutput(
-    const std::optional<QByteArray>& jsonOutput, bool embeddedMode)
+    const std::optional<QByteArray>& jsonOutput, bool embeddedMode,
+    const MmcTypeLookup& mmcType)
 {
     std::vector<DeviceDescriptor> deviceList;
 
@@ -313,7 +357,7 @@ std::vector<DeviceDescriptor> devicesFromLsblkOutput(
     deviceList.reserve(static_cast<size_t>(blockDevices.size()));
 
     for (const auto& item : blockDevices) {
-        auto device = parseBlockDevice(item.toObject(), embeddedMode);
+        auto device = parseBlockDevice(item.toObject(), embeddedMode, mmcType);
         if (device) {
             deviceList.push_back(std::move(*device));
         }
@@ -324,7 +368,7 @@ std::vector<DeviceDescriptor> devicesFromLsblkOutput(
 
 std::vector<DeviceDescriptor> ListStorageDevices()
 {
-    return devicesFromLsblkOutput(executeLsblk(), ::isEmbeddedMode());
+    return devicesFromLsblkOutput(executeLsblk(), ::isEmbeddedMode(), readMmcType);
 }
 
 // ============================================================================
@@ -335,14 +379,28 @@ std::vector<DeviceDescriptor> ListStorageDevices()
 
 namespace testing {
 
+// Never the host's sysfs, so results don't depend on the machine running
+// the tests.
+std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput,
+                                                     const std::map<std::string, std::string>& mmcTypes,
+                                                     bool embeddedMode)
+{
+    return devicesFromLsblkOutput(QByteArray::fromStdString(jsonOutput), embeddedMode,
+                                  [&mmcTypes](const QString& kname) {
+                                      const auto it = mmcTypes.find(kname.toStdString());
+                                      return it == mmcTypes.end() ? QString()
+                                                                  : QString::fromStdString(it->second);
+                                  });
+}
+
 std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutput, bool embeddedMode)
 {
-    return devicesFromLsblkOutput(QByteArray::fromStdString(jsonOutput), embeddedMode);
+    return parseLinuxBlockDevices(jsonOutput, {}, embeddedMode);
 }
 
 std::vector<DeviceDescriptor> devicesWhenLsblkCannotBeRun(bool embeddedMode)
 {
-    return devicesFromLsblkOutput(std::nullopt, embeddedMode);
+    return devicesFromLsblkOutput(std::nullopt, embeddedMode, readMmcType);
 }
 
 // lsblk itself, run for real against whatever PATH the caller has arranged.

@@ -18,6 +18,15 @@ Item {
     readonly property var    allFilesList: [ allFilesLabel ]
     readonly property string allFilesString: allFilesLabel
 
+    // A name from a repository, or from a device's firmware, drawn where the
+    // format cannot be set -- an attached tool tip above all. Those elements
+    // default to Text.AutoText, which reads markup as rich text and fetches
+    // what an <img> in it names, so a product string could call home. Where a
+    // format can be set, it is set to PlainText instead of this.
+    function plainText(s) {
+        return String(s === undefined || s === null ? "" : s).replace(/</g, " ")
+    }
+
     function withAll(list)          { return list.concat([allFilesLabel]) }
     function toFilterString(list)   { return list.join(";;") }
 

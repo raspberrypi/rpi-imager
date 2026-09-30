@@ -39,6 +39,47 @@ bool hasLine(const QByteArray &config, const QByteArray &line)
 
 // ── The prefix collisions ───────────────────────────────────────────────
 
+// ══════════════════════════════════════════════════════════════
+// Items that arrive with their carriage return still attached
+//
+// A caller splits its customisation on '\n', so a CRLF config hands over
+// items ending in '\r'. The line comparison stripped the file's lines but
+// not the item, so the two could never match: the setting was appended
+// again on every pass and config.txt grew a duplicate line each time.
+// Found by fuzzing for idempotence.
+// ══════════════════════════════════════════════════════════════
+
+TEST_CASE("A setting already present is not added again when it carries a CR",
+          "[config_txt]")
+{
+    const QByteArray config = "arm_64bit=1\r\ndtparam=audio=on\r\n";
+
+    // What splitting that config on '\n' actually yields.
+    const QByteArray item = "arm_64bit=1\r";
+
+    const QByteArray once = mergeConfigTxtItem(config, item);
+    CHECK(once == config);
+
+    const QByteArray twice = mergeConfigTxtItem(once, item);
+    CHECK(twice == once);
+}
+
+TEST_CASE("Merging is idempotent however many carriage returns trail the item",
+          "[config_txt]")
+{
+    // More than one only comes from malformed text, but the merge should
+    // still settle rather than grow without bound.
+    const QByteArray item = "dtparam=i2c=on\r\r";
+    const QByteArray once = mergeConfigTxtItem(QByteArray(), item);
+    const QByteArray twice = mergeConfigTxtItem(once, item);
+    CHECK(once == twice);
+
+    bool present = false;
+    for (const QByteArray &line : once.split('\n'))
+        if (line == "dtparam=i2c=on") { present = true; break; }
+    CHECK(present);
+}
+
 TEST_CASE("A setting is added even when a longer one shares its prefix",
           "[configtxt]")
 {

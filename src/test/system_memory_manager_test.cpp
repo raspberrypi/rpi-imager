@@ -369,7 +369,11 @@ TEST_CASE("Ring buffer slots fall as the slot size rises", "[memory]")
         // Fewer than two and there is no ring at all -- the producer and
         // consumer would serialise on a single slot.
         CHECK(slotCount >= 2);
-        CHECK(slotCount * slot <= size_t(4) * 1024 * 1024 * 1024);
+        // The cap getOptimalRingBufferSlots documents and applies. A tighter
+        // number here only passes on a machine small enough that 30% of its
+        // available RAM lands under it, and fails on a large one for no fault
+        // of the code.
+        CHECK(slotCount * slot <= size_t(16) * 1024 * 1024 * 1024);
         CHECK(slotCount <= previous);
         previous = slotCount;
     }

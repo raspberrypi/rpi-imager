@@ -12,6 +12,8 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
+#include "platform_tools.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "fastboot/eeprom_signer.h"
@@ -30,18 +32,6 @@
 #include <span>
 #include <string>
 #include <vector>
-
-// Stub: the linked platform secureboot_crypto_*.cpp on Linux/macOS
-// also defines extractRsaPubkeyBin, which calls parseSubjectPublicKeyInfoDerToNE.
-// That real implementation lives in secureboot.cpp, which has a large
-// transitive dependency graph (devicewrapperfatpartition, etc.) we don't
-// want to drag into a focused unit-test binary. Our tests only exercise
-// rsaSignSha256, so an empty stub satisfies the linker.
-#if !defined(_WIN32)
-namespace SecureBootCrypto {
-QByteArray parseSubjectPublicKeyInfoDerToNE(const QByteArray&) { return {}; }
-}
-#endif
 
 using namespace fastboot;
 
@@ -339,7 +329,7 @@ TEST_CASE("A key of the wrong size is refused rather than signed with",
     // will not boot and no indication why -- so the length is checked here.
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
-    const QString tool = QStandardPaths::findExecutable(QStringLiteral("openssl"));
+    const QString tool = rpi_test::toolPath(QStringLiteral("openssl"));
     if (tool.isEmpty())
         SKIP("openssl is not available, so no short key can be made");
 

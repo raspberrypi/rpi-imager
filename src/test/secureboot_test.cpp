@@ -14,7 +14,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "platform_paths.h"
+#include "platform_privilege.h"
 #include "secureboot.h"
+
+
 #include "secureboot_crypto.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
@@ -26,6 +30,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QRegularExpression>
+#include <QTemporaryDir>
 #include <QFileInfo>
 #include <QMap>
 #include <QProcess>
@@ -46,7 +51,7 @@ bool haveTool(const QString &path)
     return QFileInfo::exists(path);
 }
 
-bool haveOpenssl() { return haveTool(QStringLiteral("/usr/bin/openssl")); }
+bool haveOpenssl() { return haveTool(rpi_test::toolPath(QStringLiteral("openssl"))); }
 
 // A scratch directory that removes itself.
 class ScratchDir
@@ -75,7 +80,7 @@ private:
 bool generateRsaKey(const QString &path)
 {
     QProcess openssl;
-    openssl.start(QStringLiteral("/usr/bin/openssl"),
+    openssl.start(rpi_test::toolPath(QStringLiteral("openssl")),
                   {QStringLiteral("genrsa"), QStringLiteral("-out"), path,
                    QStringLiteral("2048")});
     openssl.waitForFinished(rpi_test::kFixtureProcessTimeoutMs);
@@ -292,6 +297,7 @@ TEST_CASE("SecureBoot builds a boot.img from a file map", "[secureboot]")
     files.insert(QStringLiteral("cmdline.txt"), "console=serial0,115200\n");
     files.insert(QStringLiteral("start4.elf"), QByteArray(4096, '\x11'));
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
 
     QFileInfo info(out);
@@ -319,7 +325,7 @@ TEST_CASE("SecureBoot refuses to write a boot.img it cannot open", "[secureboot]
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
 
     CHECK_FALSE(SecureBoot::createBootImg(
-        files, QStringLiteral("/nonexistent-rpi-imager-dir/deeper/boot.img")));
+        files, rpi_test::unwritablePath(QStringLiteral("boot.img"))));
 }
 
 TEST_CASE("SecureBoot signs a boot.img it just built", "[secureboot][crypto]")
@@ -333,6 +339,7 @@ TEST_CASE("SecureBoot signs a boot.img it just built", "[secureboot][crypto]")
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
 
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
@@ -366,6 +373,7 @@ TEST_CASE("SecureBoot boot signature fails on a missing key", "[secureboot][cryp
     const QString img = scratch.filePath(QStringLiteral("boot.img"));
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
 
     CHECK_FALSE(SecureBoot::generateBootSig(img, QStringLiteral("/nonexistent/key.pem"),
@@ -444,7 +452,7 @@ QStringList bootSigLines(const QString &path)
 QByteArray opensslSha256Hex(const QString &path)
 {
     QProcess p;
-    p.start(QStringLiteral("/usr/bin/openssl"),
+    p.start(rpi_test::toolPath(QStringLiteral("openssl")),
             {QStringLiteral("dgst"), QStringLiteral("-sha256"),
              QStringLiteral("-hex"), path});
     if (!p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
@@ -459,7 +467,7 @@ bool opensslVerify(const QString &keyPath, const QString &imgPath,
 {
     const QString pub = scratch + QStringLiteral("/pub.pem");
     QProcess extract;
-    extract.start(QStringLiteral("/usr/bin/openssl"),
+    extract.start(rpi_test::toolPath(QStringLiteral("openssl")),
                   {QStringLiteral("rsa"), QStringLiteral("-in"), keyPath,
                    QStringLiteral("-pubout"), QStringLiteral("-out"), pub});
     if (!extract.waitForFinished(rpi_test::kFixtureProcessTimeoutMs)
@@ -474,7 +482,7 @@ bool opensslVerify(const QString &keyPath, const QString &imgPath,
     sf.close();
 
     QProcess verify;
-    verify.start(QStringLiteral("/usr/bin/openssl"),
+    verify.start(rpi_test::toolPath(QStringLiteral("openssl")),
                  {QStringLiteral("dgst"), QStringLiteral("-sha256"),
                   QStringLiteral("-verify"), pub,
                   QStringLiteral("-signature"), sigBin, imgPath});
@@ -497,6 +505,7 @@ TEST_CASE("boot.sig has the three lines the bootloader reads",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -524,6 +533,7 @@ TEST_CASE("The digest in boot.sig is the digest of the image",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -547,6 +557,7 @@ TEST_CASE("The signature in boot.sig verifies against the key",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -576,7 +587,9 @@ TEST_CASE("A different image gets a different signature",
     QMap<QString, QByteArray> a, b;
     a.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
     b.insert(QStringLiteral("config.txt"), "arm_64bit=0\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(a, imgA));
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(b, imgB));
     REQUIRE(SecureBoot::generateBootSig(imgA, key, sigA));
     REQUIRE(SecureBoot::generateBootSig(imgB, key, sigB));
@@ -607,7 +620,9 @@ TEST_CASE("A signature made for one image does not verify another",
     QMap<QString, QByteArray> a, b;
     a.insert(QStringLiteral("config.txt"), "arm_64bit=1\n");
     b.insert(QStringLiteral("config.txt"), "tampered\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(a, imgA));
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(b, imgB));
     REQUIRE(SecureBoot::generateBootSig(imgA, key, sigA));
 
@@ -631,6 +646,7 @@ TEST_CASE("The timestamp in boot.sig is a plausible time",
 
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "x\n");
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, img));
     REQUIRE(SecureBoot::generateBootSig(img, key, sig));
 
@@ -788,13 +804,13 @@ namespace {
 
 bool haveMtools()
 {
-    return !QStandardPaths::findExecutable(QStringLiteral("mcopy")).isEmpty();
+    return !rpi_test::toolPath(QStringLiteral("mcopy")).isEmpty();
 }
 
 QByteArray readFromImg(const QString &image, const QString &path)
 {
     QProcess p;
-    p.start(QStringLiteral("mcopy"),
+    p.start(rpi_test::toolPath(QStringLiteral("mcopy")),
             {QStringLiteral("-i"), image, QStringLiteral("::") + path,
              QStringLiteral("-")});
     if (!p.waitForFinished(rpi_test::kFixtureProcessTimeoutMs))
@@ -818,6 +834,7 @@ TEST_CASE("The files put in a boot.img are in the boot.img",
     files.insert(QStringLiteral("cmdline.txt"), "console=serial0,115200\n");
     files.insert(QStringLiteral("start4.elf"), QByteArray(4096, '\x11'));
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
 
     CHECK(readFromImg(out, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
@@ -842,6 +859,7 @@ TEST_CASE("A nested firmware tree survives into the boot.img",
     files.insert(QStringLiteral("overlays/vc4-kms-v3d.dtbo"), "OVERLAY");
     files.insert(QStringLiteral("a/b/c/deep.bin"), "DEEP");
 
+    REQUIRE_NESTED_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
 
     CHECK(readFromImg(out, QStringLiteral("config.txt")) == QByteArray("arm_64bit=1\n"));
@@ -864,6 +882,7 @@ TEST_CASE("A boot.img is at least the FAT32 minimum", "[secureboot][bootimg-cont
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("config.txt"), "x\n");
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
     CHECK(QFileInfo(out).size() >= 33 * 1024 * 1024);
 }
@@ -882,6 +901,7 @@ TEST_CASE("A boot.img grows to hold what is put in it",
     QMap<QString, QByteArray> files;
     files.insert(QStringLiteral("big.bin"), QByteArray(48 * 1024 * 1024, '\x7e'));
 
+    REQUIRE_BOOT_IMG_SUPPORT();
     REQUIRE(SecureBoot::createBootImg(files, out));
     const qint64 size = QFileInfo(out).size();
     INFO("image size: " << size);
@@ -1148,4 +1168,76 @@ TEST_CASE("SecureBoot skips a zero-length file and keeps the rest", "[secureboot
     CHECK(extracted.contains(QStringLiteral("config.txt")));
     // Skipped, not carried through as an empty placeholder.
     CHECK_FALSE(extracted.contains(QStringLiteral("empty.txt")));
+}
+
+// ---------------------------------------------------------------------------
+// What signBootcode2712 refuses before it signs anything
+// ---------------------------------------------------------------------------
+//
+// The arguments decide what a Pi will accept as its own bootcode. A keynum or
+// a version outside what the format holds would be truncated into the header
+// silently -- a signature over one set of fields, describing another.
+
+TEST_CASE("Signing refuses a bootcode with nothing in it", "[secureboot]")
+{
+    CHECK(SecureBoot::signBootcode2712(QByteArray(), QStringLiteral("any.pem"),
+                                       0, 0).isEmpty());
+}
+
+TEST_CASE("Signing refuses a key number the header cannot hold", "[secureboot]")
+{
+    const QByteArray bootcode(1024, '\x5a');
+    const QString key = QStringLiteral("any.pem");
+
+    // Nought to four are the key slots; sixteen is the one reserved value.
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, -1, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 5, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 15, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 17, 0).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 1000, 0).isEmpty());
+}
+
+TEST_CASE("Signing refuses a version the header cannot hold", "[secureboot]")
+{
+    const QByteArray bootcode(1024, '\x5a');
+    const QString key = QStringLiteral("any.pem");
+
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 0, -1).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 0, 33).isEmpty());
+    CHECK(SecureBoot::signBootcode2712(bootcode, key, 0, 1000).isEmpty());
+}
+
+TEST_CASE("Signing stops when there is no key to sign with", "[secureboot]")
+{
+    // Past the argument checks and into the signing itself, which cannot
+    // produce the 256 bytes the format wants without a key. Nothing partial
+    // comes back: a truncated result would be written as a signature.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString absent = QDir(dir.path()).filePath(QStringLiteral("no-such.pem"));
+
+    CHECK(SecureBoot::signBootcode2712(QByteArray(1024, '\x5a'), absent,
+                                       0, 0).isEmpty());
+}
+
+TEST_CASE("A boot signature is refused when the hash is the wrong length",
+          "[secureboot]")
+{
+    // generateBootSig is handed a hash to sign. Anything that is not a
+    // SHA-256 is not the thing the bootloader will check against.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString img = QDir(dir.path()).filePath(QStringLiteral("boot.img"));
+    const QString sig = QDir(dir.path()).filePath(QStringLiteral("boot.sig"));
+    {
+        QFile f(img);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray(4096, '\x11'));
+    }
+
+    // No key, so this refuses whatever else is true -- what it must not do is
+    // leave a signature file behind.
+    CHECK_FALSE(SecureBoot::generateBootSig(
+        img, QDir(dir.path()).filePath(QStringLiteral("no-such.pem")), sig));
+    CHECK_FALSE(QFileInfo::exists(sig));
 }

@@ -117,6 +117,7 @@ protected:
     struct FastbootDeviceCache {
         std::string fastbootId;    // "bus:addr"
         std::string productName;
+        std::string chipName;      // e.g. "BCM2712"; empty if the gadget didn't say
         std::vector<uint8_t> portPath;
         std::vector<FastbootStorageInfo> storage;
     };

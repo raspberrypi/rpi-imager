@@ -82,6 +82,7 @@ BaseDialog {
         Accessible.role: Accessible.Grouping
         Accessible.name: qsTr("Drive information")
         Text {
+            textFormat: Text.PlainText
             text: qsTr("Size: %1").arg(root.sizeStr)
             font.family: Style.fontFamily
             font.pointSize: Style.fontSizeDescription
@@ -90,6 +91,7 @@ BaseDialog {
             Accessible.name: text
         }
         Text {
+            textFormat: Text.PlainText
             text: qsTr("Mounted as: %1").arg(root.mountpoints && root.mountpoints.length > 0 ? root.mountpoints.join(", ") : qsTr("Not mounted"))
             font.family: Style.fontFamily
             font.pointSize: Style.fontSizeDescription
@@ -120,6 +122,7 @@ BaseDialog {
         font.bold: true
         color: Style.textDescriptionColor
         text: root.driveName
+        textFormat: Text.PlainText
         // Make this text focusable when screen reader is active
         Accessible.name: qsTr("Drive name to type: %1").arg(text)
         Accessible.ignored: false
@@ -188,7 +191,13 @@ BaseDialog {
             onEnabledChanged: {
                 // Use Qt.callLater to ensure the change is processed
                 Qt.callLater(function() {
-                    if (root.registerFocusGroup) {
+                    // `root` first. Testing the function on it already
+                    // dereferences it, and a deferred call can outlive the
+                    // dialog that scheduled it -- an id whose object has gone
+                    // reads as null. Four siblings of this shape were live
+                    // defects; this one is not known to be reachable, and is
+                    // guarded to match them rather than in response to a bug.
+                    if (root && root.registerFocusGroup) {
                         // Re-register the buttons focus group to update the focus navigation
                         root.registerFocusGroup("buttons", function(){ 
                             return [cancelButton, continueButton] 

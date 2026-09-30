@@ -7,6 +7,7 @@
 #define FILE_OPERATIONS_H_
 
 #include <cstdint>
+#include <cstddef>
 #include <string>
 #include <memory>
 #include <functional>
@@ -313,6 +314,24 @@ class FileOperations {
   // Get the last platform-specific error code (Windows error code, errno on Unix)
   virtual int GetLastErrorCode() const = 0;
 
+  // Whether a failed OpenDevice() on this path is worth trying again shortly.
+  //
+  // Windows can hold a physical drive for a few seconds after a dismount or a
+  // partition-table rewrite -- Explorer, the indexer or an AV re-scanning it --
+  // so an open that is refused there may well succeed on the next attempt. An
+  // ordinary file that refuses an open will refuse it again, and every other
+  // platform opens the device without this dance.
+  //
+  // The question lives here rather than in the caller because answering it
+  // needs to know what the path is, which is platform knowledge: the caller
+  // used to decide by testing Windows error codes directly, and retried a
+  // permanently unwritable file for sixty-four seconds before giving up.
+  virtual bool OpenFailureMayBeTransient(const std::string& path) const
+  {
+    (void)path;
+    return false;
+  }
+
   // Classify the last write error into a platform-agnostic category so callers
   // can render localized user messages. The default maps everything to
   // kUnknown; platform implementations override to inspect OS state.
@@ -348,6 +367,33 @@ class FileOperations {
   // Factory method to create platform-specific implementation
   static std::unique_ptr<FileOperations> Create();
 };
+
+// The write buffer a device will actually take in one request.
+//
+// A buffer larger than the device's maximum transfer is split by the OS into
+// sub-requests, which piles on the queue pressure the split was meant to
+// avoid (#1592). The cap is aligned down to a page because the write is made
+// with FILE_FLAG_NO_BUFFERING on Windows and O_DIRECT on Linux, and both
+// refuse a length that is not a multiple of the page size -- so an unaligned
+// cap trades a slow write for one that does not happen.
+//
+// Answers the hint unchanged when there is nothing to cap to, when the device
+// can take more than was asked for, or when its maximum is under a page and
+// aligning down would leave nothing.
+inline std::size_t CapWriteBufferToDevice(std::size_t hint,
+                                          std::size_t maxTransferBytes,
+                                          std::size_t pageSize)
+{
+    if (maxTransferBytes == 0 || maxTransferBytes >= hint)
+        return hint;
+    if (pageSize == 0)
+        return hint;
+
+    const std::size_t aligned = (maxTransferBytes / pageSize) * pageSize;
+    if (aligned < pageSize)
+        return hint;
+    return aligned;
+}
 
 } // namespace rpi_imager
 

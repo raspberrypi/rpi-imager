@@ -129,12 +129,38 @@ void invokingUser(int* uid, int* gid)
 
 #else
 
-// Windows has no umask and no mode bits; Qt maps the owner permissions onto
-// the file's ACL where NTFS permission lookup is enabled, and onto the
-// read-only attribute where it is not. Best effort, and the same shape.
+// Whether anyone beyond this account can reach the file.
+//
+// Qt answers from the read-only attribute unless NTFS permission lookup is
+// switched on; with it on, the "other" bits are the access the Everyone SID
+// has, which is the boundary that matters. The group bits are not: on
+// Windows they report the owner's primary group, which is set on an ordinary
+// profile directory that no second account can reach, so judging on them
+// would report every installation as exposed.
+//
+// A path that is not there is not owner-only. Saying otherwise would report
+// a file the caller failed to create as secured.
+bool isOwnerOnly(const QString& path)
+{
+    if (!QFileInfo::exists(path))
+        return false;
+    QNtfsPermissionCheckGuard ntfs;
+    const QFileDevice::Permissions p = QFile::permissions(path);
+    return !(p & (QFileDevice::ReadOther | QFileDevice::WriteOther));
+}
+
+// Narrowing is asked for and then checked, rather than believed.
+//
+// QFile::setPermissions answers true here having changed nothing: an
+// inherited access entry is not removed by writing a new discretionary list,
+// and Imager does not write a protected one. So the attempt is made, and
+// what the file ended up as is what gets reported -- a claim of success that
+// left the file open to Everyone is worse than no claim at all.
 bool restrictExisting(const QString& path)
 {
-    return QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    QNtfsPermissionCheckGuard ntfs;
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    return isOwnerOnly(path);
 }
 
 bool createRestricted(const QString& path)
@@ -143,20 +169,16 @@ bool createRestricted(const QString& path)
     if (!f.open(QIODevice::NewOnly | QIODevice::WriteOnly))
         return false;
     f.close();
-    return restrictExisting(path);
+    restrictExisting(path);
+    return true;
 }
 
 bool restrictDirectory(const QString& path)
 {
-    return QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                       QFileDevice::ExeOwner);
-}
-
-bool isOwnerOnly(const QString& path)
-{
-    const QFileDevice::Permissions p = QFile::permissions(path);
-    return !(p & (QFileDevice::ReadGroup | QFileDevice::WriteGroup |
-                  QFileDevice::ReadOther | QFileDevice::WriteOther));
+    QNtfsPermissionCheckGuard ntfs;
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                QFileDevice::ExeOwner);
+    return isOwnerOnly(path);
 }
 
 // Windows has no uid to compare against, and no elevated-run handover of the

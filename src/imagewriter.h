@@ -39,6 +39,7 @@ class QQmlApplicationEngine;
 class DownloadThread;
 class DownloadExtractThread;
 class QTranslator;
+class QLocale;
 class WriteProgressWatchdog;
 #ifndef CLI_ONLY_BUILD
 class NativeFileDialog;
@@ -176,6 +177,14 @@ public:
 
     /* Function to return current OS list URL (may be customized) */
     Q_INVOKABLE QUrl osListUrl() const;
+
+    // Where the repository starts, and where refreshOsListFromDefaultUrl()
+    // returns to. RPI_IMAGER_OSLIST_URL overrides it, as
+    // RPI_IMAGER_TELEMETRY_URL and RPI_IMAGER_CONNECT_URL override theirs and
+    // for the same reason: a suite driving the real writer should not reach
+    // production. The telemetry guards still compare the built-in constant,
+    // so a redirected list reports nothing.
+    static QUrl defaultOsListUrl();
 
     /* Function to return version (for QML - C++ code should use staticVersion()) */
     Q_INVOKABLE QString constantVersion() const;
@@ -473,11 +482,30 @@ public:
     Q_INVOKABLE bool isSecureBootForcedByCliFlag() const;
 
     void replaceTranslator(QTranslator *trans);
+
+    /* Switch to the translation that best suits the locale, if there is one.
+       Called at startup, once the platform's UI language is known. */
+    void setLanguageForLocale(const QLocale &locale);
+
+    /* Which of langcodes ("de", "pt", "pt-BR", ...) suits the locale best:
+       the most specific one among its UI languages, so pt_BR gets "pt-BR"
+       ahead of "pt". Empty if none of them does. */
+    static QString translationForLocale(const QLocale &locale, const QStringList &langcodes);
+
     QString detectPiKeyboard();
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
+    // An ordinary web address: http or https, with a host. Used wherever a
+    // URL arrives from somewhere that is not us -- an OS list entry, the
+    // update check, the bootloader's own flash -- before it is opened or
+    // fetched from.
+    static bool isHttpUrl(const QUrl &url);
     Q_INVOKABLE bool isScreenReaderActive() const;
+    // Have a screen reader speak a message now. A label that changes on
+    // screen is not announced -- readers speak what the user moved to, and
+    // during a write nothing moves.
+    Q_INVOKABLE void announceToScreenReader(const QString &message);
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
     Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;
@@ -578,7 +606,11 @@ signals:
     void ejectStateChanged();
     void connectTokenReceived(const QString &token);
     void connectTokenConflictDetected(const QString &token);
-    void connectTokenCleared();
+    // The session token has gone. `configurationInvalidated` separates the
+    // two reasons, which want different things of the wizard: a token
+    // consumed by a successful write leaves the step configured, and one
+    // dropped because the OS or storage changed does not.
+    void connectTokenCleared(bool configurationInvalidated);
     void repositoryUrlReceived(const QString &url);
     void customRepoChanged();
     void customRepoHostChanged();  // Emitted when displayed repo host changes (e.g., after redirect)
@@ -660,7 +692,24 @@ private:
 
     QString parseTokenFromUrl(const QUrl &url, bool strictAuthKey = false) const;
 
+    bool installTranslation(const QString &langcode);
+    void replaceTranslators(const QList<QTranslator *> &translators);
+
 protected:
+    /*
+     * How the write thread is built. Overridden by tests that need the write
+     * to run against a scripted device -- a paced one, so that a case about
+     * what happens *during* a write does not depend on how quickly the host
+     * happens to finish it. The application never overrides these; the
+     * defaults return the same threads the two call sites always built.
+     */
+    virtual DownloadExtractThread *createLocalFileThread(const QByteArray &url,
+                                                         const QByteArray &dst,
+                                                         const QByteArray &expectedHash);
+    virtual DownloadExtractThread *createDownloadThread(const QByteArray &url,
+                                                        const QByteArray &dst,
+                                                        const QByteArray &expectedHash);
+
     QUrl _src, _repo;
     QString _dst, _parentCategory, _osName, _osReleaseDate, _currentLang, _currentLangcode, _currentKeyboard, _bmapUrl;
     QByteArray _expectedHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
@@ -684,7 +733,8 @@ protected:
     bool _verifyEnabled, _multipleFilesInZip, _online, _extractSizeKnown;
     QSettings _settings;
     QMap<QString,QString> _translations;
-    QTranslator *_trans;
+    // Installed translators, in the order installed; Qt searches the last first
+    QList<QTranslator *> _translators;
     int _refreshIntervalOverrideMinutes;
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token

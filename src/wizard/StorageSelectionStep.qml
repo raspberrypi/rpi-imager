@@ -136,6 +136,7 @@ WizardStepBase {
                 }
                 
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     text: qsTr("Could not list storage devices: %1").arg(root.enumerationErrorMessage)
                     font.pointSize: Style.fontSizeDescription
@@ -237,6 +238,7 @@ WizardStepBase {
             // No storage devices or no valid options message (visually hidden, for screen readers only)
             Label {
                 id: noDevicesLabel
+                textFormat: Text.PlainText
                 anchors.fill: parent
                 visible: !root.hasValidStorageOptions
                 text: {
@@ -266,8 +268,15 @@ WizardStepBase {
                     if (visible) {
                         // Briefly toggle focus to force screen reader update
                         Accessible.ignored = true
+                        // Through the id, and guarded. A deferred call can
+                        // outlive the label: once that happens the id reads as
+                        // null, while a bare property name has no scope object
+                        // left to resolve against and throws ReferenceError
+                        // before anything after it runs -- which is how this
+                        // announcement came to never happen at all.
                         Qt.callLater(function() {
-                            Accessible.ignored = false
+                            if (noDevicesLabel)
+                                noDevicesLabel.Accessible.ignored = false
                         })
                     }
                 }
@@ -277,9 +286,8 @@ WizardStepBase {
                     if (visible) {
                         // Small delay to ensure the text is set before announcing
                         Qt.callLater(function() {
-                            if (visible) {
-                                forceActiveFocus()
-                            }
+                            if (noDevicesLabel && noDevicesLabel.visible)
+                                noDevicesLabel.forceActiveFocus()
                         })
                     }
                 }
@@ -396,7 +404,9 @@ WizardStepBase {
                        (dstMouseArea.containsMouse && !dstitem.unselectable ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 opacity: dstitem.unselectable ? 0.5 : 1.0
-                anchors.rightMargin: (dstlist.contentHeight > dstlist.height ? Style.scrollBarWidth : 0)
+                // Unconditional: SelectionListView.qml records why the
+                // conditional form fed back into the layout.
+                anchors.rightMargin: Style.scrollBarWidth
                 Accessible.ignored: true
                 
                 MouseArea {
@@ -471,6 +481,7 @@ WizardStepBase {
                         }
                         
                         Text {
+                            textFormat: Text.PlainText
                             text: dstitem.isRpiboot ? qsTr("Ready for USB boot") : ImageWriterSingleton.formatSize(parseFloat(dstitem.size))
                             font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily

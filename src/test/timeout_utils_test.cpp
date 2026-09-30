@@ -15,6 +15,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <string>
 
 #include <atomic>
 #include <chrono>
@@ -254,4 +255,40 @@ TEST_CASE("an operation that will not finish is still abandoned",
     // whether it has been joined or detached -- which is the contract.
     release->store(true);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+
+TEST_CASE("a completed operation hands its result back", "[timeout-utils]") {
+  // The whole point of the result-carrying overload, and the one line of it
+  // nothing reached: the cancelled and timed-out cases below check that the
+  // caller's variable is left alone, so a copy-out that never happened would
+  // have looked exactly like all of them passing.
+  auto gate = std::make_shared<Gate>();
+  gate->release();
+
+  int answer = 0;
+  const auto outcome = runWithTimeout([gate]() {
+    gate->wait();
+    return 42;
+  }, answer, TimeoutConfig(30));
+
+  REQUIRE(outcome == TimeoutResult::Completed);
+  CHECK(answer == 42);
+}
+
+TEST_CASE("a completed operation can hand back a value of its own type",
+          "[timeout-utils]") {
+  // Not just int: the slot is a copy of the caller's variable, so a type
+  // that does not survive being copied into and back out again would fail
+  // here and nowhere else.
+  auto gate = std::make_shared<Gate>();
+  gate->release();
+
+  std::string answer = "untouched";
+  const auto outcome = runWithTimeout([gate]() {
+    gate->wait();
+    return std::string("from the operation");
+  }, answer, TimeoutConfig(30));
+
+  REQUIRE(outcome == TimeoutResult::Completed);
+  CHECK(answer == "from the operation");
 }

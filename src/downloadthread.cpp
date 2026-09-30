@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include "aligned_buffer.h"
 #include "config.h"
+#include "cmdline_params.h"
 #include "config_txt_merge.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
@@ -357,15 +358,19 @@ bool DownloadThread::_openAndPrepareDevice()
     // Device path is already platform-optimized by caller (e.g., rdisk on macOS)
     rpi_imager::FileError result = _file->OpenDevice(filename_str);
 
-#ifdef Q_OS_WIN
-    // On Windows, the device may be temporarily held by the OS after volume
-    // dismount/clean operations (especially on Windows 11 25H2+).
-    // Retry with geometric backoff, keeping the user informed.
+    // The device may be held briefly by the OS after a dismount or a
+    // partition-table rewrite -- on Windows 11 25H2+ especially. Retry with
+    // geometric backoff, keeping the user informed.
+    //
+    // Whether a retry is worth anything is asked of the file operations layer
+    // rather than decided here: this used to test Windows error codes inline,
+    // behind an #ifdef, and could not tell a drive the OS was still letting go
+    // of from a file the user simply cannot write. The second case was retried
+    // for sixty-four seconds and then reported -- long after the caller had
+    // stopped waiting for an answer.
     if (result != rpi_imager::FileError::kSuccess)
     {
-        int lastErr = _file->GetLastErrorCode();
-        // Only retry for transient access errors, not permanent failures
-        if (lastErr == ERROR_ACCESS_DENIED || lastErr == ERROR_SHARING_VIOLATION || lastErr == ERROR_NOT_READY)
+        if (_file->OpenFailureMayBeTransient(filename_str))
         {
             constexpr int kMaxRetries = 8;
             constexpr int kInitialDelayMs = 250;
@@ -381,9 +386,17 @@ bool DownloadThread::_openAndPrepareDevice()
                 emit preparationStatusUpdate(tr("Waiting for drive to become available... (%1s)")
                     .arg(totalWaitSec));
                 qDebug() << "OpenDevice retry" << attempt << "of" << kMaxRetries
-                         << "after error" << lastErr << "- waiting" << delayMs << "ms";
+                         << "after error" << _file->GetLastErrorCode()
+                         << "- waiting" << delayMs << "ms";
 
-                QThread::msleep(delayMs);
+                // Slept in slices: the last wait here is thirty-two seconds,
+                // and a single msleep of that length ignores a cancel for its
+                // whole duration.
+                constexpr int kCancelPollMs = 50;
+                for (int slept = 0; slept < delayMs && !_cancelled; slept += kCancelPollMs)
+                    QThread::msleep(kCancelPollMs);
+                if (_cancelled)
+                    break;
                 delayMs *= 2;
 
                 result = _file->OpenDevice(filename_str);
@@ -392,13 +405,11 @@ bool DownloadThread::_openAndPrepareDevice()
                     qDebug() << "OpenDevice succeeded on retry" << attempt;
                     break;
                 }
-                lastErr = _file->GetLastErrorCode();
-                if (lastErr != ERROR_ACCESS_DENIED && lastErr != ERROR_SHARING_VIOLATION && lastErr != ERROR_NOT_READY)
+                if (!_file->OpenFailureMayBeTransient(filename_str))
                     break;  // Non-transient error, stop retrying
             }
         }
     }
-#endif
 
     qint64 authOpenMs = authTimer.elapsed();
     qDebug() << "Device authorization and open took" << authOpenMs << "ms";
@@ -518,8 +529,21 @@ bool DownloadThread::_openAndPrepareDevice()
     }
 #endif
 
-#ifndef Q_OS_WIN
-    // Zero out MBR using unified FileOperations
+    // Zero the first and last megabyte, and time the second one.
+    //
+    // The write to the end is what catches a counterfeit card. A card
+    // reporting a capacity it does not have never returns from a write to
+    // the end of that capacity, so the write is wrapped in a timeout and a
+    // card that does not answer is named as counterfeit rather than left to
+    // hang. The last megabyte also carries the backup GPT header, which
+    // survives an MBR-only wipe and leaves the card looking like a hybrid
+    // nothing agrees how to read.
+    //
+    // This was #ifndef Q_OS_WIN with no #else, so Windows had neither: no
+    // counterfeit detection at all, on the platform most cards are written
+    // from. Nothing in it is POSIX -- the buffer, the timeout and the four
+    // device calls are all platform-agnostic -- so the guard is gone rather
+    // than answered.
     QElapsedTimer mbrTimer;
     mbrTimer.start();
     
@@ -643,7 +667,6 @@ bool DownloadThread::_openAndPrepareDevice()
         .arg(_timer.elapsed())  // Last MB timing (from last _timer.restart)
         .arg(knownsize / (1024 * 1024));
     emit eventDriveMbrZeroing(static_cast<quint32>(mbrTotalMs), true, mbrMetadata);
-#endif
 
 #ifdef Q_OS_LINUX
     _sectorsStart = _sectorsWritten();
@@ -2789,7 +2812,7 @@ bool DownloadThread::_customizeImage()
             if (_initFormat == "systemd") {
                 fat->writeFile("firstrun.sh", _firstrun);
                 _recordCustomisationWrite("firstrun.sh", _firstrun);
-                _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
+                _cmdline += rpi_cmdline::systemdFirstRun();
             } else if (_initFormat == "rpi-preseed") {
                 // rpi-preseed applies /boot/firmware/rpi-preseed.toml on first
                 // boot; its units are gated on the file's presence, so no
@@ -2806,8 +2829,8 @@ bool DownloadThread::_customizeImage()
             // Write meta-data file for NoCloud datasource
             // cloud-init requires meta-data to be present for proper datasource detection
             // instance-id should be unique per imaging to ensure cloud-init processes user-data
-            QByteArray instanceId = "rpi-imager-" + QByteArray::number(QDateTime::currentMSecsSinceEpoch());
-            QByteArray metadata = "instance-id: " + instanceId + "\n";
+            const QByteArray instanceId = rpi_cmdline::newInstanceId();
+            const QByteArray metadata = rpi_cmdline::nocloudMetaData(instanceId);
             fat->writeFile("meta-data", metadata);
             _recordCustomisationWrite("meta-data", metadata);
 
@@ -2817,7 +2840,7 @@ bool DownloadThread::_customizeImage()
             // deployment pattern). Without this, the NoCloud datasource cache
             // is invalidated on every reboot (/run is tmpfs), forcing a full
             // re-discovery from /boot/firmware on every boot.
-            _cmdline += " ds=nocloud;i=" + instanceId;
+            _cmdline += rpi_cmdline::nocloudDatasource(instanceId);
 
             if (!_cloudinit.isEmpty())
             {

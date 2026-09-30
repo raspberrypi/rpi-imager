@@ -20,6 +20,8 @@
 #include <QString>
 #include <QUrl>
 
+#include "platform_tools.h"
+
 namespace rpi_test {
 
 // A localhost HTTP server serving one directory, torn down with the object.
@@ -54,7 +56,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), directory});
         if (!_process.waitForStarted(10000))
             return;
@@ -155,7 +157,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), directory,
                         QString::number(dropAfterBytes),
                         QString::number(dropCount)});
@@ -223,7 +225,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
                         QString::fromUtf8(body), QString::fromUtf8(etag)});
         if (!_process.waitForStarted(10000))
@@ -285,7 +287,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript),
                         QString::number(announcedBytes)});
         if (!_process.waitForStarted(10000))
@@ -359,7 +361,7 @@ public:
             "print(s.server_address[1], flush=True)\n"
             "s.serve_forever()\n";
 
-        _process.start(QStringLiteral("/usr/bin/python3"),
+        _process.start(rpi_test::pythonPath(),
                        {QStringLiteral("-c"), QString::fromUtf8(kScript), file,
                         QString::number(prefixBytes), QString::number(announcedBytes)});
         if (!_process.waitForStarted(10000))
@@ -390,13 +392,76 @@ private:
     int _port = 0;
 };
 
-bool inline havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
+// Answers with a body and no length at all -- HTTP/1.0 framing, so the body
+// runs until the connection closes. curl's MAXFILESIZE has nothing to act on,
+// which is the case the icon fetcher's own cap exists for.
+class UnsizedHttpServer
+{
+public:
+    explicit UnsizedHttpServer(qint64 bytes)
+    {
+        static const char *kScript =
+            "import http.server, socketserver, sys\n"
+            "total = int(sys.argv[1])\n"
+            "class H(http.server.BaseHTTPRequestHandler):\n"
+            "    protocol_version = 'HTTP/1.0'\n"
+            "    def log_message(self, *a): pass\n"
+            "    def do_GET(self):\n"
+            "        self.send_response(200)\n"
+            "        self.send_header('Content-Type', 'image/png')\n"
+            "        self.end_headers()\n"
+            "        chunk = b'\\0' * 65536\n"
+            "        sent = 0\n"
+            "        try:\n"
+            "            while sent < total:\n"
+            "                n = min(len(chunk), total - sent)\n"
+            "                self.wfile.write(chunk[:n])\n"
+            "                sent += n\n"
+            "            self.wfile.flush()\n"
+            "        except Exception:\n"
+            "            return\n"
+            "socketserver.TCPServer.allow_reuse_address = True\n"
+            "s = socketserver.ThreadingTCPServer(('127.0.0.1', 0), H)\n"
+            "s.daemon_threads = True\n"
+            "print(s.server_address[1], flush=True)\n"
+            "s.serve_forever()\n";
+
+        _process.start(rpi_test::pythonPath(),
+                       {QStringLiteral("-c"), QString::fromUtf8(kScript),
+                        QString::number(bytes)});
+        if (!_process.waitForStarted(10000))
+            return;
+        if (_process.waitForReadyRead(10000))
+            _port = _process.readLine().trimmed().toInt();
+    }
+
+    ~UnsizedHttpServer()
+    {
+        _process.kill();
+        _process.waitForFinished(5000);
+    }
+
+    UnsizedHttpServer(const UnsizedHttpServer &) = delete;
+    UnsizedHttpServer &operator=(const UnsizedHttpServer &) = delete;
+
+    bool isRunning() const { return _port > 0; }
+
+    QByteArray urlFor(const QString &name) const
+    {
+        return QByteArray("http://127.0.0.1:") + QByteArray::number(_port) + "/" +
+               name.toUtf8();
+    }
+
+private:
+    QProcess _process;
+    int _port = 0;
+};
 
 } // namespace rpi_test
 
 #define REQUIRE_HTTP_SERVER(server)                                                                \
     if (!rpi_test::havePython())                                                                             \
-        SKIP("python3 is not installed, so no local HTTP server can be started");                  \
+        SKIP("no usable python3, so no local HTTP server can be started");                  \
     if (!(server).isRunning())                                                                     \
     SKIP("the local HTTP server did not start")
 

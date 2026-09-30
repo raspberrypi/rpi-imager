@@ -149,7 +149,7 @@ TestCase {
     function test_typed_filenames_survive_a_url_round_trip(data) {
         const d = create({})
         const path = "/home/pi/" + data.name
-        compare(ImageWriter.localPathFromUrl(d._toFileUrl(path)), path)
+        compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl(path)), path)
     }
 
     function test_a_windows_drive_path_becomes_a_local_file_url() {
@@ -157,8 +157,8 @@ TestCase {
             skip("Windows drive paths")
         const d = create({})
         const path = "C:/Users/pi/perf#1.json"
-        compare(ImageWriter.localPathFromUrl(d._toFileUrl(path)), path)
-        compare(ImageWriter.localPathFromUrl(d._toFileUrl("C:\\Users\\pi\\perf#1.json")), path)
+        compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl(path)), path)
+        compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl("C:\\Users\\pi\\perf#1.json")), path)
     }
 
     function test_a_save_path_decodes_its_folder_before_joining_the_filename() {
@@ -166,7 +166,7 @@ TestCase {
         d._currentFilename = "perf#1.json"
         const path = "/home/pi/images #2/perf#1.json"
         compare(d._buildFilePath(), path)
-        compare(ImageWriter.localPathFromUrl(d._toFileUrl(d._buildFilePath())), path)
+        compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl(d._buildFilePath())), path)
     }
 
     function test_an_empty_path_yields_nothing() {
@@ -185,8 +185,42 @@ TestCase {
         const home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
         const homePath = home.indexOf("file://") === 0 ? home.substring(7) : home
 
-        compare(ImageWriter.localPathFromUrl(d._toFileUrl("~")), homePath)
-        compare(ImageWriter.localPathFromUrl(d._toFileUrl("~/os.img")), homePath + "/os.img")
+        compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl("~")), homePath)
+        compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl("~/os.img")), homePath + "/os.img")
+    }
+
+    function test_a_windows_drive_path_becomes_a_file_url() {
+        // "C:/..." does not start with a slash, so it used to fall past every
+        // branch and come back unchanged -- a bare path handed to a caller
+        // expecting a URL. Checked on every platform: the shape is a Windows
+        // one, but nothing about recognising it is platform-specific.
+        const d = create({})
+        compare(d._toFileUrl("C:/Users/pi/os.img"), "file:///C:/Users/pi/os.img")
+        compare(d._toFileUrl("d:/images/os.img"), "file:///d:/images/os.img")
+    }
+
+    function test_a_windows_path_with_backslashes_becomes_a_file_url() {
+        // What actually arrives when a path is pasted from Explorer.
+        const d = create({})
+        compare(d._toFileUrl("C:" + String.fromCharCode(92) + "Users"
+                             + String.fromCharCode(92) + "pi"
+                             + String.fromCharCode(92) + "os.img"),
+                "file:///C:/Users/pi/os.img")
+    }
+
+    function test_three_slashes_are_not_two() {
+        // "file://C:/x" reads C: as the authority, so QUrl takes "c" for a host
+        // and leaves "/x" as the path. The drive letter belongs to the path.
+        const d = create({})
+        const url = d._toFileUrl("C:/x")
+        verify(url.indexOf("file:///") === 0, "expected three slashes, got " + url)
+    }
+
+    function test_a_drive_path_url_displays_without_a_leading_slash() {
+        // Stripping "file://" off "file:///C:/x" leaves "/C:/x", and shown to
+        // the user that reads as a directory which does not exist.
+        const d = create({})
+        compare(d._toDisplayPath("file:///C:/Users/pi/os.img"), "C:/Users/pi/os.img")
     }
 
     function test_a_url_becomes_a_display_path() {

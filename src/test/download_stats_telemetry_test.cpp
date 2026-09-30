@@ -14,7 +14,10 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "platform_tools.h"
+
 #include "downloadstatstelemetry.h"
+#include "test_scratch.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -48,7 +51,7 @@ private:
     QString _path;
 };
 
-bool havePython() { return QFileInfo::exists(QStringLiteral("/usr/bin/python3")); }
+bool havePython() { return rpi_test::havePython(); }
 
 // A localhost server that accepts POSTs and records how many it received.
 class LocalPostServer
@@ -89,7 +92,7 @@ public:
         QStringList args{QStringLiteral("-c"), QString::fromUtf8(kScript), countFile};
         if (withBody)
             args << QStringLiteral("body");
-        _process.start(QStringLiteral("/usr/bin/python3"), args);
+        _process.start(rpi_test::pythonPath(), args);
         if (!_process.waitForStarted(10000))
             return;
         if (_process.waitForReadyRead(10000))
@@ -301,7 +304,6 @@ TEST_CASE("Telemetry survives empty metadata", "[telemetry]")
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("rpi-imager-tests"));
     // Scoped to this process, not just to test mode. catch_discover_tests
     // runs every TEST_CASE as its own process, so `ctest -j4` has several
     // of these alive at once -- and a settings file shared between them is
@@ -309,12 +311,8 @@ int main(int argc, char *argv[])
     // secureboot_rsa_key, so one process would see another's: the case
     // that expects no key found a valid one, the write it expected to be
     // refused went ahead, and the failure looked like a timing flake.
-    QCoreApplication::setApplicationName(
-        QStringLiteral("download_stats_telemetry_test-%1").arg(QCoreApplication::applicationPid()));
-    QStandardPaths::setTestModeEnabled(true);
+    rpi_imager_test::useScratchPaths(QStringLiteral("download_stats_telemetry_test"));
     const int rc = Catch::Session().run(argc, argv);
 
-    // One settings file per process would otherwise pile up.
-    QFile::remove(QSettings().fileName());
     return rc;
 }

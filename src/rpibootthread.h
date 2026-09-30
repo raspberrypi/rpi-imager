@@ -89,19 +89,26 @@ protected:
                   QString& bootcodeDiag,
                   QString& fileServeDiag);
 
-// State stays private. Widening the sequence above is what makes it
+// Next-stage device observed by the mode-specific scanner:
+//   Fastboot  → fastboot gadget enumerated on the same port path.
+//   SBR       → rpiboot device re-enumerated after the recovery reboot.
+// Either way, set by the scanner thread and read via the wrappedProgress
+// bridge that feeds file_server's cancellation flag.
+//
+// The one piece of state that is not private, and deliberately: run() will not
+// start the fastboot phase unless this is set, so a subclass that substitutes
+// runPhase() for the real one -- which is how the phase order is checked
+// without a board on the bus -- has no way to say the device came back.
+protected:
+    std::atomic<bool> _nextStageFound{false};
+
+// The rest stays private. Widening the sequence above is what makes it
 // testable; the members it works on are nobody else's business.
 private:
     DeviceInfo _device;
     rpiboot::SideloadMode _mode;
     std::atomic<bool> _cancelled{false};
     std::atomic<bool> _stopScanner{false};
-    // Next-stage device observed by the mode-specific scanner:
-    //   Fastboot  → fastboot gadget enumerated on the same port path.
-    //   SBR       → rpiboot device re-enumerated after the recovery reboot.
-    // Either way, set by the scanner thread and read via the wrappedProgress
-    // bridge that feeds file_server's cancellation flag.
-    std::atomic<bool> _nextStageFound{false};
     QString _customFastbootGadget;
     QString _signFastbootGadgetKey;
     bool _reprovisionDevice = false;
