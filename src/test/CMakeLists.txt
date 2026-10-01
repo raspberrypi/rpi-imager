@@ -254,7 +254,6 @@ add_executable(customization_generator_test
 target_link_libraries(customization_generator_test PRIVATE 
     Catch2::Catch2WithMain
     Qt6::Core
-    Qt6::Network
     yescrypt
 )
 

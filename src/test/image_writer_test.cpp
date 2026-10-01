@@ -2532,79 +2532,10 @@ TEST_CASE("Reading a file that is not there yields nothing",
 // ══════════════════════════════════════════════════════════════
 // Credentials written onto the card
 //
-// These two produce the wifi PSK and the account password hash that end up
-// in the customisation written to the boot partition. Neither failure is
-// visible until the board has been flashed and booted: a wrong PSK is a Pi
-// that never joins the network, and a wrong hash is one nobody can log into.
+// This produces the account password hash that ends up in the customisation
+// written to the boot partition. The failure is not visible until the board
+// has been flashed and booted: a wrong hash is one nobody can log into.
 // ══════════════════════════════════════════════════════════════
-
-TEST_CASE("A wifi passphrase is derived to the documented PSK",
-          "[imagewriter][wifi]")
-{
-    // The IEEE 802.11i test vector. Checking against a published value
-    // rather than against whatever this code happens to produce is the whole
-    // point: PBKDF2-HMAC-SHA1, 4096 iterations, the SSID as salt, 256 bits.
-    ImageWriter w(nullptr);
-    const QString psk = w.deriveWifiPsk(QStringLiteral("IEEE"), QStringLiteral("password"));
-    INFO("derived: " << psk.toStdString());
-    CHECK(psk.compare(
-              QStringLiteral("f42c6fc52df0ebef9ebb4b90b38a5f902e83fe1b135a70e23aed762e9710a12e"),
-              Qt::CaseInsensitive) == 0);
-}
-
-TEST_CASE("The SSID is the salt, so the same passphrase differs per network",
-          "[imagewriter][wifi]")
-{
-    // Salting with the SSID is what stops one derivation being reusable on
-    // another network. If the salt were dropped, every card with the same
-    // passphrase would carry an identical PSK.
-    ImageWriter w(nullptr);
-    const QString a = w.deriveWifiPsk(QStringLiteral("network-one"), QStringLiteral("samepass1"));
-    const QString b = w.deriveWifiPsk(QStringLiteral("network-two"), QStringLiteral("samepass1"));
-    CHECK_FALSE(a.isEmpty());
-    CHECK(a != b);
-}
-
-TEST_CASE("An already-hexadecimal PSK is passed through untouched",
-          "[imagewriter][wifi]")
-{
-    // A 64-character key is the PSK itself, not a passphrase. Running it
-    // through the derivation again would produce a key that works nowhere.
-    ImageWriter w(nullptr);
-    const QString raw(64, QLatin1Char('a'));
-    CHECK(w.deriveWifiPsk(QStringLiteral("somewhere"), raw) == raw);
-}
-
-TEST_CASE("A too-short passphrase is not derived", "[imagewriter][wifi]")
-{
-    // WPA requires at least eight characters; anything shorter is not a
-    // passphrase and must not be silently turned into a key that looks
-    // valid.
-    ImageWriter w(nullptr);
-    const QString shortPass = QStringLiteral("abc");
-    CHECK(w.deriveWifiPsk(QStringLiteral("somewhere"), shortPass) == shortPass);
-}
-
-TEST_CASE("An empty passphrase derives nothing", "[imagewriter][wifi]")
-{
-    ImageWriter w(nullptr);
-    CHECK(w.deriveWifiPsk(QStringLiteral("somewhere"), QString()).isEmpty());
-}
-
-TEST_CASE("A trailing newline in a passphrase does not change the key",
-          "[imagewriter][wifi]")
-{
-    // Pasted credentials routinely carry one. Deriving from the newline as
-    // well produces a key that differs from every other device on the
-    // network, and the board simply never associates.
-    ImageWriter w(nullptr);
-    const QString clean = w.deriveWifiPsk(QStringLiteral("net"), QStringLiteral("passphrase1"));
-    const QString pasted = w.deriveWifiPsk(QStringLiteral("net"), QStringLiteral("passphrase1\n"));
-    const QString crlf = w.deriveWifiPsk(QStringLiteral("net"), QStringLiteral("passphrase1\r\n"));
-    CHECK_FALSE(clean.isEmpty());
-    CHECK(pasted == clean);
-    CHECK(crlf == clean);
-}
 
 TEST_CASE("A user password is hashed into a crypt string", "[imagewriter][password]")
 {
@@ -2688,6 +2619,27 @@ TEST_CASE("A single persisted setting can be removed on its own",
     const QVariantMap saved = w.getSavedCustomisationSettings();
     CHECK(saved.contains(QStringLiteral("keep")));
     CHECK_FALSE(saved.contains(QStringLiteral("drop")));
+
+    w.clearSavedCustomisationSettings();
+}
+
+TEST_CASE("A PMK saved by an earlier version is deleted on load",
+          "[imagewriter][customisation][wifi]")
+{
+    // A PMK is as good as the passphrase for WPA2, and nothing reads it now.
+    ImageWriter w(nullptr);
+    w.clearSavedCustomisationSettings();
+    w.setPersistedCustomisationSetting(QStringLiteral("wifiSSID"), QStringLiteral("net"));
+    w.setPersistedCustomisationSetting(QStringLiteral("wifiPasswordCrypt"), QString(64, QLatin1Char('a')));
+
+    CHECK_FALSE(w.getSavedCustomisationSettings().contains(QStringLiteral("wifiPasswordCrypt")));
+
+    // Gone from the file, not just from what was returned.
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("imagecustomization"));
+    CHECK_FALSE(settings.contains(QStringLiteral("wifiPasswordCrypt")));
+    CHECK(settings.contains(QStringLiteral("wifiSSID")));
+    settings.endGroup();
 
     w.clearSavedCustomisationSettings();
 }

@@ -6,7 +6,6 @@
 #include "customization_generator.h"
 #include "dependencies/sha256crypt/sha256crypt.h"
 #include "dependencies/yescrypt/yescrypt_wrapper.h"
-#include <QPasswordDigestor>
 #include <QCryptographicHash>
 #include <QDate>
 #include <QDateTime>
@@ -58,21 +57,6 @@ QString tomlQuote(const QString& value)
     v.remove(QLatin1Char('\r'));
     v.remove(QLatin1Char('\n'));
     return QLatin1Char('"') + v + QLatin1Char('"');
-}
-
-// tomlIsHex VALUE — true if VALUE is a non-empty run of hex digits. Used to tell
-// a raw 64-char PMK (encrypted PSK) apart from a plaintext Wi-Fi passphrase.
-bool tomlIsHex(const QString& value)
-{
-    if (value.isEmpty())
-        return false;
-    for (const QChar qc : value) {
-        const char c = qc.toLatin1();
-        const bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-        if (!hex)
-            return false;
-    }
-    return true;
 }
 
 QByteArray wpaSupplicantSsidField(const QByteArray& ssidOctets)
@@ -140,10 +124,6 @@ QString CustomisationGenerator::shellQuote(const QString& value) {
     QString t = value;
     t.replace("'", "'\"'\"'");
     return QString("'") + t + QString("'");
-}
-
-QString CustomisationGenerator::pbkdf2(const QByteArray& password, const QByteArray& ssid) {
-    return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, password, ssid, 4096, 32).toHex();
 }
 
 QString CustomisationGenerator::sanitisedCountryCode(const QString& value) {
@@ -250,28 +230,13 @@ QString CustomisationGenerator::resolveUserPasswordCrypt(const QVariantMap& sett
     return crypted;
 }
 
-QString CustomisationGenerator::resolveWifiPskCrypt(const QVariantMap& settings, const QByteArray& ssidOctets, bool wifiConfigured) {
+QString CustomisationGenerator::resolveWifiPassphrase(const QVariantMap& settings, bool wifiConfigured) {
     if (!wifiConfigured)
         return {};
 
-    const QString crypted = settings.value(QStringLiteral("wifiPasswordCrypt")).toString();
-    if (!crypted.isEmpty())
-        return crypted;
-
-    // Strip CR/LF before the length test, not just before derivation. A pasted
-    // trailing newline would otherwise push a 63-character passphrase to 64 and
-    // flip the branch below, passing the plaintext through as though it were a
-    // pre-computed PMK; a 7-character one would likewise be inflated to a valid
-    // passphrase length. See stripLineTerminators() and issue #1627.
-    const QString plain = stripLineTerminators(
-        settings.value(QStringLiteral("wifiPassword")).toString());
-    if (plain.isEmpty())
-        return {};
-
-    // Passphrase length per WPA spec is 8..63; anything else is taken to be a
-    // pre-computed 64-hex-digit PSK (or open-network sentinel) and passed through.
-    const bool isPassphrase = (plain.length() >= 8 && plain.length() < 64);
-    return isPassphrase ? pbkdf2(plain.toUtf8(), ssidOctets) : plain;
+    // Strip CR/LF: a pasted trailing newline would otherwise become part of
+    // the passphrase. See stripLineTerminators() and issue #1627.
+    return stripLineTerminators(settings.value(QStringLiteral("wifiPassword")).toString());
 }
 
 QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
@@ -384,8 +349,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         hidden = s.value("wifiSSIDHidden").toBool();
     const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
 
-    // Crypted PSK: prefer a pre-derived value, else derive from the plaintext passphrase.
-    const QString cryptedPsk = resolveWifiPskCrypt(s, ssidOctets, wifiConfigured);
+    const QString wifiPassphrase = resolveWifiPassphrase(s, wifiConfigured);
     
     // Prepare SSH key arguments for imager_custom
     QStringList keyList;
@@ -528,8 +492,9 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         if (useImagerCustom) {
             QString wlanCmd = QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_wlan ");
             if (hidden) wlanCmd += QStringLiteral(" -h ");
+            if (!wifiPassphrase.isEmpty()) wlanCmd += QStringLiteral(" -p ");
             wlanCmd += shellQuote(QString::fromUtf8(ssidOctets)) + QStringLiteral(" ")
-                     + shellQuote(cryptedPsk) + QStringLiteral(" ") + shellQuote(wifiCountry);
+                     + shellQuote(wifiPassphrase) + QStringLiteral(" ") + shellQuote(wifiCountry);
             line(wlanCmd, script);
         }
         line(QStringLiteral("else"), script);
@@ -549,11 +514,12 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
             wpaBody += "\tscan_ssid=1\n";
         wpaBody += wpaSupplicantSsidField(ssidOctets);
         wpaBody += "\n";
-        if (cryptedPsk.isEmpty()) {
+        if (wifiPassphrase.isEmpty()) {
             wpaBody += "\tkey_mgmt=NONE\n";
         } else {
             wpaBody += "\tkey_mgmt=WPA-PSK SAE\n";
-            wpaBody += "\tpsk=" + cryptedPsk.toUtf8() + "\n";
+            // A quoted passphrase runs to the last '"', so inner quotes are safe.
+            wpaBody += "\tpsk=\"" + wifiPassphrase.toUtf8() + "\"\n";
             wpaBody += "\tieee80211w=1\n";
         }
         wpaBody += "}\n";
@@ -1049,20 +1015,18 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
-        // Crypted PSK: prefer a pre-derived value, else derive from the plaintext passphrase.
-        QString effectiveCryptedPsk = resolveWifiPskCrypt(settings, ssidOctets, wifiConfigured);
-        if (effectiveCryptedPsk.isEmpty()) {
+        const QString wifiPassphrase = resolveWifiPassphrase(settings, wifiConfigured);
+        if (wifiPassphrase.isEmpty()) {
             // Open network (no password) - use auth block with key-management: none
             // See: https://github.com/raspberrypi/rpi-imager/issues/1396
             push(QStringLiteral("          auth:"), netcfg);
             push(QStringLiteral("            key-management: none"), netcfg);
         } else {
-            // Required because without proper escaping netplan would fail to parse
-            effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
             // Use password shorthand at access-point level (not inside auth: block)
             // This makes netplan automatically enable WPA2/WPA3 transition mode with PMF optional
             // See: https://github.com/canonical/netplan/blob/main/src/parse.c (handle_access_point_password)
-            push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
+            push(QStringLiteral("          password: \"") + yamlEscapeString(wifiPassphrase)
+                 + QStringLiteral("\""), netcfg);
         }
         
         push(QStringLiteral("      optional: true"), netcfg);
@@ -1181,26 +1145,9 @@ QByteArray CustomisationGenerator::generateRpiPreseedToml(const QVariantMap& s,
         const QString country = s.value("recommendedWifiCountry").toString().trimmed();
         const bool openNetwork = s.value("wifiMode").toString() == QLatin1String("open");
 
-        // Resolve the passphrase/PSK. The wizard normally stores a 64-hex PMK in
-        // wifiPasswordCrypt (an encrypted PSK); fall back to the legacy plaintext
-        // wifiPassword. rpi-preseed rejects a password on an open network, so we
-        // only emit one when the network is not explicitly open.
-        QString psk;
-        bool pskEncrypted = false;
-        if (!openNetwork) {
-            psk = wifiConfigured ? s.value("wifiPasswordCrypt").toString() : QString();
-            if (!psk.isEmpty()) {
-                pskEncrypted = true;
-            } else {
-                const QString legacy = stripLineTerminators(s.value("wifiPassword").toString());
-                if (!legacy.isEmpty()) {
-                    psk = legacy;
-                    // A 64-hex value is a raw PMK; anything shorter is a passphrase
-                    // that rpi-preseed/imager_custom will hash on-device.
-                    pskEncrypted = (legacy.length() == 64) && tomlIsHex(legacy);
-                }
-            }
-        }
+        // rpi-preseed rejects a password on an open network, so we only emit
+        // one when the network is not explicitly open.
+        const QString wifiPassphrase = openNetwork ? QString() : resolveWifiPassphrase(s, wifiConfigured);
 
         push(QStringLiteral("[wlan]"), body);
         if (ssidIsUtf8) {
@@ -1208,11 +1155,8 @@ QByteArray CustomisationGenerator::generateRpiPreseedToml(const QVariantMap& s,
         } else {
             push(QStringLiteral("ssid_hex = ") + tomlQuote(QString::fromLatin1(ssidOctets.toHex())), body);
         }
-        if (!psk.isEmpty()) {
-            push(QStringLiteral("password = ") + tomlQuote(psk), body);
-            push(QStringLiteral("password_encrypted = ")
-                     + (pskEncrypted ? QStringLiteral("true") : QStringLiteral("false")), body);
-        }
+        if (!wifiPassphrase.isEmpty())
+            push(QStringLiteral("password = ") + tomlQuote(wifiPassphrase), body);
         push(QStringLiteral("hidden = ") + (hidden ? QStringLiteral("true") : QStringLiteral("false")), body);
         if (!country.isEmpty()) {
             push(QStringLiteral("country = ") + tomlQuote(country), body);

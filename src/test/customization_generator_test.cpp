@@ -12,7 +12,6 @@
 #include <QVariantMap>
 #include <QString>
 #include <QByteArray>
-#include <QPasswordDigestor>
 #include <QCryptographicHash>
 #include <QStringConverter>
 #include <QRegularExpression>
@@ -283,58 +282,36 @@ TEST_CASE("cryptPassword strips CR/LF so pasted passwords still authenticate",
 }
 
 // Companion to the test above, for the Wi-Fi passphrase rather than the account
-// password. Here a stray newline does more than corrupt the derivation: the
-// 8..63 passphrase-length test decides whether the value is treated as a
-// passphrase to hash or as an already-computed 64-hex PMK to pass through, so a
-// single extra character can flip the branch and emit the user's plaintext where
-// a PMK is expected.
-TEST_CASE("resolveWifiPskCrypt strips CR/LF before classifying by length",
+// password: a stray newline would otherwise end up inside the passphrase.
+TEST_CASE("resolveWifiPassphrase strips CR/LF from the passphrase",
           "[customization][wifi][password]") {
     const QByteArray ssid = "TestNet";
 
-    // resolveWifiPskCrypt is private, so drive it through generateSystemdScript
-    // and read back the PSK it emits into the wpa_supplicant stanza.
+    // resolveWifiPassphrase is private, so drive it through generateSystemdScript
+    // and read back the key it emits into the wpa_supplicant stanza.
     auto pskFor = [&](const QString &plaintext) {
         QVariantMap settings;
         settings["wifiConfigured"] = true;
         settings["wifiSSID"] = QString::fromUtf8(ssid);
         settings["wifiPassword"] = plaintext;
         const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
-        static const QRegularExpression pskRe(QStringLiteral("(?m)^\\s*psk=(\\S*)\\s*$"));
+        static const QRegularExpression pskRe(QStringLiteral("(?m)^\\s*psk=(.*)$"));
         const QRegularExpressionMatch m = pskRe.match(script);
         REQUIRE(m.hasMatch());
         return m.captured(1);
     };
+    auto quoted = [](const QString &v) { return QLatin1Char('"') + v + QLatin1Char('"'); };
 
-    SECTION("a trailing newline does not change the derived PSK") {
-        const QString expected = pskFor(QStringLiteral("hunter2hunter2"));
-        REQUIRE_FALSE(expected.isEmpty());
-        REQUIRE(pskFor(QStringLiteral("hunter2hunter2\n")) == expected);
-        REQUIRE(pskFor(QStringLiteral("hunter2hunter2\r\n")) == expected);
+    SECTION("a trailing newline is not part of the passphrase") {
+        REQUIRE(pskFor(QStringLiteral("hunter2hunter2")) == quoted(QStringLiteral("hunter2hunter2")));
+        REQUIRE(pskFor(QStringLiteral("hunter2hunter2\n")) == quoted(QStringLiteral("hunter2hunter2")));
+        REQUIRE(pskFor(QStringLiteral("hunter2hunter2\r\n")) == quoted(QStringLiteral("hunter2hunter2")));
     }
 
-    SECTION("a 63-character passphrase is still hashed, not passed through") {
-        const QString maxLen(63, QLatin1Char('a'));
-        const QString expected = pskFor(maxLen);
-        // A derived PSK is 32 bytes rendered as hex; the plaintext must not survive.
-        REQUIRE(expected.length() == 64);
-        REQUIRE(expected != maxLen);
-        // Without stripping, 63 + 1 == 64 would take the pass-through branch.
-        REQUIRE(pskFor(maxLen + "\n") == expected);
-    }
-
-    SECTION("a too-short passphrase is not inflated into a valid length") {
-        const QString tooShort(7, QLatin1Char('a'));
-        // 7 chars is below the WPA minimum, so it is passed through unchanged
-        // rather than hashed. Adding a newline must not make it look like 8.
-        REQUIRE(pskFor(tooShort) == tooShort);
-        REQUIRE(pskFor(tooShort + "\n") == tooShort);
-    }
-
-    SECTION("a real 64-hex PMK is still passed through untouched") {
-        const QString pmk(64, QLatin1Char('a'));
-        REQUIRE(pskFor(pmk) == pmk);
-        REQUIRE(pskFor(pmk + "\n") == pmk);
+    SECTION("a 64-hex value is a passphrase like any other") {
+        const QString hex(64, QLatin1Char('a'));
+        REQUIRE(pskFor(hex) == quoted(hex));
+        REQUIRE(pskFor(hex + "\n") == quoted(hex));
     }
 }
 
@@ -463,7 +440,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "TestNetwork";
-    settings["wifiPasswordCrypt"] = "hashed_password_here";
+    settings["wifiPassword"] = "wifi_passphrase_here";
     settings["recommendedWifiCountry"] = "GB";
     settings["wifiHidden"] = true;
     
@@ -477,7 +454,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("scan_ssid=1"));
     // WPA2/WPA3 transition mode for compatibility with both security types
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("key_mgmt=WPA-PSK SAE"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("psk=hashed_password_here"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("psk=\"wifi_passphrase_here\""));
     // PMF optional for WPA3 compatibility
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ieee80211w=1"));
 }
@@ -486,7 +463,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK (open networ
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OpenNetwork";
-    settings["wifiPasswordCrypt"] = "";  // Empty PSK for open network
+    settings["wifiPassword"] = "";  // Empty PSK for open network
     settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
@@ -621,7 +598,7 @@ TEST_CASE("CustomisationGenerator handles special characters in WiFi SSID", "[cu
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Test Network (5GHz)";
-    settings["wifiPasswordCrypt"] = "fakehash";
+    settings["wifiPassword"] = "fakepassphrase";
     settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
@@ -636,7 +613,7 @@ TEST_CASE("CustomisationGenerator handles quotes in WiFi SSID", "[customization]
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "My \"Quoted\" Network";
-    settings["wifiPasswordCrypt"] = "fakehash";
+    settings["wifiPassword"] = "fakepassphrase";
     settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
@@ -651,7 +628,7 @@ TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customiza
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Network\\With\\Backslashes";
-    settings["wifiPasswordCrypt"] = "fakehash";
+    settings["wifiPassword"] = "fakepassphrase";
     settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
@@ -666,14 +643,14 @@ TEST_CASE("CustomisationGenerator handles non-ASCII UTF-8 WiFi SSID", "[customiz
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Café ☕ 日本語";
-    settings["wifiPasswordCrypt"] = "fakehash";  // Pre-computed PSK (passwords are ASCII-only per WPA2 spec)
+    settings["wifiPassword"] = "fakepassphrase";
     settings["recommendedWifiCountry"] = "FR";
 
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
 
-    // NOTE: SSIDs support full UTF-8 per WiFi spec. Passwords are ASCII-only (8-63 chars) or
-    // pre-computed 64-char hex PSK per WPA2/WPA3 spec. The UI enforces this correctly.
+    // NOTE: SSIDs support full UTF-8 per WiFi spec. Passphrases are ASCII-only (8-63 chars)
+    // per WPA2/WPA3 spec. The UI enforces this correctly.
     // This test validates the generator handles UTF-8 SSIDs robustly for:
     // - Edge cases that bypass UI validation
     // - Future WPA standards that may allow UTF-8 passphrases
@@ -693,13 +670,13 @@ TEST_CASE("CustomisationGenerator handles non-ASCII UTF-8 WiFi SSID", "[customiz
 namespace {
 
 QVariantMap exoticWifiSettings(const QString& ssid,
-                               const QString& cryptedPsk = QStringLiteral("fakecryptedhash123"),
+                               const QString& passphrase = QStringLiteral("fakepassphrase123"),
                                bool hidden = false)
 {
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = ssid;
-    settings["wifiPasswordCrypt"] = cryptedPsk;
+    settings["wifiPassword"] = passphrase;
     settings["recommendedWifiCountry"] = "GB";
     if (hidden)
         settings["wifiHidden"] = true;
@@ -707,13 +684,13 @@ QVariantMap exoticWifiSettings(const QString& ssid,
 }
 
 QVariantMap exoticWifiSettingsFromOctets(const QByteArray& ssidOctets,
-                                         const QString& cryptedPsk = QStringLiteral("fakecryptedhash123"),
+                                         const QString& passphrase = QStringLiteral("fakepassphrase123"),
                                          bool hidden = false)
 {
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSsidOctets"] = ssidOctets;
-    settings["wifiPasswordCrypt"] = cryptedPsk;
+    settings["wifiPassword"] = passphrase;
     settings["recommendedWifiCountry"] = "GB";
     if (hidden)
         settings["wifiHidden"] = true;
@@ -747,7 +724,7 @@ void requireSsidOctetsPreservedInSystemdScript(const QByteArray& ssidOctets)
     const bool imagerCustomSafe = !ssidOctets.contains('\0') && !decoder.hasError();
     if (imagerCustomSafe) {
         REQUIRE_THAT(script.toStdString(),
-                     ContainsSubstring("set_wlan '" + QString::fromUtf8(ssidOctets).toStdString() + "'"));
+                     ContainsSubstring("set_wlan  -p '" + QString::fromUtf8(ssidOctets).toStdString() + "'"));
     } else {
         REQUIRE_THAT(script.toStdString(), ContainsSubstring("imager_custom ] && false"));
     }
@@ -858,30 +835,6 @@ TEST_CASE("CustomisationGenerator handles malformed UTF-8 octets and Unicode hom
         requireSsidPreservedInSystemdScript(ssid);
         requireSsidPreservedInCloudInitYaml(ssid);
     }
-
-    SECTION("Legacy PBKDF2 uses exact SSID octets for distinct malformed values") {
-        QByteArray truncatedEuro("cost", 4);
-        truncatedEuro.append(char(0xE2));
-        truncatedEuro.append(char(0x82));
-
-        QByteArray loneLead("x", 1);
-        loneLead.append(char(0xC3));
-        REQUIRE(truncatedEuro != loneLead);
-
-        QVariantMap settings = exoticWifiSettingsFromOctets(truncatedEuro);
-        settings.remove("wifiPasswordCrypt");
-        settings["wifiPassword"] = "password1";
-
-        const QString expectedPsk = QPasswordDigestor::deriveKeyPbkdf2(
-            QCryptographicHash::Sha1,
-            QByteArray("password1"),
-            truncatedEuro,
-            4096,
-            32).toHex();
-
-        const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("\tpsk=" + expectedPsk.toStdString()));
-    }
 }
 
 TEST_CASE("CustomisationGenerator handles exotic WiFi SSIDs in systemd script", "[customization][wifi][exotic]") {
@@ -890,7 +843,7 @@ TEST_CASE("CustomisationGenerator handles exotic WiFi SSIDs in systemd script", 
         const QString script = QString::fromUtf8(
             CustomisationGenerator::generateSystemdScript(exoticWifiSettings(ssid)));
 
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan '-foobar'"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan  -p '-foobar'"));
         REQUIRE_THAT(script.toStdString(), ContainsSubstring("ssid=\"-foobar\""));
     }
 
@@ -899,16 +852,16 @@ TEST_CASE("CustomisationGenerator handles exotic WiFi SSIDs in systemd script", 
         const QString script = QString::fromUtf8(
             CustomisationGenerator::generateSystemdScript(exoticWifiSettings(ssid)));
 
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan '---hidden-net'"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan  -p '---hidden-net'"));
         REQUIRE_THAT(script.toStdString(), ContainsSubstring("ssid=\"---hidden-net\""));
     }
 
     SECTION("Hidden network with hyphen-prefixed SSID keeps -h flag separate from SSID") {
         const QString ssid = "-foobar";
         const QString script = QString::fromUtf8(
-            CustomisationGenerator::generateSystemdScript(exoticWifiSettings(ssid, "fakehash", true)));
+            CustomisationGenerator::generateSystemdScript(exoticWifiSettings(ssid, "fakepassphrase", true)));
 
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan  -h '-foobar'"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan  -h  -p '-foobar'"));
         REQUIRE_THAT(script.toStdString(), ContainsSubstring("scan_ssid=1"));
     }
 
@@ -933,40 +886,24 @@ TEST_CASE("CustomisationGenerator handles exotic WiFi SSIDs in systemd script", 
         requireSsidOctetsPreservedInSystemdScript(octets);
     }
 
-    SECTION("Legacy plaintext passphrase beginning with a hyphen") {
+    SECTION("Plaintext passphrase beginning with a hyphen") {
         QVariantMap settings = exoticWifiSettings("-network");
-        settings.remove("wifiPasswordCrypt");
         settings["wifiPassword"] = "-secretpw";
 
-        const QString expectedPsk = QPasswordDigestor::deriveKeyPbkdf2(
-            QCryptographicHash::Sha1,
-            QByteArray("-secretpw"),
-            QByteArray("-network"),
-            4096,
-            32).toHex();
-
         const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
 
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan '-network' '" + expectedPsk.toStdString() + "'"));
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("\tpsk=" + expectedPsk.toStdString()));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan  -p '-network' '-secretpw'"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("\tpsk=\"-secretpw\""));
     }
 
-    SECTION("Legacy UTF-8 passphrase with exotic SSID derives deterministic PSK") {
+    SECTION("UTF-8 passphrase with exotic SSID is written in the clear") {
         QVariantMap settings = exoticWifiSettings("Café-📶");
-        settings.remove("wifiPasswordCrypt");
         settings["wifiPassword"] = "パスワード123";
-
-        const QString expectedPsk = QPasswordDigestor::deriveKeyPbkdf2(
-            QCryptographicHash::Sha1,
-            QString("パスワード123").toUtf8(),
-            QString("Café-📶").toUtf8(),
-            4096,
-            32).toHex();
 
         const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
 
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan 'Café-📶' '" + expectedPsk.toStdString() + "'"));
-        REQUIRE_THAT(script.toStdString(), ContainsSubstring("\tpsk=" + expectedPsk.toStdString()));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("set_wlan  -p 'Café-📶' 'パスワード123'"));
+        REQUIRE_THAT(script.toStdString(), ContainsSubstring("\tpsk=\"パスワード123\""));
     }
 }
 
@@ -977,7 +914,7 @@ TEST_CASE("CustomisationGenerator handles exotic WiFi SSIDs in cloud-init networ
             CustomisationGenerator::generateCloudInitNetworkConfig(exoticWifiSettings("-foobar"), false));
 
         REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"-foobar\":"));
-        REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
+        REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakepassphrase123\""));
     }
 
     SECTION("SSID beginning with multiple hyphens") {
@@ -989,7 +926,7 @@ TEST_CASE("CustomisationGenerator handles exotic WiFi SSIDs in cloud-init networ
 
     SECTION("Hidden network with hyphen-prefixed SSID") {
         const QString yaml = QString::fromUtf8(
-            CustomisationGenerator::generateCloudInitNetworkConfig(exoticWifiSettings("-foobar", "fakehash", true), false));
+            CustomisationGenerator::generateCloudInitNetworkConfig(exoticWifiSettings("-foobar", "fakepassphrase", true), false));
 
         REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"-foobar\":"));
         REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hidden: true"));
@@ -1023,43 +960,27 @@ TEST_CASE("CustomisationGenerator handles exotic WiFi SSIDs in cloud-init networ
         requireSsidOctetsPreservedInCloudInitYaml(octets);
     }
 
-    SECTION("Legacy plaintext passphrase beginning with a hyphen") {
+    SECTION("Plaintext passphrase beginning with a hyphen") {
         QVariantMap settings = exoticWifiSettings("-network");
-        settings.remove("wifiPasswordCrypt");
         settings["wifiPassword"] = "-secretpw";
-
-        const QString expectedPsk = QPasswordDigestor::deriveKeyPbkdf2(
-            QCryptographicHash::Sha1,
-            QByteArray("-secretpw"),
-            QByteArray("-network"),
-            4096,
-            32).toHex();
 
         const QString yaml = QString::fromUtf8(
             CustomisationGenerator::generateCloudInitNetworkConfig(settings, false));
 
         REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"-network\":"));
-        REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"" + expectedPsk.toStdString() + "\""));
+        REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"-secretpw\""));
     }
 
-    SECTION("Legacy UTF-8 passphrase with exotic SSID derives deterministic PSK") {
+    SECTION("UTF-8 passphrase is written as text, not escaped as octets") {
         QVariantMap settings = exoticWifiSettings("Café-📶");
-        settings.remove("wifiPasswordCrypt");
-        settings["wifiPassword"] = "パスワード123";
-
-        const QString expectedPsk = QPasswordDigestor::deriveKeyPbkdf2(
-            QCryptographicHash::Sha1,
-            QString("パスワード123").toUtf8(),
-            QString("Café-📶").toUtf8(),
-            4096,
-            32).toHex();
+        settings["wifiPassword"] = "パスワード\\1\"23";
 
         const QString yaml = QString::fromUtf8(
             CustomisationGenerator::generateCloudInitNetworkConfig(settings, false));
 
         const QByteArray escapedKey = CustomisationGenerator::yamlEscapeSsidOctets(QString("Café-📶").toUtf8());
         REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"" + escapedKey.toStdString() + "\":"));
-        REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"" + expectedPsk.toStdString() + "\""));
+        REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"パスワード\\\\1\\\"23\""));
     }
 }
 
@@ -1503,7 +1424,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "TestNetwork";
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiPassword"] = "fakepassphrase123";
     settings["recommendedWifiCountry"] = "DE";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
@@ -1526,7 +1447,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"TestNetwork\":"));
     // Use password shorthand (not auth: block) for automatic WPA2/WPA3 transition mode
     // See: https://github.com/canonical/netplan/blob/main/src/parse.c (handle_access_point_password)
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakepassphrase123\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("optional: true"));
 }
 
@@ -1534,7 +1455,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "HiddenNetwork";
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiPassword"] = "fakepassphrase123";
     settings["wifiHidden"] = true;
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
@@ -1557,7 +1478,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config for open W
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OpenNetwork";
-    settings["wifiPasswordCrypt"] = "";  // Empty = open network
+    settings["wifiPassword"] = "";  // Empty = open network
     settings["recommendedWifiCountry"] = "US";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
@@ -1607,7 +1528,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with speci
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Test \"Network\" (5GHz)";
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiPassword"] = "fakepassphrase123";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
     QString yaml = QString::fromUtf8(netcfg);
@@ -1626,7 +1547,7 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes backslashes 
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Network\\With\\Backslashes";
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiPassword"] = "fakepassphrase123";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
     QString yaml = QString::fromUtf8(netcfg);
@@ -1641,7 +1562,7 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes control char
     // SSID with tab, newline, and carriage return (valid per IEEE 802.11)
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = QString("Net\twork\nWith\rControl");
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiPassword"] = "fakepassphrase123";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
     QString yaml = QString::fromUtf8(netcfg);
@@ -1655,7 +1576,7 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes mixed specia
     // Pathological SSID: quotes, backslashes, and control chars together
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = QString("Test\\\"Net\twork\"");
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiPassword"] = "fakepassphrase123";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
     QString yaml = QString::fromUtf8(netcfg);
@@ -1819,7 +1740,7 @@ TEST_CASE("Independent step: WiFi only", "[cloudinit][independent][wifi]") {
     QVariantMap settings;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "MyHomeNetwork";
-    settings["wifiPasswordCrypt"] = "hashedwifipassword123";
+    settings["wifiPassword"] = "wifipassphrase123";
     settings["recommendedWifiCountry"] = "GB";
     
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
@@ -1839,7 +1760,7 @@ TEST_CASE("Independent step: WiFi only", "[cloudinit][independent][wifi]") {
     REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("wifis:"));
     REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("wlan0:"));
     REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("\"MyHomeNetwork\":"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("password: \"hashedwifipassword123\""));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("password: \"wifipassphrase123\""));
     REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("regulatory-domain: \"GB\""));
     
     // No other customization in userdata
@@ -2063,7 +1984,7 @@ TEST_CASE("Combined steps: User + WiFi (no SSH)", "[cloudinit][combined]") {
     settings["sshUserPassword"] = "$6$salt$hash";
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OfficeWiFi";
-    settings["wifiPasswordCrypt"] = "wifihash";
+    settings["wifiPassword"] = "wifipassphrase";
     
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
@@ -2136,7 +2057,7 @@ TEST_CASE("Combined steps: Full customization without SSH", "[cloudinit][combine
     settings["sshUserPassword"] = "$6$salt$hash";
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "FullWiFi";
-    settings["wifiPasswordCrypt"] = "wifihash";
+    settings["wifiPassword"] = "wifipassphrase";
     settings["recommendedWifiCountry"] = "DE";
     settings["enableI2C"] = true;
     
@@ -2175,7 +2096,7 @@ TEST_CASE("Combined steps: Full customization with SSH", "[cloudinit][combined]"
     settings["sshPasswordAuth"] = true;
     settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "SSHWiFi";
-    settings["wifiPasswordCrypt"] = "wifihash";
+    settings["wifiPassword"] = "wifipassphrase";
     settings["enableSPI"] = true;
     
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, true, "pi");
@@ -2343,37 +2264,8 @@ TEST_CASE("rpi-preseed escapes a Wi-Fi passphrase carrying both", "[preseed][quo
 
     INFO(s);
     REQUIRE_THAT(s, ContainsSubstring("ssid = \"home\\\"net\""));
-    // Escaped, and left as a passphrase rather than mistaken for a raw key.
+    // Escaped.
     REQUIRE_THAT(s, ContainsSubstring("a\\\"b\\\\c"));
-}
-
-TEST_CASE("rpi-preseed tells a stored key from a passphrase by its digits",
-          "[preseed][quoting][wifi]") {
-    // A legacy setting holds either a 64-character hex PMK or whatever the
-    // user typed. Called wrong in one direction the key is derived a second
-    // time from something that is already a key; in the other a passphrase
-    // is written as if it were one. Both come out as a board that will not
-    // join the network, with nothing to say why.
-    const QString hexKey(64, QLatin1Char('a'));
-    QString notHex(64, QLatin1Char('a'));
-    notHex[40] = QLatin1Char('z');
-    REQUIRE(notHex.length() == 64);
-
-    QVariantMap stored;
-    stored["wifiSSID"] = "net";
-    stored["wifiCountry"] = "GB";
-    stored["wifiPassword"] = hexKey;
-    const std::string withKey = QString::fromUtf8(
-        CustomisationGenerator::generateRpiPreseedToml(stored)).toStdString();
-
-    QVariantMap typed = stored;
-    typed["wifiPassword"] = notHex;
-    const std::string withPassphrase = QString::fromUtf8(
-        CustomisationGenerator::generateRpiPreseedToml(typed)).toStdString();
-
-    INFO("stored key:\n" << withKey << "\ntyped:\n" << withPassphrase);
-    REQUIRE_THAT(withKey, ContainsSubstring("password_encrypted = true"));
-    REQUIRE_THAT(withPassphrase, !ContainsSubstring("password_encrypted = true"));
 }
 
 TEST_CASE("rpi-preseed ssh section is gated on sshEnabled", "[preseed][ssh]") {
@@ -2409,11 +2301,10 @@ TEST_CASE("rpi-preseed ssh multiple keys and password auth", "[preseed][ssh]") {
     REQUIRE_THAT(s, ContainsSubstring("\"ssh-ed25519 KEY2 c@d\","));
 }
 
-TEST_CASE("rpi-preseed wlan with pre-hashed PSK is marked encrypted", "[preseed][wifi]") {
+TEST_CASE("rpi-preseed wlan carries the passphrase", "[preseed][wifi]") {
     QVariantMap settings;
     settings["wifiSSID"] = "MyNet";
-    // 64 hex chars: a raw PMK stored by the wizard as wifiPasswordCrypt.
-    settings["wifiPasswordCrypt"] = QString(64, QChar('a'));
+    settings["wifiPassword"] = "correct horse";
     settings["recommendedWifiCountry"] = "GB";
 
     std::string s = QString::fromUtf8(
@@ -2421,8 +2312,8 @@ TEST_CASE("rpi-preseed wlan with pre-hashed PSK is marked encrypted", "[preseed]
 
     REQUIRE_THAT(s, ContainsSubstring("[wlan]"));
     REQUIRE_THAT(s, ContainsSubstring("ssid = \"MyNet\""));
-    REQUIRE_THAT(s, ContainsSubstring("password = \"" + std::string(64, 'a') + "\""));
-    REQUIRE_THAT(s, ContainsSubstring("password_encrypted = true"));
+    REQUIRE_THAT(s, ContainsSubstring("password = \"correct horse\""));
+    REQUIRE_THAT(s, !ContainsSubstring("password_encrypted"));
     REQUIRE_THAT(s, ContainsSubstring("country = \"GB\""));
     REQUIRE_THAT(s, ContainsSubstring("hidden = false"));
     // key_mgmt is left implicit (rpi-preseed defaults to wpa-psk with a password).
@@ -2433,9 +2324,9 @@ TEST_CASE("rpi-preseed open network emits no password", "[preseed][wifi]") {
     QVariantMap settings;
     settings["wifiSSID"] = "OpenNet";
     settings["wifiMode"] = "open";
-    // A stale crypt value must not leak into an open-network config, which
+    // A stale password must not leak into an open-network config, which
     // rpi-preseed would reject.
-    settings["wifiPasswordCrypt"] = "stalevalue";
+    settings["wifiPassword"] = "stalevalue";
 
     std::string s = QString::fromUtf8(
         CustomisationGenerator::generateRpiPreseedToml(settings)).toStdString();
@@ -2556,7 +2447,7 @@ TEST_CASE("rpi-preseed combined config orders sections", "[preseed]") {
     settings["sshUserPassword"] = "$y$hash";
     settings["sshPasswordAuth"] = false;
     settings["wifiSSID"] = "Net";
-    settings["wifiPasswordCrypt"] = QString(64, QChar('b'));
+    settings["wifiPassword"] = "netpassphrase";
     settings["timezone"] = "Europe/London";
 
     QByteArray toml = CustomisationGenerator::generateRpiPreseedToml(
@@ -2572,7 +2463,7 @@ TEST_CASE("rpi-preseed combined config orders sections", "[preseed]") {
 }
 
 // ===========================================================================
-// Credential derivation (cryptPassword / pbkdf2) - moved here from the UI/
+// Credential derivation (cryptPassword) - moved here from the UI/
 // ImageWriter layer. See issue #1627 for the CR/LF stripping rationale.
 // ===========================================================================
 
@@ -2684,28 +2575,36 @@ TEST_CASE("Generator falls back to crypted password when no plaintext present", 
     REQUIRE_THAT(script.toStdString(), ContainsSubstring("$5$savedsalt$savedhash"));
 }
 
-TEST_CASE("Generator derives Wi-Fi PSK from plaintext passphrase", "[customization][wifi][password]") {
+TEST_CASE("Generator writes the Wi-Fi passphrase in the clear", "[customization][wifi][password]") {
+    // A PSK derived here cannot be used for WPA3/SAE, which needs the passphrase.
     QVariantMap settings;
     settings["wifiSSID"] = "TestNet";
-    settings["wifiPassword"] = "supersecret"; // 11 chars -> passphrase
+    settings["wifiPassword"] = "supersecret";
 
-    const QString expectedPsk = CustomisationGenerator::pbkdf2(
-        QByteArray("supersecret"), QByteArray("TestNet"));
+    const std::string script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings)).toStdString();
+    REQUIRE_THAT(script, ContainsSubstring("set_wlan  -p 'TestNet' 'supersecret'"));
+    REQUIRE_THAT(script, ContainsSubstring("\tpsk=\"supersecret\""));
 
-    const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
-    REQUIRE_THAT(script.toStdString(), !ContainsSubstring("supersecret"));
-    REQUIRE_THAT(script.toStdString(), ContainsSubstring("psk=" + expectedPsk.toStdString()));
+    const std::string yaml = QString::fromUtf8(
+        CustomisationGenerator::generateCloudInitNetworkConfig(settings, false)).toStdString();
+    REQUIRE_THAT(yaml, ContainsSubstring("password: \"supersecret\""));
+
+    const std::string toml = QString::fromUtf8(
+        CustomisationGenerator::generateRpiPreseedToml(settings)).toStdString();
+    REQUIRE_THAT(toml, ContainsSubstring("password = \"supersecret\""));
+    REQUIRE_THAT(toml, !ContainsSubstring("password_encrypted"));
 }
 
-TEST_CASE("Generator passes through a pre-derived Wi-Fi PSK unchanged", "[customization][wifi][password]") {
+TEST_CASE("Generator ignores a stored PMK", "[customization][wifi][password]") {
+    // Earlier versions saved a derived PMK. It is not a credential we write.
     QVariantMap settings;
     settings["wifiSSID"] = "TestNet";
-    settings["wifiPasswordCrypt"] = "deadbeefcafef00d";
+    settings["wifiPasswordCrypt"] = QString(64, QLatin1Char('c'));
 
-    const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
-    REQUIRE_THAT(script.toStdString(), ContainsSubstring("psk=deadbeefcafef00d"));
+    const std::string script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings)).toStdString();
+    REQUIRE_THAT(script, !ContainsSubstring(std::string(64, 'c')));
+    REQUIRE_THAT(script, ContainsSubstring("key_mgmt=NONE"));
 }
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Does what we generate actually parse?

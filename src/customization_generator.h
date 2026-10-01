@@ -99,7 +99,7 @@ public:
     // Credential derivation
     //
     // This class is the single home for turning a plaintext secret into the
-    // form that ends up in the generated artifacts. Keep all password/PSK
+    // form that ends up in the generated artifacts. Keep all password
     // hashing here so the UI layer never touches crypto and there is exactly
     // one implementation of each algorithm.
     // -------------------------------------------------------------------
@@ -132,15 +132,6 @@ public:
     // a space starts another parameter -- so anything that is not two ASCII
     // letters is not a country and does not go.
     static QString sanitisedCountryCode(const QString& value);
-
-    /**
-     * @brief Derive a WPA PSK from a passphrase (PBKDF2-HMAC-SHA1, 4096 iters).
-     *
-     * @param password Plaintext Wi-Fi passphrase (UTF-8 bytes)
-     * @param ssid SSID octets used as the PBKDF2 salt
-     * @return Hex-encoded 32-byte PSK
-     */
-    static QString pbkdf2(const QByteArray& password, const QByteArray& ssid);
 
     /**
      * @brief Shell-quote a value for use as one argument in firstrun.sh
@@ -188,14 +179,12 @@ private:
     static QString resolveUserPasswordCrypt(const QVariantMap& settings);
 
     /**
-     * @brief Resolve the crypted Wi-Fi PSK from settings.
+     * @brief Resolve the plaintext Wi-Fi passphrase ("wifiPassword").
      *
-     * Prefers an already-derived PSK ("wifiPasswordCrypt"); otherwise derives
-     * one from the plaintext "wifiPassword" using the SSID octets as salt. A
-     * value that is not a passphrase length (8..63) is treated as a raw PSK and
-     * passed through unchanged.
+     * Never pre-derived into a PSK: NetworkManager needs the passphrase to
+     * negotiate WPA3/SAE.
      */
-    static QString resolveWifiPskCrypt(const QVariantMap& settings, const QByteArray& ssidOctets, bool wifiConfigured);
+    static QString resolveWifiPassphrase(const QVariantMap& settings, bool wifiConfigured);
 
     static QString yamlEscapeString(const QString& value);
 };
