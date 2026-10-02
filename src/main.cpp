@@ -12,6 +12,7 @@
 #include <QTranslator>
 #include <QLocale>
 #include <QSettings>
+#include <QTemporaryDir>
 #include <QCommandLineParser>
 #ifdef Q_OS_UNIX
 #include <unistd.h>
@@ -27,6 +28,7 @@
 #include <QIcon>
 #include "imagewriter.h"
 #include "settings_permissions.h"
+#include "userfiles.h"
 #include "nativefiledialog.h"
 #include <QQuickWindow>
 #include <QScreen>
@@ -293,7 +295,7 @@ int main(int argc, char *argv[])
             }
 #endif
 
-            g_logFile = fopen(logPath, "a");
+            g_logFile = PlatformQuirks::openLogFile(logPath);
             if (g_logFile) {
 #ifdef Q_OS_UNIX
                 fprintf(g_logFile, "\n=== Raspberry Pi Imager started (PID %d, EUID %d) ===\n",
@@ -424,6 +426,20 @@ int main(int argc, char *argv[])
             qDebug() << "Handed the settings file back to the invoking user";
         } else if (perms.tightened) {
             qDebug() << "Restricted permissions on the existing settings file";
+        }
+
+        // Elevated, QSettings saves as root into wherever the directory
+        // resolves. Somewhere the user doesn't own is a planted link.
+        int uid = -1;
+        int gid = -1;
+        const QFileInfo directory(QFileInfo(settingsFile).absolutePath());
+        if (PlatformQuirks::invokingUser(&uid, &gid) &&
+            QFileInfo(directory.canonicalFilePath()).ownerId() != static_cast<uint>(uid)) {
+            static QTemporaryDir sessionOnly;
+            QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, sessionOnly.path());
+            QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, sessionOnly.path());
+            qWarning() << "The settings directory" << directory.filePath()
+                       << "does not belong to the invoking user; settings will not be saved";
         }
     }
 

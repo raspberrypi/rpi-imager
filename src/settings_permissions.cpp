@@ -4,17 +4,14 @@
  */
 
 #include "settings_permissions.h"
+#include "userfiles.h"
 
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 
 #ifdef Q_OS_UNIX
-#include <cerrno>
-#include <cstdlib>
 #include <fcntl.h>
-#include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -83,50 +80,6 @@ int ownerOf(const QString& path)
     return static_cast<int>(st.st_uid);
 }
 
-// AT_SYMLINK_NOFOLLOW, for the same reason the mode is set on a descriptor:
-// the directory this sits in belongs to an unprivileged account, and we may
-// be root.
-bool giveTo(const QString& path, int uid, int gid)
-{
-    return ::fchownat(AT_FDCWD, QFile::encodeName(path).constData(),
-                      static_cast<uid_t>(uid), static_cast<gid_t>(gid),
-                      AT_SYMLINK_NOFOLLOW) == 0;
-}
-
-// The account that invoked an elevated Imager, or -1. The same two variables
-// applyQuirks() reads and in the same order, so the settings file ends up
-// owned by whoever HOME was repointed at.
-void invokingUser(int* uid, int* gid)
-{
-    *uid = -1;
-    *gid = -1;
-    if (::geteuid() != 0)
-        return;
-
-    const char* value = ::getenv("SUDO_UID");
-    if (!value)
-        value = ::getenv("PKEXEC_UID");
-    if (!value)
-        return;
-
-    char* end = nullptr;
-    errno = 0;
-    const unsigned long parsed = std::strtoul(value, &end, 10);
-    if (errno != 0 || end == value || *end != 0 || parsed == 0 ||
-        parsed > static_cast<unsigned long>(static_cast<uid_t>(-1)))
-        return;
-
-    struct passwd pw{};
-    struct passwd* found = nullptr;
-    char buffer[4096];
-    if (::getpwuid_r(static_cast<uid_t>(parsed), &pw, buffer, sizeof(buffer), &found) != 0
-        || !found)
-        return;
-
-    *uid = static_cast<int>(found->pw_uid);
-    *gid = static_cast<int>(found->pw_gid);
-}
-
 #else
 
 // Whether anyone beyond this account can reach the file.
@@ -185,8 +138,6 @@ bool restrictDirectory(const QString& path)
 // kind Linux has: the file belongs to whoever created it.
 int effectiveUser() { return 0; }
 int ownerOf(const QString& path) { return QFileInfo::exists(path) ? 0 : -1; }
-bool giveTo(const QString&, int, int) { return false; }
-void invokingUser(int* uid, int* gid) { *uid = -1; *gid = -1; }
 
 #endif
 
@@ -203,7 +154,7 @@ SettingsPermissions secureSettingsFile(const QString& path, int ownerUid, int ow
         QDir().mkpath(directory);
         const int dirOwner = ownerOf(directory);
         if (ownerUid >= 0 && dirOwner >= 0 && dirOwner != ownerUid)
-            giveTo(directory, ownerUid, ownerGid);
+            PlatformQuirks::reclaimOwnership(directory, ownerUid, ownerGid, false);
         result.directorySecured = restrictDirectory(directory);
     }
 
@@ -224,7 +175,7 @@ SettingsPermissions secureSettingsFile(const QString& path, int ownerUid, int ow
     // can, which is exactly when it is needed.
     const int owner = ownerOf(path);
     if (ownerUid >= 0 && owner >= 0 && owner != ownerUid)
-        result.reowned = giveTo(path, ownerUid, ownerGid);
+        result.reowned = PlatformQuirks::reclaimOwnership(path, ownerUid, ownerGid, false) > 0;
 
     const int finalOwner = result.reowned ? ownerUid : owner;
     const int us = effectiveUser();
@@ -250,47 +201,33 @@ SettingsPermissions secureSettingsFile(const QString& path)
 {
     int uid = -1;
     int gid = -1;
-    invokingUser(&uid, &gid);
-    return secureSettingsFile(path, uid, gid);
+    PlatformQuirks::invokingUser(&uid, &gid);
+
+    // Hand back what an earlier elevated run left as root, then create and
+    // narrow as the user: a link planted in their home then reaches nothing
+    // they couldn't already write.
+    const QString directory = QFileInfo(path).absolutePath();
+    const bool reowned = !path.isEmpty() && uid >= 0 &&
+        (PlatformQuirks::reclaimOwnership(directory, uid, gid, false) +
+         PlatformQuirks::reclaimOwnership(path, uid, gid, false)) > 0;
+
+    PlatformQuirks::InvokingUserFsScope asUser;
+    SettingsPermissions result = asUser.active() ? secureSettingsFile(path, -1, -1)
+                                                 : secureSettingsFile(path, uid, gid);
+    result.reowned = result.reowned || reowned;
+    return result;
 }
 
 int restoreUserOwnership(const QString& path, int ownerUid, int ownerGid)
 {
-    if (path.isEmpty() || ownerUid < 0)
-        return 0;
-
-    const QFileInfo info(path);
-    if (!info.exists() && !info.isSymLink())
-        return 0;
-
-    int changed = 0;
-
-    // The entry itself first, so a directory we are about to walk is already
-    // the user's even if the walk is cut short.
-    if (ownerOf(path) != ownerUid && giveTo(path, ownerUid, ownerGid))
-        ++changed;
-
-    // isSymLink before isDir: a symlink to a directory must not be walked.
-    // We changed the link itself above and that is as far as it goes.
-    if (info.isSymLink() || !info.isDir())
-        return changed;
-
-    QDirIterator it(path, QDir::AllEntries | QDir::Hidden | QDir::System |
-                          QDir::NoDotAndDotDot,
-                    QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        const QString entry = it.next();
-        if (ownerOf(entry) != ownerUid && giveTo(entry, ownerUid, ownerGid))
-            ++changed;
-    }
-    return changed;
+    return PlatformQuirks::reclaimOwnership(path, ownerUid, ownerGid, true);
 }
 
 int restoreUserOwnership(const QString& path)
 {
     int uid = -1;
     int gid = -1;
-    invokingUser(&uid, &gid);
+    PlatformQuirks::invokingUser(&uid, &gid);
     return restoreUserOwnership(path, uid, gid);
 }
 
