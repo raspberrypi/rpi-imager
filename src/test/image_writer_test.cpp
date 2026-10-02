@@ -2522,6 +2522,30 @@ TEST_CASE("Timezones look like timezones", "[imagewriter][locale]")
     CHECK(zones.contains(QStringLiteral("Europe/London")));
 }
 
+TEST_CASE("Locale labels correspond to the supported configuration codes", "[imagewriter][locale]")
+{
+    ImageWriter w(nullptr);
+    const auto countries = w.getCountryList();
+    const auto countryNames = w.getCountryNames();
+    REQUIRE(countryNames.size() == countries.size());
+    CHECK(countryNames.at(countries.indexOf(QStringLiteral("DE"))) == QStringLiteral("Germany"));
+    CHECK(countryNames.at(countries.indexOf(QStringLiteral("GB"))) == QStringLiteral("United Kingdom"));
+    for (int i = 0; i < countries.size(); ++i) {
+        INFO(countries.at(i).toStdString());
+        CHECK(countryNames.at(i).size() > 2);
+    }
+
+    const auto layouts = w.getKeymapLayoutList();
+    const auto layoutNames = w.getKeymapLayoutNames();
+    REQUIRE(layoutNames.size() == layouts.size());
+    for (int i = 0; i < layouts.size(); ++i) {
+        INFO(layouts.at(i).toStdString());
+        CHECK(layoutNames.at(i) != layouts.at(i));
+    }
+    CHECK(layoutNames.at(layouts.indexOf(QStringLiteral("de"))).contains(QStringLiteral("Germany")));
+    CHECK(layoutNames.at(layouts.indexOf(QStringLiteral("latam"))).contains(QStringLiteral("Latin American")));
+}
+
 TEST_CASE("Reading a file that is not there yields nothing",
           "[imagewriter][files]")
 {

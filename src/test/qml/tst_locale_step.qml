@@ -177,6 +177,7 @@ TestCase {
         child("localeTimezoneCombo").editText = ""
         child("localeKeyboardCombo").editText = ""
         child("localeCapitalCityCombo").editText = ""
+        child("localeWifiCountryCombo").currentIndex = -1
         step.nextClicked()
 
         var s = fakeContainer.customizationSettings
@@ -284,4 +285,36 @@ TestCase {
         compare(child("localeTimezoneCombo").editText, itsLocale.timezone,
                 "the timezone was still filled in from the city")
     }
+    function test_country_override_is_saved_and_survives_city_changes() {
+        chooseCity(aCity)
+        const combo = child("localeWifiCountryCombo")
+        const country = itsLocale.countryCode === "DE" ? "GB" : "DE"
+        pick("localeWifiCountryCombo", country)
+        chooseCity(aCity)
+        compare(combo.currentText, country)
+        verify(combo.displayText.length > 2)
+        step.nextClicked()
+        compare(fakeContainer.customizationSettings.recommendedWifiCountry, country)
+        step.destroy()
+        step = stepComponent.createObject(testCase)
+        compare(child("localeWifiCountryCombo").currentText, country)
+    }
+
+    function test_country_can_be_chosen_without_finding_a_capital_city() {
+        pick("localeWifiCountryCombo", "DE")
+        verify(step.nextButtonEnabled)
+        step.nextClicked()
+        compare(fakeContainer.customizationSettings.recommendedWifiCountry, "DE")
+        verify(fakeContainer.localeConfigured)
+    }
+
+    function test_layout_names_are_readable_but_settings_keep_the_code() {
+        pick("localeKeyboardCombo", "de")
+        const combo = child("localeKeyboardCombo")
+        verify(combo.displayText.indexOf("German") >= 0)
+        verify(combo.displayText.indexOf("Germany") >= 0)
+        step.nextClicked()
+        compare(fakeContainer.customizationSettings.keyboard, "de")
+    }
+
 }

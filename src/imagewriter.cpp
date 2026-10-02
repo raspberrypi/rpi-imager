@@ -3600,6 +3600,47 @@ QStringList ImageWriter::getCountryList()
     return countries;
 }
 
+QStringList ImageWriter::getCountryNames()
+{
+    QStringList names;
+    for (const QString &code : getCountryList()) {
+        const auto territory = QLocale::codeToTerritory(code);
+        // AN remains in the supported regulatory-domain list, but is no
+        // longer an ISO territory in Qt's current locale database.
+        names.append(code == "AN" ? tr("Netherlands Antilles")
+                     : territory == QLocale::AnyTerritory ? code
+                     : QLocale::territoryToString(territory));
+    }
+    return names;
+}
+
+QStringList ImageWriter::getKeymapLayoutNames()
+{
+    QMap<QString, QString> descriptions;
+    QFile f(":/keymap-layout-names.txt");
+    if (f.open(QFile::ReadOnly | QFile::Text)) {
+        QTextStream in(&f);
+        while (!in.atEnd()) {
+            const QString line = in.readLine();
+            const int tab = line.indexOf('\t');
+            if (tab > 0 && !line.startsWith('#'))
+                descriptions.insert(line.left(tab), line.mid(tab + 1));
+        }
+    }
+    QStringList names;
+    for (const QString &code : getKeymapLayoutList()) {
+        QString name = descriptions.value(code, code);
+        const auto territory = QLocale::codeToTerritory(code.toUpper());
+        if (territory != QLocale::AnyTerritory) {
+            const QString country = QLocale::territoryToString(territory);
+            if (!name.contains(country, Qt::CaseInsensitive))
+                name += QStringLiteral(" — ") + country;
+        }
+        names.append(name);
+    }
+    return names;
+}
+
 QStringList ImageWriter::getKeymapLayoutList()
 {
     QFile f(":/keymap-layouts.txt");
