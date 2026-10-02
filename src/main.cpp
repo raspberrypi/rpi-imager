@@ -489,18 +489,6 @@ int main(int argc, char *argv[])
     // Initialize libcurl globally - must happen before any curl operations
     CurlNetworkConfig::ensureInitialized();
 
-    // Create ImageWriter early to check embedded mode
-    ImageWriter imageWriter(nullptr);
-
-    // Register as the handler for the rpi-imager:// URL scheme so the Raspberry
-    // Pi Connect sign-in callback can route back to us. Platform mechanics live
-    // in the PAL (desktop file on Linux, Launch Services on macOS, installer on
-    // Windows). Skipped in embedded mode, which has no desktop environment.
-    if (!imageWriter.isEmbeddedMode())
-    {
-        PlatformQuirks::registerUriScheme();
-    }
-
     // Everything an elevated run leaves in the user's home, handed back.
     //
     // Imager elevates itself to write to a disk and applyQuirks() then points
@@ -511,6 +499,9 @@ int main(int argc, char *argv[])
     // files stop *any* application registering a file association, and a
     // stale handler cannot be rewritten unelevated -- so after the AppImage
     // moves, the Connect callback keeps launching the old path.
+    //
+    // Before ImageWriter: its CacheManager checks the cache directory as the
+    // user, and leftovers still root-owned would turn caching off.
     const auto handBackUserFiles = []() {
         const QString applications =
             QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
@@ -531,11 +522,32 @@ int main(int argc, char *argv[])
              }) {
             changed += rpi_imager::restoreUserOwnership(path);
         }
+        // Only the directory itself: other Raspberry Pi applications keep
+        // their caches inside it.
+        int uid = -1;
+        int gid = -1;
+        if (PlatformQuirks::invokingUser(&uid, &gid))
+            changed += PlatformQuirks::reclaimOwnership(
+                QFileInfo(QStandardPaths::writableLocation(QStandardPaths::CacheLocation))
+                    .absolutePath(), uid, gid, false);
         if (changed > 0)
             qDebug() << "Handed" << changed << "file(s) back to the invoking user";
     };
     handBackUserFiles();
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, handBackUserFiles);
+
+    // Create ImageWriter early to check embedded mode
+    ImageWriter imageWriter(nullptr);
+
+    // Register as the handler for the rpi-imager:// URL scheme so the Raspberry
+    // Pi Connect sign-in callback can route back to us. Platform mechanics live
+    // in the PAL (desktop file on Linux, Launch Services on macOS, installer on
+    // Windows). Skipped in embedded mode, which has no desktop environment.
+    if (!imageWriter.isEmbeddedMode())
+    {
+        PlatformQuirks::registerUriScheme();
+    }
+
 #ifdef Q_OS_LINUX
     if (imageWriter.isEmbeddedMode()) {
         // Font and locale setup only needed for embedded Linux systems
