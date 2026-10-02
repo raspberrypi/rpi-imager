@@ -158,6 +158,21 @@ TestCase {
                "and the wizard knows there is a key")
     }
 
+    function test_a_chosen_key_is_recorded_as_the_path_it_names() {
+        // Not the url with its scheme cut off: that kept the url's escaping,
+        // so a '#' in the name was stored as "%23" and signing could not
+        // open the key.
+        var picker = child("secureBootKeyFileDialog")
+
+        picker.selectedFile = "file:///home/pi/.ssh/secure%23boot.pem"
+        picker.accepted()
+
+        compare(ImageWriterSingleton.getStringSetting("secureboot_rsa_key"),
+                "/home/pi/.ssh/secure#boot.pem")
+        compare(step.rsaKeyPath, "/home/pi/.ssh/secure#boot.pem",
+                "and the screen shows the same thing")
+    }
+
     function test_choosing_nothing_leaves_the_key_alone() {
         // An empty answer from the picker must not clear a key that was
         // already set: that would leave secure boot on with nothing to sign

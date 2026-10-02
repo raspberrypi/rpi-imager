@@ -99,26 +99,16 @@ BaseDialog {
         // them, and every test below is written against forward slashes.
         s = s.replace(/\\/g, "/")
         // Allow absolute paths
-        if (s.indexOf("/") === 0)
-            return "file://" + s
-        // A Windows absolute path is "C:/..." and does not start with a slash,
-        // so it used to fall through and come back as a bare path where the
-        // caller wanted a URL. Three slashes, not two: the drive letter belongs
-        // to the path, and "file://C:/x" puts it in the authority instead --
-        // QUrl reads that as a host named "c" with the path "/x".
-        if (/^[A-Za-z]:\//.test(s))
-            return "file:///" + s
+        if (s.indexOf("/") === 0 || /^[A-Za-z]:\//.test(s))
+            return String(ImageWriterSingleton.fileUrlFromLocalPath(s))
         return s // fallback; caller may provide URL
     }
 
-    // Convert a URL to a display path (strip file:// scheme)
+    // Decode a file URL for display and for joining typed filenames.
     function _toDisplayPath(u) {
         var s = String(u || "").trim()
         if (s.indexOf("file://") === 0) {
-            var p = s.substring(7)
-            // "file:///C:/x" leaves "/C:/x" once the scheme is off, and the
-            // leading slash is not part of the path -- shown to the user it
-            // reads as a directory that does not exist.
+            var p = ImageWriterSingleton.localPathFromUrl(s)
             if (/^\/[A-Za-z]:/.test(p))
                 p = p.substring(1)
             return p.length > 0 ? p : "/"
