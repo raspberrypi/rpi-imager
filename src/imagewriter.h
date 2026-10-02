@@ -435,6 +435,7 @@ public:
     Q_INVOKABLE void clearSavedCustomisationSettings();
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
+    Q_INVOKABLE bool imageSupportsWifiHotspot();
     // Whether the selected OS can apply the GPIO/hardware interface toggles
     // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
     // module; rpi-preseed configures them natively via raspi-config.

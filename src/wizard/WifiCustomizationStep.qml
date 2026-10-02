@@ -16,11 +16,43 @@ import RpiImager
 WizardStepBase {
     id: root
     
+    // Joining a network and hosting one are mutually exclusive on wlan0.
+    property string wifiNetworkMode: "client"
+    property string originalSavedNetworkMode: "client"
+    property bool hotspotSupported: ImageWriterSingleton.imageSupportsWifiHotspot()
+    readonly property bool isHotspot: wifiNetworkMode === "hotspot"
+
+    function canKeepSavedPassword(ssid) {
+        return hadSavedCrypt && wifiNetworkMode === originalSavedNetworkMode
+            && ssidUnchanged(ssid, originalSavedSSID)
+    }
+
+    function selectNetworkMode(mode) {
+        if (mode === wifiNetworkMode) return
+        wifiNetworkMode = mode
+        wifiMode = "secure"
+        // Never reuse the host computer's network credentials for a new AP.
+        fieldWifiSSID.text = mode === "hotspot"
+            ? (wizardContainer.customizationSettings.hostname || "raspberrypi") : ""
+        fieldWifiPassword.text = ""
+        fieldWifiPasswordConfirm.text = ""
+        chkWifiHidden.checked = false
+        ssidAutoDetected = false
+        updatePasswordFieldUI()
+        root.requestFocusRebuild()
+    }
+
     // "open" | "secure"
     property string wifiMode: "secure"
     property string originalSavedSSID: ""
     property bool hadSavedCrypt: false
     property bool showPw: wifiMode === "secure"
+
+    function validHotspotName() {
+        var encoded = ImageWriterSingleton.wifiSsidOctetsBase64(fieldWifiSSID.value)
+        // Unpadded base64 has at most 43 characters for a 32-byte SSID.
+        return encoded.length > 0 && encoded.replace(/=+$/, "").length <= 43
+    }
 
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
@@ -37,7 +69,7 @@ WizardStepBase {
 
     Component.onCompleted: {
         root.registerFocusGroup("wifi_modes", function() {
-            return [tabSecure, tabOpen]
+            return [tabJoin, tabHotspot, tabSecure, tabOpen]
         }, 0)
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("wifi_fields", function(){
@@ -50,24 +82,23 @@ WizardStepBase {
             }
             return items
         }, 1)
-        root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
-
-        // Set SSID placeholder before prefilling text content
-        fieldWifiSSID.placeholderText = qsTr("Network name")
+        root.registerFocusGroup("wifi_options", function(){ return root.isHotspot ? [] : [chkWifiHidden] }, 2)
 
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings
+        originalSavedNetworkMode = settings.wifiNetworkMode || "client"
+        wifiNetworkMode = originalSavedNetworkMode === "hotspot" && hotspotSupported ? "hotspot" : "client"
+        // An unsupported OS must not reinterpret saved hotspot credentials as
+        // credentials for an existing network.
+        if (originalSavedNetworkMode === "hotspot" && !hotspotSupported)
+            settings = ({})
 
-        // Set SSID placeholder first (before setting any text)
-        fieldWifiSSID.placeholderText = qsTr("Network name")
-
-        // Then set text values after, so they properly override the placeholder
         if (settings.wifiSSID) {
             fieldWifiSSID.text = settings.wifiSSID
         }
 
         // If not saved, try to auto-detect the current SSID from the system
-        if (fieldWifiSSID.value.length === 0) {
+        if (!root.isHotspot && fieldWifiSSID.value.length === 0) {
             var detectedSsid = ImageWriterSingleton.getSSID()
             console.log("WifiCustomizationStep: detected SSID:", detectedSsid)
             if (detectedSsid && detectedSsid.length > 0) {
@@ -89,7 +120,7 @@ WizardStepBase {
         // IMPORTANT: Only attempt PSK retrieval if we have an SSID (either saved or detected)
         // Pass the SSID to getPSKForSSID() to avoid race condition where SSID detection
         // might fail during the keychain permission dialog on macOS
-        if (!hadSavedCrypt && fieldWifiSSID.value.length > 0) {
+        if (!root.isHotspot && !hadSavedCrypt && fieldWifiSSID.value.length > 0) {
             // Auto-populate WiFi password from system keychain when available
             // Only when no crypted password is already saved
             var psk = ImageWriterSingleton.getPSKForSSID(fieldWifiSSID.value)
@@ -117,7 +148,7 @@ WizardStepBase {
         function onLocationPermissionGranted() {
             console.log("WifiCustomizationStep: Location permission granted, retrying SSID detection")
             // Only retry if SSID field is still empty (user hasn't manually entered one)
-            if (fieldWifiSSID.value.length === 0) {
+            if (!root.isHotspot && fieldWifiSSID.value.length === 0) {
                 var detectedSsid = ImageWriterSingleton.getSSID()
                 console.log("WifiCustomizationStep: re-detected SSID:", detectedSsid)
                 if (detectedSsid && detectedSsid.length > 0) {
@@ -139,7 +170,6 @@ WizardStepBase {
 
     function updatePasswordFieldUI() {
         var ssid = fieldWifiSSID.value
-        var prevSSID = originalSavedSSID
 
         if (wifiMode === "open") {
             fieldWifiPassword.text = ""
@@ -152,10 +182,10 @@ WizardStepBase {
 
         // secure
         fieldWifiPassword.enabled = true
-        var canKeep = hadSavedCrypt && ssidUnchanged(ssid, prevSSID)
+        var canKeep = canKeepSavedPassword(ssid)
         fieldWifiPassword.placeholderText = canKeep
            ? qsTr("Saved (hidden) — leave blank to keep")
-           : qsTr("Network password")
+           : (root.isHotspot ? qsTr("Hotspot password") : qsTr("Network password"))
     }
 
     function passwordErrorMessage() {
@@ -163,7 +193,7 @@ WizardStepBase {
 
         // Gather state
         var ssidNow = fieldWifiSSID.value;
-        var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID);
+        var canKeep = canKeepSavedPassword(ssidNow);
         var pwd = fieldWifiPassword.text || "";
         var conf = fieldWifiPasswordConfirm.text || "";
 
@@ -255,12 +285,66 @@ WizardStepBase {
                     spacing: Style.spacingSmall
 
                     ImToggleTab {
+                        id: tabJoin
+                        objectName: "wifiJoinTab"
+                        text: qsTr("Join a network")
+                        accessibleDescription: qsTr("Connect your Raspberry Pi to an existing Wi-Fi network")
+                        active: !root.isHotspot
+                        onClicked: root.selectNetworkMode("client")
+                        onActiveFocusChanged: if (activeFocus) wifiScroll.scrollToItem(this)
+                    }
+                    ImToggleTab {
+                        id: tabHotspot
+                        objectName: "wifiHotspotTab"
+                        text: qsTr("Create a hotspot")
+                        accessibleDescription: root.hotspotSupported
+                            ? qsTr("Let other devices connect directly to your Raspberry Pi over Wi-Fi")
+                            : qsTr("Hotspots require Raspberry Pi OS with NetworkManager (Bookworm or later)")
+                        enabled: root.hotspotSupported
+                        active: root.isHotspot
+                        onClicked: root.selectNetworkMode("hotspot")
+                        onActiveFocusChanged: if (activeFocus) wifiScroll.scrollToItem(this)
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    font.family: Style.fontFamily
+                    font.pointSize: Style.fontSizeDescription
+                    color: Style.formLabelColor
+                    text: root.isHotspot
+                        ? qsTr("Your Raspberry Pi will create a Wi-Fi network when it starts. Connect your phone or computer to it to access the Pi at 10.42.0.1. No existing Wi-Fi is needed; internet access requires a separate connection on the Pi.")
+                        : (root.hotspotSupported
+                           ? qsTr("Connect your Raspberry Pi to an existing Wi-Fi network.")
+                           : qsTr("Connect your Raspberry Pi to an existing Wi-Fi network. Creating a hotspot requires Raspberry Pi OS with NetworkManager (Bookworm or later)."))
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: root.isHotspot && !root.validHotspotName()
+                    text: fieldWifiSSID.value.length === 0 ? qsTr("Enter a hotspot name") : qsTr("Hotspot name is too long (max 32 bytes)")
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    font.pointSize: Style.fontSizeDescription
+                    color: Style.formLabelErrorColor
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacingSmall
+
+                    ImToggleTab {
                         id: tabSecure
                         objectName: "wifiSecureTab"
-                        text: qsTr("Secure network")
-                        accessibleDescription: qsTr("Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption")
+                        text: root.isHotspot ? qsTr("Secure hotspot") : qsTr("Secure network")
+                        accessibleDescription: root.isHotspot
+                            ? qsTr("Protect your Raspberry Pi hotspot with a WPA2 password")
+                            : qsTr("Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption")
                         active: root.wifiMode === "secure"
-                        onClicked: { root.wifiMode = "secure"; updatePasswordFieldUI() }
+                        onClicked: { root.wifiMode = "secure"; root.updatePasswordFieldUI(); root.requestFocusRebuild() }
 
                         onActiveFocusChanged: {
                             if (activeFocus) wifiScroll.scrollToItem(this);
@@ -270,10 +354,10 @@ WizardStepBase {
                     ImToggleTab {
                         id: tabOpen
                         objectName: "wifiOpenTab"
-                        text: qsTr("Open network")
+                        text: root.isHotspot ? qsTr("Open hotspot") : qsTr("Open network")
                         accessibleDescription: qsTr("Configure Wi-Fi for an unencrypted network without password protection")
                         active: root.wifiMode === "open"
-                        onClicked: { root.wifiMode = "open"; updatePasswordFieldUI() }
+                        onClicked: { root.wifiMode = "open"; root.updatePasswordFieldUI(); root.requestFocusRebuild() }
 
                         onActiveFocusChanged: {
                             if (activeFocus) wifiScroll.scrollToItem(this);
@@ -289,8 +373,8 @@ WizardStepBase {
 
                     WizardFormLabel {
                         id: labelSSID
-                        text: qsTr("SSID:")
-                        accessibleDescription: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
+                        text: root.isHotspot ? qsTr("Hotspot name:") : qsTr("SSID:")
+                        accessibleDescription: root.isHotspot ? qsTr("Enter the name other devices will see when they search for your Raspberry Pi hotspot") : qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
                     }
 
                     ImTextField {
@@ -298,6 +382,7 @@ WizardStepBase {
                         objectName: "wifiSsidField"
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
+                        placeholderText: root.isHotspot ? qsTr("Hotspot name") : qsTr("Network name")
                         trimWhitespace: true
                         onTextChanged: updatePasswordFieldUI()
                         onActiveFocusChanged: {
@@ -311,7 +396,7 @@ WizardStepBase {
                         text: CommonStrings.password
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedCrypt && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword(fieldWifiSSID.value)
                             return canKeep 
                                 ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
                                 : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
@@ -341,7 +426,7 @@ WizardStepBase {
                         text: qsTr("Confirm password:")
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedCrypt && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword(fieldWifiSSID.value)
                             return canKeep 
                                 ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
                                 : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
@@ -354,7 +439,7 @@ WizardStepBase {
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         placeholderText: {
-                            var canKeep = root.hadSavedCrypt && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword(fieldWifiSSID.value)
                             return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                         }
                         visible: root.showPw
@@ -391,6 +476,7 @@ WizardStepBase {
                     ImCheckBox {
                         id: chkWifiHidden
                         objectName: "wifiHiddenToggle"
+                        visible: !root.isHotspot
                         text: qsTr("Hidden SSID")
                         Accessible.description: qsTr("Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.")
 
@@ -450,13 +536,14 @@ WizardStepBase {
     // - all WiFi fields are empty (skip)
     nextButtonEnabled: (function(){
         var haveSSID = fieldWifiSSID.value.length > 0
+        if (root.isHotspot && (!root.hotspotSupported || !root.validHotspotName())) return false
         if (!haveSSID) return true  // allow skipping by leaving fields empty
 
         if (wifiMode === "open") return true
 
         // secure / closed mode
         var ssidNow = fieldWifiSSID.value
-        var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID)
+        var canKeep = canKeepSavedPassword(ssidNow)
         var pwd = fieldWifiPassword.text || ""
 
         // If we *can* keep and user left blank, OK
@@ -478,9 +565,11 @@ WizardStepBase {
         var ssid = fieldWifiSSID.value
         var pwd = fieldWifiPassword.text
         var prevSSID = wizardContainer.customizationSettings.wifiSSID || ""
-        var hidden = chkWifiHidden.checked
+        if (isHotspot && !nextButtonEnabled) return
+        var hidden = !isHotspot && chkWifiHidden.checked
         var hadCryptBefore = !!wizardContainer.customizationSettings.wifiPasswordCrypt
         var sameSSID = ssidUnchanged(ssid, prevSSID)
+            && wifiNetworkMode === (wizardContainer.customizationSettings.wifiNetworkMode || "client")
 
         // Derive the PSK once, eagerly, in C++/generator if a new passphrase was
         // entered. Only the derived PSK is ever stored; the plaintext passphrase
@@ -498,6 +587,8 @@ WizardStepBase {
 
         // Update conserved customization settings (runtime state)
         wizardContainer.customizationSettings.wifiMode = wifiMode
+        wizardContainer.customizationSettings.wifiNetworkMode = wifiNetworkMode
+        delete wizardContainer.customizationSettings.wifiPassword
         
         // Handle SSID and password
         if (ssid.length > 0) {
@@ -532,6 +623,8 @@ WizardStepBase {
         // to disk - the plaintext passphrase is not.
         var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         saved.wifiMode = wifiMode
+        saved.wifiNetworkMode = wifiNetworkMode
+        delete saved.wifiPassword
         if (ssid.length > 0) {
             saved.wifiSSID = ssid
             saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
