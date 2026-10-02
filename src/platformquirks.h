@@ -11,6 +11,8 @@
 #include <QUrl>
 #include <functional>
 
+class QFile;
+
 namespace PlatformQuirks {
     
     /** Callback type for network status changes. Parameter is true if network is available. */
@@ -206,6 +208,14 @@ namespace PlatformQuirks {
      * On other platforms, returns the path unchanged.
      */
     QString getEjectDevicePath(const QString& devicePath);
+
+    /**
+     * Open file for writing as a new, empty file at its fileName().
+     * On POSIX, whatever is at the path is unlinked rather than followed,
+     * so a planted symlink or hard link can't redirect a privileged write
+     * to another file.
+     */
+    bool openFreshFile(QFile& file);
 
     /**
      * Unmount all volumes associated with a disk device.

@@ -13,11 +13,16 @@
 #include "../platformquirks.h"
 #include <cstdlib>
 #include <cstdio>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <QProcess>
 #include <QDebug>
+#include <QFile>
 #import <AppKit/AppKit.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 #import <DiskArbitration/DiskArbitration.h>
@@ -457,6 +462,24 @@ QString getEjectDevicePath(const QString& devicePath) {
     QString result = devicePath;
     result.replace("/dev/rdisk", "/dev/disk");
     return result;
+}
+
+bool openFreshFile(QFile& file) {
+    const QByteArray path = QFile::encodeName(file.fileName());
+    if (::unlink(path.constData()) != 0 && errno != ENOENT) {
+        qDebug() << "openFreshFile: Failed to replace" << file.fileName() << "-" << std::strerror(errno);
+        return false;
+    }
+    const int fd = ::open(path.constData(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
+    if (fd < 0) {
+        qDebug() << "openFreshFile: Failed to create" << file.fileName() << "-" << std::strerror(errno);
+        return false;
+    }
+    if (!file.open(fd, QIODevice::WriteOnly, QFileDevice::AutoCloseHandle)) {
+        ::close(fd);
+        return false;
+    }
+    return true;
 }
 
 DiskResult unmountDisk(const QString& device) {
