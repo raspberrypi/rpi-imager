@@ -41,6 +41,7 @@ set(PLATFORM_SOURCES
     windows/diskpart_util.h
     windows/file_operations_windows.cpp
     windows/platformquirks_windows.cpp
+    windows/userfiles_windows.cpp
     windows/windows_suspend_inhibitor.cpp
 )
 

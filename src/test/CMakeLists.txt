@@ -328,8 +328,11 @@ set(PLATFORM_BOOTIMGCREATOR_SRC
 # against AppKit, SystemConfiguration, CoreWLAN and CoreLocation, and the
 # secure-boot crypto against Security, none of which arrive with Qt.
 if(WIN32)
+    set(PLATFORM_USERFILES_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/userfiles_windows.cpp)
     set(PLATFORM_QUIRKS_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/platformquirks_windows.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/platformquirks_windows.cpp
+        ${PLATFORM_USERFILES_SRC})
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../windows/secureboot_crypto_windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
@@ -384,8 +387,11 @@ if(WIN32)
         ws2_32 iphlpapi wbemuuid ole32 oleaut32 crypt32 bcrypt ncrypt setupapi
         virtdisk Qt6::Gui rpi_windows_support)
 elseif(APPLE)
+    set(PLATFORM_USERFILES_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/userfiles_macos.cpp)
     set(PLATFORM_QUIRKS_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm
+        ${PLATFORM_USERFILES_SRC})
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/secureboot_crypto_macos.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
@@ -405,8 +411,11 @@ elseif(APPLE)
         "-framework IOKit"
     )
 else()
+    set(PLATFORM_USERFILES_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/userfiles_linux.cpp)
     set(PLATFORM_QUIRKS_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+        ${PLATFORM_USERFILES_SRC})
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../secureboot_crypto_common.cpp)
@@ -1746,6 +1755,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # a file can belong to one account while another secures it.
     add_executable(settings_permissions_probe
         ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.cpp
+        ${PLATFORM_USERFILES_SRC}
         ${CMAKE_CURRENT_SOURCE_DIR}/settings_permissions_probe.cpp
     )
     target_link_libraries(settings_permissions_probe PRIVATE Qt6::Core)
@@ -2058,6 +2068,7 @@ endif()
 add_executable(performance_stats_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../performancestats.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../performancestats.cpp
+    ${PLATFORM_USERFILES_SRC}
     performance_stats_test.cpp
 )
 
@@ -2209,6 +2220,7 @@ rpi_discover_tests(revision_code_test)
 add_executable(settings_permissions_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../settings_permissions.cpp
+    ${PLATFORM_USERFILES_SRC}
     settings_permissions_test.cpp
 )
 
@@ -3460,6 +3472,7 @@ add_executable(cache_manager_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../cachemanager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../cachemanager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../systemmemorymanager.cpp
+    ${PLATFORM_USERFILES_SRC}
     cache_manager_test.cpp
 )
 

@@ -6,7 +6,7 @@
 #include "asynccachewriter.h"
 #include <QDebug>
 #include <QFileInfo>
-#include "platformquirks.h"
+#include "userfiles.h"
 
 AsyncCacheWriter::AsyncCacheWriter(QObject *parent)
     : QThread(parent)
@@ -70,8 +70,12 @@ bool AsyncCacheWriter::open(const QString &filename, qint64 preallocateSize)
     _filename = filename;
     _file.setFileName(filename);
 
-    // Running as root, the path is often in the invoking user's home or /tmp.
-    if (!PlatformQuirks::openFreshFile(_file)) {
+    // Elevated, the path is in the invoking user's home or wherever they chose.
+    const bool opened = [this] {
+        PlatformQuirks::InvokingUserFsScope asUser;
+        return PlatformQuirks::openFreshFile(_file);
+    }();
+    if (!opened) {
         qDebug() << "AsyncCacheWriter: Failed to open" << filename << "-" << _file.errorString();
         return false;
     }
