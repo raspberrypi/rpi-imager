@@ -5,9 +5,9 @@
 
 #include "networkaccessmanagerfactory.h"
 #include "config.h"
+#include "userfiles.h"
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
-#include <QStandardPaths>
 #include <QDir>
 #include <QUrl>
 #include <QDebug>
@@ -22,7 +22,7 @@ QNetworkAccessManager *NetworkAccessManagerFactory::create(QObject *parent)
 {
     QNetworkAccessManager *nam = new QNetworkAccessManager(parent);
     auto c = new QNetworkDiskCache(nam);
-    c->setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+QDir::separator()+"oslistcache"+QString::number(_nr++));
+    c->setCacheDirectory(PlatformQuirks::trustedCacheLocation()+QDir::separator()+"oslistcache"+QString::number(_nr++));
     c->clear();
     nam->setCache(c);
     return nam;

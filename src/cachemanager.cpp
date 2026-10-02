@@ -14,6 +14,7 @@
 #include <QFileInfo>
 #include <functional>
 #include "systemmemorymanager.h"
+#include "userfiles.h"
 #include "config.h"
 
 // Hash algorithm used for cache verification (use same as OS list verification)
@@ -200,6 +201,7 @@ void CacheManager::invalidateCache()
     }
     
     // Try to remove the cache file
+    PlatformQuirks::InvokingUserFsScope asUser;
     if (!cacheFileName.isEmpty() && QFile::exists(cacheFileName)) {
         if (QFile::remove(cacheFileName)) {
             qDebug() << "Successfully removed corrupted cache file:" << cacheFileName;
@@ -371,7 +373,16 @@ void CacheManager::loadCacheSettings()
     
     settings_.endGroup();
     
+    // The settings file is the user's to edit: anything but our own cache
+    // path would have root hash and then delete a file of their choosing.
+    if (!lastFileName.isEmpty() && lastFileName != getDefaultCacheFilePath()) {
+        qDebug() << "Ignoring cache file outside the cache directory:" << lastFileName;
+        invalidateCache();
+        return;
+    }
+
     // Validate cache file exists and is accessible
+    PlatformQuirks::InvokingUserFsScope asUser;
     if (!lastFileName.isEmpty() && !lastHash.isEmpty()) {
         QFileInfo fileInfo(lastFileName);
         if (fileInfo.exists() && fileInfo.isReadable() && fileInfo.size() > 0) {
@@ -420,6 +431,7 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
 {
     bool isValid = false;
     QByteArray computedHash;
+    PlatformQuirks::InvokingUserFsScope asUser;
     
     if (!expectedHash.isEmpty() && !fileName.isEmpty()) {
         QFile cacheFile(fileName);
@@ -493,6 +505,7 @@ void CacheVerificationWorker::checkDiskSpace()
 
 bool CacheVerificationWorker::ensureCacheDirectoryExists()
 {
+    PlatformQuirks::InvokingUserFsScope asUser;
     QString cacheDir = getCacheDirectory();
     
     if (cacheDir.isEmpty()) {

@@ -10,6 +10,7 @@
 
 #include "../curlnetworkconfig.h"
 #include "../secureboot.h"
+#include "../userfiles.h"
 
 #include <QDebug>
 #include <QFile>
@@ -88,7 +89,9 @@ FirmwareManager::FirmwareManager() = default;
 
 std::filesystem::path FirmwareManager::cacheRoot() const
 {
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    // Elevated, a cache in the user's home is theirs to swap firmware into
+    // before root signs and boots it.
+    const QString cacheDir = PlatformQuirks::trustedCacheLocation();
     return std::filesystem::path(cacheDir.toStdString()) / "rpiboot-firmware";
 }
 
