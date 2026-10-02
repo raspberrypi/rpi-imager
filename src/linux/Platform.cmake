@@ -46,6 +46,7 @@ set(PLATFORM_SOURCES
     linux/secureboot_crypto_linux.cpp
     linux/file_operations_linux.cpp
     linux/platformquirks_linux.cpp
+    linux/userfiles_linux.cpp
 )
 
 # DBus-backed components. The embedded (linuxfb netboot) build has no session

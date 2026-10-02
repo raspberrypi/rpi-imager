@@ -12,6 +12,7 @@
  */
 
 #include "../platformquirks.h"
+#include "../userfiles.h"
 #include <cstdlib>
 #include <unistd.h>
 #include <pwd.h>
@@ -1712,24 +1713,6 @@ QString getWriteDevicePath(const QString& devicePath) {
 QString getEjectDevicePath(const QString& devicePath) {
     // No path transformation needed on Linux.
     return devicePath;
-}
-
-bool openFreshFile(QFile& file) {
-    const QByteArray path = QFile::encodeName(file.fileName());
-    if (::unlink(path.constData()) != 0 && errno != ENOENT) {
-        qDebug() << "openFreshFile: Failed to replace" << file.fileName() << "-" << std::strerror(errno);
-        return false;
-    }
-    const int fd = ::open(path.constData(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0644);
-    if (fd < 0) {
-        qDebug() << "openFreshFile: Failed to create" << file.fileName() << "-" << std::strerror(errno);
-        return false;
-    }
-    if (!file.open(fd, QIODevice::WriteOnly, QFileDevice::AutoCloseHandle)) {
-        ::close(fd);
-        return false;
-    }
-    return true;
 }
 
 // Whether a /proc/mounts entry belongs to `devicePath` -- either the whole

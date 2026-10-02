@@ -20,6 +20,7 @@ set(PLATFORM_SOURCES
     drivelist/drivelist_darwin.mm
     mac/file_operations_macos.cpp
     mac/platformquirks_macos.mm
+    mac/userfiles_macos.cpp
     mac/mac_suspend_inhibitor.cpp
 )
 
