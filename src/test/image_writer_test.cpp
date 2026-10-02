@@ -2644,6 +2644,83 @@ TEST_CASE("An empty password hashes to nothing", "[imagewriter][password]")
 // Customisation that survives between runs
 // ══════════════════════════════════════════════════════════════
 
+namespace {
+struct ProfileSettingsScope {
+    QSettings settings;
+    QVariant previous = settings.value("customisationProfiles/v1");
+    ProfileSettingsScope() { settings.remove("customisationProfiles/v1"); settings.sync(); }
+    ~ProfileSettingsScope() {
+        if (previous.isValid()) settings.setValue("customisationProfiles/v1", previous);
+        else settings.remove("customisationProfiles/v1");
+        settings.sync();
+    }
+};
+}
+
+TEST_CASE("Named profiles survive a new writer and remain independent of remembered settings",
+          "[imagewriter][profiles]")
+{
+    ProfileSettingsScope scope;
+    ImageWriter w(nullptr);
+    const QVariantMap tv{{"hostname", "pitv"}, {"sshUserPassword", "$6$hash"},
+                         {"wifiPasswordCrypt", "derived-psk"}, {"wifiMode", "secure"}};
+    REQUIRE(w.saveCustomisationProfile("", "  piTV  ", tv));
+    REQUIRE(w.saveCustomisationProfile("", "piLED", {{"hostname", "piled"}}));
+    const QVariantList profiles = w.customisationProfiles();
+    REQUIRE(profiles.size() == 2);
+    CHECK(profiles[0].toMap().value("name").toString() == "piLED");
+    const QString id = profiles[1].toMap().value("id").toString();
+    REQUIRE_FALSE(id.isEmpty());
+    w.clearSavedCustomisationSettings();
+    ImageWriter reopened(nullptr);
+    CHECK(reopened.customisationProfile(id).value("settings").toMap() == tv);
+    REQUIRE(w.saveCustomisationProfile(id, "TV renamed", {{"hostname", "new-tv"}}));
+    CHECK(w.customisationProfile(id).value("name").toString() == "TV renamed");
+    CHECK(w.customisationProfile(id).value("settings").toMap().size() == 1);
+    REQUIRE(w.saveCustomisationProfile("", "TV copy", w.customisationProfile(id).value("settings").toMap()));
+    REQUIRE(w.deleteCustomisationProfile(id));
+    CHECK(w.customisationProfile(id).isEmpty());
+    CHECK(w.customisationProfiles().size() == 2);
+    CHECK_FALSE(w.deleteCustomisationProfile(id));
+}
+
+TEST_CASE("Profiles reject ambiguous names and stale identifiers without overwriting data",
+          "[imagewriter][profiles]")
+{
+    ProfileSettingsScope scope;
+    ImageWriter w(nullptr);
+    REQUIRE(w.saveCustomisationProfile("", "Project", {{"hostname", "original"}}));
+    const QString id = w.customisationProfiles()[0].toMap().value("id").toString();
+    for (const QString &name : {QString(), QString("   "), QString("project"),
+                               QString("bad\nname"), QString(65, 'a')})
+        CHECK_FALSE(w.saveCustomisationProfile("", name, {{"hostname", "replacement"}}));
+    CHECK_FALSE(w.saveCustomisationProfile("missing-id", "Other", {}));
+    CHECK(w.customisationProfile(id).value("settings").toMap().value("hostname").toString() == "original");
+    CHECK(w.customisationProfiles().size() == 1);
+    REQUIRE(w.saveCustomisationProfile(id, "PROJECT", {}));
+}
+
+TEST_CASE("Profiles never retain per-device tokens, plaintext or session-only actions",
+          "[imagewriter][profiles]")
+{
+    ProfileSettingsScope scope;
+    ImageWriter w(nullptr);
+    const QVariantMap settings{{"hostname", "test-pi"}, {"enableI2C", true},
+                              {"piConnectEnabled", true}, {"piConnectToken", "secret"},
+                              {"sshUserPasswordPlain", "secret"}, {"wifiPassword", "secret"},
+                              {"passwordlessSudo", true}, {"secureBootEnabled", true},
+                              {"disableWarnings", true}, {"connectOrgApiKey", "secret"}};
+    REQUIRE(w.saveCustomisationProfile("", "Safe", settings));
+    const QString id = w.customisationProfiles()[0].toMap().value("id").toString();
+    const QVariantMap expected{{"hostname", "test-pi"}, {"enableI2C", true}};
+    CHECK(w.customisationProfile(id).value("settings").toMap() == expected);
+    // Apply the same boundary on read, including files written by older builds.
+    scope.settings.setValue("customisationProfiles/v1", QVariantMap{
+        {id, QVariantMap{{"name", "Safe"}, {"settings", settings}}}});
+    scope.settings.sync();
+    CHECK(w.customisationProfile(id).value("settings").toMap() == expected);
+}
+
 TEST_CASE("Persisted customisation settings round-trip",
           "[imagewriter][customisation]")
 {

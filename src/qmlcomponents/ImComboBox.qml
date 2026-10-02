@@ -74,6 +74,7 @@ ComboBox {
     // name all keep the full string. Every box in the app is non-editable; an
     // editable one would need the style's TextField content item back.
     contentItem: Text {
+        textFormat: Text.PlainText
         leftPadding: root.Material.textFieldHorizontalPadding
         topPadding: root.Material.textFieldVerticalPadding
         bottomPadding: root.Material.textFieldVerticalPadding
@@ -346,6 +347,7 @@ ComboBox {
                 bottomPadding: 0
 
                 contentItem: Text {
+                    textFormat: Text.PlainText
                     text: filterDelegate.displayText
                     font: root.font
                     elide: Text.ElideRight

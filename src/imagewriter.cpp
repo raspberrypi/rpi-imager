@@ -40,6 +40,7 @@
 #include <QTextStream>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QUuid>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimeZone>
@@ -4444,6 +4445,83 @@ void ImageWriter::clearSavedCustomisationSettings()
     _settings.remove("");
     _settings.endGroup();
     _settings.sync();
+}
+
+namespace {
+
+// Only reusable customization values belong in a preset. In particular, never
+// retain plaintext credentials, Connect tokens, OTP actions or confirmations.
+QVariantMap reusableProfileSettings(const QVariantMap &settings)
+{
+    static const QStringList keys = {
+        "hostname", "capitalCity", "timezone", "keyboard", "recommendedWifiCountry",
+        "sshUserName", "sshUserPassword", "wifiSSID", "wifiSsidOctetsBase64",
+        "wifiPasswordCrypt", "wifiMode", "wifiHidden", "wifiCountry", "sshEnabled",
+        "sshPasswordAuth", "sshAuthorizedKeys", "sshPublicKey", "enableI2C",
+        "enableSPI", "enable1Wire", "enableSerial", "enableUsbGadget"
+    };
+    QVariantMap result;
+    for (const QString &key : keys) {
+        if (settings.contains(key))
+            result.insert(key, settings.value(key));
+    }
+    return result;
+}
+
+} // namespace
+
+QVariantList ImageWriter::customisationProfiles()
+{
+    QVariantList result;
+    const QVariantMap profiles = _settings.value("customisationProfiles/v1").toMap();
+    for (auto it = profiles.cbegin(); it != profiles.cend(); ++it) {
+        const QVariantMap profile = it.value().toMap();
+        result.append(QVariantMap{{"id", it.key()}, {"name", profile.value("name")}});
+    }
+    std::sort(result.begin(), result.end(), [](const QVariant &a, const QVariant &b) {
+        return QString::compare(a.toMap().value("name").toString(),
+                                b.toMap().value("name").toString(), Qt::CaseInsensitive) < 0;
+    });
+    return result;
+}
+
+QVariantMap ImageWriter::customisationProfile(const QString &id)
+{
+    const QVariantMap profiles = _settings.value("customisationProfiles/v1").toMap();
+    if (!profiles.contains(id))
+        return {};
+    QVariantMap profile = profiles.value(id).toMap();
+    profile.insert("settings", reusableProfileSettings(profile.value("settings").toMap()));
+    return profile;
+}
+
+bool ImageWriter::saveCustomisationProfile(const QString &id, const QString &name, const QVariantMap &settings)
+{
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty() || trimmed.size() > 64 || trimmed.contains(QRegularExpression("[\\x00-\\x1f\\x7f]")))
+        return false;
+    QVariantMap profiles = _settings.value("customisationProfiles/v1").toMap();
+    if (!id.isEmpty() && !profiles.contains(id))
+        return false;
+    for (auto it = profiles.cbegin(); it != profiles.cend(); ++it) {
+        if (it.key() != id && it.value().toMap().value("name").toString().compare(trimmed, Qt::CaseInsensitive) == 0)
+            return false;
+    }
+    const QString profileId = id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : id;
+    profiles.insert(profileId, QVariantMap{{"name", trimmed}, {"settings", reusableProfileSettings(settings)}});
+    _settings.setValue("customisationProfiles/v1", profiles);
+    _settings.sync();
+    return _settings.status() == QSettings::NoError;
+}
+
+bool ImageWriter::deleteCustomisationProfile(const QString &id)
+{
+    QVariantMap profiles = _settings.value("customisationProfiles/v1").toMap();
+    if (!profiles.remove(id))
+        return false;
+    _settings.setValue("customisationProfiles/v1", profiles);
+    _settings.sync();
+    return _settings.status() == QSettings::NoError;
 }
 
 bool ImageWriter::imageSupportsCustomization()
