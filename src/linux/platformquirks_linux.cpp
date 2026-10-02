@@ -1106,7 +1106,7 @@ static bool installPolkitPolicyForPath(const char* appImagePath) {
         "    <defaults>\n"
         "      <allow_any>auth_admin</allow_any>\n"
         "      <allow_inactive>auth_admin</allow_inactive>\n"
-        "      <allow_active>auth_admin_keep</allow_active>\n"
+        "      <allow_active>auth_admin</allow_active>\n"
         "    </defaults>\n"
         "    <annotate key=\"org.freedesktop.policykit.exec.path\">%2</annotate>\n"
         "    <annotate key=\"org.freedesktop.policykit.exec.allow_gui\">true</annotate>\n"
@@ -1966,6 +1966,7 @@ bool registerUriScheme() {
                             + QStringLiteral("/applications");
     const QString desktopName = QStringLiteral("com.raspberrypi.rpi-imager-uri-handler.desktop");
     const QString desktopPath = appsDir + QLatin1Char('/') + desktopName;
+    PlatformQuirks::InvokingUserFsScope asUser;
 
     // Idempotent: if the entry already matches, assume registration is current
     // and skip the desktop-database tools so steady-state startup stays cheap.
@@ -1998,7 +1999,8 @@ bool registerUriScheme() {
     // Best-effort with bounded waits: a missing tool just means we rely on the
     // MimeType association. Clear the AppImage library overrides for the child
     // so these system tools load their own libraries (see clearAppImageEnvironment).
-    auto runTool = [](const QString& prog, const QStringList& args) {
+    auto runTool = [](QString prog, QStringList args) {
+        runAsInvokingUser(prog, args);
         QProcess p;
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
         env.remove(QStringLiteral("LD_LIBRARY_PATH"));
