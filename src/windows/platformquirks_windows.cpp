@@ -615,6 +615,10 @@ QString getEjectDevicePath(const QString& devicePath) {
     return devicePath;
 }
 
+bool openFreshFile(QFile& file) {
+    return file.open(QIODevice::WriteOnly);
+}
+
 // Helper to extract device number from PhysicalDrive path
 // Defined outside anonymous namespace for test API access
 static int parseDeviceNumberImpl(const QString& device) {
