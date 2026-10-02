@@ -319,6 +319,23 @@ TestCase {
         compare(mgr.keys[1], edKey)
     }
 
+    function test_a_key_file_with_a_hash_in_its_name_is_read() {
+        // A '#' in the name is "%23" in the url the picker hands back, and
+        // cutting "file://" off the url left it that way: the file read was
+        // one that does not exist, and no key was added.
+        var url = TestFiles.write("id#1.pub", edKey + "\n")
+        verify(url.length > 0, "the fixture file was written")
+        verify(url.indexOf("%23") >= 0, "the url escapes the '#': " + url)
+        var picker = findChild(mgr, "sshBrowseKeyFileDialog")
+        verify(picker, "found the key picker")
+
+        picker.selectedFile = url
+        picker.accepted()
+
+        compare(mgr.keys.length, 1, "the key in the file was added")
+        compare(mgr.keys[0], edKey)
+    }
+
     function test_a_key_file_that_is_not_there_adds_nothing() {
         // The picker can hand back a path that has since gone.
         //

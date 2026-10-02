@@ -384,7 +384,7 @@ BaseDialog {
         }
         onAccepted: {
             if (selectedFile && selectedFile.toString().length > 0) {
-                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
+                var filePath = ImageWriterSingleton.localPathFromUrl(selectedFile)
                 rsaKeyPath.text = filePath
             }
         }
