@@ -169,6 +169,22 @@ TestCase {
         compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl(d._buildFilePath())), path)
     }
 
+    function test_the_save_places_are_the_urls_standardpaths_gives() {
+        // Already urls: "file://" in front made "file://file:///...".
+        const d = create({ isSaveDialog: true })
+        const places = findChild(d, "placesModel")
+        verify(places, "found the places")
+        const home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
+        let found = false
+        for (let i = 0; i < places.count; ++i) {
+            if (places.get(i).label === "Home") {
+                compare(String(places.get(i).url), home)
+                found = true
+            }
+        }
+        verify(found, "the save dialog offers Home")
+    }
+
     function test_an_empty_path_yields_nothing() {
         const d = create({})
         compare(d._toFileUrl(""), "")

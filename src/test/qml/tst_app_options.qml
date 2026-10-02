@@ -13,6 +13,7 @@
  * later session that has forgotten it was ever set.
  */
 
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtTest
@@ -317,6 +318,16 @@ TestCase {
     }
 
     // ── The signing key ───────────────────────────────────────────────
+
+    function test_the_key_picker_starts_in_the_ssh_folder() {
+        // StandardPaths answers with a url, so "file://" in front of it
+        // named a folder that does not exist.
+        var picker = findChild(dialog, "rsaKeyFileDialog")
+        verify(picker, "found the key picker")
+        var home = ImageWriterSingleton.localPathFromUrl(
+            StandardPaths.writableLocation(StandardPaths.HomeLocation))
+        compare(ImageWriterSingleton.localPathFromUrl(picker.currentFolder), home + "/.ssh")
+    }
 
     function test_a_chosen_signing_key_is_recorded_as_a_path() {
         // The picker hands back a file:// url and the signer wants a path.
