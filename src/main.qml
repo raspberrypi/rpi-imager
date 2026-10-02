@@ -509,7 +509,7 @@ ApplicationWindow {
         function onPerformanceSaveDialogNeeded(suggestedFilename, initialDir) {
             console.log("Native save dialog not available, using QML fallback")
             performanceSaveDialog.suggestedFilename = suggestedFilename
-            var folderUrl = (Qt.platform.os === "windows") ? ("file:///" + initialDir) : ("file://" + initialDir)
+            var folderUrl = String(ImageWriterSingleton.fileUrlFromLocalPath(initialDir))
             performanceSaveDialog.currentFolder = folderUrl
             performanceSaveDialog.folder = folderUrl
             performanceSaveDialog.open()

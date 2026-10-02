@@ -196,7 +196,7 @@ BaseDialog {
     }
 
     // Places model for left pane
-    ListModel { id: placesModel }
+    ListModel { id: placesModel; objectName: "placesModel" }
 
     onCurrentFolderChanged: {
         // Ensure address bar follows folder changes
@@ -222,20 +222,21 @@ BaseDialog {
         
         // Add places based on dialog mode
         if (dialog.isSaveDialog) {
-            // Save dialogs get common save locations
+            // Save dialogs get common save locations. StandardPaths answers
+            // with a url, already escaped: prefixing "file://" broke all three.
             var docsPath = String(StandardPaths.writableLocation(StandardPaths.DocumentsLocation))
             if (docsPath && docsPath.length > 0) {
-                placesModel.append({ label: qsTr("Documents"), url: "file://" + docsPath })
+                placesModel.append({ label: qsTr("Documents"), url: docsPath })
             }
             
             var downloadPath = String(StandardPaths.writableLocation(StandardPaths.DownloadLocation))
             if (downloadPath && downloadPath.length > 0) {
-                placesModel.append({ label: qsTr("Downloads"), url: "file://" + downloadPath })
+                placesModel.append({ label: qsTr("Downloads"), url: downloadPath })
             }
             
             var homePath = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
             if (homePath && homePath.length > 0) {
-                placesModel.append({ label: qsTr("Home"), url: "file://" + homePath })
+                placesModel.append({ label: qsTr("Home"), url: homePath })
             }
         } else {
             // Open dialogs get removable drives shortcut based on platform

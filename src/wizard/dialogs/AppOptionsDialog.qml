@@ -364,23 +364,13 @@ BaseDialog {
         dialogTitle: qsTr("Select RSA Private Key")
         nameFilters: [qsTr("PEM Files (*.pem)"), qsTr("All Files (*)")]
         Component.onCompleted: {
-            // Default to ~/.ssh folder if it exists
-            if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
-                var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-                var url = "file://" + home + "/.ssh"
-                rsaKeyFileDialog.currentFolder = url
-                rsaKeyFileDialog.folder = url
-            } else if (Qt.platform.os === "linux") {
-                var lhome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-                var lurl = "file://" + lhome + "/.ssh"
-                rsaKeyFileDialog.currentFolder = lurl
-                rsaKeyFileDialog.folder = lurl
-            } else if (Qt.platform.os === "windows") {
-                var whome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-                var wurl = "file:///" + whome + "/.ssh"
-                rsaKeyFileDialog.currentFolder = wurl
-                rsaKeyFileDialog.folder = wurl
-            }
+            // Default to ~/.ssh. StandardPaths answers with a url, so it is
+            // made a path, extended, and made a url again.
+            var home = ImageWriterSingleton.localPathFromUrl(
+                StandardPaths.writableLocation(StandardPaths.HomeLocation))
+            var url = String(ImageWriterSingleton.fileUrlFromLocalPath(home + "/.ssh"))
+            rsaKeyFileDialog.currentFolder = url
+            rsaKeyFileDialog.folder = url
         }
         onAccepted: {
             if (selectedFile && selectedFile.toString().length > 0) {

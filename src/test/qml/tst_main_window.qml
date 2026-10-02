@@ -54,6 +54,17 @@ TestCase {
         return d
     }
 
+    function test_the_fallback_save_dialog_opens_where_it_was_told() {
+        // The folder arrives as a path; with "file://" in front of it, a
+        // '#' in the name began a fragment and the folder was lost.
+        ImageWriterSingleton.performanceSaveDialogNeeded("perf.json", "/home/pi/docs #2")
+        var d = findChild(win, "performanceSaveDialog")
+        verify(d, "found the save dialog")
+        tryVerify(function () { return d.visible }, 3000, "the dialog opened")
+        compare(ImageWriterSingleton.localPathFromUrl(d.currentFolder), "/home/pi/docs #2")
+        d.close()
+    }
+
     function test_closing_when_idle_just_closes() {
         win.close()
 
