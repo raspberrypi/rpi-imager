@@ -4,6 +4,7 @@
  */
 
 #include "performancestats.h"
+#include "userfiles.h"
 #include <QFile>
 #include <QDateTime>
 #include <QDebug>
@@ -846,6 +847,7 @@ QJsonDocument PerformanceStats::exportToJson() const
 
 bool PerformanceStats::exportToFile(const QString &filePath) const
 {
+    PlatformQuirks::InvokingUserFsScope asUser;
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         qWarning() << "PerformanceStats: Failed to open file for writing:" << filePath;

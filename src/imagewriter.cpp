@@ -23,6 +23,7 @@
 #include "wlancredentials.h"
 #include "device_info.h"
 #include "platformquirks.h"
+#include "userfiles.h"
 #include "secureboot_crypto.h"
 #ifndef CLI_ONLY_BUILD
 #include "iconimageprovider.h"
@@ -517,6 +518,8 @@ QString ImageWriter::readFileContents(const QString &filePath)
                              ? QUrl(filePath).toLocalFile()
                              : filePath;
 
+    // Elevated, a picked file could be a link to one only root can read.
+    PlatformQuirks::InvokingUserFsScope asUser;
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         qDebug() << "Failed to open file:" << path << "Error:" << file.errorString();
@@ -3500,6 +3503,7 @@ QString ImageWriter::_privKeyFileName()
 QString ImageWriter::getDefaultPubKey()
 {
     QByteArray pubkey;
+    PlatformQuirks::InvokingUserFsScope asUser;
     QFile pubfile(_pubKeyFileName());
 
     if (pubfile.exists() && pubfile.open(QFile::ReadOnly))
@@ -3543,10 +3547,12 @@ void ImageWriter::generatePubKey()
         QString progName = _sshKeyGen();
         QStringList args;
         args << "-t" << "rsa" << "-f" << _privKeyFileName() << "-N" << "";
+        PlatformQuirks::runAsInvokingUser(progName, args);
 
         if (!dir.exists(_sshKeyDir()))
         {
             qDebug() << "Creating" << _sshKeyDir();
+            PlatformQuirks::InvokingUserFsScope asUser;
             dir.mkdir(_sshKeyDir());
         }
 
