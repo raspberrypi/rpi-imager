@@ -21,8 +21,13 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QTimer>
+
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -219,6 +224,83 @@ TEST_CASE("A path that cannot be opened is refused up front", "[cachewriter]")
     CHECK_FALSE(writer.open(QStringLiteral("/proc/definitely/not/writable/cached.img"), 1024));
     CHECK_FALSE(writer.isActive());
 }
+
+#ifndef _WIN32
+namespace {
+
+// Elevated, the cache path sits in a directory the invoking user controls,
+// so whatever they leave there must be replaced, never written through.
+void cacheOver(const QString &path, const QByteArray &payload)
+{
+    AsyncCacheWriter writer;
+    bool finished = false;
+    QObject::connect(&writer, &AsyncCacheWriter::finished, &writer,
+                     [&](const QByteArray &) { finished = true; });
+    REQUIRE(writer.open(path, payload.size() * 4));
+    REQUIRE(writer.write(payload.constData(), size_t(payload.size())));
+    writer.finish();
+    REQUIRE(waitFor([&] { return finished; }));
+}
+
+QByteArray contentsOf(const QString &path)
+{
+    QFile f(path);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    return f.readAll();
+}
+
+} // namespace
+
+TEST_CASE("A symlink at the cache path is replaced, not followed", "[cachewriter]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString victim = dir.filePath(QStringLiteral("someone-elses-file"));
+    { QFile f(victim); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("keep me"); }
+    const QString path = dir.filePath(QStringLiteral("lastdownload.cache"));
+    REQUIRE(QFile::link(victim, path));
+
+    const QByteArray payload = payloadOfSize(4096, 11);
+    cacheOver(path, payload);
+
+    CHECK(contentsOf(victim) == QByteArray("keep me"));
+    CHECK_FALSE(QFileInfo(path).isSymLink());
+    CHECK(contentsOf(path) == payload);
+}
+
+TEST_CASE("A dangling symlink at the cache path creates nothing at its target",
+          "[cachewriter]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString target = dir.filePath(QStringLiteral("not-yet-there"));
+    const QString path = dir.filePath(QStringLiteral("lastdownload.cache"));
+    REQUIRE(QFile::link(target, path));
+
+    cacheOver(path, payloadOfSize(1024, 12));
+
+    CHECK_FALSE(QFileInfo::exists(target));
+    CHECK_FALSE(QFileInfo(path).isSymLink());
+}
+
+TEST_CASE("A hard link at the cache path leaves the other name untouched",
+          "[cachewriter]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString victim = dir.filePath(QStringLiteral("someone-elses-file"));
+    { QFile f(victim); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("keep me"); }
+    const QString path = dir.filePath(QStringLiteral("lastdownload.cache"));
+    REQUIRE(::link(QFile::encodeName(victim).constData(),
+                   QFile::encodeName(path).constData()) == 0);
+
+    const QByteArray payload = payloadOfSize(4096, 13);
+    cacheOver(path, payload);
+
+    CHECK(contentsOf(victim) == QByteArray("keep me"));
+    CHECK(contentsOf(path) == payload);
+}
+#endif // !_WIN32 -- links planted at the cache path
 
 TEST_CASE("Opening a second time while active is refused", "[cachewriter]")
 {
