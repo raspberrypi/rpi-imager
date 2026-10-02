@@ -11896,6 +11896,98 @@ void removeAsRoot(const QString &path)
 
 } // namespace
 
+namespace {
+
+// Runs body as root in a namespace with $1 the scratch directory and $2 the
+// probe. Links are made in there as 1000: one this account made outside
+// would show as root's, which the walk trusts. setpriv rather than chown -h,
+// which some coreutils apply to the target.
+QString runAsNamespaceRoot(const QTemporaryDir &tmp, const QByteArray &body)
+{
+    const QString script = tmp.filePath(QStringLiteral("run.sh"));
+    {
+        QFile f(script);
+        if (!f.open(QIODevice::WriteOnly))
+            return {};
+        f.write("#!/bin/sh\n" + body);
+    }
+    QProcess p;
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.remove(QStringLiteral("SUDO_UID"));
+    environment.remove(QStringLiteral("PKEXEC_UID"));
+    p.setProcessEnvironment(environment);
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-r"), QStringLiteral("--map-auto"), QStringLiteral("sh"),
+             script, tmp.path(), QStringLiteral(SETTINGS_PERMISSIONS_PROBE_BINARY)});
+    if (!p.waitForFinished(30000) || p.exitCode() != 0)
+        return {};
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
+} // namespace
+
+TEST_CASE("A link above the path is not followed to hand a file over",
+          "[imagewriter][ownership]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString out = runAsNamespaceRoot(tmp,
+        "mkdir \"$1/real\" && touch \"$1/real/victim\"\n"
+        "chmod 777 \"$1\" && setpriv --reuid=1000 --regid=1000 --clear-groups"
+        " ln -s real \"$1/link\" && chmod 700 \"$1\"\n"
+        "\"$2\" \"$1/link/victim\" 1000 1000 own\n"
+        "echo \"VICTIM=$(stat -c %u \"$1/real/victim\")\"\n");
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable");
+    INFO(out.toStdString());
+
+    CHECK(out.contains(QStringLiteral("CHANGED=0")));
+    CHECK(out.contains(QStringLiteral("VICTIM=0")));
+    removeAsRoot(tmp.path());
+}
+
+TEST_CASE("A hard-linked file is not handed over", "[imagewriter][ownership]")
+{
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString out = runAsNamespaceRoot(tmp,
+        "mkdir \"$1/cache\" && touch \"$1/victim\"\n"
+        "ln \"$1/victim\" \"$1/cache/entry\"\n"
+        "\"$2\" \"$1/cache\" 1000 1000 own\n"
+        "echo \"VICTIM=$(stat -c %u \"$1/victim\")\"\n"
+        "echo \"DIR=$(stat -c %u \"$1/cache\")\"\n");
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable");
+    INFO(out.toStdString());
+
+    CHECK(out.contains(QStringLiteral("VICTIM=0")));
+    CHECK(out.contains(QStringLiteral("DIR=1000")));
+    removeAsRoot(tmp.path());
+}
+
+TEST_CASE("A settings directory linked elsewhere is not written into",
+          "[imagewriter][settingsperms]")
+{
+    if (!haveHandoverAccount())
+        SKIP("uid 1000 is not an account here");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    // Root could create in etc; the account the link belongs to cannot.
+    const QString out = runAsNamespaceRoot(tmp,
+        "mkdir -m 755 \"$1/etc\" && chmod 777 \"$1\"\n"
+        "setpriv --reuid=1000 --regid=1000 --clear-groups ln -s etc \"$1/conf\"\n"
+        "chmod 755 \"$1\"\n"
+        "SUDO_UID=1000 \"$2\" \"$1/conf/Imager.conf\" -1 -1 newenv >/dev/null\n"
+        "echo \"PLANTED=$(ls -A \"$1/etc\" | wc -l)\"\n");
+    if (out.isEmpty())
+        SKIP("unshare -r --map-auto is unavailable");
+    INFO(out.toStdString());
+
+    CHECK(out.contains(QStringLiteral("PLANTED=0")));
+    removeAsRoot(tmp.path());
+}
+
 TEST_CASE("An elevated run finds the invoking account in SUDO_UID",
           "[imagewriter][settingsperms]")
 {
