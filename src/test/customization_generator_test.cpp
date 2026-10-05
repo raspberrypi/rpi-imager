@@ -308,11 +308,119 @@ TEST_CASE("resolveWifiPassphrase strips CR/LF from the passphrase",
         REQUIRE(pskFor(QStringLiteral("hunter2hunter2\r\n")) == quoted(QStringLiteral("hunter2hunter2")));
     }
 
-    SECTION("a 64-hex value is a passphrase like any other") {
+    SECTION("a 64-hex value is a raw key, written unquoted") {
         const QString hex(64, QLatin1Char('a'));
-        REQUIRE(pskFor(hex) == quoted(hex));
-        REQUIRE(pskFor(hex + "\n") == quoted(hex));
+        REQUIRE(pskFor(hex) == hex);
+        REQUIRE(pskFor(hex + "\n") == hex);
     }
+
+    SECTION("63 hex digits are still a passphrase") {
+        const QString hex(63, QLatin1Char('a'));
+        REQUIRE(pskFor(hex) == quoted(hex));
+    }
+}
+
+TEST_CASE("A raw 64-hex key is passed to imager_custom without -p",
+          "[customization][wifi][password]") {
+    const QString hex = QStringLiteral("0123456789abcdefABCDEF0123456789abcdef0123456789abcdef0123456789");
+    REQUIRE(hex.size() == 64);
+    QVariantMap settings;
+    settings["wifiSSID"] = "TestNet";
+    settings["wifiPassword"] = hex;
+    const std::string script = QString::fromUtf8(
+        CustomisationGenerator::generateSystemdScript(settings)).toStdString();
+
+    // Without -p, raspi-config hands it to wpa_cli as hex, not as a quoted passphrase.
+    REQUIRE_THAT(script, ContainsSubstring("set_wlan 'TestNet' '" + hex.toStdString() + "'"));
+    REQUIRE_THAT(script, !ContainsSubstring("set_wlan  -p"));
+}
+
+namespace {
+
+// Runs the set_wlan branch of the script against a stand-in imager_custom
+// whose body holds MARKER, and returns the PASS argument it was given.
+QString passGivenToImagerCustom(const QString &passphrase, const QByteArray &marker)
+{
+    const QString shell = rpi_test::shellPath();
+    if (shell.isEmpty())
+        SKIP("no POSIX shell available to run the script");
+
+    QVariantMap settings;
+    settings["wifiSSID"] = "TestNet";
+    settings["wifiPassword"] = passphrase;
+    const QString script = QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings));
+
+    const QString realPath = QStringLiteral("/usr/lib/raspberrypi-sys-mods/imager_custom");
+    const qsizetype start = script.indexOf(QStringLiteral("if [ -f ") + realPath);
+    REQUIRE(start >= 0);
+    const qsizetype bodyStart = script.indexOf(QLatin1Char('\n'), start) + 1;
+    const qsizetype end = script.indexOf(QStringLiteral("\nelse\n"), bodyStart);
+    REQUIRE(end > bodyStart);
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString fake = dir.filePath(QStringLiteral("imager_custom"));
+    const QString out = dir.filePath(QStringLiteral("pass"));
+    {
+        QFile f(fake);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("# " + marker + "\n"
+                "shift; while [ \"${1#-}\" != \"$1\" ]; do shift; done\n"
+                "printf '%s' \"$2\" >\"$PASSOUT\"\n");
+    }
+    QString body = script.mid(bodyStart, end - bodyStart);
+    body.replace(realPath, fake);
+    body.replace(QStringLiteral("   ") + fake + QStringLiteral(" set_wlan"),
+                 QStringLiteral("   sh ") + fake + QStringLiteral(" set_wlan"));
+
+    QProcess sh;
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("PASSOUT"), out);
+    sh.setProcessEnvironment(env);
+    sh.start(shell, {QStringLiteral("-c"), body});
+    INFO(body.toStdString());
+    REQUIRE(sh.waitForFinished(10000));
+    REQUIRE(sh.exitStatus() == QProcess::NormalExit);
+    QFile f(out);
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    return QString::fromUtf8(f.readAll());
+}
+
+} // namespace
+
+TEST_CASE("A passphrase reaches NetworkManager's keyfile escaped, raspi-config raw",
+          "[customization][wifi][password]") {
+    // imager_custom since 2023 writes psk=${PASS} into the keyfile as given,
+    // and GLib unescapes it on load: "Pa\ssword1" would arrive as "Pa sword1".
+    const QByteArray keyfileWriter = "psk=${PASS}";
+    const QByteArray raspiConfig = "raspi-config nonint do_wifi_ssid_passphrase '$SSID' '$PASS'";
+
+    struct Case { const char *typed; const char *keyfile; };
+    const Case cases[] = {
+        {"plainpassword",      "plainpassword"},
+        {"Pa\\ssword1",      "Pa\\\\ssword1"},
+        {"ends-with\\",      "ends-with\\\\"},
+        {" leadingspace",      "\\sleadingspace"},
+        {"inner space ",       "inner space "},
+        {"q\"uo'te$`x;#",     "q\"uo'te$`x;#"},
+    };
+    for (const Case &c : cases) {
+        const QString typed = QString::fromUtf8(c.typed);
+        INFO("passphrase: " << c.typed);
+        CHECK(passGivenToImagerCustom(typed, keyfileWriter) == QString::fromUtf8(c.keyfile));
+        CHECK(passGivenToImagerCustom(typed, raspiConfig) == typed);
+    }
+}
+
+TEST_CASE("A passphrase the keyfile reads as typed keeps the one-line set_wlan",
+          "[customization][wifi][password]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "TestNet";
+    settings["wifiPassword"] = "plain password";
+    const std::string script = QString::fromUtf8(
+        CustomisationGenerator::generateSystemdScript(settings)).toStdString();
+    REQUIRE_THAT(script, ContainsSubstring("set_wlan  -p 'TestNet' 'plain password'"));
+    REQUIRE_THAT(script, !ContainsSubstring("IMAGER_WLAN_PASS"));
 }
 
 TEST_CASE("CustomisationGenerator handles sha256crypt password format", "[customization][password]") {
