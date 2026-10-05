@@ -285,6 +285,10 @@ static QString windowsFontEngineFromPlatformArgs(const QByteArray &platformArgs)
     return args.mid(start, end - start);
 }
 
+WindowIconSource windowIconSource() {
+    return {QString(), QStringLiteral(":/icons/rpi-imager.ico")};
+}
+
 void applyQuirks() {
     // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
     // for the main thread. This prevents Windows from showing modal dialogs

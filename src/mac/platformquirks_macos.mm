@@ -206,6 +206,11 @@ namespace {
 
 namespace PlatformQuirks {
 
+WindowIconSource windowIconSource() {
+    // Setting one would replace the bundle's icon in the Dock.
+    return {};
+}
+
 void applyQuirks() {
     @autoreleasepool {
         // Log macOS version for remote debugging
