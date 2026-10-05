@@ -47,6 +47,31 @@ bool ssidOctetsSafeForImagerCustom(const QByteArray& ssidOctets)
     return isValidUtf8(ssidOctets);
 }
 
+// WPA's 64-hex-digit raw PSK; 64 characters cannot be a passphrase.
+bool isHexPsk(const QString& value)
+{
+    static const QRegularExpression re(QStringLiteral("^[0-9A-Fa-f]{64}$"));
+    return re.match(value).hasMatch();
+}
+
+// VALUE as a GLib key-file string, which NetworkManager unescapes on load.
+QString keyfileEscape(const QString& value)
+{
+    QString v;
+    for (qsizetype i = 0; i < value.size(); ++i) {
+        const QChar c = value.at(i);
+        if (c == QLatin1Char('\\'))
+            v += QLatin1String("\\\\");
+        else if (c == QLatin1Char(' ') && i == 0)
+            v += QLatin1String("\\s");
+        else if (c == QLatin1Char('\t'))
+            v += QLatin1String("\\t");
+        else
+            v += c;
+    }
+    return v;
+}
+
 // tomlQuote VALUE — render VALUE as an rpi-preseed TOML basic string.
 // rpi-preseed's parser only unescapes \\ and \" and keeps values single-line,
 // so we escape exactly those two characters and drop any embedded newlines
@@ -506,11 +531,26 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
              + (useImagerCustom ? QStringLiteral("true") : QStringLiteral("false"))
              + QStringLiteral("; then"), script);
         if (useImagerCustom) {
-            QString wlanCmd = QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_wlan ");
+            const QString imagerCustom = QStringLiteral("/usr/lib/raspberrypi-sys-mods/imager_custom");
+            QString passArg = shellQuote(wifiPassphrase);
+            const QString escaped = keyfileEscape(wifiPassphrase);
+            if (escaped != wifiPassphrase) {
+                // imager_custom since sys-mods c8a2ee70 pastes PASS into the
+                // keyfile unescaped; the raspi-config path before it needs it raw.
+                line(QStringLiteral("   IMAGER_WLAN_PASS=") + passArg, script);
+                line(QStringLiteral("   if grep -qF ") + shellQuote(QStringLiteral("psk=${PASS}"))
+                     + QStringLiteral(" ") + imagerCustom
+                     + QStringLiteral("; then IMAGER_WLAN_PASS=") + shellQuote(escaped)
+                     + QStringLiteral("; fi"), script);
+                passArg = QStringLiteral("\"$IMAGER_WLAN_PASS\"");
+            }
+            QString wlanCmd = QStringLiteral("   ") + imagerCustom + QStringLiteral(" set_wlan ");
             if (hidden) wlanCmd += QStringLiteral(" -h ");
-            if (!wifiPassphrase.isEmpty()) wlanCmd += QStringLiteral(" -p ");
+            // A raw PSK goes unflagged so raspi-config hands it to wpa_cli as hex.
+            if (!wifiPassphrase.isEmpty() && !isHexPsk(wifiPassphrase))
+                wlanCmd += QStringLiteral(" -p ");
             wlanCmd += shellQuote(QString::fromUtf8(ssidOctets)) + QStringLiteral(" ")
-                     + shellQuote(wifiPassphrase) + QStringLiteral(" ") + shellQuote(wifiCountry);
+                     + passArg + QStringLiteral(" ") + shellQuote(wifiCountry);
             line(wlanCmd, script);
         }
         line(QStringLiteral("else"), script);
@@ -535,7 +575,10 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         } else {
             wpaBody += "\tkey_mgmt=WPA-PSK SAE\n";
             // A quoted passphrase runs to the last '"', so inner quotes are safe.
-            wpaBody += "\tpsk=\"" + wifiPassphrase.toUtf8() + "\"\n";
+            if (isHexPsk(wifiPassphrase))
+                wpaBody += "\tpsk=" + wifiPassphrase.toUtf8() + "\n";
+            else
+                wpaBody += "\tpsk=\"" + wifiPassphrase.toUtf8() + "\"\n";
             wpaBody += "\tieee80211w=1\n";
         }
         wpaBody += "}\n";

@@ -113,6 +113,31 @@ TestCase {
         verify(step.isAsciiPrintable(""))
     }
 
+    // -- The raw 64-digit key ----------------------------------------------
+
+    function test_sixty_four_hex_digits_is_a_raw_key() {
+        verify(step.isHex64(repeated("a", 64)))
+        verify(step.isHex64(repeated("0", 64)))
+        verify(step.isHex64(repeated("F", 64)), "upper case too")
+        verify(step.isHex64(repeated("aB3f", 16)), "mixed")
+    }
+
+    function test_the_wrong_length_is_not_a_raw_key() {
+        verify(!step.isHex64(repeated("a", 63)))
+        verify(!step.isHex64(repeated("a", 65)))
+        verify(!step.isHex64(""))
+    }
+
+    function test_non_hex_characters_are_not_a_raw_key() {
+        verify(!step.isHex64(repeated("g", 64)), "g is past f")
+        verify(!step.isHex64(repeated("a", 63) + "z"), "one bad digit at the end")
+        verify(!step.isHex64("z" + repeated("a", 63)), "one bad digit at the start")
+        verify(!step.isHex64(repeated("a", 32) + " " + repeated("a", 31)),
+               "a space in the middle")
+        verify(!step.isHex64(repeated("a", 64) + String.fromCharCode(10)),
+               "a trailing newline")
+    }
+
     // -- The rule the user meets -------------------------------------------
 
     function test_an_empty_password_is_allowed() {
@@ -135,10 +160,11 @@ TestCase {
         verify(!step.isValidWifiPassword("a"))
     }
 
-    function test_a_passphrase_of_sixty_four_characters_is_rejected() {
-        // Including 64 hex digits: a raw PMK cannot negotiate WPA3/SAE.
+    function test_a_passphrase_of_sixty_four_characters_is_rejected_unless_hex() {
+        // 64 is the raw-key length, not a passphrase length. Networks set up
+        // with a raw key have no passphrase to enter instead.
         verify(!step.isValidWifiPassword(repeated("z", 64)))
-        verify(!step.isValidWifiPassword(repeated("a", 64)))
+        verify(step.isValidWifiPassword(repeated("a", 64)), "but 64 hex is")
     }
 
     function test_a_passphrase_longer_than_sixty_four_is_rejected() {
