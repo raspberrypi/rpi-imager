@@ -48,6 +48,18 @@ namespace PlatformQuirks {
      */
     void applyQuirks();
 
+    /** Where the window icon comes from; either part may be empty. */
+    struct WindowIconSource {
+        QString themeName;    ///< Freedesktop icon theme name, tried first.
+        QString fallbackFile; ///< Loaded when the theme has no such icon.
+    };
+
+    /**
+     * The window icon for this platform. Both parts empty means leave the
+     * icon the platform already gives the application.
+     */
+    WindowIconSource windowIconSource();
+
     /** Play a system beep sound. */
     void beep();
 

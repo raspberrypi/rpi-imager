@@ -399,11 +399,14 @@ int main(int argc, char *argv[])
     app.setOrganizationDomain("raspberrypi.com");
     app.setApplicationName("Raspberry Pi Imager");
     app.setApplicationVersion(ImageWriter::staticVersion());
-#ifdef Q_OS_WIN
-    app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
-#else
-    app.setWindowIcon(QIcon::fromTheme("rpi-imager"));
-#endif
+    {
+        const auto source = PlatformQuirks::windowIconSource();
+        QIcon icon(source.fallbackFile);
+        if (!source.themeName.isEmpty())
+            icon = QIcon::fromTheme(source.themeName, icon);
+        if (!icon.isNull())
+            app.setWindowIcon(icon);
+    }
 
     // Before anything reads or writes a setting. The file holds the crypt
     // hash of the Pi's account password, the derived WPA PSK, and in

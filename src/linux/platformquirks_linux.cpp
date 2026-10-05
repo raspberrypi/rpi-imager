@@ -199,6 +199,12 @@ namespace {
 
 namespace PlatformQuirks {
 
+WindowIconSource windowIconSource() {
+    // The theme only has the icon once a package installed it. An AppImage,
+    // a build tree or an elevated run without XDG_DATA_DIRS falls back.
+    return {QStringLiteral("rpi-imager"), QStringLiteral(":/icons/rpi-imager.svg")};
+}
+
 void applyQuirks() {
     // Log system information for remote debugging
     // This helps diagnose distro-specific issues from user reports

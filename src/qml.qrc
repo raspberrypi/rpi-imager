@@ -7,6 +7,8 @@
         <file>keymap-layouts.txt</file>
         <file>capital-cities.txt</file>
         <file>sounds/chime.wav</file>
+        <file>icons/rpi-imager.ico</file>
+        <file alias="icons/rpi-imager.svg">linux/icon/rpi-imager.svg</file>
     </qresource>
 
     <!-- Resources used by QML: -->
@@ -15,7 +17,6 @@
         <file>fonts/Roboto-Light.ttf</file>
         <file>fonts/Roboto-Regular.ttf</file>
 
-        <file>icons/rpi-imager.ico</file>
         <file>icons/ic_chevron_left_40px.svg</file>
         <file>icons/ic_chevron_right_40px.svg</file>
         <file>icons/ic_sd_storage_40px.svg</file>
