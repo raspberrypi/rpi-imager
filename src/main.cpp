@@ -28,7 +28,6 @@
 #include <QIcon>
 #include "imagewriter.h"
 #include "settings_permissions.h"
-#include "userfiles.h"
 #include "nativefiledialog.h"
 #include <QQuickWindow>
 #include <QScreen>
@@ -39,6 +38,7 @@
 #include <QtMath>
 #endif
 #include "platformquirks.h"
+#include "userfiles.h"
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #endif
