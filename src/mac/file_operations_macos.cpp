@@ -1136,4 +1136,8 @@ std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
   return CreateXpcFileOperations();
 }
 
+std::unique_ptr<FileOperations> CreateInProcessPlatformFileOperations() {
+  return std::make_unique<MacOSFileOperations>();
+}
+
 } // namespace rpi_imager

@@ -39,10 +39,15 @@ void FileOperationsLog(const std::string& msg) {
 // These functions are implemented in the platform-specific source files
 // Each platform provides its own implementation
 extern std::unique_ptr<FileOperations> CreatePlatformFileOperations();
+extern std::unique_ptr<FileOperations> CreateInProcessPlatformFileOperations();
 extern FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path);
 
 std::unique_ptr<FileOperations> FileOperations::Create() {
   return CreatePlatformFileOperations();
+}
+
+std::unique_ptr<FileOperations> FileOperations::CreateInProcess() {
+  return CreateInProcessPlatformFileOperations();
 }
 
 FileOperations::DeviceIOLimits FileOperations::QueryDeviceIOLimits(const std::string& path) {
