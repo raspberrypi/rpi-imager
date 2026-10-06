@@ -276,7 +276,7 @@ download_qt_source() {
         fi
         
         echo "Extracting Qt source..."
-        tar xf "qt-everywhere-src-$QT_VERSION.tar.xz"
+        tar --no-same-owner -xf "qt-everywhere-src-$QT_VERSION.tar.xz"
     else
         echo "Qt source already extracted"
     fi
