@@ -6,7 +6,6 @@
 #include "file_operations_macos.h"
 #include "macfile.h"
 
-#include <CommonCrypto/CommonDigest.h>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -490,51 +489,6 @@ FileError MacOSFileOperations::WriteSequential(const std::uint8_t* data, std::si
   async_write_offset_ += size;
   last_error_code_ = 0;
   return FileError::kSuccess;
-}
-
-FileOperations::FastVerifyResult MacOSFileOperations::FastVerifySha256(
-    const std::uint8_t* prefix,
-    std::size_t prefix_len,
-    std::uint64_t device_offset,
-    std::uint64_t length) {
-  FastVerifyResult out;
-  out.supported = true;
-  if (!IsOpen()) {
-    out.error = FileError::kOpenError;
-    return out;
-  }
-
-  CC_SHA256_CTX ctx;
-  CC_SHA256_Init(&ctx);
-  if (prefix && prefix_len > 0) {
-    CC_SHA256_Update(&ctx, prefix, (CC_LONG)prefix_len);
-  }
-
-  constexpr std::size_t kReadChunk = 16ull * 1024 * 1024;
-  std::vector<std::uint8_t> buf(kReadChunk);
-
-  std::uint64_t remaining = length;
-  std::uint64_t cursor = device_offset;
-  while (remaining > 0) {
-    const std::size_t want =
-        (std::size_t)std::min<std::uint64_t>(remaining, kReadChunk);
-    ssize_t got = ::pread(fd_, buf.data(), want, (off_t)cursor);
-    if (got < 0) {
-      out.error = FileError::kReadError;
-      return out;
-    }
-    if (got == 0) break;
-    CC_SHA256_Update(&ctx, buf.data(), (CC_LONG)got);
-    cursor += (std::uint64_t)got;
-    remaining -= (std::uint64_t)got;
-  }
-
-  std::uint8_t digest[CC_SHA256_DIGEST_LENGTH];
-  CC_SHA256_Final(digest, &ctx);
-  out.error = FileError::kSuccess;
-  out.digest.assign(reinterpret_cast<const char*>(digest),
-                      CC_SHA256_DIGEST_LENGTH);
-  return out;
 }
 
 FileError MacOSFileOperations::ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) {
