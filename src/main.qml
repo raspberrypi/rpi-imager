@@ -369,7 +369,7 @@ ApplicationWindow {
         id: privilegedHelperDialog
         parent: overlayRoot
         helperState: ImageWriterSingleton ? ImageWriterSingleton.privilegedHelperState
-                                          : ImageWriter.Unknown
+                                          : ImageWriterSingleton.Unknown
         onAccepted: {
             // User confirmed the explainer for first-time install.
             // The first device-open call from the imager pipeline will
@@ -383,9 +383,9 @@ ApplicationWindow {
     function _evaluatePrivilegedHelperState() {
         if (!ImageWriterSingleton) return
         const s = ImageWriterSingleton.privilegedHelperState
-        if (s === ImageWriter.NeedsInstall ||
-            s === ImageWriter.NeedsApproval ||
-            s === ImageWriter.Unknown) {
+        if (s === ImageWriterSingleton.NeedsInstall ||
+            s === ImageWriterSingleton.NeedsApproval ||
+            s === ImageWriterSingleton.Unknown) {
             if (!privilegedHelperDialog.opened) privilegedHelperDialog.open()
         } else if (privilegedHelperDialog.opened) {
             privilegedHelperDialog.close()
@@ -412,8 +412,8 @@ ApplicationWindow {
         repeat: true
         running: privilegedHelperDialog.opened
                   && ImageWriterSingleton
-                  && (ImageWriterSingleton.privilegedHelperState === ImageWriter.NeedsApproval
-                      || ImageWriterSingleton.privilegedHelperState === ImageWriter.Unknown)
+                  && (ImageWriterSingleton.privilegedHelperState === ImageWriterSingleton.NeedsApproval
+                      || ImageWriterSingleton.privilegedHelperState === ImageWriterSingleton.Unknown)
         onTriggered: {
             ImageWriterSingleton.refreshPrivilegedHelperState()
         }
