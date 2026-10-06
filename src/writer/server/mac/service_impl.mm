@@ -39,6 +39,7 @@
 #include <array>
 #include <atomic>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -274,6 +275,20 @@ struct OpenSession {
     // §7a per-write latency histogram; latency_buckets[i] counts samples
     // whose latency fell in bucket i (see kLatencyBucketUpperUs).
     std::array<std::atomic<std::uint64_t>, kNumLatencyBuckets> latency_buckets{};
+
+    // Set by closeSession: queued bulk writes skip their pwrite rather than
+    // hold the close until each one has run.
+    std::shared_ptr<std::atomic<bool>> discard_queued =
+        std::make_shared<std::atomic<bool>>(false);
+
+    // A prepareDevice write still blocked when it timed out. It owns fd from
+    // then on: closing it under the pwrite would let the number be reused.
+    struct StuckWrite {
+        std::mutex m;
+        bool done = false;
+        bool owns_fd = false;
+    };
+    std::shared_ptr<StuckWrite> stuck_write;
 };
 
 // Lock-free min/max update for the latency stats.
@@ -1425,6 +1440,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     std::array<std::atomic<std::uint64_t>, kNumLatencyBuckets>* latency_buckets_ptr = nullptr;
     dispatch_queue_t bulk_queue = nullptr;
     dispatch_semaphore_t inflight_sem = nullptr;
+    std::shared_ptr<std::atomic<bool>> discard;
     {
         std::lock_guard<std::mutex> lk(sessionMutex());
         auto it = sessionTable().find(sessionToken);
@@ -1432,6 +1448,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
             reply(0, @"bulkWriteFromBuffer: unknown session token", 0);
             return;
         }
+        discard = it->second->discard_queued;
         OpenSession* sess = it->second.get();
         fd = sess->fd;
         shm_base = sess->shm_base;
@@ -1484,6 +1501,12 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
 
     dispatch_async(bulk_queue, ^{
         dispatch_semaphore_wait(inflight_sem, DISPATCH_TIME_FOREVER);
+
+        if (discard->load()) {
+            dispatch_semaphore_signal(inflight_sem);
+            reply(0, @"bulkWriteFromBuffer: session closed", ECANCELED);
+            return;
+        }
 
         // Atomic CAS on bytes_written to enforce the per-session cap
         // even with multiple in-flight writes. If the cap is exceeded
@@ -1806,7 +1829,40 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         std::string err;
         int kerrno = 0;
         off_t off = static_cast<off_t>(deviceBytes - kOneMB);
-        if (!pwriteAll(zeros.data(), kOneMB, off, err, kerrno)) {
+        // A card advertising capacity it lacks never answers this write, and
+        // the connection's messages queue behind it. Give up before the
+        // client's 120 s limit; the write keeps fd until it returns.
+        struct LastMb {
+            std::vector<std::uint8_t> zeros;
+            std::string err;
+            int kerrno = 0;
+            bool ok = false;
+        };
+        auto job = std::make_shared<LastMb>();
+        job->zeros = zeros;
+        auto stuck = std::make_shared<OpenSession::StuckWrite>();
+        dispatch_semaphore_t finished = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            job->ok = pwriteAll(job->zeros.data(), kOneMB, off, job->err, job->kerrno);
+            dispatch_semaphore_signal(finished);
+            std::lock_guard<std::mutex> lk(stuck->m);
+            stuck->done = true;
+            if (stuck->owns_fd) ::close(fd);
+        });
+        if (dispatch_semaphore_wait(finished,
+                dispatch_time(DISPATCH_TIME_NOW, 110 * NSEC_PER_SEC)) != 0) {
+            {
+                std::lock_guard<std::mutex> lk(sessionMutex());
+                sess_ptr->stuck_write = stuck;
+            }
+            auditLogf(@"FAIL prepareDevice session=%llu phase=last-mb reason=timeout",
+                      (unsigned long long)sessionToken);
+            reply(NO, @"prepareDevice: timed out writing to the end of the device", ETIMEDOUT);
+            return;
+        }
+        err = job->err;
+        kerrno = job->kerrno;
+        if (!job->ok) {
             auditLogf(@"FAIL prepareDevice session=%llu phase=last-mb "
                        "offset=%lld errno=%d",
                        (unsigned long long)sessionToken,
@@ -1870,6 +1926,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         bytes = drained->bytes_written.load();
         pid = drained->client_pid;
         bulk_queue = drained->bulk_queue;
+        drained->discard_queued->store(true);
     }
     // Drop sessionMutex BEFORE draining - in-flight writes may still
     // try to look up the session via the mutex, and we'd deadlock if
@@ -1881,7 +1938,15 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     }
     if (shm_base) munmap(shm_base, shm_size);
     if (shm_fd >= 0) ::close(shm_fd);
-    if (fd >= 0) ::close(fd);
+    bool fd_handed_off = false;
+    if (drained->stuck_write) {
+        std::lock_guard<std::mutex> lk(drained->stuck_write->m);
+        if (!drained->stuck_write->done) {
+            drained->stuck_write->owns_fd = true;
+            fd_handed_off = true;
+        }
+    }
+    if (fd >= 0 && !fd_handed_off) ::close(fd);
 
     // §7a SessionStats. Build the payload AFTER the dispatch barrier
     // above so per-write counters are quiescent.

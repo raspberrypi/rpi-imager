@@ -35,6 +35,9 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -55,6 +58,9 @@ constexpr std::uint32_t kProtocolVersion = wire::kProtocolVersion;
 constexpr std::size_t kMaxSyncChunk = 8u * 1024 * 1024;
 
 // Per-session bytes-written ceiling (defense in depth; mirrors macOS helper).
+// Under the client's kHardTimeoutSeconds, so the helper answers first.
+constexpr auto kPrepareTimeout = std::chrono::seconds(110);
+
 constexpr std::uint64_t kMaxSessionBytesWritten = 64ull * 1024 * 1024 * 1024;
 
 std::uint64_t physicalMemoryBytes() {
@@ -181,7 +187,10 @@ proto::ErrorInfo mapMaintenanceError(win_maint::Result r, const char* op) {
 }
 
 struct Session {
-    std::unique_ptr<rpi_imager::WindowsFileOperations> fops;
+    // Shared with a prepareDevice worker that may outlive the session.
+    std::shared_ptr<rpi_imager::WindowsFileOperations> fops;
+    // A prepareDevice write that never returned still owns the device.
+    bool wedged = false;
     wire::WinSharedMemory bulk;
     std::atomic<std::uint64_t> bytes_written{0};
     std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
@@ -344,8 +353,32 @@ proto::ErrorInfo Helper::handlePrepareDevice(const std::string& payload, std::st
     if (s->fops->GetSize(size) != FileError::kSuccess) {
         return fail(proto::ERROR_DEVICE_IO, "prepareDevice: GetSize failed");
     }
+    // A card advertising capacity it lacks never answers the write to its
+    // end. The dispatch loop is single-threaded, so give up before the
+    // client's 120 s limit rather than leave every later call queued behind it.
+    struct PrepareJob {
+        std::mutex m;
+        std::condition_variable cv;
+        bool done = false;
+        FileError result = FileError::kSuccess;
+    };
+    auto job = std::make_shared<PrepareJob>();
+    const bool zero_last_mb = req.options().zero_last_mb();
     const auto t0 = std::chrono::steady_clock::now();
-    const FileError e = s->fops->PrepareDevice(size, req.options().zero_last_mb());
+    std::thread([fops = s->fops, job, size, zero_last_mb] {
+        const FileError r = fops->PrepareDevice(size, zero_last_mb);
+        std::lock_guard<std::mutex> lk(job->m);
+        job->done = true;
+        job->result = r;
+        job->cv.notify_all();
+    }).detach();
+    std::unique_lock<std::mutex> lk(job->m);
+    if (!job->cv.wait_for(lk, kPrepareTimeout, [&] { return job->done; })) {
+        s->wedged = true;
+        return fail(proto::ERROR_DEVICE_IO,
+                    "prepareDevice: timed out writing to the end of the device");
+    }
+    const FileError e = job->result;
     const auto t1 = std::chrono::steady_clock::now();
     if (e != FileError::kSuccess) {
         return fail(mapFileError(e), "PrepareDevice failed");
@@ -672,9 +705,13 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
 
     Session& s = it->second;
     s.bulk_writer.shutdown();
-    (void)s.fops->WaitForPendingWrites();
     s.bulk.release();
-    const FileError e = s.fops->Close();
+    // Waiting on a wedged device would block this loop as long as the write.
+    FileError e = FileError::kTimeout;
+    if (!s.wedged) {
+        (void)s.fops->WaitForPendingWrites();
+        e = s.fops->Close();
+    }
     const bool success = (e == FileError::kSuccess);
     proto::ErrorInfo terminal;
     if (!success) {
