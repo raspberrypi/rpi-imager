@@ -17,7 +17,7 @@ QT_BUILD_COMMON_LOADED=1
 # =============================================================================
 
 # Qt Version Configuration
-QT_VERSION_DEFAULT="6.11.1"    # Default version for all platforms
+QT_VERSION_DEFAULT="6.11.2"    # Default version for all platforms
 
 # Build Configuration Defaults
 PREFIX_DEFAULT="/opt/Qt"       # Base installation prefix (version will be appended)
@@ -297,9 +297,11 @@ apply_qt_patches() {
     fi
 
     # 32-bit hosts: std::atomic<std::chrono::milliseconds> is not always lock-free.
+    # Qt 6.11.2 dropped the assert, so only patch sources that still carry it.
     case "$ARCH" in
         arm|armv6l|armv7l|armhf)
-            if [ -f "$_target" ] && ! grep -q '__SIZEOF_POINTER__ >= 8' "$_target"; then
+            if [ -f "$_target" ] && grep -q 'is_always_lock_free);' "$_target" \
+                && ! grep -q '__SIZEOF_POINTER__ >= 8' "$_target"; then
                 echo "Applying Qt arm32 patch: qtestsupport chrono atomic static_assert"
                 if [ -f "$_patch_dir/qt6-qtestsupport-chrono-atomic-32bit.patch" ]; then
                     (cd "$_src" && patch -p1 -N -i "$_patch_dir/qt6-qtestsupport-chrono-atomic-32bit.patch") || true
@@ -321,8 +323,17 @@ apply_qt_patches() {
                     continue
                     ;;
             esac
-            echo "Applying Qt patch: $(basename "$_patch")"
-            (cd "$_src" && patch -p1 -N -i "$_patch") || true
+            # Fatal on failure: a patch that no longer applies would ship
+            # Qt without the fix.
+            if (cd "$_src" && patch -p1 -R -s -f --dry-run -i "$_patch") >/dev/null 2>&1; then
+                echo "Qt patch already applied: $(basename "$_patch")"
+            else
+                echo "Applying Qt patch: $(basename "$_patch")"
+                if ! (cd "$_src" && patch -p1 -N -i "$_patch"); then
+                    echo "Error: Qt patch $(basename "$_patch") does not apply to Qt $QT_VERSION" >&2
+                    return 1
+                fi
+            fi
         done
     fi
 }
@@ -930,7 +941,7 @@ get_icu_version_for_qt() {
     qt_ver="${1:-$QT_VERSION}"
     
     case "$qt_ver" in
-        6.9.3|6.11.0|6.11.1)
+        6.9.3|6.11.0|6.11.1|6.11.2)
             echo "73.2"
             ;;
         *)
