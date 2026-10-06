@@ -58,6 +58,7 @@ BaseDialog {
 
     Text {
         id: titleText
+        textFormat: Text.PlainText
         text: root.isNeedsAttention
               ? qsTr("Privileged Helper unavailable")
               : (root.isNeedsApproval
@@ -74,6 +75,7 @@ BaseDialog {
 
     Text {
         id: descriptionText
+        textFormat: Text.PlainText
         text: root.isNeedsAttention
               ? qsTr("Raspberry Pi Imager could not communicate with its "
                      + "privileged helper service, which is required to "
@@ -103,6 +105,7 @@ BaseDialog {
 
     Text {
         id: hintText
+        textFormat: Text.PlainText
         text: root.isNeedsAttention
               ? qsTr("Use the signed app from /Applications if you are "
                      + "developing locally, or enable the helper under "
