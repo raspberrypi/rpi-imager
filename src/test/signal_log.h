@@ -4,7 +4,7 @@
  *
  * A minimal stand-in for QSignalSpy.
  *
- * The Qt builds this project ships (/opt/Qt/6.11.1, all three variants) are
+ * The Qt builds this project ships (/opt/Qt/6.11.2, all three variants) are
  * configured without the Qt Test module -- no libQt6Test, no headers. Linking
  * Qt6::Test therefore made the suite unbuildable against exactly the Qt that
  * goes out of the door, while passing happily against a distro Qt that does
