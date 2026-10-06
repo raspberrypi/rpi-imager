@@ -2492,9 +2492,9 @@ rpi_discover_tests(secureboot_test)
 # for, so this target finds them on its own.
 find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
-# QuickTest drives the QML controls. The Qt we ship is built without testlib
-# (qt/features_exclude.list), so this is optional: found, the driven UI tests
-# are built; absent, they are skipped and the rest of the suite is unaffected.
+# QuickTest drives the QML controls. The Qt we ship includes testlib, but this
+# stays optional so the suite still builds against a Qt without it: the driven
+# UI tests are skipped and the rest of the suite is unaffected.
 find_package(Qt6 QUIET COMPONENTS QuickTest)
 
 # The write pipeline links as one unit -- DownloadThread reaches the device
@@ -2866,8 +2866,8 @@ endif()
     rpi_discover_tests(qml_load_test)
 
     # Driven tests for the controls themselves: real clicks and keystrokes
-    # against real instances. Needs a Qt built with testlib -- the Qt we ship
-    # excludes it, so this target simply does not exist against that build.
+    # against real instances. Needs a Qt built with testlib; against one
+    # without it, this target simply does not exist.
     if(TARGET Qt6::QuickTest)
         add_executable(qml_ui_test qml_ui_test.cpp)
         set_target_properties(qml_ui_test PROPERTIES AUTOMOC ON)

@@ -72,9 +72,6 @@ systemsemaphore
 # Security (advanced)
 gssapi
 
-# Testing and debugging
-testlib
-
 # WebAssembly features
 wasm-exceptions
 wasm-jspi
