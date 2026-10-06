@@ -340,22 +340,22 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[i], "--verify-appimage-signature") == 0 && i + 1 < argc) {
             std::vector<std::string> trusted;
-            trusted.reserve(identity::kTrustedAppImageKeyFingerprintCount);
-            for (std::size_t k = 0; k < identity::kTrustedAppImageKeyFingerprintCount; ++k) {
-                trusted.emplace_back(identity::kTrustedAppImageKeyFingerprints[k]);
+            trusted.reserve(rpi_imager::identity::kTrustedAppImageKeyFingerprintCount);
+            for (std::size_t k = 0; k < rpi_imager::identity::kTrustedAppImageKeyFingerprintCount; ++k) {
+                trusted.emplace_back(rpi_imager::identity::kTrustedAppImageKeyFingerprints[k]);
             }
             const auto result =
-                appimage::verifyEmbeddedSignature(argv[i + 1], trusted);
+                rpi_imager::appimage::verifyEmbeddedSignature(argv[i + 1], trusted);
             std::fprintf(stderr, "%s: %s\n",
                          argv[i + 1],
-                         appimage::verifyResultMessage(result));
+                         rpi_imager::appimage::verifyResultMessage(result));
             if (g_logFile) {
                 fclose(g_logFile);
             }
-            if (result == appimage::VerifyResult::Ok) {
+            if (result == rpi_imager::appimage::VerifyResult::Ok) {
                 return 0;
             }
-            if (result == appimage::VerifyResult::Unsigned && trusted.empty()) {
+            if (result == rpi_imager::appimage::VerifyResult::Unsigned && trusted.empty()) {
                 return 0;
             }
             return 1;

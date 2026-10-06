@@ -5,6 +5,7 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
+#include <utility>
 
 namespace rpi_imager::privileged::wire {
 
@@ -27,6 +28,21 @@ int memfdCreate(const char* name) {
 
 LinuxSharedMemory::~LinuxSharedMemory() {
     release();
+}
+
+LinuxSharedMemory::LinuxSharedMemory(LinuxSharedMemory&& other) noexcept
+    : fd_(std::exchange(other.fd_, -1)),
+      base_(std::exchange(other.base_, nullptr)),
+      size_(std::exchange(other.size_, 0)) {}
+
+LinuxSharedMemory& LinuxSharedMemory::operator=(LinuxSharedMemory&& other) noexcept {
+    if (this != &other) {
+        release();
+        fd_ = std::exchange(other.fd_, -1);
+        base_ = std::exchange(other.base_, nullptr);
+        size_ = std::exchange(other.size_, 0);
+    }
+    return *this;
 }
 
 bool LinuxSharedMemory::createOwned(std::size_t size_bytes) {

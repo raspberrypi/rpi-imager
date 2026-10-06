@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -119,16 +120,16 @@ bool sha256FileZeroedSections(int fd,
         gnutls_hash(hd, buf.data(), static_cast<std::size_t>(n));
     }
 
-    const int rc = gnutls_hash_output(hd, out_digest);
+    gnutls_hash_output(hd, out_digest);
     gnutls_hash_deinit(hd, nullptr);
-    return rc == 0;
+    return true;
 }
 
 class GpgmeContext {
 public:
     GpgmeContext() {
-        const gpgme_error_t err = gpgme_check_version(nullptr);
-        if (err) {
+        // Returns the library version, or null if initialisation failed.
+        if (!gpgme_check_version(nullptr)) {
             ok_ = false;
             return;
         }
@@ -347,7 +348,7 @@ VerifyResult verifyEmbeddedSignature(
         return VerifyResult::Tampered;
     }
 
-    gpgme_verify_result_t result = gpgme_get_verify_result(ctx);
+    gpgme_verify_result_t result = gpgme_op_verify_result(ctx);
     if (!result || !result->signatures) {
         gpgme_release(ctx);
         return VerifyResult::Tampered;

@@ -1857,7 +1857,7 @@ void DownloadThread::_writeComplete()
         // Zero-copy write observability: did the helper write directly from
         // producer memory, and how many submits took each path?
         bool zcEngaged = false;
-        quint64 zcSubmits = 0, copySubmits = 0;
+        std::uint64_t zcSubmits = 0, copySubmits = 0;
         _file->GetZeroCopyWriteStats(zcEngaged, zcSubmits, copySubmits);
         qDebug() << "Zero-copy writes:" << (zcEngaged ? "engaged" : "not engaged")
                  << "(zero-copy submits" << zcSubmits << ", copy submits" << copySubmits << ")";

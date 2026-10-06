@@ -8,6 +8,8 @@
 #include "../privileged_io/backends/linux_polkit.h"
 #include "../privileged_io/backends/linux_embedded.h"
 #include "../privileged_io_glue.h"
+#include "../posix_write_error.h"
+#include "../timeout_utils.h"
 #include "../write_buffer_provider.h"
 
 #include <algorithm>
@@ -18,6 +20,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <functional>
+#include <thread>
 #include <vector>
 
 namespace rpi_imager {
@@ -146,6 +149,8 @@ struct LinuxHelperFileOperations::State {
     static constexpr std::size_t kNoSlot = static_cast<std::size_t>(-1);
     mutable std::mutex slot_mutex;
     std::condition_variable slot_cv;
+    // Copy-ring slots usable at once; ReduceQueueDepthForRecovery lowers it.
+    std::atomic<std::size_t> slot_limit{0};
     std::atomic<int>       pending_writes{0};
     mutable std::condition_variable pending_cv;
     mutable std::mutex pending_mutex;
@@ -308,7 +313,7 @@ FileError LinuxHelperFileOperations::Close() {
     // helper's session teardown unmaps shm too, but releasing here
     // gets the client-side mmap dropped cleanly via mapBulkBuffer(0).
     if (state_->ring_base) {
-        if (auto bulk = bulkPlane()) {
+        if (auto bulk = bulkPlane(); bulk.valid()) {
             (void)bulk.mapBulkBuffer(sid, 0);
         }
         state_->ring_base = nullptr;
@@ -478,6 +483,7 @@ bool LinuxHelperFileOperations::SetAsyncQueueDepth(int depth) {
     state_->ring_base = bulk.bulkBufferBase();
     state_->ring_size = bulk.bulkBufferSize();
     state_->slot_in_use.assign(static_cast<std::size_t>(depth), false);
+    state_->slot_limit.store(static_cast<std::size_t>(depth));
     state_->queue_depth = depth;
     state_->async_ready = true;
     state_->cancelled.store(false);
@@ -560,7 +566,7 @@ void LinuxHelperFileOperations::releaseZeroCopyRing() {
     std::lock_guard<std::mutex> lk(state_->mutex);
     if (!state_->zerocopy_active) return;
     if (state_->open) {
-        if (auto bulk = bulkPlane()) {
+        if (auto bulk = bulkPlane(); bulk.valid()) {
             (void)bulk.mapBulkBuffer(state_->session_id, 0);
         }
     }
@@ -664,6 +670,10 @@ FileError LinuxHelperFileOperations::AsyncWriteSequential(const std::uint8_t* da
         } else if (!state_->async_ready || size > state_->slot_bytes) {
             use_sync = true;
         }
+        if (sync_fallback_mode_) {
+            zero_copy = false;
+            use_sync = true;
+        }
     }
     if (use_sync) {
         // Run the synchronous path with the existing write_offset
@@ -687,8 +697,12 @@ FileError LinuxHelperFileOperations::AsyncWriteSequential(const std::uint8_t* da
         std::unique_lock<std::mutex> slot_lk(state_->slot_mutex);
         state_->slot_cv.wait(slot_lk, [this] {
             if (state_->cancelled.load()) return true;
-            for (bool b : state_->slot_in_use) if (!b) return true;
-            return false;
+            std::size_t busy = 0;
+            bool any_free = false;
+            for (bool b : state_->slot_in_use) {
+                if (b) ++busy; else any_free = true;
+            }
+            return any_free && busy < state_->slot_limit.load();
         });
         if (state_->cancelled.load()) {
             if (callback) callback(FileError::kCancelled, 0);
@@ -814,6 +828,60 @@ FileError LinuxHelperFileOperations::WaitForPendingWrites() {
         return FileError::kCancelled;
     }
     return FileError::kSuccess;
+}
+
+void LinuxHelperFileOperations::PollAsyncCompletions() {
+    // Completions arrive on the XPC reply queue; there is nothing to reap.
+}
+
+FileError LinuxHelperFileOperations::AttemptSyncFallback() {
+    // In-flight writes belong to the helper and cannot be replayed from
+    // here, so the fallback is a drain.
+    return DrainAndSwitchToSync(TimeoutDefaults::kHardTimeoutSeconds)
+        ? FileError::kSuccess : FileError::kTimeout;
+}
+
+std::vector<FileOperations::PendingWriteInfo>
+LinuxHelperFileOperations::GetPendingWritesSorted() const {
+    return {};
+}
+
+void LinuxHelperFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    const int oldDepth = state_->queue_depth;
+    if (newDepth >= oldDepth) return;
+    newDepth = std::max(newDepth, TimeoutDefaults::kMinAsyncQueueDepth);
+    state_->queue_depth = newDepth;
+    state_->slot_limit.store(static_cast<std::size_t>(newDepth));
+    FileOperationsLog("LinuxHelperFileOperations: queue depth reduced for recovery: "
+                      + std::to_string(oldDepth) + " -> " + std::to_string(newDepth)
+                      + " (pending: " + std::to_string(state_->pending_writes.load()) + ")");
+}
+
+bool LinuxHelperFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
+    sync_fallback_mode_ = true;
+
+    int lastPending = state_->pending_writes.load();
+    auto lastProgress = std::chrono::steady_clock::now();
+    while (lastPending > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        const int pending = state_->pending_writes.load();
+        const auto now = std::chrono::steady_clock::now();
+        if (pending < lastPending) {
+            lastPending = pending;
+            lastProgress = now;
+        } else if (now - lastProgress >= std::chrono::seconds(stallTimeoutSeconds)) {
+            FileOperationsLog("LinuxHelperFileOperations: drain stalled with "
+                              + std::to_string(pending) + " writes pending");
+            return false;
+        }
+    }
+    return true;
+}
+
+WriteErrorClass LinuxHelperFileOperations::ClassifyLastWriteError() const {
+    std::lock_guard<std::mutex> lk(state_->first_error_mutex);
+    return ClassifyPosixWriteErrno(state_->first_error_kerrno);
 }
 
 void LinuxHelperFileOperations::CancelAsyncIO() {

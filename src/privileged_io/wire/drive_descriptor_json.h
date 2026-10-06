@@ -8,6 +8,7 @@
 #pragma once
 
 #include "../../drivelist/drivelist.h"
+#include "proto/imager.pb.h"
 
 #include <string>
 #include <vector>

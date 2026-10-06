@@ -140,6 +140,7 @@ if(UNIX AND NOT APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/helper_maintenance.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/sha256.c
         ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/sha256.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/insecure_memzero.c
     )
     if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
         list(APPEND PRIVILEGED_IO_SOURCES
