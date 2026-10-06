@@ -70,6 +70,15 @@ std::uint64_t maxBulkBufferBytes() {
     return third > kFloor ? third : kFloor;
 }
 
+proto::ErrorInfo ok() { return proto::ErrorInfo(); }
+
+proto::ErrorInfo fail(proto::ErrorCode code, const std::string& detail) {
+    proto::ErrorInfo e;
+    e.set_code(code);
+    e.set_detail(detail);
+    return e;
+}
+
 proto::ErrorInfo mapMaintenanceError(linux_maint::Result r, const char* op) {
     switch (r) {
         case linux_maint::Result::Success:
@@ -88,15 +97,6 @@ proto::ErrorInfo mapMaintenanceError(linux_maint::Result r, const char* op) {
                             ? std::string(op) + " failed"
                             : linux_maint::lastDetail());
     }
-}
-
-proto::ErrorInfo ok() { return proto::ErrorInfo(); }
-
-proto::ErrorInfo fail(proto::ErrorCode code, const std::string& detail) {
-    proto::ErrorInfo e;
-    e.set_code(code);
-    e.set_detail(detail);
-    return e;
 }
 
 proto::ErrorCode mapFileError(FileError e) {
@@ -131,9 +131,7 @@ public:
     }
     bool finish(std::string& out32) {
         unsigned char digest[32] = {0};
-        if (gnutls_hash_output(hd_, digest) != 0) {
-            return false;
-        }
+        gnutls_hash_output(hd_, digest);
         out32.assign(reinterpret_cast<char*>(digest), sizeof(digest));
         return true;
     }
@@ -247,16 +245,15 @@ proto::ErrorInfo Helper::handleOpenSession(const std::string& payload, std::stri
         return fail(proto::ERROR_DEVICE_PERMISSION, "helper only opens /dev/* paths");
     }
 
-    Session s;
-    s.fops = std::make_unique<rpi_imager::LinuxFileOperations>();
-    const FileError e = s.fops->OpenDevice(req.device_path());
+    // Built in place: the atomics make Session immovable.
+    const std::uint64_t id = next_id_++;
+    auto it = sessions_.try_emplace(id).first;
+    it->second.fops = std::make_shared<rpi_imager::LinuxFileOperations>();
+    const FileError e = it->second.fops->OpenDevice(req.device_path());
     if (e != FileError::kSuccess) {
+        sessions_.erase(it);
         return fail(mapFileError(e), "OpenDevice failed for " + req.device_path());
     }
-
-    const std::uint64_t id = next_id_++;
-    auto [it, inserted] = sessions_.emplace(id, std::move(s));
-    (void)inserted;
     it->second.bulk_writer.start(it->second.fops.get(), outbound_);
 
     proto::SessionId sid;

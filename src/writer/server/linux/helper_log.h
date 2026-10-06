@@ -5,8 +5,11 @@
 
 #pragma once
 
+#include <string>
+
 namespace rpi_imager::writer {
 
 void helperLog(const char* msg);
+inline void helperLog(const std::string& msg) { helperLog(msg.c_str()); }
 
 } // namespace rpi_imager::writer

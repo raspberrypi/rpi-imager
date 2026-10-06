@@ -1165,9 +1165,11 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
+#if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
   if (shouldUseLinuxHelperFileOperations()) {
     return CreateLinuxHelperFileOperations();
   }
+#endif
   return std::make_unique<LinuxFileOperations>();
 }
 
