@@ -233,6 +233,25 @@ public:
 
     virtual Result<void> unmount(const std::string& device_path) = 0;
     virtual Result<void> eject(const std::string& device_path) = 0;
+
+    // Dismounts the disk's volumes and deletes its partition table, holding
+    // the volumes locked until the next openSession on that disk. Windows
+    // only; NOT_IMPLEMENTED tells the caller to clean in process.
+    virtual Result<void> cleanDisk(const std::string& /*device_path*/) {
+        proto_ns::ErrorInfo err;
+        err.set_code(proto_ns::ERROR_NOT_IMPLEMENTED);
+        err.set_detail("cleanDisk not implemented by this backend");
+        return Result<void>::failure(err);
+    }
+
+    // Asks the OS to re-read the disk's partition table. Windows only, as
+    // cleanDisk.
+    virtual Result<void> rescanDisk(const std::string& /*device_path*/) {
+        proto_ns::ErrorInfo err;
+        err.set_code(proto_ns::ERROR_NOT_IMPLEMENTED);
+        err.set_detail("rescanDisk not implemented by this backend");
+        return Result<void>::failure(err);
+    }
 };
 
 // Factory selects the appropriate backend based on platform, OS version,

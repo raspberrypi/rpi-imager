@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Raspberry Pi Ltd
 
 #include "helper_maintenance.h"
+#include "../drivelist/drivelist.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winioctl.h>
+#include <shlobj.h>
 
 #include <cstdio>
 #include <cstring>
@@ -100,7 +102,8 @@ bool ejectMedia(HANDLE volume) {
     return false;
 }
 
-Result processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEject) {
+Result processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEject,
+                          bool& matched) {
     wchar_t volumePath[8];
     swprintf(volumePath, 8, L"\\\\.\\%c:", driveLetter);
 
@@ -116,6 +119,7 @@ Result processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEj
         CloseHandle(volume);
         return Result::Success;
     }
+    matched = true;
 
     if (!isVolumeMounted(volume)) {
         CloseHandle(volume);
@@ -158,11 +162,12 @@ Result processPhysicalDrive(const std::string& device, bool doEject) {
     }
 
     Result result = Result::Success;
+    bool matched = false;
     TCHAR driveLetter = L'A';
     while (drivesMask) {
         if (drivesMask & 1) {
-            const Result letterResult =
-                processDriveLetter(driveLetter, static_cast<ULONG>(deviceNumber), doEject);
+            const Result letterResult = processDriveLetter(
+                driveLetter, static_cast<ULONG>(deviceNumber), doEject, matched);
             if (letterResult != Result::Success && result == Result::Success) {
                 result = letterResult;
             }
@@ -170,7 +175,77 @@ Result processPhysicalDrive(const std::string& device, bool doEject) {
         ++driveLetter;
         drivesMask >>= 1;
     }
+
+    // No mounted volume to eject through, as after a raw write: eject the
+    // media via the physical drive, as PlatformQuirks::ejectDisk does.
+    if (doEject && !matched) {
+        HANDLE drive = CreateFileA(device.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   nullptr, OPEN_EXISTING, 0, nullptr);
+        if (drive == INVALID_HANDLE_VALUE) {
+            setError(GetLastError(), "could not open physical drive to eject");
+            return Result::Error;
+        }
+        // Fixed readers refuse this; nothing is mounted, so it is still safe.
+        (void)ejectMedia(drive);
+        CloseHandle(drive);
+    }
     return result;
+}
+
+void notifyShellDriveRemoved(wchar_t driveLetter) {
+    wchar_t root[4] = {driveLetter, L':', L'\\', 0};
+    SHChangeNotify(SHCNE_MEDIAREMOVED, SHCNF_PATHW, root, nullptr);
+    SHChangeNotify(SHCNE_DRIVEREMOVED, SHCNF_PATHW, root, nullptr);
+}
+
+// Port of DiskpartUtil::unmountVolumes, which the non-elevated client can no
+// longer run.
+void dismountVolumesOf(int deviceNumber, std::vector<void*>& held) {
+    for (const auto& dev : ::Drivelist::ListStorageDevices()) {
+        if (parseDeviceNumber(dev.device) != deviceNumber) {
+            continue;
+        }
+        for (const auto& mountpoint : dev.mountpoints) {
+            if (mountpoint.size() < 2 || mountpoint[1] != ':') {
+                continue;
+            }
+            const wchar_t letter = static_cast<wchar_t>(mountpoint[0]);
+            notifyShellDriveRemoved(letter);
+
+            wchar_t volumePath[8];
+            swprintf(volumePath, 8, L"\\\\.\\%c:", letter);
+            HANDLE volume = CreateFileW(volumePath, GENERIC_READ | GENERIC_WRITE,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                        nullptr, OPEN_EXISTING, 0, nullptr);
+            if (volume == INVALID_HANDLE_VALUE) {
+                continue;
+            }
+
+            // Geometric backoff: Windows 11 25H2+ may hold handles longer.
+            DWORD bytesReturned = 0;
+            for (int attempt = 0, delayMs = 100; attempt < 8; ++attempt, delayMs *= 2) {
+                if (DeviceIoControl(volume, FSCTL_LOCK_VOLUME, nullptr, 0, nullptr, 0,
+                                    &bytesReturned, nullptr)) {
+                    break;
+                }
+                Sleep(static_cast<DWORD>(delayMs));
+            }
+            (void)dismountVolume(volume);
+
+            if (dev.isRemovable) {
+                unlockVolume(volume);
+                CloseHandle(volume);
+                wchar_t root[4] = {letter, L':', L'\\', 0};
+                (void)DeleteVolumeMountPointW(root);
+            } else {
+                held.push_back(volume);
+            }
+            notifyShellDriveRemoved(letter);
+            Sleep(100);
+        }
+        break;
+    }
 }
 
 } // namespace
@@ -193,6 +268,93 @@ Result ejectDisk(const std::string& device_path) {
     g_last_error = 0;
     g_last_detail.clear();
     return processPhysicalDrive(device_path, true);
+}
+
+int physicalDriveNumber(const std::string& device_path) {
+    return parseDeviceNumber(device_path);
+}
+
+void releaseVolumes(std::vector<void*>& held) {
+    for (void* h : held) {
+        unlockVolume(static_cast<HANDLE>(h));
+        CloseHandle(static_cast<HANDLE>(h));
+    }
+    held.clear();
+}
+
+// Port of DiskpartUtil::rescanDisk.
+Result rescanDisk(const std::string& device_path) {
+    g_last_error = 0;
+    g_last_detail.clear();
+    if (parseDeviceNumber(device_path) < 0) {
+        setError(0, "invalid PhysicalDrive path");
+        return Result::InvalidDrive;
+    }
+    HANDLE disk = CreateFileA(device_path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, OPEN_EXISTING, 0, nullptr);
+    if (disk == INVALID_HANDLE_VALUE) {
+        setError(GetLastError(), "could not open disk for rescan");
+        return Result::Error;
+    }
+    DWORD bytesReturned = 0;
+    DeviceIoControl(disk, IOCTL_DISK_UPDATE_PROPERTIES, nullptr, 0, nullptr, 0,
+                    &bytesReturned, nullptr);
+    if (!DeviceIoControl(disk, IOCTL_DISK_ARE_VOLUMES_READY, nullptr, 0, nullptr, 0,
+                         &bytesReturned, nullptr)) {
+        Sleep(500);
+    }
+    CloseHandle(disk);
+    SHChangeNotify(SHCNE_DRIVEADD, SHCNF_IDLIST, nullptr, nullptr);
+    SHChangeNotify(SHCNE_MEDIAINSERTED, SHCNF_IDLIST, nullptr, nullptr);
+    return Result::Success;
+}
+
+// Port of DiskpartUtil::cleanDiskFast.
+Result cleanDisk(const std::string& device_path, std::vector<void*>& held) {
+    g_last_error = 0;
+    g_last_detail.clear();
+
+    const int deviceNumber = parseDeviceNumber(device_path);
+    if (deviceNumber < 0) {
+        setError(0, "invalid PhysicalDrive path");
+        return Result::InvalidDrive;
+    }
+
+    dismountVolumesOf(deviceNumber, held);
+
+    HANDLE disk = CreateFileA(device_path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, OPEN_EXISTING, 0, nullptr);
+    if (disk == INVALID_HANDLE_VALUE) {
+        const DWORD err = GetLastError();
+        setError(err, "could not open disk for cleaning");
+        return err == ERROR_ACCESS_DENIED ? Result::AccessDenied : Result::Error;
+    }
+
+    DWORD bytesReturned = 0;
+    DeviceIoControl(disk, FSCTL_ALLOW_EXTENDED_DASD_IO, nullptr, 0, nullptr, 0,
+                    &bytesReturned, nullptr);
+
+    Result result = Result::Success;
+    if (!DeviceIoControl(disk, IOCTL_DISK_DELETE_DRIVE_LAYOUT, nullptr, 0, nullptr, 0,
+                         &bytesReturned, nullptr)) {
+        const DWORD err = GetLastError();
+        // Neither means a layout survived: there was no partition table.
+        if (err != ERROR_INVALID_FUNCTION && err != ERROR_FILE_NOT_FOUND) {
+            LARGE_INTEGER zero = {};
+            SetFilePointerEx(disk, zero, nullptr, FILE_BEGIN);
+            char emptyMbr[512] = {0};
+            DWORD written = 0;
+            if (!WriteFile(disk, emptyMbr, sizeof(emptyMbr), &written, nullptr)
+                || written != sizeof(emptyMbr)) {
+                setError(GetLastError(), "could not clear partition table");
+                result = Result::Error;
+            }
+        }
+    }
+    CloseHandle(disk);
+    return result;
 }
 
 } // namespace rpi_imager::win_maint

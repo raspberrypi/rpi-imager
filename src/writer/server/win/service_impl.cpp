@@ -194,6 +194,13 @@ struct Session {
 class Helper {
 public:
     explicit Helper(DWORD client_pid) : client_pid_(client_pid) {}
+    ~Helper() {
+        for (auto& [disk, volumes] : held_volumes_) {
+            win_maint::releaseVolumes(volumes);
+        }
+    }
+    Helper(const Helper&) = delete;
+    Helper& operator=(const Helper&) = delete;
 
     void setPushContext(WireOutbound* outbound, DriveWatchService* drive_watch) {
         outbound_ = outbound;
@@ -227,8 +234,13 @@ private:
     proto::ErrorInfo handleListDrives(std::string& out);
     proto::ErrorInfo handleUnmount(const std::string& payload);
     proto::ErrorInfo handleEject(const std::string& payload);
+    proto::ErrorInfo handleCleanDisk(const std::string& payload);
+    proto::ErrorInfo handleRescanDisk(const std::string& payload);
+    void releaseHeldVolumes(const std::string& device_path);
 
     DWORD client_pid_ = 0;
+    // Volumes cleanDisk left locked, by disk number, until that disk opens.
+    std::unordered_map<int, std::vector<void*>> held_volumes_;
     std::unordered_map<std::uint64_t, Session> sessions_;
     std::uint64_t next_id_ = 1;
 
@@ -281,6 +293,8 @@ proto::ErrorInfo Helper::handleOpenSession(const std::string& payload, std::stri
     Session s;
     s.fops = std::make_unique<rpi_imager::WindowsFileOperations>();
     const FileError e = s.fops->OpenDevice(req.device_path());
+    // Released once the drive is open, as the in-process path does (#1665).
+    releaseHeldVolumes(req.device_path());
     if (e != FileError::kSuccess) {
         return fail(mapFileError(e), "OpenDevice failed for " + req.device_path());
     }
@@ -554,11 +568,63 @@ proto::ErrorInfo Helper::handleListDrives(std::string& out) {
     return ok();
 }
 
+void Helper::releaseHeldVolumes(const std::string& device_path) {
+    auto it = held_volumes_.find(win_maint::physicalDriveNumber(device_path));
+    if (it != held_volumes_.end()) {
+        win_maint::releaseVolumes(it->second);
+        held_volumes_.erase(it);
+    }
+}
+
+proto::ErrorInfo Helper::handleCleanDisk(const std::string& payload) {
+    proto::PathRequest req;
+    if (!req.ParseFromString(payload)) {
+        return fail(proto::ERROR_UNKNOWN, "bad PathRequest");
+    }
+    if (!isPhysicalDrivePath(req.device_path())) {
+        return fail(proto::ERROR_DEVICE_PERMISSION,
+                    "helper only cleans \\\\.\\PhysicalDriveN paths");
+    }
+    releaseHeldVolumes(req.device_path());
+
+    std::vector<void*> held;
+    const auto r = win_maint::cleanDisk(req.device_path(), held);
+    if (!held.empty()) {
+        held_volumes_[win_maint::physicalDriveNumber(req.device_path())] = std::move(held);
+    }
+    if (r == win_maint::Result::Success) {
+        return ok();
+    }
+    releaseHeldVolumes(req.device_path());
+    proto::ErrorInfo err = mapMaintenanceError(r, "cleanDisk");
+    err.set_kernel_errno(win_maint::lastWin32Error());
+    return err;
+}
+
+proto::ErrorInfo Helper::handleRescanDisk(const std::string& payload) {
+    proto::PathRequest req;
+    if (!req.ParseFromString(payload)) {
+        return fail(proto::ERROR_UNKNOWN, "bad PathRequest");
+    }
+    if (!isPhysicalDrivePath(req.device_path())) {
+        return fail(proto::ERROR_DEVICE_PERMISSION,
+                    "helper only rescans \\\\.\\PhysicalDriveN paths");
+    }
+    const auto r = win_maint::rescanDisk(req.device_path());
+    if (r == win_maint::Result::Success) {
+        return ok();
+    }
+    proto::ErrorInfo err = mapMaintenanceError(r, "rescanDisk");
+    err.set_kernel_errno(win_maint::lastWin32Error());
+    return err;
+}
+
 proto::ErrorInfo Helper::handleUnmount(const std::string& payload) {
     proto::PathRequest req;
     if (!req.ParseFromString(payload)) {
         return fail(proto::ERROR_UNKNOWN, "bad PathRequest");
     }
+    releaseHeldVolumes(req.device_path());
     const auto r = win_maint::unmountDisk(req.device_path());
     if (r == win_maint::Result::Success) {
         return ok();
@@ -575,6 +641,7 @@ proto::ErrorInfo Helper::handleEject(const std::string& payload) {
     if (!req.ParseFromString(payload)) {
         return fail(proto::ERROR_UNKNOWN, "bad PathRequest");
     }
+    releaseHeldVolumes(req.device_path());
     const auto r = win_maint::ejectDisk(req.device_path());
     if (r == win_maint::Result::Success) {
         return ok();
@@ -664,6 +731,8 @@ proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& ou
         case proto::WIRE_UNSUBSCRIBE_DRIVES:  return handleUnsubscribeDrives();
         case proto::WIRE_UNMOUNT:             return handleUnmount(req.payload());
         case proto::WIRE_EJECT:               return handleEject(req.payload());
+        case proto::WIRE_CLEAN_DISK:          return handleCleanDisk(req.payload());
+        case proto::WIRE_RESCAN_DISK:         return handleRescanDisk(req.payload());
         default:
             return fail(proto::ERROR_NOT_IMPLEMENTED, "unknown method");
     }

@@ -351,6 +351,8 @@ enum WireMethod {
   // Maintenance
   WIRE_UNMOUNT = 30;               // req: PathRequest, reply: (empty)
   WIRE_EJECT = 31;                 // req: PathRequest, reply: (empty)
+  WIRE_CLEAN_DISK = 32;            // req: PathRequest, reply: (empty)
+  WIRE_RESCAN_DISK = 33;           // req: PathRequest, reply: (empty)
 }
 
 message WireRequest {

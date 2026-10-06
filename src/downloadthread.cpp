@@ -301,28 +301,51 @@ bool DownloadThread::_openAndPrepareDevice()
                 }
             };
 
-            // Unmount volumes first (with performance instrumentation)
-            emit preparationStatusUpdate(tr("Unmounting volumes..."));
-            auto unmountResult = DiskpartUtil::unmountVolumes(_filename, lockedVolumes, timingCallback);
-            if (!unmountResult.success)
-            {
-                qDebug() << "Warning: Volume unmount had issues:" << unmountResult.errorMessage;
-                // Continue anyway - cleanDiskFast may still succeed
-            }
-
-            // Clean disk using fast direct IOCTL method (replaces diskpart)
+            // The helper is elevated and this process may not be (asInvoker),
+            // so the helper cleans when it can; NOT_IMPLEMENTED means no helper.
             emit preparationStatusUpdate(tr("Cleaning disk..."));
-            auto cleanResult = DiskpartUtil::cleanDiskFast(_filename, timingCallback);
-            if (!cleanResult.success)
+            QElapsedTimer helperCleanTimer;
+            helperCleanTimer.start();
+            const auto helperClean =
+                rpi_imager::getProcessPrivilegedWriter().cleanDisk(_filename.toStdString());
+            const bool cleanInProcess = !helperClean.ok
+                && helperClean.error.code() == rpi_imager::privileged::proto::ERROR_NOT_IMPLEMENTED;
+            if (!cleanInProcess) {
+                emit eventDriveDiskClean(static_cast<quint32>(helperCleanTimer.elapsed()),
+                                         helperClean.ok);
+                if (!helperClean.ok) {
+                    qDebug() << "Helper disk clean failed:"
+                             << QString::fromStdString(helperClean.error.detail());
+                    emit error(tr("Failed to clean disk '%1'. Please close any applications using the disk and try again.")
+                                   .arg(QString::fromLatin1(_filename)));
+                    return false;
+                }
+            }
+            else
             {
-                // Fall back to legacy diskpart method if direct IOCTLs fail
-                qDebug() << "Fast disk clean failed, falling back to diskpart:" << cleanResult.errorMessage;
-                emit preparationStatusUpdate(tr("Cleaning disk (legacy method)..."));
-                cleanResult = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::SkipUnmounting);
+                // Unmount volumes first (with performance instrumentation)
+                emit preparationStatusUpdate(tr("Unmounting volumes..."));
+                auto unmountResult = DiskpartUtil::unmountVolumes(_filename, lockedVolumes, timingCallback);
+                if (!unmountResult.success)
+                {
+                    qDebug() << "Warning: Volume unmount had issues:" << unmountResult.errorMessage;
+                    // Continue anyway - cleanDiskFast may still succeed
+                }
+
+                // Clean disk using fast direct IOCTL method (replaces diskpart)
+                emit preparationStatusUpdate(tr("Cleaning disk..."));
+                auto cleanResult = DiskpartUtil::cleanDiskFast(_filename, timingCallback);
                 if (!cleanResult.success)
                 {
-                    emit error(cleanResult.errorMessage);
-                    return false;
+                    // Fall back to legacy diskpart method if direct IOCTLs fail
+                    qDebug() << "Fast disk clean failed, falling back to diskpart:" << cleanResult.errorMessage;
+                    emit preparationStatusUpdate(tr("Cleaning disk (legacy method)..."));
+                    cleanResult = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::SkipUnmounting);
+                    if (!cleanResult.success)
+                    {
+                        emit error(cleanResult.errorMessage);
+                        return false;
+                    }
                 }
             }
         }
@@ -1602,7 +1625,16 @@ void DownloadThread::_onDownloadError(const QString &msg)
     // OS may be holding a stale view of the disk (no drive letter, no visible
     // partitions) — give it a chance to re-enumerate before we report the
     // failure. No-op on platforms where the kernel does this automatically.
+#ifdef Q_OS_WIN
+    // As cleanDisk: the rescan needs the drive opened for writing.
+    const auto rescanned =
+        rpi_imager::getProcessPrivilegedWriter().rescanDisk(_filename.toStdString());
+    if (!rescanned.ok
+        && rescanned.error.code() == rpi_imager::privileged::proto::ERROR_NOT_IMPLEMENTED)
+        PlatformQuirks::refreshDiskView(_filename);
+#else
     PlatformQuirks::refreshDiskView(_filename);
+#endif
 
     emit error(msg);
 }
@@ -2127,9 +2159,18 @@ void DownloadThread::_performEject()
 
     // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
     QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
+    // Through the PAL: dismounting needs the privileges the client no longer
+    // has. Without a helper, LocalShimBackend calls PlatformQuirks::ejectDisk.
+    const auto ejected = rpi_imager::getProcessPrivilegedWriter().eject(ejectPath.toStdString());
+    if (!ejected.ok)
+        qDebug() << "Eject failed:" << QString::fromStdString(ejected.error.detail());
+    const bool succeeded = ejected.ok;
+#else
     PlatformQuirks::DiskResult result = PlatformQuirks::ejectDisk(ejectPath);
 
     const bool succeeded = (result == PlatformQuirks::DiskResult::Success);
+#endif
 
     qDebug() << "Background eject finished for" << ejectPath << "succeeded:" << succeeded;
     emit ejectFinished(succeeded);
