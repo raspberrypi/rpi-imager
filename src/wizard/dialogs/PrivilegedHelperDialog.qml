@@ -34,11 +34,11 @@ BaseDialog {
 
     property int helperState: 0   // ImageWriter.PrivilegedHelperState enum
     readonly property bool isNeedsInstall:
-        helperState === ImageWriter.NeedsInstall
+        helperState === ImageWriterSingleton.NeedsInstall
     readonly property bool isNeedsApproval:
-        helperState === ImageWriter.NeedsApproval
+        helperState === ImageWriterSingleton.NeedsApproval
     readonly property bool isNeedsAttention:
-        helperState === ImageWriter.Unknown
+        helperState === ImageWriterSingleton.Unknown
 
     function escapePressed() {
         root.reject()
