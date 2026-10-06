@@ -299,18 +299,17 @@ proto::ErrorInfo Helper::handleOpenSession(const std::string& payload, std::stri
                     "helper only opens \\\\.\\PhysicalDriveN paths");
     }
 
-    Session s;
-    s.fops = std::make_unique<rpi_imager::WindowsFileOperations>();
-    const FileError e = s.fops->OpenDevice(req.device_path());
+    // Built in place: the atomics make Session immovable.
+    const std::uint64_t id = next_id_++;
+    auto it = sessions_.try_emplace(id).first;
+    it->second.fops = std::make_shared<rpi_imager::WindowsFileOperations>();
+    const FileError e = it->second.fops->OpenDevice(req.device_path());
     // Released once the drive is open, as the in-process path does (#1665).
     releaseHeldVolumes(req.device_path());
     if (e != FileError::kSuccess) {
+        sessions_.erase(it);
         return fail(mapFileError(e), "OpenDevice failed for " + req.device_path());
     }
-
-    const std::uint64_t id = next_id_++;
-    auto [it, inserted] = sessions_.emplace(id, std::move(s));
-    (void)inserted;
     it->second.bulk_writer.start(it->second.fops.get(), outbound_);
 
     proto::SessionId sid;
