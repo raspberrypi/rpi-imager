@@ -133,7 +133,12 @@ function(rpi_discover_tests target)
     endif()
     set(_test_env "${_telemetry_off}" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1"
                   "XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
-                  "BROWSER=true")
+                  "BROWSER=true"
+                  # Device I/O in process, as these tests were written for: the
+                  # helper cannot register for a test binary and opens no
+                  # scratch files. The PAL has its own suites.
+                  "RPI_IMAGER_USE_LEGACY_AUTHOPEN=1"
+                  "RPI_IMAGER_USE_LEGACY_INPROCESS=1")
     # Without this Qt's default handler on Windows sends qDebug/qWarning to the
     # debugger rather than to stderr, so a test that fails under CTest comes
     # back with an exit code and not one line of why. The QtQuickTest binary was
@@ -2612,6 +2617,9 @@ set(RPI_DOWNLOAD_PIPELINE_SOURCES
     ${PLATFORM_ACCEL_HASH_SRC}
     ${PLATFORM_DRIVELIST_SRC}
     ${PLATFORM_FILE_OPS}
+    # DownloadThread unmounts through the privileged-writer PAL.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io_glue.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../local_shim_backend.cpp
 )
 
 # ── bmap ────────────────────────────────────────────────────────────────────
@@ -2776,6 +2784,7 @@ if(NOT BUILD_CLI_ONLY)
         ${GNUTLS_LIBRARIES}
         ${LIBUSB_LIBRARIES}
         ${CMAKE_DL_LIBS}
+        privileged_io
     )
 
     # The platform libraries the application itself links. This target
@@ -3408,6 +3417,7 @@ add_executable(download_thread_test
     ${RPI_DOWNLOAD_PIPELINE_SOURCES}
     download_thread_test.cpp
 )
+target_link_libraries(download_thread_test PRIVATE privileged_io)
 
 set_target_properties(download_thread_test PROPERTIES AUTOMOC ON)
 
@@ -3468,6 +3478,7 @@ add_executable(download_extract_thread_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
     download_extract_thread_test.cpp
 )
+target_link_libraries(download_extract_thread_test PRIVATE privileged_io)
 
 set_target_properties(download_extract_thread_test PROPERTIES AUTOMOC ON)
 
@@ -3520,6 +3531,7 @@ if(UNIX AND NOT APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/download_extract_multifile_probe.cpp
     )
+    target_link_libraries(download_extract_multifile_probe PRIVATE privileged_io)
 
     set_target_properties(download_extract_multifile_probe PROPERTIES AUTOMOC ON)
 
