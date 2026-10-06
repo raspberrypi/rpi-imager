@@ -49,8 +49,13 @@ public:
     FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size,
                                    AsyncWriteCallback callback = nullptr) override;
     int GetPendingWriteCount() const override;
+    void PollAsyncCompletions() override;
     FileError WaitForPendingWrites() override;
     void CancelAsyncIO() override;
+    FileError AttemptSyncFallback() override;
+    std::vector<PendingWriteInfo> GetPendingWritesSorted() const override;
+    void ReduceQueueDepthForRecovery(int newDepth) override;
+    bool DrainAndSwitchToSync(int stallTimeoutSeconds) override;
     void GetAsyncIOStats(uint32_t& wallClockMs, uint32_t& writeCount,
                          uint32_t& minLatencyUs, uint32_t& maxLatencyUs,
                          uint32_t& avgLatencyUs) const override;
@@ -72,6 +77,7 @@ public:
 
     int GetHandle() const override { return -1; }
     int GetLastErrorCode() const override;
+    WriteErrorClass ClassifyLastWriteError() const override;
     bool IsDirectIOEnabled() const override;
     FileError SetDirectIOEnabled(bool enabled) override;
     DirectIOInfo GetDirectIOInfo() const override;

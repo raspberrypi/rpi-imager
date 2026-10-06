@@ -1442,7 +1442,11 @@ long cfaModeRead()
 #endif
 
 WriteErrorClass WindowsFileOperations::ClassifyLastWriteError() const {
-    const DWORD error = static_cast<DWORD>(last_error_code_);
+    return ClassifyWin32WriteError(static_cast<unsigned long>(last_error_code_));
+}
+
+WriteErrorClass ClassifyWin32WriteError(unsigned long win32_error) {
+    const DWORD error = static_cast<DWORD>(win32_error);
 
     // Asked only where the answer could differ. Every other error means
     // something Defender has no part in, and the registry read is not free.

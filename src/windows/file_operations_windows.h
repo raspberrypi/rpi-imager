@@ -223,6 +223,9 @@ class WindowsFileOperations : public FileOperations {
   bool WaitForOverlappedWithCancel(OVERLAPPED* overlapped, DWORD* bytes_transferred);
 };
 
+// Shared with the helper client, whose write errors arrive as Win32 codes.
+WriteErrorClass ClassifyWin32WriteError(unsigned long win32_error);
+
 } // namespace rpi_imager
 
 #endif // FILE_OPERATIONS_WINDOWS_H_ 
