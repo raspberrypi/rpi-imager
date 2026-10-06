@@ -99,8 +99,12 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     QSettings settings;
     _ejectEnabled = settings.value("eject", true).toBool();
 
-    // Initialize unified file operations
-    _file = rpi_imager::FileOperations::Create();
+    // Initialize unified file operations. The helpers open only devices, so
+    // a regular-file destination (the CLI allows one) stays in process.
+    const bool toDevice = _filename.startsWith("/dev/")
+        || _filename.toLower().startsWith("\\\\.\\physicaldrive");
+    _file = toDevice ? rpi_imager::FileOperations::Create()
+                     : rpi_imager::FileOperations::CreateInProcess();
 #ifdef Q_OS_WIN
     _volumeFile = rpi_imager::FileOperations::Create();
 #endif
