@@ -496,6 +496,10 @@ class FileOperations {
 
   // Factory method to create platform-specific implementation
   static std::unique_ptr<FileOperations> Create();
+
+  // The platform implementation without the privileged helper, for regular
+  // files: the helpers only open devices.
+  static std::unique_ptr<FileOperations> CreateInProcess();
 };
 
 // The write buffer a device will actually take in one request.

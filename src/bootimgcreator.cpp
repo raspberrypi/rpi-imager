@@ -56,7 +56,7 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
     QFile::remove(outputPath);
 
     {
-        rpi_imager::DiskFormatter formatter;
+        rpi_imager::DiskFormatter formatter(rpi_imager::FileOperations::CreateInProcess());
         const auto formatted = formatter.FormatFilesystemOnly(
             outputPath.toStdString(), static_cast<std::uint64_t>(totalSize));
         if (!formatted) {
@@ -67,7 +67,7 @@ bool BootImgCreator::createBootImg(const QMap<QString, QByteArray> &files,
         }
     }
 
-    auto ops = rpi_imager::FileOperations::Create();
+    auto ops = rpi_imager::FileOperations::CreateInProcess();
     if (!ops || ops->OpenDevice(outputPath.toStdString()) !=
                     rpi_imager::FileError::kSuccess) {
         qDebug() << "BootImgCreator: could not reopen" << outputPath;
