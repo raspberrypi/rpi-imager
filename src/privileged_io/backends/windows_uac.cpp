@@ -551,6 +551,30 @@ Result<void> WindowsUacBackend::eject(const std::string& device_path) {
     return Result<void>::success();
 }
 
+Result<void> WindowsUacBackend::cleanDisk(const std::string& device_path) {
+    return pathRpc(proto_ns::WIRE_CLEAN_DISK, device_path);
+}
+
+Result<void> WindowsUacBackend::rescanDisk(const std::string& device_path) {
+    return pathRpc(proto_ns::WIRE_RESCAN_DISK, device_path);
+}
+
+Result<void> WindowsUacBackend::pathRpc(proto_ns::WireMethod method,
+                                        const std::string& device_path) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::PathRequest req;
+    req.set_device_path(device_path);
+    std::string req_ser;
+    req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), method, req_ser, err, reply)) {
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
 // ---------------------------------------------------------------------------
 // Bulk-write shared-memory plane (§6, §14.3)
 // ---------------------------------------------------------------------------
