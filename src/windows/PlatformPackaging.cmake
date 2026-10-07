@@ -64,17 +64,6 @@ if (IMAGER_SIGNED_APP)
                 ${_IMAGER_SIGNTOOL_CERT_ARGS}
                 "${CMAKE_BINARY_DIR}/rpi-imager-callback-relay.exe")
 
-    # The privileged helper must be Authenticode-signed with the same publisher
-    # cert as rpi-imager.exe so §14.4 publisher pinning can succeed.
-    if(NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER AND TARGET rpi-imager-writer)
-        add_custom_command(TARGET rpi-imager-writer POST_BUILD
-            COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256
-                    ${_IMAGER_SIGNTOOL_CERT_ARGS}
-                    "$<TARGET_FILE:rpi-imager-writer>"
-            COMMENT "Signing rpi-imager-writer.exe (§14.4 peer auth)"
-            VERBATIM)
-    endif()
-
     # inf2cat.exe is always x86 regardless of host/target architecture
     find_program(INF2CAT
         NAMES inf2cat inf2cat.exe
@@ -165,6 +154,18 @@ if(NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER AND TARGET rpi-imager-writer)
             "${CMAKE_BINARY_DIR}/deploy"
         COMMENT "Staging rpi-imager-writer.exe into deploy/"
         VERBATIM)
+
+    # The helper must carry the same signature as rpi-imager.exe for §14.4
+    # pinning. A POST_BUILD step can only attach to a target from the directory
+    # that created it, so this signs the staged copy, which is what ships.
+    if(IMAGER_SIGNED_APP)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256
+                    ${_IMAGER_SIGNTOOL_CERT_ARGS}
+                    "${CMAKE_BINARY_DIR}/deploy/rpi-imager-writer.exe"
+            COMMENT "Signing rpi-imager-writer.exe (§14.4 peer auth)"
+            VERBATIM)
+    endif()
 endif()
 
 add_custom_command(TARGET ${PROJECT_NAME}
