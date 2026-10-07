@@ -32,7 +32,7 @@ proto::ErrorCode mapFileError(FileError e) {
         case FileError::kLockError: return proto::ERROR_DEVICE_BUSY;
         case FileError::kSyncError: return proto::ERROR_SYNC_FAILED;
         case FileError::kFlushError: return proto::ERROR_SYNC_FAILED;
-        case FileError::kCancelled: return proto::ERROR_CANCELLED;
+        case FileError::kCancelled: return proto::ERROR_OPERATION_CANCELLED;
         case FileError::kTimeout: return proto::ERROR_DEVICE_IO;
         default: return proto::ERROR_UNKNOWN;
     }

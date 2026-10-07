@@ -106,10 +106,10 @@ proto_ns::ErrorInfo elevationFailureFromStatus(int status) {
             return makeError(proto_ns::ERROR_HELPER_INSTALL_REJECTED,
                              "pkexec permission denied");
         }
-        return makeError(proto_ns::ERROR_CANCELLED,
+        return makeError(proto_ns::ERROR_OPERATION_CANCELLED,
                          "privilege elevation failed (exit " + std::to_string(code) + ")");
     }
-    return makeError(proto_ns::ERROR_CANCELLED,
+    return makeError(proto_ns::ERROR_OPERATION_CANCELLED,
                      "privileged helper exited before connecting");
 }
 
