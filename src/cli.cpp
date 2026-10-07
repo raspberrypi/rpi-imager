@@ -175,7 +175,12 @@ int Cli::run()
 
     // Check for elevated privileges where the in-process path still needs them.
 #if defined(Q_OS_LINUX)
-    if (!PlatformQuirks::hasElevatedPrivileges())
+#if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+    const bool helperWrites = rpi_imager::preferNativePrivilegedHelper("RPI_IMAGER_USE_LINUX_HELPER");
+#else
+    const bool helperWrites = false;
+#endif
+    if (!helperWrites && !PlatformQuirks::hasElevatedPrivileges())
     {
         // Common error message
         const char* commonMsg = "Writing to storage devices requires elevated privileges.";
@@ -200,7 +205,7 @@ int Cli::run()
         return 1;
     }
 #elif defined(Q_OS_WIN)
-    if (!preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")
+    if (!rpi_imager::preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")
         && !PlatformQuirks::hasElevatedPrivileges())
     {
         std::cerr << "ERROR: Not running as Administrator." << std::endl;
