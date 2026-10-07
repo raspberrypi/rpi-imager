@@ -153,7 +153,8 @@ private:
     // Dedicated thread for curl_multi event loop
     QThread *_thread = nullptr;
     
-    // curl_multi handle (only accessed from _thread)
+    // curl_multi handle: used on _thread; set and cleared under _mutex, which
+    // queueFetch() also holds to read it for curl_multi_wakeup()
     CURLM *_multi = nullptr;
     
     // Pending requests queue (protected by _mutex)
