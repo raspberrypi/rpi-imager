@@ -140,11 +140,16 @@ void IconMultiFetcher::runEventLoop()
 {
     qDebug() << "IconMultiFetcher: Event loop starting";
     
-    // Initialize curl_multi handle
-    _multi = curl_multi_init();
-    if (!_multi) {
+    CURLM *multi = curl_multi_init();
+    if (!multi) {
         qCritical() << "IconMultiFetcher: Failed to initialize curl_multi";
         return;
+    }
+    {
+        // queueFetch() reads _multi under the mutex from the caller's thread,
+        // to wake curl_multi_poll, so it is published under it too.
+        QMutexLocker locker(&_mutex);
+        _multi = multi;
     }
     
     // Configure multi handle for optimal icon fetching
@@ -197,9 +202,13 @@ void IconMultiFetcher::runEventLoop()
     _activeTransfers.clear();
     _inFlightUrls.clear();
     
-    curl_multi_cleanup(_multi);
-    _multi = nullptr;
-    
+    {
+        // Held across the cleanup so queueFetch() cannot wake a freed handle.
+        QMutexLocker locker(&_mutex);
+        curl_multi_cleanup(_multi);
+        _multi = nullptr;
+    }
+
     qDebug() << "IconMultiFetcher: Event loop exiting";
 }
 
