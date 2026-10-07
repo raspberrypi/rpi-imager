@@ -568,8 +568,12 @@ static bool isValidInterfaceName(const QString& name) {
 }
 
 bool hasNetworkConnectivity() {
-    // Return cached value if valid (invalidated by netlink monitor on changes)
-    if (g_networkConnectivityCacheValid.load(std::memory_order_relaxed)) {
+    // The cache is only as good as whatever invalidates it, and that is the
+    // netlink monitor. Without one running -- embedded mode never starts it --
+    // a cached "offline" taken before a slow PHY had its link stood for good,
+    // so the link coming up was never seen. Unmonitored, read it fresh.
+    if (g_monitorRunning.load(std::memory_order_acquire)
+        && g_networkConnectivityCacheValid.load(std::memory_order_relaxed)) {
         return g_cachedNetworkConnectivity.load(std::memory_order_relaxed);
     }
     
@@ -672,7 +676,10 @@ bool isNetworkReady() {
 void startNetworkMonitoring(NetworkStatusCallback callback) {
     // Stop any existing monitoring
     stopNetworkMonitoring();
-    
+
+    // Whatever was cached before this point had nothing watching it.
+    g_networkConnectivityCacheValid.store(false, std::memory_order_relaxed);
+
     // Set callback under mutex
     pthread_mutex_lock(&g_callbackMutex);
     g_networkCallback = callback;

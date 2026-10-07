@@ -11,7 +11,8 @@
  * technique embedded_scaling/run.sh uses for /sys/class/drm.
  *
  * Prints CONNECTIVITY=1 or CONNECTIVITY=0 on stdout. The function caches its
- * answer in process-wide state, so each case gets a fresh process.
+ * answer in process-wide state while the netlink monitor runs, so each case
+ * gets a fresh process.
  */
 
 #include "platformquirks.h"
@@ -188,10 +189,34 @@ int openUrlViaPortalAttempt()
     return 0;
 }
 
+// Embedded Imager asks ten times a second and never starts the netlink
+// monitor. A PHY slow to negotiate is still down at the first ask, so this
+// asks, brings eth0 up in the mounted fixture, and asks again in the same
+// process -- the sequence a cached "offline" used to swallow for good.
+int linkComesUp()
+{
+    const bool first = PlatformQuirks::hasNetworkConnectivity();
+    FILE* f = std::fopen("/sys/class/net/eth0/operstate", "w");
+    if (!f) {
+        std::printf("LINKUP=skip\n");
+        return 0;
+    }
+    std::fputs("up\n", f);
+    std::fclose(f);
+    const bool later = PlatformQuirks::hasNetworkConnectivity();
+    std::printf("FIRST=%d LATER=%d\n", first ? 1 : 0, later ? 1 : 0);
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
+    if (argc > 1 && std::strcmp(argv[1], "linkup") == 0) {
+        const int rc = linkComesUp();
+        std::fflush(stdout);
+        return rc;
+    }
     if (argc > 1 && std::strcmp(argv[1], "portal") == 0) {
         const int rc = openUrlViaPortalAttempt();
         std::fflush(stdout);
