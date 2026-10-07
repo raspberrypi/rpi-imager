@@ -6,14 +6,20 @@
 #   - windows/rpi-imager.rc.in (VERSIONINFO CompanyName)
 #   - windows/rpi-imager.iss.in (Inno Setup publisher)
 #
+# The publisher name and the signer's O= are separate because the publisher
+# name also forms the install directory: changing it would move fresh installs
+# while upgrades stay put. Only the signer name has to match the certificate.
+#
 # Downstream FOSS developers testing the Windows privileged helper locally
-# override RPI_IMAGER_PUBLISHER_ORG at CMake configure time to match a
+# override RPI_IMAGER_SIGNER_ORG at CMake configure time to match a
 # self-signed code-signing cert; thumbprints are auto-discovered from the
 # Windows cert store when RPI_IMAGER_AUTO_TRUST_SIGNING_CERT is ON (default).
 # See doc/windows-privileged-helper-dev.md.
 
 set(RPI_IMAGER_PUBLISHER_ORG "Raspberry Pi Ltd" CACHE STRING
-    "Authenticode publisher Organization (O=) pinned by the Windows helper (§14.4)")
+    "Publisher shown in VERSIONINFO and by the installer, and the install directory name")
+set(RPI_IMAGER_SIGNER_ORG "Raspberry Pi Limited" CACHE STRING
+    "Authenticode signer Organization (O=) pinned by the Windows helper (§14.4); must match the signing cert")
 set(RPI_IMAGER_WINDOWS_CLIENT_EXE "rpi-imager.exe" CACHE STRING
     "Client executable basename accepted by the Windows helper peer auth")
 set(RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS "" CACHE STRING
@@ -21,7 +27,7 @@ set(RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS "" CACHE STRING
 set(IMAGER_SIGNING_CERT_SHA1 "" CACHE STRING
     "SHA-1 thumbprint passed to signtool (/sha1). Auto-discovered on Windows when empty and RPI_IMAGER_AUTO_TRUST_SIGNING_CERT is ON.")
 option(RPI_IMAGER_AUTO_TRUST_SIGNING_CERT
-    "On Windows hosts, discover code-signing cert thumbprints from the cert store at configure time (matched by RPI_IMAGER_PUBLISHER_ORG)"
+    "On Windows hosts, discover code-signing cert thumbprints from the cert store at configure time (matched by RPI_IMAGER_SIGNER_ORG)"
     ON)
 
 set(_rpi_discovered_thumbs "")
@@ -29,13 +35,13 @@ set(_rpi_discovered_primary "")
 if(RPI_IMAGER_AUTO_TRUST_SIGNING_CERT AND CMAKE_HOST_WIN32)
     include(${CMAKE_CURRENT_LIST_DIR}/rpi_imager_discover_signing_cert.cmake)
     rpi_imager_discover_windows_signing_cert(
-        "${RPI_IMAGER_PUBLISHER_ORG}"
+        "${RPI_IMAGER_SIGNER_ORG}"
         _rpi_discovered_thumbs
         _rpi_discovered_primary)
     if(_rpi_discovered_thumbs)
         message(STATUS
             "Auto-discovered Windows code-signing thumbprint(s) for "
-            "'${RPI_IMAGER_PUBLISHER_ORG}': ${_rpi_discovered_thumbs}")
+            "'${RPI_IMAGER_SIGNER_ORG}': ${_rpi_discovered_thumbs}")
     endif()
     if(_rpi_discovered_primary AND IMAGER_SIGNING_CERT_SHA1 STREQUAL "")
         set(IMAGER_SIGNING_CERT_SHA1 "${_rpi_discovered_primary}" CACHE STRING
@@ -145,7 +151,7 @@ if(CMAKE_HOST_WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER
    AND RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINT_COUNT EQUAL 0)
     message(WARNING
         "Windows helper peer auth has no trusted signer thumbprints configured. "
-        "Install a code-signing cert whose O= matches RPI_IMAGER_PUBLISHER_ORG, "
+        "Install a code-signing cert whose O= matches RPI_IMAGER_SIGNER_ORG, "
         "set RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS, or enable "
         "RPI_IMAGER_AUTO_TRUST_SIGNING_CERT.")
 endif()

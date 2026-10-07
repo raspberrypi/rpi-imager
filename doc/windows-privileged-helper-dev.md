@@ -10,7 +10,7 @@ It enforces **publisher-pinned peer authentication** before honoring pipe RPCs
 1. named `rpi-imager.exe` (or whatever `RPI_IMAGER_WINDOWS_CLIENT_EXE` is set to),
 2. installed beside `rpi-imager-writer.exe`, and
 3. **Authenticode-signed**, with signer certificate **Organization (O=)** matching
-   `RPI_IMAGER_PUBLISHER_ORG`, and leaf **SHA-1 thumbprint** in the peer-auth
+   `RPI_IMAGER_SIGNER_ORG`, and leaf **SHA-1 thumbprint** in the peer-auth
    allowlist (auto-populated from your cert store by default).
 
 The GUI client (`rpi-imager.exe`) runs with an **`asInvoker` UAC manifest** — no
@@ -31,14 +31,14 @@ After `WinVerifyTrust` succeeds on the client binary, the helper inspects the
 
 | Check | CMake source | When enforced |
 |-------|----------------|---------------|
-| Organization (`O=`) | `RPI_IMAGER_PUBLISHER_ORG` → `kPublisherOrganizationWide` | Always |
+| Organization (`O=`) | `RPI_IMAGER_SIGNER_ORG` → `kSignerOrganizationWide` | Always |
 | SHA-1 thumbprint | `kTrustedSignerThumbprints[]` in generated `rpi_imager_identity.h` | When the list is non-empty |
 
 The thumbprint allowlist is built at **CMake configure time** from:
 
 1. **Auto-discovery** (default, `RPI_IMAGER_AUTO_TRUST_SIGNING_CERT=ON`): on a
    Windows host, scans `CurrentUser\My` and `LocalMachine\My` for valid
-   code-signing certs whose `O=` matches `RPI_IMAGER_PUBLISHER_ORG`.
+   code-signing certs whose `O=` matches `RPI_IMAGER_SIGNER_ORG`.
 2. **Manual extras**: `RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS` (semicolon-separated;
    useful for cert rotation or non-Windows configure hosts).
 3. **`IMAGER_SIGNING_CERT_SHA1`**: always merged into the allowlist when set; also
@@ -89,11 +89,11 @@ Import-Certificate -FilePath $exportPath -CertStoreLocation Cert:\CurrentUser\Tr
 ### 2. Configure CMake
 
 On a **Windows** machine with the cert installed, thumbprints are discovered
-automatically — you only need to set the publisher org:
+automatically — you only need to set the signer org:
 
 ```powershell
 cmake -S src -B build `
-  -DRPI_IMAGER_PUBLISHER_ORG="$org" `
+  -DRPI_IMAGER_SIGNER_ORG="$org" `
   -DQt6_ROOT=C:\Qt\6.9.0\mingw_64 `
   -DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64
 ```
@@ -174,7 +174,7 @@ the troubleshooting table below.
 |--------|----------------|
 | Helper exits instantly, client cannot connect | Unsigned client or helper; exes not co-located |
 | `WinVerifyTrust` fails | Cert not in `CurrentUser\Root` / `TrustedPublisher` |
-| Pinning fails despite valid signature | `RPI_IMAGER_PUBLISHER_ORG` does not match cert `O=` — reconfigure CMake |
+| Pinning fails despite valid signature | `RPI_IMAGER_SIGNER_ORG` does not match cert `O=` — reconfigure CMake |
 | Pinning fails, `O=` is correct | Cert not in store at configure time, or auto-discovery off — set `RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS` and reconfigure |
 | CMake shows no auto-discovered thumbprints | Cert `O=` mismatch, cert expired, or no private key — fix cert or pass thumbprint manually |
 | Works once, fails after rebuild | Forgot to re-sign after linking new binaries |
@@ -210,7 +210,7 @@ to a publicly trusted code-signing CA. Options include:
 - **Commercial EV/OV code-signing CAs** — paid; required for SmartScreen
   reputation without a long “unknown publisher” period.
 
-Set `RPI_IMAGER_PUBLISHER_ORG` to the certificate `Organization` field. On the
+Set `RPI_IMAGER_SIGNER_ORG` to the certificate `Organization` field. On the
 Windows release build host, auto-discovery picks up the signing cert thumbprint;
 add extra thumbprints via `RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS` during cert
 rotation. Sign both `rpi-imager.exe` and `rpi-imager-writer.exe` before publishing.
@@ -233,7 +233,8 @@ releases.
 | Variable | Purpose |
 |----------|---------|
 | `RPI_IMAGER_DISABLE_WINDOWS_HELPER` | Omit the helper, PAL backend, and adapter (default: **built**) |
-| `RPI_IMAGER_PUBLISHER_ORG` | Publisher `O=` pinned by peer auth (override for dev) |
+| `RPI_IMAGER_SIGNER_ORG` | Signer `O=` pinned by peer auth (default `Raspberry Pi Limited`; override for dev) |
+| `RPI_IMAGER_PUBLISHER_ORG` | Publisher name in VERSIONINFO and the installer, and the install directory; not used by peer auth |
 | `RPI_IMAGER_AUTO_TRUST_SIGNING_CERT` | Auto-discover thumbprints from cert store (default ON) |
 | `RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINTS` | Extra thumbprints (manual / rotation / non-Windows configure) |
 | `IMAGER_SIGNING_CERT_SHA1` | `signtool /sha1` cert; auto-discovered when empty |

@@ -16,7 +16,7 @@ namespace rpi_imager::writer {
 
 namespace {
 
-using rpi_imager::identity::kPublisherOrganizationWide;
+using rpi_imager::identity::kSignerOrganizationWide;
 using rpi_imager::identity::kTrustedSignerThumbprintCount;
 using rpi_imager::identity::kTrustedSignerThumbprints;
 using rpi_imager::identity::kWindowsClientExeName;
@@ -129,7 +129,7 @@ bool publisherMatchesPinnedIdentity(HANDLE wvt_state) {
 
     std::wstring org;
     if (!readCertOrganization(prov_cert->pCert, org)) return false;
-    if (!iequals(org.c_str(), kPublisherOrganizationWide)) return false;
+    if (!iequals(org.c_str(), kSignerOrganizationWide)) return false;
 
     std::wstring thumbprint;
     if (!readCertSha1ThumbprintHex(prov_cert->pCert, thumbprint)) return false;
