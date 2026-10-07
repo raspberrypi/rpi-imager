@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -177,7 +178,15 @@ RpcResult DuplexConnection::rpcResultFromResponse(const proto::WireResponse& res
 void DuplexConnection::detach() {
     stop_.store(true);
     attached_.store(false);
-    if (reader_.joinable()) {
+    // The reader blocks reading the connection until the peer speaks;
+    // joining without waking it hung every client at exit. The reader also
+    // detaches itself on end of stream, and must not join itself.
+    if (reader_.joinable() && reader_.get_id() != std::this_thread::get_id()) {
+#if defined(_WIN32)
+        if (io_ != nullptr) (void)CancelIoEx(io_, nullptr);
+#else
+        if (io_ >= 0) (void)::shutdown(io_, SHUT_RDWR);
+#endif
         reader_.join();
     }
 #if defined(_WIN32)
