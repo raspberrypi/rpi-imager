@@ -7,6 +7,11 @@
 #include "write_buffer_provider.h"
 #include "privileged_io/privileged_writer.h"
 #include "privileged_io_glue.h"
+#include "aligned_buffer.h"
+
+#include <QDateTime>
+#include <QString>
+#include <QSysInfo>
 
 #include <atomic>
 #include <chrono>
@@ -19,7 +24,6 @@
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <sys/utsname.h>
 #include <unistd.h>
 #include <vector>
 
@@ -132,12 +136,9 @@ std::string jsonEscape(const std::string& s) {
 }
 
 std::string isoTimestampNow() {
-    char ts[40];
-    time_t now = time(nullptr);
-    struct tm tm_buf;
-    localtime_r(&now, &tm_buf);
-    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S%z", &tm_buf);
-    return ts;
+    const QDateTime now = QDateTime::currentDateTime();
+    return now.toOffsetFromUtc(now.offsetFromUtc())
+        .toString(Qt::ISODate).toStdString();
 }
 
 }  // namespace
@@ -214,7 +215,7 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
     if (async_ok && opts.zero_copy) {
         provider = file->CreateWriteBufferProvider();
         if (provider) {
-            std::size_t pageSize = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+            std::size_t pageSize = GetDirectIOAlignment();
             if (pageSize == 0) pageSize = 4096;
             zc_slot_bytes = ((opts.chunk_bytes + pageSize - 1) / pageSize) * pageSize;
             if (provider->allocateSlots(static_cast<std::size_t>(opts.queue_depth),
@@ -425,16 +426,17 @@ int runFileOperationsBenchmark(const BenchmarkOptions& opts) {
                          "benchmark: could not open output %s for writing\n",
                          opts.output_path.c_str());
         } else {
-            struct utsname uts{};
-            uname(&uts);
+            const std::string sysname = QSysInfo::kernelType().toStdString();
+            const std::string release = QSysInfo::kernelVersion().toStdString();
+            const std::string machine = QSysInfo::currentCpuArchitecture().toStdString();
 
             out << "{\n";
             out << "  \"schema\": \"rpi-imager-benchmark/v1\",\n";
             out << "  \"timestamp\": \"" << jsonEscape(isoTimestampNow()) << "\",\n";
             out << "  \"host\": {\n";
-            out << "    \"sysname\": \"" << jsonEscape(uts.sysname) << "\",\n";
-            out << "    \"release\": \"" << jsonEscape(uts.release) << "\",\n";
-            out << "    \"machine\": \"" << jsonEscape(uts.machine) << "\"\n";
+            out << "    \"sysname\": \"" << jsonEscape(sysname) << "\",\n";
+            out << "    \"release\": \"" << jsonEscape(release) << "\",\n";
+            out << "    \"machine\": \"" << jsonEscape(machine) << "\"\n";
             out << "  },\n";
             out << "  \"config\": {\n";
             out << "    \"backend\": \"" << jsonEscape(backend) << "\",\n";

@@ -529,7 +529,7 @@ int main(int argc, char *argv[])
         qWarning() << "Not running with elevated privileges - device access may fail";
     }
 #elif defined(Q_OS_WIN)
-    if (!preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")
+    if (!rpi_imager::preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")
         && !PlatformQuirks::hasElevatedPrivileges())
     {
         hasPermissionIssue = true;
