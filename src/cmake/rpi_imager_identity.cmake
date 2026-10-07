@@ -43,9 +43,12 @@ if(RPI_IMAGER_AUTO_TRUST_SIGNING_CERT AND CMAKE_HOST_WIN32)
             "Auto-discovered Windows code-signing thumbprint(s) for "
             "'${RPI_IMAGER_SIGNER_ORG}': ${_rpi_discovered_thumbs}")
     endif()
+    # A normal variable, not the cache: set(CACHE) cannot replace the empty
+    # entry above, and a forced one would outlive a certificate rotation.
+    # Discovering afresh each configure keeps it current; a value the user
+    # set explicitly is non-empty and so is never replaced.
     if(_rpi_discovered_primary AND IMAGER_SIGNING_CERT_SHA1 STREQUAL "")
-        set(IMAGER_SIGNING_CERT_SHA1 "${_rpi_discovered_primary}" CACHE STRING
-            "SHA-1 thumbprint passed to signtool (/sha1). Auto-discovered on Windows when empty and RPI_IMAGER_AUTO_TRUST_SIGNING_CERT is ON.")
+        set(IMAGER_SIGNING_CERT_SHA1 "${_rpi_discovered_primary}")
         message(STATUS "Auto-selected IMAGER_SIGNING_CERT_SHA1=${IMAGER_SIGNING_CERT_SHA1}")
     endif()
 endif()

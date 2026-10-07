@@ -32,16 +32,24 @@ function(rpi_imager_discover_windows_signing_cert publisher_org out_thumbprints_
         return()
     endif()
 
+    rpi_imager_parse_signing_cert_discovery("${_discover_output}" _thumbprints _primary)
+    set(${out_thumbprints_var} "${_thumbprints}" PARENT_SCOPE)
+    set(${out_primary_var} "${_primary}" PARENT_SCOPE)
+endfunction()
+
+# The script prints one KEY=VALUE per line, CRLF-terminated. The output cannot
+# be split into a CMake list first, because THUMBPRINTS= is itself
+# semicolon-separated, so each key is matched within its own line instead.
+function(rpi_imager_parse_signing_cert_discovery output out_thumbprints_var out_primary_var)
+    set(_text "\n${output}")
     set(_thumbprints "")
     set(_primary "")
-    foreach(_line IN LISTS _discover_output)
-        if(_line MATCHES "^THUMBPRINTS=(.*)$")
-            set(_thumbprints "${CMAKE_MATCH_1}")
-        elseif(_line MATCHES "^PRIMARY=(.*)$")
-            set(_primary "${CMAKE_MATCH_1}")
-        endif()
-    endforeach()
-
+    if(_text MATCHES "\nTHUMBPRINTS=([^\r\n]*)")
+        set(_thumbprints "${CMAKE_MATCH_1}")
+    endif()
+    if(_text MATCHES "\nPRIMARY=([^\r\n]*)")
+        set(_primary "${CMAKE_MATCH_1}")
+    endif()
     set(${out_thumbprints_var} "${_thumbprints}" PARENT_SCOPE)
     set(${out_primary_var} "${_primary}" PARENT_SCOPE)
 endfunction()
