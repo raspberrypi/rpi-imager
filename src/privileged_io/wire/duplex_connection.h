@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "duplex_stream.h"
 #include "frame.h"
 #include "proto/imager.pb.h"
 
@@ -14,6 +15,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -44,11 +46,7 @@ public:
     DuplexConnection(const DuplexConnection&) = delete;
     DuplexConnection& operator=(const DuplexConnection&) = delete;
 
-#if defined(_WIN32)
-    bool attach(void* pipe_handle);
-#else
-    bool attach(int sock_fd);
-#endif
+    bool attach(std::unique_ptr<DuplexStream> stream);
     void detach();
 
     bool isAttached() const { return attached_.load(); }
@@ -74,15 +72,13 @@ public:
 private:
     void readerLoop();
     void handleServerPayload(const std::string& payload, int ancillary_fd);
-    bool writeRequest(const proto::WireRequest& req);
+    bool writeRequest(const proto::WireRequest& req, int& os_error);
     void failAllOutstandingAsyncLocked(const proto::ErrorInfo& err);
     RpcResult rpcResultFromResponse(const proto::WireResponse& response, int ancillary_fd);
 
-#if defined(_WIN32)
-    void* io_ = nullptr;
-#else
-    int io_ = -1;
-#endif
+    // Replaced and released only under write_mutex_, so no writer is still
+    // inside it; the reader is joined before that, or is the one releasing.
+    std::unique_ptr<DuplexStream> stream_;
 
     std::atomic<bool> attached_{false};
     std::atomic<bool> stop_{false};

@@ -21,6 +21,7 @@
 #include "wire/handshake.h"
 #include "wire/protocol.h"
 #include "wire/win_shared_memory.h"
+#include "wire/win_pipe_stream.h"
 #include "proto/imager.pb.h"
 
 // The helper opens \\.\PhysicalDriveN with its own handle and writes from its
@@ -801,20 +802,6 @@ std::wstring pipeNameFromArgs(int argc, char** argv) {
     return std::wstring();
 }
 
-bool writeAll(HANDLE pipe, const char* data, std::size_t len) {
-    std::size_t off = 0;
-    while (off < len) {
-        DWORD wrote = 0;
-        const DWORD chunk = static_cast<DWORD>(
-            (len - off) > 0x7fffffffu ? 0x7fffffffu : (len - off));
-        if (!WriteFile(pipe, data + off, chunk, &wrote, nullptr) || wrote == 0) {
-            return false;
-        }
-        off += wrote;
-    }
-    return true;
-}
-
 // Creates a named-pipe security descriptor granting generic access to
 // interactive users (§14.4). Caller must LocalFree the returned descriptor.
 PSECURITY_DESCRIPTOR createPipeSecurityDescriptor() {
@@ -835,7 +822,8 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
         return;
     }
 
-    WireOutbound outbound(pipe);
+    wire::WinPipeStream stream(pipe);
+    WireOutbound outbound(stream);
     DriveWatchService drive_watch;
     Helper helper(client_pid);
     helper.setPushContext(&outbound, &drive_watch);
@@ -850,11 +838,11 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
             if (oversize) {
                 break;
             }
-            DWORD got = 0;
-            if (!ReadFile(pipe, buf, sizeof(buf), &got, nullptr) || got == 0) {
+            const wire::StreamChunk chunk = stream.read(buf, sizeof(buf));
+            if (!chunk.ok) {
                 break;
             }
-            acc.append(buf, got);
+            acc.append(buf, chunk.len);
             continue;
         }
 
@@ -902,23 +890,13 @@ int RpiImagerWriterServiceMainWin(int argc, char** argv) {
     sa.lpSecurityDescriptor = psd;
     sa.bInheritHandle = FALSE;
 
-    HANDLE pipe = CreateNamedPipeW(
-        pipe_name.c_str(),
-        PIPE_ACCESS_DUPLEX,
-        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-        1,                       // a single client (the launching GUI)
-        64 * 1024, 64 * 1024,
-        0,
-        &sa);
+    HANDLE pipe = wire::createPipeServer(pipe_name, &sa);
     LocalFree(psd);
     if (pipe == INVALID_HANDLE_VALUE) {
         return 3;
     }
 
-    const BOOL connected =
-        ConnectNamedPipe(pipe, nullptr) ? TRUE
-                                        : (GetLastError() == ERROR_PIPE_CONNECTED);
-    if (connected) {
+    if (wire::connectPipeServer(pipe)) {
         DWORD client_pid = 0;
         if (GetNamedPipeClientProcessId(pipe, &client_pid) && client_pid != 0) {
             serviceLoop(pipe, client_pid);

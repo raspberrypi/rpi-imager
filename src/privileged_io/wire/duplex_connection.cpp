@@ -7,97 +7,13 @@
 #include "server_message.h"
 
 #include <chrono>
-#include <cstring>
 #include <thread>
 #include <utility>
 #include <vector>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
-#include <cerrno>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
-
 namespace rpi_imager::privileged::wire {
 
 namespace {
-
-#if defined(_WIN32)
-bool writeAllHandle(void* handle, const char* data, std::size_t len) {
-    auto* pipe = static_cast<HANDLE>(handle);
-    std::size_t off = 0;
-    while (off < len) {
-        DWORD wrote = 0;
-        const DWORD chunk = static_cast<DWORD>(
-            (len - off) > 0x7fffffffu ? 0x7fffffffu : (len - off));
-        if (!WriteFile(pipe, data + off, chunk, &wrote, nullptr) || wrote == 0) {
-            return false;
-        }
-        off += wrote;
-    }
-    return true;
-}
-
-bool readSomeHandle(void* handle, char* buf, std::size_t cap, std::size_t& out_len) {
-    auto* pipe = static_cast<HANDLE>(handle);
-    DWORD got = 0;
-    const DWORD chunk = static_cast<DWORD>(cap > 0x7fffffffu ? 0x7fffffffu : cap);
-    if (!ReadFile(pipe, buf, chunk, &got, nullptr) || got == 0) {
-        return false;
-    }
-    out_len = got;
-    return true;
-}
-#else
-bool writeAllFd(int fd, const char* data, std::size_t len) {
-    std::size_t off = 0;
-    while (off < len) {
-        const ssize_t n = ::write(fd, data + off, len - off);
-        if (n <= 0) {
-            return false;
-        }
-        off += static_cast<std::size_t>(n);
-    }
-    return true;
-}
-
-struct SocketReadChunk {
-    std::size_t len = 0;
-    int ancillary_fd = -1;
-    bool ok = false;
-};
-
-SocketReadChunk readSomeSocket(int fd, char* buf, std::size_t cap) {
-    SocketReadChunk out;
-    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {0};
-    struct iovec iov {};
-    iov.iov_base = buf;
-    iov.iov_len = cap;
-    struct msghdr msg {};
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = cmsg_buf;
-    msg.msg_controllen = sizeof(cmsg_buf);
-
-    const ssize_t n = ::recvmsg(fd, &msg, 0);
-    if (n <= 0) {
-        return out;
-    }
-    out.len = static_cast<std::size_t>(n);
-    for (struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr;
-         cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS &&
-            cmsg->cmsg_len == CMSG_LEN(sizeof(int))) {
-            std::memcpy(&out.ancillary_fd, CMSG_DATA(cmsg), sizeof(out.ancillary_fd));
-        }
-    }
-    out.ok = true;
-    return out;
-}
-#endif
 
 proto::ErrorInfo makeIoError(proto::ErrorCode code, const char* detail, int kernel_errno) {
     proto::ErrorInfo e;
@@ -115,31 +31,20 @@ DuplexConnection::~DuplexConnection() {
     detach();
 }
 
-#if defined(_WIN32)
-bool DuplexConnection::attach(void* pipe_handle) {
-    if (pipe_handle == nullptr || pipe_handle == INVALID_HANDLE_VALUE) {
+bool DuplexConnection::attach(std::unique_ptr<DuplexStream> stream) {
+    if (!stream) {
         return false;
     }
     detach();
-    io_ = pipe_handle;
+    {
+        std::lock_guard<std::mutex> lk(write_mutex_);
+        stream_ = std::move(stream);
+    }
     stop_.store(false);
     attached_.store(true);
     reader_ = std::thread([this] { readerLoop(); });
     return true;
 }
-#else
-bool DuplexConnection::attach(int sock_fd) {
-    if (sock_fd < 0) {
-        return false;
-    }
-    detach();
-    io_ = sock_fd;
-    stop_.store(false);
-    attached_.store(true);
-    reader_ = std::thread([this] { readerLoop(); });
-    return true;
-}
-#endif
 
 void DuplexConnection::failAllOutstandingAsyncLocked(const proto::ErrorInfo& err) {
     std::vector<AsyncCallback> callbacks;
@@ -180,20 +85,19 @@ void DuplexConnection::detach() {
     attached_.store(false);
     // The reader blocks reading the connection until the peer speaks;
     // joining without waking it hung every client at exit. The reader also
-    // detaches itself on end of stream, and must not join itself.
+    // detaches itself on end of stream, and must not join itself. Cancelling
+    // also aborts a write blocked on the stream, which the release below
+    // would otherwise wait on.
+    if (stream_) {
+        stream_->cancel();
+    }
     if (reader_.joinable() && reader_.get_id() != std::this_thread::get_id()) {
-#if defined(_WIN32)
-        if (io_ != nullptr) (void)CancelIoEx(io_, nullptr);
-#else
-        if (io_ >= 0) (void)::shutdown(io_, SHUT_RDWR);
-#endif
         reader_.join();
     }
-#if defined(_WIN32)
-    io_ = nullptr;
-#else
-    io_ = -1;
-#endif
+    {
+        std::lock_guard<std::mutex> lk(write_mutex_);
+        stream_.reset();
+    }
     acc_ = FrameAccumulator{};
 
     const proto::ErrorInfo disconnected =
@@ -221,18 +125,22 @@ void DuplexConnection::setEventCallback(EventCallback cb) {
     event_cb_ = std::move(cb);
 }
 
-bool DuplexConnection::writeRequest(const proto::WireRequest& req) {
+bool DuplexConnection::writeRequest(const proto::WireRequest& req, int& os_error) {
+    os_error = 0;
     std::string ser;
     if (!req.SerializeToString(&ser) || ser.size() > kMaxFrameBytes) {
         return false;
     }
     const std::string frame = encodeFrame(ser);
     std::lock_guard<std::mutex> lk(write_mutex_);
-#if defined(_WIN32)
-    return writeAllHandle(io_, frame.data(), frame.size());
-#else
-    return writeAllFd(io_, frame.data(), frame.size());
-#endif
+    if (!stream_) {
+        return false;
+    }
+    if (!stream_->write(frame.data(), frame.size(), -1)) {
+        os_error = stream_->lastError();
+        return false;
+    }
+    return true;
 }
 
 RpcResult DuplexConnection::call(proto::WireMethod method,
@@ -259,14 +167,10 @@ RpcResult DuplexConnection::call(proto::WireMethod method,
     req.set_payload(request_payload);
     lk.unlock();
 
-    if (!writeRequest(req)) {
+    int err = 0;
+    if (!writeRequest(req, err)) {
         lk.lock();
         pending_.reset();
-#if defined(_WIN32)
-        const int err = static_cast<int>(GetLastError());
-#else
-        const int err = errno;
-#endif
         out.error = makeIoError(proto::ERROR_DEVICE_IO, "transport write failed", err);
         return out;
     }
@@ -342,12 +246,8 @@ void DuplexConnection::submitAsync(proto::WireMethod method,
     req.set_request_id(request_id);
     req.set_payload(request_payload);
 
-    if (!writeRequest(req)) {
-#if defined(_WIN32)
-        const int err = static_cast<int>(GetLastError());
-#else
-        const int err = errno;
-#endif
+    int err = 0;
+    if (!writeRequest(req, err)) {
         const proto::ErrorInfo io_err =
             makeIoError(proto::ERROR_DEVICE_IO, "transport write failed", err);
         alk.lock();
@@ -435,15 +335,7 @@ void DuplexConnection::readerLoop() {
             return;
         }
 
-#if defined(_WIN32)
-        std::size_t got = 0;
-        if (!readSomeHandle(io_, buf, sizeof(buf), got)) {
-            detach();
-            return;
-        }
-        acc_.append(buf, got);
-#else
-        const SocketReadChunk chunk = readSomeSocket(io_, buf, sizeof(buf));
+        const StreamChunk chunk = stream_->read(buf, sizeof(buf));
         if (!chunk.ok) {
             detach();
             return;
@@ -452,7 +344,6 @@ void DuplexConnection::readerLoop() {
             pending_ancillary_fd = chunk.ancillary_fd;
         }
         acc_.append(buf, chunk.len);
-#endif
     }
 }
 

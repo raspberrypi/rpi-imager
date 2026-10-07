@@ -17,6 +17,7 @@
 #include "../wire/drive_descriptor_json.h"
 #include "../wire/duplex_connection.h"
 #include "../wire/protocol.h"
+#include "../wire/win_pipe_stream.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -156,9 +157,7 @@ bool ensureConnectedImpl(WindowsUacBackend::State* st,
         (st->options.handshake_timeout_ms ? st->options.handshake_timeout_ms : 30000);
     HANDLE pipe = INVALID_HANDLE_VALUE;
     for (;;) {
-        pipe = CreateFileW(pipe_name.c_str(),
-                           GENERIC_READ | GENERIC_WRITE,
-                           0, nullptr, OPEN_EXISTING, 0, nullptr);
+        pipe = wire::openPipeClient(pipe_name);
         if (pipe != INVALID_HANDLE_VALUE) {
             break;
         }
@@ -177,7 +176,7 @@ bool ensureConnectedImpl(WindowsUacBackend::State* st,
     st->pipe = pipe;
     st->connected = true;
     if (!st->duplex.isAttached()) {
-        st->duplex.attach(pipe);
+        st->duplex.attach(std::make_unique<wire::WinPipeStream>(pipe));
     }
     return true;
 }

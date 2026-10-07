@@ -620,6 +620,23 @@ if(WIN32)
 endif()
 
 # ============================================================================
+# WinPipeStream -- Windows only, with the helper
+# ============================================================================
+# The pipe between the client and its privileged helper. A synchronous pipe
+# handle queues a write behind the transport's ever-pending read, so the
+# first RPC never completed and the GUI never left start-up; no test opened
+# a real pipe, so nothing showed it.
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+    add_executable(win_pipe_stream_test win_pipe_stream_test.cpp)
+    target_include_directories(win_pipe_stream_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(win_pipe_stream_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(win_pipe_stream_test PRIVATE cxx_std_20)
+    rpi_discover_tests(win_pipe_stream_test)
+endif()
+
+# ============================================================================
 # SecureBootCrypto
 # ============================================================================
 # The RSA signing behind secure boot. Every case that reached it went through

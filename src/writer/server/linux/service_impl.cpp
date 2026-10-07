@@ -19,6 +19,7 @@
 #include "wire/protocol.h"
 #include "wire/linux_shared_memory.h"
 #include "wire/linux_socket_io.h"
+#include "wire/linux_socket_stream.h"
 #include "proto/imager.pb.h"
 
 #include "linux/file_operations_linux.h"
@@ -685,7 +686,8 @@ void serviceLoop(int client_fd) {
     }
     helperLog("client authenticated");
 
-    WireOutbound outbound(client_fd);
+    wire::LinuxSocketStream stream(client_fd);
+    WireOutbound outbound(stream);
     DriveWatchService drive_watch;
     Helper helper;
     helper.setPushContext(&outbound, &drive_watch);
