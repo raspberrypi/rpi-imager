@@ -145,6 +145,7 @@ if(NOT APPLE)
             bcrypt
             crypt32
             setupapi
+            virtdisk
             wintrust
         )
         target_compile_features(rpi-imager-writer PRIVATE cxx_std_20)
