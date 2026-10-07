@@ -4,7 +4,7 @@
 // In-process test backend for IPrivilegedWriter.
 //
 // Backs a session with a regular tempfile rather than a real block device,
-// performs writes via pwrite(2) on a worker thread, and accumulates the
+// performs writes on a worker thread, and accumulates the
 // SessionStats payload that real backends would. No privilege escalation,
 // no IPC, no shared memory — but a faithful enough implementation that
 // the upper-half pipeline (decompression, hashing, ring back-pressure,
@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -50,7 +51,7 @@ public:
         // mirrors production), but tests usually shrink this for speed.
         std::size_t slot_capacity = 1ull * 1024 * 1024;     // 1 MB default
 
-        // If non-zero, sleep this long inside each pwrite() to simulate
+        // If non-zero, sleep this long before each slot write to simulate
         // backend latency. Useful for tests that want to verify pacing
         // behaviour without involving a real disk.
         std::chrono::microseconds simulated_write_latency{0};
@@ -122,8 +123,12 @@ private:
     struct Session {
         std::uint64_t id = 0;
         std::string   device_path;
-        int           fd = -1;
         bool          owns_tempfile = false;
+
+        // The worker and the caller's readChunk/writeChunk share one stream
+        // position, so each seek-and-transfer must hold io_mutex throughout.
+        std::fstream  file;
+        std::mutex    io_mutex;
         proto_ns::OpenOptions options;
 
         std::vector<SlotEntry> slots;

@@ -10,12 +10,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <filesystem>
 #include <random>
 #include <sstream>
-#include <sys/stat.h>
-#include <unistd.h>
 
 namespace rpi_imager::privileged::backends {
 
@@ -31,11 +28,37 @@ std::string makeTempPath() {
     return (dir / ss.str()).string();
 }
 
+// Opening for append creates the file without discarding what a caller-supplied
+// device file already holds; resize_file then sets the length either way.
 bool truncateOrCreate(const std::string& path, std::uint64_t size) {
-    int fd = ::open(path.c_str(), O_RDWR | O_CREAT, 0600);
-    if (fd < 0) return false;
-    bool ok = ::ftruncate(fd, static_cast<off_t>(size)) == 0;
-    ::close(fd);
+    {
+        std::ofstream create(path, std::ios::binary | std::ios::app);
+        if (!create) return false;
+    }
+    std::error_code ec;
+    fs::resize_file(path, size, ec);
+    return !ec;
+}
+
+// Callers hold the session's io_mutex. Every transfer seeks first, which is
+// also what lets one fstream alternate between reading and writing.
+bool writeAt(std::fstream& f, std::uint64_t offset, const void* buf, std::size_t len) {
+    f.clear();
+    f.seekp(static_cast<std::streamoff>(offset));
+    f.write(static_cast<const char*>(buf), static_cast<std::streamsize>(len));
+    return static_cast<bool>(f);
+}
+
+// Reading past the end of the file is a short read, as pread(2) reports it,
+// so only a bad stream counts as failure.
+bool readAt(std::fstream& f, std::uint64_t offset, void* buf, std::size_t len,
+            std::size_t& out_read) {
+    f.clear();
+    f.seekg(static_cast<std::streamoff>(offset));
+    f.read(static_cast<char*>(buf), static_cast<std::streamsize>(len));
+    out_read = static_cast<std::size_t>(f.gcount());
+    const bool ok = !f.bad();
+    f.clear();
     return ok;
 }
 
@@ -62,7 +85,7 @@ InProcessTestBackend::~InProcessTestBackend() {
         sess->stop.store(true);
         sess->queue_cv.notify_all();
         if (sess->worker.joinable()) sess->worker.join();
-        if (sess->fd >= 0) ::close(sess->fd);
+        sess->file.close();
         if (sess->owns_tempfile && !sess->device_path.empty()) {
             std::error_code ec;
             fs::remove(sess->device_path, ec);
@@ -149,8 +172,9 @@ Result<proto_ns::SessionId> InProcessTestBackend::openSession(
             errno));
     }
 
-    sess->fd = ::open(sess->device_path.c_str(), O_RDWR);
-    if (sess->fd < 0) {
+    sess->file.open(sess->device_path,
+                    std::ios::in | std::ios::out | std::ios::binary);
+    if (!sess->file.is_open()) {
         return Result<proto_ns::SessionId>::failure(makeError(
             proto_ns::ERROR_DEVICE_PERMISSION,
             "could not open test device file: " + sess->device_path,
@@ -204,17 +228,15 @@ Result<void> InProcessTestBackend::prepareDevice(
     constexpr std::size_t kMb = 1ull * 1024 * 1024;
     std::vector<std::uint8_t> zeros(kMb, 0);
 
+    std::lock_guard<std::mutex> io(s->io_mutex);
     if (opts.zero_first_mb()) {
-        ssize_t n = ::pwrite(s->fd, zeros.data(), kMb, 0);
-        if (n != static_cast<ssize_t>(kMb)) {
+        if (!writeAt(s->file, 0, zeros.data(), kMb)) {
             return Result<void>::failure(makeError(
                 proto_ns::ERROR_WRITE_FAILED, "zero first MB failed", errno));
         }
     }
     if (opts.zero_last_mb() && options_.device_bytes >= kMb) {
-        off_t off = static_cast<off_t>(options_.device_bytes - kMb);
-        ssize_t n = ::pwrite(s->fd, zeros.data(), kMb, off);
-        if (n != static_cast<ssize_t>(kMb)) {
+        if (!writeAt(s->file, options_.device_bytes - kMb, zeros.data(), kMb)) {
             return Result<void>::failure(makeError(
                 proto_ns::ERROR_WRITE_FAILED, "zero last MB failed", errno));
         }
@@ -291,12 +313,13 @@ Result<std::size_t> InProcessTestBackend::readChunk(const proto_ns::SessionId& s
     if (!s) return Result<std::size_t>::failure(
         makeError(proto_ns::ERROR_SESSION_NOT_FOUND, "no such session"));
 
-    ssize_t n = ::pread(s->fd, buf, len, static_cast<off_t>(offset));
-    if (n < 0) {
+    std::size_t n = 0;
+    std::lock_guard<std::mutex> io(s->io_mutex);
+    if (!readAt(s->file, offset, buf, len, n)) {
         return Result<std::size_t>::failure(
-            makeError(proto_ns::ERROR_DEVICE_IO, "pread failed", errno));
+            makeError(proto_ns::ERROR_DEVICE_IO, "read failed", errno));
     }
-    return Result<std::size_t>::success(static_cast<std::size_t>(n));
+    return Result<std::size_t>::success(n);
 }
 
 Result<std::size_t> InProcessTestBackend::writeChunk(const proto_ns::SessionId& sid,
@@ -307,12 +330,12 @@ Result<std::size_t> InProcessTestBackend::writeChunk(const proto_ns::SessionId& 
     if (!s) return Result<std::size_t>::failure(
         makeError(proto_ns::ERROR_SESSION_NOT_FOUND, "no such session"));
 
-    ssize_t n = ::pwrite(s->fd, buf, len, static_cast<off_t>(offset));
-    if (n < 0) {
+    std::lock_guard<std::mutex> io(s->io_mutex);
+    if (!writeAt(s->file, offset, buf, len)) {
         return Result<std::size_t>::failure(
-            makeError(proto_ns::ERROR_WRITE_FAILED, "pwrite failed", errno));
+            makeError(proto_ns::ERROR_WRITE_FAILED, "write failed", errno));
     }
-    return Result<std::size_t>::success(static_cast<std::size_t>(n));
+    return Result<std::size_t>::success(len);
 }
 
 Result<void> InProcessTestBackend::syncDevice(const proto_ns::SessionId& sid) {
@@ -320,9 +343,12 @@ Result<void> InProcessTestBackend::syncDevice(const proto_ns::SessionId& sid) {
     if (!s) return Result<void>::failure(
         makeError(proto_ns::ERROR_SESSION_NOT_FOUND, "no such session"));
 
-    if (::fsync(s->fd) != 0) {
+    // A tempfile has no device cache to drain; flushing the stream is what
+    // makes earlier writes visible to anything else reading the file.
+    std::lock_guard<std::mutex> io(s->io_mutex);
+    if (!s->file.flush()) {
         return Result<void>::failure(
-            makeError(proto_ns::ERROR_SYNC_FAILED, "fsync failed", errno));
+            makeError(proto_ns::ERROR_SYNC_FAILED, "flush failed", errno));
     }
     return Result<void>::success();
 }
@@ -346,10 +372,7 @@ Result<proto_ns::SessionStats> InProcessTestBackend::closeSession(
     sess->queue_cv.notify_all();
     if (sess->worker.joinable()) sess->worker.join();
 
-    if (sess->fd >= 0) {
-        ::close(sess->fd);
-        sess->fd = -1;
-    }
+    sess->file.close();
     if (sess->owns_tempfile && !sess->device_path.empty()) {
         std::error_code ec;
         fs::remove(sess->device_path, ec);
@@ -410,9 +433,13 @@ void InProcessTestBackend::workerLoop(Session* s) {
         const auto submit_time = std::chrono::steady_clock::now();
         const auto& slot_buf = s->slots[pw.slot_index].buffer;
 
-        ssize_t n = ::pwrite(s->fd, slot_buf.data(),
-                             static_cast<std::size_t>(pw.length),
-                             static_cast<off_t>(pw.offset));
+        bool wrote = false;
+        {
+            std::lock_guard<std::mutex> io(s->io_mutex);
+            wrote = pw.length <= slot_buf.size() &&
+                    writeAt(s->file, pw.offset, slot_buf.data(),
+                            static_cast<std::size_t>(pw.length));
+        }
 
         proto_ns::WriteResult wr;
         wr.set_slot_index(pw.slot_index);
@@ -421,14 +448,14 @@ void InProcessTestBackend::workerLoop(Session* s) {
         wr.set_latency_us(static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::microseconds>(latency).count()));
 
-        if (n < 0 || static_cast<std::uint64_t>(n) != pw.length) {
+        if (!wrote) {
             *wr.mutable_error() = makeError(proto_ns::ERROR_WRITE_FAILED,
-                                            "pwrite returned short or error",
+                                            "slot write failed",
                                             errno);
             s->writes_failed.fetch_add(1);
         } else {
-            wr.set_bytes_written(static_cast<std::uint64_t>(n));
-            s->bytes_written.fetch_add(static_cast<std::uint64_t>(n));
+            wr.set_bytes_written(pw.length);
+            s->bytes_written.fetch_add(pw.length);
             s->writes_completed.fetch_add(1);
         }
 
