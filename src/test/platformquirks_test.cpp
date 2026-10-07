@@ -2665,6 +2665,23 @@ int connectivityWith(const QString& fixture, const QString& emptyBin)
     return -1;
 }
 
+// The probe's FIRST=.. LATER=.. line from asking before and after eth0 comes
+// up in `fixture`; empty if it could not be run.
+QString linkComesUpWith(const QString& fixture, const QString& emptyBin)
+{
+    QProcess p;
+    p.start(QStringLiteral("unshare"),
+            {QStringLiteral("-rm"), QStringLiteral("--propagation"),
+             QStringLiteral("private"), QStringLiteral("sh"), QStringLiteral("-c"),
+             QStringLiteral("mount --bind \"$1\" /sys/class/net "
+                            "&& exec env PATH=\"$3\" \"$2\" linkup"),
+             QStringLiteral("_"), fixture,
+             QStringLiteral(NETWORK_PROBE_BINARY), emptyBin});
+    if (!p.waitForFinished(30000))
+        return QString();
+    return QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+}
+
 } // namespace
 
 TEST_CASE("An interface that is up means the OS list can be fetched",
@@ -2720,6 +2737,30 @@ TEST_CASE("Loopback on its own is not a network", "[platformquirks][netdetect]")
     }));
 
     CHECK(connectivityWith(fixture.path(), emptyBin.path()) == 0);
+}
+
+TEST_CASE("A link that comes up after the first look is seen",
+          "[platformquirks][netdetect]")
+{
+    // Embedded Imager polls this ten times a second without the netlink
+    // monitor that clears its cache. A Pi 5 whose PHY takes four seconds to
+    // negotiate was still down at the first poll; "offline" was cached, and
+    // the link coming up was never seen -- no IP shown, no OS list, ever.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir fixture, emptyBin;
+    REQUIRE(fixture.isValid());
+    REQUIRE(emptyBin.isValid());
+    REQUIRE(buildNetFixture(fixture.path(), {
+        {QStringLiteral("lo"), QStringLiteral("unknown")},
+        {QStringLiteral("eth0"), QStringLiteral("down")},
+    }));
+
+    const QString out = linkComesUpWith(fixture.path(), emptyBin.path());
+    if (out.contains(QStringLiteral("LINKUP=skip")))
+        SKIP("the fixture's operstate could not be rewritten");
+    CHECK(out == QStringLiteral("FIRST=0 LATER=1"));
 }
 
 TEST_CASE("A VLAN interface counts like any other", "[platformquirks][netdetect]")
