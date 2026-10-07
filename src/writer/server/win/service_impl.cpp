@@ -13,6 +13,7 @@
 #include "../drive_watch_service.h"
 #include "../bulk_write_async.h"
 #include "../../../windows/helper_maintenance.h"
+#include "../../../aligned_buffer.h"
 
 // Resolved via privileged_io's PUBLIC include dirs (source dir for wire/,
 // binary dir for the generated proto/).
@@ -35,6 +36,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstring>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -475,14 +477,18 @@ proto::ErrorInfo Helper::handleWriteChunk(const std::string& payload, std::strin
         return fail(proto::ERROR_WRITE_FAILED, "writeChunk: chunk exceeds sync cap");
     }
 
+    // The device is opened for direct I/O, which refuses the protobuf
+    // string's unaligned buffer.
+    AlignedBuffer buf(req.data().size());
+    if (!buf) return fail(proto::ERROR_WRITE_FAILED, "writeChunk: out of memory");
+    std::memcpy(buf.data(), req.data().data(), req.data().size());
     const auto t0 = std::chrono::steady_clock::now();
-    const FileError e = s->fops->WriteAtOffset(
-        req.offset(),
-        reinterpret_cast<const std::uint8_t*>(req.data().data()),
-        req.data().size());
+    const FileError e = s->fops->WriteAtOffset(req.offset(), buf.data(), req.data().size());
     const auto t1 = std::chrono::steady_clock::now();
     if (e != FileError::kSuccess) {
-        return fail(mapFileError(e), "WriteAtOffset failed");
+        proto::ErrorInfo err = fail(mapFileError(e), "WriteAtOffset failed");
+        err.set_kernel_errno(s->fops->GetLastErrorCode());
+        return err;
     }
     s->bytes_written.fetch_add(req.data().size());
     const auto lat_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -506,11 +512,14 @@ proto::ErrorInfo Helper::handleReadChunk(const std::string& payload, std::string
     if (s->fops->Seek(req.offset()) != FileError::kSuccess) {
         return fail(proto::ERROR_DEVICE_IO, "readChunk: seek failed");
     }
-    std::vector<std::uint8_t> buf(static_cast<std::size_t>(req.length()));
+    AlignedBuffer buf(static_cast<std::size_t>(req.length()));
+    if (!buf) return fail(proto::ERROR_DEVICE_IO, "readChunk: out of memory");
     std::size_t got = 0;
     const FileError e = s->fops->ReadSequential(buf.data(), buf.size(), got);
     if (e != FileError::kSuccess) {
-        return fail(mapFileError(e), "ReadSequential failed");
+        proto::ErrorInfo err = fail(mapFileError(e), "ReadSequential failed");
+        err.set_kernel_errno(s->fops->GetLastErrorCode());
+        return err;
     }
 
     proto::ReadReply reply;

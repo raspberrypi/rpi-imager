@@ -94,11 +94,6 @@ bool SessionBulkWriter::submit(std::uint64_t request_id,
     }
 
     const std::uint64_t len = req.length();
-    if (req.offset() != fops_->Tell()) {
-        sync_err = fail(proto::ERROR_WRITE_FAILED,
-                        "bulkWrite: non-sequential device offset");
-        return false;
-    }
 
     const std::uint64_t already = session_bytes_written->load();
     if (already + len > max_session_bytes) {
@@ -181,6 +176,18 @@ void SessionBulkWriter::runJob(Job job) {
         return;
     }
 
+    // The client positions each write, and its Seek never reaches us. Tell()
+    // is exact here, jobs being issued in order; Seek drains writes in flight.
+    if (job.req.offset() != fops->Tell()) {
+        const FileError se = fops->Seek(job.req.offset());
+        if (se != FileError::kSuccess) {
+            bytes_written->fetch_sub(len);
+            sendResponse(job.request_id, fail(mapFileError(se), "bulkWrite: seek failed"), {});
+            jobFinished();
+            return;
+        }
+    }
+
     const auto t0 = std::chrono::steady_clock::now();
     const std::uint64_t request_id = job.request_id;
     const std::uint32_t slot_index = job.req.slot_index();
@@ -220,12 +227,28 @@ void SessionBulkWriter::runJob(Job job) {
 void SessionBulkWriter::workerLoop() {
     for (;;) {
         Job job;
+        bool reap = false;
         {
             std::unique_lock<std::mutex> lk(mutex_);
-            cv_.wait(lk, [this] { return shutdown_ || !queue_.empty(); });
+            const auto ready = [this] { return shutdown_ || !queue_.empty(); };
+            if (active_jobs_ > 0) {
+                cv_.wait_for(lk, std::chrono::milliseconds(2), ready);
+            } else {
+                cv_.wait(lk, ready);
+            }
             if (shutdown_ && queue_.empty() && active_jobs_ == 0) {
                 break;
             }
+            reap = queue_.empty() && active_jobs_ > 0;
+        }
+        // Completions are only reaped on the submitting thread, and nothing
+        // else here would: without this the last writes are never answered.
+        if (reap) {
+            if (fops_) fops_->PollAsyncCompletions();
+            continue;
+        }
+        {
+            std::unique_lock<std::mutex> lk(mutex_);
             if (queue_.empty()) {
                 continue;
             }
