@@ -71,6 +71,14 @@ namespace PlatformQuirks {
     
     /** Check if system is ready for network operations (including time sync on embedded). */
     bool isNetworkReady();
+
+    /**
+     * The earliest time, in seconds since the epoch, the clock can really
+     * read: when the source was committed. isNetworkReady() holds the fetch
+     * back below it where nothing synchronises the clock. 0, the default,
+     * means no floor.
+     */
+    void setClockFloor(long long epochSecs);
     
     /** 
      * Start monitoring network status changes.

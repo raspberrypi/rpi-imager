@@ -46,6 +46,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QFileInfo>
+#include <QDateTime>
 #include <QSize>
 #include <QCryptographicHash>
 #include <QUrl>
@@ -76,6 +77,9 @@ namespace {
     // Cached network connectivity state (updated by netlink monitor)
     std::atomic<bool> g_cachedNetworkConnectivity{false};
     std::atomic<bool> g_networkConnectivityCacheValid{false};
+
+    // See setClockFloor(). 0 means no floor.
+    std::atomic<long long> g_clockFloorSecs{0};
     
     void* netlinkMonitorThread(void* arg) {
         (void)arg;
@@ -649,8 +653,18 @@ bool isNetworkReady() {
     QFile clockFile("/var/lib/systemd/timesync/clock");
     QFile timesyncBinary("/lib/systemd/systemd-timesyncd");
     
-    // If systemd-timesyncd is not present, assume time is reliable
+    // Without systemd-timesyncd nothing will ever say the clock is synced,
+    // and waiting for it would leave the OS list empty for good. But the
+    // clock may still be 1970 on a board with no RTC battery, and every
+    // certificate would then be not yet valid; so believe it only if it is no
+    // earlier than the source Imager was built from.
     if (!timesyncBinary.exists()) {
+        const long long floorSecs = g_clockFloorSecs.load(std::memory_order_relaxed);
+        if (floorSecs > 0 && QDateTime::currentSecsSinceEpoch() < floorSecs) {
+            qDebug() << "Clock reads" << QDateTime::currentDateTimeUtc()
+                     << "- earlier than this build's source, so not yet set";
+            return false;
+        }
         return true;
     }
     
@@ -671,6 +685,10 @@ bool isNetworkReady() {
     }
     
     return timeIsSynced;
+}
+
+void setClockFloor(long long epochSecs) {
+    g_clockFloorSecs.store(epochSecs, std::memory_order_relaxed);
 }
 
 void startNetworkMonitoring(NetworkStatusCallback callback) {

@@ -14,6 +14,8 @@
 #ifndef NETWORK_POLL_ACTION_H
 #define NETWORK_POLL_ACTION_H
 
+#include <QHostAddress>
+
 namespace rpi_net {
 
 enum class PollAction {
@@ -33,6 +35,12 @@ enum class PollAction {
 };
 
 PollAction planPollAction(bool hasConnectivity, bool wasOnline, bool haveOsList);
+
+// Whether an address can carry the OS list fetch. A link comes up before
+// DHCP has answered, and the only addresses then are loopback and
+// link-local; fetching on those fails, and on a first fetch that is the end
+// of it.
+bool isUsableAddress(const QHostAddress &address);
 
 } // namespace rpi_net
 

@@ -238,6 +238,9 @@ int main(int argc, char** argv)
         return rc;
     }
     if (argc > 1 && std::strcmp(argv[1], "ready") == 0) {
+        // An optional floor, as Imager sets one from its source's date.
+        if (argc > 2 && argv[2][0] != '\0')
+            PlatformQuirks::setClockFloor(std::atoll(argv[2]));
         const bool ready = PlatformQuirks::isNetworkReady();
         std::printf("READY=%d\n", ready ? 1 : 0);
     } else {
