@@ -115,6 +115,9 @@ protected:
     bool _terminate;
     std::atomic<bool> _rpibootEnabled{false};
     std::atomic<bool> _fastbootScanEnabled{false};
+    // Set once a subscription to helper drive notifications has been tried,
+    // which waits for the helper to be running (see helperActive()).
+    std::atomic<bool> _helperSubscriptionTried{false};
     ScanMode _scanMode;
     mutable QMutex _mutex;
     QWaitCondition _modeChanged;

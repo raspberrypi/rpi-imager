@@ -43,6 +43,7 @@ public:
     Result<void> uninstallHelper() override;
     BackendKind  backend() const override { return BackendKind::LinuxPolkit; }
     std::string  backendDescription() const override;
+    bool         helperActive() const override;
 
     Result<std::vector<proto_ns::DriveInfo>> listDrivesNow() override;
     Result<void> subscribeDrives(DriveChangeCallback cb) override;

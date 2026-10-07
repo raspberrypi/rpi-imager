@@ -25,6 +25,7 @@
 #include <objbase.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -67,6 +68,11 @@ std::wstring clientExeDir() {
     return slash == std::wstring::npos ? std::wstring() : path.substr(0, slash + 1);
 }
 
+std::wstring helperExePath(const WindowsUacBackend::Options& options) {
+    return options.helper_exe_path.empty() ? clientExeDir() + L"rpi-imager-writer.exe"
+                                           : widen(options.helper_exe_path);
+}
+
 } // namespace
 
 struct WindowsUacBackend::State {
@@ -75,7 +81,9 @@ struct WindowsUacBackend::State {
     std::mutex      mutex;          // serialises connect + sync control-plane RPCs
     HANDLE          pipe = INVALID_HANDLE_VALUE;
     HANDLE          helper_process = nullptr;
-    bool            connected = false;
+    // Atomic so helperActive() can read it without the mutex, which a
+    // connect holds for as long as the UAC prompt is open.
+    std::atomic<bool> connected{false};
     wire::DuplexConnection duplex;
 
     // Bulk plane.
@@ -122,9 +130,7 @@ bool ensureConnectedImpl(WindowsUacBackend::State* st,
     StringFromGUID2(guid, guid_str, 64);
     std::wstring pipe_name = std::wstring(L"\\\\.\\pipe\\rpi-imager-writer-") + guid_str;
 
-    std::wstring helper = st->options.helper_exe_path.empty()
-                              ? clientExeDir() + L"rpi-imager-writer.exe"
-                              : widen(st->options.helper_exe_path);
+    const std::wstring helper = helperExePath(st->options);
 
     std::wstring params = L"--pipe " + pipe_name;
 
@@ -217,7 +223,24 @@ bool callRpcLocked(WindowsUacBackend::State* st,
 // Helper lifecycle
 // ---------------------------------------------------------------------------
 
+bool WindowsUacBackend::helperActive() const {
+    return state_->connected.load() && state_->duplex.isAttached();
+}
+
 Result<proto_ns::HelperStatus> WindowsUacBackend::queryHelperStatus() {
+    // Probing a helper that is not running would start it, and the UAC
+    // prompt with it. It ships beside the client and starts on first use, so
+    // until then being present is all there is to report.
+    if (!helperActive()) {
+        proto_ns::HelperStatus s;
+        const bool present =
+            GetFileAttributesW(helperExePath(state_->options).c_str()) != INVALID_FILE_ATTRIBUTES;
+        s.set_state(present ? proto_ns::HELPER_STATE_INSTALLED_READY
+                            : proto_ns::HELPER_STATE_NOT_INSTALLED);
+        s.set_client_version(std::to_string(kProtocolVersion));
+        return Result<proto_ns::HelperStatus>::success(std::move(s));
+    }
+
     std::lock_guard<std::mutex> lk(state_->mutex);
     proto_ns::ErrorInfo err;
     std::string reply;

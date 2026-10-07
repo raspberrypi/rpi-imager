@@ -228,7 +228,18 @@ bool DownloadThread::_openAndPrepareDevice()
 {
     QElapsedTimer unmountTimer;
     QElapsedTimer openTimer;
-    
+
+    // Where the helper starts on demand, the first helper call below starts
+    // it, and that is when the system asks for permission. Said here, the
+    // prompt arrives over a screen that explains it rather than one that
+    // reads "Cleaning disk...".
+    auto announcePermissionPrompt = [this] {
+        if (!rpi_imager::getProcessPrivilegedWriter().helperActive()) {
+            emit preparationStatusUpdate(
+                tr("Waiting for your permission to write to the storage device..."));
+        }
+    };
+
     if (_filename.startsWith("/dev/"))
     {
         emit preparationStatusUpdate(tr("Unmounting drive..."));
@@ -244,6 +255,7 @@ bool DownloadThread::_openAndPrepareDevice()
         // macOS helper, or the LocalShimBackend elsewhere) handles it
         // without touching this call site.
         auto& writer = rpi_imager::getProcessPrivilegedWriter();
+        announcePermissionPrompt();
         auto unmountResult = writer.unmount(unmountPath.toStdString());
         bool unmountSuccess = unmountResult.ok;
         emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), unmountSuccess);
@@ -308,6 +320,7 @@ bool DownloadThread::_openAndPrepareDevice()
             // The helper is elevated and this process may not be (asInvoker),
             // so the helper cleans when it can; NOT_IMPLEMENTED means no helper.
             emit preparationStatusUpdate(tr("Cleaning disk..."));
+            announcePermissionPrompt();
             QElapsedTimer helperCleanTimer;
             helperCleanTimer.start();
             const auto helperClean =

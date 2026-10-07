@@ -123,7 +123,9 @@ struct LinuxPolkitBackend::State {
     int sock = -1;
     pid_t helper_pid = -1;
     std::string socket_path;
-    bool connected = false;
+    // Atomic so helperActive() can read it without the mutex, which a
+    // connect holds for as long as the polkit prompt is open.
+    std::atomic<bool> connected{false};
     wire::DuplexConnection duplex;
 
     wire::LinuxSharedMemory bulk;
@@ -313,7 +315,27 @@ RpcResult callRpcLocked(LinuxPolkitBackend::State* st,
 
 } // namespace
 
+bool LinuxPolkitBackend::helperActive() const {
+    return state_->connected.load() && state_->duplex.isAttached();
+}
+
 Result<proto_ns::HelperStatus> LinuxPolkitBackend::queryHelperStatus() {
+    // Probing a helper that is not running would start it through pkexec,
+    // and the polkit prompt with it. It starts on first use, so until then
+    // being present and executable is all there is to report.
+    if (!helperActive()) {
+        const std::string appimage = clientAppImagePath();
+        const std::string helper = appimage.empty()
+                                       ? resolveHelperPath(state_->options.helper_exe_path)
+                                       : appimage;
+        proto_ns::HelperStatus s;
+        s.set_state(::access(helper.c_str(), X_OK) == 0
+                        ? proto_ns::HELPER_STATE_INSTALLED_READY
+                        : proto_ns::HELPER_STATE_NOT_INSTALLED);
+        s.set_client_version(std::to_string(kProtocolVersion));
+        return Result<proto_ns::HelperStatus>::success(std::move(s));
+    }
+
     std::lock_guard<std::mutex> lk(state_->mutex);
     proto_ns::ProtocolVersion pv;
     pv.set_version(kProtocolVersion);
