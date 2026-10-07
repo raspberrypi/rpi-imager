@@ -149,7 +149,8 @@ bool authenticodePublisherPinned(const wchar_t* image_path) {
     trust.pFile = &file_info;
     trust.dwStateAction = WTD_STATEACTION_VERIFY;
 
-    static const GUID kVerifyGuid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+    // Not const: MinGW's WinVerifyTrust takes a non-const GUID*.
+    static GUID kVerifyGuid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
     const LONG status = WinVerifyTrust(nullptr, &kVerifyGuid, &trust);
 
     bool publisher_ok = false;
@@ -183,7 +184,7 @@ bool verifyConnectingClient(DWORD client_pid) {
         return false;
     }
 
-    if (!iequals(basename(client_path.c_str()).c_str(), kWindowsClientExeName)) {
+    if (!iequals(basename(client_path).c_str(), kWindowsClientExeName)) {
         return false;
     }
     if (!sameInstallDirectory(client_path)) {
