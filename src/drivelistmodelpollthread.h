@@ -101,7 +101,7 @@ public:
     void setFastbootScanEnabled(bool enabled);
 
 protected:
-    bool _terminate;
+    std::atomic<bool> _terminate;
     std::atomic<bool> _rpibootEnabled{false};
     std::atomic<bool> _fastbootScanEnabled{false};
     ScanMode _scanMode;
