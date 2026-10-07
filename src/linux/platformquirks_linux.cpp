@@ -1891,14 +1891,6 @@ DiskResult refreshDiskView(const QString& device) {
 
 const char* findCACertBundle()
 {
-    // Cache the result - this is called on every curl handle setup
-    static const char* cachedPath = nullptr;
-    static bool cacheInitialized = false;
-    
-    if (cacheInitialized) {
-        return cachedPath;
-    }
-    
     // Common CA certificate bundle paths across Linux distributions.
     // AppImages and other portable distributions bundle libcurl with a
     // hardcoded CA certificate path from the build system. When run on a
@@ -1919,17 +1911,20 @@ const char* findCACertBundle()
         nullptr
     };
 
-    for (int i = 0; caPaths[i] != nullptr; i++)
-    {
-        if (access(caPaths[i], R_OK) == 0)
+    // Looked up once, though every curl handle setup asks, from whichever
+    // thread owns the handle. A function-local static is initialised exactly
+    // once however many threads arrive together; the flag-and-pointer pair it
+    // replaces could be seen set before the path it guarded, handing curl a
+    // null bundle.
+    static const char* const cachedPath = []() -> const char* {
+        for (int i = 0; caPaths[i] != nullptr; i++)
         {
-            cachedPath = caPaths[i];
-            break;
+            if (access(caPaths[i], R_OK) == 0)
+                return caPaths[i];
         }
-    }
-    
-    cacheInitialized = true;
-    return cachedPath;  // May be nullptr if not found, curl will use its compiled-in default
+        return nullptr;  // curl will use its compiled-in default
+    }();
+    return cachedPath;
 }
 
 void clearAppImageEnvironment() {
