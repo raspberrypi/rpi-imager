@@ -6,6 +6,7 @@
 #include "../wire/handshake.h"
 #include "../wire/linux_shared_memory.h"
 #include "../wire/linux_socket_io.h"
+#include "../wire/linux_socket_stream.h"
 #include "../wire/drive_descriptor_json.h"
 #include "../wire/duplex_connection.h"
 #include "../wire/protocol.h"
@@ -273,7 +274,7 @@ bool ensureConnectedImpl(LinuxPolkitBackend::State* st, proto_ns::ErrorInfo& err
     st->sock = sock;
     st->connected = true;
     if (!st->duplex.isAttached()) {
-        st->duplex.attach(sock);
+        st->duplex.attach(std::make_unique<wire::LinuxSocketStream>(sock));
     }
     return true;
 }

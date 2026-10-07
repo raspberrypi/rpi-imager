@@ -118,8 +118,11 @@ if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
         backends/windows_uac.cpp
         wire/win_shared_memory.h
         wire/win_shared_memory.cpp
+        wire/win_pipe_stream.h
+        wire/win_pipe_stream.cpp
         wire/drive_descriptor_json.h
         wire/drive_descriptor_json.cpp
+        wire/duplex_stream.h
         wire/duplex_connection.h
         wire/duplex_connection.cpp
         wire/server_message.h
@@ -148,8 +151,11 @@ if(UNIX AND NOT APPLE)
             backends/linux_polkit.cpp
             wire/linux_socket_io.h
             wire/linux_socket_io.cpp
+            wire/linux_socket_stream.h
+            wire/linux_socket_stream.cpp
             wire/drive_descriptor_json.h
             wire/drive_descriptor_json.cpp
+            wire/duplex_stream.h
             wire/duplex_connection.h
             wire/duplex_connection.cpp
             wire/server_message.h
