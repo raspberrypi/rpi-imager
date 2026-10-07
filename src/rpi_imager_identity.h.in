@@ -12,10 +12,10 @@
 
 namespace rpi_imager::identity {
 
-// Authenticode publisher Organization (O=). Must match the cert used to sign
+// Authenticode signer Organization (O=). Must match the cert used to sign
 // shipping Windows builds; the helper pins this in peer auth (§14.4).
-inline constexpr char kPublisherOrganizationUtf8[] = "@RPI_IMAGER_PUBLISHER_ORG@";
-inline constexpr wchar_t kPublisherOrganizationWide[] = L"@RPI_IMAGER_PUBLISHER_ORG@";
+inline constexpr char kSignerOrganizationUtf8[] = "@RPI_IMAGER_SIGNER_ORG@";
+inline constexpr wchar_t kSignerOrganizationWide[] = L"@RPI_IMAGER_SIGNER_ORG@";
 
 // SHA-1 thumbprints (40 hex chars) of leaf code-signing certs accepted by peer
 // auth when non-empty. Multiple entries support cert rotation windows.
