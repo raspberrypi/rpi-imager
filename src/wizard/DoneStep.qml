@@ -247,7 +247,9 @@ WizardStepBase {
                     if (root.ejectState === ImageWriterSingleton.EjectSucceeded)
                         return qsTr("The storage device was ejected automatically. You can now remove it safely.")
                     if (root.ejectState === ImageWriterSingleton.EjectFailed)
-                        return qsTr("The storage device could not be ejected. Close any application still using it, then press Eject.")
+                        // Something may still hold it, or the reader may be one that
+                        // cannot eject at all; pressing Eject again only helps the first.
+                        return qsTr("The storage device could not be ejected automatically. Close anything still using it and press Eject, or eject it from your computer before removing it.")
                     // EjectIdle: no eject ran for this write, so never claim one
                     // did — instruct the user to eject before removal instead.
                     return qsTr("Please eject the storage device before removing it from your computer.")

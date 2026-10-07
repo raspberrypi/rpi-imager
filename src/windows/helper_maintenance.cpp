@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Raspberry Pi Ltd
 
 #include "helper_maintenance.h"
+#include "virtual_disk.h"
 #include "../drivelist/drivelist.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -108,8 +109,10 @@ bool ejectMedia(HANDLE volume) {
     return false;
 }
 
+// `ejected` reports whether the medium actually left: a dismounted volume
+// whose reader refuses the eject still returns Success.
 Result processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEject,
-                          bool& matched) {
+                          bool& ejected) {
     wchar_t volumePath[8];
     swprintf(volumePath, 8, L"\\\\.\\%c:", driveLetter);
 
@@ -125,7 +128,6 @@ Result processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEj
         CloseHandle(volume);
         return Result::Success;
     }
-    matched = true;
 
     if (!isVolumeMounted(volume)) {
         CloseHandle(volume);
@@ -145,8 +147,8 @@ Result processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEj
         return Result::Error;
     }
 
-    if (doEject) {
-        (void)ejectMedia(volume);
+    if (doEject && ejectMedia(volume)) {
+        ejected = true;
     }
 
     unlockVolume(volume);
@@ -168,12 +170,12 @@ Result processPhysicalDrive(const std::string& device, bool doEject) {
     }
 
     Result result = Result::Success;
-    bool matched = false;
+    bool ejected = false;
     TCHAR driveLetter = L'A';
     while (drivesMask) {
         if (drivesMask & 1) {
             const Result letterResult = processDriveLetter(
-                driveLetter, static_cast<ULONG>(deviceNumber), doEject, matched);
+                driveLetter, static_cast<ULONG>(deviceNumber), doEject, ejected);
             if (letterResult != Result::Success && result == Result::Success) {
                 result = letterResult;
             }
@@ -182,9 +184,9 @@ Result processPhysicalDrive(const std::string& device, bool doEject) {
         drivesMask >>= 1;
     }
 
-    // No mounted volume to eject through, as after a raw write: eject the
+    // Nothing ejected through a volume, as after a raw write: eject the
     // media via the physical drive, as PlatformQuirks::ejectDisk does.
-    if (doEject && !matched) {
+    if (doEject && !ejected) {
         HANDLE drive = CreateFileA(device.c_str(), GENERIC_READ | GENERIC_WRITE,
                                    FILE_SHARE_READ | FILE_SHARE_WRITE,
                                    nullptr, OPEN_EXISTING, 0, nullptr);
@@ -192,9 +194,18 @@ Result processPhysicalDrive(const std::string& device, bool doEject) {
             setError(GetLastError(), "could not open physical drive to eject");
             return Result::Error;
         }
-        // Fixed readers refuse this; nothing is mounted, so it is still safe.
-        (void)ejectMedia(drive);
+        ejected = ejectMedia(drive);
+        if (!ejected) {
+            setError(GetLastError(), "the device refused to eject");
+        }
         CloseHandle(drive);
+    }
+
+    // A fixed reader refuses to eject. Its volumes are dismounted, but
+    // reporting success would have the client tell the user it is safe to
+    // pull while Windows still has the disk.
+    if (doEject && result == Result::Success && !ejected) {
+        return Result::Error;
     }
     return result;
 }
@@ -273,6 +284,22 @@ Result unmountDisk(const std::string& device_path) {
 Result ejectDisk(const std::string& device_path) {
     g_last_error = 0;
     g_last_detail.clear();
+
+    // A virtual disk takes no media eject; detaching it is the eject.
+    const int deviceNumber = parseDeviceNumber(device_path);
+    if (deviceNumber >= 0) {
+        const std::wstring backing =
+            virtual_disk::backingFile(static_cast<unsigned long>(deviceNumber));
+        if (!backing.empty()) {
+            (void)processPhysicalDrive(device_path, false);
+            DWORD error = 0;
+            if (virtual_disk::detach(backing, error)) {
+                return Result::Success;
+            }
+            setError(error, "could not detach the virtual disk");
+            return Result::Error;
+        }
+    }
     return processPhysicalDrive(device_path, true);
 }
 

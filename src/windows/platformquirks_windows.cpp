@@ -5,6 +5,7 @@
 
 #include "../platformquirks.h"
 #include "diskpart_util.h"
+#include "virtual_disk.h"
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00  // Windows 10 or later
 #endif
@@ -693,98 +694,6 @@ namespace {
                               &bytesReturned, NULL) != FALSE;
     }
     
-    // The file behind an attached virtual disk, or empty when the device is
-    // not one.
-    //
-    // Windows offers no way to ask a physical drive for its backing file; the
-    // dependency query is the documented route, and it answers only for a
-    // disk that has one, which is also how the device is recognised.
-    QString virtualDiskBackingFile(ULONG deviceNumber) {
-        const QString physicalPath =
-            QStringLiteral("\\\\.\\PhysicalDrive%1").arg(deviceNumber);
-        HANDLE disk = CreateFileW(
-            reinterpret_cast<LPCWSTR>(physicalPath.utf16()),
-            GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-            NULL, OPEN_EXISTING, 0, NULL);
-        if (disk == INVALID_HANDLE_VALUE)
-            return QString();
-
-        // Typed enum rather than ULONG here, so the bitwise or has to be put
-        // back into it explicitly.
-        const GET_STORAGE_DEPENDENCY_FLAG flags =
-            static_cast<GET_STORAGE_DEPENDENCY_FLAG>(
-                GET_STORAGE_DEPENDENCY_FLAG_DISK_HANDLE
-                | GET_STORAGE_DEPENDENCY_FLAG_HOST_VOLUMES);
-
-        // Asked for its size first: the strings sit after the structure, so
-        // the entry count alone does not give it.
-        STORAGE_DEPENDENCY_INFO probe{};
-        probe.Version = STORAGE_DEPENDENCY_INFO_VERSION_2;
-        ULONG needed = 0;
-        DWORD rc = GetStorageDependencyInformation(disk, flags, sizeof(probe),
-                                                   &probe, &needed);
-        if (rc != ERROR_INSUFFICIENT_BUFFER || needed < sizeof(STORAGE_DEPENDENCY_INFO)) {
-            CloseHandle(disk);
-            return QString();
-        }
-
-        QByteArray buffer(static_cast<int>(needed), 0);
-        auto* info = reinterpret_cast<STORAGE_DEPENDENCY_INFO*>(buffer.data());
-        info->Version = STORAGE_DEPENDENCY_INFO_VERSION_2;
-        ULONG used = 0;
-        rc = GetStorageDependencyInformation(disk, flags, needed, info, &used);
-        CloseHandle(disk);
-        if (rc != ERROR_SUCCESS || info->NumberEntries == 0)
-            return QString();
-
-        const STORAGE_DEPENDENCY_INFO_TYPE_2& entry = info->Version2Entries[0];
-        if (!entry.HostVolumeName || !entry.DependentVolumeRelativePath)
-            return QString();
-
-        QString host = QString::fromWCharArray(entry.HostVolumeName);
-        QString relative = QString::fromWCharArray(entry.DependentVolumeRelativePath);
-        if (host.isEmpty() || relative.isEmpty())
-            return QString();
-
-        // The volume name ends in a separator and the relative path begins
-        // with one, so joining them unchanged gives a path that opens nothing.
-        while (host.endsWith(QLatin1Char('\\')))
-            host.chop(1);
-        if (!relative.startsWith(QLatin1Char('\\')))
-            relative.prepend(QLatin1Char('\\'));
-        return host + relative;
-    }
-
-    // Detach a virtual disk, which is what ejecting one means: the volumes go,
-    // the drive stops being listed, and the file can be attached again.
-    bool detachVirtualDisk(const QString& backingFile) {
-        VIRTUAL_STORAGE_TYPE storageType{};
-        storageType.DeviceId = VIRTUAL_STORAGE_TYPE_DEVICE_UNKNOWN;
-        storageType.VendorId = GUID{};  // VIRTUAL_STORAGE_TYPE_VENDOR_UNKNOWN
-
-        OPEN_VIRTUAL_DISK_PARAMETERS params{};
-        params.Version = OPEN_VIRTUAL_DISK_VERSION_1;
-        params.Version1.RWDepth = 1;  // OPEN_VIRTUAL_DISK_RW_DEPTH_DEFAULT
-
-        const std::wstring path = backingFile.toStdWString();
-        HANDLE vhd = INVALID_HANDLE_VALUE;
-        DWORD rc = OpenVirtualDisk(&storageType, path.c_str(),
-                                   VIRTUAL_DISK_ACCESS_DETACH,
-                                   OPEN_VIRTUAL_DISK_FLAG_NONE, &params, &vhd);
-        if (rc != ERROR_SUCCESS) {
-            qDebug() << "detachVirtualDisk: cannot open" << backingFile << "error" << rc;
-            return false;
-        }
-
-        rc = DetachVirtualDisk(vhd, DETACH_VIRTUAL_DISK_FLAG_NONE, 0);
-        CloseHandle(vhd);
-        if (rc != ERROR_SUCCESS) {
-            qDebug() << "detachVirtualDisk: cannot detach" << backingFile << "error" << rc;
-            return false;
-        }
-        return true;
-    }
-
     // Eject media from volume (card, not reader!)
     bool ejectMedia(HANDLE volume) {
         DWORD bytesReturned;
@@ -812,8 +721,11 @@ namespace {
         return false;
     }
     
-    // Process a single drive letter: unmount/eject if it belongs to our device
-    PlatformQuirks::DiskResult processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEject) {
+    // Process a single drive letter: unmount/eject if it belongs to our device.
+    // `ejected` reports whether the medium actually left: a dismounted volume
+    // whose reader refuses the eject still returns Success.
+    PlatformQuirks::DiskResult processDriveLetter(TCHAR driveLetter, ULONG targetDeviceNumber, bool doEject,
+                                                  bool* ejected = nullptr) {
         // Open volume handle
         TCHAR volumePath[8];
         swprintf_s(volumePath, 8, L"\\\\.\\%c:", driveLetter);
@@ -861,7 +773,10 @@ namespace {
         
         // If ejecting, eject the media
         if (doEject) {
-            if (!ejectMedia(volume)) {
+            const bool mediaEjected = ejectMedia(volume);
+            if (ejected)
+                *ejected = mediaEjected;
+            if (!mediaEjected) {
                 qDebug() << "processDriveLetter: couldn't eject media from" << QString(QChar(driveLetter));
                 // Not fatal - volume is still dismounted
             }
@@ -935,16 +850,18 @@ DiskResult ejectDisk(const QString& device) {
     // showed no volumes, the imager still listed the drive, and attaching the
     // file again failed because it was never detached, which reads as a
     // corrupt image. Detaching is what ejecting one means.
-    const QString backingFile = virtualDiskBackingFile(static_cast<ULONG>(deviceNumber));
-    if (!backingFile.isEmpty()) {
+    const std::wstring backingFile =
+        rpi_imager::virtual_disk::backingFile(static_cast<ULONG>(deviceNumber));
+    if (!backingFile.empty()) {
         qDebug() << "ejectDisk: device" << deviceNumber << "is a virtual disk backed by"
-                 << backingFile;
+                 << QString::fromStdWString(backingFile);
         unmountDisk(device);
-        if (detachVirtualDisk(backingFile))
+        DWORD detachError = 0;
+        if (rpi_imager::virtual_disk::detach(backingFile, detachError))
             return DiskResult::Success;
         // Left attached rather than stranded: the volumes are back in a
         // moment when Windows rescans, and the user can detach it themselves.
-        qDebug() << "ejectDisk: could not detach the virtual disk";
+        qDebug() << "ejectDisk: could not detach the virtual disk, error" << detachError;
         return DiskResult::Error;
     }
 
@@ -955,25 +872,27 @@ DiskResult ejectDisk(const QString& device) {
         return DiskResult::Error;
     }
     
-    // Process each drive letter with eject
+    // Process each drive letter with eject. A letter on another disk also
+    // returns Success, so only the medium leaving counts as an eject.
     TCHAR driveLetter = L'A';
     DiskResult result = DiskResult::Success;
     bool ejectedAny = false;
-    
+
     while (drivesMask) {
         if (drivesMask & 1) {
-            DiskResult letterResult = processDriveLetter(driveLetter, deviceNumber, true);
-            if (letterResult == DiskResult::Success) {
-                ejectedAny = true;
-            } else if (result == DiskResult::Success) {
+            bool letterEjected = false;
+            DiskResult letterResult = processDriveLetter(driveLetter, deviceNumber, true,
+                                                         &letterEjected);
+            ejectedAny = ejectedAny || letterEjected;
+            if (letterResult != DiskResult::Success && result == DiskResult::Success) {
                 result = letterResult;  // Remember first error
             }
         }
         driveLetter++;
         drivesMask >>= 1;
     }
-    
-    // If we didn't find any volumes but the device exists, try direct eject on the physical drive
+
+    // Nothing ejected through a volume, as after a raw write: try the physical drive
     if (!ejectedAny) {
         QString physicalPath = QString("\\\\.\\PhysicalDrive%1").arg(deviceNumber);
         HANDLE physicalDrive = CreateFileW(
@@ -986,12 +905,19 @@ DiskResult ejectDisk(const QString& device) {
             qDebug() << "ejectDisk: attempting direct eject on physical drive";
             if (ejectMedia(physicalDrive)) {
                 qDebug() << "ejectDisk: direct eject succeeded";
-                result = DiskResult::Success;
+                ejectedAny = true;
             }
             CloseHandle(physicalDrive);
         }
     }
-    
+
+    // A fixed reader refuses to eject. Its volumes are dismounted, but saying
+    // it was ejected would tell the user it is safe to pull while Windows
+    // still has the disk.
+    if (result == DiskResult::Success && !ejectedAny) {
+        qDebug() << "ejectDisk: the device refused to eject";
+        return DiskResult::Error;
+    }
     return result;
 }
 
