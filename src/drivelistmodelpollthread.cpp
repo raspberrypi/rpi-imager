@@ -39,6 +39,13 @@ bool tryListDevicesFromHelper(std::vector<Drivelist::DeviceDescriptor>& out) {
     auto& w = ::rpi_imager::getProcessPrivilegedWriter();
     using BK = ::rpi_imager::privileged::BackendKind;
 
+    // Listing needs no privilege, so it is no reason to start the helper and
+    // raise an elevation prompt; in-process enumeration covers it until a
+    // write has started the helper.
+    if (!w.helperActive()) {
+        return false;
+    }
+
 #ifdef Q_OS_DARWIN
     if (w.backend() == BK::MacOSXpc) {
         auto* xpc = dynamic_cast<
@@ -103,6 +110,28 @@ bool usesHelperDriveNotifications() {
     return kind == BK::MacOSXpc || kind == BK::WindowsUac || kind == BK::LinuxPolkit;
 }
 
+// Returns false, without trying, while the helper is not running: subscribing
+// would start it, and the elevation prompt with it, before the user has asked
+// to write anything. The poll thread retries once a write has started it.
+bool trySubscribeToHelperDriveChanges(DriveListModelPollThread* self) {
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    if (!w.helperActive()) {
+        return false;
+    }
+    auto r = w.subscribeDrives(
+        [self](const ::rpi_imager::privileged::proto::DriveChange&) {
+            self->requestImmediateRescan();
+        });
+    if (!r.ok) {
+        qDebug() << "[drivelist] subscribeDrives failed:"
+                 << QString::fromStdString(r.error.detail())
+                 << "- falling back to pure polling";
+    } else {
+        qDebug() << "[drivelist] subscribed to helper drive notifications";
+    }
+    return true;
+}
+
 } // namespace
 #endif
 
@@ -138,7 +167,7 @@ void DriveListModelPollThread::stop()
 #if defined(Q_OS_DARWIN) || \
     (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
     (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
-    if (usesHelperDriveNotifications()) {
+    if (usesHelperDriveNotifications() && _helperSubscriptionTried.exchange(false)) {
         auto& w = ::rpi_imager::getProcessPrivilegedWriter();
         (void)w.unsubscribeDrives();
     }
@@ -152,19 +181,7 @@ void DriveListModelPollThread::start()
     (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
     (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
     if (usesHelperDriveNotifications()) {
-        auto& w = ::rpi_imager::getProcessPrivilegedWriter();
-        auto* self = this;
-        auto r = w.subscribeDrives(
-            [self](const ::rpi_imager::privileged::proto::DriveChange&) {
-                self->requestImmediateRescan();
-            });
-        if (!r.ok) {
-            qDebug() << "[drivelist] subscribeDrives failed:"
-                     << QString::fromStdString(r.error.detail())
-                     << "- falling back to pure polling";
-        } else {
-            qDebug() << "[drivelist] subscribed to helper drive notifications";
-        }
+        _helperSubscriptionTried = trySubscribeToHelperDriveChanges(this);
     }
 #endif
     QThread::start();
@@ -264,6 +281,9 @@ void DriveListModelPollThread::run()
 #if defined(Q_OS_DARWIN) || \
     (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
     (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+        if (usesHelperDriveNotifications() && !_helperSubscriptionTried.load()) {
+            _helperSubscriptionTried = trySubscribeToHelperDriveChanges(this);
+        }
         if (tryListDevicesFromHelper(driveList)) {
             drivelistFromHelper = true;
         }

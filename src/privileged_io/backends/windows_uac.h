@@ -58,6 +58,7 @@ public:
     Result<void> uninstallHelper() override;
     BackendKind  backend() const override { return BackendKind::WindowsUac; }
     std::string  backendDescription() const override;
+    bool         helperActive() const override;
 
     // Drive enumeration (§5)
     Result<std::vector<proto_ns::DriveInfo>> listDrivesNow() override;

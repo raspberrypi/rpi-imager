@@ -131,6 +131,14 @@ public:
     virtual BackendKind backend() const = 0;
     virtual std::string backendDescription() const = 0;
 
+    // True when a call reaches the helper without starting it, so it cannot
+    // raise an elevation prompt. Backends that start their helper on demand
+    // behind UAC or polkit report false until it is running, letting callers
+    // that only want something nice to have (drive change notifications)
+    // wait rather than prompt at a moment the user did not choose. Never
+    // blocks, even while a connect is waiting on that prompt.
+    virtual bool helperActive() const { return true; }
+
     // -------------------------------------------------------------------
     // Drive enumeration
     // -------------------------------------------------------------------

@@ -62,6 +62,7 @@ public:
     Result<void> installHelper() override;
     Result<void> uninstallHelper() override;
     BackendKind  backend() const override { return BackendKind::FaultInjecting; }
+    bool         helperActive() const override { return inner_->helperActive(); }
     std::string  backendDescription() const override;
 
     // ---- Drive enumeration (forwarded)
