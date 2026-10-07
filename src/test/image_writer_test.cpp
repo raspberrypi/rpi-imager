@@ -948,6 +948,9 @@ public:
     FetchFailWriter() : ImageWriter(nullptr) {}
     using ImageWriter::onOsListFetchComplete;
     using ImageWriter::onOsListFetchError;
+
+    bool retryScheduled() const { return _osListRefreshTimer.isActive(); }
+    int retryIntervalMs() const { return _osListRefreshTimer.interval(); }
 };
 
 class Ipv4OnlyGuard
@@ -997,9 +1000,9 @@ TEST_CASE("A first failure retries the list over IPv4 before giving up",
 TEST_CASE("A second failure gives up and shows the offline screen",
           "[imagewriter][fetchfail]")
 {
-    // The retry has already been spent, so this is the end of the road and
-    // the user needs the placeholder and its Retry button rather than an
-    // empty list that looks like there are no images.
+    // The IPv4-only retry has already been spent, so the user needs the
+    // placeholder and its Retry button now rather than an empty list that
+    // looks like there are no images.
     Ipv4OnlyGuard guard;
     CurlNetworkConfig::instance().setIPv4Only(true);
 
@@ -1010,6 +1013,31 @@ TEST_CASE("A second failure gives up and shows the offline screen",
                               writer.osListUrl());
 
     CHECK(spy.osListUnavailable == 1);
+}
+
+TEST_CASE("A first list that never arrived is retried by embedded Imager alone",
+          "[imagewriter][fetchfail]")
+{
+    // Embedded Imager fetches once, when the network first looks ready, and
+    // stops polling; with no Retry button, a fetch made a moment too early --
+    // before the lease, or before the clock was set -- left the screen
+    // offline until a reboot. The desktop has a Retry button and a network
+    // monitor, and calling a firewalled server every 30 seconds for as long
+    // as it is open helps nobody. Embedded is a build-time choice, so this
+    // checks whichever this build is.
+    Ipv4OnlyGuard guard;
+    CurlNetworkConfig::instance().setIPv4Only(true);
+
+    FetchFailWriter writer;
+    writer.onOsListFetchError(QStringLiteral("Connection timed out"),
+                              writer.osListUrl());
+
+    if (writer.isEmbeddedMode()) {
+        REQUIRE(writer.retryScheduled());
+        CHECK(writer.retryIntervalMs() == 30 * 1000);
+    } else {
+        CHECK_FALSE(writer.retryScheduled());
+    }
 }
 
 TEST_CASE("A failed refresh keeps the list already on screen",

@@ -2610,6 +2610,18 @@ void ImageWriter::onOsListFetchError(const QString &errorMessage, const QUrl &ur
             // No data at all - notify UI of offline state
             qWarning() << "Top-level OS list fetch failed:" << errorMessage << ". Operating in offline mode.";
             emit osListUnavailableChanged();
+
+            // Embedded has no Retry button, and its poll stops once the network
+            // looks ready, so a fetch made a moment too early -- before the
+            // lease, or before the clock was set -- was the only one there would
+            // ever be. Try again there. The desktop leaves it to the user's
+            // Retry and the network monitor, rather than calling a firewalled
+            // server every 30 seconds for as long as Imager is open.
+            if (isEmbeddedMode()) {
+                constexpr int kEmptyListRetryMs = 30 * 1000;
+                qWarning() << "Retrying the OS list in" << kEmptyListRetryMs / 1000 << "seconds.";
+                _osListRefreshTimer.start(kEmptyListRetryMs);
+            }
         } else {
             // We have stale data - reschedule refresh to retry later
             // Use a shorter retry interval (5 minutes) rather than full refresh interval
