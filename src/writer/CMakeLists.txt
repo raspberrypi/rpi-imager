@@ -115,6 +115,26 @@ if(NOT APPLE)
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/..
         )
+        # Name and icon for the UAC prompt; generated at build time, like
+        # rpi-imager.rc, so the version matches the binary.
+        add_custom_command(
+            OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager-writer.rc"
+            COMMAND ${CMAKE_COMMAND}
+                -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+                -DEXTRA_VARS_FILE=${CMAKE_CURRENT_SOURCE_DIR}/../cmake/rpi_imager_identity.cmake
+                -DRPI_IMAGER_ICON=${CMAKE_CURRENT_SOURCE_DIR}/../icons/rpi-imager.ico
+                -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../windows/rpi-imager-writer.rc.in
+                -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/rpi-imager-writer.rc
+                -P ${CONFIGURE_VERSIONED_SCRIPT}
+            DEPENDS
+                ${IMAGER_VERSION_VARS}
+                ${CMAKE_CURRENT_SOURCE_DIR}/../windows/rpi-imager-writer.rc.in
+                ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/rpi_imager_identity.cmake
+            COMMENT "Configuring rpi-imager-writer.rc with build-time version"
+            VERBATIM
+        )
+        target_sources(rpi-imager-writer PRIVATE
+            "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager-writer.rc")
         # Peer authentication (§14.4): WinVerifyTrust + publisher org and
         # optional thumbprint allowlist pinning uses wintrust; CertGetNameStringW
         # and CertGetCertificateContextProperty use crypt32. drivelist_windows.cpp
