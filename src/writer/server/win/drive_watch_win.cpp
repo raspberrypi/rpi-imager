@@ -13,6 +13,7 @@
 #include <dbt.h>
 #include <initguid.h>
 #include <devguid.h>
+#include <winioctl.h>
 
 namespace rpi_imager::writer {
 

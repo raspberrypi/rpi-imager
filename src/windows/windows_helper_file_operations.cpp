@@ -973,6 +973,12 @@ FileError WindowsHelperFileOperations::PrepareDevice(std::uint64_t /*device_size
     return FileError::kSuccess;
 }
 
+// The device is opened in the helper, so there is no local Win32 error to
+// report; failures arrive as ErrorInfo on each response instead.
+int WindowsHelperFileOperations::GetLastErrorCode() const {
+    return 0;
+}
+
 bool WindowsHelperFileOperations::IsDirectIOEnabled() const {
     // The helper opens the device with the direct-I/O hint set on its
     // own FD. From the unprivileged side we don't have a meaningful

@@ -9,6 +9,12 @@
 #include <winioctl.h>
 #include <shlobj.h>
 
+// The Windows 8 SDK added this; MinGW's winioctl.h still lacks it.
+#ifndef IOCTL_DISK_ARE_VOLUMES_READY
+#define IOCTL_DISK_ARE_VOLUMES_READY \
+    CTL_CODE(IOCTL_DISK_BASE, 0x0087, METHOD_BUFFERED, FILE_READ_ACCESS)
+#endif
+
 #include <cstdio>
 #include <cstring>
 

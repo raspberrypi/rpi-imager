@@ -117,12 +117,14 @@ if(NOT APPLE)
         )
         # Peer authentication (§14.4): WinVerifyTrust + publisher org and
         # optional thumbprint allowlist pinning uses wintrust; CertGetNameStringW
-        # and CertGetCertificateContextProperty use crypt32.
+        # and CertGetCertificateContextProperty use crypt32. drivelist_windows.cpp
+        # names setupapi with #pragma comment(lib), which only MSVC honours.
         target_link_libraries(rpi-imager-writer PRIVATE
             privileged_io
             advapi32
             bcrypt
             crypt32
+            setupapi
             wintrust
         )
         target_compile_features(rpi-imager-writer PRIVATE cxx_std_20)
