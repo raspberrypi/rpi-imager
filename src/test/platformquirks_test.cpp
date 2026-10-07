@@ -17,6 +17,7 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include <QElapsedTimer>
+#include <QDateTime>
 #include "platformquirks.h"
 
 #ifdef Q_OS_WIN
@@ -2854,7 +2855,8 @@ bool buildOnlineNetFixture(const QString& root)
 
 // -1 if the probe could not be run at all.
 int networkReadyWith(const QString& netFixture, const QString& libSystemd,
-                     const QString& varLibSystemd, const QString& emptyBin)
+                     const QString& varLibSystemd, const QString& emptyBin,
+                     const QString& clockFloor = QString())
 {
     QProcess p;
     p.start(QStringLiteral("unshare"),
@@ -2863,9 +2865,9 @@ int networkReadyWith(const QString& netFixture, const QString& libSystemd,
              QStringLiteral("mount --bind \"$1\" /sys/class/net "
                             "&& mount --bind \"$2\" /lib/systemd "
                             "&& mount --bind \"$3\" /var/lib/systemd "
-                            "&& exec env PATH=\"$5\" \"$4\" ready"),
+                            "&& exec env PATH=\"$5\" \"$4\" ready \"$6\""),
              QStringLiteral("_"), netFixture, libSystemd, varLibSystemd,
-             QStringLiteral(NETWORK_PROBE_BINARY), emptyBin});
+             QStringLiteral(NETWORK_PROBE_BINARY), emptyBin, clockFloor});
     if (!p.waitForFinished(30000))
         return -1;
     const QString out = QString::fromUtf8(p.readAllStandardOutput());
@@ -2921,6 +2923,41 @@ TEST_CASE("A machine with no time synchronisation service is trusted",
     // never run would leave the OS list empty for good, so its absence means
     // the clock is whatever the machine says it is and the fetch goes ahead.
     CHECK(networkReadyWith(net, lib, var, bin) == 1);
+}
+
+TEST_CASE("Without a time service, a clock earlier than Imager's source is not trusted",
+          "[platformquirks][netready]")
+{
+    // The embedded image has no timesyncd, and a board with no RTC battery
+    // boots at 1970. Trusting that clock sent the OS list fetch out to fail
+    // on every certificate. Below the floor Imager sets from its source's
+    // date, the clock cannot be right; at or above it, it is believed.
+    if (!haveMountNamespaces())
+        SKIP("unprivileged mount namespaces are unavailable");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString net = tmp.filePath(QStringLiteral("net"));
+    const QString lib = tmp.filePath(QStringLiteral("lib-systemd"));
+    const QString var = tmp.filePath(QStringLiteral("var-lib-systemd"));
+    const QString bin = tmp.filePath(QStringLiteral("bin"));
+    REQUIRE(QDir().mkpath(lib));
+    REQUIRE(QDir().mkpath(var + QStringLiteral("/timesync")));
+    REQUIRE(QDir().mkpath(bin));
+    REQUIRE(buildOnlineNetFixture(net));
+
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    constexpr qint64 kDay = 24 * 60 * 60;
+
+    SECTION("a floor a year ahead of the clock holds it back")
+    {
+        CHECK(networkReadyWith(net, lib, var, bin, QString::number(now + 365 * kDay)) == 0);
+    }
+
+    SECTION("a floor behind the clock lets it through")
+    {
+        CHECK(networkReadyWith(net, lib, var, bin, QString::number(now - kDay)) == 1);
+    }
 }
 
 TEST_CASE("Time not yet synchronised holds the fetch back",

@@ -277,6 +277,11 @@ bool isNetworkReady() {
     return hasNetworkConnectivity();
 }
 
+void setClockFloor(long long epochSecs) {
+    // The system keeps its own time here, so there is nothing to hold back.
+    (void)epochSecs;
+}
+
 void startNetworkMonitoring(NetworkStatusCallback callback) {
     // Stop any existing monitoring
     stopNetworkMonitoring();

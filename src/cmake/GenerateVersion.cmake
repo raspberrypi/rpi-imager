@@ -31,6 +31,31 @@ if(GIT_EXECUTABLE)
     endif()
 endif()
 
+# When the source was committed, as seconds since the epoch. No real clock
+# can be earlier, so a machine with nothing to set its time -- embedded has
+# no timesyncd, and a board without an RTC battery boots at 1970 -- can tell
+# a clock that cannot be right from one that might be. The commit rather than
+# the build time keeps the output reproducible. A tarball build has no git,
+# and Debian's SOURCE_DATE_EPOCH is the changelog date, which serves equally.
+# 0 means unknown, and no floor.
+set(SOURCE_EPOCH 0)
+if(GIT_EXECUTABLE)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" log -1 --format=%ct
+        WORKING_DIRECTORY "${SOURCE_DIR}"
+        OUTPUT_VARIABLE GIT_COMMIT_EPOCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_EPOCH_RESULT
+    )
+    if(GIT_EPOCH_RESULT EQUAL 0 AND GIT_COMMIT_EPOCH MATCHES "^[0-9]+$")
+        set(SOURCE_EPOCH "${GIT_COMMIT_EPOCH}")
+    endif()
+endif()
+if(SOURCE_EPOCH EQUAL 0 AND "$ENV{SOURCE_DATE_EPOCH}" MATCHES "^[0-9]+$")
+    set(SOURCE_EPOCH "$ENV{SOURCE_DATE_EPOCH}")
+endif()
+
 # Parse numeric version components (e.g. v2.0.0-rc4-60-geac7c2f0 → 2, 0, 0, 0)
 #
 # The fourth component is optional and exists for hotfix tags such as v2.0.11.1.
@@ -75,6 +100,7 @@ endfunction()
 set(HEADER_CONTENT "\
 #pragma once
 #define IMAGER_VERSION_STR \"${VERSION_STR}\"
+#define IMAGER_SOURCE_EPOCH ${SOURCE_EPOCH}LL
 ")
 write_if_changed("${OUTPUT_DIR}/imager_version.h" "${HEADER_CONTENT}")
 

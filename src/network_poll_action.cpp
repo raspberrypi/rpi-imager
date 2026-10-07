@@ -20,4 +20,9 @@ PollAction planPollAction(bool hasConnectivity, bool wasOnline, bool haveOsList)
     return PollAction::Nothing;
 }
 
+bool isUsableAddress(const QHostAddress &address)
+{
+    return !address.isNull() && !address.isLoopback() && !address.isLinkLocal();
+}
+
 } // namespace rpi_net

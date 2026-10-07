@@ -12545,6 +12545,21 @@ TEST_CASE("A poll while already online and connected does nothing",
     CHECK(rpi_net::planPollAction(true, true, false) == rpi_net::PollAction::Nothing);
 }
 
+TEST_CASE("Only an address a fetch can use counts as being on the network",
+          "[imagewriter][network]")
+{
+    // A link is up before DHCP answers. Until then a machine has loopback and
+    // link-local addresses, and fetching the OS list over those fails.
+    CHECK(rpi_net::isUsableAddress(QHostAddress(QStringLiteral("10.3.31.237"))));
+    CHECK(rpi_net::isUsableAddress(QHostAddress(QStringLiteral("2a00:1098:88:26::1"))));
+
+    CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress(QStringLiteral("169.254.12.7"))));
+    CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress(QStringLiteral("fe80::1"))));
+    CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress(QHostAddress::LocalHost)));
+    CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress(QHostAddress::LocalHostIPv6)));
+    CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress()));
+}
+
 TEST_CASE("Losing the network is noticed once", "[imagewriter][netpoll]")
 {
     CHECK(rpi_net::planPollAction(false, true, true) == rpi_net::PollAction::GoOffline);

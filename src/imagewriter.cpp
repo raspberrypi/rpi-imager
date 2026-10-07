@@ -218,6 +218,8 @@ ImageWriter::ImageWriter(QObject *parent)
     _screenReaderPollTimer.start();
 #endif
 
+    PlatformQuirks::setClockFloor(IMAGER_SOURCE_EPOCH);
+
     if (::isEmbeddedMode())
     {
         connect(&_networkchecktimer, SIGNAL(timeout()), SLOT(pollNetwork()));
@@ -3242,18 +3244,24 @@ bool ImageWriter::isOnline()
     // For embedded mode, report IP addresses on status display and check time sync
     if (isEmbeddedMode()) {
         if (hasBasicConnectivity) {
-            /* Report detected IP addresses for embedded mode status display */
-            QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
-            foreach (QHostAddress a, addresses)
+            // A link is up before DHCP has answered. Fetching then fails, and a
+            // first fetch that fails is not tried again, so keep polling until
+            // there is an address the fetch can use.
+            bool haveAddress = false;
+            const QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+            for (const QHostAddress &a : addresses)
             {
-                if (!a.isLoopback() && a.scopeId().isEmpty())
+                if (rpi_net::isUsableAddress(a))
                 {
                     qDebug() << "IP DETECTED: " << a.toString();
                     emit networkInfo(QString("IP: %1").arg(a.toString()));
+                    haveAddress = true;
                     break;
                 }
             }
-            
+            if (!haveAddress)
+                return false;
+
             // Check if network is truly ready (including time sync)
             bool networkReady = PlatformQuirks::isNetworkReady();
             if (networkReady) {
