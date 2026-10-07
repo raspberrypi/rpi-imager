@@ -570,7 +570,8 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     // chunked read is adequate for bring-up and will be aligned during
     // hardware validation.
     constexpr std::size_t kChunk = 1u * 1024 * 1024;
-    std::vector<std::uint8_t> buf(kChunk);
+    AlignedBuffer buf(kChunk);  // direct I/O, as in readChunk
+    if (!buf) return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: out of memory");
     std::uint64_t remaining = req.length();
     while (remaining > 0) {
         const std::size_t want = static_cast<std::size_t>(
