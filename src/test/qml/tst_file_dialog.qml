@@ -199,7 +199,9 @@ TestCase {
     function test_a_tilde_expands_to_the_home_directory() {
         const d = create({})
         const home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
-        const homePath = home.indexOf("file://") === 0 ? home.substring(7) : home
+        // file:///C:/Users/pi is the path C:/Users/pi, so the slash before a
+        // drive letter belongs to the URL; file:///home/pi keeps its slash.
+        const homePath = home.replace(/^file:\/\/(\/(?=[A-Za-z]:))?/, "")
 
         compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl("~")), homePath)
         compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl("~/os.img")), homePath + "/os.img")
