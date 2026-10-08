@@ -155,6 +155,8 @@ WizardStepBase {
                 checked: false
                 onToggled: function(isChecked) {
                     root.wizardContainer.piConnectEnabled = isChecked
+                    if (!isChecked)
+                        root.stopDeviceSignIn()
                     // Rebuild focus order when pill state changes
                     root.rebuildFocusOrder()
                 }
@@ -168,7 +170,7 @@ WizardStepBase {
                 text: qsTr("Open Raspberry Pi Connect")
                 accessibleDescription: qsTr("Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token")
                 enabled: useTokenPill.checked
-                visible: !root.orgModeEnabled && useTokenPill.checked && !root.connectTokenReceived
+                visible: !root.orgModeEnabled && !root.deviceSignIn && useTokenPill.checked && !root.connectTokenReceived
                 onClicked: root.openConnectSignIn()
             }
 
@@ -176,7 +178,7 @@ WizardStepBase {
             WizardFormLabel {
                 id: labelConnectToken
                 text: qsTr("Authentication token:")
-                visible: !root.orgModeEnabled && useTokenPill.checked
+                visible: !root.orgModeEnabled && !root.deviceSignIn && useTokenPill.checked
                 accessibleDescription: qsTr("Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.")
             }
 
@@ -185,7 +187,7 @@ WizardStepBase {
                 objectName: "connectTokenField"
                 Layout.fillWidth: true
                 font.pointSize: Style.fontSizeInput
-                visible: !root.orgModeEnabled && useTokenPill.checked
+                visible: !root.orgModeEnabled && !root.deviceSignIn && useTokenPill.checked
                 enabled: root.tokenFieldEnabled
                 persistentSelection: true
                 mouseSelectionMode: TextInput.SelectCharacters
@@ -210,6 +212,50 @@ WizardStepBase {
                         root.connectTokenReceived = false
                         root.connectToken = ""
                     }
+                }
+            }
+
+            // ── Device sign-in (embedded: no browser to sign in with) ──
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingSmall
+                visible: !root.orgModeEnabled && root.deviceSignIn && useTokenPill.checked
+
+                ImButton {
+                    id: btnDeviceSignIn
+                    objectName: "connectDeviceSignInButton"
+                    Layout.fillWidth: true
+                    visible: !root.connectTokenReceived
+                             && (root.deviceState === "" || root.deviceState === "failed")
+                    text: root.deviceState === "failed" ? qsTr("Get a new code")
+                                                        : qsTr("Sign in with a phone")
+                    accessibleDescription: qsTr("Show a code to scan or type on a phone, where you sign in to Raspberry Pi Connect")
+                    onClicked: root.startDeviceSignIn()
+                }
+
+                QrCode {
+                    id: deviceQr
+                    objectName: "connectDeviceQrCode"
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 200
+                    Layout.preferredHeight: 200
+                    visible: !root.connectTokenReceived && root.deviceState === "code"
+                    text: root.deviceVerificationUri
+                }
+
+                Text {
+                    id: deviceStatusText
+                    objectName: "connectDeviceStatus"
+                    Layout.fillWidth: true
+                    visible: text.length > 0
+                    text: root.deviceStatusMessage()
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pointSize: Style.fontSizeFormLabel
+                    color: root.deviceState === "failed" ? Style.formLabelErrorColor : Style.formLabelColor
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
             }
         }
@@ -237,6 +283,89 @@ WizardStepBase {
     property bool tokenFieldEnabled: false
     property bool tokenFromBrowser: false
     property bool isValid: false
+
+    // Embedded mode has no browser, so the sign-in above cannot happen
+    // there: a code for a phone stands in for it. Overridable for tests.
+    property bool deviceSignIn: ImageWriterSingleton ? ImageWriterSingleton.isEmbeddedMode() : false
+    // "", "waiting" for a code, "code" shown, or "failed".
+    property string deviceState: ""
+    property string deviceUserCode: ""
+    property string deviceVerificationUri: ""
+    property int deviceSecondsLeft: 0
+    property string deviceFailure: ""
+
+    function startDeviceSignIn() {
+        root.deviceFailure = ""
+        root.deviceState = "waiting"
+        ImageWriterSingleton.startConnectDeviceSignIn()
+    }
+
+    function stopDeviceSignIn() {
+        deviceExpiryTimer.stop()
+        if (root.deviceState === "waiting" || root.deviceState === "code")
+            ImageWriterSingleton.cancelConnectDeviceSignIn()
+        root.deviceState = ""
+    }
+
+    function handleDeviceCode(userCode, verificationUri, expiresInSecs) {
+        if (root.deviceState !== "waiting")
+            return
+        root.deviceUserCode = userCode
+        root.deviceVerificationUri = verificationUri
+        root.deviceSecondsLeft = expiresInSecs
+        root.deviceState = "code"
+        deviceExpiryTimer.restart()
+        root.rebuildFocusOrder()
+    }
+
+    function handleDeviceFailure(reason) {
+        if (root.deviceState !== "waiting" && root.deviceState !== "code")
+            return
+        deviceExpiryTimer.stop()
+        root.deviceFailure = reason
+        root.deviceState = "failed"
+        root.rebuildFocusOrder()
+    }
+
+    function deviceStatusMessage() {
+        if (root.connectTokenReceived && root.deviceSignIn)
+            return qsTr("Signed in to Raspberry Pi Connect.")
+        if (root.deviceState === "waiting")
+            return qsTr("Getting a code from Raspberry Pi Connect…")
+        if (root.deviceState === "code") {
+            var where = root.deviceVerificationUri.replace(/^https:\/\//, "")
+            var mins = Math.floor(root.deviceSecondsLeft / 60)
+            var secs = root.deviceSecondsLeft % 60
+            return qsTr("Scan the code with your phone, or go to %1 and check the code is %2.").arg(where).arg(root.deviceUserCode)
+                + "\n" + qsTr("The code expires in %1:%2.").arg(mins).arg(secs < 10 ? "0" + secs : secs)
+        }
+        if (root.deviceState === "failed") {
+            switch (root.deviceFailure) {
+            case "expired":      return qsTr("The code has expired.")
+            case "badcode":      return qsTr("Raspberry Pi Connect no longer recognises that code.")
+            case "unauthorized": return qsTr("Raspberry Pi Connect did not accept the request from Raspberry Pi Imager.")
+            case "network":      return qsTr("Could not reach Raspberry Pi Connect. Check the network connection.")
+            default:             return qsTr("Raspberry Pi Connect sent a reply that could not be read.")
+            }
+        }
+        return ""
+    }
+
+    // Counts the code down on screen. The sign-in keeps its own deadline
+    // and reports "expired" itself; this only shows how long is left.
+    Timer {
+        id: deviceExpiryTimer
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            if (root.deviceSecondsLeft > 0)
+                root.deviceSecondsLeft--
+            if (root.deviceSecondsLeft === 0)
+                stop()
+        }
+    }
+
+    Component.onDestruction: root.stopDeviceSignIn()
 
     // Org-mode key state.  A saved key is never re-shown:
     // `hasStoredOrgKey` only controls placeholder text / the Clear
@@ -293,9 +422,19 @@ WizardStepBase {
     Connections {
         target: ImageWriterSingleton
 
+        function onConnectDeviceCodeReady(userCode, verificationUri, expiresInSecs) {
+            root.handleDeviceCode(userCode, verificationUri, expiresInSecs)
+        }
+
+        function onConnectDeviceSignInFailed(reason) {
+            root.handleDeviceFailure(reason)
+        }
+
         // Listen for callback with token
         function onConnectTokenReceived(token){
             if (token && token.length > 0) {
+                deviceExpiryTimer.stop()
+                root.deviceState = ""
                 root.connectTokenReceived = true
                 root.connectToken = token
                 root.tokenFromBrowser = true
@@ -367,6 +506,11 @@ WizardStepBase {
             // Include help link if visible
             if (useTokenPill.helpLinkItem && useTokenPill.helpLinkItem.visible)
                 items.push(useTokenPill.helpLinkItem)
+            if (root.deviceSignIn) {
+                if (useTokenPill.checked && btnDeviceSignIn.visible)
+                    items.push(btnDeviceSignIn)
+                return items
+            }
             // Only include button if it's actually visible (checked and no token received yet)
             if (useTokenPill.checked && !root.connectTokenReceived)
                 items.push(btnOpenConnect)

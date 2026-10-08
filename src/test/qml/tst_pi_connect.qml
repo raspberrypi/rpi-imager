@@ -444,4 +444,84 @@ TestCase {
         verify(back !== -1, "and Back is still in the ring")
         verify(signIn < back, "with sign-in ahead of it")
     }
+
+    // ── Device sign-in (embedded: no browser to sign in with) ──
+
+    readonly property string deviceToken: "rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9xY"
+    readonly property string verifyUri: "https://connect.raspberrypi.com/verify/DECA-FBAD"
+
+    function useDeviceSignIn() {
+        step.deviceSignIn = true
+        child("connectUseTokenToggle").checked = true
+    }
+
+    function test_embedded_offers_a_code_for_a_phone_instead_of_a_browser() {
+        useDeviceSignIn()
+        verify(!child("connectOpenSignInButton").visible, "no browser to open")
+        verify(!child("connectTokenField").visible, "and no clipboard to paste from")
+        verify(child("connectDeviceSignInButton").visible, "so a code for a phone instead")
+    }
+
+    function test_the_code_is_shown_as_a_qr_code_and_as_text() {
+        useDeviceSignIn()
+        step.deviceState = "waiting"   // as startDeviceSignIn() leaves it, with no network
+        step.handleDeviceCode("DECA-FBAD", verifyUri, 900)
+
+        var qr = child("connectDeviceQrCode")
+        verify(qr.visible, "the QR code is up")
+        verify(qr.moduleCount >= 21, "and has something to draw: " + qr.moduleCount)
+        var text = child("connectDeviceStatus").text
+        verify(text.indexOf("DECA-FBAD") >= 0, "the short code is there to check: " + text)
+        verify(text.indexOf("connect.raspberrypi.com/verify") >= 0, "and where to go without a camera")
+        verify(text.indexOf("15:00") >= 0, "and how long it lasts")
+        verify(!child("connectDeviceSignInButton").visible, "no second request while a code is up")
+    }
+
+    function test_each_way_a_code_can_fail_offers_a_new_one_data() {
+        return [
+            { tag: "expired",      reason: "expired" },
+            { tag: "bad code",     reason: "badcode" },
+            { tag: "client ID",    reason: "unauthorized" },
+            { tag: "network",      reason: "network" },
+            { tag: "unreadable",   reason: "malformed" },
+        ]
+    }
+    function test_each_way_a_code_can_fail_offers_a_new_one(data) {
+        useDeviceSignIn()
+        step.deviceState = "waiting"
+        step.handleDeviceCode("DECA-FBAD", verifyUri, 900)
+        step.handleDeviceFailure(data.reason)
+
+        compare(step.deviceState, "failed")
+        verify(!child("connectDeviceQrCode").visible, data.tag + ": the dead code is taken down")
+        var button = child("connectDeviceSignInButton")
+        verify(button.visible, data.tag + ": a way to start again")
+        compare(button.text, "Get a new code")
+        verify(child("connectDeviceStatus").text.length > 0, data.tag + ": and a reason")
+        verify(!step.nextButtonEnabled, data.tag + ": Connect cannot be finished without a sign-in")
+    }
+
+    function test_signing_in_on_the_phone_completes_the_step() {
+        useDeviceSignIn()
+        step.deviceState = "waiting"
+        step.handleDeviceCode("DECA-FBAD", verifyUri, 900)
+        // What the sign-in does when the phone approves it.
+        ImageWriterSingleton.overwriteConnectToken(deviceToken)
+
+        verify(step.connectTokenReceived)
+        compare(step.deviceState, "")
+        verify(!child("connectDeviceQrCode").visible)
+        verify(child("connectDeviceStatus").text.indexOf("Signed in") >= 0)
+        verify(step.nextButtonEnabled, "and Next can go on")
+    }
+
+    function test_an_answer_after_stopping_is_ignored() {
+        useDeviceSignIn()
+        step.deviceState = "waiting"
+        // Turning Connect off, or leaving the step.
+        step.stopDeviceSignIn()
+        step.handleDeviceCode("DECA-FBAD", verifyUri, 900)
+        step.handleDeviceFailure("expired")
+        compare(step.deviceState, "", "neither a code nor a failure turns up afterwards")
+    }
 }

@@ -19,6 +19,17 @@
 /* Time synchronization URL (only used on linuxfb QPA platform, URL must be HTTP) */
 #define TIME_URL                                "http://downloads.raspberrypi.com/"
 
+/* Raspberry Pi Connect API */
+#define CONNECT_API_URL                         "https://api.connect.raspberrypi.com"
+
+/* Client ID Imager presents for the Connect device-code sign-in (embedded
+ * mode, which has no browser for the usual sign-in).
+ *
+ * PLACEHOLDER: this is the example ID from the Connect API documentation,
+ * not one issued to Imager. Replace it with Imager's own before release; the
+ * API answers 401 to an ID it does not know. */
+#define CONNECT_DEVICE_CLIENT_ID                "057C9305-A173-4596-BDAC-9701A92F7F62"
+
 /* Phone home the name of images downloaded for image popularity ranking */
 #define TELEMETRY_URL                           "https://rpi-imager-stats.raspberrypi.com/downloads"
 

@@ -37,6 +37,7 @@
 
 class QQmlApplicationEngine;
 class DownloadThread;
+class ConnectDeviceSignIn;
 class DownloadExtractThread;
 class QTranslator;
 class QLocale;
@@ -522,6 +523,17 @@ public:
     Q_INVOKABLE void announceToScreenReader(const QString &message);
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
     Q_INVOKABLE void overwriteConnectToken(const QString &token);
+
+    /* Raspberry Pi Connect sign-in for embedded mode, which has no browser:
+       a code to scan or type on a phone. connectDeviceCodeReady() carries
+       it; a sign-in arrives through overwriteConnectToken() as an rpdev_
+       token; connectDeviceSignInFailed() says why one did not. */
+    Q_INVOKABLE void startConnectDeviceSignIn();
+    Q_INVOKABLE void cancelConnectDeviceSignIn();
+
+    /* A QR code for `text`, for QML to draw: "size" modules a side, and
+       "modules" a string of size*size '0'/'1' characters, row by row. */
+    Q_INVOKABLE QVariantMap qrCode(const QString &text) const;
     Q_INVOKABLE QString getRuntimeConnectToken() const;
     Q_INVOKABLE bool verifyAuthKey(const QString &token, bool strict = false) const;
     Q_INVOKABLE void clearConnectToken();
@@ -621,6 +633,9 @@ signals:
     void writeStateChanged();
     void ejectStateChanged();
     void connectTokenReceived(const QString &token);
+    void connectDeviceCodeReady(const QString &userCode, const QString &verificationUri,
+                                int expiresInSecs);
+    void connectDeviceSignInFailed(const QString &reason);
     void connectTokenConflictDetected(const QString &token);
     // The session token has gone. `configurationInvalidated` separates the
     // two reasons, which want different things of the wizard: a token
@@ -755,6 +770,7 @@ protected:
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token
     QString _piConnectToken;
+    ConnectDeviceSignIn *_connectDeviceSignIn = nullptr;
     // True when the current _piConnectToken was minted by us via
     // requestOrgAuthKey() (rather than typed/pasted by the user).
     // Lets the wizard drop only its own minted keys on storage / OS

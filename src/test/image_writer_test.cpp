@@ -12544,6 +12544,8 @@ TEST_CASE("A fastboot flash reads the cache only once it has been checked",
 
 #include "network_poll_action.h"
 #include "github_keys.h"
+#include "connect_device_signin.h"
+#include <mutex>
 
 TEST_CASE("Connectivity arriving with no list fetches one",
           "[imagewriter][netpoll]")
@@ -12693,6 +12695,285 @@ TEST_CASE("An invalid GitHub username is answered without a fetch",
     CHECK(gotStatus == QStringLiteral("invalid"));
     CHECK(gotUser == QStringLiteral("not a user"));
     CHECK(gotKeys.isEmpty());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Raspberry Pi Connect device-code sign-in. Embedded Imager has no browser for
+// the usual sign-in; it shows a code for a phone and polls until it is
+// approved.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Stands in for the Connect API: records each request and answers from a
+// queue, and once the queue is empty says the code is still pending. The
+// poster runs on a worker thread, hence the lock.
+struct ScriptedConnect
+{
+    std::mutex lock;
+    QStringList urls;
+    QList<QByteArray> bodies;
+    QList<rpi_connect::HttpReply> replies;
+
+    void queue(long status, const QByteArray &body)
+    {
+        std::lock_guard<std::mutex> g(lock);
+        replies.append({status, body, QString()});
+    }
+
+    ConnectDeviceSignIn::Poster poster()
+    {
+        return [this](const QString &url, const QByteArray &body) {
+            std::lock_guard<std::mutex> g(lock);
+            urls.append(url);
+            bodies.append(body);
+            if (replies.isEmpty())
+                return rpi_connect::HttpReply{400, R"({"error":"authorization_pending"})", QString()};
+            return replies.takeFirst();
+        };
+    }
+
+    QStringList requested()
+    {
+        std::lock_guard<std::mutex> g(lock);
+        return urls;
+    }
+};
+
+const QByteArray kDeviceCode = R"({"device_code":"5b8f1e0a-6d0c-4a3e-9b7e-2f1c4d3a9e01",
+    "user_code":"DECAFBAD","verification_uri_complete":"https://connect.raspberrypi.com/verify/DECA-FBAD",
+    "expires_in":900,"interval":0})";
+const QByteArray kSignedIn = R"({"device_id":"9a7d2c1b-1111-4222-8333-944455556666",
+    "access_token":"rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9"})";
+
+// What a sign-in came to, collected from its signals.
+struct SignInResult
+{
+    QString userCode, verificationUri, token, failure;
+    int codes = 0;
+    bool done() const { return !token.isEmpty() || !failure.isEmpty(); }
+};
+
+void watch(ConnectDeviceSignIn &signIn, SignInResult &r)
+{
+    QObject::connect(&signIn, &ConnectDeviceSignIn::codeReady,
+                     [&r](const QString &code, const QString &uri, int) {
+                         ++r.codes; r.userCode = code; r.verificationUri = uri;
+                     });
+    QObject::connect(&signIn, &ConnectDeviceSignIn::signedIn,
+                     [&r](const QString &, const QString &token) { r.token = token; });
+    QObject::connect(&signIn, &ConnectDeviceSignIn::failed,
+                     [&r](const QString &reason) { r.failure = reason; });
+}
+
+bool spinUntil(const std::function<bool()> &done, int ms = 5000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (!done() && t.elapsed() < ms) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        QThread::msleep(2);
+    }
+    return done();
+}
+
+constexpr const char *kBase = "http://connect.test";
+
+} // namespace
+
+TEST_CASE("A Connect sign-in shows a code, then arrives once it is approved",
+          "[imagewriter][connect][devicecode]")
+{
+    ScriptedConnect api;
+    api.queue(200, kDeviceCode);
+    api.queue(400, R"({"error":"authorization_pending"})");
+    api.queue(400, R"({"error":"authorization_pending"})");
+    api.queue(200, kSignedIn);
+
+    ConnectDeviceSignIn signIn(QStringLiteral("client-1"), QString::fromLatin1(kBase), api.poster());
+    signIn.setMinimumPollIntervalMs(0);
+    SignInResult r;
+    watch(signIn, r);
+    signIn.start();
+
+    REQUIRE(spinUntil([&] { return r.done(); }));
+    CHECK(r.failure.isEmpty());
+    CHECK(r.codes == 1);
+    CHECK(r.userCode == QStringLiteral("DECAFBAD"));
+    CHECK(r.verificationUri == QStringLiteral("https://connect.raspberrypi.com/verify/DECA-FBAD"));
+    CHECK(r.token == QStringLiteral("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9"));
+    CHECK_FALSE(signIn.isActive());
+
+    std::lock_guard<std::mutex> g(api.lock);
+    REQUIRE(api.urls.size() == 4);
+    CHECK(api.urls[0] == QStringLiteral("http://connect.test/client/device"));
+    CHECK(api.urls[1] == QStringLiteral("http://connect.test/client/token"));
+    CHECK(api.bodies[0] == QByteArray("client_id=client-1"));
+    CHECK(api.bodies[3] == QByteArray("client_id=client-1&device_code=5b8f1e0a-6d0c-4a3e-9b7e-2f1c4d3a9e01"));
+}
+
+TEST_CASE("A Connect sign-in stops on each answer that means starting again",
+          "[imagewriter][connect][devicecode]")
+{
+    struct Case { const char *name; long status; QByteArray body; const char *reason; };
+    const Case cases[] = {
+        {"expired",      400, R"({"error":"expired_token"})",         "expired"},
+        {"bad code",     400, R"({"error":"bad_verification_code"})", "badcode"},
+        {"client ID",    401, "",                                      "unauthorized"},
+        {"unreadable",   500, "<html>oops</html>",                     "malformed"},
+    };
+    for (const Case &c : cases) {
+        INFO(c.name);
+        ScriptedConnect api;
+        api.queue(200, kDeviceCode);
+        api.queue(c.status, c.body);
+
+        ConnectDeviceSignIn signIn(QStringLiteral("client-1"), QString::fromLatin1(kBase), api.poster());
+        signIn.setMinimumPollIntervalMs(0);
+        SignInResult r;
+        watch(signIn, r);
+        signIn.start();
+
+        REQUIRE(spinUntil([&] { return r.done(); }));
+        CHECK(r.token.isEmpty());
+        CHECK(r.failure == QString::fromLatin1(c.reason));
+        CHECK_FALSE(signIn.isActive());
+    }
+}
+
+TEST_CASE("A Connect client ID that is refused gets no code at all",
+          "[imagewriter][connect][devicecode]")
+{
+    ScriptedConnect api;
+    api.queue(401, "");
+    ConnectDeviceSignIn signIn(QStringLiteral("not-ours"), QString::fromLatin1(kBase), api.poster());
+    SignInResult r;
+    watch(signIn, r);
+    signIn.start();
+
+    REQUIRE(spinUntil([&] { return r.done(); }));
+    CHECK(r.codes == 0);
+    CHECK(r.failure == QStringLiteral("unauthorized"));
+    CHECK(api.requested().size() == 1);
+}
+
+TEST_CASE("A dropped connection while waiting does not cost the code",
+          "[imagewriter][connect][devicecode]")
+{
+    // Wi-Fi on a Pi drops now and then. Throwing the code away for that would
+    // send the user back to scan again for nothing.
+    ScriptedConnect api;
+    api.queue(200, kDeviceCode);
+    api.queue(-1, QByteArray());
+    api.queue(200, kSignedIn);
+
+    ConnectDeviceSignIn signIn(QStringLiteral("client-1"), QString::fromLatin1(kBase), api.poster());
+    signIn.setMinimumPollIntervalMs(0);
+    SignInResult r;
+    watch(signIn, r);
+    signIn.start();
+
+    REQUIRE(spinUntil([&] { return r.done(); }));
+    CHECK(r.failure.isEmpty());
+    CHECK(r.token == QStringLiteral("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9"));
+}
+
+TEST_CASE("A code nobody approves runs out on Imager's clock too",
+          "[imagewriter][connect][devicecode]")
+{
+    // The server may never say expired_token -- it may be unreachable by
+    // then -- so the sign-in keeps its own deadline.
+    ScriptedConnect api;
+    api.queue(200, R"({"device_code":"d","user_code":"DECAFBAD",
+        "verification_uri_complete":"https://connect.raspberrypi.com/verify/DECA-FBAD",
+        "expires_in":1,"interval":0})");
+
+    ConnectDeviceSignIn signIn(QStringLiteral("client-1"), QString::fromLatin1(kBase), api.poster());
+    signIn.setMinimumPollIntervalMs(50);
+    SignInResult r;
+    watch(signIn, r);
+    signIn.start();
+
+    REQUIRE(spinUntil([&] { return r.done(); }, 5000));
+    CHECK(r.failure == QStringLiteral("expired"));
+}
+
+TEST_CASE("A cancelled Connect sign-in says nothing more",
+          "[imagewriter][connect][devicecode]")
+{
+    ScriptedConnect api;
+    api.queue(200, kDeviceCode);
+    api.queue(200, kSignedIn);
+
+    ConnectDeviceSignIn signIn(QStringLiteral("client-1"), QString::fromLatin1(kBase), api.poster());
+    signIn.setMinimumPollIntervalMs(200);
+    SignInResult r;
+    watch(signIn, r);
+    signIn.start();
+    REQUIRE(spinUntil([&] { return r.codes == 1; }));
+
+    // Leaving the step: the token waiting in the queue must not arrive.
+    signIn.cancel();
+    spinUntil([] { return false; }, 600);
+    CHECK(r.token.isEmpty());
+    CHECK(r.failure.isEmpty());
+    CHECK_FALSE(signIn.isActive());
+}
+
+TEST_CASE("Connect device-code replies are read strictly",
+          "[imagewriter][connect][devicecode]")
+{
+    using rpi_connect::HttpReply;
+    // The QR code sends a phone wherever this says, so it must be a web page.
+    const auto notWeb = rpi_connect::parseDeviceAuthorisation(HttpReply{200,
+        R"J({"device_code":"d","user_code":"U","verification_uri_complete":"javascript:alert(1)","expires_in":900,"interval":5})J",
+        QString()});
+    CHECK_FALSE(notWeb.ok);
+    CHECK(notWeb.error == QStringLiteral("malformed"));
+
+    const auto offline = rpi_connect::parseDeviceAuthorisation(HttpReply{-1, {}, QStringLiteral("no route")});
+    CHECK(offline.error == QStringLiteral("network"));
+
+    // A 200 that is not an rpdev_ token is not a sign-in.
+    const auto odd = rpi_connect::classifyTokenReply(HttpReply{200, R"({"access_token":"rpuak_x"})", QString()});
+    CHECK(odd.outcome == rpi_connect::TokenOutcome::Failed);
+    const auto slow = rpi_connect::classifyTokenReply(HttpReply{400, R"({"error":"slow_down"})", QString()});
+    CHECK(slow.outcome == rpi_connect::TokenOutcome::SlowDown);
+
+    CHECK(rpi_connect::displayUserCode(QStringLiteral("DECAFBAD")) == QStringLiteral("DECA-FBAD"));
+    CHECK(rpi_connect::displayUserCode(QStringLiteral("DECA-FBAD")) == QStringLiteral("DECA-FBAD"));
+}
+
+TEST_CASE("A Connect device token passes the token check",
+          "[imagewriter][connect][devicecode]")
+{
+    ImageWriter w(nullptr);
+    // The Next button checks strictly, and the exact length there is for
+    // auth keys; an rpdev_ token is longer.
+    CHECK(w.verifyAuthKey(QStringLiteral("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9xY"), true));
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("rpdev_short"), true));
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("rpdev_0OIl0OIl0OIl0OIl0OIl0OIl"), false));
+    // Auth keys are as strict as before.
+    CHECK(w.verifyAuthKey(QStringLiteral("rpuak_3mJr7AoUXx2Wqd1bVfzJ5tZp"), true));
+    CHECK_FALSE(w.verifyAuthKey(QStringLiteral("rpuak_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9"), true));
+}
+
+TEST_CASE("A QR code comes out as a square of modules QML can draw",
+          "[imagewriter][connect][qr]")
+{
+    ImageWriter w(nullptr);
+    const QVariantMap qr = w.qrCode(QStringLiteral("https://connect.raspberrypi.com/verify/DECA-FBAD"));
+    const int size = qr.value(QStringLiteral("size")).toInt();
+    const QString modules = qr.value(QStringLiteral("modules")).toString();
+
+    // A QR code is 21 modules a side at version 1, four more each version.
+    REQUIRE(size >= 21);
+    CHECK((size - 17) % 4 == 0);
+    REQUIRE(modules.size() == size * size);
+    // The finder pattern in the top-left corner: a dark top row of seven,
+    // then light inside it.
+    CHECK(modules.left(7) == QStringLiteral("1111111"));
+    CHECK(modules.mid(size + 1, 5) == QStringLiteral("00000"));
 }
 
 TEST_CASE("Embedded Imager reboots without asking for /sbin/reboot",
