@@ -501,6 +501,14 @@ public:
     QString detectPiKeyboard();
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
+
+    /* How reboot() restarts the machine. Embedded Imager is not on a system
+       with an init that a reboot command can ask: pi-gen-micro has no
+       /sbin/reboot, and busybox's reboot only signals PID 1, which there is
+       a shell script that ignores it. So embedded makes the kernel call
+       itself, and if that fails it quits and init reboots on its way out. */
+    enum class RebootPath { KernelCallThenQuit, ExternalCommand };
+    static RebootPath rebootPathFor(bool embedded);
     Q_INVOKABLE void openUrl(const QUrl &url);
     // An ordinary web address: http or https, with a host. Used wherever a
     // URL arrives from somewhere that is not us -- an OS list entry, the

@@ -88,6 +88,7 @@
 
 #ifdef Q_OS_LINUX
 #include "linux/stpanalyzer.h"
+#include <sys/reboot.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
@@ -5004,10 +5005,29 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     _startConfiguredWrite();
 }
 
+ImageWriter::RebootPath ImageWriter::rebootPathFor(bool embedded)
+{
+    return embedded ? RebootPath::KernelCallThenQuit : RebootPath::ExternalCommand;
+}
+
 void ImageWriter::reboot()
 {
     qDebug() << "Rebooting system.";
-    QProcess::execute(QStringLiteral("/sbin/reboot"), QStringList());
+    if (rebootPathFor(isEmbeddedMode()) == RebootPath::KernelCallThenQuit) {
+#ifdef Q_OS_LINUX
+        ::sync();
+        ::reboot(RB_AUTOBOOT);
+        // Only reached if the kernel refused.
+        qWarning() << "reboot(RB_AUTOBOOT) failed:" << strerror(errno)
+                   << "- quitting so init reboots";
+#endif
+        QCoreApplication::quit();
+        return;
+    }
+
+    const int rc = QProcess::execute(QStringLiteral("/sbin/reboot"), QStringList());
+    if (rc != 0)
+        qWarning() << "/sbin/reboot did not run cleanly, result" << rc;
 }
 
 bool ImageWriter::isHttpUrl(const QUrl &url)
