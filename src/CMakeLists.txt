@@ -364,7 +364,7 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "disk_formatter.cpp" "bootimgcreator.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
     "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "secureboot_crypto_common.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
     "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp"
-    "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "github_keys.cpp" "eeprom_repo_override.cpp")
+    "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "github_keys.cpp" "dependencies/qrcodegen/qrcodegen.cpp" "eeprom_repo_override.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
