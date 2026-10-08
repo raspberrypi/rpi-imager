@@ -22,6 +22,16 @@ ColumnLayout {
     
     // Internal state
     property bool expanded: false
+
+    // Embedded Imager runs on a Pi with no clipboard and no file browser, so
+    // neither the paste field nor Browse can bring a key in. A GitHub
+    // username can be typed, and https://github.com/<user>.keys serves that
+    // account's public keys -- what ssh-import-id gh:<user> uses.
+    property bool gitHubImportAvailable: ImageWriterSingleton ? ImageWriterSingleton.isEmbeddedMode() : false
+    // "", "busy", or the status of the last import: see gitHubKeysImported.
+    property string gitHubStatus: ""
+    property string gitHubMessage: ""
+    property string gitHubPendingUser: ""
     
     spacing: Style.spacingSmall
     
@@ -151,6 +161,49 @@ ColumnLayout {
         }
     }
     
+    function importFromGitHub(username) {
+        var name = username.trim()
+        if (name.length === 0 || root.gitHubStatus === "busy")
+            return
+        root.gitHubPendingUser = name
+        root.gitHubStatus = "busy"
+        root.gitHubMessage = qsTr("Fetching keys from GitHub…")
+        ImageWriterSingleton.importGitHubKeys(name)
+    }
+
+    // The answer to importFromGitHub(). Separate from the request so a result
+    // can be fed in without a network.
+    function handleGitHubResult(username, keys, status) {
+        if (root.gitHubStatus !== "busy" || username !== root.gitHubPendingUser)
+            return
+        root.gitHubPendingUser = ""
+        root.gitHubStatus = status
+        if (status === "keys") {
+            var before = root.keys.length
+            root.keys = deduplicateKeys(root.keys.concat(keys))
+            var added = root.keys.length - before
+            root.gitHubMessage = added > 0
+                ? qsTr("Added %n key(s) from GitHub user %1.", "", added).arg(username)
+                : qsTr("Every key from GitHub user %1 is already in the list.").arg(username)
+            gitHubUserField.text = ""
+        } else if (status === "nokeys") {
+            root.gitHubMessage = qsTr("GitHub user %1 has no public SSH keys. Add one on GitHub, or use password authentication.").arg(username)
+        } else if (status === "nosuchuser") {
+            root.gitHubMessage = qsTr("There is no GitHub user called %1.").arg(username)
+        } else if (status === "invalid") {
+            root.gitHubMessage = qsTr("%1 is not a valid GitHub username.").arg(username)
+        } else {
+            root.gitHubMessage = qsTr("Could not get keys from GitHub. Check the network connection and try again, or use password authentication.")
+        }
+    }
+
+    Connections {
+        target: ImageWriterSingleton
+        function onGitHubKeysImported(username, keys, status) {
+            root.handleGitHubResult(username, keys, status)
+        }
+    }
+
     // Get all keys as a single string (newline-separated)
     function getAllKeysAsString() {
         return root.keys.join("\n")
@@ -177,6 +230,10 @@ ColumnLayout {
         }
         items.push(addKeyField)
         items.push(addOrBrowseButton)
+        if (root.gitHubImportAvailable) {
+            items.push(gitHubUserField)
+            items.push(gitHubImportButton)
+        }
         return items
     }
 
@@ -386,6 +443,49 @@ ColumnLayout {
                     ? qsTr("Add the entered SSH key")
                     : qsTr("Select an SSH public key file to add")
             }
+        }
+
+        // Import from GitHub (embedded: nothing else can bring a key in)
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            visible: root.gitHubImportAvailable
+
+            ImTextField {
+                id: gitHubUserField
+                objectName: "sshGitHubUserField"
+                Layout.fillWidth: true
+                placeholderText: qsTr("GitHub username")
+                font.pointSize: Style.fontSizeInput
+                Accessible.name: qsTr("GitHub username")
+                Accessible.description: qsTr("Type a GitHub username to add the public SSH keys that account has published")
+                trimWhitespace: true
+                enabled: root.gitHubStatus !== "busy"
+                onAccepted: root.importFromGitHub(gitHubUserField.value)
+            }
+
+            ImButton {
+                id: gitHubImportButton
+                objectName: "sshGitHubImportButton"
+                text: qsTr("Import from GitHub")
+                enabled: gitHubUserField.value.length > 0 && root.gitHubStatus !== "busy"
+                onClicked: root.importFromGitHub(gitHubUserField.value)
+                accessibleDescription: qsTr("Add the public SSH keys published by this GitHub account")
+            }
+        }
+
+        Text {
+            objectName: "sshGitHubStatus"
+            Layout.fillWidth: true
+            visible: root.gitHubImportAvailable && root.gitHubMessage.length > 0
+            text: root.gitHubMessage
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            font.pointSize: Style.fontSizeFormLabel
+            color: (root.gitHubStatus === "keys" || root.gitHubStatus === "busy")
+                   ? Style.formLabelColor : Style.formLabelErrorColor
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
     }
     

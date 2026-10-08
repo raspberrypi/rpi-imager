@@ -278,6 +278,12 @@ public:
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
+    /* Fetch the public SSH keys a GitHub account publishes, for a machine with
+       no clipboard or file browser to bring a key in. The answer arrives as
+       gitHubKeysImported(); see github_keys.h for what each status means, and
+       "invalid" for a name that was never sent. */
+    Q_INVOKABLE void importGitHubKeys(const QString &username);
+
     /* The path of a file the QML file dialogs hand back as a url. Cutting
        "file://" off the url is not the same thing: that leaves "/C:/..." on
        Windows, and "%23" for a '#' in the name everywhere. */
@@ -596,6 +602,8 @@ signals:
     void operationWarning(QVariant message);  // Non-fatal warning during operation (e.g., sync fallback)
     void hwFilterChanged();
     void networkInfo(QVariant msg);
+    void gitHubKeysImported(const QString &username, const QStringList &keys,
+                            const QString &status);
     void cacheVerificationStarted();
     void cacheVerificationFinished();
     void selectedDeviceRemoved();
