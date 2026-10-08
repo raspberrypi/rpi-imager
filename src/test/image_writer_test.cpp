@@ -12695,6 +12695,17 @@ TEST_CASE("An invalid GitHub username is answered without a fetch",
     CHECK(gotKeys.isEmpty());
 }
 
+TEST_CASE("Embedded Imager reboots without asking for /sbin/reboot",
+          "[imagewriter][reboot]")
+{
+    // The Reboot button on the Done screen did nothing on the embedded image:
+    // it ran /sbin/reboot, which pi-gen-micro does not have, and busybox's
+    // reboot would only have signalled an init that ignores it. Embedded
+    // makes the kernel call itself. Elsewhere the command is still the way.
+    CHECK(ImageWriter::rebootPathFor(true) == ImageWriter::RebootPath::KernelCallThenQuit);
+    CHECK(ImageWriter::rebootPathFor(false) == ImageWriter::RebootPath::ExternalCommand);
+}
+
 TEST_CASE("Losing the network is noticed once", "[imagewriter][netpoll]")
 {
     CHECK(rpi_net::planPollAction(false, true, true) == rpi_net::PollAction::GoOffline);
