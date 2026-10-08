@@ -459,7 +459,9 @@ TestCase {
         useDeviceSignIn()
         verify(!child("connectOpenSignInButton").visible, "no browser to open")
         verify(!child("connectTokenField").visible, "and no clipboard to paste from")
-        verify(child("connectDeviceSignInButton").visible, "so a code for a phone instead")
+        var button = child("connectDeviceSignInButton")
+        verify(button.visible, "so a code for another device instead")
+        compare(button.text, "Sign in on another device")
     }
 
     function test_the_code_is_shown_as_a_qr_code_and_as_text() {
@@ -470,10 +472,16 @@ TestCase {
         var qr = child("connectDeviceQrCode")
         verify(qr.visible, "the QR code is up")
         verify(qr.moduleCount >= 21, "and has something to draw: " + qr.moduleCount)
-        var text = child("connectDeviceStatus").text
-        verify(text.indexOf("DECA-FBAD") >= 0, "the short code is there to check: " + text)
-        verify(text.indexOf("connect.raspberrypi.com/verify") >= 0, "and where to go without a camera")
-        verify(text.indexOf("15:00") >= 0, "and how long it lasts")
+        // Not everyone has a phone: the address is on its own line, whole,
+        // to type into a browser anywhere, and the code on its own for the
+        // bare verify page.
+        var instruction = child("connectDeviceInstruction").text
+        verify(instruction.indexOf("any device") >= 0, instruction)
+        verify(instruction.indexOf("phone") < 0, "and assumes no phone: " + instruction)
+        compare(child("connectDeviceUrl").text, "connect.raspberrypi.com/verify/DECA-FBAD")
+        compare(child("connectDeviceCode").text, "Code: DECA-FBAD")
+        verify(child("connectDeviceExpiry").text.indexOf("15:00") >= 0, "and how long it lasts")
+        compare(child("connectDeviceStatus").text, "", "with nothing else competing for the space")
         verify(!child("connectDeviceSignInButton").visible, "no second request while a code is up")
     }
 
@@ -523,5 +531,23 @@ TestCase {
         step.handleDeviceCode("DECA-FBAD", verifyUri, 900)
         step.handleDeviceFailure("expired")
         compare(step.deviceState, "", "neither a code nor a failure turns up afterwards")
+    }
+
+    function test_the_address_wraps_rather_than_being_cut_off_on_a_narrow_screen() {
+        useDeviceSignIn()
+        step.deviceState = "waiting"
+        step.handleDeviceCode("DECA-FBAD", verifyUri, 900)
+        var url = child("connectDeviceUrl")
+        compare(url.elide, Text.ElideNone, "never elided")
+        compare(url.wrapMode, Text.WrapAnywhere, "and free to break inside the address, which has no spaces")
+
+        // Narrower than the address at its size: it has to go onto more
+        // lines, all of it still inside the panel.
+        step.width = 300
+        tryVerify(function() { return url.lineCount >= 2 }, 2000,
+                  "the address took " + url.lineCount + " line(s) at width " + url.width)
+        verify(url.contentWidth <= url.width + 1,
+               "and fits: content " + url.contentWidth + " in " + url.width)
+        compare(url.text, "connect.raspberrypi.com/verify/DECA-FBAD", "with nothing dropped")
     }
 }
