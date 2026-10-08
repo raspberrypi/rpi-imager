@@ -554,6 +554,60 @@ TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("install -m 0644 /dev/null \"/var/lib/systemd/linger/$TARGET_USER\""));
 }
 
+TEST_CASE("A Connect device token is written as rpi-connect's state.json",
+          "[customization][piconnect]") {
+    // The device-code sign-in embedded Imager uses returns an rpdev_ access
+    // token: already signed in, so rpi-connect wants it as its own state,
+    // not as an auth key to sign in with.
+    const QString token = QStringLiteral("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9");
+    const auto file = CustomisationGenerator::piConnectCredentialFile(token);
+    CHECK(file.fileName == QStringLiteral("state.json"));
+    CHECK(file.content == QStringLiteral(
+        R"({"accessToken":"rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9","shellDisabled":false,"vncDisabled":false})"));
+
+    // An auth key is unchanged: auth.key, the key itself.
+    const auto key = CustomisationGenerator::piConnectCredentialFile(QStringLiteral("rpuak_abc"));
+    CHECK(key.fileName == QStringLiteral("auth.key"));
+    CHECK(key.content == QStringLiteral("rpuak_abc"));
+}
+
+TEST_CASE("The firstrun script puts a Connect device token in the configured user's state.json",
+          "[customization][piconnect]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "alice";
+    settings["piConnectEnabled"] = true;
+    const QString token = QStringLiteral("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9");
+
+    const std::string script =
+        QString::fromUtf8(CustomisationGenerator::generateSystemdScript(settings, token)).toStdString();
+
+    CHECK_THAT(script, ContainsSubstring("TARGET_USER=\"alice\""));
+    CHECK_THAT(script, ContainsSubstring("/.config/com.raspberrypi.connect/state.json\""));
+    CHECK_THAT(script, ContainsSubstring(
+        R"({"accessToken":"rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9","shellDisabled":false,"vncDisabled":false})"));
+    CHECK_THAT(script, ContainsSubstring("chmod 600 \"$TARGET_HOME/.config/com.raspberrypi.connect/state.json\""));
+    CHECK_THAT(script, !ContainsSubstring("auth.key"));
+    // Signed in or not, it is the same daemon to start.
+    CHECK_THAT(script, ContainsSubstring("rpi-connect.service"));
+}
+
+TEST_CASE("cloud-init puts a Connect device token in the configured user's state.json",
+          "[cloudinit][userdata][piconnect]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "alice";
+    settings["piConnectEnabled"] = true;
+    const QString token = QStringLiteral("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9");
+
+    const std::string yaml =
+        QString::fromUtf8(CustomisationGenerator::generateCloudInitUserData(settings, token)).toStdString();
+
+    CHECK_THAT(yaml, ContainsSubstring("/home/alice/.config/com.raspberrypi.connect/state.json"));
+    CHECK_THAT(yaml, ContainsSubstring("accessToken"));
+    CHECK_THAT(yaml, ContainsSubstring("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9"));
+    CHECK_THAT(yaml, ContainsSubstring("chmod 600"));
+    CHECK_THAT(yaml, !ContainsSubstring("auth.key"));
+}
+
 // Negative Tests - Testing resilience to invalid/malicious inputs
 TEST_CASE("CustomisationGenerator handles empty settings gracefully", "[customization][negative]") {
     QVariantMap settings;  // Completely empty

@@ -15,6 +15,7 @@ namespace rpi_imager {
 // Raspberry Pi Connect configuration paths
 constexpr auto PI_CONNECT_CONFIG_PATH = ".config/com.raspberrypi.connect";
 constexpr auto PI_CONNECT_DEPLOY_KEY_FILENAME = "auth.key";
+constexpr auto PI_CONNECT_STATE_FILENAME = "state.json";
 
 /**
  * @brief Generates firstrun.sh and cloud-init customisation scripts for Raspberry Pi images
@@ -153,6 +154,21 @@ public:
      * @return A single shell word the shell will read back unchanged
      */
     static QString shellQuote(const QString& value);
+
+    /**
+     * @brief Which file a Raspberry Pi Connect credential goes in, and what
+     * goes in it.
+     *
+     * An auth key (rpuak_/rpoak_) is something rpi-connect signs in with on
+     * first boot, read from auth.key. An rpdev_ access token, from the
+     * device-code sign-in embedded Imager uses, is already signed in: it is
+     * rpi-connect's own state.json, as a JSON object.
+     */
+    struct PiConnectCredentialFile {
+        QString fileName;
+        QString content;
+    };
+    static PiConnectCredentialFile piConnectCredentialFile(const QString& token);
 
     /**
      * @brief Whether the OS image's release date selects yescrypt over sha256crypt.

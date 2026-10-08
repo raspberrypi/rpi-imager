@@ -15,6 +15,8 @@
 #include <QStringConverter>
 #include <QDebug>
 #include <QRandomGenerator>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <random>
 
@@ -135,6 +137,20 @@ QString heredocDelimiter(const QString& body, const QString& base)
 }
 
 } // namespace
+
+CustomisationGenerator::PiConnectCredentialFile
+CustomisationGenerator::piConnectCredentialFile(const QString& token)
+{
+    if (token.startsWith(QLatin1String("rpdev_"))) {
+        QJsonObject state;
+        state.insert(QStringLiteral("accessToken"), token);
+        state.insert(QStringLiteral("vncDisabled"), false);
+        state.insert(QStringLiteral("shellDisabled"), false);
+        return { QString::fromLatin1(PI_CONNECT_STATE_FILENAME),
+                 QString::fromUtf8(QJsonDocument(state).toJson(QJsonDocument::Compact)) };
+    }
+    return { QString::fromLatin1(PI_CONNECT_DEPLOY_KEY_FILENAME), token };
+}
 
 QString CustomisationGenerator::shellQuote(const QString& value) {
     QString t = value;
@@ -584,17 +600,18 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     QString piConnectTokenTrimmed = piConnectToken.trimmed();
     if (piConnectEnabled && !piConnectTokenTrimmed.isEmpty()) {
         const QString configDir = QStringLiteral("$TARGET_HOME/") + PI_CONNECT_CONFIG_PATH;
-        const QString deployKeyPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
+        const PiConnectCredentialFile credential = piConnectCredentialFile(piConnectTokenTrimmed);
+        const QString deployKeyPath = configDir + QStringLiteral("/") + credential.fileName;
         
         line(QStringLiteral("TARGET_USER=\"") + effectiveUser + QStringLiteral("\""), script);
         line(QStringLiteral("TARGET_HOME=$(getent passwd \"$TARGET_USER\" | cut -d: -f6)"), script);
         line(QStringLiteral("if [ -z \"$TARGET_HOME\" ] || [ ! -d \"$TARGET_HOME\" ]; then TARGET_HOME=\"/home/") + effectiveUser + QStringLiteral("\"; fi"), script);
         line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"") + configDir + QStringLiteral("\""), script);
         const QString tokenDelim =
-            heredocDelimiter(piConnectTokenTrimmed, QStringLiteral("EOF"));
+            heredocDelimiter(credential.content, QStringLiteral("EOF"));
         line(QStringLiteral("cat > \"") + deployKeyPath + QStringLiteral("\" <<'")
              + tokenDelim + QStringLiteral("'"), script);
-        line(piConnectTokenTrimmed, script);
+        line(credential.content, script);
         line(tokenDelim, script);
         line(QStringLiteral("chown \"$TARGET_USER:$TARGET_USER\" \"") + deployKeyPath + QStringLiteral("\""), script);
         line(QStringLiteral("chmod 600 \"") + deployKeyPath + QStringLiteral("\""), script);
@@ -920,7 +937,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
 
         if (needsRuncmdForPiConnect) {
             const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
-            const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
+            const PiConnectCredentialFile credential = piConnectCredentialFile(cleanToken);
+            const QString targetPath = configDir + QStringLiteral("/") + credential.fileName;
             const QString userHome = QStringLiteral("/home/") + effectiveUser;
             const QString userQ = shellQuote(effectiveUser);
             const QString ownerQ = shellQuote(effectiveUser + QStringLiteral(":") + effectiveUser);
@@ -933,7 +951,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
 
             // The token was hand-escaped for a single-quoted string here;
             // shellQuote does the same thing and is the one the rest uses.
-            runcmd(QStringLiteral("printf '%s\n' ") + shellQuote(cleanToken)
+            runcmd(QStringLiteral("printf '%s\n' ") + shellQuote(credential.content)
                    + QStringLiteral(" > ") + shellQuote(targetPath)
                    + QStringLiteral(" && chown ") + ownerQ + QStringLiteral(" ") + shellQuote(targetPath)
                    + QStringLiteral(" && chmod 600 ") + shellQuote(targetPath));
