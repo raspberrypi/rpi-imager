@@ -228,8 +228,8 @@ WizardStepBase {
                     visible: !root.connectTokenReceived
                              && (root.deviceState === "" || root.deviceState === "failed")
                     text: root.deviceState === "failed" ? qsTr("Get a new code")
-                                                        : qsTr("Sign in with a phone")
-                    accessibleDescription: qsTr("Show a code to scan or type on a phone, where you sign in to Raspberry Pi Connect")
+                                                        : qsTr("Sign in on another device")
+                    accessibleDescription: qsTr("Show a code and an address for signing in to Raspberry Pi Connect on a phone or another computer")
                     onClicked: root.startDeviceSignIn()
                 }
 
@@ -239,8 +239,70 @@ WizardStepBase {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: 200
                     Layout.preferredHeight: 200
-                    visible: !root.connectTokenReceived && root.deviceState === "code"
+                    visible: root.showDeviceCode
                     text: root.deviceVerificationUri
+                }
+
+                // Not everyone has a phone to scan with, so the address is
+                // there to type into a browser on any other device: on its
+                // own line, large enough to read across a room on HDMI, and
+                // broken anywhere rather than cut off on a narrow screen.
+                Text {
+                    objectName: "connectDeviceInstruction"
+                    Layout.fillWidth: true
+                    visible: root.showDeviceCode
+                    text: qsTr("Scan the QR code, or visit this address on any device:")
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pointSize: Style.fontSizeFormLabel
+                    color: Style.formLabelColor
+                }
+
+                Text {
+                    objectName: "connectDeviceUrl"
+                    Layout.fillWidth: true
+                    visible: root.showDeviceCode
+                    text: root.deviceVerificationUri.replace(/^https:\/\//, "")
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WrapAnywhere
+                    elide: Text.ElideNone
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pointSize: Style.fontSizeXl
+                    font.bold: true
+                    color: Style.formLabelColor
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: qsTr("Address: %1").arg(text)
+                }
+
+                Text {
+                    objectName: "connectDeviceCode"
+                    Layout.fillWidth: true
+                    visible: root.showDeviceCode
+                    // For the bare connect.raspberrypi.com/verify page, which
+                    // asks for the code rather than reading it from the address.
+                    text: qsTr("Code: %1").arg(root.deviceUserCode)
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WrapAnywhere
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pointSize: Style.fontSizeXl
+                    font.bold: true
+                    color: Style.formLabelColor
+                }
+
+                Text {
+                    objectName: "connectDeviceExpiry"
+                    Layout.fillWidth: true
+                    visible: root.showDeviceCode
+                    text: {
+                        var mins = Math.floor(root.deviceSecondsLeft / 60)
+                        var secs = root.deviceSecondsLeft % 60
+                        return qsTr("The code expires in %1:%2.").arg(mins).arg(secs < 10 ? "0" + secs : secs)
+                    }
+                    textFormat: Text.PlainText
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pointSize: Style.fontSizeFormLabel
+                    color: Style.formLabelColor
                 }
 
                 Text {
@@ -285,7 +347,8 @@ WizardStepBase {
     property bool isValid: false
 
     // Embedded mode has no browser, so the sign-in above cannot happen
-    // there: a code for a phone stands in for it. Overridable for tests.
+    // there: a code to use on another device stands in for it. Overridable
+    // for tests.
     property bool deviceSignIn: ImageWriterSingleton ? ImageWriterSingleton.isEmbeddedMode() : false
     // "", "waiting" for a code, "code" shown, or "failed".
     property string deviceState: ""
@@ -293,6 +356,7 @@ WizardStepBase {
     property string deviceVerificationUri: ""
     property int deviceSecondsLeft: 0
     property string deviceFailure: ""
+    readonly property bool showDeviceCode: !root.connectTokenReceived && root.deviceState === "code"
 
     function startDeviceSignIn() {
         root.deviceFailure = ""
@@ -332,13 +396,6 @@ WizardStepBase {
             return qsTr("Signed in to Raspberry Pi Connect.")
         if (root.deviceState === "waiting")
             return qsTr("Getting a code from Raspberry Pi Connect…")
-        if (root.deviceState === "code") {
-            var where = root.deviceVerificationUri.replace(/^https:\/\//, "")
-            var mins = Math.floor(root.deviceSecondsLeft / 60)
-            var secs = root.deviceSecondsLeft % 60
-            return qsTr("Scan the code with your phone, or go to %1 and check the code is %2.").arg(where).arg(root.deviceUserCode)
-                + "\n" + qsTr("The code expires in %1:%2.").arg(mins).arg(secs < 10 ? "0" + secs : secs)
-        }
         if (root.deviceState === "failed") {
             switch (root.deviceFailure) {
             case "expired":      return qsTr("The code has expired.")
