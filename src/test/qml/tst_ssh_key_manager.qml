@@ -479,4 +479,83 @@ TestCase {
         console.log("SshKeyManager", data.tag, "files", filesFed,
                     "keys", mgr.keys.length);
     }
+
+    // ── Importing from GitHub (embedded: no clipboard, no file browser) ──
+
+    readonly property string ghKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG gh:alice"
+
+    function startImport(user) {
+        // As importFromGitHub() leaves it, without sending anything.
+        mgr.gitHubPendingUser = user
+        mgr.gitHubStatus = "busy"
+    }
+
+    function test_github_import_is_offered_only_where_nothing_else_can_add_a_key() {
+        // This build is the desktop one, which has a clipboard and Browse.
+        compare(mgr.gitHubImportAvailable, ImageWriterSingleton.isEmbeddedMode(),
+                "offered exactly when embedded")
+        mgr.expanded = true
+        var field = findChild(mgr, "sshGitHubUserField")
+        verify(field, "the username field exists")
+        compare(field.visible, mgr.gitHubImportAvailable, "and is shown only when offered")
+    }
+
+    function test_keys_from_github_are_added_and_counted() {
+        mgr.keys = [rsaKey]
+        startImport("alice")
+        mgr.handleGitHubResult("alice", [ghKey], "keys")
+        compare(mgr.keys.length, 2, "the GitHub key joins the one already there")
+        compare(mgr.keys[1], ghKey)
+        compare(mgr.gitHubStatus, "keys")
+        verify(mgr.gitHubMessage.indexOf("alice") >= 0, "the message names the account")
+    }
+
+    function test_keys_already_in_the_list_are_not_added_twice() {
+        mgr.keys = [ghKey]
+        startImport("alice")
+        mgr.handleGitHubResult("alice", [ghKey], "keys")
+        compare(mgr.keys.length, 1)
+        verify(mgr.gitHubMessage.indexOf("already") >= 0,
+               "and the message says nothing new was added: " + mgr.gitHubMessage)
+    }
+
+    function test_each_failure_is_said_plainly_and_adds_nothing_data() {
+        return [
+            { tag: "no keys",      status: "nokeys" },
+            { tag: "no such user", status: "nosuchuser" },
+            { tag: "invalid name", status: "invalid" },
+            { tag: "network",      status: "failed" },
+        ]
+    }
+    function test_each_failure_is_said_plainly_and_adds_nothing(data) {
+        mgr.keys = [rsaKey]
+        startImport("alice")
+        mgr.handleGitHubResult("alice", [], data.status)
+        compare(mgr.keys.length, 1, data.tag + ": nothing added")
+        compare(mgr.gitHubStatus, data.status)
+        verify(mgr.gitHubMessage.length > 0, data.tag + ": there is a message")
+        verify(mgr.gitHubMessage.indexOf("Fetching") < 0, data.tag + ": no longer says it is fetching")
+    }
+
+    function test_a_reply_no_one_asked_for_is_ignored() {
+        mgr.keys = []
+        // Nothing pending.
+        mgr.handleGitHubResult("alice", [ghKey], "keys")
+        compare(mgr.keys.length, 0, "not while idle")
+        // Pending for someone else.
+        startImport("bob")
+        mgr.handleGitHubResult("alice", [ghKey], "keys")
+        compare(mgr.keys.length, 0, "not for another account")
+        compare(mgr.gitHubStatus, "busy", "still waiting for bob")
+    }
+
+    function test_an_invalid_username_goes_through_imager_and_comes_back_invalid() {
+        // The real round trip, with no network: Imager answers an invalid
+        // name at once without fetching anything.
+        mgr.keys = [rsaKey]
+        mgr.importFromGitHub("not a user")
+        compare(mgr.gitHubStatus, "invalid")
+        compare(mgr.keys.length, 1)
+        verify(mgr.gitHubMessage.indexOf("not a user") >= 0, mgr.gitHubMessage)
+    }
 }

@@ -12543,6 +12543,7 @@ TEST_CASE("A fastboot flash reads the cache only once it has been checked",
 // ══════════════════════════════════════════════════════════════
 
 #include "network_poll_action.h"
+#include "github_keys.h"
 
 TEST_CASE("Connectivity arriving with no list fetches one",
           "[imagewriter][netpoll]")
@@ -12586,6 +12587,112 @@ TEST_CASE("Only an address a fetch can use counts as being on the network",
     CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress(QHostAddress::LocalHost)));
     CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress(QHostAddress::LocalHostIPv6)));
     CHECK_FALSE(rpi_net::isUsableAddress(QHostAddress()));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SSH keys from a GitHub account. Embedded Imager has no clipboard and no
+// file browser, so a typed GitHub username is the only way it can bring a
+// public key in.
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("A GitHub username is checked before anything is fetched",
+          "[imagewriter][github]")
+{
+    CHECK(rpi_ssh::isValidGitHubUsername(QStringLiteral("torvalds")));
+    CHECK(rpi_ssh::isValidGitHubUsername(QStringLiteral("a")));
+    CHECK(rpi_ssh::isValidGitHubUsername(QStringLiteral("raspberry-pi")));
+    CHECK(rpi_ssh::isValidGitHubUsername(QString(39, QLatin1Char('x'))));
+
+    // Typos GitHub would 404 on anyway, and anything that would change the
+    // URL rather than name an account in it.
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QString()));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QString(40, QLatin1Char('x'))));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QStringLiteral("-leading")));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QStringLiteral("trailing-")));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QStringLiteral("double--hyphen")));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QStringLiteral("has space")));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QStringLiteral("../etc/passwd")));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QStringLiteral("user?x=1")));
+    CHECK_FALSE(rpi_ssh::isValidGitHubUsername(QStringLiteral("user.keys")));
+
+    CHECK(rpi_ssh::gitHubKeysUrl(QStringLiteral("torvalds"))
+          == QUrl(QStringLiteral("https://github.com/torvalds.keys")));
+}
+
+TEST_CASE("A GitHub key list is taken a key per line, each marked as from GitHub",
+          "[imagewriter][github]")
+{
+    const QByteArray body =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA\n"
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB==\r\n"
+        "\n"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA\n";
+    const auto r = rpi_ssh::interpretGitHubKeysReply(QStringLiteral("alice"), body, QString());
+
+    CHECK(r.status == rpi_ssh::GitHubKeysStatus::Keys);
+    // GitHub serves keys with no comment; without one the list cannot say
+    // where a key came from. The repeat is dropped.
+    REQUIRE(r.keys.size() == 2);
+    CHECK(r.keys[0] == QStringLiteral("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA gh:alice"));
+    CHECK(r.keys[1] == QStringLiteral("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB== gh:alice"));
+}
+
+TEST_CASE("A GitHub account with no keys is told apart from one that does not exist",
+          "[imagewriter][github]")
+{
+    // An account with no keys: 200 and an empty body.
+    const auto none = rpi_ssh::interpretGitHubKeysReply(QStringLiteral("alice"), QByteArray(), QString());
+    CHECK(none.status == rpi_ssh::GitHubKeysStatus::NoKeys);
+    CHECK(none.keys.isEmpty());
+
+    // No such account: GitHub answers 404, which arrives as an error.
+    const auto missing = rpi_ssh::interpretGitHubKeysReply(
+        QStringLiteral("nobody"), QByteArray(),
+        QStringLiteral("HTTP 404: The requested URL returned error: 404"));
+    CHECK(missing.status == rpi_ssh::GitHubKeysStatus::NoSuchUser);
+}
+
+TEST_CASE("A GitHub fetch that fails, or brings back something else, adds nothing",
+          "[imagewriter][github]")
+{
+    const auto offline = rpi_ssh::interpretGitHubKeysReply(
+        QStringLiteral("alice"), QByteArray(), QStringLiteral("Could not resolve host: github.com"));
+    CHECK(offline.status == rpi_ssh::GitHubKeysStatus::Failed);
+    CHECK(offline.keys.isEmpty());
+    CHECK_FALSE(offline.detail.isEmpty());
+
+    const auto server = rpi_ssh::interpretGitHubKeysReply(
+        QStringLiteral("alice"), QByteArray(), QStringLiteral("HTTP 503: Service Unavailable"));
+    CHECK(server.status == rpi_ssh::GitHubKeysStatus::Failed);
+
+    // A captive portal answers 200 with its login page. That is not an
+    // account with no keys, and none of it may end up in authorized_keys.
+    const auto portal = rpi_ssh::interpretGitHubKeysReply(
+        QStringLiteral("alice"),
+        QByteArray("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA\n<html><body>Sign in</body></html>\n"),
+        QString());
+    CHECK(portal.status == rpi_ssh::GitHubKeysStatus::Failed);
+    CHECK(portal.keys.isEmpty());
+}
+
+TEST_CASE("An invalid GitHub username is answered without a fetch",
+          "[imagewriter][github]")
+{
+    ImageWriter w(nullptr);
+    QString gotUser, gotStatus;
+    QStringList gotKeys;
+    int calls = 0;
+    QObject::connect(&w, &ImageWriter::gitHubKeysImported,
+                     [&](const QString &u, const QStringList &k, const QString &s) {
+                         ++calls; gotUser = u; gotKeys = k; gotStatus = s;
+                     });
+
+    w.importGitHubKeys(QStringLiteral("  not a user  "));
+
+    REQUIRE(calls == 1);
+    CHECK(gotStatus == QStringLiteral("invalid"));
+    CHECK(gotUser == QStringLiteral("not a user"));
+    CHECK(gotKeys.isEmpty());
 }
 
 TEST_CASE("Losing the network is noticed once", "[imagewriter][netpoll]")

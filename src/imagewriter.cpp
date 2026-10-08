@@ -6,6 +6,7 @@
 #include "downloadextractthread.h"
 #include "imagewriter.h"
 #include "network_poll_action.h"
+#include "github_keys.h"
 #include "eeprom_repo_override.h"
 #include "imagesizeparser.h"
 #include "imager_version.h"
@@ -3348,6 +3349,29 @@ bool ImageWriter::isOnline()
     }
     
     return hasBasicConnectivity;
+}
+
+void ImageWriter::importGitHubKeys(const QString &username)
+{
+    const QString name = username.trimmed();
+    if (!rpi_ssh::isValidGitHubUsername(name)) {
+        emit gitHubKeysImported(name, {}, QStringLiteral("invalid"));
+        return;
+    }
+
+    auto *fetcher = new CurlFetcher(this);
+    auto report = [this, name](const QByteArray &body, const QString &error) {
+        const rpi_ssh::GitHubKeysResult r = rpi_ssh::interpretGitHubKeysReply(name, body, error);
+        if (!r.detail.isEmpty())
+            qWarning() << "GitHub keys for" << name << ":" << r.detail;
+        emit gitHubKeysImported(name, r.keys,
+                                QString::fromLatin1(rpi_ssh::gitHubKeysStatusName(r.status)));
+    };
+    connect(fetcher, &CurlFetcher::finished, this,
+            [report](const QByteArray &data, const QUrl &, const QUrl &) { report(data, QString()); });
+    connect(fetcher, &CurlFetcher::error, this,
+            [report](const QString &message, const QUrl &) { report(QByteArray(), message); });
+    fetcher->fetch(rpi_ssh::gitHubKeysUrl(name));
 }
 
 void ImageWriter::pollNetwork()
