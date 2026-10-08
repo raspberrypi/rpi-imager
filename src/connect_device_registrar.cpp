@@ -4,6 +4,7 @@
  */
 
 #include "connect_device_registrar.h"
+#include "config.h"
 #include "fastboot/fastboot_protocol.h"
 #include "rpiboot/usb_transport.h"
 #include "curlnetworkconfig.h"
@@ -23,8 +24,7 @@
 
 namespace {
 
-constexpr const char *DEFAULT_CONNECT_BASE_URL =
-    "https://api.connect.raspberrypi.com";
+constexpr const char *DEFAULT_CONNECT_BASE_URL = CONNECT_API_URL;
 
 // Scan INFO lines for a PEM public key block and return it as a
 // newline-terminated string, exactly as the API expects.

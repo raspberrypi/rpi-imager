@@ -7,6 +7,8 @@
 #include "imagewriter.h"
 #include "network_poll_action.h"
 #include "github_keys.h"
+#include "connect_device_signin.h"
+#include "dependencies/qrcodegen/qrcodegen.hpp"
 #include "eeprom_repo_override.h"
 #include "imagesizeparser.h"
 #include "imager_version.h"
@@ -5109,7 +5111,10 @@ bool ImageWriter::verifyAuthKey(const QString &s, bool strict) const
     static const QRegularExpression base58OnlyRe(QStringLiteral("^[1-9A-HJ-NP-Za-km-z]+$"));
 
     // Required prefix
-    bool hasPrefix = s.startsWith(QStringLiteral("rpuak_")) || s.startsWith(QStringLiteral("rpoak_"));
+    // rpdev_ is an access token from the device-code sign-in, which writes
+    // state.json rather than auth.key; the exact length below is for keys.
+    const bool isDeviceToken = s.startsWith(QStringLiteral("rpdev_"));
+    bool hasPrefix = isDeviceToken || s.startsWith(QStringLiteral("rpuak_")) || s.startsWith(QStringLiteral("rpoak_"));
     if (!hasPrefix)
         return false;
 
@@ -5119,7 +5124,7 @@ bool ImageWriter::verifyAuthKey(const QString &s, bool strict) const
     if (payload.isEmpty() || !base58Match)
         return false;
 
-    if (strict) {
+    if (strict && !isDeviceToken) {
         // Exactly 24 Base58 chars today → total length 30
         return payload.size() == 24;
     } else {
@@ -5195,6 +5200,45 @@ void ImageWriter::handleIncomingUrl(const QUrl &url)
 
         overwriteConnectToken(token);
     }
+}
+
+void ImageWriter::startConnectDeviceSignIn()
+{
+    if (!_connectDeviceSignIn) {
+        _connectDeviceSignIn = new ConnectDeviceSignIn(
+            QStringLiteral(CONNECT_DEVICE_CLIENT_ID), QString(), {}, this);
+        connect(_connectDeviceSignIn, &ConnectDeviceSignIn::codeReady, this,
+                [this](const QString &userCode, const QString &uri, int expiresInSecs) {
+            emit connectDeviceCodeReady(rpi_connect::displayUserCode(userCode), uri, expiresInSecs);
+        });
+        connect(_connectDeviceSignIn, &ConnectDeviceSignIn::signedIn, this,
+                [this](const QString &, const QString &token) {
+            overwriteConnectToken(token);
+        });
+        connect(_connectDeviceSignIn, &ConnectDeviceSignIn::failed,
+                this, &ImageWriter::connectDeviceSignInFailed);
+    }
+    _connectDeviceSignIn->start();
+}
+
+void ImageWriter::cancelConnectDeviceSignIn()
+{
+    if (_connectDeviceSignIn)
+        _connectDeviceSignIn->cancel();
+}
+
+QVariantMap ImageWriter::qrCode(const QString &text) const
+{
+    using qrcodegen::QrCode;
+    const QByteArray utf8 = text.toUtf8();
+    const QrCode qr = QrCode::encodeText(utf8.constData(), QrCode::Ecc::MEDIUM);
+    const int size = qr.getSize();
+    QString modules;
+    modules.reserve(size * size);
+    for (int y = 0; y < size; ++y)
+        for (int x = 0; x < size; ++x)
+            modules.append(qr.getModule(x, y) ? QLatin1Char('1') : QLatin1Char('0'));
+    return { { QStringLiteral("size"), size }, { QStringLiteral("modules"), modules } };
 }
 
 void ImageWriter::overwriteConnectToken(const QString &token)
