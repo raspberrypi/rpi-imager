@@ -52,6 +52,7 @@ TestCase {
         property bool hostnameConfigured: false
         property bool localeConfigured: false
         property bool userConfigured: false
+        property var customizationSettings: ({})
         property bool wifiConfigured: false
         property bool sshEnabled: false
         property bool piConnectEnabled: false

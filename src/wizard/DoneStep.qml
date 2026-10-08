@@ -192,7 +192,7 @@ WizardStepBase {
                     if (snapshot.hostnameConfigured) items.push(CommonStrings.hostnameConfigured)
                     if (snapshot.localeConfigured) items.push(CommonStrings.localeConfigured)
                     if (snapshot.userConfigured) items.push(CommonStrings.userAccountConfigured)
-                    if (snapshot.wifiConfigured) items.push(CommonStrings.wifiConfigured)
+                    if (snapshot.wifiConfigured) items.push(snapshot.wifiHotspot ? CommonStrings.wifiHotspotConfigured : CommonStrings.wifiConfigured)
                     if (snapshot.sshEnabled) items.push(CommonStrings.sshEnabled)
                     if (snapshot.piConnectEnabled) items.push(CommonStrings.piConnectEnabled)
                     if (snapshot.featUsbGadgetEnabled) items.push(CommonStrings.usbGadgetEnabled)
@@ -226,7 +226,7 @@ WizardStepBase {
                         Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.hostnameConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.hostnameConfigured }
                         Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.localeConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.localeConfigured }
                         Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.userAccountConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.userConfigured }
-                        Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.wifiConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.wifiConfigured }
+                        Text { objectName: "doneWifiSummaryLabel"; textFormat: Text.PlainText; text: "✓ " + (customizationColumn.snapshot.wifiHotspot ? CommonStrings.wifiHotspotConfigured : CommonStrings.wifiConfigured); font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.wifiConfigured }
                         Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.sshEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.sshEnabled }
                         Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.piConnectEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.piConnectEnabled }
                         Text { textFormat: Text.PlainText; text: "✓ " + CommonStrings.usbGadgetEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.featUsbGadgetEnabled }

@@ -30,6 +30,7 @@ TestCase {
         property bool localeConfigured: false
         property bool userConfigured: false
         property bool wifiConfigured: false
+        property bool wifiHotspot: false
         property bool sshEnabled: false
         property bool piConnectEnabled: false
         property bool ifI2cEnabled: false
@@ -70,6 +71,7 @@ TestCase {
         fakeSnapshot.localeConfigured = false
         fakeSnapshot.userConfigured = false
         fakeSnapshot.wifiConfigured = false
+        fakeSnapshot.wifiHotspot = false
         fakeSnapshot.sshEnabled = false
         fakeSnapshot.piConnectEnabled = false
         fakeSnapshot.ifI2cEnabled = false
@@ -367,4 +369,14 @@ TestCase {
         }
         return null
     }
+    function test_summary_identifies_hotspot_from_snapshot() {
+        fakeSnapshot.wifiConfigured = true
+        fakeSnapshot.wifiHotspot = true
+        const s = make()
+        const label = findChild(s, "doneWifiSummaryLabel")
+        verify(label)
+        verify(label.visible)
+        compare(label.text, "✓ " + CommonStrings.wifiHotspotConfigured)
+    }
+
 }
