@@ -117,6 +117,19 @@ WizardStepBase {
                 Layout.fillWidth: true
             }
 
+            ImButton {
+                id: profilesButton
+                objectName: "saveProfilesButton"
+                text: qsTr("Profiles…")
+                accessibleDescription: qsTr("Save these customisation settings as a profile, or manage saved profiles")
+                visible: root.wizardContainer.customizationSupported && (root.anyCustomizationsApplied ||
+                         root.wizardContainer.ifI2cEnabled || root.wizardContainer.ifSpiEnabled ||
+                         root.wizardContainer.if1WireEnabled || (root.wizardContainer.ifSerial !== "" &&
+                         root.wizardContainer.ifSerial !== "Disabled"))
+                Layout.alignment: Qt.AlignRight
+                onClicked: root.wizardContainer.openProfiles(true)
+            }
+
             GridLayout {
                 id: summaryGrid
                 Layout.fillWidth: true
@@ -742,6 +755,7 @@ WizardStepBase {
         registerFocusGroup("summary", function() {
             var items = []
             if (summaryLayout.visible) {
+                if (profilesButton.visible) items.push(profilesButton)
                 // Only include text labels when screen reader is active
                 if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                     items.push(summaryHeading)

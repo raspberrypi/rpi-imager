@@ -439,6 +439,12 @@ public:
     Q_INVOKABLE void setPersistedCustomisationSetting(const QString &key, const QVariant &value);
     Q_INVOKABLE void removePersistedCustomisationSetting(const QString &key);
     Q_INVOKABLE void clearSavedCustomisationSettings();
+    // Named presets share the protected settings file. An empty id creates a
+    // profile; an existing id updates it. Session-only values are excluded.
+    Q_INVOKABLE QVariantList customisationProfiles();
+    Q_INVOKABLE QVariantMap customisationProfile(const QString &id);
+    Q_INVOKABLE bool saveCustomisationProfile(const QString &id, const QString &name, const QVariantMap &settings);
+    Q_INVOKABLE bool deleteCustomisationProfile(const QString &id);
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
     // Whether the selected OS can apply the GPIO/hardware interface toggles
