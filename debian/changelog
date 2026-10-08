@@ -1,3 +1,117 @@
+rpi-imager (2.0.12-1) unstable; urgency=medium
+
+  * Embedded (Raspberry Pi network installer):
+    - See a network that comes up late. Imager cached "offline" and only the
+      netlink monitor cleared it, which embedded mode never started, so a PHY
+      slow to negotiate (the Pi 5 Rev 1.2's MXL86110) was still down at the
+      first poll and the installer never saw a network at all.
+    - Wait for a usable address, not just a link, before fetching the OS list:
+      a link is up before DHCP answers, and the old check took a link-local
+      169.254 address for an IP.
+    - Hold the fetch back while the clock reads earlier than the source Imager
+      was built from. With no time service and no RTC battery a board boots at
+      1970, and every certificate is then not yet valid. The installer image
+      now sets the clock from downloads.raspberrypi.com before Imager starts.
+    - Try a failed first OS list fetch again after 30 seconds. Embedded has no
+      Retry button and stops polling once the network looks ready, so a fetch
+      made a moment too early was the only one there would be.
+    - Sign in to Raspberry Pi Connect with a code: a QR code, the address to
+      visit on any device and the short code, then wait for approval. The
+      browser sign-in cannot run without a browser or the rpi-imager:// scheme.
+    - Import SSH public keys from a GitHub username, since there is no
+      clipboard or file picker to bring a key in any other way. Unknown users,
+      accounts with no keys, network failures and replies that are not a key
+      list (a captive portal's page) are each reported and add nothing.
+    - Make the Done screen's Reboot button reboot. It ran /sbin/reboot, which
+      the installer image does not have, and ignored the failure.
+    - Fit the UI to its design canvas instead of the panel's DPI, so it is
+      laid out the same on every display.
+  * Raspberry Pi Connect:
+    - Write the access token from the device-code sign-in as rpi-connect's
+      state.json for the configured user. It is already signed in, and written
+      as auth.key it would be ignored. Auth keys still go to auth.key.
+    - Enable rpi-connect's units where `systemctl --user enable` puts them:
+      the sign-in path and wayvnc are wanted by rpi-connect.service, not by
+      paths.target and default.target, so is-enabled reports them correctly.
+    - Keep the step configured when its token has been spent.
+  * OS Customisation:
+    - Store and write the Wi-Fi passphrase rather than a PBKDF2-derived key.
+      A derived key cannot negotiate WPA3/SAE, so NetworkManager fell back to
+      WPA2 or failed on SAE-only networks. A key saved by an earlier version is
+      dropped from the settings file; a 64-hex raw key is still accepted.
+    - Escape the passphrase for NetworkManager's keyfile where imager_custom
+      writes it unescaped: a backslash or a leading space was lost on load.
+    - Write UTF-8 into cloud-init YAML as characters, not escapes.
+  * Write reliability:
+    - A cancelled write no longer reports success: a cancel during
+      customisation showed the done screen for a half-written device.
+    - Refuse a short download, and a truncated .img.xz -- the format every
+      Raspberry Pi image ships in -- instead of writing part of an image and
+      calling it a success. Size an image by its content, not its name.
+    - Stop an abandoned or timed-out write touching the caller's buffer or a
+      descriptor closed under it, and keep a failed write's errno; a failed
+      final flush no longer calls std::terminate().
+    - Linux: write sequentially at the logical cursor, reap io_uring
+      completions while waiting for a buffer slot, and wait for the partition
+      node before mounting after a format. Recycle ring buffer slots by
+      identity, and let the direct-I/O reopen fall back to a shared handle.
+    - Run the post-write eject in the background with live status; on macOS,
+      give slow drives time to flush, unmount off the main thread, skip queued
+      writes once cancelled and wait for pending writes before cleanup.
+    - Windows: record why a write failed, clear stale error codes, and detach
+      a virtual disk instead of ejecting its media.
+    - Trim a preallocated cache file to what was written, and replace the
+      cache file rather than following a link planted at its path.
+  * Security (elevated runs):
+    - Create the settings file as the invoking user, and reclaim ownership
+      without following links: root could be led to create it anywhere a
+      symlinked settings directory pointed, then hand it to the user.
+    - Read SSH keys and write exports as the invoking user, register the URI
+      handler as the user, keep trusted caches root-owned, and restore the
+      user's HOME under sudo and pkexec.
+    - Bound the sizes, lifetimes and inputs the write path trusts; refuse
+      malformed FAT, EEPROM and STP structures; on macOS, sign only a SHA-256
+      digest.
+  * Compute Module (rpiboot / fastboot):
+    - Follow the fastboot gadget through the bootstrap handover, so a board
+      part-way through it is not shown as an unrelated device; serve recovery
+      files the way recovery.bin asks for them.
+    - Report a bootstrap that failed and a flash that stopped part way; tell a
+      transport failure from a device denial; check for cancel between erase
+      stages.
+  * Interface and localisation:
+    - Describe internal eMMC as eMMC, not as an SD card reader, which invited
+      overwriting an eMMC system drive (#1658).
+    - Load the regional translation for a regional locale: Brazilian
+      Portuguese and Traditional Chinese never loaded (#1572). Match each
+      system language in turn, and translate the remaining Spanish strings.
+    - Share one label/field grid across the customisation steps, use the
+      width a resized window offers, elide rather than clip combo box text,
+      let footer buttons shrink for longer translations, and keep write
+      errors visible.
+    - Make nested step controls reachable by keyboard, keep the OS selection
+      across a list refresh, order a local OS list as its manifest does, and
+      set the window icon on Linux.
+  * Windows:
+    - Generate secure boot keys with CNG and drop OpenSSL; build boot.img in
+      process rather than through diskpart; installer improvements.
+  * Build / packaging:
+    - Move to Qt 6.11.2, carrying the qtbase fix for a fontconfig crash that
+      segfaulted the AppImage on some systems (#1756). Qt patches now fail the
+      build when they do not apply. Build testlib into every Qt.
+    - Extract the Qt source without restoring ownership, which the rootless
+      release chroots cannot do; fix the CLI-only build's missing include.
+    - Bundle the xcb helper libraries in AppImages, drop the stale libfuse2
+      dependency, and compress the macOS DMG without deprecated verbs.
+    - Vendor Nayuki's qrcodegen (MIT) for the Connect sign-in QR code.
+  * Testing:
+    - A test suite across the write path, extraction, FAT, rpiboot, fastboot,
+      the CLI, the QML wizard (QuickTest) and Windows, with opt-in coverage and
+      sanitiser builds. ThreadSanitizer runs found and fixed data races in the
+      CA bundle lookup, the icon fetcher and the drive list poll thread.
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 08 Oct 2026 15:02:57 +0100
+
 rpi-imager (2.0.11.1-1) unstable; urgency=medium
 
   * Pi Connect:
