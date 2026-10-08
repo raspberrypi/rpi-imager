@@ -541,8 +541,11 @@ TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
     
     // Check systemd unit directories are created
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("SYSTEMD_USER_BASE="));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("default.target.wants"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("paths.target.wants"));
+    // The layout the units' [Install] sections give, as systemctl enable makes it.
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("$SYSTEMD_USER_BASE/default.target.wants/rpi-connect.service\""));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("$SYSTEMD_USER_BASE/rpi-connect.service.wants/rpi-connect-signin.path\""));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("$SYSTEMD_USER_BASE/rpi-connect.service.wants/rpi-connect-wayvnc.service\""));
+    REQUIRE_THAT(scriptStr.toStdString(), !ContainsSubstring("paths.target.wants"));
     
     // Check all three systemd units are enabled
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect.service"));
@@ -587,8 +590,14 @@ TEST_CASE("The firstrun script puts a Connect device token in the configured use
         R"({"accessToken":"rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9","shellDisabled":false,"vncDisabled":false})"));
     CHECK_THAT(script, ContainsSubstring("chmod 600 \"$TARGET_HOME/.config/com.raspberrypi.connect/state.json\""));
     CHECK_THAT(script, !ContainsSubstring("auth.key"));
-    // Signed in or not, it is the same daemon to start.
-    CHECK_THAT(script, ContainsSubstring("rpi-connect.service"));
+
+    // Signed in or not, it is the same daemon to enable and start, laid out
+    // as systemctl --user enable rpi-connect would.
+    CHECK_THAT(script, ContainsSubstring("$SYSTEMD_USER_BASE/default.target.wants/rpi-connect.service\""));
+    CHECK_THAT(script, ContainsSubstring("$SYSTEMD_USER_BASE/rpi-connect.service.wants/rpi-connect-signin.path\""));
+    CHECK_THAT(script, ContainsSubstring("$SYSTEMD_USER_BASE/rpi-connect.service.wants/rpi-connect-wayvnc.service\""));
+    CHECK_THAT(script, ContainsSubstring("install -m 0644 /dev/null \"/var/lib/systemd/linger/$TARGET_USER\""));
+    CHECK_THAT(script, ContainsSubstring("start rpi-connect.service"));
 }
 
 TEST_CASE("cloud-init puts a Connect device token in the configured user's state.json",
@@ -606,6 +615,12 @@ TEST_CASE("cloud-init puts a Connect device token in the configured user's state
     CHECK_THAT(yaml, ContainsSubstring("rpdev_3mJr7AoUXx2Wqd1bVfzJ5tZpKq9"));
     CHECK_THAT(yaml, ContainsSubstring("chmod 600"));
     CHECK_THAT(yaml, !ContainsSubstring("auth.key"));
+
+    CHECK_THAT(yaml, ContainsSubstring("/home/alice/.config/systemd/user/default.target.wants/rpi-connect.service"));
+    CHECK_THAT(yaml, ContainsSubstring("/home/alice/.config/systemd/user/rpi-connect.service.wants/rpi-connect-signin.path"));
+    CHECK_THAT(yaml, ContainsSubstring("/home/alice/.config/systemd/user/rpi-connect.service.wants/rpi-connect-wayvnc.service"));
+    CHECK_THAT(yaml, ContainsSubstring("/var/lib/systemd/linger/alice"));
+    CHECK_THAT(yaml, ContainsSubstring("start rpi-connect.service"));
 }
 
 // Negative Tests - Testing resilience to invalid/malicious inputs
@@ -1534,8 +1549,10 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chmod 600"));
     
     // Check systemd unit directories are created
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/paths.target.wants"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants/rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/rpi-connect.service.wants/rpi-connect-signin.path"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/rpi-connect.service.wants/rpi-connect-wayvnc.service"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("paths.target.wants"));
     
     // Check all three systemd units are enabled via symlinks with fallback logic
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service"));

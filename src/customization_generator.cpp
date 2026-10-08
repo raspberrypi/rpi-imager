@@ -619,19 +619,22 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         // Enable systemd user services for Raspberry Pi Connect
         line(QStringLiteral("# Enable Raspberry Pi Connect systemd units"), script);
         line(QStringLiteral("SYSTEMD_USER_BASE=\"$TARGET_HOME/.config/systemd/user\""), script);
-        line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"$SYSTEMD_USER_BASE/default.target.wants\" \"$SYSTEMD_USER_BASE/paths.target.wants\""), script);
+        // The layout `systemctl --user enable rpi-connect` makes, from the
+        // units' own [Install] sections: the service wanted by default.target,
+        // and the sign-in path and wayvnc -- its Also= -- wanted by the
+        // service. The sign-in path stays wanted once signed in: it only
+        // fires on an auth.key, and a state.json never makes one.
+        line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"$SYSTEMD_USER_BASE/default.target.wants\" \"$SYSTEMD_USER_BASE/rpi-connect.service.wants\""), script);
         
         // Enable rpi-connect.service in default.target.wants
         line(QStringLiteral("UNIT_SRC=\"/usr/lib/systemd/user/rpi-connect.service\"; [ -f \"$UNIT_SRC\" ] || UNIT_SRC=\"/lib/systemd/user/rpi-connect.service\""), script);
         line(QStringLiteral("ln -sf \"$UNIT_SRC\" \"$SYSTEMD_USER_BASE/default.target.wants/rpi-connect.service\""), script);
         
-        // Enable rpi-connect-signin.path in paths.target.wants (path units need to be independently enabled)
         line(QStringLiteral("UNIT_SRC=\"/usr/lib/systemd/user/rpi-connect-signin.path\"; [ -f \"$UNIT_SRC\" ] || UNIT_SRC=\"/lib/systemd/user/rpi-connect-signin.path\""), script);
-        line(QStringLiteral("ln -sf \"$UNIT_SRC\" \"$SYSTEMD_USER_BASE/paths.target.wants/rpi-connect-signin.path\""), script);
+        line(QStringLiteral("ln -sf \"$UNIT_SRC\" \"$SYSTEMD_USER_BASE/rpi-connect.service.wants/rpi-connect-signin.path\""), script);
         
-        // Enable rpi-connect-wayvnc.service in default.target.wants
         line(QStringLiteral("UNIT_SRC=\"/usr/lib/systemd/user/rpi-connect-wayvnc.service\"; [ -f \"$UNIT_SRC\" ] || UNIT_SRC=\"/lib/systemd/user/rpi-connect-wayvnc.service\""), script);
-        line(QStringLiteral("ln -sf \"$UNIT_SRC\" \"$SYSTEMD_USER_BASE/default.target.wants/rpi-connect-wayvnc.service\""), script);
+        line(QStringLiteral("ln -sf \"$UNIT_SRC\" \"$SYSTEMD_USER_BASE/rpi-connect.service.wants/rpi-connect-wayvnc.service\""), script);
         
         line(QStringLiteral("chown -R \"$TARGET_USER:$TARGET_USER\" \"$TARGET_HOME/.config/systemd\" || true"), script);
         
@@ -959,15 +962,16 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             runcmd(QStringLiteral("install -o ") + userQ + QStringLiteral(" -m 700 -d ")
                    + shellQuote(userHome + QStringLiteral("/.config/systemd/user/default.target.wants"))
                    + QStringLiteral(" ")
-                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/paths.target.wants")));
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants")));
 
-            // Check both /usr/lib and /lib for systemd unit files (different distros use different paths)
+            // As in the firstrun script: the layout the units' [Install]
+            // sections give. Check both /usr/lib and /lib for systemd unit files (different distros use different paths)
             runcmd(QStringLiteral("UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect.service; ln -sf $UNIT_SRC ")
                    + shellQuote(userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect.service")));
             runcmd(QStringLiteral("UNIT_SRC=/usr/lib/systemd/user/rpi-connect-signin.path; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-signin.path; ln -sf $UNIT_SRC ")
-                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/paths.target.wants/rpi-connect-signin.path")));
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants/rpi-connect-signin.path")));
             runcmd(QStringLiteral("UNIT_SRC=/usr/lib/systemd/user/rpi-connect-wayvnc.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-wayvnc.service; ln -sf $UNIT_SRC ")
-                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect-wayvnc.service")));
+                   + shellQuote(userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants/rpi-connect-wayvnc.service")));
 
             runcmd(QStringLiteral("chown -R ") + ownerQ + QStringLiteral(" ")
                    + shellQuote(userHome + QStringLiteral("/.config/systemd")));
