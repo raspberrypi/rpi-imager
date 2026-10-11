@@ -408,6 +408,7 @@ set(SOURCES ${SOURCES}
     "fastbootflashthread.cpp"
     "connect_device_registrar.cpp"
     "settings_permissions.cpp"
+    "settings_secrets.cpp"
 )
 
 # Find Qt components - different requirements for CLI-only vs GUI builds

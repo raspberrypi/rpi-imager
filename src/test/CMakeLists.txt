@@ -2236,6 +2236,29 @@ target_compile_features(settings_permissions_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(settings_permissions_test)
 
+add_executable(settings_secrets_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../settings_secrets.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../settings_secrets.cpp
+    settings_secrets_test.cpp
+)
+
+target_include_directories(settings_secrets_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(settings_secrets_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+if(WIN32)
+    # CryptProtectData, and WTSQuerySessionInformation for the signed-in user.
+    target_link_libraries(settings_secrets_test PRIVATE crypt32 wtsapi32)
+endif()
+
+target_compile_features(settings_secrets_test PRIVATE cxx_std_20)
+
+rpi_discover_tests(settings_secrets_test)
+
 # Writing into a subdirectory, measured against mtools rather than against
 # this driver's own reading -- which has agreed with it while it put files in
 # the wrong place.

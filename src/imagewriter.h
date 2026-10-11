@@ -33,6 +33,7 @@
 #include "device_info.h"
 #include "imageadvancedoptions.h"
 #include "performancestats.h"
+#include "settings_secrets.h"
 #include "rpiboot/rpiboot_types.h"
 
 class QQmlApplicationEngine;
@@ -762,6 +763,7 @@ protected:
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _online, _extractSizeKnown;
     QSettings _settings;
+    rpi_imager::SecretSettings _secrets;
     QMap<QString,QString> _translations;
     // Installed translators, in the order installed; Qt searches the last first
     QList<QTranslator *> _translators;
