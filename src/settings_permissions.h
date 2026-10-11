@@ -23,6 +23,7 @@ struct SettingsPermissions
     bool directorySecured = false;   // and its directory likewise
     bool reowned = false;            // it belonged to another account and was handed back
     bool foreignOwner = false;       // it belongs to another account and could not be
+    bool registry = false;           // a Windows registry key, not a file; left to the hive
 };
 
 /*
