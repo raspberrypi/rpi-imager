@@ -22,6 +22,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QSettings>
 #include <QTemporaryDir>
 
 #ifdef _WIN32
@@ -148,6 +149,27 @@ TEST_CASE("Handing the file to another account is not claimed on Windows",
 
     CHECK_FALSE(result.reowned);
     CHECK(result.secured);
+}
+
+TEST_CASE("Registry-backed settings leave nothing on the system drive",
+          "[settingsperms][windows]")
+{
+    // #1771: the registry key name was taken as a path and left
+    // C:\HKEY_CURRENT_USER\Software\Raspberry Pi\Raspberry Pi Imager behind.
+    const QString key = QSettings(QSettings::NativeFormat, QSettings::UserScope,
+                                  QStringLiteral("rpi-imager-test"),
+                                  QStringLiteral("settings-perms-1771"))
+                            .fileName();
+    REQUIRE(key.startsWith(QStringLiteral("\\HKEY_CURRENT_USER\\")));
+    const QString strayDir =
+        QDir::rootPath() + QStringLiteral("HKEY_CURRENT_USER/Software/rpi-imager-test");
+
+    const auto result = rpi_imager::secureSettingsFile(key);
+
+    CHECK(result.registry);
+    CHECK_FALSE(result.created);
+    CHECK_FALSE(QFileInfo::exists(strayDir));
+    QDir(strayDir).removeRecursively();
 }
 
 #endif // _WIN32

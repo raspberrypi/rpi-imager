@@ -21,6 +21,14 @@ namespace rpi_imager {
 
 namespace {
 
+// Native QSettings on Windows is the registry, and fileName() names the key
+// as "\HKEY_CURRENT_USER\...". Taken as a path, it became a folder at the
+// root of the system drive (#1771). The hive is per-user already.
+bool isRegistryPath(const QString& path)
+{
+    return path.startsWith(QLatin1String("\\HKEY_"));
+}
+
 #ifdef Q_OS_UNIX
 
 // 0600 on a descriptor we opened ourselves with O_NOFOLLOW, so a symlink at
@@ -148,6 +156,10 @@ SettingsPermissions secureSettingsFile(const QString& path, int ownerUid, int ow
     SettingsPermissions result;
     if (path.isEmpty())
         return result;
+    if (isRegistryPath(path)) {
+        result.registry = true;
+        return result;
+    }
 
     const QString directory = QFileInfo(path).absolutePath();
     if (!directory.isEmpty()) {

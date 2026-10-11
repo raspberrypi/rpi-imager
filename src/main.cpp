@@ -417,7 +417,9 @@ int main(int argc, char *argv[])
         const QString settingsFile = QSettings().fileName();
         const rpi_imager::SettingsPermissions perms =
             rpi_imager::secureSettingsFile(settingsFile);
-        if (perms.foreignOwner) {
+        if (perms.registry) {
+            // Windows: a registry key, already readable only by its account.
+        } else if (perms.foreignOwner) {
             // Left readable on purpose: it is not ours to narrow, and
             // narrowing it would be worse than leaving it -- see
             // secureSettingsFile.
