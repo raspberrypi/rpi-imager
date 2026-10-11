@@ -141,6 +141,7 @@ ImageWriter::ImageWriter(QObject *parent)
       _thread(nullptr),
       _verifyEnabled(true), _multipleFilesInZip(false), _online(false), _extractSizeKnown(true),
       _settings(),
+      _secrets(_settings, rpi_imager::secretsMayPersist()),
       _translations(),
       _refreshIntervalOverrideMinutes(-1),
       _refreshJitterOverrideMinutes(-1),
@@ -153,6 +154,11 @@ ImageWriter::ImageWriter(QObject *parent)
       _progressWatchdog(nullptr),
       _forceSyncMode(false)
 {
+    _secrets.sealPlaintext();
+    if (!_secrets.persists())
+        qWarning() << "Running as an account other than the signed-in user;"
+                   << "passwords and keys entered will not be saved";
+
     // Initialise CacheManager
     _cacheManager = new CacheManager(this);
     
@@ -3886,7 +3892,7 @@ void ImageWriter::setConnectOrgRegistration(const QString &apiKey,
             return;
         }
     }
-    _settings.setValue(QStringLiteral("connect_org_api_key"), trimmedKey);
+    _secrets.setValue(QStringLiteral("connect_org_api_key"), trimmedKey);
     _settings.setValue(QStringLiteral("connect_org_description"), trimmedDesc);
     _settings.sync();
 }
@@ -3900,14 +3906,14 @@ void ImageWriter::setConnectOrgDescription(const QString &descriptionPrefix)
 
 void ImageWriter::clearConnectOrgRegistration()
 {
-    _settings.remove(QStringLiteral("connect_org_api_key"));
+    _secrets.remove(QStringLiteral("connect_org_api_key"));
     _settings.remove(QStringLiteral("connect_org_description"));
     _settings.sync();
 }
 
 bool ImageWriter::hasConnectOrgRegistration() const
 {
-    return !_settings.value(QStringLiteral("connect_org_api_key"))
+    return !_secrets.value(QStringLiteral("connect_org_api_key"))
                      .toString().isEmpty();
 }
 
@@ -3922,7 +3928,7 @@ QVariantMap ImageWriter::requestOrgAuthKey(const QString &description, int ttlDa
     out.insert(QStringLiteral("ok"), false);
 
     const QString apiKey =
-        _settings.value(QStringLiteral("connect_org_api_key")).toString();
+        _secrets.value(QStringLiteral("connect_org_api_key")).toString();
     if (apiKey.isEmpty()) {
         qWarning() << "Connect: cannot mint auth key — no organisation API key set";
         out.insert(QStringLiteral("error"),
@@ -4179,7 +4185,7 @@ QString ImageWriter::getRsaKeyFingerprint(const QString &keyPath)
 
 void ImageWriter::setSetting(const QString &key, const QVariant &value)
 {
-    _settings.setValue(key, value);
+    _secrets.setValue(key, value);
     _settings.sync();
 }
 
@@ -4402,32 +4408,21 @@ QString ImageWriter::wifiSsidOctetsBase64(const QString &ssid) const
 
 void ImageWriter::setSavedCustomisationSettings(const QVariantMap &map)
 {
-    _settings.beginGroup("imagecustomization");
-    _settings.remove("");
-    const QStringList keys = map.keys();
-    for (const QString &key : keys) {
-        _settings.setValue(key, map.value(key));
-    }
-    _settings.endGroup();
+    _secrets.clearGroup(QStringLiteral("imagecustomization"));
+    for (auto it = map.constBegin(); it != map.constEnd(); ++it)
+        _secrets.setValue(QStringLiteral("imagecustomization/") + it.key(), it.value());
     _settings.sync();
 }
 
 QVariantMap ImageWriter::getSavedCustomisationSettings()
 {
-    QVariantMap result;
-
-    _settings.beginGroup("imagecustomization");
     // Earlier versions stored a derived PMK. It is equivalent to the
     // passphrase for WPA2, so it is deleted rather than kept around.
-    if (_settings.contains(QStringLiteral("wifiPasswordCrypt"))) {
-        _settings.remove(QStringLiteral("wifiPasswordCrypt"));
+    if (_settings.contains(QStringLiteral("imagecustomization/wifiPasswordCrypt"))) {
+        _settings.remove(QStringLiteral("imagecustomization/wifiPasswordCrypt"));
         _settings.sync();
     }
-    const QStringList keys = _settings.childKeys();
-    for (const QString &key : keys) {
-        result.insert(key, _settings.value(key));
-    }
-    _settings.endGroup();
+    QVariantMap result = _secrets.group(QStringLiteral("imagecustomization"));
 
     // Belt-and-braces: deduplicate SSH authorized keys if present.
     // Many UIs allow pasting multiple keys; ensure unique entries using a
@@ -4459,25 +4454,19 @@ QVariantMap ImageWriter::getSavedCustomisationSettings()
 
 void ImageWriter::setPersistedCustomisationSetting(const QString &key, const QVariant &value)
 {
-    _settings.beginGroup("imagecustomization");
-    _settings.setValue(key, value);
-    _settings.endGroup();
+    _secrets.setValue(QStringLiteral("imagecustomization/") + key, value);
     _settings.sync();
 }
 
 void ImageWriter::removePersistedCustomisationSetting(const QString &key)
 {
-    _settings.beginGroup("imagecustomization");
-    _settings.remove(key);
-    _settings.endGroup();
+    _secrets.remove(QStringLiteral("imagecustomization/") + key);
     _settings.sync();
 }
 
 void ImageWriter::clearSavedCustomisationSettings()
 {
-    _settings.beginGroup("imagecustomization");
-    _settings.remove("");
-    _settings.endGroup();
+    _secrets.clearGroup(QStringLiteral("imagecustomization"));
     _settings.sync();
 }
 
@@ -5414,7 +5403,7 @@ bool ImageWriter::_connectOrgRegistrationForWrite(QString &apiKey,
         return false;
 
     const QString storedKey =
-        _settings.value(QStringLiteral("connect_org_api_key")).toString();
+        _secrets.value(QStringLiteral("connect_org_api_key")).toString();
     if (storedKey.isEmpty())
         return false;
 
