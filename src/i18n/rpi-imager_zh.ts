@@ -17,7 +17,7 @@
     </message>
     <message>
         <source>Enable anonymous statistics (telemetry)</source>
-        <translation>启用匿名分析（遥测）</translation>
+        <translation>启用匿名统计（遥测）</translation>
     </message>
     <message>
         <source>What is this?</source>
@@ -37,7 +37,7 @@
     </message>
     <message>
         <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
-        <translation>如果你禁用警告，树莓派启动盘制作工具（Raspberry Pi Imager）将 &lt;b&gt;不会在写入镜像之前显示确认提示&lt;/b&gt;。在选择系统驱动器时，你仍然需要 &lt;b&gt;输入完全相同的名称&lt;/b&gt;。</translation>
+        <translation>如果你禁用警告，树莓派启动盘制作工具将 &lt;b&gt;不会在写入镜像之前显示确认提示&lt;/b&gt;。在选择系统驱动器时，你仍然需要 &lt;b&gt;输入完全相同的名称&lt;/b&gt;。</translation>
     </message>
     <message>
         <source>Content Repository</source>
@@ -49,11 +49,11 @@
     </message>
     <message>
         <source>Close the options dialog without saving any changes</source>
-        <translation>关闭选项对话框且不保存任何更改</translation>
+        <translation>关闭选项对话框而不保存任何更改</translation>
     </message>
     <message>
         <source>Save the selected options and apply them to Raspberry Pi Imager</source>
-        <translation>保存所选选项并将其应用到树莓派启动盘制作工具（Raspberry Pi Imager）</translation>
+        <translation>保存所选选项并将其应用到树莓派启动盘制作工具</translation>
     </message>
     <message>
         <source>Keep warnings enabled and return to the options dialog</source>
@@ -73,7 +73,7 @@
     </message>
     <message>
         <source>Send anonymous usage statistics to help improve Raspberry Pi Imager</source>
-        <translation>发送匿名使用统计数据以帮助改进树莓派启动盘制作工具（Raspberry Pi Imager）</translation>
+        <translation>发送匿名使用统计数据以帮助改进树莓派启动盘制作工具</translation>
     </message>
     <message>
         <source>Skip confirmation dialogs before writing images (advanced users only)</source>
@@ -81,7 +81,7 @@
     </message>
     <message>
         <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
-        <translation>在官方树莓派仓库和自定义源之间切换操作系统镜像的来源</translation>
+        <translation>在官方树莓派存储库和自定义源之间切换操作系统镜像的来源</translation>
     </message>
     <message>
         <source>Secure Boot RSA Key</source>
@@ -89,7 +89,7 @@
     </message>
     <message>
         <source>Change</source>
-        <translation>修改</translation>
+        <translation>更改</translation>
     </message>
     <message>
         <source>Select</source>
@@ -97,7 +97,7 @@
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation>在安全启动模式下，为签名启动镜像选择 RSA 2048 位私钥</translation>
+        <translation>在安全启动模式下，选择用于为启动镜像签名的 RSA 2048 位私钥</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
@@ -117,39 +117,39 @@
     </message>
     <message>
         <source>Audio notification unavailable - no viable audio player found on this system</source>
-        <translation type="unfinished"></translation>
+        <translation>音频通知不可用：此系统上未找到可用的音频播放器</translation>
     </message>
     <message>
         <source>Saved Customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>已保存的自定义设置</translation>
     </message>
     <message>
         <source>Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>清除</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
-        <translation type="unfinished"></translation>
+        <translation>移除所有已保存的操作系统自定义设置，例如主机名、Wi-Fi 和用户凭据</translation>
     </message>
     <message>
         <source>Version: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>版本：%1</translation>
     </message>
     <message>
         <source>Clear saved customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>清除已保存的自定义设置？</translation>
     </message>
     <message>
         <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
-        <translation type="unfinished"></translation>
+        <translation>这将移除所有已保存的操作系统自定义设置，例如主机名、Wi-Fi 和用户凭据。</translation>
     </message>
     <message>
         <source>Keep saved customisation settings and return to the options dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>保留已保存的自定义设置并返回选项对话框</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings permanently</source>
-        <translation type="unfinished"></translation>
+        <translation>永久移除所有已保存的操作系统自定义设置</translation>
     </message>
 </context>
 <context>
@@ -211,7 +211,7 @@
     </message>
     <message>
         <source>Finish</source>
-        <translation>结束</translation>
+        <translation>完成</translation>
     </message>
     <message>
         <source>Select image</source>
@@ -227,7 +227,7 @@
     </message>
     <message>
         <source>Storage:</source>
-        <translation>存储：</translation>
+        <translation>存储设备：</translation>
     </message>
     <message>
         <source>No device selected</source>
@@ -239,7 +239,7 @@
     </message>
     <message>
         <source>No storage selected</source>
-        <translation>未选中任何存储</translation>
+        <translation>未选中任何存储设备</translation>
     </message>
     <message>
         <source>Hostname configured</source>
@@ -271,11 +271,11 @@
     </message>
     <message>
         <source>USB Gadget mode enabled</source>
-        <translation>已启用 USB Gadget 模式</translation>
+        <translation>已启用 USB gadget 模式</translation>
     </message>
     <message>
         <source>1-Wire enabled</source>
-        <translation>已启用单总线协议</translation>
+        <translation>已启用 1-Wire</translation>
     </message>
     <message>
         <source>Serial configured</source>
@@ -291,66 +291,66 @@
     </message>
     <message>
         <source>Imager Repository Files (*.json *.%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Imager 存储库文件 (*.json *.%1)</translation>
     </message>
 </context>
 <context>
     <name>ConfirmOtpProgramDialog</name>
     <message>
         <source>WARNING: OTP Programming is PERMANENT and IRREVERSIBLE</source>
-        <translation type="unfinished"></translation>
+        <translation>警告：OTP 烧写是永久且不可逆的操作</translation>
     </message>
     <message>
         <source>This operation will permanently program the secure boot public key hash into the device&apos;s one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>此操作会将安全启动公钥哈希永久烧写到设备的一次性可编程（OTP）存储器中。烧写完成后，此设备将只能启动使用对应私钥签名的镜像。此操作无法撤销。</translation>
     </message>
     <message>
         <source>Device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>设备：%1</translation>
     </message>
     <message>
         <source>Serial: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>序列号：%1</translation>
     </message>
     <message>
         <source>Key fingerprint: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>密钥指纹：%1</translation>
     </message>
     <message>
         <source>Also lock JTAG debug port (additional irreversible action)</source>
-        <translation type="unfinished"></translation>
+        <translation>同时锁定 JTAG 调试端口（额外不可逆操作）</translation>
     </message>
     <message>
         <source>To confirm, type the device serial number below:</source>
-        <translation type="unfinished"></translation>
+        <translation>如需确认，请在下方输入设备序列号：</translation>
     </message>
     <message>
         <source>Serial to type: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>需输入的序列号：%1</translation>
     </message>
     <message>
         <source>Type device serial number exactly</source>
-        <translation type="unfinished"></translation>
+        <translation>请准确输入设备序列号</translation>
     </message>
     <message>
         <source>Confirmation input. Type exactly: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>确认输入框。请准确输入：%1</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Cancel OTP programming and return to previous screen</source>
-        <translation type="unfinished"></translation>
+        <translation>取消 OTP 烧写并返回上一界面</translation>
     </message>
     <message>
         <source>PROGRAM OTP</source>
-        <translation type="unfinished"></translation>
+        <translation>烧写 OTP</translation>
     </message>
     <message>
         <source>Permanently program the secure boot key into device OTP memory</source>
-        <translation type="unfinished"></translation>
+        <translation>将安全启动密钥永久烧写到设备的 OTP 存储器中</translation>
     </message>
 </context>
 <context>
@@ -369,11 +369,11 @@
     </message>
     <message>
         <source>To continue, type the exact drive name below:</source>
-        <translation>要继续，请在下方输入完全相同的驱动器名称：</translation>
+        <translation>要继续，请在下方准确输入驱动器名称：</translation>
     </message>
     <message>
         <source>Type drive name exactly as shown above</source>
-        <translation>按照上方显示的完全相同名称输入驱动器名称</translation>
+        <translation>按上方显示的名称原样输入驱动器名称</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -385,7 +385,7 @@
     </message>
     <message>
         <source>Cancel operation and return to storage selection to choose a different device</source>
-        <translation>取消操作并返回存储设备选择以选择其他设备</translation>
+        <translation>取消操作并返回存储设备选择，以选择其他设备</translation>
     </message>
     <message>
         <source>Proceed to write the image to this system drive after confirming the drive name</source>
@@ -393,30 +393,30 @@
     </message>
     <message>
         <source>Drive information</source>
-        <translation>设备信息</translation>
+        <translation>驱动器信息</translation>
     </message>
     <message>
         <source>Drive name to type: %1</source>
-        <translation>键入设备名称：%1</translation>
+        <translation>需键入的驱动器名称：%1</translation>
     </message>
     <message>
         <source>Drive name input. Type exactly: %1. %2</source>
-        <translation>输入驱动器名称。请完整输入：%1. %2</translation>
+        <translation>输入驱动器名称。请准确键入：%1。%2</translation>
     </message>
 </context>
 <context>
     <name>ConfirmUnfilterDialog</name>
     <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
-        <translation>禁用系统驱动器过滤后，&lt;b&gt;系统驱动器&lt;/b&gt;将显示在列表中。</translation>
+        <translation>禁用系统驱动器过滤后，&lt;b&gt;系统驱动器将显示在列表中&lt;/b&gt;。</translation>
     </message>
     <message>
         <source>KEEP FILTER ON</source>
-        <translation>开启过滤</translation>
+        <translation>保持过滤开启</translation>
     </message>
     <message>
         <source>SHOW SYSTEM DRIVES</source>
-        <translation>显示系统设备</translation>
+        <translation>显示系统驱动器</translation>
     </message>
     <message>
         <source>Keep system drives hidden to prevent accidental damage to your operating system</source>
@@ -431,155 +431,155 @@
     <name>DebugOptionsDialog</name>
     <message>
         <source>Debug Options</source>
-        <translation type="unfinished"></translation>
+        <translation>调试选项</translation>
     </message>
     <message>
         <source>⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ 这些选项用于调试和测试。更改后可能影响性能和数据完整性。</translation>
     </message>
     <message>
         <source>I/O Options</source>
-        <translation type="unfinished"></translation>
+        <translation>I/O 选项</translation>
     </message>
     <message>
         <source>Enable Direct I/O (F_NOCACHE / O_DIRECT)</source>
-        <translation type="unfinished"></translation>
+        <translation>启用直接 I/O（F_NOCACHE / O_DIRECT）</translation>
     </message>
     <message>
         <source>Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.</source>
-        <translation type="unfinished"></translation>
+        <translation>写入时绕过操作系统的页面缓存。速度较慢，但可确保数据直接写入设备。</translation>
     </message>
     <message>
         <source>Enable Async I/O</source>
-        <translation type="unfinished"></translation>
+        <translation>启用异步 I/O</translation>
     </message>
     <message>
         <source>Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.</source>
-        <translation type="unfinished"></translation>
+        <translation>将多个写入操作排入队列，从而掩盖设备延迟。启用直接 I/O 时可提升性能。</translation>
     </message>
     <message>
         <source>Queue Depth:</source>
-        <translation type="unfinished"></translation>
+        <translation>队列深度：</translation>
     </message>
     <message>
         <source>Async queue depth: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>异步队列深度：%1</translation>
     </message>
     <message>
         <source>Buffer memory: ~%1-%2 MB (varies by system RAM)</source>
-        <translation type="unfinished"></translation>
+        <translation>缓冲区内存：约 %1-%2 MB（取决于系统内存）</translation>
     </message>
     <message>
         <source>Enable Periodic Sync</source>
-        <translation type="unfinished"></translation>
+        <translation>启用定期同步</translation>
     </message>
     <message>
         <source>Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.</source>
-        <translation type="unfinished"></translation>
+        <translation>写入期间定期将数据刷新到磁盘。启用直接 I/O 时会自动禁用。</translation>
     </message>
     <message>
         <source>Debugging</source>
-        <translation type="unfinished"></translation>
+        <translation>调试</translation>
     </message>
     <message>
         <source>Verbose Performance Logging</source>
-        <translation type="unfinished"></translation>
+        <translation>详细性能日志</translation>
     </message>
     <message>
         <source>Log detailed timing information for each write operation to help diagnose performance issues.</source>
-        <translation type="unfinished"></translation>
+        <translation>为每个写入操作记录详细的计时信息，以便诊断性能问题。</translation>
     </message>
     <message>
         <source>Network Options</source>
-        <translation type="unfinished"></translation>
+        <translation>网络选项</translation>
     </message>
     <message>
         <source>Force IPv4-only Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>强制仅使用 IPv4 下载</translation>
     </message>
     <message>
         <source>Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.</source>
-        <translation type="unfinished"></translation>
+        <translation>下载时仅使用 IPv4。如果因 IPv6 路由故障而遇到连接问题，请启用此选项。</translation>
     </message>
     <message>
         <source>Workarounds</source>
-        <translation type="unfinished"></translation>
+        <translation>变通方案</translation>
     </message>
     <message>
         <source>Counterfeit Card Mode (skip end-of-device checks)</source>
-        <translation type="unfinished"></translation>
+        <translation>扩容卡模式（跳过设备末尾检查）</translation>
     </message>
     <message>
         <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
-        <translation type="unfinished"></translation>
+        <translation>跳过针对存储设备末尾的操作。如果使用的是谎报大容量的扩容 SD 卡，请启用此选项。镜像必须小于该卡的实际容量。</translation>
     </message>
     <message>
         <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ 仅当你的 SD 卡标称容量大于实际容量时才启用此选项。请确保镜像小于该卡的实际容量！</translation>
     </message>
     <message>
         <source>Advanced Features</source>
-        <translation type="unfinished"></translation>
+        <translation>高级功能</translation>
     </message>
     <message>
         <source>Enable Rpiboot/Fastboot Support</source>
-        <translation type="unfinished"></translation>
+        <translation>启用 rpiboot/fastboot 支持</translation>
     </message>
     <message>
         <source>Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.</source>
-        <translation type="unfinished"></translation>
+        <translation>扫描处于 USB 启动模式（rpiboot）的树莓派设备。需要 libusb。</translation>
     </message>
     <message>
         <source>Custom Fastboot Gadget:</source>
-        <translation type="unfinished"></translation>
+        <translation>自定义 fastboot gadget：</translation>
     </message>
     <message>
         <source>(default)</source>
-        <translation type="unfinished"></translation>
+        <translation>（默认）</translation>
     </message>
     <message>
         <source>Browse...</source>
-        <translation type="unfinished"></translation>
+        <translation>浏览</translation>
     </message>
     <message>
         <source>Select a local fastboot gadget boot.img file</source>
-        <translation type="unfinished"></translation>
+        <translation>选择本地 fastboot gadget boot.img 文件</translation>
     </message>
     <message>
         <source>Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>清除</translation>
     </message>
     <message>
         <source>Revert to the default fastboot gadget from GitHub</source>
-        <translation type="unfinished"></translation>
+        <translation>恢复为 GitHub 上的默认 fastboot gadget</translation>
     </message>
     <message>
         <source>Select Fastboot Gadget Image</source>
-        <translation type="unfinished"></translation>
+        <translation>选择 fastboot gadget 镜像</translation>
     </message>
     <message>
         <source>Boot images (*.img *.bin)</source>
-        <translation type="unfinished"></translation>
+        <translation>启动镜像 (*.img *.bin)</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">所有文件 (*)</translation>
+        <translation>所有文件 (*)</translation>
     </message>
     <message>
         <source>Current Status</source>
-        <translation type="unfinished"></translation>
+        <translation>当前状态</translation>
     </message>
     <message>
         <source>Close the debug options dialog without saving any changes</source>
-        <translation type="unfinished"></translation>
+        <translation>关闭调试选项对话框，不保存任何更改</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished"></translation>
+        <translation>应用</translation>
     </message>
     <message>
         <source>Apply the selected debug options</source>
-        <translation type="unfinished"></translation>
+        <translation>应用所选的调试选项</translation>
     </message>
 </context>
 <context>
@@ -610,25 +610,27 @@
     </message>
     <message>
         <source>Unable to load device list</source>
-        <translation type="unfinished"></translation>
+        <translation>无法加载设备列表</translation>
     </message>
     <message>
         <source>The device list could not be downloaded. Please check your internet connection and try again.
 
 You can still write a local image file by pressing Next and selecting &apos;Use custom&apos; on the following screen.</source>
-        <translation type="unfinished"></translation>
+        <translation>无法下载设备列表。请检查你的网络连接后重试。
+
+你仍可写入本地镜像文件：点击“下一步”，然后在接下来的界面中选择“使用自定义”。</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>重试</translation>
     </message>
     <message>
         <source>Retry downloading the device list</source>
-        <translation type="unfinished"></translation>
+        <translation>重试下载设备列表</translation>
     </message>
     <message>
         <source>Connected via USB</source>
-        <translation type="unfinished"></translation>
+        <translation>已通过 USB 连接</translation>
     </message>
 </context>
 <context>
@@ -639,7 +641,7 @@ You can still write a local image file by pressing Next and selecting &apos;Use 
     </message>
     <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
-        <translation>存储设备已自动弹出。你现在可以安全地移除它。</translation>
+        <translation>存储设备已自动弹出，现在可以安全移除。</translation>
     </message>
     <message>
         <source>Please eject the storage device before removing it from your computer.</source>
@@ -675,7 +677,7 @@ You can still write a local image file by pressing Next and selecting &apos;Use 
     </message>
     <message>
         <source>Close Raspberry Pi Imager and exit the application</source>
-        <translation>关闭树莓派启动盘制作工具（Raspberry Pi Imager）并退出应用程序</translation>
+        <translation>关闭树莓派启动盘制作工具并退出应用程序</translation>
     </message>
     <message>
         <source>Return to storage selection to write the same image to another storage device</source>
@@ -694,7 +696,7 @@ You can still write a local image file by pressing Next and selecting &apos;Use 
     <name>DownloadExtractThread</name>
     <message>
         <source>Error extracting archive: %1</source>
-        <translation>解压至 %1 时发生错误</translation>
+        <translation>解压压缩包时发生错误：%1</translation>
     </message>
     <message>
         <source>Error mounting FAT32 partition</source>
@@ -706,7 +708,7 @@ You can still write a local image file by pressing Next and selecting &apos;Use 
     </message>
     <message>
         <source>Error changing to directory &apos;%1&apos;</source>
-        <translation>进入文件夹 “%1” 时发生错误</translation>
+        <translation>进入目录“%1”时发生错误</translation>
     </message>
     <message>
         <source>The write operation has stalled.
@@ -717,11 +719,18 @@ No data has been written for 30 seconds. This could be caused by:
 • System resource exhaustion
 
 Please check the storage device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>写入操作已停滞。
+
+已连续 30 秒未写入任何数据。可能的原因：
+• 存储设备已断开连接或无响应
+• 设备已损坏或存在故障
+• 系统资源耗尽
+
+请检查存储设备，然后重试。</translation>
     </message>
     <message>
         <source>Failed to acquire write buffer slot</source>
-        <translation type="unfinished"></translation>
+        <translation>获取写入缓冲区槽位失败</translation>
     </message>
     <message>
         <source>The download has stalled.
@@ -732,26 +741,33 @@ No data received for 30 seconds. This could be caused by:
 • Firewall or proxy blocking the connection
 
 Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>下载已停滞。
+
+已连续 30 秒未收到任何数据。可能的原因：
+• 网络连接丢失或不稳定
+• 远程服务器无响应
+• 防火墙或代理阻止了连接
+
+请检查网络连接，然后重试。</translation>
     </message>
 </context>
 <context>
     <name>DownloadThread</name>
     <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>请检查，在隐私设置中是否允许树莓派启动盘制作工具（Raspberry Pi Imager）访问“可移除的宗卷”（位于“文件和文件夹”下），或为其授予“完全磁盘访问权限”。</translation>
+        <translation>请检查在隐私设置中是否允许树莓派启动盘制作工具访问“可移除的宗卷”（位于“文件和文件夹”下），或为其授予“完全磁盘访问权限”。</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos;.</source>
-        <translation>无法打开存储设备 “%1”。</translation>
+        <translation>无法打开存储设备“%1”。</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
-        <translation>下载错误，已下载：%1</translation>
+        <translation>下载时发生错误：%1</translation>
     </message>
     <message>
         <source>Access denied error while writing file to disk.</source>
-        <translation>将文件写入磁盘时被拒绝访问。</translation>
+        <translation>向磁盘写入文件时访问被拒绝。</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
@@ -759,19 +775,19 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>写入校验失败。SD 卡与写入的内容不一致。</translation>
+        <translation>写入校验失败。SD 卡中的内容与写入的内容不一致。</translation>
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation>缓存文件已损坏。SHA256 哈希值与预期值不匹配。&lt;br&gt;该缓存文件将被删除，将重新开始下载。</translation>
+        <translation>缓存文件已损坏。SHA256 哈希值与预期值不匹配。&lt;br&gt;将删除该缓存文件并重新开始下载。</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation>本地文件已损坏或其 SHA256 哈希值不正确。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2。</translation>
+        <translation>本地文件已损坏或其 SHA256 哈希值不正确。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation>下载内容似乎已损坏。SHA256 哈希值不匹配。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2&lt;br&gt;请检查您的网络连接，然后重试。</translation>
+        <translation>下载内容似乎已损坏。SHA256 哈希值不匹配。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2&lt;br&gt;请检查你的网络连接，然后重试。</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
@@ -783,7 +799,7 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.</source>
-        <translation>磁盘可能被写保护或被其他应用程序使用。请确保磁盘未挂载，然后重试。</translation>
+        <translation>磁盘可能已启用写保护或被其他应用程序使用。请确保磁盘未挂载，然后重试。</translation>
     </message>
     <message>
         <source>Disk is full. Please use a larger storage device.</source>
@@ -791,7 +807,7 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only.</source>
-        <translation>磁盘被写保护。请检查磁盘是否有物理写保护开关或是否为只读。</translation>
+        <translation>磁盘已启用写保护。请检查磁盘是否有物理写保护开关或是否为只读。</translation>
     </message>
     <message>
         <source>Media error detected. The storage device may be damaged or counterfeit. Please try a different device.</source>
@@ -811,31 +827,31 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
-        <translation>写入存储设备时出错。请检查设备是否可写、有足够的空间且未被写保护。</translation>
+        <translation>写入存储设备时出错。请检查设备是否可写、是否有足够空间且未启用写保护。</translation>
     </message>
     <message>
         <source>Unmounting drive...</source>
-        <translation>正在卸载驱动器...</translation>
+        <translation>正在卸载驱动器……</translation>
     </message>
     <message>
         <source>Opening drive...</source>
-        <translation>正在打开驱动器...</translation>
+        <translation>正在打开驱动器……</translation>
     </message>
     <message>
         <source>Zero&apos;ing out first and last MB of drive...</source>
-        <translation>正在清零驱动器的首尾 MB...</translation>
+        <translation>正在清零驱动器首尾各 1 MB 区域……</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation>正在开始下载...</translation>
+        <translation>开始下载……</translation>
     </message>
     <message>
         <source>Writing image...</source>
-        <translation>正在写入镜像...</translation>
+        <translation>正在写入镜像……</translation>
     </message>
     <message>
         <source>Customising OS...</source>
-        <translation>正在自定义操作系统...</translation>
+        <translation>正在自定义操作系统……</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
@@ -843,7 +859,7 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Creating signed boot image...</source>
-        <translation>正在创建签名的启动镜像...</translation>
+        <translation>正在创建签名的启动镜像……</translation>
     </message>
     <message>
         <source>Failed to create secure boot files</source>
@@ -859,7 +875,7 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Extracting boot partition files...</source>
-        <translation>正在提取启动分区文件...</translation>
+        <translation>正在提取启动分区文件……</translation>
     </message>
     <message>
         <source>Failed to extract boot partition files</source>
@@ -875,7 +891,7 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Creating boot.img...</source>
-        <translation>正在创建 boot.img...</translation>
+        <translation>正在创建 boot.img……</translation>
     </message>
     <message>
         <source>Failed to create boot.img</source>
@@ -883,7 +899,7 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Signing boot image...</source>
-        <translation>正在签名启动镜像...</translation>
+        <translation>正在签名启动镜像……</translation>
     </message>
     <message>
         <source>Failed to generate boot.sig</source>
@@ -899,15 +915,15 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Cleaning up boot partition...</source>
-        <translation>正在清理启动分区...</translation>
+        <translation>正在清理启动分区……</translation>
     </message>
     <message>
         <source>Syncing deletions to disk...</source>
-        <translation>正在将删除操作同步到磁盘...</translation>
+        <translation>正在将删除操作同步到磁盘……</translation>
     </message>
     <message>
         <source>Writing signed boot files...</source>
-        <translation>正在写入签名的启动文件...</translation>
+        <translation>正在写入签名的启动文件……</translation>
     </message>
     <message>
         <source>Failed to write secure boot files: %1</source>
@@ -915,45 +931,47 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Unmounting volumes...</source>
-        <translation>正在卸载卷...</translation>
+        <translation>正在卸载宗卷……</translation>
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation>正在清理磁盘...</translation>
+        <translation>正在清理磁盘……</translation>
     </message>
     <message>
         <source>Cleaning disk (legacy method)...</source>
-        <translation>正在清理磁盘（传统方法）...</translation>
+        <translation>正在清理磁盘（传统方法）……</translation>
     </message>
     <message>
         <source>Writing customization files...</source>
-        <translation>正在写入自定义文件...</translation>
+        <translation>正在写入自定义文件……</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>卸载磁盘“%1”失败。请关闭所有正在使用该磁盘的应用程序，然后重试。</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>卸载磁盘“%1”失败。</translation>
     </message>
     <message>
         <source>getting device size</source>
-        <translation type="unfinished"></translation>
+        <translation>获取设备大小</translation>
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing.
 
 The system may be low on memory.</source>
-        <translation type="unfinished"></translation>
+        <translation>为 MBR 清零分配缓冲区失败。
+
+系统内存可能不足。</translation>
     </message>
     <message>
         <source>preparing storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>准备存储设备</translation>
     </message>
     <message>
         <source>Zero&apos;ing out end of drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在清零驱动器末尾区域……</translation>
     </message>
     <message>
         <source>Timeout writing to end of storage device.
@@ -961,7 +979,11 @@ The system may be low on memory.</source>
 This may indicate a counterfeit SD card with fake capacity.
 
 Please try a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>写入存储设备末尾时超时。
+
+这可能表明 SD 卡是虚标容量的扩容卡。
+
+请尝试其他存储设备。</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.
@@ -969,21 +991,27 @@ Please try a different storage device.</source>
 This could indicate the card is advertising wrong capacity (possible counterfeit).
 
 Please try a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>尝试清零存储卡末尾时发生写入错误。
+
+这可能表明该卡标称容量有误（可能是假冒产品）。
+
+请尝试其他存储设备。</translation>
     </message>
     <message>
         <source>Storage device responding slowly. Restarting in compatibility mode...</source>
-        <translation type="unfinished"></translation>
+        <translation>存储设备响应缓慢。正在以兼容模式重新开始写入……</translation>
     </message>
     <message>
         <source>storage operation</source>
-        <translation type="unfinished"></translation>
+        <translation>存储操作</translation>
     </message>
     <message>
         <source>Failed to open storage device.
 
 The device may be in use by another application, or you may not have permission to access it.</source>
-        <translation type="unfinished"></translation>
+        <translation>无法打开存储设备。
+
+该设备可能正被其他应用程序使用，或者你没有访问权限。</translation>
     </message>
     <message>
         <source>Error writing to storage device during %1.
@@ -994,49 +1022,70 @@ This could be caused by:
 • Hardware failure or bad sectors
 
 Please check the device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>在%1期间写入存储设备时出错。
+
+可能的原因：
+• 设备已断开连接或无响应
+• 设备已满或已启用写保护
+• 硬件故障或存在坏道
+
+请检查设备，然后重试。</translation>
     </message>
     <message>
         <source>Error reading from storage device during %1.
 
 The device may have been disconnected or is malfunctioning.</source>
-        <translation type="unfinished"></translation>
+        <translation>在%1期间读取存储设备时出错。
+
+设备可能已断开连接或出现故障。</translation>
     </message>
     <message>
         <source>Error seeking on storage device during %1.
 
 The device may be malfunctioning or disconnected.</source>
-        <translation type="unfinished"></translation>
+        <translation>在%1期间查找存储设备时出错。
+
+设备可能已出现故障或已断开连接。</translation>
     </message>
     <message>
         <source>Error getting storage device size.
 
 The device may not be properly recognized.</source>
-        <translation type="unfinished"></translation>
+        <translation>获取存储设备大小时出错。
+
+设备可能未被正确识别。</translation>
     </message>
     <message>
         <source>Error closing storage device.
 
 The device may have been disconnected.</source>
-        <translation type="unfinished"></translation>
+        <translation>关闭存储设备时出错。
+
+设备可能已断开连接。</translation>
     </message>
     <message>
         <source>Failed to lock storage device.
 
 The device may be in use by another application. Please close any applications using this device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>锁定存储设备失败。
+
+该设备可能正被其他应用程序使用。请关闭所有正在使用该设备的应用程序，然后重试。</translation>
     </message>
     <message>
         <source>Error syncing data to storage device.
 
 The device may have been disconnected or is not responding. Data may not have been fully written.</source>
-        <translation type="unfinished"></translation>
+        <translation>将数据同步到存储设备时出错。
+
+设备可能已断开连接或无响应。数据可能未完全写入。</translation>
     </message>
     <message>
         <source>Error flushing data to storage device.
 
 The device may have been disconnected or is not responding.</source>
-        <translation type="unfinished"></translation>
+        <translation>将数据刷新到存储设备时出错。
+
+设备可能已断开连接或无响应。</translation>
     </message>
     <message>
         <source>Storage device timed out during %1.
@@ -1047,13 +1096,22 @@ The device is not responding. This may indicate:
 • Driver or system issue
 
 Please disconnect and reconnect the device, then try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>在%1期间存储设备响应超时。
+
+设备无响应。这可能表明：
+• 设备已断开连接
+• 设备已损坏
+• 驱动程序或系统问题
+
+请断开并重新连接设备，然后重试。</translation>
     </message>
     <message>
         <source>Unknown storage error during %1.
 
 Please try again or use a different storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>在%1期间发生未知存储错误。
+
+请重试或使用其他存储设备。</translation>
     </message>
     <message>
         <source>The storage device is not responding. This may indicate:
@@ -1062,7 +1120,12 @@ Please try again or use a different storage device.</source>
 • A driver or system issue
 
 Please disconnect and reconnect the device, then try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>存储设备无响应。这可能表明：
+• 设备已断开连接
+• 设备已损坏
+• 驱动程序或系统问题
+
+请断开并重新连接设备，然后重试。</translation>
     </message>
     <message>
         <source>Error writing to storage device.
@@ -1073,34 +1136,41 @@ Some writes failed to complete. This could be caused by:
 • Hardware failure
 
 Please check the device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>写入存储设备时出错。
+
+部分写入未能完成。可能的原因：
+• 写入过程中存储设备断开连接
+• 设备已满或已启用写保护
+• 硬件故障
+
+请检查设备，然后重试。</translation>
     </message>
     <message>
         <source>flush</source>
-        <translation type="unfinished"></translation>
+        <translation>刷新数据</translation>
     </message>
     <message>
         <source>sync</source>
-        <translation type="unfinished"></translation>
+        <translation>同步数据</translation>
     </message>
     <message>
         <source>writing partition table</source>
-        <translation type="unfinished"></translation>
+        <translation>写入分区表</translation>
     </message>
     <message>
         <source>final flush</source>
-        <translation type="unfinished"></translation>
+        <translation>最终刷新</translation>
     </message>
     <message>
         <source>final sync</source>
-        <translation type="unfinished"></translation>
+        <translation>最终同步</translation>
     </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
         <source>Error opening device for formatting</source>
-        <translation>格式化时设备打开失败</translation>
+        <translation>格式化过程中打开设备时出错</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
@@ -1124,126 +1194,126 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Preparing disk for formatting...</source>
-        <translation>正在准备磁盘进行格式化...</translation>
+        <translation>正在准备格式化磁盘……</translation>
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation>正在清理磁盘...</translation>
+        <translation>正在清理磁盘……</translation>
     </message>
     <message>
         <source>Writing filesystem...</source>
-        <translation>正在写入文件系统...</translation>
+        <translation>正在写入文件系统……</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
-        <translation>无法格式化设备：权限不足。请使用提升的权限运行（sudo）。</translation>
+        <translation>无法格式化设备：权限不足。请以提升的权限（sudo）运行。</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>卸载磁盘“%1”失败。请关闭所有正在使用该磁盘的应用程序，然后重试。</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>卸载磁盘“%1”失败。</translation>
     </message>
 </context>
 <context>
     <name>FastbootFlashThread</name>
     <message>
         <source>Applying OS customisation...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在应用操作系统自定义设置……</translation>
     </message>
     <message>
         <source>Failed to mount boot partition: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>挂载启动分区失败：%1</translation>
     </message>
     <message>
         <source>Failed to read config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>读取 config.txt 失败：%1</translation>
     </message>
     <message>
         <source>Failed to write config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>写入 config.txt 失败：%1</translation>
     </message>
     <message>
         <source>Failed to write firstrun.sh: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>写入 firstrun.sh 失败：%1</translation>
     </message>
     <message>
         <source>Failed to write meta-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>写入 meta-data 失败：%1</translation>
     </message>
     <message>
         <source>Failed to write user-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>写入 user-data 失败：%1</translation>
     </message>
     <message>
         <source>Failed to write network-config: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>写入 network-config 失败：%1</translation>
     </message>
     <message>
         <source>Failed to read cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>读取 cmdline.txt 失败：%1</translation>
     </message>
     <message>
         <source>Failed to write cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>写入 cmdline.txt 失败：%1</translation>
     </message>
     <message>
         <source>Failed to initialize curl</source>
-        <translation type="unfinished"></translation>
+        <translation>初始化 curl 失败</translation>
     </message>
     <message>
         <source>No entries in image archive</source>
-        <translation type="unfinished"></translation>
+        <translation>镜像归档中没有任何条目</translation>
     </message>
     <message>
         <source>Fastboot error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>fastboot 错误：%1</translation>
     </message>
     <message>
         <source>Fastboot error: unexpected internal error</source>
-        <translation type="unfinished"></translation>
+        <translation>fastboot 错误：意外的内部错误</translation>
     </message>
     <message>
         <source>Connecting to fastboot device...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在连接 fastboot 设备……</translation>
     </message>
     <message>
         <source>Failed to open fastboot device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>打开 fastboot 设备失败：%1</translation>
     </message>
     <message>
         <source>Downloading and flashing OS image...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在下载并刷写操作系统镜像……</translation>
     </message>
     <message>
         <source>Fetching block map...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在获取块映射……</translation>
     </message>
     <message>
         <source>Fastboot download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>fastboot 下载失败：%1</translation>
     </message>
     <message>
         <source>Fastboot flash failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>fastboot 刷写失败：%1</translation>
     </message>
     <message>
         <source>Download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>下载失败：%1</translation>
     </message>
     <message>
         <source>Decompression failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>解压缩失败：%1</translation>
     </message>
     <message>
         <source>Cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>已取消</translation>
     </message>
     <message>
         <source>Image hash mismatch. Expected: %1 Got: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>镜像哈希不匹配。预期：%1，实际：%2</translation>
     </message>
 </context>
 <context>
@@ -1269,7 +1339,7 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Save hostname and continue to next customisation step</source>
-        <translation>保存主机名并继续到下一个自定义步骤</translation>
+        <translation>保存主机名并进入下一个自定义步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1277,7 +1347,7 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
 </context>
 <context>
@@ -1304,11 +1374,11 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Enable USB Gadget Mode</source>
-        <translation>启用 USB Gadget 模式</translation>
+        <translation>启用 USB gadget 模式</translation>
     </message>
     <message>
         <source>Learn more about USB Gadget Mode</source>
-        <translation>了解更多关于 USB Gadget 模式</translation>
+        <translation>详细了解 USB gadget 模式</translation>
     </message>
     <message>
         <source>Console</source>
@@ -1316,15 +1386,15 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.</source>
-        <translation>USB Gadget 模式可能会改变设备的行为，并可能影响连接性和主机交互。</translation>
+        <translation>USB gadget 模式可能会改变设备的行为，并影响连接性与主机交互。</translation>
     </message>
     <message>
         <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
-        <translation>请在进行前查看&lt;a href=&apos;%1&apos;&gt;文档&lt;/a&gt;。</translation>
+        <translation>请在继续之前查阅&lt;a href=&apos;%1&apos;&gt;文档&lt;/a&gt;。</translation>
     </message>
     <message>
         <source>Only continue if you are sure you know what you are doing.</source>
-        <translation>仅在你确定知道自己在做什么的情况下继续。</translation>
+        <translation>只有在你确定自己清楚在做什么时才继续。</translation>
     </message>
     <message>
         <source>I understand, continue</source>
@@ -1348,7 +1418,7 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors</source>
-        <translation>启用 SPI（串行外设接口），用于与显示器和传感器进行高速通信</translation>
+        <translation>启用 SPI（串行外设接口），用于与显示器、传感器高速通信</translation>
     </message>
     <message>
         <source>Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices</source>
@@ -1356,11 +1426,11 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
-        <translation>启用 USB 设备模式，将你的树莓派用作网络和存储的 USB 外设</translation>
+        <translation>启用 USB 设备模式，将你的树莓派用作提供网络和存储功能的 USB 外设</translation>
     </message>
     <message>
         <source>Save interface and feature settings and continue to writing step</source>
-        <translation>保存接口和功能设置并继续到写入步骤</translation>
+        <translation>保存接口和功能设置，然后继续前往写入步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1368,27 +1438,27 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
     <message>
         <source>Configure the serial interface: Disabled, Default (system decides), Console &amp; Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).</source>
-        <translation>配置串行接口：禁用、默认（系统决定）、控制台与硬件（控制台和 UART）、硬件（仅 UART）或控制台（仅在支持的设备上使用控制台）。</translation>
+        <translation>配置串行接口：禁用、默认（由系统决定）、控制台与硬件（同时包含控制台和 UART）、硬件（仅 UART）或控制台（仅限受支持的设备）。</translation>
     </message>
     <message>
         <source>USB Gadget Mode Warning</source>
-        <translation>USB Gadget 模式警告</translation>
+        <translation>USB gadget 模式警告</translation>
     </message>
     <message>
         <source>Please review the documentation before proceeding.</source>
-        <translation>请在进行前查看文档。</translation>
+        <translation>请在继续之前查阅文档。</translation>
     </message>
     <message>
         <source>Cancel and return to the interfaces and features settings without enabling USB Gadget Mode</source>
-        <translation>取消并返回接口和功能设置，不启用 USB Gadget 模式</translation>
+        <translation>取消并返回接口和功能设置，不启用 USB gadget 模式</translation>
     </message>
     <message>
         <source>Confirm that you understand the risks and continue with USB Gadget Mode enabled</source>
-        <translation>确认你理解风险并继续启用 USB Gadget 模式</translation>
+        <translation>确认你已了解风险，并在启用 USB gadget 模式的情况下继续</translation>
     </message>
     <message>
         <source>This button will be enabled after 2 seconds</source>
@@ -1399,15 +1469,15 @@ Please check the device and try again.</source>
     <name>ImComboBox</name>
     <message>
         <source>Search: &quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
+        <translation>搜索：“%1”</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished"></translation>
+        <translation>第 %1 项，共 %2 项</translation>
     </message>
     <message>
         <source>No matches</source>
-        <translation type="unfinished"></translation>
+        <translation>无匹配项</translation>
     </message>
 </context>
 <context>
@@ -1418,7 +1488,7 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Enter path or URL…</source>
-        <translation>输入路径或 URL…</translation>
+        <translation>输入路径或 URL……</translation>
     </message>
     <message>
         <source>Folders</source>
@@ -1466,7 +1536,7 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Enter filename…</source>
-        <translation>输入文件名…</translation>
+        <translation>输入文件名……</translation>
     </message>
     <message>
         <source>Navigate to a folder using the panel on the left,
@@ -1479,7 +1549,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Enter folder or file path…</source>
-        <translation type="unfinished"></translation>
+        <translation>输入文件夹或文件路径……</translation>
     </message>
 </context>
 <context>
@@ -1516,11 +1586,11 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Password is currently visible. Activate to hide it.</source>
-        <translation>密码当前可见。激活以隐藏。</translation>
+        <translation>密码当前可见。激活即可隐藏。</translation>
     </message>
     <message>
         <source>Password is currently hidden. Activate to show it.</source>
-        <translation>密码当前已隐藏。激活以显示。</translation>
+        <translation>密码当前已隐藏。激活即可显示。</translation>
     </message>
 </context>
 <context>
@@ -1564,7 +1634,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation>您的以太网交换机启用了 STP。获取 IP 地址可能需要较长时间。</translation>
+        <translation>你的以太网交换机启用了 STP。获取 IP 地址可能需要较长时间。</translation>
     </message>
     <message>
         <source>B</source>
@@ -1596,7 +1666,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Unknown precondition failure.</source>
-        <translation>未知的前提条件失败。</translation>
+        <translation>未知的前置条件错误。</translation>
     </message>
     <message>
         <source>Cannot start write. %1</source>
@@ -1644,23 +1714,27 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Starting fastboot flash...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在启动 fastboot 刷写……</translation>
     </message>
     <message>
         <source>Preparing device for imaging...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在准备设备以写入镜像……</translation>
     </message>
     <message>
         <source>Storage capacity is not large enough.
 
 The image requires at least %1 of storage.</source>
-        <translation type="unfinished"></translation>
+        <translation>存储容量不足。
+
+镜像至少需要 %1 的存储空间。</translation>
     </message>
     <message>
         <source>Input file is not a valid disk image.
 
 File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation type="unfinished"></translation>
+        <translation>输入文件不是有效的磁盘镜像。
+
+文件大小 %1 字节不是 512 字节的整数倍。</translation>
     </message>
     <message>
         <source>Failed to start write operation: insufficient memory.
@@ -1668,27 +1742,31 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
 The system does not have enough available memory to perform this operation. Try closing other applications to free up memory, then try again.
 
 Technical details: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>无法启动写入操作：内存不足。
+
+系统的可用内存不足以执行此操作。请尝试关闭其他应用程序以释放内存，然后重试。
+
+技术细节：%1</translation>
     </message>
     <message>
         <source>Failed to start write operation: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>无法启动写入操作：%1</translation>
     </message>
     <message>
         <source>Limited by download speed</source>
-        <translation type="unfinished"></translation>
+        <translation>受限于下载速度</translation>
     </message>
     <message>
         <source>Limited by decompression speed</source>
-        <translation type="unfinished"></translation>
+        <translation>受限于解压速度</translation>
     </message>
     <message>
         <source>Limited by storage device speed</source>
-        <translation type="unfinished"></translation>
+        <translation>受限于存储设备速度</translation>
     </message>
     <message>
         <source>Verifying written data</source>
-        <translation type="unfinished"></translation>
+        <translation>正在校验已写入的数据</translation>
     </message>
 </context>
 <context>
@@ -1699,11 +1777,11 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Would you like to prefill the Wi‑Fi password from the system keychain?</source>
-        <translation>是否要从系统钥匙串中预填 Wi‑Fi 密码？</translation>
+        <translation>是否要从系统钥匙串中预填 Wi-Fi 密码？</translation>
     </message>
     <message>
         <source>This will require administrator authentication on macOS.</source>
-        <translation>这需要在 macOS 上进行管理员身份验证。</translation>
+        <translation>这需要在 macOS 上验证管理员身份。</translation>
     </message>
     <message>
         <source>Skip keychain access and manually enter the Wi-Fi password</source>
@@ -1711,7 +1789,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
-        <translation>使用管理员身份验证从系统钥匙串中检索 Wi-Fi 密码</translation>
+        <translation>使用管理员身份验证从系统钥匙串中获取 Wi-Fi 密码</translation>
     </message>
 </context>
 <context>
@@ -1726,22 +1804,22 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Choose your language for Raspberry Pi Imager</source>
-        <translation>选择树莓派启动盘制作工具（Raspberry Pi Imager）的语言</translation>
+        <translation>选择树莓派启动盘制作工具的语言</translation>
     </message>
     <message>
         <source>Select the language for the Raspberry Pi Imager interface</source>
-        <translation>选择树莓派启动盘制作工具（Raspberry Pi Imager）界面的语言</translation>
+        <translation>选择树莓派启动盘制作工具界面的语言</translation>
     </message>
 </context>
 <context>
     <name>LocalFileExtractThread</name>
     <message>
         <source>Error opening image file</source>
-        <translation>读取镜像文件时发生错误</translation>
+        <translation>打开镜像文件时发生错误</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation>从镜像文件读取时发生错误</translation>
+        <translation>读取镜像文件时发生错误</translation>
     </message>
     <message>
         <source>Error writing to device</source>
@@ -1753,11 +1831,11 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Opening image file...</source>
-        <translation>正在打开镜像文件...</translation>
+        <translation>正在打开镜像文件……</translation>
     </message>
     <message>
         <source>Starting extraction...</source>
-        <translation>正在开始提取...</translation>
+        <translation>开始提取……</translation>
     </message>
 </context>
 <context>
@@ -1784,7 +1862,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Save localisation settings and continue to next customisation step</source>
-        <translation>保存本地化设置并继续到下一个自定义步骤</translation>
+        <translation>保存本地化设置并进入下一个自定义步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1792,45 +1870,45 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
     <message>
         <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country&apos;s Wi-Fi regulations.</source>
-        <translation>选择你最近的首都城市。这将自动为你所在的地区推荐正确的时区和键盘布局，并设置符合你国家 Wi-Fi 法规的无线监管域。</translation>
+        <translation>选择距离你最近的首都城市。这将自动为你所在的地区推荐正确的时区和键盘布局，并设置符合你所在国家 Wi-Fi 法规的无线监管域。</translation>
     </message>
     <message>
         <source>Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.</source>
-        <translation>选择你的时区，以便树莓派显示正确的本地时间。这会根据你的首都城市选择自动推荐，但如果建议不正确，你可以更改它。</translation>
+        <translation>选择你的时区，让树莓派显示正确的本地时间。系统会根据你选择的首都城市自动推荐，但如果建议不正确，你可以更改。</translation>
     </message>
     <message>
         <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
-        <translation>选择你的键盘布局，以便按键时产生正确的字符。这会根据你的首都城市选择自动推荐，但如果你使用不同的键盘布局，可以更改它。</translation>
+        <translation>选择你的键盘布局，确保按键时能输出正确的字符。系统会根据你选择的首都城市自动推荐，但如果你使用不同的键盘布局，可以更改。</translation>
     </message>
     <message>
         <source>Why am I being asked this?</source>
-        <translation type="unfinished"></translation>
+        <translation>为什么会询问这个问题？</translation>
     </message>
     <message>
         <source>This also sets the Wi-Fi regulatory domain for your region.</source>
-        <translation type="unfinished"></translation>
+        <translation>这也会为你的区域设置无线监管域。</translation>
     </message>
 </context>
 <context>
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
-        <translation>建议</translation>
+        <translation>推荐</translation>
     </message>
 </context>
 <context>
     <name>OSSelectionStep</name>
     <message>
         <source>Local - %1</source>
-        <translation>本地 - %1</translation>
+        <translation>本地：%1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation>已缓存到本地磁盘</translation>
+        <translation>已缓存在你的电脑上</translation>
     </message>
     <message>
         <source>Local file</source>
@@ -1838,7 +1916,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Online - %1 download</source>
-        <translation>在线 - %1 下载</translation>
+        <translation>在线：%1 下载</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
@@ -1890,46 +1968,46 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Unable to download OS list. You can still use a local image file.</source>
-        <translation type="unfinished"></translation>
+        <translation>无法下载操作系统列表。你仍可使用本地镜像文件。</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>重试</translation>
     </message>
     <message>
         <source>Retry downloading the OS list</source>
-        <translation type="unfinished"></translation>
+        <translation>重试下载操作系统列表</translation>
     </message>
 </context>
 <context>
     <name>PasswordlessSudoWarningDialog</name>
     <message>
         <source>Passwordless Sudo</source>
-        <translation type="unfinished"></translation>
+        <translation>免密码 sudo</translation>
     </message>
     <message>
         <source>Enabling passwordless sudo allows any process running as this user to gain full root privileges without authentication. This significantly weakens the security of your system.</source>
-        <translation type="unfinished"></translation>
+        <translation>启用免密码 sudo 后，任何以此用户身份运行的进程都无需身份验证即可获得完整的 root 权限。这会显著削弱系统的安全性。</translation>
     </message>
     <message>
         <source>Only enable this if you understand the risks and have a specific need, such as automated scripts or headless operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>仅在你了解相关风险且有明确需要（例如自动化脚本或无界面运行）时才启用。</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Cancel and keep sudo requiring a password</source>
-        <translation type="unfinished"></translation>
+        <translation>取消并保留 sudo 密码验证</translation>
     </message>
     <message>
         <source>ENABLE</source>
-        <translation type="unfinished"></translation>
+        <translation>启用</translation>
     </message>
     <message>
         <source>Enable passwordless sudo for this user account</source>
-        <translation type="unfinished"></translation>
+        <translation>为此用户账户启用免密码 sudo</translation>
     </message>
 </context>
 <context>
@@ -1964,7 +2042,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Save Raspberry Pi Connect settings and continue to next customisation step</source>
-        <translation>保存树莓派 Connect 设置并继续到下一个自定义步骤</translation>
+        <translation>保存树莓派 Connect 设置并进入下一个自定义步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1972,7 +2050,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
     <message>
         <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
@@ -1980,7 +2058,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Waiting for token (%1s)</source>
-        <translation>正在等待令牌（%1秒）</translation>
+        <translation>正在等待令牌（%1 秒）</translation>
     </message>
     <message>
         <source>Paste token here</source>
@@ -2000,7 +2078,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Close this dialog and return to the token field</source>
-        <translation>关闭此对话框并返回到令牌字段</translation>
+        <translation>关闭此对话框并返回令牌输入框</translation>
     </message>
     <message>
         <source>Authentication token:</source>
@@ -2015,7 +2093,7 @@ Technical details: %1</source>
     <name>QObject</name>
     <message>
         <source>Raspberry Pi Imager requires elevated privileges to write to storage devices.</source>
-        <translation>树莓派启动盘制作工具（Raspberry Pi Imager）需要提升的权限才能写入存储设备。</translation>
+        <translation>树莓派启动盘制作工具需要提升权限才能写入存储设备。</translation>
     </message>
     <message>
         <source>Without this, you will encounter permission errors when writing images.</source>
@@ -2047,46 +2125,46 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Invalid Windows physical drive path: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>无效的 Windows 物理驱动器路径：%1</translation>
     </message>
     <message>
         <source>Failed to open disk for cleaning. Error code: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>无法打开磁盘执行清理。错误代码：%1</translation>
     </message>
     <message>
         <source>Failed to clear partition table. Error code: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>无法清除分区表。错误代码：%1</translation>
     </message>
     <message>
         <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
-        <translation type="unfinished"></translation>
+        <translation>无法启动磁盘清理工具。请确保你拥有管理员权限。</translation>
     </message>
     <message>
         <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
-        <translation type="unfinished"></translation>
+        <translation>磁盘清理操作超时。磁盘可能正被其他应用程序占用。</translation>
     </message>
     <message>
         <source>Failed to clean disk. Error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>无法清理磁盘。错误：%1</translation>
     </message>
     <message>
         <source>Unknown error</source>
-        <translation type="unfinished"></translation>
+        <translation>未知错误</translation>
     </message>
     <message>
         <source>Failed to clean disk after %1 attempts. %2</source>
-        <translation type="unfinished"></translation>
+        <translation>尝试 %1 次后仍无法清理磁盘。%2</translation>
     </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
     <message>
         <source>Enable SSH</source>
-        <translation>开启 SSH</translation>
+        <translation>启用 SSH</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation>使用密码登录</translation>
+        <translation>使用密码认证</translation>
     </message>
     <message>
         <source>Use public key authentication</source>
@@ -2110,11 +2188,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
-        <translation>启用安全外壳访问以远程命令行控制你的树莓派</translation>
+        <translation>启用 SSH 访问，即可通过命令行远程控制你的树莓派</translation>
     </message>
     <message>
         <source>Save SSH settings and continue to next customisation step</source>
-        <translation>保存 SSH 设置并继续到下一个自定义步骤</translation>
+        <translation>保存 SSH 设置并进入下一个自定义步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -2122,15 +2200,15 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
     <message>
         <source>Allow SSH login using the username and password you configured in the previous step.</source>
-        <translation>允许使用你在上一步中配置的用户名和密码进行 SSH 登录。</translation>
+        <translation>允许使用你在上一步中配置的用户名和密码通过 SSH 登录。</translation>
     </message>
     <message>
         <source>Allow SSH login using a cryptographic key pair instead of a password. More secure than password authentication.</source>
-        <translation>允许使用加密密钥对而不是密码进行 SSH 登录。比密码认证更安全。</translation>
+        <translation>允许使用加密密钥对代替密码通过 SSH 登录。比密码认证更安全。</translation>
     </message>
     <message>
         <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
@@ -2141,11 +2219,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     <name>RepositoryDialog</name>
     <message>
         <source>Content Repository</source>
-        <translation>内容仓库</translation>
+        <translation>内容存储库</translation>
     </message>
     <message>
         <source>Repository source:</source>
-        <translation>仓库源：</translation>
+        <translation>存储库源：</translation>
     </message>
     <message>
         <source>Use custom file</source>
@@ -2153,11 +2231,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Please select a custom repository json file</source>
-        <translation>请选择自定义仓库 JSON 文件</translation>
+        <translation>请选择自定义存储库 JSON 文件</translation>
     </message>
     <message>
         <source>Select Repository</source>
-        <translation>选择仓库</translation>
+        <translation>选择存储库</translation>
     </message>
     <message>
         <source>Apply &amp; Restart</source>
@@ -2165,7 +2243,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Select custom repository</source>
-        <translation>选择自定义仓库</translation>
+        <translation>选择自定义存储库</translation>
     </message>
     <message>
         <source>Use custom URL</source>
@@ -2173,23 +2251,23 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Select a custom repository JSON file from your computer</source>
-        <translation>从计算机中选择自定义仓库 JSON 文件</translation>
+        <translation>从计算机中选择自定义存储库 JSON 文件</translation>
     </message>
     <message>
         <source>Close the repository dialog without changing the content source</source>
-        <translation>关闭仓库对话框而不更改内容源</translation>
+        <translation>关闭存储库对话框而不更改内容源</translation>
     </message>
     <message>
         <source>Apply the new content repository and restart the wizard from the beginning</source>
-        <translation>应用新的内容仓库并从开始重新启动向导</translation>
+        <translation>应用新的内容存储库并从头重新启动向导</translation>
     </message>
     <message>
         <source>Choose the source for operating system images</source>
-        <translation>选择操作系统镜像的源</translation>
+        <translation>选择操作系统镜像源</translation>
     </message>
     <message>
         <source>Use the official Raspberry Pi operating system repository</source>
-        <translation>使用官方的树莓派操作系统仓库</translation>
+        <translation>使用官方的树莓派操作系统存储库</translation>
     </message>
     <message>
         <source>Load operating system list from a JSON file on your computer</source>
@@ -2204,59 +2282,59 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     <name>RpibootThread</name>
     <message>
         <source>Downloading firmware...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在下载固件……</translation>
     </message>
     <message>
         <source>Failed to obtain rpiboot firmware: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>获取 rpiboot 固件失败：%1</translation>
     </message>
     <message>
         <source>Connecting to device...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在连接设备……</translation>
     </message>
     <message>
         <source>Failed to open USB device</source>
-        <translation type="unfinished"></translation>
+        <translation>打开 USB 设备失败</translation>
     </message>
     <message>
         <source>rpiboot protocol failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>rpiboot 协议失败：%1</translation>
     </message>
     <message>
         <source>USB error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>USB 错误：%1</translation>
     </message>
     <message>
         <source>Waiting for device to restart...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在等待设备重启……</translation>
     </message>
     <message>
         <source>Failed to open USB device after re-enumeration</source>
-        <translation type="unfinished"></translation>
+        <translation>重新枚举后打开 USB 设备失败</translation>
     </message>
     <message>
         <source>Waiting for fastboot device...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在等待 fastboot 设备……</translation>
     </message>
     <message>
         <source>Timed out waiting for fastboot device to appear.</source>
-        <translation type="unfinished"></translation>
+        <translation>等待 fastboot 设备出现时超时。</translation>
     </message>
     <message>
         <source>Waiting for device to disconnect (%1/%2)...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在等待设备断开连接（%1/%2）……</translation>
     </message>
     <message>
         <source>Device disconnected, waiting for reconnect...</source>
-        <translation type="unfinished"></translation>
+        <translation>设备已断开连接，正在等待重新连接……</translation>
     </message>
     <message>
         <source>Waiting for device to reconnect (%1/%2s)...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在等待设备重新连接（%1/%2 秒）……</translation>
     </message>
     <message>
         <source>Timed out waiting for device to re-enumerate after bootcode upload (waited %1s).</source>
-        <translation type="unfinished"></translation>
+        <translation>上传 bootcode 后等待设备重新枚举超时（已等待 %1 秒）。</translation>
     </message>
 </context>
 <context>
@@ -2271,7 +2349,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Save secure boot settings and continue to next customisation step</source>
-        <translation>保存安全启动设置并继续到下一个自定义步骤</translation>
+        <translation>保存安全启动设置并进入下一个自定义步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -2279,7 +2357,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
     <message>
         <source>Enable Secure Boot Signing</source>
@@ -2287,7 +2365,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
-        <translation>使用你的 RSA 密钥对启动分区进行签名，以在树莓派上启用安全启动验证</translation>
+        <translation>使用 RSA 密钥为启动分区签名，以在树莓派上启用安全启动验证</translation>
     </message>
     <message>
         <source>Learn about Secure Boot</source>
@@ -2323,7 +2401,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation>选择用于安全启动模式下签名启动镜像的 RSA 2048 位私钥</translation>
+        <translation>在安全启动模式下，选择用于为启动镜像签名的 RSA 2048 位私钥</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
@@ -2339,11 +2417,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Your boot partition will be signed using the selected RSA private key.</source>
-        <translation>你的启动分区将使用选定的 RSA 私钥进行签名。</translation>
+        <translation>将使用所选 RSA 私钥为启动分区签名。</translation>
     </message>
     <message>
         <source>Please select an RSA private key above to enable secure boot signing.</source>
-        <translation>请在上面选择 RSA 私钥以启用安全启动签名。</translation>
+        <translation>请在上方选择 RSA 私钥以启用安全启动签名。</translation>
     </message>
     <message>
         <source>PEM Files (*.pem)</source>
@@ -2355,23 +2433,23 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>OTP Secure Boot Provisioning</source>
-        <translation type="unfinished"></translation>
+        <translation>OTP 安全启动预配置</translation>
     </message>
     <message>
         <source>Program the secure boot public key hash into the device&apos;s OTP memory. This is a permanent, irreversible operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>将安全启动公钥哈希烧写到设备的 OTP 存储器中。此操作永久且不可逆。</translation>
     </message>
     <message>
         <source>Provision Secure Boot OTP</source>
-        <translation type="unfinished"></translation>
+        <translation>预配置安全启动 OTP</translation>
     </message>
     <message>
         <source>Permanently program the secure boot key into device OTP memory</source>
-        <translation type="unfinished"></translation>
+        <translation>将安全启动密钥永久烧写到设备的 OTP 存储器中</translation>
     </message>
     <message>
         <source>WARNING: After OTP provisioning, this device will ONLY boot images signed with the selected key. This cannot be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>警告：完成 OTP 预配置后，此设备将只能启动使用所选密钥签名的镜像。此操作无法撤销。</translation>
     </message>
 </context>
 <context>
@@ -2434,7 +2512,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Paste key or click BROWSE to select file</source>
-        <translation>粘贴密钥或点击浏览选择文件</translation>
+        <translation>粘贴密钥或点击“浏览”按钮选择文件</translation>
     </message>
     <message>
         <source>SSH public key input</source>
@@ -2442,7 +2520,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Paste an SSH public key here or use the browse button to select a key file</source>
-        <translation>在此处粘贴 SSH 公钥或使用浏览按钮选择密钥文件</translation>
+        <translation>在此处粘贴 SSH 公钥或使用“浏览”按钮选择密钥文件</translation>
     </message>
     <message>
         <source>Add</source>
@@ -2465,7 +2543,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     <name>StorageSelectionStep</name>
     <message>
         <source>No storage devices found</source>
-        <translation>找不到存储设备</translation>
+        <translation>未找到存储设备</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
@@ -2508,7 +2586,8 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
 Try connecting a new device, or uncheck
 &apos;Exclude system drives&apos; below.</source>
         <translation>所有可见设备都是只读的。
-尝试连接新设备，或取消选中下面的“排除系统驱动器”。</translation>
+尝试连接新设备，或取消选中
+下面的“排除系统驱动器”。</translation>
     </message>
     <message>
         <source>All devices are read-only.
@@ -2520,8 +2599,9 @@ Please connect a writable storage device.</source>
         <source>All devices are hidden by the filter.
 Uncheck &apos;Exclude system drives&apos; below
 to show system drives.</source>
-        <translation>所有设备都被过滤器隐藏。
-取消选中下面的“排除系统驱动器”以显示系统驱动器。</translation>
+        <translation>所有设备均被过滤器隐藏。
+取消选中下面的“排除系统驱动器”
+以显示系统驱动器。</translation>
     </message>
     <message>
         <source>When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.</source>
@@ -2545,19 +2625,19 @@ to show system drives.</source>
     </message>
     <message>
         <source>Could not list storage devices: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>无法列出存储设备：%1</translation>
     </message>
     <message>
         <source>Error: Could not list storage devices. %1</source>
-        <translation type="unfinished"></translation>
+        <translation>错误：无法列出存储设备。%1</translation>
     </message>
     <message>
         <source>Ready for USB boot</source>
-        <translation type="unfinished"></translation>
+        <translation>可用于 USB 启动</translation>
     </message>
     <message>
         <source>Could not list storage devices: %1. This may be a permissions issue. Try running the application with administrator privileges.</source>
-        <translation type="unfinished"></translation>
+        <translation>无法列出存储设备：%1。这可能是权限问题。请尝试以管理员身份运行应用程序。</translation>
     </message>
 </context>
 <context>
@@ -2568,11 +2648,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
-        <translation>有可用的更新版本。是否要访问网站下载？</translation>
+        <translation>Imager 有可用的新版本。是否要访问网站下载？</translation>
     </message>
     <message>
         <source>Continue using the current version of Raspberry Pi Imager</source>
-        <translation>继续使用当前版本的树莓派启动盘制作工具（Raspberry Pi Imager）</translation>
+        <translation>继续使用当前版本的树莓派启动盘制作工具</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
@@ -2580,11 +2660,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Imager version %1 is available. Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Imager 有可用的新版本 %1。是否要访问网站下载？</translation>
     </message>
     <message>
         <source>Update</source>
-        <translation type="unfinished"></translation>
+        <translation>更新</translation>
     </message>
 </context>
 <context>
@@ -2615,7 +2695,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
-        <translation>已保存（隐藏）— 留空以保持</translation>
+        <translation>已保存（隐藏），留空则保持不变</translation>
     </message>
     <message>
         <source>Re-enter to change password</source>
@@ -2631,7 +2711,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Save user account settings and continue to next customisation step</source>
-        <translation>保存用户账户设置并继续到下一个自定义步骤</translation>
+        <translation>保存用户账户设置并进入下一个自定义步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -2639,7 +2719,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
     <message>
         <source>Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
@@ -2647,35 +2727,35 @@ to show system drives.</source>
     </message>
     <message>
         <source>Enter a new password for this account, or leave blank to keep the previously saved password.</source>
-        <translation>为此账户输入新密码，或留空以保持先前保存的密码。</translation>
+        <translation>为此账户输入新密码，或留空以保留之前保存的密码。</translation>
     </message>
     <message>
         <source>Enter a password for this account. You will need to re-enter it in the next field to confirm.</source>
-        <translation>为此账户输入密码。你需要在下一个字段中重新输入以确认。</translation>
+        <translation>为此账户输入密码。请在下一个输入框中再次输入以确认。</translation>
     </message>
     <message>
         <source>Re-enter the new password to confirm, or leave blank to keep the previously saved password.</source>
-        <translation>重新输入新密码以确认，或留空以保持先前保存的密码。</translation>
+        <translation>重新输入新密码以确认，或留空以保留之前保存的密码。</translation>
     </message>
     <message>
         <source>Re-enter the password to confirm it matches.</source>
-        <translation>重新输入密码以确认匹配。</translation>
+        <translation>重新输入密码以确认两次输入一致。</translation>
     </message>
     <message>
         <source>Enable passwordless sudo</source>
-        <translation type="unfinished"></translation>
+        <translation>启用免密码 sudo</translation>
     </message>
     <message>
         <source>Allow this user to run sudo commands without entering a password.</source>
-        <translation type="unfinished"></translation>
+        <translation>允许此用户无需输入密码即可运行 sudo 命令。</translation>
     </message>
     <message>
         <source>Allows any process running as this user to gain full root privileges without a password. Only enable this if you have a specific need, such as automated scripts or headless operation.</source>
-        <translation type="unfinished"></translation>
+        <translation>以此用户身份运行的任何进程都无需密码即可获得完整的 root 权限。仅在你有明确需要（例如自动化脚本或无界面运行）时才启用。</translation>
     </message>
     <message>
         <source>Passwordless sudo information: </source>
-        <translation type="unfinished"></translation>
+        <translation>免密码 sudo 信息： </translation>
     </message>
 </context>
 <context>
@@ -2706,7 +2786,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
-        <translation>已保存（隐藏）— 留空以保持</translation>
+        <translation>已保存（隐藏），留空则保持不变</translation>
     </message>
     <message>
         <source>Secure network</source>
@@ -2714,7 +2794,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption</source>
-        <translation>为使用 WPA2/WPA3 加密的密码保护网络配置 Wi-Fi</translation>
+        <translation>为受密码保护且采用 WPA2/WPA3 加密的网络配置 Wi-Fi</translation>
     </message>
     <message>
         <source>Open network</source>
@@ -2750,7 +2830,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Save Wi-Fi settings and continue to next customisation step</source>
-        <translation>保存 Wi-Fi 设置并继续到下一个自定义步骤</translation>
+        <translation>保存 Wi-Fi 设置并进入下一个自定义步骤</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -2758,7 +2838,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation>跳过所有自定义设置，直接进行镜像写入</translation>
+        <translation>跳过所有自定义设置，直接写入镜像</translation>
     </message>
     <message>
         <source>Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.</source>
@@ -2766,15 +2846,15 @@ to show system drives.</source>
     </message>
     <message>
         <source>Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.</source>
-        <translation>输入新的 Wi-Fi 密码，或留空以保持先前保存的密码。必须为 8-63 个字符或 64 个字符的十六进制密钥。</translation>
+        <translation>输入新的 Wi-Fi 密码，或留空以保留先前保存的密码。必须为 8-63 个字符或 64 个字符的十六进制密钥。</translation>
     </message>
     <message>
         <source>Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.</source>
-        <translation>输入你的 Wi-Fi 网络密码。必须为 8-63 个字符或 64 个字符的十六进制密钥。你需要在下一个字段中重新输入以确认。</translation>
+        <translation>输入你的 Wi-Fi 网络密码。必须为 8-63 个字符或 64 个字符的十六进制密钥。请在下个字段中再次输入以确认。</translation>
     </message>
     <message>
         <source>Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.</source>
-        <translation>重新输入新的 Wi-Fi 密码以确认，或留空以保持先前保存的密码。</translation>
+        <translation>重新输入新的 Wi-Fi 密码以确认，或留空以保留先前保存的密码。</translation>
     </message>
     <message>
         <source>Re-enter the Wi-Fi password to confirm it matches.</source>
@@ -2782,7 +2862,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.</source>
-        <translation>如果你的 Wi-Fi 网络不广播其名称，需要手动输入 SSID 才能连接，请勾选此项。</translation>
+        <translation>如果你的 Wi-Fi 网络未广播其名称，需要手动输入 SSID 才能连接，请勾选此项。</translation>
     </message>
     <message>
         <source>Passwords don&apos;t match</source>
@@ -2805,7 +2885,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Storage</source>
-        <translation>储存设备</translation>
+        <translation>存储设备</translation>
     </message>
     <message>
         <source>Writing</source>
@@ -2867,7 +2947,7 @@ to show system drives.</source>
         <source>A new Raspberry Pi Connect token was received that differs from your current one.
 
 </source>
-        <translation>收到了一个新的树莓派 Connect 令牌，与你当前的令牌不同。
+        <translation>收到了新的树莓派 Connect 令牌，与你当前的令牌不同。
 
 </translation>
     </message>
@@ -2885,7 +2965,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Please wait…</source>
-        <translation>请稍候…</translation>
+        <translation>请稍候……</translation>
     </message>
     <message>
         <source>Replace the current token with the newly received one</source>
@@ -2893,11 +2973,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Keep existing</source>
-        <translation>维持现状</translation>
+        <translation>保留现有</translation>
     </message>
     <message>
         <source>Keep your current Raspberry Pi Connect token</source>
-        <translation>保持你当前的树莓派 Connect 令牌</translation>
+        <translation>保留你当前的树莓派 Connect 令牌</translation>
     </message>
     <message>
         <source>Secure Boot</source>
@@ -2909,57 +2989,59 @@ to show system drives.</source>
     </message>
     <message>
         <source>Sidebar resize handle</source>
-        <translation type="unfinished"></translation>
+        <translation>侧边栏大小调整手柄</translation>
     </message>
     <message>
         <source>Open local repository file?</source>
-        <translation type="unfinished"></translation>
+        <translation>打开本地存储库文件？</translation>
     </message>
     <message>
         <source>Switch to a custom repository?</source>
-        <translation type="unfinished"></translation>
+        <translation>切换到自定义存储库？</translation>
     </message>
     <message>
         <source>You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.</source>
-        <translation type="unfinished"></translation>
+        <translation>你正在打开树莓派启动盘制作工具的本地清单文件。此操作将用该文件的内容替换当前的操作系统列表。</translation>
     </message>
     <message>
         <source>A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.
 
 </source>
-        <translation type="unfinished"></translation>
+        <translation>某网站请求将树莓派启动盘制作工具切换为使用自定义操作系统存储库。
+
+</translation>
     </message>
     <message>
         <source>Only accept if you trust this source and intentionally clicked a link to open this repository.</source>
-        <translation type="unfinished"></translation>
+        <translation>仅当你信任该来源并有意点击链接打开此存储库时才接受。</translation>
     </message>
     <message>
         <source>Repository URL: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>存储库 URL：%1</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished">打开</translation>
+        <translation>打开</translation>
     </message>
     <message>
         <source>Switch repository</source>
-        <translation type="unfinished"></translation>
+        <translation>切换存储库</translation>
     </message>
     <message>
         <source>Open the local manifest file and use it as the OS repository</source>
-        <translation type="unfinished"></translation>
+        <translation>打开本地清单文件并将其用作操作系统存储库</translation>
     </message>
     <message>
         <source>Switch to the custom repository from the link</source>
-        <translation type="unfinished"></translation>
+        <translation>切换到链接中的自定义存储库</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Keep your current repository settings</source>
-        <translation type="unfinished"></translation>
+        <translation>保留当前的存储库设置</translation>
     </message>
 </context>
 <context>
@@ -2977,17 +3059,19 @@ to show system drives.</source>
     <name>WriteProgressWatchdog</name>
     <message>
         <source>Switched to compatibility mode - write continuing...</source>
-        <translation type="unfinished"></translation>
+        <translation>已切换至兼容模式，正在继续写入……</translation>
     </message>
     <message>
         <source>Write stalled - no progress for %1 seconds.
 
 Please check your storage device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>写入停滞，%1 秒内没有任何进展。
+
+请检查你的存储设备并重试。</translation>
     </message>
     <message>
         <source>Storage device not responding. Restarting in compatibility mode...</source>
-        <translation type="unfinished"></translation>
+        <translation>存储设备无响应。正在以兼容模式重新开始写入……</translation>
     </message>
 </context>
 <context>
@@ -3006,7 +3090,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Starting write process...</source>
-        <translation>正在开始写入过程...</translation>
+        <translation>正在启动写入过程……</translation>
     </message>
     <message>
         <source>You are about to ERASE all data on: %1</source>
@@ -3026,7 +3110,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Please wait...</source>
-        <translation>请稍候...</translation>
+        <translation>请稍候……</translation>
     </message>
     <message>
         <source>Writing... %1%</source>
@@ -3050,7 +3134,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Finalising...</source>
-        <translation>正在完成...</translation>
+        <translation>正在完成……</translation>
     </message>
     <message>
         <source>Write image</source>
@@ -3070,7 +3154,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Skip verification</source>
-        <translation>跳过验证</translation>
+        <translation>跳过校验</translation>
     </message>
     <message>
         <source>Cancel write</source>
@@ -3078,7 +3162,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Skip verification and finish the write process</source>
-        <translation>跳过验证并完成写入过程</translation>
+        <translation>跳过校验并完成写入过程</translation>
     </message>
     <message>
         <source>Cancel the write operation and return to the summary</source>
@@ -3086,15 +3170,15 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Continue to the completion screen</source>
-        <translation>继续到完成页面</translation>
+        <translation>继续前往完成页面</translation>
     </message>
     <message>
         <source>Begin writing the image to the storage device. All existing data will be erased.</source>
-        <translation>准备将镜像写入存储设备。所有现有数据将被擦除。</translation>
+        <translation>开始将镜像写入存储设备。所有现有数据将被擦除。</translation>
     </message>
     <message>
         <source>Return to previous customization step</source>
-        <translation>返回上一步自定义步骤</translation>
+        <translation>返回上一个自定义步骤</translation>
     </message>
     <message>
         <source>Write progress</source>
@@ -3102,7 +3186,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Finalising…</source>
-        <translation>正在完成…</translation>
+        <translation>正在完成……</translation>
     </message>
     <message>
         <source>Write complete</source>
@@ -3118,22 +3202,22 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Writing in progress — do not disconnect the storage device</source>
-        <translation>正在写入中 — 请勿断开存储设备</translation>
+        <translation>正在写入，请勿断开存储设备</translation>
     </message>
     <message>
         <source>Please wait... %1</source>
-        <translation>请等待... %1</translation>
+        <translation>请稍候…… %1</translation>
     </message>
     <message>
         <source>Writing... %1 MB written</source>
-        <translation type="unfinished"></translation>
+        <translation>正在写入…… 已写入 %1 MB</translation>
     </message>
 </context>
 <context>
     <name>main</name>
     <message>
         <source>Are you sure you want to quit?</source>
-        <translation>您确定要退出吗？</translation>
+        <translation>你确定要退出吗？</translation>
     </message>
     <message>
         <source>Error</source>
@@ -3157,7 +3241,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
-        <translation>树莓派启动盘制作工具（Raspberry Pi Imager）仍在忙碌中。你确定要退出吗？</translation>
+        <translation>树莓派启动盘制作工具仍在忙碌中。你确定要退出吗？</translation>
     </message>
     <message>
         <source>Storage device removed</source>
@@ -3177,19 +3261,19 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Close the storage removed notification and return to storage selection</source>
-        <translation>关闭存储设备移除通知并返回到存储设备选择</translation>
+        <translation>关闭存储设备移除通知并返回存储设备选择</translation>
     </message>
     <message>
         <source>Return to Raspberry Pi Imager and continue the current operation</source>
-        <translation>返回树莓派启动盘制作工具（Raspberry Pi Imager）并继续当前操作</translation>
+        <translation>返回树莓派启动盘制作工具并继续当前操作</translation>
     </message>
     <message>
         <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
-        <translation>强制退出树莓派启动盘制作工具（Raspberry Pi Imager）并取消当前写入操作</translation>
+        <translation>强制退出树莓派启动盘制作工具并取消当前写入操作</translation>
     </message>
     <message>
         <source>Raspberry Pi Imager %1</source>
-        <translation>树莓派启动盘制作工具（Raspberry Pi Imager） %1</translation>
+        <translation>树莓派启动盘制作工具 %1</translation>
     </message>
     <message>
         <source>Insufficient Permissions</source>
@@ -3205,7 +3289,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
-        <translation>退出树莓派启动盘制作工具（Raspberry Pi Imager） - 你必须以更高的权限重新启动才能写入镜像</translation>
+        <translation>退出树莓派启动盘制作工具，你必须以提升的权限重新启动才能写入镜像</translation>
     </message>
     <message>
         <source>Install Authorization</source>
@@ -3213,7 +3297,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
-        <translation>安装系统授权以允许提升树莓派启动盘制作工具（Raspberry Pi Imager）的运行权限</translation>
+        <translation>安装系统授权，允许树莓派启动盘制作工具以提升的权限运行</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
@@ -3229,11 +3313,11 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Offline</source>
-        <translation type="unfinished"></translation>
+        <translation>离线</translation>
     </message>
     <message>
         <source>Using data from %1</source>
-        <translation type="unfinished"></translation>
+        <translation>正在使用来自 %1 的数据</translation>
     </message>
 </context>
 </TS>
