@@ -573,7 +573,7 @@ bool DownloadThread::_openAndPrepareDevice()
     if (mbrWriteResult != rpi_imager::FileError::kSuccess || mbrFlushResult != rpi_imager::FileError::kSuccess)
     {
         rpi_imager::FileError errorToReport = (mbrWriteResult != rpi_imager::FileError::kSuccess) ? mbrWriteResult : mbrFlushResult;
-        emit error(_fileErrorToString(errorToReport, tr("preparing storage device")));
+        emit error(_writeFailureToString(errorToReport, tr("preparing storage device")));
         return false;
     }
     qint64 firstMBMs = _timer.elapsed();
@@ -1722,36 +1722,54 @@ void DownloadThread::_onWriteError()
     if (_cancelled)
         return;
 
-    switch (_file->ClassifyLastWriteError())
+    const QString classified = _classifiedWriteError();
+    if (!classified.isEmpty())
     {
-        case rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess:
-            _onDownloadError(tr("Access denied error while writing file to disk.") + "<br>" +
-                             tr("Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again."));
-            return;
-        case rpi_imager::WriteErrorClass::kAccessDenied:
-            _onDownloadError(tr("Access denied error while writing file to disk.") + "<br>" +
-                             tr("The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again."));
-            return;
-        case rpi_imager::WriteErrorClass::kDiskFull:
-            _onDownloadError(tr("Disk is full. Please use a larger storage device."));
-            return;
-        case rpi_imager::WriteErrorClass::kWriteProtected:
-            _onDownloadError(tr("The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only."));
-            return;
-        case rpi_imager::WriteErrorClass::kMediaError:
-            _onDownloadError(tr("Media error detected. The storage device may be damaged or counterfeit. Please try a different device."));
-            return;
-        case rpi_imager::WriteErrorClass::kInvalidParameter:
-            _onDownloadError(tr("Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device."));
-            return;
-        case rpi_imager::WriteErrorClass::kIoDeviceError:
-            _onDownloadError(tr("I/O device error. The storage device may have been disconnected or is malfunctioning."));
-            return;
-        case rpi_imager::WriteErrorClass::kUnknown:
-            break;
+        _onDownloadError(classified);
+        return;
     }
 
     _onDownloadError(tr("Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected."));
+}
+
+// Write failures before the image stream starts went through
+// _fileErrorToString() alone, so Windows lost the Controlled Folder Access
+// hint once the MBR zeroing there began failing first.
+QString DownloadThread::_writeFailureToString(rpi_imager::FileError error, const QString &operation)
+{
+    if (error == rpi_imager::FileError::kWriteError)
+    {
+        const QString classified = _classifiedWriteError();
+        if (!classified.isEmpty())
+            return classified;
+    }
+    return _fileErrorToString(error, operation);
+}
+
+QString DownloadThread::_classifiedWriteError()
+{
+    switch (_file->ClassifyLastWriteError())
+    {
+        case rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess:
+            return tr("Access denied error while writing file to disk.") + "<br>" +
+                   tr("Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.");
+        case rpi_imager::WriteErrorClass::kAccessDenied:
+            return tr("Access denied error while writing file to disk.") + "<br>" +
+                   tr("The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.");
+        case rpi_imager::WriteErrorClass::kDiskFull:
+            return tr("Disk is full. Please use a larger storage device.");
+        case rpi_imager::WriteErrorClass::kWriteProtected:
+            return tr("The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only.");
+        case rpi_imager::WriteErrorClass::kMediaError:
+            return tr("Media error detected. The storage device may be damaged or counterfeit. Please try a different device.");
+        case rpi_imager::WriteErrorClass::kInvalidParameter:
+            return tr("Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device.");
+        case rpi_imager::WriteErrorClass::kIoDeviceError:
+            return tr("I/O device error. The storage device may have been disconnected or is malfunctioning.");
+        case rpi_imager::WriteErrorClass::kUnknown:
+            break;
+    }
+    return QString();
 }
 
 void DownloadThread::_closeFiles()
@@ -2035,7 +2053,7 @@ void DownloadThread::_writeComplete()
             _firstBlock = nullptr;
             
             rpi_imager::FileError errorToReport = (writeResult != rpi_imager::FileError::kSuccess) ? writeResult : flushResult;
-            DownloadThread::_onDownloadError(_fileErrorToString(errorToReport, tr("writing partition table")));
+            DownloadThread::_onDownloadError(_writeFailureToString(errorToReport, tr("writing partition table")));
             return;
         }
         _bytesWritten += _firstBlockSize;

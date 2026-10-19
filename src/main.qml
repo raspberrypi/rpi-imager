@@ -180,14 +180,16 @@ ApplicationWindow {
 
         FocusableText {
             id: errorMessage
-            text: errorDialog.message
+            // StyledText folds "\n" into a space, running the bullet lists
+            // in the C++ messages together.
+            text: errorDialog.message.replace(/\n/g, "<br>")
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
             font.pointSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
-            Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
+            Accessible.name: text.replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         }
 
         RowLayout {
