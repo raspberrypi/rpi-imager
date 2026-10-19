@@ -270,6 +270,8 @@ protected:
     virtual void _onDownloadError(const QString &msg);
     virtual void _onWriteError();
     QString _fileErrorToString(rpi_imager::FileError error, const QString &operation = QString());
+    QString _writeFailureToString(rpi_imager::FileError error, const QString &operation);
+    QString _classifiedWriteError();
 
     void _hashData(const char *buf, size_t len);
     void _writeComplete();
