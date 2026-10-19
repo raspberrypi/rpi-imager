@@ -189,7 +189,7 @@ sent, which is what lets the bulk transfer tests check a real round trip.
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
   - During installation, choose the Qt version named by `QT_VERSION_DEFAULT` in [qt/qt-build-common.sh](./qt/qt-build-common.sh), with the Mingw64 64-bit toolchain. Any newer Qt 6 that satisfies the `find_package(Qt6 ...)` minimum in `src/CMakeLists.txt` will also configure.
-- For building the installer, install Inno Setup scriptable install system: https://jrsoftware.org/isdl.php
+- For building the installer, install Inno Setup 6.5 or later 6.x (Inno Setup 7 is not yet supported): https://jrsoftware.org/isdl.php
 - Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
 - It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
 

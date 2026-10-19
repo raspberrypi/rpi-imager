@@ -37,7 +37,7 @@ This will build and install the version of Qt preferred for Raspberry Pi Imager 
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
   - During installation, choose Qt 6.11 with Mingw64 64-bit toolchain.
-- For building the installer, install Inno Setup scriptable install system: https://jrsoftware.org/isdl.php
+- For building the installer, install Inno Setup 6.5 or later 6.x (Inno Setup 7 is not yet supported): https://jrsoftware.org/isdl.php
 - Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
 - It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
 

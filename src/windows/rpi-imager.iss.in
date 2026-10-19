@@ -52,11 +52,16 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+; Unofficial in Inno Setup 6, so vendored from issrc's is6 branch. Inno Setup 7.0.2+ ships it.
+Name: "chinesesimplified"; MessagesFile: "@CMAKE_SOURCE_DIR@\windows\ChineseSimplified.isl"
 
 [Messages]
 italian.SetupWindowTitle=Installazione di {#MyAppName} {#MyAppVersion}
 
 [CustomMessages]
+ProgramName={#MyAppName}
+; Matches the app's own zh translation
+chinesesimplified.ProgramName=树莓派启动盘制作工具
 italian.NameAndVersion=%1 %2
 italian.AdditionalIcons=Collegamenti:
 italian.CreateDesktopIcon=Crea collegamento programma sul &desktop
@@ -130,8 +135,8 @@ Source: "@CMAKE_BINARY_DIR@\deploy\tls\*"; DestDir: "{app}\tls"; Flags: ignoreve
 Source: "@CMAKE_BINARY_DIR@\deploy\qml\*"; DestDir: "{app}\qml"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AfterInstall: SetElevationBit('{group}\{#MyAppName}.lnk')
-Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AfterInstall: SetElevationBit('{commondesktop}\{#MyAppName}.lnk')
+Name: "{group}\{cm:ProgramName}"; Filename: "{app}\{#MyAppExeName}"; AfterInstall: SetElevationBit('{group}\{cm:ProgramName}.lnk')
+Name: "{commondesktop}\{cm:ProgramName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AfterInstall: SetElevationBit('{commondesktop}\{cm:ProgramName}.lnk')
 
 [Run]
 ; Stage and install WinUSB driver for Raspberry Pi USB boot mode devices.
@@ -149,6 +154,12 @@ Type: dirifempty;      Name: "{commonpf32}\Raspberry Pi Imager";   Check: IsWin6
 ; 32-bit Windows – old NSIS path lives in Program Files
 Type: filesandordirs; Name: "{commonpf}\Raspberry Pi Imager\qml";  Check: not IsWin64
 Type: dirifempty;      Name: "{commonpf}\Raspberry Pi Imager";     Check: not IsWin64
+
+; Shortcuts named in the other language, left by a previous install in that language
+Type: files; Name: "{group}\{#MyAppName}.lnk";             Languages: chinesesimplified
+Type: files; Name: "{commondesktop}\{#MyAppName}.lnk";     Languages: chinesesimplified; Tasks: desktopicon
+Type: files; Name: "{group}\树莓派启动盘制作工具.lnk";         Check: not IsChineseSimplified
+Type: files; Name: "{commondesktop}\树莓派启动盘制作工具.lnk"; Check: not IsChineseSimplified; Tasks: desktopicon
 
 [Code]
 
@@ -173,6 +184,11 @@ begin
   finally
     Stream.Free;
   end;
+end;
+
+function IsChineseSimplified: Boolean;
+begin
+  Result := ActiveLanguage = 'chinesesimplified';
 end;
 
 // Helper function to find a process by name
