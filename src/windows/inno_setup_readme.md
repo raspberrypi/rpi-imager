@@ -4,7 +4,7 @@ This directory contains the necessary files to build a Windows installer using I
 
 ## Requirements
 
-- Inno Setup 6 or later (https://jrsoftware.org/isinfo.php)
+- Inno Setup 6.5 or later 6.x; Inno Setup 7 is not yet supported (https://jrsoftware.org/isinfo.php)
 - Visual Studio (2019 or later) with C++ workload
 - CMake 3.16 or later
 
@@ -46,7 +46,7 @@ Inno Setup offers several advantages over NSIS:
 3. Modern installer look and feel
 4. Better Unicode support
 5. Cleaner uninstallation
-6. Free for both commercial and non-commercial use
+6. Free to use, though commercial users are asked to buy a licence (https://jrsoftware.org/isorder.php)
 
 ## Customizing
 
@@ -54,6 +54,14 @@ To modify the installer:
 
 - Edit `rpi-imager.iss.in` to change settings, add files, or modify behavior
 - The script uses CMake variables like `@CMAKE_BINARY_DIR@` which are replaced during configuration
+
+## Installer Languages
+
+Most installer languages use the translations bundled with Inno Setup (`compiler:Languages\*.isl`).
+
+Simplified Chinese is the exception. Inno Setup 6 does not install its Chinese translation, so `ChineseSimplified.isl` is kept in this directory, copied unchanged from the `is6` branch of https://github.com/jrsoftware/issrc (`Files/Languages/Unofficial/`). Refresh it from there when moving to a newer Inno Setup 6 release. Inno Setup 7.0.2 and later include it, so the copy can be removed once the build moves to Inno Setup 7.
+
+Shortcut names come from the `ProgramName` custom message in `rpi-imager.iss.in`, so they follow the installer language. A localised name should match the app's own translation in `src/i18n/`. If you add one, also add matching `[InstallDelete]` entries, so that reinstalling in a different language removes the shortcut with the old name.
 
 ## Testing
 
