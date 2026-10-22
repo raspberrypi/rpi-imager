@@ -1532,22 +1532,15 @@ ImageWriter::WritePath ImageWriter::choosePath() const
 // definition means the next check added lands on both paths.
 QString ImageWriter::_localSourceError(const QString &localPath) const
 {
-    // isReadable() consults the real ACL only while this is in scope. Without
-    // it Qt answers from the read-only attribute alone on Windows, so a file
-    // the user has genuinely been denied read access to was reported readable
-    // and the write went ahead, failing somewhere less explicable than here.
-    //
-    // Scoped rather than global: the lookup costs a security-descriptor query
-    // per call, and this is the one place that needs the true answer.
-    const PlatformQuirks::NativePermissionScope nativePermissions;
-
     const QFileInfo fi(localPath);
 
     if (!fi.exists())
         return tr("Source file not found: %1").arg(localPath);
+    // Ahead of canReadFile(), whose Windows probe opens the file: anything
+    // but a regular file is refused before that open.
     if (!fi.isFile())
         return tr("Source is not a regular file: %1").arg(localPath);
-    if (!fi.isReadable())
+    if (!PlatformQuirks::canReadFile(localPath))
         return tr("Source file is not readable: %1").arg(localPath);
     if (fi.size() == 0)
     {

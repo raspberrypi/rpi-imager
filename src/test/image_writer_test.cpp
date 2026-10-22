@@ -27,6 +27,7 @@
 // probe is built only where `unshare -r` exists to run it.
 #include <unistd.h>
 #include <pwd.h>
+#include <sys/stat.h>
 #endif
 
 #include "imagewriter.h"
@@ -422,6 +423,30 @@ TEST_CASE("An image that cannot be read is refused", "[imagewriter]")
     CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("not readable"));
     CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring(path.toStdString()));
 }
+
+#ifndef _WIN32
+TEST_CASE("A FIFO picked as a source is refused without waiting for a writer",
+          "[imagewriter]")
+{
+    // Anything that opened it before the refusal would hang here until the
+    // test timeout.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("pipe.img"));
+    REQUIRE(::mkfifo(QFile::encodeName(path).constData(), 0600) == 0);
+
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+
+    writer.setSrc(QUrl::fromLocalFile(path), 0, 1024 * 1024);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    INFO("reported: " << log.errors[0].toStdString());
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("not a regular file"));
+}
+#endif
 
 TEST_CASE("An empty image file is refused rather than written as a blank card",
           "[imagewriter]")
