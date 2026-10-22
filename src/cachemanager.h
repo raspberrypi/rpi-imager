@@ -88,7 +88,7 @@ signals:
     void cacheFileUpdated(const QByteArray& uncompressedHash);
 
 private slots:
-    void onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash);
+    void onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash, quint64 generation);
     void onDiskSpaceCheckComplete(qint64 availableBytes, const QString& directory);
 
 private:
@@ -99,6 +99,14 @@ private:
     QSettings settings_;
     bool cachingEnabled_;
 
+    // Guarded by mutex_. Only the newest verification's result is accepted;
+    // an older one may describe a different file.
+    quint64 verificationGeneration_ = 0;
+    bool verificationQueued_ = false;
+    QString queuedFile_;
+    QByteArray queuedHash_;
+
+    void supersedeVerification();
     void updateCacheStatus(const std::function<void(CacheStatus&)>& updater);
     void loadCacheSettings();
     QString getDefaultCacheFilePath() const;
@@ -116,11 +124,11 @@ public:
     explicit CacheVerificationWorker(QObject *parent = nullptr);
 
 public slots:
-    void verifyCacheFile(const QString& fileName, const QByteArray& expectedHash);
+    void verifyCacheFile(const QString& fileName, const QByteArray& expectedHash, quint64 generation);
     void checkDiskSpace();
 
 signals:
-    void verificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash);
+    void verificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash, quint64 generation);
     void diskSpaceCheckComplete(qint64 availableBytes, const QString& directory);
     void verificationProgress(qint64 bytesProcessed, qint64 totalBytes);
 

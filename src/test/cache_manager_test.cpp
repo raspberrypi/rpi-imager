@@ -349,6 +349,58 @@ TEST_CASE("CacheManager verification of a missing file fails rather than hangs",
     CHECK_FALSE(completed.at(0).at(0).toBool());
 }
 
+TEST_CASE("A superseded verification does not answer for the file that replaced it",
+          "[cache-manager]")
+{
+    clearCacheDir();
+    CacheManager manager;
+
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    const QByteArray good = payloadOfSize(256 * 1024, 21);
+    const QString goodPath = QDir(dir).filePath(QStringLiteral("good.img"));
+    REQUIRE(writeFile(goodPath, good));
+    const QString corruptPath = QDir(dir).filePath(QStringLiteral("corrupt.img"));
+    REQUIRE(writeFile(corruptPath, payloadOfSize(256 * 1024, 22)));
+    const QByteArray wanted = hashOf("the image the corrupt file should have held");
+
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
+    manager.setCustomCacheFile(goodPath, hashOf(good));
+    manager.startVerification(hashOf(good));
+    manager.setCustomCacheFile(corruptPath, wanted);
+    manager.startVerification(wanted);
+
+    // The good file's result arrives first. Accepting it wrote the corrupt
+    // file to the card.
+    REQUIRE(waitFor([&]() { return completed.count() > 0; }, 30000));
+    CHECK_FALSE(completed.at(0).at(0).toBool());
+    CHECK(manager.getCacheStatus().cacheFileName == corruptPath);
+    CHECK_FALSE(manager.isCached(wanted));
+    CHECK_FALSE(waitFor([&]() { return completed.count() > 1; }, 1000));
+}
+
+TEST_CASE("Asking again while the same file is being verified hashes it once",
+          "[cache-manager]")
+{
+    clearCacheDir();
+    CacheManager manager;
+
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    const QByteArray contents = payloadOfSize(256 * 1024, 23);
+    const QByteArray hash = hashOf(contents);
+    const QString custom = QDir(dir).filePath(QStringLiteral("good.img"));
+    REQUIRE(writeFile(custom, contents));
+    manager.setCustomCacheFile(custom, hash);
+
+    rpi_test::SignalLog completed(&manager, &CacheManager::cacheVerificationComplete);
+    manager.startVerification(hash);
+    manager.startVerification(hash);
+
+    REQUIRE(waitFor([&]() { return completed.count() > 0; }, 30000));
+    CHECK(completed.at(0).at(0).toBool());
+    CHECK(manager.isCached(hash));
+    CHECK_FALSE(waitFor([&]() { return completed.count() > 1; }, 1000));
+}
+
 TEST_CASE("CacheManager reports progress while verifying", "[cache-manager]")
 {
     clearCacheDir();
@@ -849,6 +901,47 @@ TEST_CASE("A custom cache file is not written into settings", "[cache-manager][p
     // permanent cache; the temporary directory it lived in is gone by now.
     CacheManager second;
     CHECK(second.getCacheStatus().cacheFileName != custom);
+}
+
+TEST_CASE("A leftover cache's startup check does not answer for a custom cache file",
+          "[cache-manager][persist]")
+{
+    clearCacheDir();
+    clearCacheSettings();
+    if (!cachingIsPossible(4096))
+        SKIP("this disk is below the threshold CacheManager caches above, so there is "
+             "no cache to persist");
+
+    const QByteArray payload = payloadOfSize(4096, 13);
+    {
+        CacheManager first;
+        first.startBackgroundOperations();
+        REQUIRE(waitFor([&]() { return first.isReady(); }));
+        QString cacheFile;
+        first.setupCacheForDownload(hashOf(payload), payload.size(), cacheFile);
+        if (cacheFile.isEmpty())
+            cacheFile = first.getCacheStatus().cacheFileName;
+        REQUIRE(writeFile(cacheFile, payload));
+        first.updateCacheFile(hashOf(payload), hashOf(payload));
+    }
+
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString custom = QDir(dir.path()).filePath(QStringLiteral("corrupt.img"));
+    REQUIRE(writeFile(custom, payloadOfSize(4096, 14)));
+    const QByteArray wanted = hashOf("the image the custom file should have held");
+
+    // The ordering that failed image_writer_test depending on its seed.
+    CacheManager second;
+    rpi_test::SignalLog completed(&second, &CacheManager::cacheVerificationComplete);
+    second.startBackgroundOperations();
+    second.setCustomCacheFile(custom, wanted);
+    second.startVerification(wanted);
+
+    REQUIRE(waitFor([&]() { return completed.count() > 0; }, 30000));
+    CHECK_FALSE(completed.at(0).at(0).toBool());
+    CHECK(second.getCacheStatus().cacheFileName == custom);
+    clearCacheSettings();
 }
 
 // ---------------------------------------------------------------------------

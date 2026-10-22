@@ -163,6 +163,7 @@ void CacheManager::setCustomCacheFile(const QString& cacheFile, const QByteArray
         status.cachedHash = QFile::exists(cacheFile) ? sha256 : QByteArray();
         status.customCacheFile = true;
         status.verificationComplete = false;
+        supersedeVerification();
     });
     
     // Enable caching when custom cache file is set
@@ -188,6 +189,7 @@ void CacheManager::invalidateCache()
         if (!customCache) {
             status.cacheFileName.clear();
         }
+        supersedeVerification();
     });
     
     // Clear settings (but not for custom cache files)
@@ -225,6 +227,7 @@ void CacheManager::updateCacheFile(const QByteArray& uncompressedHash, const QBy
         status.verificationComplete = true;
         customCache = status.customCacheFile;
         cacheFileName = status.cacheFileName;
+        supersedeVerification();
     });
     
     // Save settings (but not for custom cache files)
@@ -244,6 +247,8 @@ void CacheManager::startVerification(const QByteArray& expectedHash)
 {
     QString cacheFileName;
     QByteArray hashToVerify;
+    bool alreadyQueued = false;
+    quint64 generation = 0;
     
     updateCacheStatus([&](CacheStatus& status) {
         if (status.customCacheFile) {
@@ -262,11 +267,34 @@ void CacheManager::startVerification(const QByteArray& expectedHash)
         status.cachedHash = expectedHash; // Store the expected uncompressed hash for UI matching
         status.isValid = false;
         status.verificationComplete = false;
+
+        // startWrite() asks again while the startup check of the same file
+        // is still hashing it; a second pass would double the wait.
+        alreadyQueued = verificationQueued_ && queuedFile_ == cacheFileName &&
+                        queuedHash_ == hashToVerify;
+        if (!alreadyQueued) {
+            generation = ++verificationGeneration_;
+            verificationQueued_ = true;
+            queuedFile_ = cacheFileName;
+            queuedHash_ = hashToVerify;
+        }
     });
+
+    if (alreadyQueued) {
+        qDebug() << "Cache verification already queued for" << cacheFileName;
+        return;
+    }
     
     // Start verification on background thread
     QMetaObject::invokeMethod(worker_, "verifyCacheFile", Qt::QueuedConnection,
-                              Q_ARG(QString, cacheFileName), Q_ARG(QByteArray, hashToVerify));
+                              Q_ARG(QString, cacheFileName), Q_ARG(QByteArray, hashToVerify),
+                              Q_ARG(quint64, generation));
+}
+
+void CacheManager::supersedeVerification()
+{
+    ++verificationGeneration_;
+    verificationQueued_ = false;
 }
 
 bool CacheManager::setupCacheForDownload(const QByteArray& expectedHash, qint64 downloadSize, QString& cacheFilePath)
@@ -304,12 +332,18 @@ bool CacheManager::setupCacheForDownload(const QByteArray& expectedHash, qint64 
     return true;
 }
 
-void CacheManager::onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash)
+void CacheManager::onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash, quint64 generation)
 {
     Q_UNUSED(expectedHash);  // Already stored in status.cacheFileHash
     QByteArray uncompressedHashForUI;
+    bool superseded = false;
     
     updateCacheStatus([&](CacheStatus& status) {
+        if (generation != verificationGeneration_) {
+            superseded = true;
+            return;
+        }
+        verificationQueued_ = false;
         status.isValid = isValid;
         status.verificationComplete = true;
         status.cacheFileName = fileName;
@@ -318,6 +352,11 @@ void CacheManager::onVerificationComplete(bool isValid, const QString& fileName,
         status.computedHash = computedHash;
         uncompressedHashForUI = status.cachedHash; // Get the uncompressed hash for UI update
     });
+
+    if (superseded) {
+        qDebug() << "Ignoring superseded cache verification of" << fileName;
+        return;
+    }
     
     qDebug() << "Cache verification:" << (isValid ? "valid" : "invalid") << fileName
              << "expected:" << expectedHash << "computed:" << computedHash;
@@ -427,7 +466,7 @@ CacheVerificationWorker::CacheVerificationWorker(QObject *parent)
 {
 }
 
-void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QByteArray& expectedHash)
+void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QByteArray& expectedHash, quint64 generation)
 {
     bool isValid = false;
     QByteArray computedHash;
@@ -484,7 +523,7 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
         }
     }
     
-    emit verificationComplete(isValid, fileName, expectedHash, computedHash);
+    emit verificationComplete(isValid, fileName, expectedHash, computedHash, generation);
 }
 
 void CacheVerificationWorker::checkDiskSpace()
