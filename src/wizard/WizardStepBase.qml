@@ -144,7 +144,9 @@ FocusScope {
         RowLayout {
             id: buttonRow
             Layout.fillWidth: true
-            spacing: Style.spacingSmall
+            // Gaps are left margins instead, so the spacer costs no gap of its
+            // own: the narrowest embedded canvas has just room for the buttons
+            spacing: 0
             
             // Embedded mode network info on the left
             Text {
@@ -157,13 +159,22 @@ FocusScope {
                 visible: ImageWriterSingleton && ImageWriterSingleton.isEmbeddedMode() && root.networkInfoText.length > 0
                 Layout.alignment: Qt.AlignVCenter
                 elide: Text.ElideRight
-                Layout.maximumWidth: parent.width * 0.4  // Don't let it take up too much space
+                // A Text the layout cannot shrink pushed Next off a 4:3 panel.
+                // The buttons get their width first; the label takes what
+                // remains, ahead of the spacer, up to its natural width.
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: 0
+                Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.horizontalStretchFactor: 100
             }
             
             // Custom button container - a nested RowLayout for steps that need custom button layouts
             RowLayout {
                 id: customButtonArea
                 Layout.fillWidth: true
+                Layout.horizontalStretchFactor: 1
+                Layout.leftMargin: networkInfoLabel.visible ? Style.spacingSmall : 0
                 spacing: Style.spacingSmall
                 visible: children.length > 0
             }
@@ -183,6 +194,7 @@ FocusScope {
                 Layout.fillWidth: true
                 Layout.minimumWidth: Style.buttonWidthSkip
                 Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.leftMargin: networkInfoLabel.visible ? Style.spacingSmall : 0
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.skipClicked()
                 // Tab order among action buttons: next -> back -> skip -> wrap to first field
@@ -192,6 +204,7 @@ FocusScope {
             
             Item {
                 Layout.fillWidth: true
+                Layout.horizontalStretchFactor: 1
                 visible: customButtonArea.children.length === 0
             }
             
@@ -204,6 +217,7 @@ FocusScope {
                 Layout.fillWidth: true
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.leftMargin: Style.spacingSmall
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.backClicked()
                 // After back, Tab goes to skip; Shift+Tab goes to next
@@ -220,6 +234,7 @@ FocusScope {
                 Layout.fillWidth: true
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.leftMargin: Style.spacingSmall
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.nextClicked()
                 // After next, Tab goes to back; Shift+Tab goes to skip
