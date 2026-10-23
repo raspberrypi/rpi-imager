@@ -169,6 +169,47 @@ TestCase {
 
         keyClick(Qt.Key_Return)
         compare(list.selectedCount, 0)
+        compare(list.currentIndex, 0,
+                "but it lights up the first row, so the press visibly did something")
+    }
+
+    function test_a_second_enter_chooses_the_row_the_first_lit() {
+        const list = create({})
+
+        keyClick(Qt.Key_Return)
+        keyClick(Qt.Key_Return)
+
+        compare(list.selectedCount, 1)
+        compare(list.selectedIndex, 0)
+    }
+
+    function test_enter_from_nothing_skips_a_blocked_first_row() {
+        const list = create({ blocked: [0] })
+
+        keyClick(Qt.Key_Return)
+
+        compare(list.currentIndex, 1,
+                "Enter opens the list the way Down does, onto a row that can be chosen")
+        compare(list.selectedCount, 0)
+    }
+
+    function test_enter_lights_nothing_when_every_row_is_blocked() {
+        const list = create({ blocked: [0, 1, 2, 3, 4] })
+
+        keyClick(Qt.Key_Return)
+
+        compare(list.currentIndex, -1)
+        compare(list.selectedCount, 0)
+    }
+
+    function test_space_with_nothing_highlighted_only_highlights() {
+        const list = create({})
+
+        keyClick(Qt.Key_Space)
+
+        compare(list.currentIndex, 0)
+        compare(list.selectedCount, 0)
+        compare(list.spaceCount, 0)
     }
 
     // -- The row that stopped being selectable under the highlight ---------
@@ -288,6 +329,7 @@ TestCase {
         keyClick(Qt.Key_Enter)
 
         compare(list.selectedCount, 0)
+        compare(list.currentIndex, 0)
     }
 
     function test_a_screen_reader_can_choose_the_highlighted_row() {

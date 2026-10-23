@@ -285,7 +285,12 @@ ListView {
     }
     
     function _activateCurrent(signalFn) {
-        if (root.currentIndex === -1 || !root.isItemSelectable(root.currentIndex))
+        // Nothing is preselected: highlight the first row, as Down does, rather than choose it
+        if (root.currentIndex === -1) {
+            root.currentIndex = root.findNextSelectableIndex(-1, 1)
+            return
+        }
+        if (!root.isItemSelectable(root.currentIndex))
             return
         var item = root.itemAtIndex(root.currentIndex)
         signalFn(root.currentIndex, item)
