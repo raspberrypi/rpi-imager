@@ -339,7 +339,9 @@ FocusScope {
             for (var k = 0; k < arr.length; k++) {
                 var it = arr[k]
                 // Skip items that have activeFocusOnTab explicitly set to false (e.g. labels when screen reader inactive)
-                if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function' && it.activeFocusOnTab !== false) {
+                // Disabled ones stay: KeyNavigation passes over them, and leaving
+                // them out kept them unreachable once enabled, with no rebuild
+                if (it && it.visible && typeof it.forceActiveFocus === 'function' && it.activeFocusOnTab !== false) {
                     items.push(it)
                 }
             }
@@ -385,7 +387,8 @@ FocusScope {
         // Ensure initialFocusItem set, and that it is still one of the items
         // the ring actually contains -- see BaseDialog.rebuildFocusOrder()
         // for why a stale one puts focus on something invisible.
-        var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
+        var enabledItems = _focusableItems.filter(function(it) { return it.enabled })
+        var firstField = enabledItems.length > 0 ? enabledItems[0] : null
         if (!initialFocusItem || _focusableItems.indexOf(initialFocusItem) === -1)
             initialFocusItem = firstField
     }
@@ -396,7 +399,7 @@ FocusScope {
             return nextButton.visible && nextButton.enabled ? nextButton : null
         }
 
-        var allFocusable = _focusableItems.slice() // copy array
+        var allFocusable = _focusableItems.filter(function(it) { return it.enabled })
         if (nextButton.visible && nextButton.enabled) allFocusable.push(nextButton)
         if (backButton.visible && backButton.enabled) allFocusable.push(backButton)
         if (skipButton.visible && skipButton.enabled) allFocusable.push(skipButton)
@@ -419,7 +422,7 @@ FocusScope {
             return nextButton.visible && nextButton.enabled ? nextButton : null
         }
 
-        var allFocusable = _focusableItems.slice() // copy array
+        var allFocusable = _focusableItems.filter(function(it) { return it.enabled })
         if (nextButton.visible && nextButton.enabled) allFocusable.push(nextButton)
         if (backButton.visible && backButton.enabled) allFocusable.push(backButton)
         if (skipButton.visible && skipButton.enabled) allFocusable.push(skipButton)

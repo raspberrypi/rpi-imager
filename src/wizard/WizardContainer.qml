@@ -848,8 +848,9 @@ Item {
                             currentItem.initialFocusItem.forceActiveFocus()
                         } else if (currentItem) {
                             // Fallback: try to find first focusable field
-                            if (currentItem._focusableItems && currentItem._focusableItems.length > 0) {
-                                currentItem._focusableItems[0].forceActiveFocus()
+                            var enabledItems = (currentItem._focusableItems || []).filter(function(it) { return it.enabled })
+                            if (enabledItems.length > 0) {
+                                enabledItems[0].forceActiveFocus()
                             }
                         }
                     })
