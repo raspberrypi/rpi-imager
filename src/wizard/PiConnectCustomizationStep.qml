@@ -20,9 +20,6 @@ WizardStepBase {
              ? qsTr("Register this device with your Raspberry Pi Connect organisation")
              : qsTr("Sign in to receive a token and enable Raspberry Pi Connect")
     showSkipButton: true
-    // This page is one switch and what follows from it, so the switch comes
-    // straight after Next rather than behind Back, Skip and App Options.
-    fieldsFollowNextButton: true
     nextButtonAccessibleDescription: qsTr("Save Raspberry Pi Connect settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
@@ -548,6 +545,9 @@ WizardStepBase {
         // rebuild, so set it explicitly before registering groups.
         if (root.orgModeEnabled && root.hasStoredOrgKey) {
             root.initialFocusItem = fieldOrgDescription
+        } else if (!root.orgModeEnabled) {
+            // The help link precedes it in the ring, but the page is the switch
+            root.initialFocusItem = useTokenPill.focusItem
         }
 
         root.registerFocusGroup("pi_connect", function(){
@@ -559,10 +559,11 @@ WizardStepBase {
                     orgItems.push(clearOrgKeyButton)
                 return orgItems
             }
-            var items = [useTokenPill.focusItem]
-            // Include help link if visible
+            // In reading order: the help link sits under the label, left of the switch
+            var items = []
             if (useTokenPill.helpLinkItem && useTokenPill.helpLinkItem.visible)
                 items.push(useTokenPill.helpLinkItem)
+            items.push(useTokenPill.focusItem)
             if (root.deviceSignIn) {
                 if (useTokenPill.checked && btnDeviceSignIn.visible)
                     items.push(btnDeviceSignIn)
