@@ -196,7 +196,10 @@ WizardStepBase {
             }
             
             onCurrentIndexChanged: {
-                root.hasDeviceSelected = currentIndex !== -1
+                // Arrow keys and Enter only highlight a row; enabling Next on
+                // that advanced without a device. Choosing it sets this.
+                if (currentIndex === -1)
+                    root.hasDeviceSelected = false
             }
             
             onItemSelected: function(index, item) {

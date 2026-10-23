@@ -290,18 +290,41 @@ TestCase {
 
     // -- Selecting, once there is something to select ----------------------
 
-    function test_selecting_and_unselecting_tracks_whether_next_is_offered() {
-        // currentIndex is what the list reports and hasDeviceSelected is what
-        // the Next button reads, so they have to follow each other. Driven
-        // directly rather than by clicking, so it holds whether or not this
-        // run has any rows to click on.
+    function test_a_highlight_is_not_a_choice_but_losing_it_clears_one() {
+        // Driven directly rather than by clicking, so it holds whether or not
+        // this run has any rows to click on.
         step.hwlist.currentIndex = 0
-        verify(step.hasDeviceSelected,
-               "a selected row means a device is selected")
+        verify(!step.hasDeviceSelected,
+               "arrow keys move the highlight; Next must wait for a choice")
 
+        step.hasDeviceSelected = true
         step.hwlist.currentIndex = -1
         verify(!step.hasDeviceSelected,
-               "and losing the selection means it is not")
+               "and losing the selection means nothing is chosen")
+    }
+
+    function test_enter_highlights_first_and_chooses_second() {
+        var list = listWithBoards()
+        if (!list)
+            return
+        // An earlier case may have chosen a board, which the step restores
+        list.currentIndex = -1
+        verify(!step.nextButtonEnabled)
+        const spy = nextSpy.createObject(testCase, { target: step })
+        list.forceActiveFocus()
+
+        keyClick(Qt.Key_Return)
+        wait(0)
+        compare(list.currentIndex, 0)
+        verify(!step.nextButtonEnabled,
+               "a highlight alone would move on with no board set")
+        compare(spy.count, 0)
+
+        keyClick(Qt.Key_Return)
+        verify(step.hasDeviceSelected, "the second press chooses it")
+        verify(String(fakeContainer.selectedDeviceName).length > 0)
+        tryCompare(spy, "count", 1)
+        spy.destroy()
     }
 
 
