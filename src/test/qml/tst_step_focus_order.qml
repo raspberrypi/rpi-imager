@@ -209,6 +209,47 @@ TestCase {
         compare(orderAfter(step.one).length, withIt - 1)
     }
 
+    // -- Controls that are disabled ----------------------------------------
+    //
+    // They stay in the ring for Tab to pass over, so one that is disabled
+    // when the ring is built is still reachable once it is enabled.
+
+    function test_tab_passes_over_a_disabled_control() {
+        step.two.enabled = false
+        step.one.forceActiveFocus()
+
+        keyClick(Qt.Key_Tab)
+
+        verify(step.three.activeFocus)
+    }
+
+    function test_a_control_disabled_when_the_ring_was_built_is_reachable_once_enabled() {
+        step.two.enabled = false
+        step.rebuildFocusOrder()
+        step.two.enabled = true
+        step.one.forceActiveFocus()
+
+        keyClick(Qt.Key_Tab)
+
+        verify(step.two.activeFocus)
+    }
+
+    function test_first_focus_skips_a_disabled_control() {
+        step.one.enabled = false
+        step.initialFocusItem = null
+        step.rebuildFocusOrder()
+
+        compare(step.initialFocusItem, step.two)
+    }
+
+    function test_the_tab_fallback_skips_a_disabled_control() {
+        step.two.enabled = false
+        step.rebuildFocusOrder()
+
+        compare(step.getNextFocusableElement(step.one), step.three)
+        compare(step.getPreviousFocusableElement(step.three), step.one)
+    }
+
     // -- Turning a group off ----------------------------------------------
 
     function test_a_group_turned_off_leaves_the_order() {

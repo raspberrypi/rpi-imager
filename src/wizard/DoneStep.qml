@@ -6,6 +6,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../qmlcomponents"
@@ -321,6 +322,16 @@ WizardStepBase {
     
     // Focus management - rebuild when customization visibility changes
     onAnyCustomizationsAppliedChanged: rebuildFocusOrder()
+
+    // While an eject runs every button may be disabled, leaving focus on the
+    // step itself, and a retry hides the Eject button yet leaves it focused.
+    // Deferred so every button's state has settled first.
+    onEjectInProgressChanged: if (!ejectInProgress) Qt.callLater(_reclaimFocus)
+    function _reclaimFocus() {
+        const holder = root.Window.activeFocusItem
+        if (finishButton.enabled && root.activeFocus && (holder === root || !holder.visible))
+            finishButton.forceActiveFocus()
+    }
     
     Component.onCompleted: {
         // Register choices section as first focus group

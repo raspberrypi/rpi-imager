@@ -89,6 +89,11 @@ TestCase {
 
     function cleanup() {
         step = null
+        // Shared writer; nothing resets it to Idle, and Failed shows the same buttons
+        if (ImageWriterSingleton.ejectState !== ImageWriterSingleton.EjectIdle) {
+            TestEject.start()
+            TestEject.finish(false)
+        }
     }
 
     function make() {
@@ -277,6 +282,117 @@ TestCase {
         verify(button.activeFocusOnTab, "and the keyboard can reach it")
         verify(String(button.accessibleDescription).length > 0,
                "and it says what it will do")
+    }
+
+    // -- Reaching the buttons once the card has been ejected -----------------
+    //
+    // The background eject usually outlasts this screen's construction and
+    // disables its buttons while the tab ring is built.
+
+    Item {
+        id: outsideTheStep
+        width: 10
+        height: 10
+        activeFocusOnTab: true
+    }
+
+    function tabReaches(target) {
+        for (let i = 0; i < 10; i++) {
+            if (target.activeFocus)
+                return true
+            keyClick(Qt.Key_Tab)
+        }
+        return target.activeFocus
+    }
+
+    function test_tab_reaches_the_buttons_once_the_automatic_eject_ends() {
+        fakeSnapshot.hostnameConfigured = true
+        TestEject.start()
+        const s = make()
+        const another = findByText(s, "Write Another")
+        const finish = findByText(s, CommonStrings.finish)
+        verify(!finish.enabled, "the eject is still running as the screen comes up")
+        wait(0) // ring is built a turn later
+        s.initialFocusItem.forceActiveFocus()
+
+        TestEject.finish(true)
+
+        verify(finish.enabled)
+        verify(tabReaches(another), "Tab has to reach Write Another")
+        verify(tabReaches(finish), "and Finish")
+    }
+
+    function test_focus_lands_on_finish_when_the_step_had_none() {
+        // Nothing customised and every button disabled: nothing in the step to focus
+        TestEject.start()
+        const s = make()
+        wait(0)
+        s.forceActiveFocus() // as the wizard's StackView does
+        const finish = findByText(s, CommonStrings.finish)
+
+        TestEject.finish(true)
+
+        tryVerify(() => finish.activeFocus,
+                  1000, "a keyboard user is put somewhere they can act from")
+    }
+
+    function test_a_manual_eject_hands_focus_to_finish() {
+        // A failed eject offers a retry, whose button hides while it runs, keeping focus
+        TestEject.start()
+        TestEject.finish(false)
+        const s = make()
+        wait(0)
+        const eject = findByText(s, "Eject")
+        verify(eject.visible, "a failed eject offers a retry")
+        eject.forceActiveFocus()
+
+        TestEject.start()
+        verify(!eject.visible)
+        TestEject.finish(true)
+
+        tryVerify(() => findByText(s, CommonStrings.finish).activeFocus)
+    }
+
+    function test_a_retry_that_fails_again_leaves_focus_on_eject() {
+        TestEject.start()
+        TestEject.finish(false)
+        const s = make()
+        wait(0)
+        const eject = findByText(s, "Eject")
+        eject.forceActiveFocus()
+
+        TestEject.start()
+        TestEject.finish(false)
+        wait(0)
+
+        verify(eject.visible && eject.activeFocus, "ready for another try")
+    }
+
+    function test_an_eject_ending_leaves_focus_where_the_user_put_it() {
+        fakeSnapshot.hostnameConfigured = true
+        TestEject.start()
+        const s = make()
+        wait(0)
+        s.initialFocusItem.forceActiveFocus()
+        const held = s.initialFocusItem
+
+        TestEject.finish(true)
+        wait(0)
+
+        verify(held.activeFocus, "a finished eject does not steal focus")
+    }
+
+    function test_an_eject_ending_leaves_focus_outside_the_step_alone() {
+        // App Options, or a dialog opened while the eject ran
+        TestEject.start()
+        make()
+        wait(0)
+        outsideTheStep.forceActiveFocus()
+
+        TestEject.finish(true)
+        wait(0)
+
+        verify(outsideTheStep.activeFocus)
     }
 
     // -- Reading a long list of customisations without a mouse -------------

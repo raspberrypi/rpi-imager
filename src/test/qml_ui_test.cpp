@@ -256,6 +256,26 @@ public:
     }
 };
 
+// Drives the writer's eject state, which otherwise moves only behind a real
+// write. The slots are protected; invokeMethod reaches them by name.
+class TestEject : public QObject
+{
+    Q_OBJECT
+
+public:
+    Q_INVOKABLE void start()
+    {
+        if (!QMetaObject::invokeMethod(g_qmlWriter, "onEjectStarted"))
+            qFatal("TestEject: ImageWriter::onEjectStarted() is gone");
+    }
+
+    Q_INVOKABLE void finish(bool succeeded)
+    {
+        if (!QMetaObject::invokeMethod(g_qmlWriter, "onEjectFinished", Q_ARG(bool, succeeded)))
+            qFatal("TestEject: ImageWriter::onEjectFinished(bool) is gone");
+    }
+};
+
 class TestDrives : public QObject
 {
     Q_OBJECT
@@ -462,6 +482,11 @@ public slots:
                                           [](QQmlEngine *, QJSEngine *) -> QObject * {
                                               return new TestEnv;
                                           });
+
+        qmlRegisterSingletonType<TestEject>(kUri, 1, 0, "TestEject",
+                                            [](QQmlEngine *, QJSEngine *) -> QObject * {
+                                                return new TestEject;
+                                            });
     }
 
     void qmlEngineAvailable(QQmlEngine *engine)
