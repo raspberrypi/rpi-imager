@@ -4416,13 +4416,15 @@ void ImageWriter::setSavedCustomisationSettings(const QVariantMap &map)
 
 QVariantMap ImageWriter::getSavedCustomisationSettings()
 {
-    // Earlier versions stored a derived PMK. It is equivalent to the
-    // passphrase for WPA2, so it is deleted rather than kept around.
-    if (_settings.contains(QStringLiteral("imagecustomization/wifiPasswordCrypt"))) {
-        _settings.remove(QStringLiteral("imagecustomization/wifiPasswordCrypt"));
+    QVariantMap result = _secrets.group(QStringLiteral("imagecustomization"));
+    // Client networks need passphrases for WPA3/SAE. Keep WPA2 hotspot keys,
+    // reading and removing them through the account-aware secret store.
+    if (result.value(QStringLiteral("wifiNetworkMode")).toString() != QLatin1String("hotspot")
+        && result.contains(QStringLiteral("wifiPasswordCrypt"))) {
+        _secrets.remove(QStringLiteral("imagecustomization/wifiPasswordCrypt"));
+        result.remove(QStringLiteral("wifiPasswordCrypt"));
         _settings.sync();
     }
-    QVariantMap result = _secrets.group(QStringLiteral("imagecustomization"));
 
     // Belt-and-braces: deduplicate SSH authorized keys if present.
     // Many UIs allow pasting multiple keys; ensure unique entries using a
@@ -4478,6 +4480,20 @@ bool ImageWriter::imageSupportsCustomization()
 bool ImageWriter::imageSupportsCcRpi()
 {
     return _initFormat == "cloudinit-rpi";
+}
+
+QString ImageWriter::deriveHotspotPsk(const QString &ssid, const QString &password)
+{
+    return rpi_imager::CustomisationGenerator::hotspotPsk({{"wifiPassword", password}}, ssid.toUtf8());
+}
+
+bool ImageWriter::imageSupportsWifiHotspot()
+{
+    // Raspberry Pi OS moved to NetworkManager with Bookworm. Generic
+    // cloud-init images may use networkd, which cannot create this hotspot.
+    return _initFormat == "cloudinit-rpi" || _initFormat == "rpi-preseed"
+        || (_initFormat == "systemd"
+            && (_osReleaseDate.isEmpty() || _osReleaseDate >= QStringLiteral("2023-10-10")));
 }
 
 bool ImageWriter::imageSupportsInterfaceCustomisation()
