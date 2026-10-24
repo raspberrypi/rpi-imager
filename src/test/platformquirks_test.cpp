@@ -18,14 +18,20 @@
 #include <QTemporaryDir>
 #include <QElapsedTimer>
 #include <QDateTime>
+#include <QDir>
 #include "platformquirks.h"
+#include "platform_permissions.h"
 
 #ifdef Q_OS_WIN
 #include "vhd_device.h"
 #include <windows.h>
 #else
 #include <unistd.h>  // geteuid(), used well before the POSIX block below
+#include <fcntl.h>
+#include <sys/stat.h>
 #endif
+
+#include <future>
 
 #include <cmath>
 
@@ -6037,6 +6043,90 @@ TEST_CASE("The ssh-keygen path does not name the WOW64 alias to a 64-bit build",
     else
         CHECK(sizeof(void *) == 4);
 }
+
+// ============================================================================
+// Whether a source file can be read
+// ============================================================================
+
+namespace {
+
+QString writeScratchImage(const QTemporaryDir &dir, const QString &name)
+{
+    const QString path = QDir(dir.path()).filePath(name);
+    QFile f(path);
+    if (f.open(QIODevice::WriteOnly))
+        f.write(QByteArray(1024, '\0'));
+    return path;
+}
+
+} // namespace
+
+TEST_CASE("A file this process can open is readable", "[platformquirks][readable]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    CHECK(PlatformQuirks::canReadFile(writeScratchImage(dir, QStringLiteral("ok.img"))));
+}
+
+TEST_CASE("A file that is not there is not readable", "[platformquirks][readable]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    CHECK_FALSE(PlatformQuirks::canReadFile(QDir(dir.path()).filePath(QStringLiteral("gone.img"))));
+}
+
+TEST_CASE("A file with read access taken away is not readable", "[platformquirks][readable]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = writeScratchImage(dir, QStringLiteral("locked.img"));
+    rpi_test::DeniedAccess denied(path, rpi_test::DeniedAccess::Read);
+    REQUIRE_DENIED(denied);
+
+    CHECK_FALSE(PlatformQuirks::canReadFile(path));
+}
+
+#ifdef Q_OS_WIN
+TEST_CASE("A file held open without sharing is not readable", "[platformquirks][readable][windows]")
+{
+    // Its ACL allows the read, so only an actual open can say no: this is
+    // what tells the probe apart from an ACL lookup.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QString path = writeScratchImage(dir, QStringLiteral("held.img"));
+    const HANDLE held = ::CreateFileW(
+        reinterpret_cast<LPCWSTR>(QDir::toNativeSeparators(path).utf16()), GENERIC_READ,
+        0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    REQUIRE(held != INVALID_HANDLE_VALUE);
+
+    CHECK_FALSE(PlatformQuirks::canReadFile(path));
+    ::CloseHandle(held);
+    CHECK(PlatformQuirks::canReadFile(path));
+}
+#else
+TEST_CASE("A FIFO is answered without waiting for a writer", "[platformquirks][readable]")
+{
+    // An open would block until something writes. Opening the write end
+    // releases a stalled probe so the future can be joined.
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+    const QByteArray fifo = QFile::encodeName(QDir(dir.path()).filePath(QStringLiteral("pipe")));
+    REQUIRE(::mkfifo(fifo.constData(), 0600) == 0);
+
+    auto answer = std::async(std::launch::async, [&fifo] {
+        return PlatformQuirks::canReadFile(QFile::decodeName(fifo));
+    });
+    const bool returned = answer.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
+    if (!returned) {
+        const int fd = ::open(fifo.constData(), O_WRONLY | O_NONBLOCK);
+        if (fd >= 0)
+            ::close(fd);
+    }
+
+    REQUIRE(returned);
+    CHECK(answer.get());
+}
+#endif
 
 #ifdef Q_OS_WIN
 

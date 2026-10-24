@@ -18,6 +18,7 @@
 #include <netinet/in.h>
 #include <QProcess>
 #include <QDebug>
+#include <QFileInfo>
 #import <AppKit/AppKit.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 #import <DiskArbitration/DiskArbitration.h>
@@ -535,8 +536,9 @@ void logFontEngine()
 
 namespace PlatformQuirks {
 
-// The stat bits are already the answer here.
-NativePermissionScope::NativePermissionScope() = default;
-NativePermissionScope::~NativePermissionScope() = default;
+bool canReadFile(const QString &path)
+{
+    return QFileInfo(path).isReadable();
+}
 
 } // namespace PlatformQuirks

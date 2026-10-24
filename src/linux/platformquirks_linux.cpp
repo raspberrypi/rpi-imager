@@ -2347,8 +2347,9 @@ void applyEmbeddedDisplayScaling()
 
 namespace PlatformQuirks {
 
-// The stat bits are already the answer here.
-NativePermissionScope::NativePermissionScope() = default;
-NativePermissionScope::~NativePermissionScope() = default;
+bool canReadFile(const QString &path)
+{
+    return QFileInfo(path).isReadable();
+}
 
 } // namespace PlatformQuirks

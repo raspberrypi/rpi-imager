@@ -1060,7 +1060,10 @@ void logFontEngine()
 
 namespace PlatformQuirks {
 
-NativePermissionScope::NativePermissionScope() { qEnableNtfsPermissionChecks(); }
-NativePermissionScope::~NativePermissionScope() { qDisableNtfsPermissionChecks(); }
+bool canReadFile(const QString &path)
+{
+    QFile probe(path);
+    return probe.open(QIODevice::ReadOnly);
+}
 
 } // namespace PlatformQuirks
