@@ -510,11 +510,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
+        <source>Skip operations at the end of the storage device. Enable this for counterfeit storage devices that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
+        <source>⚠️ Only enable this if your storage device reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -758,11 +758,11 @@ Please check your network connection and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <source>Error reading from storage.&lt;br&gt;storage device may be broken.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <source>Verifying write failed. Contents of storage device is different from what was written to it.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -958,7 +958,7 @@ The system may be low on memory.</source>
     <message>
         <source>Timeout writing to end of storage device.
 
-This may indicate a counterfeit SD card with fake capacity.
+This may indicate a counterfeit storage device with fake capacity.
 
 Please try a different storage device.</source>
         <translation type="unfinished"></translation>
