@@ -27,7 +27,7 @@ WizardStepBase {
 
     title: qsTr("Customisation: Interfaces & Features")
     subtitle: qsTr("Enable hardware interfaces and connectivity options.")
-    showSkipButton: true
+    showSkipButton: !wizardContainer.userRequired
     nextButtonEnabled: true
     backButtonEnabled: true
     nextButtonAccessibleDescription: qsTr("Save interface and feature settings and continue to writing step")

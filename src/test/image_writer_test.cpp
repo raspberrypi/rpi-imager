@@ -196,6 +196,85 @@ TEST_CASE("Starting a write with no drive chosen says so", "[imagewriter]")
 }
 
 // ══════════════════════════════════════════════════════════════
+// An OS that ships with no usable account ("user_required")
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+void selectUserRequiredOs(ImageWriter &writer, const QByteArray &initFormat = "rpi-preseed")
+{
+    writer.setSrc(QUrl(QStringLiteral("file:///tmp/whatever.img")), 0, 0, QByteArray(), false,
+                  QString(), QStringLiteral("Jig OS"), initFormat);
+    writer.setSWCapabilitiesList(QVariantList{QStringLiteral("user_required")});
+    writer.setDst(QProcess::nullDevice(), 1024 * 1024);
+}
+} // namespace
+
+TEST_CASE("An OS that requires a user is not written without one", "[imagewriter]")
+{
+    // Written without an account, the OS has nothing anyone can sign in
+    // with, and that is found only once the card is in the board.
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+    selectUserRequiredOs(writer);
+    REQUIRE(writer.imageRequiresUser());
+
+    writer.applyCustomisationFromSettings(QVariantMap{{QStringLiteral("hostname"), QStringLiteral("jig")}});
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("needs a user account"));
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("Jig OS"));
+}
+
+TEST_CASE("A username with no password does not satisfy an OS that requires a user",
+          "[imagewriter]")
+{
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+    selectUserRequiredOs(writer);
+
+    writer.applyCustomisationFromSettings(QVariantMap{{QStringLiteral("sshUserName"), QStringLiteral("jig")}});
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("needs a user account"));
+}
+
+TEST_CASE("Choosing another image forgets the account staged for the last one",
+          "[imagewriter]")
+{
+    // The account belongs to the customisation it was staged with; a new
+    // source starts with nothing staged until the wizard stages it again.
+    ImageWriter writer(nullptr);
+    UiLog log(&writer);
+    selectUserRequiredOs(writer);
+    writer.applyCustomisationFromSettings(QVariantMap{
+        {QStringLiteral("sshUserName"), QStringLiteral("jig")},
+        {QStringLiteral("sshUserPassword"), QStringLiteral("$5$salt$hash")}});
+
+    selectUserRequiredOs(writer);
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("needs a user account"));
+}
+
+TEST_CASE("Only an OS Imager can customise can require a user", "[imagewriter]")
+{
+    // A custom image has no manifest. A capability left over from the OS
+    // chosen before it must not make it unwritable.
+    ImageWriter writer(nullptr);
+    selectUserRequiredOs(writer, "none");
+    CHECK_FALSE(writer.imageRequiresUser());
+
+    selectUserRequiredOs(writer, "rpi-preseed");
+    CHECK(writer.imageRequiresUser());
+
+    writer.setSWCapabilitiesList(QVariantList{});
+    CHECK_FALSE(writer.imageRequiresUser());
+}
+
+// ══════════════════════════════════════════════════════════════
 // Refusing a card that cannot hold the image
 // ══════════════════════════════════════════════════════════════
 

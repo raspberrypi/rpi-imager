@@ -37,6 +37,7 @@ TestCase {
         property bool wifiConfigured: false
         property bool sshEnabled: false
         property bool passwordlessSudoAvailable: true
+        property bool userRequired: false
         property bool disableWarnings: false
         property string networkInfoText: ""
         property Item overlayRootRef: null
@@ -73,6 +74,7 @@ TestCase {
         fakeContainer.wifiConfigured = true
         fakeContainer.sshEnabled = true
         fakeContainer.jumpedTo = -1
+        fakeContainer.userRequired = false
         step = stepComponent.createObject(testCase)
         verify(step, "the step was created")
         // A saved password from a previous session changes every rule below,
@@ -228,6 +230,53 @@ TestCase {
 
         compare(fakeContainer.skipAllCalls, 1,
                 "the button asks the container to skip all customisation")
+    }
+
+    // ── An OS that ships with no usable account ───────────────────────
+    //
+    // The manifest's "user_required" says the image has nothing anyone can
+    // sign in with unless an account is made here, so "no account" stops
+    // being an answer.
+
+    function test_required_user_cannot_be_left_empty() {
+        fakeContainer.userRequired = true
+        fill("", "", "")
+        verify(!step.nextButtonEnabled)
+    }
+
+    function test_required_user_needs_a_username() {
+        fakeContainer.userRequired = true
+        fill("", "correct horse", "correct horse")
+        verify(!step.nextButtonEnabled)
+    }
+
+    function test_required_user_needs_a_password() {
+        fakeContainer.userRequired = true
+        fill("jig", "", "")
+        verify(!step.nextButtonEnabled)
+    }
+
+    function test_required_user_accepts_a_name_and_matching_passwords() {
+        fakeContainer.userRequired = true
+        fill("jig", "correct horse", "correct horse")
+        verify(step.nextButtonEnabled)
+    }
+
+    function test_required_user_accepts_a_saved_password() {
+        fakeContainer.userRequired = true
+        step.hasSavedUserPassword = true
+        fill("jig", "", "")
+        verify(step.nextButtonEnabled)
+    }
+
+    function test_required_user_says_why_and_offers_no_skip() {
+        var notice = field("userRequiredNotice")
+        verify(!notice.visible)
+        verify(step.showSkipButton)
+
+        fakeContainer.userRequired = true
+        verify(notice.visible, "the step says why an account is needed")
+        verify(!step.showSkipButton, "skipping would write an OS nobody can sign in to")
     }
 
     // ── The warning before passwordless sudo ──────────────────────────

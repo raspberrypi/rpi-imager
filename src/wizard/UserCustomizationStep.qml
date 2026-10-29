@@ -23,6 +23,10 @@ WizardStepBase {
     property bool savedPasswordInvalidated: false
     property string savedUsername: ""
 
+    // The OS ships with no usable account, so leaving this empty is no
+    // longer a choice.
+    readonly property bool userRequired: !!wizardContainer && !!wizardContainer.userRequired
+
     // The one rule, used by the field's validator and by the check on the
     // restore path. Written once so the two cannot drift: a username that
     // can no longer be typed must not arrive by another route either.
@@ -46,7 +50,7 @@ WizardStepBase {
     
     title: qsTr("Customisation: Choose username")
     subtitle: qsTr("Create a user account for your Raspberry Pi")
-    showSkipButton: true
+    showSkipButton: !wizardContainer.userRequired
     nextButtonAccessibleDescription: qsTr("Save user account settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
@@ -115,6 +119,14 @@ WizardStepBase {
             WizardDescriptionText {
                 id: helpText
                 text: qsTr("The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
+            }
+
+            WizardDescriptionText {
+                id: userRequiredNotice
+                objectName: "userRequiredNotice"
+                visible: root.userRequired
+                text: qsTr("This operating system has no account you can sign in with until you create one here, so a username and password are required.")
+                Accessible.ignored: !visible
             }
 
             WizardDescriptionText {
@@ -212,7 +224,7 @@ WizardStepBase {
         // Include labels before their corresponding fields so users hear the explanation first
         root.registerFocusGroup("user_fields", function(){
             // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
-            return [labelUsername, fieldUsername, labelPassword, fieldPassword, labelPasswordConfirm, fieldPasswordConfirm, helpText, checkPasswordlessSudo, sudoInfoIcon]
+            return [labelUsername, fieldUsername, labelPassword, fieldPassword, labelPasswordConfirm, fieldPasswordConfirm, helpText, userRequiredNotice, checkPasswordlessSudo, sudoInfoIcon]
         }, 0)
         
         // Set initial focus on the username field
@@ -259,10 +271,15 @@ WizardStepBase {
     
     // Validation
     // Allow proceed when:
-    // - all fields are empty (no customization), or
+    // - all fields are empty (no customization), unless the OS requires a user, or
     // - a new password is entered and matches confirm, or
     // - a saved (crypted) password exists and user leaves password fields blank (with or without username)
-    nextButtonEnabled: (
+    // When the OS requires a user, a username is needed in the last two cases as well.
+    nextButtonEnabled: root.userRequired
+        ? (fieldUsername.text.length > 0 && (
+            (fieldPassword.text.length > 0 && fieldPasswordConfirm.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
+            || (root.hasSavedUserPassword && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)))
+        : (
         (fieldUsername.text.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)
         || (fieldPassword.text.length > 0 && fieldPasswordConfirm.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
         || (root.hasSavedUserPassword && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)

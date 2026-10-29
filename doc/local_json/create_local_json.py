@@ -25,6 +25,7 @@ VALID_OS_CAPABILITIES = {
     "serial":            "Enable serial interface option",
     "spi":               "Enable SPI interface option",
     "usb_otg":           "Enable USB Gadget mode option",
+    "user_required":     "Require a username and password before writing",
 }
 
 # Valid device (hardware) capabilities

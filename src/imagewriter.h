@@ -449,6 +449,9 @@ public:
     Q_INVOKABLE void clearSavedCustomisationSettings();
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
+    // The OS ships with no usable account and declares 'user_required': it is
+    // written only with customisation that creates a user with a password.
+    Q_INVOKABLE bool imageRequiresUser();
     // Whether the selected OS can apply the GPIO/hardware interface toggles
     // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
     // module; rpi-preseed configures them natively via raspi-config.
@@ -777,6 +780,8 @@ protected:
     // Lets the wizard drop only its own minted keys on storage / OS
     // changes without clobbering a user-supplied token.
     bool _piConnectTokenIsOrgMinted = false;
+    // Whether the staged customisation creates a user with a password.
+    bool _customisationCreatesUser = false;
     // CLI flag to force enable secure boot regardless of OS capabilities
     static bool _forceSecureBootEnabled;
 #ifndef CLI_ONLY_BUILD

@@ -183,6 +183,7 @@ WizardStepBase {
             // Update selected OS name to the chosen file name
             root.wizardContainer.selectedOsName = ImageWriterSingleton.srcFileName()
             root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
+            root.wizardContainer.userRequired = ImageWriterSingleton.imageRequiresUser()
             // For custom images, customization is not supported; clear any staged flags
             if (!root.wizardContainer.customizationSupported) {
                 root.wizardContainer.hostnameConfigured = false
@@ -860,6 +861,7 @@ WizardStepBase {
                 root.wizardContainer.piConnectAvailable = false
                 root.wizardContainer.secureBootAvailable = ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
                 root.wizardContainer.passwordlessSudoAvailable = false
+                root.wizardContainer.userRequired = false
                 root.wizardContainer.ccRpiAvailable = false
                 root.wizardContainer.ifAndFeaturesAvailable = false
                 root.nextButtonEnabled = true
@@ -894,6 +896,7 @@ WizardStepBase {
                 root.wizardContainer.piConnectAvailable = ImageWriterSingleton.checkSWCapability("rpi_connect")
                 root.wizardContainer.secureBootAvailable = ImageWriterSingleton.checkSWCapability("secure_boot") || ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
                 root.wizardContainer.passwordlessSudoAvailable = ImageWriterSingleton.checkSWCapability("passwordless_sudo")
+                root.wizardContainer.userRequired = ImageWriterSingleton.imageRequiresUser()
                 root.wizardContainer.ccRpiAvailable = ImageWriterSingleton.imageSupportsCcRpi()
                 
                 // Check if any interface/feature capabilities are available (requires both HW and SW support).

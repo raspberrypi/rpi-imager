@@ -52,6 +52,7 @@ The `--capabilities` option accepts one or more of the following values:
 | `serial` | Enable serial interface option |
 | `spi` | Enable SPI interface option |
 | `usb_otg` | Enable USB Gadget mode option |
+| `user_required` | Require a username and password before writing |
 
 ### Available device capabilities
 

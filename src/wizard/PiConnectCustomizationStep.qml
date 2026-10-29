@@ -19,7 +19,7 @@ WizardStepBase {
     subtitle: orgModeEnabled
              ? qsTr("Register this device with your Raspberry Pi Connect organisation")
              : qsTr("Sign in to receive a token and enable Raspberry Pi Connect")
-    showSkipButton: true
+    showSkipButton: !wizardContainer.userRequired
     nextButtonAccessibleDescription: qsTr("Save Raspberry Pi Connect settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")

@@ -1057,7 +1057,8 @@ echo "All files validated successfully!"
    - Set `architecture` for proper sorting on device selection
    - Use `capabilities` to enable hardware-specific features
    - Interface capabilities (i2c, spi, etc.) need both device and OS support
-   - OS-only capabilities (rpi_connect, secure_boot, passwordless_sudo) only need OS support
+   - OS-only capabilities (rpi_connect, secure_boot, passwordless_sudo, user_required) only need OS support
+   - `user_required` is for an OS that ships with its account locked, such as an rpi-preseed appliance: the wizard offers no way to skip the user step, and Imager refuses to write without a username and password
 
 ## Common Pitfalls
 

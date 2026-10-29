@@ -85,6 +85,8 @@ Item {
     property bool secureBootAvailable: false
     // Whether selected OS supports passwordless sudo configuration
     property bool passwordlessSudoAvailable: false
+    // Whether selected OS must be written with a user account (user_required)
+    property bool userRequired: false
     // Whether secure boot key is configured in App Options
     property bool secureBootKeyConfigured: false
 
@@ -408,6 +410,7 @@ Item {
         piConnectAvailable = false
         secureBootAvailable = false
         passwordlessSudoAvailable = false
+        userRequired = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
@@ -1615,6 +1618,12 @@ Item {
     // so the answer has to be the same everywhere: nothing the user configured
     // is configured any more, and the wizard goes straight to the write.
     function skipAllCustomisation() {
+        // Not offered when the OS needs an account; should it be reached
+        // anyway, the user step is where the answer is.
+        if (userRequired) {
+            jumpToStep(stepUserCustomization)
+            return
+        }
         hostnameConfigured = false
         localeConfigured = false
         userConfigured = false
