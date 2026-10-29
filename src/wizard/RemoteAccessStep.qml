@@ -18,7 +18,7 @@ WizardStepBase {
     
     title: qsTr("Customisation: SSH authentication")
     subtitle: qsTr("Configure SSH access")
-    showSkipButton: true
+    showSkipButton: !wizardContainer.userRequired
     nextButtonAccessibleDescription: qsTr("Save SSH settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")

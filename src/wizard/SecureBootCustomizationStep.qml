@@ -34,7 +34,7 @@ WizardStepBase {
     
     title: qsTr("Customisation: Secure Boot")
     subtitle: qsTr("Configure secure boot image signing")
-    showSkipButton: true
+    showSkipButton: !wizardContainer.userRequired
     nextButtonAccessibleDescription: qsTr("Save secure boot settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")

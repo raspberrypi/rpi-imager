@@ -25,7 +25,7 @@ WizardStepBase {
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
     title: qsTr("Customisation: Choose Wi‑Fi")
-    showSkipButton: true
+    showSkipButton: !wizardContainer.userRequired
     nextButtonAccessibleDescription: qsTr("Save Wi-Fi settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")

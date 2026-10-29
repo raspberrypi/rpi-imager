@@ -41,6 +41,7 @@ TestCase {
         property bool secureBootAvailable: false
         property bool secureBootEnabled: false
         property bool passwordlessSudoAvailable: false
+        property bool userRequired: false
         property bool hostnameConfigured: false
         property bool localeConfigured: false
         property bool userConfigured: false
@@ -75,6 +76,7 @@ TestCase {
         fakeContainer.secureBootAvailable = false
         fakeContainer.secureBootEnabled = false
         fakeContainer.passwordlessSudoAvailable = false
+        fakeContainer.userRequired = false
         fakeContainer.ifI2cEnabled = false
         fakeContainer.ifSpiEnabled = false
         fakeContainer.if1WireEnabled = false
@@ -286,6 +288,29 @@ TestCase {
                + "would make secure boot impossible to configure at all")
         compare(fakeContainer.customizationSettings.secureBootEnabled, true,
                 "and is still in what the generator is given")
+    }
+
+    // -- An OS that ships with no usable account -----------------------------
+
+    function test_an_os_that_requires_a_user_says_so() {
+        chooseOs({ init_format: "rpi-preseed", capabilities: ["user_required"] })
+        verify(fakeContainer.userRequired, "the user step may not be left empty")
+    }
+
+    function test_the_next_os_does_not_inherit_the_requirement() {
+        chooseOs({ init_format: "rpi-preseed", capabilities: ["user_required"] })
+        chooseOs({ init_format: "rpi-preseed" })
+        verify(!fakeContainer.userRequired, "this one did not ask for it")
+    }
+
+    function test_a_custom_image_does_not_inherit_the_requirement() {
+        // A custom image has no manifest to ask for an account, and Imager
+        // cannot customise it to give it one.
+        chooseOs({ init_format: "rpi-preseed", capabilities: ["user_required"] })
+        step.customImageFileDialog.selectedFile = __qmlModuleRoot + "Style.qml"
+        step.customImageFileDialog.accepted()
+        tryVerify(function () { return !fakeContainer.userRequired }, 3000,
+                  "the requirement went with the OS that made it")
     }
 
     function test_an_os_with_passwordless_sudo_keeps_it() {

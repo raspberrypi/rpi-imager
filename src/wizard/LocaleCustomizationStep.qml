@@ -18,7 +18,7 @@ WizardStepBase {
     
     title: qsTr("Customisation: Localisation")
     subtitle: qsTr("Select your location for suggested time zone and keyboard layout")
-    showSkipButton: true
+    showSkipButton: !wizardContainer.userRequired
     nextButtonAccessibleDescription: qsTr("Save localisation settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")

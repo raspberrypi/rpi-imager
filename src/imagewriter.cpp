@@ -674,6 +674,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
+    _customisationCreatesUser = false;
     _bmapUrl = bmapUrl;
 
     qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
@@ -1636,6 +1637,14 @@ void ImageWriter::startWrite()
         }
 
         emit error(tr("Cannot start write. %1").arg(reason));
+        return;
+    }
+
+    // The wizard keeps the user from getting here, but "write another", the
+    // sidebar and a replayed write all reach this point by other routes.
+    if (imageRequiresUser() && !_customisationCreatesUser)
+    {
+        emit error(tr("Cannot start write. %1 needs a user account: set a username and password in the customisation settings.").arg(_osName));
         return;
     }
 
@@ -4224,9 +4233,16 @@ void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
 
     // If the selected image does not support customisation, ensure nothing is staged
     if (_initFormat.isEmpty()) {
+        _customisationCreatesUser = false;
         setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), NoAdvancedOptions);
         return;
     }
+
+    // A name and a password: an account with no password cannot be signed in to.
+    _customisationCreatesUser =
+        !settings.value(QStringLiteral("sshUserName")).toString().trimmed().isEmpty()
+        && (!settings.value(QStringLiteral("sshUserPassword")).toString().isEmpty()
+            || !settings.value(QStringLiteral("sshUserPasswordPlain")).toString().isEmpty());
 
     // Make the selected OS release date available to the generator so it can
     // choose the right password hashing algorithm (yescrypt vs sha256crypt)
@@ -4466,6 +4482,13 @@ void ImageWriter::clearSavedCustomisationSettings()
 bool ImageWriter::imageSupportsCustomization()
 {
     return !_initFormat.isEmpty();
+}
+
+bool ImageWriter::imageRequiresUser()
+{
+    // A custom image carries no manifest, so a capability left over from the
+    // OS chosen before it does not apply.
+    return imageSupportsCustomization() && checkSWCapability(QStringLiteral("user_required"));
 }
 
 bool ImageWriter::imageSupportsCcRpi()
