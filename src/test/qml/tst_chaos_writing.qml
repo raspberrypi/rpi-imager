@@ -46,6 +46,8 @@ TestCase {
 
     QtObject {
         id: containerStub
+        // Profiles are exercised with the real container in tst_profiles.qml.
+        function openProfiles(saving) {}
         property bool disableWarnings: false
         property bool customizationSupported: true
         property bool featUsbGadgetEnabled: false

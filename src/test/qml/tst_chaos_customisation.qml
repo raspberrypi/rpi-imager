@@ -71,6 +71,8 @@ TestCase {
     // missing one would quietly weaken the run instead of stopping it.
     QtObject {
         id: fakeContainer
+        // Profiles are exercised with the real container in tst_profiles.qml.
+        function openProfiles(saving) {}
         property var customizationSettings: ({})
         property bool hostnameConfigured: false
         property bool localeConfigured: false
