@@ -144,6 +144,21 @@ TestCase {
         verify(!wiz.isStepPermissible(wiz.stepWriting))
     }
 
+    function test_skipping_customisation_preserves_required_account_guard_data() {
+        return [{tag: "optional account", required: false},
+                {tag: "required account", required: true}]
+    }
+
+    function test_skipping_customisation_preserves_required_account_guard(data) {
+        wiz.activeProfileId = "selected-profile"
+        wiz.hostnameConfigured = true
+        wiz.userRequired = data.required
+        wiz.skipAllCustomisation()
+        compare(wiz.currentStep, data.required ? wiz.stepUserCustomization : wiz.stepWriting)
+        compare(wiz.activeProfileId, data.required ? "selected-profile" : "")
+        compare(wiz.hostnameConfigured, data.required)
+    }
+
     function test_profile_names_are_displayed_as_plain_text() {
         verify(ImageWriterSingleton.saveCustomisationProfile("", "QML profile <b>literal</b>", {}))
         wiz.openProfiles(false)
