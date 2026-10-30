@@ -452,6 +452,8 @@ public:
     // The OS ships with no usable account and declares 'user_required': it is
     // written only with customisation that creates a user with a password.
     Q_INVOKABLE bool imageRequiresUser();
+    Q_INVOKABLE bool imageSupportsWifiHotspot();
+    Q_INVOKABLE QString deriveHotspotPsk(const QString &ssid, const QString &password);
     // Whether the selected OS can apply the GPIO/hardware interface toggles
     // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
     // module; rpi-preseed configures them natively via raspi-config.
