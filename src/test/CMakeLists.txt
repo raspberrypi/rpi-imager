@@ -645,6 +645,19 @@ if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     rpi_discover_tests(windows_uac_status_test)
 endif()
 
+# The helper connection, built wherever a native helper backend is: a helper
+# that hung up mid-request crashed the client.
+if((WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+   OR (UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER))
+    add_executable(duplex_connection_test duplex_connection_test.cpp)
+    target_include_directories(duplex_connection_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(duplex_connection_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(duplex_connection_test PRIVATE cxx_std_20)
+    rpi_discover_tests(duplex_connection_test)
+endif()
+
 # ============================================================================
 # SecureBootCrypto
 # ============================================================================

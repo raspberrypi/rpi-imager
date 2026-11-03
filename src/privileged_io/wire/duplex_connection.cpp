@@ -104,13 +104,15 @@ void DuplexConnection::detach() {
         makeIoError(proto::ERROR_DEVICE_DISCONNECTED, "connection detached", 0);
 
     {
+        // call() still holds a reference to pending_ while it waits, and
+        // frees it once it has read the result; freeing it here left that
+        // waiter reading through null when the helper hung up mid-RPC.
         std::lock_guard<std::mutex> lk(rpc_mutex_);
         if (pending_) {
             pending_->complete = true;
             pending_->result.ok = false;
             pending_->result.error = disconnected;
             rpc_cv_.notify_all();
-            pending_.reset();
         }
     }
 
@@ -184,7 +186,9 @@ RpcResult DuplexConnection::call(proto::WireMethod method,
     }
 
     if (!pending_->complete) {
-        out.error = makeIoError(proto::ERROR_DEVICE_IO, "RPC timed out", 0);
+        out.error = attached_.load()
+                        ? makeIoError(proto::ERROR_DEVICE_IO, "RPC timed out", 0)
+                        : makeIoError(proto::ERROR_DEVICE_DISCONNECTED, "connection detached", 0);
         pending_.reset();
         return out;
     }

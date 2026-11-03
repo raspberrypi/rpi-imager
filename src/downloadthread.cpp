@@ -272,6 +272,12 @@ bool DownloadThread::_openAndPrepareDevice()
                               "the storage device. Nothing has been written."));
                 return false;
             }
+            if (unmountResult.error.code()
+                    == rpi_imager::privileged::proto::ERROR_DEVICE_DISCONNECTED) {
+                emit error(tr("The part of Raspberry Pi Imager that writes to storage "
+                              "devices stopped unexpectedly. Nothing has been written."));
+                return false;
+            }
 #ifdef Q_OS_DARWIN
             if (unmountResult.error.code()
                     == rpi_imager::privileged::proto::ERROR_HELPER_NOT_INSTALLED) {
