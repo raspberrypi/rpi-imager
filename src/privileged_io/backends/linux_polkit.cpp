@@ -240,7 +240,7 @@ bool ensureConnectedImpl(LinuxPolkitBackend::State* st, proto_ns::ErrorInfo& err
 
     const auto deadline = std::chrono::steady_clock::now()
         + std::chrono::milliseconds(
-            st->options.handshake_timeout_ms ? st->options.handshake_timeout_ms : 30000);
+            st->options.handshake_timeout_ms ? st->options.handshake_timeout_ms : 600000);
 
     bool connected = false;
     while (std::chrono::steady_clock::now() < deadline) {
