@@ -102,6 +102,11 @@ public:
     // §5 concrete extension matching MacOSXpcBackend::listDevicesNow.
     Result<std::vector<Drivelist::DeviceDescriptor>> listDevicesNow();
 
+    // A descriptor for a Raspberry Pi USB boot device the client may not open
+    // itself. Starts the helper, and so the polkit prompt, if needed. The
+    // caller owns the descriptor.
+    Result<int> openUsbDevice(std::uint32_t bus, std::uint32_t address);
+
 public:
     struct State;
 private:

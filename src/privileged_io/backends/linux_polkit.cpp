@@ -625,6 +625,20 @@ Result<void> LinuxPolkitBackend::eject(const std::string& device_path) {
     return Result<void>::success();
 }
 
+Result<int> LinuxPolkitBackend::openUsbDevice(std::uint32_t bus, std::uint32_t address) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::UsbOpenRequest req;
+    req.set_bus(bus);
+    req.set_address(address);
+    std::string req_ser;
+    req.SerializeToString(&req_ser);
+    const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_OPEN_USB_DEVICE, req_ser, true);
+    if (!rpc.ok) {
+        return Result<int>::failure(std::move(rpc.err));
+    }
+    return Result<int>::success(rpc.ancillary_fd);
+}
+
 Result<void> LinuxPolkitBackend::mapBulkBuffer(const proto_ns::SessionId& sid,
                                                std::size_t size_bytes,
                                                const std::uint32_t async_queue_depth) {
