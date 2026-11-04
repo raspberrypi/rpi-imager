@@ -5,6 +5,7 @@
 #include "peer_auth_linux.h"
 #include "helper_log.h"
 #include "drivelist_linux_helper.h"
+#include "usb_device_access.h"
 #include "../session_telemetry.h"
 #include "../drive_list_rpc.h"
 #include "../wire_outbound.h"
@@ -29,6 +30,7 @@
 #include <atomic>
 #include <chrono>
 #include <sys/stat.h>
+#include <cstdio>
 #include <cstdlib>
 #include <condition_variable>
 #include <mutex>
@@ -171,7 +173,13 @@ public:
     proto::ErrorInfo dispatch(const proto::WireRequest& req, std::string& out_payload,
                               bool& response_deferred);
     int pending_fd() const { return pending_fd_; }
-    void clearPendingFd() { pending_fd_ = -1; }
+    void clearPendingFd() {
+        if (pending_fd_owned_ && pending_fd_ >= 0) {
+            ::close(pending_fd_);
+        }
+        pending_fd_ = -1;
+        pending_fd_owned_ = false;
+    }
 
 private:
     Session* find(const proto::SessionId& sid) {
@@ -197,10 +205,14 @@ private:
     proto::ErrorInfo handleListDrives(std::string& out);
     proto::ErrorInfo handleUnmount(const std::string& payload);
     proto::ErrorInfo handleEject(const std::string& payload);
+    proto::ErrorInfo handleOpenUsbDevice(const std::string& payload, std::string& out);
 
     std::unordered_map<std::uint64_t, Session> sessions_;
     std::uint64_t next_id_ = 1;
     int pending_fd_ = -1;
+    // The bulk buffer's fd stays with its session; a USB node is the
+    // client's once sent, and is closed here.
+    bool pending_fd_owned_ = false;
 
     WireOutbound* outbound_ = nullptr;
     DriveWatchService* drive_watch_ = nullptr;
@@ -614,10 +626,36 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
     return ok();
 }
 
+proto::ErrorInfo Helper::handleOpenUsbDevice(const std::string& payload, std::string& out) {
+    proto::UsbOpenRequest req;
+    if (!req.ParseFromString(payload)) {
+        return fail(proto::ERROR_UNKNOWN, "bad UsbOpenRequest");
+    }
+    auto opened = usb_access::openRaspberryPiUsbDevice(req.bus(), req.address());
+    char ids[48];
+    std::snprintf(ids, sizeof(ids), "bus=%u addr=%u id=%04x:%04x", req.bus(), req.address(),
+                  opened.vendor_id, opened.product_id);
+    if (opened.fd < 0) {
+        helperLog(std::string("usb open refused ") + ids + ": " + opened.error.detail());
+        return opened.error;
+    }
+    helperLog(std::string("usb open ok ") + ids);
+    pending_fd_ = opened.fd;
+    pending_fd_owned_ = true;
+
+    proto::UsbDeviceIdentity identity;
+    identity.set_vendor_id(opened.vendor_id);
+    identity.set_product_id(opened.product_id);
+    identity.set_bus(req.bus());
+    identity.set_address(req.address());
+    identity.SerializeToString(&out);
+    return ok();
+}
+
 proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& out_payload,
                                   bool& response_deferred) {
     response_deferred = false;
-    pending_fd_ = -1;
+    clearPendingFd();
     switch (req.method()) {
         case proto::WIRE_HELLO: {
             const auto ver_err = wire::checkProtocolVersion(req.payload(), kProtocolVersion);
@@ -655,6 +693,7 @@ proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& ou
         case proto::WIRE_UNSUBSCRIBE_DRIVES: return handleUnsubscribeDrives();
         case proto::WIRE_UNMOUNT: return handleUnmount(req.payload());
         case proto::WIRE_EJECT: return handleEject(req.payload());
+        case proto::WIRE_OPEN_USB_DEVICE: return handleOpenUsbDevice(req.payload(), out_payload);
         default:
             return fail(proto::ERROR_NOT_IMPLEMENTED, "unknown method");
     }
@@ -728,8 +767,9 @@ void serviceLoop(int client_fd) {
             resp.set_payload(reply_payload);
         }
 
-        const int pass_fd = (req.method() == proto::WIRE_MAP_BULK_BUFFER
-                             && err.code() == proto::ERROR_NONE)
+        const bool sends_fd = req.method() == proto::WIRE_MAP_BULK_BUFFER
+                              || req.method() == proto::WIRE_OPEN_USB_DEVICE;
+        const int pass_fd = (sends_fd && err.code() == proto::ERROR_NONE)
                                 ? helper.pending_fd()
                                 : -1;
         if (!outbound.sendResponse(resp, pass_fd)) {

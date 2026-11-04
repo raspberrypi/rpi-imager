@@ -355,6 +355,10 @@ enum WireMethod {
   WIRE_EJECT = 31;                 // req: PathRequest, reply: (empty)
   WIRE_CLEAN_DISK = 32;            // req: PathRequest, reply: (empty)
   WIRE_RESCAN_DISK = 33;           // req: PathRequest, reply: (empty)
+
+  // USB boot (Linux): the helper opens a Raspberry Pi boot ROM or fastboot
+  // gadget node and passes the descriptor back; the protocol stays in the client.
+  WIRE_OPEN_USB_DEVICE = 40;       // req: UsbOpenRequest, reply: UsbDeviceIdentity + fd
 }
 
 message WireRequest {
@@ -454,4 +458,16 @@ message DriveList {
 
 message PathRequest {               // unmount / eject
   string device_path = 1;
+}
+
+message UsbOpenRequest {            // a bus and address, never a path
+  uint32 bus = 1;
+  uint32 address = 2;
+}
+
+message UsbDeviceIdentity {         // what the opened node turned out to be
+  uint32 vendor_id = 1;
+  uint32 product_id = 2;
+  uint32 bus = 3;
+  uint32 address = 4;
 }

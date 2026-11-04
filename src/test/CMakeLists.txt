@@ -665,6 +665,13 @@ if(TARGET rpi_imager_writer_linux)
     target_link_libraries(appimage_signature_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
     target_compile_features(appimage_signature_test PRIVATE cxx_std_20)
     rpi_discover_tests(appimage_signature_test)
+
+    # What the helper will open for a client that is booting a Pi over USB.
+    add_executable(usb_device_access_test usb_device_access_test.cpp)
+    target_include_directories(usb_device_access_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(usb_device_access_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(usb_device_access_test PRIVATE cxx_std_20)
+    rpi_discover_tests(usb_device_access_test)
 endif()
 
 # ============================================================================
