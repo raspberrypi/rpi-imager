@@ -498,52 +498,10 @@ int main(int argc, char *argv[])
     // Initialize libcurl globally - must happen before any curl operations
     CurlNetworkConfig::ensureInitialized();
 
-    // Everything an elevated run leaves in the user's home, handed back.
-    //
-    // Imager elevates itself to write to a disk and applyQuirks() then points
-    // HOME and the XDG directories at the invoking user, so from that point
-    // root is writing into somebody else's home: the rpi-imager:// handler,
-    // the mimeinfo.cache and mimeapps.list that update-desktop-database and
-    // xdg-mime rewrite, and the OS list cache. Left root-owned, the two MIME
-    // files stop *any* application registering a file association, and a
-    // stale handler cannot be rewritten unelevated -- so after the AppImage
-    // moves, the Connect callback keeps launching the old path.
-    //
     // Before ImageWriter: its CacheManager checks the cache directory as the
     // user, and leftovers still root-owned would turn caching off.
-    const auto handBackUserFiles = []() {
-        const QString applications =
-            QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
-            + QStringLiteral("/applications");
-        const QString config =
-            QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
-
-        int changed = 0;
-        // Named individually rather than sweeping the applications directory:
-        // other applications' entries live there too and are not ours to touch.
-        for (const QString& path : {
-                 applications + QStringLiteral("/com.raspberrypi.rpi-imager-uri-handler.desktop"),
-                 applications + QStringLiteral("/mimeinfo.cache"),
-                 config + QStringLiteral("/mimeapps.list"),
-                 QSettings().fileName(),
-                 QFileInfo(QSettings().fileName()).absolutePath(),
-                 QStandardPaths::writableLocation(QStandardPaths::CacheLocation),
-             }) {
-            changed += rpi_imager::restoreUserOwnership(path);
-        }
-        // Only the directory itself: other Raspberry Pi applications keep
-        // their caches inside it.
-        int uid = -1;
-        int gid = -1;
-        if (PlatformQuirks::invokingUser(&uid, &gid))
-            changed += PlatformQuirks::reclaimOwnership(
-                QFileInfo(QStandardPaths::writableLocation(QStandardPaths::CacheLocation))
-                    .absolutePath(), uid, gid, false);
-        if (changed > 0)
-            qDebug() << "Handed" << changed << "file(s) back to the invoking user";
-    };
-    handBackUserFiles();
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, handBackUserFiles);
+    rpi_imager::handBackUserFiles();
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, &rpi_imager::handBackUserFiles);
 
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter(nullptr);

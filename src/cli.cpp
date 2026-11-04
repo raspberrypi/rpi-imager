@@ -15,6 +15,7 @@
 #include "drivelist/drivelist.h"
 #include "imageadvancedoptions.h"
 #include "platformquirks.h"
+#include "settings_permissions.h"
 
 /* Message handler to discard qDebug() output if using cli (unless --debug is set) */
 static void devnullMsgHandler(QtMsgType, const QMessageLogContext &, const QString &)
@@ -370,6 +371,8 @@ int Cli::run()
     _imageWriter->setDst(args[1]);
     _imageWriter->setVerifyEnabled(!parser.isSet("disable-verify"));
     _imageWriter->setSetting("eject", !parser.isSet("disable-eject"));
+
+    connect(_app, &QCoreApplication::aboutToQuit, this, &rpi_imager::handBackUserFiles);
 
     /* Run startWrite() in event loop (otherwise calling _app->exit() on error does not work) */
     QTimer::singleShot(1, _imageWriter, &ImageWriter::startWrite);

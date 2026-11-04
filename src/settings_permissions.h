@@ -47,6 +47,9 @@ SettingsPermissions secureSettingsFile(const QString& path);
 int restoreUserOwnership(const QString& path, int ownerUid, int ownerGid);
 int restoreUserOwnership(const QString& path);
 
+/* Everything an elevated run leaves in the user's home, handed back. */
+void handBackUserFiles();
+
 } // namespace rpi_imager
 
 #endif // SETTINGS_PERMISSIONS_H
