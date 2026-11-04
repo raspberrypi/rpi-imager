@@ -5,6 +5,7 @@
         <file>qtquickcontrols2.conf</file>
         <file alias="countries.txt">countries.txt</file>
         <file>keymap-layouts.txt</file>
+        <file>keymap-layout-names.txt</file>
         <file>capital-cities.txt</file>
         <file>sounds/chime.wav</file>
         <file>icons/rpi-imager.ico</file>

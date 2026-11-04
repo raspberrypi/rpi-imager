@@ -45,14 +45,25 @@ ComboBox {
     // in, and the comma is where it pauses. Translatable as a whole, because
     // that order is not the same in every language.
     Accessible.name: _purposeWithoutColon.length > 0
-                     ? qsTr("%1, %2").arg(_purposeWithoutColon).arg(currentText)
-                     : currentText
+                     ? qsTr("%1, %2").arg(_purposeWithoutColon).arg(displayText)
+                     : displayText
     Accessible.description: indicateError ? "Error: Invalid selection" : ""
     Accessible.editable: editable
     Accessible.focused: activeFocus
     
     // Enhanced properties
     property bool indicateError: false
+
+    // Keep the model's values stable for find(), recommendations and saving.
+    // Labels affect only presentation and searching.
+    property var displayLabels: []
+    property bool searchable: false
+    property string searchPlaceholder: qsTr("Search…")
+    displayText: currentIndex >= 0 ? labelAt(currentIndex) : ""
+
+    function labelAt(index) {
+        return displayLabels[index] || textAt(index)
+    }
     
     // Filter-as-you-type state
     property string searchString: ""
@@ -88,13 +99,14 @@ ComboBox {
     // ComboBox mirrors editText from its content item only while that item is a
     // TextInput, and ours no longer is. Call sites read editText on these
     // (always non-editable) boxes to persist the selection, so keep the mirror
-    // explicit rather than leaving them reading an empty string.
+    // explicit. This remains the model value even when displayLabels supplies
+    // a human-readable name, so settings never store a label instead of a code.
     function syncEditText() {
         if (!editable)
-            editText = displayText
+            editText = currentText
     }
 
-    onDisplayTextChanged: root.syncEditText()
+    onCurrentTextChanged: root.syncEditText()
     Component.onCompleted: root.syncEditText()
 
     ListModel {
@@ -127,18 +139,23 @@ ComboBox {
     
     function rebuildFilteredModel() {
         filteredModel.clear()
-        var search = searchString.toLowerCase()
+        var search = searchString.trim().toLowerCase()
+        var matches = []
         for (var i = 0; i < fullModelData.length; i++) {
-            var text = fullModelData[i]
+            var text = displayLabels[i] || fullModelData[i]
+            var value = fullModelData[i].toLowerCase()
             if (search.length === 0 ||
                 text.toLowerCase().startsWith(search) ||
-                wordBoundaryMatch(text, search)) {
-                filteredModel.append({displayText: text, originalIndex: i})
+                wordBoundaryMatch(text, search) || value === search) {
+                matches.push({displayText: text, originalIndex: i})
             }
         }
-        if (filteredModel.count > 0) {
-            dropdownList.currentIndex = 0
-        }
+        if (displayLabels.length > 0)
+            matches.sort(function(a, b) { return a.displayText.localeCompare(b.displayText) })
+        for (var j = 0; j < matches.length; j++)
+            filteredModel.append(matches[j])
+        dropdownList.currentIndex = filteredModel.count > 0 ? 0 : -1
+        dropdownList.positionViewAtBeginning()
     }
     
     function performSearch(inputText) {
@@ -212,26 +229,47 @@ ComboBox {
     popup: Popup {
         id: popupComponent
         padding: 0
-        y: root.height
-        width: root.width
-        // Cap height to available space between the combo box bottom and window bottom
-        height: {
-            var ideal = Math.min(300, Math.max(150, root.model.length * root.itemHeight))
-            var win = root.Window.window
-            if (win) {
-                var globalY = root.mapToItem(null, 0, root.height).y
-                var margin = 8
-                var available = win.height - globalY - margin
-                return Math.max(root.itemHeight * 2, Math.min(ideal, available))
+        // Long lists can open above a field near the bottom of the wizard.
+        property real spaceBelow: 300
+        property real spaceAbove: 0
+        property int focusDirection: 0
+        onOpened: dropdownList.positionViewAtIndex(dropdownList.currentIndex, ListView.Contain)
+        onClosed: {
+            if (focusDirection !== 0) {
+                var forward = focusDirection > 0
+                focusDirection = 0
+                Qt.callLater(function() {
+                    var target = forward ? root.KeyNavigation.tab : root.KeyNavigation.backtab
+                    if (!target) {
+                        target = root.nextItemInFocusChain(forward)
+                        while (target && target !== root &&
+                               (!target.visible || !target.enabled || !target.activeFocusOnTab))
+                            target = target.nextItemInFocusChain(forward)
+                    }
+                    if (target)
+                        target.forceActiveFocus(forward ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+                })
             }
-            return ideal
         }
+        onAboutToShow: {
+            var win = root.Window.window
+            spaceBelow = win ? win.height - root.mapToItem(null, 0, root.height).y - 8 : 300
+            spaceAbove = root.mapToItem(null, 0, 0).y - 8
+        }
+        readonly property real idealHeight: Math.min(300, Math.max(150,
+                                                root.count * root.itemHeight + (root.searchable ? 60 : 0)))
+        readonly property bool opensAbove: spaceBelow < idealHeight && spaceAbove > spaceBelow
+        y: opensAbove ? -height : root.height
+        width: root.width
+        height: Math.min(idealHeight, Math.max(root.itemHeight * 2,
+                                              opensAbove ? spaceAbove : spaceBelow))
         closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
         
         onVisibleChanged: {
             if (visible) {
                 root.originalIndex = root.currentIndex
                 root.searchString = ""
+                searchField.text = ""
                 // Snapshot the full model into a JS array for filtering
                 root.fullModelData = []
                 for (var i = 0; i < root.model.length; i++) {
@@ -245,7 +283,12 @@ ComboBox {
                         break
                     }
                 }
-                dropdownList.forceActiveFocus()
+                dropdownList.positionViewAtIndex(dropdownList.currentIndex, ListView.Contain)
+                if (root.searchable) {
+                    searchField.forceActiveFocus()
+                } else {
+                    dropdownList.forceActiveFocus()
+                }
             } else {
                 root.searchString = ""
                 filteredModel.clear()
@@ -262,10 +305,48 @@ ComboBox {
         }
         
         contentItem: Item {
+            ImTextField {
+                id: searchField
+                objectName: "comboSearchField"
+                visible: root.searchable
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Style.spacingTiny
+                placeholderText: root.searchPlaceholder
+                Accessible.name: qsTr("Search %1").arg(root._purposeWithoutColon)
+                onTextChanged: {
+                    if (root.searchable && popupComponent.visible) {
+                        root.searchString = text
+                        root.rebuildFilteredModel()
+                    }
+                }
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+                        if (filteredModel.count > 0) {
+                            var delta = event.key === Qt.Key_Down ? 1 : -1
+                            dropdownList.currentIndex = Math.max(0, Math.min(filteredModel.count - 1,
+                                                                           dropdownList.currentIndex + delta))
+                            dropdownList.positionViewAtIndex(dropdownList.currentIndex, ListView.Contain)
+                        }
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        if (dropdownList.currentIndex >= 0)
+                            root.selectFilteredItem(dropdownList.currentIndex)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+                        popupComponent.focusDirection = event.key === Qt.Key_Backtab ||
+                                                        (event.modifiers & Qt.ShiftModifier) ? -1 : 1
+                        popupComponent.close()
+                        event.accepted = true
+                    }
+                }
+            }
+
             // Search indicator bar at the top of the popup
             Rectangle {
                 id: searchIndicator
-                visible: root.searchString.length > 0
+                visible: !root.searchable && root.searchString.length > 0
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -300,14 +381,15 @@ ComboBox {
                 id: dropdownList
                 objectName: "comboDropdownList"
                 clip: true
-                anchors.top: searchIndicator.visible ? searchIndicator.bottom : parent.top
+                anchors.top: root.searchable ? searchField.bottom : searchIndicator.visible ? searchIndicator.bottom : parent.top
+                anchors.topMargin: root.searchable ? Style.spacingTiny : 0
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 model: filteredModel
                 boundsBehavior: Flickable.StopAtBounds
             
-            focus: popupComponent.visible
+            focus: popupComponent.visible && !root.searchable
             interactive: true
             flickDeceleration: PlatformHelper.prefersReducedMotion ? 100000 : 3000
             maximumFlickVelocity: PlatformHelper.prefersReducedMotion ? 0 : 2500
@@ -380,7 +462,7 @@ ComboBox {
                     else if (event.key === Qt.Key_Tab) {
                         event.accepted = false
                     }
-                    else if (event.text && event.text.length === 1) {
+                    else if (!root.searchable && event.text && event.text.length === 1) {
                         root.performSearch(event.text)
                         event.accepted = true
                     }
@@ -408,7 +490,7 @@ ComboBox {
                 else if (event.key === Qt.Key_Tab) {
                     event.accepted = false
                 }
-                else if (event.text && event.text.length === 1) {
+                else if (!root.searchable && event.text && event.text.length === 1) {
                     root.performSearch(event.text)
                     event.accepted = true
                 }

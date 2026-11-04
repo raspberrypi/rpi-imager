@@ -22,13 +22,14 @@ WizardStepBase {
     nextButtonAccessibleDescription: qsTr("Save localisation settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
-    nextButtonEnabled: comboCapitalCity.currentIndex !== -1
+    nextButtonEnabled: comboCapitalCity.currentIndex !== -1 || comboWifiCountry.currentIndex !== -1
 
     // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
     
     // Track if user manually changed fields (to avoid overwriting their choices)
     property bool userChangedTimezone: false
     property bool userChangedKeyboard: false
+    property bool userChangedWifiCountry: false
 
     // Initialize the component
     Component.onCompleted: {
@@ -36,6 +37,10 @@ WizardStepBase {
         comboCapitalCity.model = ImageWriterSingleton.getCapitalCitiesList()
         comboTimezone.model = ImageWriterSingleton.getTimezoneList()
         comboKeyboard.model = ImageWriterSingleton.getKeymapLayoutList()
+        comboKeyboard.displayLabels = ImageWriterSingleton.getKeymapLayoutNames()
+        comboWifiCountry.model = ImageWriterSingleton.getCountryList()
+        comboWifiCountry.displayLabels = ImageWriterSingleton.getCountryNames()
+        comboWifiCountry.currentIndex = -1
 
         // Start with no selection so the user must make an active choice
         comboCapitalCity.currentIndex = -1
@@ -44,6 +49,11 @@ WizardStepBase {
 
         // Restore from conserved customization settings only
         var settings = wizardContainer.customizationSettings
+
+        if (settings.recommendedWifiCountry) {
+            comboWifiCountry.currentIndex = comboWifiCountry.find(settings.recommendedWifiCountry)
+            root.userChangedWifiCountry = comboWifiCountry.currentIndex >= 0
+        }
 
         if (settings.capitalCity) {
             var cityIndex = comboCapitalCity.find(settings.capitalCity)
@@ -75,7 +85,8 @@ WizardStepBase {
             if (capitalCityInfoIcon.activeFocusOnTab)
                 items.push(capitalCityInfoIcon)
             return items.concat([labelTimezone, comboTimezone,
-                                 labelKeyboard, comboKeyboard]) 
+                                 labelKeyboard, comboKeyboard,
+                                 labelWifiCountry, comboWifiCountry])
         }, 0)
     }
     
@@ -104,7 +115,8 @@ WizardStepBase {
         }
         
         // Save the recommended WiFi country for later
-        if (localeData.countryCode) {
+        if (!userChangedWifiCountry && localeData.countryCode) {
+            comboWifiCountry.currentIndex = comboWifiCountry.find(localeData.countryCode)
             wizardContainer.customizationSettings.recommendedWifiCountry = localeData.countryCode
             ImageWriterSingleton.setPersistedCustomisationSetting("recommendedWifiCountry", localeData.countryCode)
             console.log("LocaleCustomizationStep: Saved recommendedWifiCountry:", localeData.countryCode)
@@ -113,7 +125,31 @@ WizardStepBase {
     
     // Content
     content: [
+    ScrollView {
+        id: localeScroll
+        width: parent.width
+        height: parent.height
+        clip: true
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+        function scrollToItem(item) {
+            var flick = contentItem
+            var pos = item.mapToItem(flick.contentItem, 0, 0)
+            if (pos.y < flick.contentY + 12)
+                flick.contentY = Math.max(0, pos.y - 12)
+            else if (pos.y + item.height > flick.contentY + flick.height - 12)
+                flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height,
+                                                    pos.y + item.height - flick.height + 12))
+        }
+
+        Item {
+            width: localeScroll.availableWidth
+            implicitWidth: localeScroll.availableWidth
+            implicitHeight: Math.max(localeScroll.availableHeight,
+                                     localeColumn.implicitHeight + 2 * Style.sectionPadding)
+
     ColumnLayout {
+        id: localeColumn
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
@@ -136,6 +172,9 @@ WizardStepBase {
                     ImComboBox {
                         id: comboCapitalCity
                         objectName: "localeCapitalCityCombo"
+                        onActiveFocusChanged: if (activeFocus) localeScroll.scrollToItem(this)
+                        searchable: true
+                        searchPlaceholder: qsTr("Search cities or countries…")
                         accessiblePurpose: labelCapitalCity.text
                         Layout.fillWidth: true
                         editable: false
@@ -190,6 +229,9 @@ WizardStepBase {
                 ImComboBox {
                     id: comboTimezone
                     objectName: "localeTimezoneCombo"
+                    onActiveFocusChanged: if (activeFocus) localeScroll.scrollToItem(this)
+                    searchable: true
+                    searchPlaceholder: qsTr("Search time zones…")
                     accessiblePurpose: labelTimezone.text
                     Layout.fillWidth: true
                     editable: false
@@ -208,6 +250,9 @@ WizardStepBase {
                 ImComboBox {
                     id: comboKeyboard
                     objectName: "localeKeyboardCombo"
+                    onActiveFocusChanged: if (activeFocus) localeScroll.scrollToItem(this)
+                    searchable: true
+                    searchPlaceholder: qsTr("Search layouts or countries…")
                     accessiblePurpose: labelKeyboard.text
                     Layout.fillWidth: true
                     editable: false
@@ -217,7 +262,25 @@ WizardStepBase {
                         root.userChangedKeyboard = true
                     }
                 }
+
+                WizardFormLabel {
+                    id: labelWifiCountry
+                    text: qsTr("Wi-Fi country:")
+                    accessibleDescription: qsTr("Choose the country where your Raspberry Pi will be used. This sets the permitted Wi-Fi channels and is suggested from your capital city.")
+                }
+                ImComboBox {
+                    id: comboWifiCountry
+                    objectName: "localeWifiCountryCombo"
+                    accessiblePurpose: labelWifiCountry.text
+                    Layout.fillWidth: true
+                    onActiveFocusChanged: if (activeFocus) localeScroll.scrollToItem(this)
+                    searchable: true
+                    searchPlaceholder: qsTr("Search countries…")
+                    onActivated: root.userChangedWifiCountry = true
+                }
             }
+        }
+    }
         }
     }
     ]
@@ -228,6 +291,15 @@ WizardStepBase {
         var tz = comboTimezone.editText ? comboTimezone.editText.trim() : ""
         var kb = comboKeyboard.editText ? comboKeyboard.editText.trim() : ""
         
+        var country = comboWifiCountry.currentText
+        if (country.length > 0) {
+            wizardContainer.customizationSettings.recommendedWifiCountry = country
+            ImageWriterSingleton.setPersistedCustomisationSetting("recommendedWifiCountry", country)
+        } else {
+            delete wizardContainer.customizationSettings.recommendedWifiCountry
+            ImageWriterSingleton.removePersistedCustomisationSetting("recommendedWifiCountry")
+        }
+
         // Update conserved customization settings (runtime state)
         if (city.length > 0) {
             wizardContainer.customizationSettings.capitalCity = city
@@ -253,7 +325,7 @@ WizardStepBase {
             ImageWriterSingleton.removePersistedCustomisationSetting("keyboard")
         }
         
-        wizardContainer.localeConfigured = (tz.length > 0 || kb.length > 0)
+        wizardContainer.localeConfigured = (tz.length > 0 || kb.length > 0 || country.length > 0)
         // Avoid logging settings to protect privacy
     }
     
