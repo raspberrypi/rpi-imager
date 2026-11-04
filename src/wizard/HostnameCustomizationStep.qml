@@ -50,6 +50,7 @@ WizardStepBase {
             if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
                 items.push(helpText)
             }
+            items.push(profilesButton)
             items.push(fieldHostname)
             return items
         }, 0)
@@ -84,6 +85,15 @@ WizardStepBase {
         anchors.margins: Style.sectionPadding
         spacing: Style.stepContentSpacing
         
+        ImButton {
+            id: profilesButton
+            objectName: "loadProfilesButton"
+            text: qsTr("Profiles…")
+            accessibleDescription: qsTr("Load or manage saved customisation profiles")
+            Layout.alignment: Qt.AlignRight
+            onClicked: root.wizardContainer.openProfiles(false)
+        }
+
         WizardSectionContainer {
             RowLayout {
                 Layout.fillWidth: true
