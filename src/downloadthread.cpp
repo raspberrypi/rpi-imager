@@ -2629,6 +2629,11 @@ void DownloadThread::setVerifyEnabled(bool verify)
     _verifyEnabled = verify;
 }
 
+void DownloadThread::setEjectEnabled(bool eject)
+{
+    _ejectEnabled = eject;
+}
+
 bool DownloadThread::isImage()
 {
     return true;

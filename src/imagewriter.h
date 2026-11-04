@@ -7,6 +7,7 @@
  */
 
 #include <memory>
+#include <optional>
 
 #include <QPointer>
 #include <QJsonArray>
@@ -119,6 +120,9 @@ public:
 
     /* Set verification enabled */
     Q_INVOKABLE void setVerifyEnabled(bool verify);
+
+    /* Eject for this run only, overriding the "eject" setting */
+    void setEjectEnabled(bool eject);
 
     /* Set custom repo */
     Q_INVOKABLE void setCustomRepo(const QUrl &repo);
@@ -765,6 +769,7 @@ protected:
     SuspendInhibitor *_suspendInhibitor;
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _online, _extractSizeKnown;
+    std::optional<bool> _ejectEnabled;
     QSettings _settings;
     rpi_imager::SecretSettings _secrets;
     QMap<QString,QString> _translations;
