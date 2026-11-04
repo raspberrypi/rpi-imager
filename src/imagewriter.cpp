@@ -1486,6 +1486,8 @@ void ImageWriter::_configureWriteThread()
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);
+    if (_ejectEnabled)
+        _thread->setEjectEnabled(*_ejectEnabled);
     // Single source of truth for the User-Agent: CurlNetworkConfig (also used by
     // all the libcurl fetch paths via applyCurlSettings) so it can never drift.
     _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
@@ -3119,6 +3121,13 @@ void ImageWriter::setVerifyEnabled(bool verify)
     _verifyEnabled = verify;
     if (_thread)
         _thread->setVerifyEnabled(verify);
+}
+
+void ImageWriter::setEjectEnabled(bool eject)
+{
+    _ejectEnabled = eject;
+    if (_thread)
+        _thread->setEjectEnabled(eject);
 }
 
 /* Relay events from download thread to QML */

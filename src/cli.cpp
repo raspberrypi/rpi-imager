@@ -370,7 +370,7 @@ int Cli::run()
 
     _imageWriter->setDst(args[1]);
     _imageWriter->setVerifyEnabled(!parser.isSet("disable-verify"));
-    _imageWriter->setSetting("eject", !parser.isSet("disable-eject"));
+    _imageWriter->setEjectEnabled(!parser.isSet("disable-eject"));
 
     connect(_app, &QCoreApplication::aboutToQuit, this, &rpi_imager::handBackUserFiles);
 

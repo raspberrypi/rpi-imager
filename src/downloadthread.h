@@ -122,6 +122,11 @@ public:
     void setVerifyEnabled(bool verify);
 
     /*
+     * Enable/disable eject after writing
+     */
+    void setEjectEnabled(bool eject);
+
+    /*
      * Enable disk cache
      */
     void setCacheFile(const QString &filename, qint64 filesize = 0);
