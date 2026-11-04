@@ -35,7 +35,7 @@ struct BlockRange {
 // Matches the structs in fastbootd's commands.cpp.  All integers are
 // little-endian, structs are packed (no padding).
 
-static constexpr uint32_t BMAP_WIRE_MAGIC = 0x424D4150;  // "BMAP"
+static constexpr uint32_t BMAP_WIRE_MAGIC = 0x50414D42;  // "BMAP" as little-endian bytes
 
 #pragma pack(push, 1)
 

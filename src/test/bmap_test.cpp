@@ -319,7 +319,10 @@ TEST_CASE("Serialisation produces the header fastbootd expects", "[bmap]")
     const auto wire = map.serialize();
     REQUIRE(wire.size() >= 16);
 
-    CHECK(le32(wire, 0) == BMAP_WIRE_MAGIC);
+    // fastbootd memcpy()s the header and compares with 0x50414D42, so
+    // the bytes must spell BMAP; comparing with our own constant cannot
+    // catch it being swapped.
+    CHECK(std::string(wire.begin(), wire.begin() + 4) == "BMAP");
     CHECK(le32(wire, 4) == 4096);
     CHECK(le32(wire, 8) == 2);       // range count
     CHECK(le32(wire, 12) == 0);      // reserved
