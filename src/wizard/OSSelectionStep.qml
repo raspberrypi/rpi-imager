@@ -456,7 +456,21 @@ WizardStepBase {
             Accessible.name: delegateItem.name + ". " + delegateItem.description + (delegateItem.release_date !== "" ? ". " + qsTr("Released: %1").arg(delegateItem.release_date) : "")
             Accessible.focusable: true
             Accessible.ignored: false
-            
+            Accessible.selectable: true
+            // The chosen OS, not the highlight the arrow keys move.
+            Accessible.selected: !!root.wizardContainer && delegateItem.name !== ""
+                                 && root.wizardContainer.selectedOsName === delegateItem.name
+            // Switch access and voice control select by action, not by key.
+            // As a click: selects without advancing, unlike Return.
+            Accessible.onPressAction: delegateItem.activate()
+
+            function activate() {
+                if (delegateItem.parentListView) {
+                    delegateItem.parentListView.currentSelectionIsFromMouse = true
+                    delegateItem.parentListView.itemSelected(delegateItem.index, delegateItem)
+                }
+            }
+
             Rectangle {
                 id: osbgrect
                 anchors.left: parent.left
@@ -488,14 +502,7 @@ WizardStepBase {
                         }
                     }
 
-                    onClicked: {
-                        // Trigger the itemSelected signal to handle selection with scroll preservation
-                        if (delegateItem.parentListView) {
-                            // Set flag to indicate this is a mouse click
-                            delegateItem.parentListView.currentSelectionIsFromMouse = true
-                            delegateItem.parentListView.itemSelected(delegateItem.index, delegateItem)
-                        }
-                    }
+                    onClicked: delegateItem.activate()
                     
                     onDoubleClicked: {
                         // Double-click acts like pressing Return - select and advance

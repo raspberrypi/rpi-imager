@@ -273,7 +273,16 @@ WizardStepBase {
                           + (hwitem.isUsbBootConnected ? ". " + qsTr("Connected via USB") : "")
             Accessible.focusable: true
             Accessible.ignored: false
-            
+            Accessible.selectable: true
+            // The chosen board, not the highlight the arrow keys move.
+            Accessible.selected: root.hasDeviceSelected && root.hwModel.currentIndex === hwitem.index
+            // Switch access and voice control select by action, not by key.
+            Accessible.onPressAction: hwitem.activate()
+
+            function activate() {
+                hwlist.itemSelected(hwitem.index, hwitem)
+            }
+
             Rectangle {
                 id: hwbgrect
                 anchors.fill: parent
@@ -291,11 +300,7 @@ WizardStepBase {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     
-                    onClicked: {
-                        // Trigger the itemSelected signal by setting ListView's currentIndex
-                        // This will handle all the selection logic in onItemSelected
-                        hwlist.itemSelected(hwitem.index, hwitem)
-                    }
+                    onClicked: hwitem.activate()
                     
                     onDoubleClicked: {
                         // Double-click acts like pressing Return - select and advance
