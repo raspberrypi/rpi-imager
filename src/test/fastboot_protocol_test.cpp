@@ -1597,3 +1597,96 @@ TEST_CASE("A response prefix this host does not know is a failure, not a pass",
     // Named, so a bug report says what the device actually said.
     CHECK(resp.message.find("Unknown response prefix") != std::string::npos);
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// Write verification (oem bmap-load / bmap-verify)
+// ────────────────────────────────────────────────────────────────────────
+
+static void queueDownloadAccepted(MockUsbTransport& mock, size_t size)
+{
+    char sizeHex[9];
+    snprintf(sizeHex, sizeof(sizeHex), "%08x", static_cast<unsigned>(size));
+    mock.queueBulkReadResponse(makeResponse("DATA", sizeHex));
+    mock.queueBulkReadResponse(makeResponse("OKAY"));
+}
+
+static bool sentCommand(MockUsbTransport& mock, const std::string& command)
+{
+    for (const auto& w : mock.capturedBulkWrites())
+        if (std::string(w.begin(), w.end()) == command)
+            return true;
+    return false;
+}
+
+TEST_CASE("verifyBlocks loads the ranges, verifies, and reports each range", "[fastboot][protocol][verify]")
+{
+    MockUsbTransport mock;
+    const std::vector<uint8_t> ranges(16 + 2 * 40, 0);
+    queueDownloadAccepted(mock, ranges.size());
+    mock.queueBulkReadResponse(makeResponse("OKAY", "bmap loaded: 2 ranges"));
+    mock.queueBulkReadResponse(makeResponse("INFO", "verifying range 0/2 (blocks 0-9)"));
+    mock.queueBulkReadResponse(makeResponse("INFO", "verifying range 1/2 (blocks 20-29)"));
+    mock.queueBulkReadResponse(makeResponse("OKAY", "verified 2 ranges ok"));
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    std::vector<std::pair<uint32_t, uint32_t>> seen;
+    const auto result = fb.verifyBlocks(mock, ranges, "mmcblk0",
+        [&](uint32_t i, uint32_t n) { seen.emplace_back(i, n); }, cancelled);
+
+    CHECK(result == FastbootProtocol::VerifyResult::Verified);
+    CHECK(sentCommand(mock, "oem bmap-load mmcblk0"));
+    CHECK(sentCommand(mock, "oem bmap-verify mmcblk0"));
+    CHECK(seen == std::vector<std::pair<uint32_t, uint32_t>>{{0, 2}, {1, 2}});
+}
+
+TEST_CASE("verifyBlocks reports a gadget that cannot verify as unsupported", "[fastboot][protocol][verify]")
+{
+    MockUsbTransport mock;
+    const std::vector<uint8_t> ranges(16, 0);
+    queueDownloadAccepted(mock, ranges.size());
+    mock.queueBulkReadResponse(makeResponse("FAIL", "Unknown OEM command."));
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    CHECK(fb.verifyBlocks(mock, ranges, "mmcblk0", {}, cancelled)
+          == FastbootProtocol::VerifyResult::Unsupported);
+    CHECK_FALSE(sentCommand(mock, "oem bmap-verify mmcblk0"));
+}
+
+TEST_CASE("verifyBlocks tells a mismatch from a failure to read", "[fastboot][protocol][verify][negative]")
+{
+    const std::string expected(64, 'a'), actual(64, 'b');
+    auto [reply, want] = GENERATE_COPY(Catch::Generators::table<std::string, FastbootProtocol::VerifyResult>({
+        {"3:" + expected + ":" + actual, FastbootProtocol::VerifyResult::Mismatch},
+        {"bmap-verify: read error at range 3: Input/output error", FastbootProtocol::VerifyResult::Failed},
+        {"bmap-verify: range 3 runs past the end of /dev/mmcblk0", FastbootProtocol::VerifyResult::Failed},
+        {"3:abc:def", FastbootProtocol::VerifyResult::Failed},
+    }));
+
+    MockUsbTransport mock;
+    const std::vector<uint8_t> ranges(16 + 40, 0);
+    queueDownloadAccepted(mock, ranges.size());
+    mock.queueBulkReadResponse(makeResponse("OKAY", "bmap loaded: 1 ranges"));
+    mock.queueBulkReadResponse(makeResponse("FAIL", reply));
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    CHECK(fb.verifyBlocks(mock, ranges, "mmcblk0", {}, cancelled) == want);
+    CHECK_THAT(fb.lastError(), Catch::Matchers::ContainsSubstring(reply));
+}
+
+TEST_CASE("verifyBlocks fails when the device stops answering", "[fastboot][protocol][verify][negative]")
+{
+    MockUsbTransport mock;
+    const std::vector<uint8_t> ranges(16 + 40, 0);
+    queueDownloadAccepted(mock, ranges.size());
+    mock.queueBulkReadResponse(makeResponse("OKAY", "bmap loaded: 1 ranges"));
+    mock.queueBulkReadResponse(makeResponse("INFO", "verifying range 0/1 (blocks 0-9)"));
+    // Nothing more queued: the read fails as a dead transport would.
+
+    FastbootProtocol fb;
+    std::atomic<bool> cancelled{false};
+    CHECK(fb.verifyBlocks(mock, ranges, "mmcblk0", {}, cancelled)
+          == FastbootProtocol::VerifyResult::Failed);
+}

@@ -56,6 +56,11 @@ static_assert(sizeof(BmapWireRange) == 40);
 
 #pragma pack(pop)
 
+// Ranges in the format "oem bmap-load" takes. The caller keeps block
+// numbers within 32 bits, as BlockMap::parse() does.
+std::vector<uint8_t> serializeBlockRanges(const std::vector<BlockRange>& ranges,
+                                          uint64_t blockSize);
+
 // ── Parsed block map ────────────────────────────────────────────────────
 
 // Sorted, non-overlapping list of mapped (allocated) block ranges.

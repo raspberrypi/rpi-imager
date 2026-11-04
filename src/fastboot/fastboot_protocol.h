@@ -16,6 +16,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -63,7 +64,8 @@ public:
     };
     CaptureResult sendCommandCapture(rpiboot::IUsbTransport& transport,
                                       std::string_view command,
-                                      int timeoutMs);
+                                      int timeoutMs,
+                                      const std::function<void(const std::string&)>& onInfo = {});
 
     // Download data to the device (for use with flash).
     // Sends "download:<hex-size>", waits for DATA response, then
@@ -183,6 +185,18 @@ public:
                                      std::string_view spidev,
                                      rpiboot::ProgressCallback progress,
                                      std::atomic<bool>& cancelled);
+
+    // ── Write verification (rpi-fastbootd c241e51) ────────────────────
+    //
+    // Download `ranges` (the "oem bmap-load" format), then have the device
+    // read each range of `blockDevice` back and compare its SHA-256.
+    // `onRange` is called as the device starts each range.
+    enum class VerifyResult { Verified, Mismatch, Unsupported, Failed };
+    VerifyResult verifyBlocks(rpiboot::IUsbTransport& transport,
+                              std::span<const uint8_t> ranges,
+                              std::string_view blockDevice,
+                              const std::function<void(uint32_t index, uint32_t count)>& onRange,
+                              std::atomic<bool>& cancelled);
 
     const std::string& lastError() const { return _lastError; }
 

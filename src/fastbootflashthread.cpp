@@ -10,6 +10,7 @@
 #include "config_txt_merge.h"
 #include "fastboot/sparse_encoder.h"
 #include "fastboot/bmap.h"
+#include "fastboot/write_manifest.h"
 #include "fastboot/pieeprom.h"
 #include "fastboot/eeprom_signer.h"
 #include "connect_device_registrar.h"
@@ -376,6 +377,57 @@ static QByteArray textBeforePadding(const uint8_t *data, size_t size)
         }
     }
     return out;
+}
+
+bool FastbootFlashThread::verifyWrite(fastboot::FastbootProtocol& fb,
+                                      rpiboot::IUsbTransport& transport,
+                                      const fastboot::WriteManifest& manifest)
+{
+    if (manifest.ranges().empty())
+        return true;
+    if (!manifest.representable()) {
+        qWarning() << "FastbootFlashThread: image too large for the device's verify format; not verified";
+        return true;
+    }
+
+    // Progress is reported in bytes, at the start of each range the
+    // device announces, so it matches the block path's verify bar.
+    const auto& ranges = manifest.ranges();
+    std::vector<quint64> bytesBefore(ranges.size() + 1, 0);
+    for (size_t i = 0; i < ranges.size(); ++i)
+        bytesBefore[i + 1] = bytesBefore[i]
+            + (ranges[i].end - ranges[i].begin) * manifest.blockSize();
+    const quint64 total = bytesBefore.back();
+
+    emit preparationStatusUpdate(tr("Verifying write..."));
+    emit verifyProgress(0, total);
+    const std::vector<uint8_t> wire = manifest.serialize();
+    const auto result = fb.verifyBlocks(transport, wire, _blockDevice.toStdString(),
+        [&](uint32_t index, uint32_t) {
+            if (index < ranges.size())
+                emit verifyProgress(bytesBefore[index], total);
+        }, _cancelled);
+
+    const QString detail = QString::fromStdString(fb.lastError());
+    switch (result) {
+    case fastboot::FastbootProtocol::VerifyResult::Verified:
+        emit verifyProgress(total, total);
+        qDebug() << "FastbootFlashThread: device verified" << ranges.size() << "ranges,"
+                 << total << "bytes";
+        return true;
+    case fastboot::FastbootProtocol::VerifyResult::Unsupported:
+        qWarning() << "FastbootFlashThread: device cannot verify writes; not verified:" << detail;
+        return true;
+    case fastboot::FastbootProtocol::VerifyResult::Mismatch:
+        qWarning() << "FastbootFlashThread:" << detail;
+        emit error(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
+        return false;
+    case fastboot::FastbootProtocol::VerifyResult::Failed:
+        break;
+    }
+    qWarning() << "FastbootFlashThread: verify failed:" << detail;
+    emit error(tr("Could not verify the write: %1").arg(detail));
+    return false;
 }
 
 bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
@@ -1001,6 +1053,11 @@ void FastbootFlashThread::runImpl()
     // become DONT_CARE (skipped entirely).  Otherwise zero-filled regions
     // are FILL(0) to guarantee correctness on non-erased storage.
     fastboot::SparseEncoder sparse(maxDownloadSize, _extractLen);
+    fastboot::WriteManifest manifest;
+    if (_verifyEnabled)
+        sparse.setBlockObserver([&manifest](uint64_t index, std::span<const uint8_t> block, bool written) {
+            manifest.addBlock(index, block, written);
+        });
 
     // Fetch and apply optional block map
     if (!_bmapUrl.isEmpty()) {
@@ -1179,6 +1236,8 @@ void FastbootFlashThread::runImpl()
             flashError = true;
     }
 
+    manifest.finish();
+
     if (!flashError && !_cancelled.load()) {
         qDebug() << "Sparse stats: raw=" << sparse.rawBlockCount()
                  << "fill=" << sparse.fillBlockCount()
@@ -1231,6 +1290,11 @@ void FastbootFlashThread::runImpl()
             return;
         }
     }
+
+    // 8b. Have the device read the write back, before customisation
+    //     changes the first partition.
+    if (_verifyEnabled && !verifyWrite(fb, *transport, manifest))
+        return;
 
     // 9. Apply OS customisation via fastboot file transfer
     qDebug() << "FastbootFlashThread: applying OS customisation...";

@@ -99,7 +99,8 @@ Response FastbootProtocol::sendCommand(rpiboot::IUsbTransport& transport,
 FastbootProtocol::CaptureResult FastbootProtocol::sendCommandCapture(
     rpiboot::IUsbTransport& transport,
     std::string_view command,
-    int timeoutMs)
+    int timeoutMs,
+    const std::function<void(const std::string&)>& onInfo)
 {
     CaptureResult result;
 
@@ -122,6 +123,8 @@ FastbootProtocol::CaptureResult FastbootProtocol::sendCommandCapture(
     for (;;) {
         auto resp = readResponse(transport, timeoutMs);
         if (resp.type == Response::Info || resp.type == Response::Text) {
+            if (onInfo && resp.type == Response::Info)
+                onInfo(resp.message);
             result.infoLines.push_back(resp.message);
             continue;
         }
@@ -454,6 +457,56 @@ std::vector<uint8_t> FastbootProtocol::readEeprom(rpiboot::IUsbTransport& transp
     }
 
     return upload(transport, progress, cancelled);
+}
+
+// ── Write verification ────────────────────────────────────────────────
+
+FastbootProtocol::VerifyResult FastbootProtocol::verifyBlocks(
+    rpiboot::IUsbTransport& transport,
+    std::span<const uint8_t> ranges,
+    std::string_view blockDevice,
+    const std::function<void(uint32_t index, uint32_t count)>& onRange,
+    std::atomic<bool>& cancelled)
+{
+    // Each INFO restarts the wait, and a range is at most 64 MiB, so a
+    // minute allows for slow SD cards rather than for a long command.
+    constexpr int kPerResponseTimeoutMs = 60 * 1000;
+    _lastError.clear();
+
+    if (!download(transport, ranges, nullptr, cancelled))
+        return VerifyResult::Failed;
+
+    const std::string dev(blockDevice);
+    auto load = sendCommand(transport, "oem bmap-load " + dev, kPerResponseTimeoutMs);
+    if (load.type != Response::Okay) {
+        _lastError = "oem bmap-load failed: " + load.message;
+        // Gadgets from before rpi-fastbootd c241e51 cannot verify at all.
+        return load.message.find("Unknown OEM command") != std::string::npos
+            ? VerifyResult::Unsupported : VerifyResult::Failed;
+    }
+
+    auto verify = sendCommandCapture(transport, "oem bmap-verify " + dev, kPerResponseTimeoutMs,
+        [&onRange](const std::string& line) {
+            unsigned index = 0, count = 0;
+            if (onRange && std::sscanf(line.c_str(), "verifying range %u/%u", &index, &count) == 2)
+                onRange(index, count);
+        });
+    const auto& terminal = verify.terminal;
+    if (terminal.type == Response::Okay)
+        return VerifyResult::Verified;
+
+    _lastError = "oem bmap-verify failed: " + terminal.message;
+    if (terminal.type != Response::Fail)
+        return VerifyResult::Failed;
+    // A mismatch is "<range>:<expected sha256>:<actual sha256>"; anything
+    // else (an I/O error, a range past the end) means it could not tell.
+    unsigned range = 0;
+    char expected[65] = {}, actual[65] = {};
+    if (std::sscanf(terminal.message.c_str(), "%u:%64[0-9a-f]:%64[0-9a-f]",
+                    &range, expected, actual) == 3
+        && std::strlen(expected) == 64 && std::strlen(actual) == 64)
+        return VerifyResult::Mismatch;
+    return VerifyResult::Failed;
 }
 
 // ── Flash ──────────────────────────────────────────────────────────────

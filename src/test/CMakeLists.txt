@@ -1205,6 +1205,7 @@ add_executable(sparse_encoder_test
     # only map it is ever handed came out of this parser. Qt comes with it:
     # the bmap is XML.
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/write_manifest.cpp
     sparse_encoder_test.cpp
 )
 
@@ -3450,6 +3451,7 @@ add_executable(fastboot_flash_thread_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastbootflashthread.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/write_manifest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/pieeprom.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/eeprom_signer.cpp
