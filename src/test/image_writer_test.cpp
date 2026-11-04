@@ -2755,6 +2755,19 @@ TEST_CASE("A single persisted setting can be removed on its own",
     w.clearSavedCustomisationSettings();
 }
 
+TEST_CASE("A WPA2 hotspot key survives saved-settings migration",
+          "[imagewriter][customisation][wifi][hotspot]")
+{
+    ImageWriter w(nullptr);
+    w.clearSavedCustomisationSettings();
+    const QString key(64, QLatin1Char('a'));
+    w.setSavedCustomisationSettings({{"wifiNetworkMode", "hotspot"},
+                                    {"wifiSSID", "My Pi"}, {"wifiPasswordCrypt", key}});
+    CHECK(w.getSavedCustomisationSettings().value("wifiPasswordCrypt").toString() == key);
+    CHECK(w.getSavedCustomisationSettings().value("wifiPasswordCrypt").toString() == key);
+    w.clearSavedCustomisationSettings();
+}
+
 TEST_CASE("A PMK saved by an earlier version is deleted on load",
           "[imagewriter][customisation][wifi]")
 {
@@ -16262,4 +16275,22 @@ TEST_CASE("A cache that fails its check is not written; the download happens ins
     QFile written(target);
     REQUIRE(written.open(QIODevice::ReadOnly));
     CHECK(written.read(image.size()) == image);
+}
+
+TEST_CASE("Hotspot customisation is offered only for NetworkManager-capable OS formats",
+          "[imagewriter][customisation][hotspot]")
+{
+    ImageWriter writer(nullptr);
+    selectImageWithFormat(writer, "systemd", "2023-05-03");
+    CHECK_FALSE(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "systemd", "2023-10-10");
+    CHECK(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "cloudinit");
+    CHECK_FALSE(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "cloudinit-rpi");
+    CHECK(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "rpi-preseed");
+    CHECK(writer.imageSupportsWifiHotspot());
+    selectImageWithFormat(writer, "none");
+    CHECK_FALSE(writer.imageSupportsWifiHotspot());
 }

@@ -178,6 +178,7 @@ bool SecretSettings::isSecret(const QString& key)
 {
     static const QStringList secrets{
         QStringLiteral("wifiPassword"),
+        QStringLiteral("wifiPasswordCrypt"),
         QStringLiteral("sshUserPassword"),
         QStringLiteral("sshAuthorizedKeys"),
         QStringLiteral("connect_org_api_key"),

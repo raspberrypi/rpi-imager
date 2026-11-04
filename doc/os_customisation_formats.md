@@ -47,3 +47,32 @@ However although Imager 1.x will _appear_ to customise a local Raspberry Pi OS T
 When loading a locally-downloaded OS image file into Raspberry Pi Imager 2.x, it correctly assumes `"init_format": "none"`, because it has no way of knowing which customisation format the image expects.
 To enable customisation for local images in Imager 2.x, create a local OS manifest using [create_local_json.py](./local_json/).
 This local OS manifest will then contain the required `init_format` metadata, which will allow Imager 2.x to successfully customise local OS images.
+
+### Wi-Fi hotspots
+
+The Wi-Fi customisation step offers **Join a network** and **Create a hotspot**.
+The hotspot is an alternative to joining an existing network, rather than an
+automatic fallback. It starts at boot, broadcasts the chosen SSID on `wlan0`
+using the 2.4 GHz band, and gives connected devices addresses through
+NetworkManager's shared IPv4 mode. The Pi is reachable at `10.42.0.1`.
+Local access works without internet; internet sharing requires another upstream
+connection on the Pi, such as Ethernet. Remote access still requires enabling
+SSH or another service separately.
+
+Hotspot creation requires an access-point-capable wireless adapter and
+NetworkManager. Imager offers it for Raspberry Pi OS Bookworm or later with
+`systemd`, `cloudinit-rpi`, or `rpi-preseed` customisation. Generic `cloudinit`
+images and older Raspberry Pi OS releases do not offer it. A local `systemd`
+image without a release date can use the option, but must include NetworkManager.
+
+The generated `imager-hotspot.nmconnection` uses `mode=ap`, `ipv4.method=shared`,
+autoconnect, and owner-only file permissions. Secure hotspots use WPA2 with a
+derived 64-hex PSK; the wizard persists the derived key, never the plaintext
+passphrase. Open hotspots omit the security section. Hotspot names are limited
+to 32 UTF-8 bytes, and the hotspot always broadcasts its SSID.
+
+For `systemd`, the first-run script installs the profile before the normal boot.
+For `cloudinit-rpi`, `runcmd` installs and activates the profile while the
+network-config retains Ethernet DHCP. For `rpi-preseed`, the native `[wlan]`
+section keeps credentials in fields that preseed redacts from logs; an early
+command converts its profile to a hotspot offline before NetworkManager starts.
