@@ -336,7 +336,8 @@ void DriveListModelPollThread::run()
 std::unique_ptr<rpiboot::IUsbContext> DriveListModelPollThread::makeUsbContext()
 {
     try {
-        return std::make_unique<rpiboot::LibusbContext>();
+        return std::make_unique<rpiboot::LibusbContext>(
+            rpiboot::LibusbContext::Elevation::IfHelperRunning);
     } catch (...) {
         // No USB, no permissions. The rest of the drive list is unaffected.
         return nullptr;

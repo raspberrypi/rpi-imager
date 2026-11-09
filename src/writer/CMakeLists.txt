@@ -36,6 +36,8 @@ if(NOT APPLE)
             server/linux/helper_log.cpp
             server/linux/peer_auth_linux.h
             server/linux/peer_auth_linux.cpp
+            server/linux/usb_device_access.h
+            server/linux/usb_device_access.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/../linux/helper_maintenance.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/../linux/appimage_signature.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/../linux/proc_environ.cpp

@@ -15,6 +15,7 @@
 #include <QString>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -54,12 +55,28 @@ public:
 
     // Open a specific device for communication
     virtual std::unique_ptr<IUsbTransport> openDevice(const UsbDeviceInfo& info) const = 0;
+
+    enum class OpenFailure { None, NotFound, AccessDenied, Other };
+    // Why the last openDevice() returned nothing.
+    virtual OpenFailure lastOpenFailure() const { return OpenFailure::None; }
 };
 
 // RAII wrapper around libusb_context
 class LibusbContext : public IUsbContext {
 public:
-    LibusbContext();
+    // Whether a node this process may not open is tried through the
+    // privileged helper. A background scan must never raise its prompt.
+    enum class Elevation { Never, IfHelperRunning, Allowed };
+
+    // Installed by the application where a helper exists (Linux). open()
+    // returns a descriptor for bus/address, or -1.
+    struct PrivilegedOpener {
+        std::function<int(uint8_t bus, uint8_t address)> open;
+        std::function<bool()> helperRunning;
+    };
+    static void setPrivilegedOpener(PrivilegedOpener opener);
+
+    explicit LibusbContext(Elevation elevation = Elevation::Never);
     ~LibusbContext() override;
 
     LibusbContext(const LibusbContext&) = delete;
@@ -68,19 +85,25 @@ public:
     std::vector<UsbDeviceInfo> scanBootDevices() const override;
     std::vector<UsbDeviceInfo> scanFastbootDevices() const override;
     std::unique_ptr<IUsbTransport> openDevice(const UsbDeviceInfo& info) const override;
+    OpenFailure lastOpenFailure() const override { return _lastOpenFailure; }
 
     // Raw context for advanced usage (hotplug registration, etc.)
     libusb_context* raw() const { return _ctx; }
 
 private:
+    libusb_device_handle* openThroughHelper(const UsbDeviceInfo& info, int& fd) const;
+
     libusb_context* _ctx = nullptr;
+    Elevation _elevation;
+    mutable OpenFailure _lastOpenFailure = OpenFailure::None;
 };
 
 // Real IUsbTransport implementation backed by libusb
 class LibusbTransport : public IUsbTransport {
 public:
-    // Takes ownership of the handle; claims interface 0
-    explicit LibusbTransport(libusb_device_handle* handle);
+    // Takes ownership of the handle; claims interface 0. ownedFd is the node
+    // a wrapped handle was made from, which libusb leaves open.
+    explicit LibusbTransport(libusb_device_handle* handle, int ownedFd = -1);
     ~LibusbTransport() override;
 
     LibusbTransport(const LibusbTransport&) = delete;
@@ -122,6 +145,7 @@ public:
 
 private:
     libusb_device_handle* _handle = nullptr;
+    [[maybe_unused]] int _ownedFd = -1;  // closed on Linux only
     bool _interfaceClaimed = false;
     uint8_t _interface = 0;
     uint8_t _outEp = 0x01;

@@ -46,6 +46,8 @@
 #include <vector>
 #include "writer/server/linux/service_impl.h"
 #include "linux/appimage_signature.h"
+#include "privileged_io/backends/linux_polkit.h"
+#include "rpiboot/libusb_transport.h"
 #include "rpi_imager_identity.h"
 #endif
 #ifdef Q_OS_DARWIN
@@ -369,6 +371,21 @@ int main(int argc, char *argv[])
     // (#1671).
     const bool linuxHelperWrites =
         rpi_imager::preferNativePrivilegedHelper("RPI_IMAGER_USE_LINUX_HELPER");
+    if (linuxHelperWrites) {
+        // Without udev rules (a bare AppImage) only root can open a Pi in
+        // USB boot mode; the helper opens it and the GUI keeps the protocol.
+        rpiboot::LibusbContext::setPrivilegedOpener({
+            [](uint8_t bus, uint8_t address) {
+                auto& writer = rpi_imager::getProcessPrivilegedWriter();
+                if (writer.backend() != rpi_imager::privileged::BackendKind::LinuxPolkit)
+                    return -1;
+                const auto r = static_cast<rpi_imager::privileged::backends::LinuxPolkitBackend&>(
+                    writer).openUsbDevice(bus, address);
+                return r.ok ? r.value : -1;
+            },
+            [] { return rpi_imager::getProcessPrivilegedWriter().helperActive(); },
+        });
+    }
 #else
     const bool linuxHelperWrites = false;
 #endif

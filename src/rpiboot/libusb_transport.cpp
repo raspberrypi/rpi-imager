@@ -6,15 +6,39 @@
 #include "libusb_transport.h"
 #include <libusb.h>
 #include <cstring>
+#include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <QDebug>
+#ifdef __linux__
+#include <unistd.h>
+#endif
 
 namespace rpiboot {
 
 // ── LibusbContext ──────────────────────────────────────────────────────
 
-LibusbContext::LibusbContext()
+namespace {
+std::mutex& openerMutex()
+{
+    static std::mutex m;
+    return m;
+}
+LibusbContext::PrivilegedOpener& installedOpener()
+{
+    static LibusbContext::PrivilegedOpener opener;
+    return opener;
+}
+} // namespace
+
+void LibusbContext::setPrivilegedOpener(PrivilegedOpener opener)
+{
+    std::lock_guard<std::mutex> lk(openerMutex());
+    installedOpener() = std::move(opener);
+}
+
+LibusbContext::LibusbContext(Elevation elevation)
+    : _elevation(elevation)
 {
     int rc = libusb_init(&_ctx);
     if (rc != LIBUSB_SUCCESS)
@@ -116,12 +140,13 @@ std::unique_ptr<IUsbTransport> LibusbContext::openDevice(const UsbDeviceInfo& in
         return nullptr;
 
     libusb_device_handle* handle = nullptr;
+    int rc = LIBUSB_ERROR_NOT_FOUND;
 
     for (ssize_t i = 0; i < count; ++i) {
         if (libusb_get_bus_number(list[i]) == info.busNumber &&
             libusb_get_device_address(list[i]) == info.deviceAddress) {
 
-            int rc = libusb_open(list[i], &handle);
+            rc = libusb_open(list[i], &handle);
             if (rc != LIBUSB_SUCCESS)
                 handle = nullptr;
             break;
@@ -130,16 +155,69 @@ std::unique_ptr<IUsbTransport> LibusbContext::openDevice(const UsbDeviceInfo& in
 
     libusb_free_device_list(list, 1);
 
+    if (handle) {
+        _lastOpenFailure = OpenFailure::None;
+        return std::make_unique<LibusbTransport>(handle);
+    }
+    if (rc != LIBUSB_ERROR_ACCESS) {
+        _lastOpenFailure = rc == LIBUSB_ERROR_NOT_FOUND || rc == LIBUSB_ERROR_NO_DEVICE
+                               ? OpenFailure::NotFound
+                               : OpenFailure::Other;
+        return nullptr;
+    }
+
+    _lastOpenFailure = OpenFailure::AccessDenied;
+    int fd = -1;
+    handle = openThroughHelper(info, fd);
     if (!handle)
         return nullptr;
+    _lastOpenFailure = OpenFailure::None;
+    return std::make_unique<LibusbTransport>(handle, fd);
+}
 
-    return std::make_unique<LibusbTransport>(handle);
+libusb_device_handle* LibusbContext::openThroughHelper(const UsbDeviceInfo& info, int& fd) const
+{
+    fd = -1;
+#ifdef __linux__
+    PrivilegedOpener opener;
+    {
+        std::lock_guard<std::mutex> lk(openerMutex());
+        opener = installedOpener();
+    }
+    if (_elevation == Elevation::Never || !opener.open)
+        return nullptr;
+    if (_elevation == Elevation::IfHelperRunning
+        && !(opener.helperRunning && opener.helperRunning()))
+        return nullptr;
+
+    fd = opener.open(info.busNumber, info.deviceAddress);
+    if (fd < 0) {
+        qDebug() << "rpiboot: helper would not open USB device" << info.busNumber
+                 << ":" << info.deviceAddress;
+        return nullptr;
+    }
+    libusb_device_handle* handle = nullptr;
+    const int rc = libusb_wrap_sys_device(_ctx, static_cast<intptr_t>(fd), &handle);
+    if (rc != LIBUSB_SUCCESS) {
+        qDebug() << "rpiboot: libusb_wrap_sys_device failed:"
+                 << libusb_strerror(static_cast<libusb_error>(rc));
+        ::close(fd);
+        fd = -1;
+        return nullptr;
+    }
+    qDebug() << "rpiboot: opened USB device" << info.busNumber << ":" << info.deviceAddress
+             << "through the privileged helper";
+    return handle;
+#else
+    (void)info;
+    return nullptr;
+#endif
 }
 
 // ── LibusbTransport ────────────────────────────────────────────────────
 
-LibusbTransport::LibusbTransport(libusb_device_handle* handle)
-    : _handle(handle)
+LibusbTransport::LibusbTransport(libusb_device_handle* handle, int ownedFd)
+    : _handle(handle), _ownedFd(ownedFd)
 {
     // Read the active config descriptor to determine the correct interface
     // and bulk endpoints, matching the upstream rpiboot Initialize_Device() logic.
@@ -210,6 +288,10 @@ LibusbTransport::~LibusbTransport()
             libusb_release_interface(_handle, _interface);
         libusb_close(_handle);
     }
+#ifdef __linux__
+    if (_ownedFd >= 0)
+        ::close(_ownedFd);
+#endif
 }
 
 std::string LibusbTransport::interfaceString() const

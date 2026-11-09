@@ -45,7 +45,8 @@ std::unique_ptr<rpiboot::IUsbContext> RpibootThread::makeUsbContext()
     // no permissions, no usbfs. Callers get nullptr and report it rather
     // than the exception escaping into a QThread::run().
     try {
-        return std::make_unique<rpiboot::LibusbContext>();
+        return std::make_unique<rpiboot::LibusbContext>(
+            rpiboot::LibusbContext::Elevation::Allowed);
     } catch (const std::exception &e) {
         qWarning() << "RpibootThread: cannot open the USB bus:" << e.what();
         return nullptr;
@@ -157,7 +158,9 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device"));
-                emit error(tr("Failed to open USB device"));
+                emit error(ctx && ctx->lastOpenFailure() == rpiboot::IUsbContext::OpenFailure::AccessDenied
+                               ? tr("Raspberry Pi Imager was not given permission to use the USB device.")
+                               : tr("Failed to open USB device"));
                 return false;
             }
 
@@ -222,7 +225,9 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device after re-enumeration"));
-                emit error(tr("Failed to open USB device after re-enumeration"));
+                emit error(ctx && ctx->lastOpenFailure() == rpiboot::IUsbContext::OpenFailure::AccessDenied
+                               ? tr("Raspberry Pi Imager was not given permission to use the USB device.")
+                               : tr("Failed to open USB device after re-enumeration"));
                 return false;
             }
 

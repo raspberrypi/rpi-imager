@@ -900,7 +900,7 @@ void FastbootFlashThread::runImpl()
     QElapsedTimer deviceOpenTimer;
     deviceOpenTimer.start();
 
-    rpiboot::LibusbContext ctx;
+    rpiboot::LibusbContext ctx(rpiboot::LibusbContext::Elevation::Allowed);
     std::unique_ptr<rpiboot::IUsbTransport> transport;
 
     rpiboot::UsbDeviceInfo targetInfo{};
@@ -917,7 +917,9 @@ void FastbootFlashThread::runImpl()
     transport = openFastbootTransport(ctx, targetInfo);
     if (!transport || !transport->isOpen()) {
         emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), false, _fastbootId);
-        emit error(tr("Failed to open fastboot device: %1").arg(_fastbootId));
+        emit error(ctx.lastOpenFailure() == rpiboot::IUsbContext::OpenFailure::AccessDenied
+                       ? tr("Raspberry Pi Imager was not given permission to use the USB device.")
+                       : tr("Failed to open fastboot device: %1").arg(_fastbootId));
         return;
     }
 
