@@ -1712,6 +1712,7 @@ TEST_CASE("cloud-init network-config writes an EAP block for WPA2/WPA3 Enterpris
     REQUIRE_THAT(yaml, ContainsSubstring("          auth:\n"
                                          "            key-management: eap\n"
                                          "            method: peap\n"
+                                         "            phase2-auth: mschapv2\n"
                                          "            identity: \"user@example.com\"\n"
                                          "            password: \"correct horse\"\n"));
     // The password belongs inside auth:, not as the Personal shorthand
