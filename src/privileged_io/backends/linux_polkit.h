@@ -28,7 +28,10 @@ public:
         // running client executable, then /usr/bin/rpi-imager-writer.
         std::string helper_exe_path;
 
-        std::uint32_t handshake_timeout_ms = 30000;
+        // Includes the time a person spends at the password prompt, which
+        // may be minutes with a screen reader. Cancelling ends pkexec, so
+        // this only bounds a helper that hangs.
+        std::uint32_t handshake_timeout_ms = 600000;
     };
 
     LinuxPolkitBackend();

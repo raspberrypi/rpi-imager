@@ -9,10 +9,16 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <filesystem>
+#include <memory>
 #include <string>
+#include <system_error>
+#include <type_traits>
 #include <unistd.h>
 #include <vector>
 
@@ -119,16 +125,16 @@ bool sha256FileZeroedSections(int fd,
         gnutls_hash(hd, buf.data(), static_cast<std::size_t>(n));
     }
 
-    const int rc = gnutls_hash_output(hd, out_digest);
+    gnutls_hash_output(hd, out_digest);
     gnutls_hash_deinit(hd, nullptr);
-    return rc == 0;
+    return true;
 }
 
 class GpgmeContext {
 public:
     GpgmeContext() {
-        const gpgme_error_t err = gpgme_check_version(nullptr);
-        if (err) {
+        // Returns the library version, or null if initialisation failed.
+        if (!gpgme_check_version(nullptr)) {
             ok_ = false;
             return;
         }
@@ -141,6 +147,59 @@ public:
 private:
     bool ok_ = false;
 };
+
+// The embedded key is imported into a home of its own: the root helper's
+// keyring never holds it. no-autostart keeps gpg from leaving an agent
+// running for every connection.
+class ScratchGpgHome {
+public:
+    ScratchGpgHome() {
+        char tmpl[] = "/tmp/rpi-imager-gpg-XXXXXX";
+        if (!::mkdtemp(tmpl)) {
+            return;
+        }
+        path_ = tmpl;
+        const std::string conf = path_ + "/gpg.conf";
+        const int fd = ::open(conf.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+        static constexpr char kConf[] = "no-autostart\n";
+        ok_ = fd >= 0 && ::write(fd, kConf, sizeof(kConf) - 1) == sizeof(kConf) - 1;
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+    ~ScratchGpgHome() {
+        if (!path_.empty()) {
+            std::error_code ec;
+            std::filesystem::remove_all(path_, ec);
+        }
+    }
+    ScratchGpgHome(const ScratchGpgHome&) = delete;
+    ScratchGpgHome& operator=(const ScratchGpgHome&) = delete;
+
+    bool ok() const { return ok_; }
+    const std::string& path() const { return path_; }
+
+private:
+    std::string path_;
+    bool ok_ = false;
+};
+
+struct GpgmeCtxDeleter {
+    void operator()(gpgme_ctx_t c) const { gpgme_release(c); }
+};
+struct GpgmeDataDeleter {
+    void operator()(gpgme_data_t d) const { gpgme_data_release(d); }
+};
+using GpgmeCtx = std::unique_ptr<std::remove_pointer_t<gpgme_ctx_t>, GpgmeCtxDeleter>;
+using GpgmeData = std::unique_ptr<std::remove_pointer_t<gpgme_data_t>, GpgmeDataDeleter>;
+
+GpgmeData dataFrom(const void* bytes, std::size_t len) {
+    gpgme_data_t d = nullptr;
+    if (gpgme_data_new_from_mem(&d, static_cast<const char*>(bytes), len, 1) != 0) {
+        return nullptr;
+    }
+    return GpgmeData(d);
+}
 
 bool fingerprintAllowed(const std::string& fp,
                         const std::vector<std::string>& trusted) {
@@ -315,51 +374,85 @@ VerifyResult verifyEmbeddedSignature(
         return VerifyResult::Unsigned;
     }
 
+    std::vector<unsigned char> public_key(key.length);
+    if (key.length > 0) {
+        const int kfd = ::open(appimage_path.c_str(), O_RDONLY | O_CLOEXEC);
+        const bool read_ok = kfd >= 0
+            && readAt(kfd, static_cast<off_t>(key.offset), public_key.data(), key.length);
+        if (kfd >= 0) {
+            ::close(kfd);
+        }
+        if (!read_ok) {
+            return VerifyResult::IoError;
+        }
+    }
+    while (!public_key.empty() && public_key.back() == 0) {
+        public_key.pop_back();
+    }
+    if (public_key.empty()) {
+        return VerifyResult::UntrustedKey;
+    }
+
     static GpgmeContext gpg_init;
     if (!gpg_init.ok()) {
         return VerifyResult::InternalError;
     }
 
-    gpgme_ctx_t ctx = nullptr;
-    if (gpgme_new(&ctx) != 0) {
+    ScratchGpgHome home;
+    gpgme_ctx_t raw_ctx = nullptr;
+    if (!home.ok() || gpgme_new(&raw_ctx) != 0) {
         return VerifyResult::InternalError;
     }
-    gpgme_set_protocol(ctx, GPGME_PROTOCOL_OpenPGP);
-
-    gpgme_data_t sig_data = nullptr;
-    gpgme_data_t plain_data = nullptr;
-    if (gpgme_data_new_from_mem(&sig_data,
-                                reinterpret_cast<const char*>(signature.data()),
-                                signature.size(), 0) != 0
-        || gpgme_data_new_from_mem(&plain_data, digest_hex, std::strlen(digest_hex), 0) != 0) {
-        gpgme_data_release(sig_data);
-        gpgme_data_release(plain_data);
-        gpgme_release(ctx);
+    const GpgmeCtx ctx(raw_ctx);
+    gpgme_set_protocol(ctx.get(), GPGME_PROTOCOL_OpenPGP);
+    if (gpgme_ctx_set_engine_info(ctx.get(), GPGME_PROTOCOL_OpenPGP, nullptr,
+                                  home.path().c_str()) != 0) {
         return VerifyResult::InternalError;
     }
 
-    const gpgme_error_t ver_err = gpgme_op_verify(ctx, sig_data, nullptr, plain_data);
-    gpgme_data_release(sig_data);
-    gpgme_data_release(plain_data);
-
-    if (gpgme_err_code(ver_err) != GPG_ERR_NO_ERROR) {
-        gpgme_release(ctx);
+    const GpgmeData key_data = dataFrom(public_key.data(), public_key.size());
+    if (!key_data) {
+        return VerifyResult::InternalError;
+    }
+    const gpgme_import_result_t imported =
+        gpgme_op_import(ctx.get(), key_data.get()) == 0 ? gpgme_op_import_result(ctx.get())
+                                                        : nullptr;
+    if (!imported || imported->imported + imported->unchanged == 0) {
         return VerifyResult::Tampered;
     }
 
-    gpgme_verify_result_t result = gpgme_get_verify_result(ctx);
-    if (!result || !result->signatures) {
-        gpgme_release(ctx);
+    const GpgmeData sig_data = dataFrom(signature.data(), signature.size());
+    const GpgmeData signed_digest = dataFrom(digest_hex, std::strlen(digest_hex));
+    if (!sig_data || !signed_digest) {
+        return VerifyResult::InternalError;
+    }
+
+    // Detached: the signed text is the third argument, not the fourth.
+    if (gpgme_op_verify(ctx.get(), sig_data.get(), signed_digest.get(), nullptr) != 0) {
         return VerifyResult::Tampered;
     }
 
-    char* fpr = result->signatures->fpr;
-    if (!fpr || !fingerprintAllowed(fpr, trusted_key_fingerprints)) {
-        gpgme_release(ctx);
+    // gpgme fills in fpr from the signature packet even when the signature is
+    // bad or its key unknown, so the status has to be checked before it.
+    const gpgme_verify_result_t result = gpgme_op_verify_result(ctx.get());
+    const gpgme_signature_t sig_result = result ? result->signatures : nullptr;
+    if (!sig_result || gpgme_err_code(sig_result->status) != GPG_ERR_NO_ERROR
+        || !sig_result->fpr) {
+        return VerifyResult::Tampered;
+    }
+
+    // A signing subkey reports its own fingerprint; pins name the primary key.
+    std::string primary = sig_result->fpr;
+    gpgme_key_t signer = nullptr;
+    if (gpgme_get_key(ctx.get(), sig_result->fpr, &signer, 0) == 0 && signer) {
+        if (signer->fpr) {
+            primary = signer->fpr;
+        }
+        gpgme_key_unref(signer);
+    }
+    if (!fingerprintAllowed(primary, trusted_key_fingerprints)) {
         return VerifyResult::UntrustedKey;
     }
-
-    gpgme_release(ctx);
     return VerifyResult::Ok;
 }
 

@@ -635,6 +635,15 @@ if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     rpi_discover_tests(win_pipe_stream_test)
 endif()
 
+# The AppImage signature the Linux helper authenticates its client by.
+if(TARGET rpi_imager_writer_linux)
+    add_executable(appimage_signature_test appimage_signature_test.cpp)
+    target_include_directories(appimage_signature_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(appimage_signature_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(appimage_signature_test PRIVATE cxx_std_20)
+    rpi_discover_tests(appimage_signature_test)
+endif()
+
 # ============================================================================
 # SecureBootCrypto
 # ============================================================================

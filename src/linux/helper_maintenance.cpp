@@ -5,6 +5,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <mntent.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <vector>

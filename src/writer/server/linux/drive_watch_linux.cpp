@@ -21,7 +21,7 @@ struct DriveWatchService::Impl {
     std::atomic<bool> stop{false};
     std::thread thread;
 
-    udev* udev = nullptr;
+    struct udev* udev = nullptr;
     udev_monitor* monitor = nullptr;
     int monitor_fd = -1;
 

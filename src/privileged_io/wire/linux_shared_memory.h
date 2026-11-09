@@ -27,6 +27,8 @@ public:
 
     LinuxSharedMemory(const LinuxSharedMemory&) = delete;
     LinuxSharedMemory& operator=(const LinuxSharedMemory&) = delete;
+    LinuxSharedMemory(LinuxSharedMemory&& other) noexcept;
+    LinuxSharedMemory& operator=(LinuxSharedMemory&& other) noexcept;
 
     // Helper side: memfd_create + ftruncate + mmap a writable region.
     bool createOwned(std::size_t size_bytes);

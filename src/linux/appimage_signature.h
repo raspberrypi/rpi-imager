@@ -28,9 +28,10 @@ struct SectionInfo {
 // Locate an ELF section by name in a Type 2 AppImage on disk.
 bool findElfSection(const std::string& path, const char* section_name, SectionInfo& out);
 
-// Verify the embedded signature against `trusted_key_fingerprints` (uppercase hex,
-// no spaces). When the list is empty, only structural checks are performed and
-// unsigned images return VerifyResult::Unsigned.
+// Verify the embedded signature with the key embedded beside it, then require
+// that key's primary fingerprint to be in `trusted_key_fingerprints` (uppercase
+// hex, no spaces). An empty list accepts any good signature; unsigned images
+// return VerifyResult::Unsigned either way.
 VerifyResult verifyEmbeddedSignature(
     const std::string& appimage_path,
     const std::vector<std::string>& trusted_key_fingerprints);

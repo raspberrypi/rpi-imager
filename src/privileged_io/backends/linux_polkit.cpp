@@ -99,13 +99,16 @@ void reapHelperChild(pid_t& pid) {
 proto_ns::ErrorInfo elevationFailureFromStatus(int status) {
     if (WIFEXITED(status)) {
         const int code = WEXITSTATUS(status);
+        // pkexec(1): 127 is "not authorised", 126 "dialog dismissed". The
+        // helper's presence was checked before spawning, so 127 is not a
+        // missing binary.
         if (code == 127) {
-            return makeError(proto_ns::ERROR_HELPER_NOT_INSTALLED,
-                             "pkexec could not execute privileged helper");
+            return makeError(proto_ns::ERROR_HELPER_INSTALL_REJECTED,
+                             "pkexec: not authorised to run privileged helper");
         }
         if (code == 126) {
             return makeError(proto_ns::ERROR_HELPER_INSTALL_REJECTED,
-                             "pkexec permission denied");
+                             "pkexec: authentication dialog dismissed");
         }
         return makeError(proto_ns::ERROR_OPERATION_CANCELLED,
                          "privilege elevation failed (exit " + std::to_string(code) + ")");
@@ -235,7 +238,7 @@ bool ensureConnectedImpl(LinuxPolkitBackend::State* st, proto_ns::ErrorInfo& err
 
     const auto deadline = std::chrono::steady_clock::now()
         + std::chrono::milliseconds(
-            st->options.handshake_timeout_ms ? st->options.handshake_timeout_ms : 30000);
+            st->options.handshake_timeout_ms ? st->options.handshake_timeout_ms : 600000);
 
     bool connected = false;
     while (std::chrono::steady_clock::now() < deadline) {

@@ -340,22 +340,22 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[i], "--verify-appimage-signature") == 0 && i + 1 < argc) {
             std::vector<std::string> trusted;
-            trusted.reserve(identity::kTrustedAppImageKeyFingerprintCount);
-            for (std::size_t k = 0; k < identity::kTrustedAppImageKeyFingerprintCount; ++k) {
-                trusted.emplace_back(identity::kTrustedAppImageKeyFingerprints[k]);
+            trusted.reserve(rpi_imager::identity::kTrustedAppImageKeyFingerprintCount);
+            for (std::size_t k = 0; k < rpi_imager::identity::kTrustedAppImageKeyFingerprintCount; ++k) {
+                trusted.emplace_back(rpi_imager::identity::kTrustedAppImageKeyFingerprints[k]);
             }
             const auto result =
-                appimage::verifyEmbeddedSignature(argv[i + 1], trusted);
+                rpi_imager::appimage::verifyEmbeddedSignature(argv[i + 1], trusted);
             std::fprintf(stderr, "%s: %s\n",
                          argv[i + 1],
-                         appimage::verifyResultMessage(result));
+                         rpi_imager::appimage::verifyResultMessage(result));
             if (g_logFile) {
                 fclose(g_logFile);
             }
-            if (result == appimage::VerifyResult::Ok) {
+            if (result == rpi_imager::appimage::VerifyResult::Ok) {
                 return 0;
             }
-            if (result == appimage::VerifyResult::Unsigned && trusted.empty()) {
+            if (result == rpi_imager::appimage::VerifyResult::Unsigned && trusted.empty()) {
                 return 0;
             }
             return 1;
@@ -363,10 +363,21 @@ int main(int argc, char *argv[])
     }
 #endif
 
+#if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+    // With the polkit helper doing the writes, the GUI stays the user's: a
+    // root GUI cannot join the user's AT-SPI bus, so screen readers lose it
+    // (#1671).
+    const bool linuxHelperWrites =
+        rpi_imager::preferNativePrivilegedHelper("RPI_IMAGER_USE_LINUX_HELPER");
+#else
+    const bool linuxHelperWrites = false;
+#endif
+
     // Attempt automatic elevation if running from an elevatable bundle without privileges
     // This happens BEFORE Qt initialization to avoid overhead
     // If elevation succeeds, this process is replaced; if it fails, we continue
-    if (PlatformQuirks::isElevatableBundle() && !PlatformQuirks::hasElevatedPrivileges()) {
+    if (!linuxHelperWrites && PlatformQuirks::isElevatableBundle()
+        && !PlatformQuirks::hasElevatedPrivileges()) {
         // Try to elevate - this will only work if an elevation policy is installed
         PlatformQuirks::tryElevate(argc, argv);
         // If we get here, elevation failed or wasn't possible
@@ -521,11 +532,11 @@ int main(int argc, char *argv[])
     }
 
     // Early check for elevated privileges where the in-process path still needs them.
-    // Linux: root/polkit unless a helper policy is installed.
-    // Windows: default helper path runs asInvoker; warn only for legacy in-process I/O.
+    // Linux and Windows: the default helper path runs unprivileged; warn only
+    // for legacy in-process I/O.
     bool hasPermissionIssue = false;
 #if defined(Q_OS_LINUX)
-    if (!PlatformQuirks::hasElevatedPrivileges())
+    if (!linuxHelperWrites && !PlatformQuirks::hasElevatedPrivileges())
     {
         hasPermissionIssue = true;
         qWarning() << "Not running with elevated privileges - device access may fail";

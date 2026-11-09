@@ -252,6 +252,14 @@ bool DownloadThread::_openAndPrepareDevice()
             qDebug() << "Unmount failed:"
                      << QString::fromStdString(unmountResult.error.detail())
                      << "(code" << unmountResult.error.code() << ")";
+            // The first privileged call is this one, so a refused or
+            // dismissed password prompt surfaces here, not as a busy disk.
+            if (unmountResult.error.code()
+                    == rpi_imager::privileged::proto::ERROR_HELPER_INSTALL_REJECTED) {
+                emit error(tr("Raspberry Pi Imager was not given permission to write to "
+                              "the storage device. Nothing has been written."));
+                return false;
+            }
 #ifdef Q_OS_DARWIN
             if (unmountResult.error.code()
                     == rpi_imager::privileged::proto::ERROR_HELPER_NOT_INSTALLED) {
@@ -1895,7 +1903,7 @@ void DownloadThread::_writeComplete()
         // Zero-copy write observability: did the helper write directly from
         // producer memory, and how many submits took each path?
         bool zcEngaged = false;
-        quint64 zcSubmits = 0, copySubmits = 0;
+        std::uint64_t zcSubmits = 0, copySubmits = 0;
         _file->GetZeroCopyWriteStats(zcEngaged, zcSubmits, copySubmits);
         qDebug() << "Zero-copy writes:" << (zcEngaged ? "engaged" : "not engaged")
                  << "(zero-copy submits" << zcSubmits << ", copy submits" << copySubmits << ")";

@@ -208,7 +208,7 @@ Result<void> LinuxEmbeddedBackend::prepareDevice(
     }
     constexpr std::size_t kMb = 1ull * 1024 * 1024;
     std::vector<std::uint8_t> zeros(kMb, 0);
-    Session& s = it->second;
+    State::Session& s = it->second;
     const std::uint64_t dev_size = deviceSizeBytes(s.fd);
 
     if (opts.zero_first_mb()) {
@@ -346,7 +346,7 @@ Result<proto_ns::SessionStats> LinuxEmbeddedBackend::closeSession(
         return Result<proto_ns::SessionStats>::failure(
             makeError(proto_ns::ERROR_SESSION_NOT_FOUND, "no such session"));
     }
-    Session s = std::move(it->second);
+    State::Session s = std::move(it->second);
     state_->sessions.erase(it);
 
     const auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(
