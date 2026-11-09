@@ -79,7 +79,6 @@ WizardStepBase {
             var items = []
             var reader = ImageWriterSingleton && ImageWriterSingleton.screenReaderActive
             if (root.fetchStatus === "ready") {
-                if (reader) items.push(introText)
                 items.push(licenceArea)
                 if (reader && acceptedBeforeText.visible) items.push(acceptedBeforeText)
                 items.push(acceptBox)
@@ -140,13 +139,6 @@ WizardStepBase {
         }
 
         // -- Ready ---------------------------------------------------------
-        WizardDescriptionText {
-            id: introText
-            visible: root.fetchStatus === "ready"
-            text: qsTr("Read the licence for %1. It must be accepted before the OS is written.")
-                      .arg(root.wizardContainer.selectedOsName)
-        }
-
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -179,6 +171,10 @@ WizardStepBase {
                     Accessible.role: Accessible.EditableText
                     Accessible.readOnly: true
                     Accessible.name: qsTr("Licence for %1").arg(root.wizardContainer.selectedOsName)
+                    // Said, not shown: the title and subtitle already say it,
+                    // and the licence needs the room.
+                    Accessible.description: qsTr("Read the licence for %1. It must be accepted before the OS is written.")
+                                                .arg(root.wizardContainer.selectedOsName)
                 }
             }
         }
@@ -196,6 +192,9 @@ WizardStepBase {
             Layout.fillWidth: true
             visible: root.fetchStatus === "ready"
             text: qsTr("I accept this licence")
+            // Material's touch-target padding, which the licence needs more.
+            topPadding: 0
+            bottomPadding: 0
             onToggled: root.recordAcceptance(acceptBox.checked)
         }
     }
