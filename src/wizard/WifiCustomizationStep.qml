@@ -18,6 +18,8 @@ WizardStepBase {
     
     // "open" | "secure"
     property string wifiMode: "secure"
+    // "personal" | "enterprise"
+    property string wifiSecureMode: "personal"
     property string originalSavedSSID: ""
     property bool hadSavedPassword: false
     property bool showPw: wifiMode === "secure"
@@ -25,8 +27,6 @@ WizardStepBase {
     // otherwise a stale "enterprise" choice falls back to Personal.
     property bool showSecurityChoice: showPw && wizardContainer.wifiEnterpriseAvailable
     property bool isEnterprise: showSecurityChoice && wifiSecureMode === "enterprise"
-        // "personal" | "enterprise"
-    property string wifiSecureMode: isEnterprise ? "enterprise" : "personal"
     property bool showUsername: isEnterprise
     onShowSecurityChoiceChanged: rebuildFocusOrder()
     onIsEnterpriseChanged: rebuildFocusOrder()
@@ -880,7 +880,7 @@ WizardStepBase {
             } else if (havePassword) {
                // overwrite with the newly entered passphrase
                wizardContainer.customizationSettings.wifiPassword = pwd
-            } else if (hadPasswordBefore && sameSSID) {
+            } else if (canKeepSavedPassword()) {
                // keep the existing passphrase (do nothing)
             } else {
                // no password provided and can't keep -> ensure cleared
@@ -908,14 +908,14 @@ WizardStepBase {
         // use it, so picking a cloud-init OS next time brings it back.
         saved.wifiSecureMode = wifiSecureMode
         if (ssid.length > 0) {
-            applyEnterpriseSettings(saved, isEnterprise)
+            applyEnterpriseSettings(saved, wifiSecureMode === "enterprise")
             saved.wifiSSID = ssid
             saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
             if (wifiMode === "open") {
                delete saved.wifiPassword
             } else if (havePassword) {
                saved.wifiPassword = pwd
-            } else if (hadPasswordBefore && sameSSID) {
+            } else if (canKeepSavedPassword()) {
                // keep existing persisted passphrase
             } else {
                delete saved.wifiPassword
