@@ -47,33 +47,8 @@ echo "Copying app bundle with display name..."
 rm -rf "$DMG_APP_PATH"
 cp -R "$SOURCE_APP_PATH" "$DMG_APP_PATH"
 
-# Deploy Qt dependencies to the copied app bundle
-echo "Deploying Qt dependencies to app bundle..."
-"@CMAKE_COMMAND@" -E echo "Running macdeployqt on: $DMG_APP_PATH"
-
-# Find macdeployqt (it should be in the Qt6_ROOT/bin directory)
-MACDEPLOYQT_PATH="@Qt6_ROOT@/bin/macdeployqt"
-if [ ! -f "$MACDEPLOYQT_PATH" ]; then
-    echo "Error: macdeployqt not found at $MACDEPLOYQT_PATH"
-    echo "Checking alternative locations..."
-    
-    # Try some common Qt installation paths
-    for qt_path in "@QT_DIR@" "@CMAKE_PREFIX_PATH@" "/usr/local/qt6" "/opt/homebrew/opt/qt6"; do
-        if [ -f "$qt_path/bin/macdeployqt" ]; then
-            MACDEPLOYQT_PATH="$qt_path/bin/macdeployqt"
-            echo "Found macdeployqt at: $MACDEPLOYQT_PATH"
-            break
-        fi
-    done
-    
-    if [ ! -f "$MACDEPLOYQT_PATH" ]; then
-        echo "Error: Could not locate macdeployqt"
-        exit 1
-    fi
-fi
-
-echo "Using macdeployqt: $MACDEPLOYQT_PATH"
-"$MACDEPLOYQT_PATH" "$DMG_APP_PATH" -qmldir="@CMAKE_CURRENT_SOURCE_DIR@" -always-overwrite
+# The source bundle was deployed and pruned at build time; deploying again
+# here would restore what the pruning removed.
 
 # Validate and clean up problematic symlinks under QML tree (targets that don't exist or escape the bundle)
 echo "Validating symlinks under QML directory..."
