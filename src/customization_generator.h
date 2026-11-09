@@ -202,7 +202,22 @@ private:
      */
     static QString resolveWifiPassphrase(const QVariantMap& settings, bool wifiConfigured);
 
+    /**
+     * @brief Resolve the plaintext Wi-Fi username ("wifiUsername").
+     *
+     * The WPA2/WPA3 Enterprise identity, with CR/LF stripped. Empty when
+     * Wi-Fi is not configured.
+     */
     static QString resolveWifiUsername(const QVariantMap& settings, bool wifiConfigured);
+
+    /**
+     * @brief Resolve the secure Wi-Fi dropdown: "open", "personal" or "enterprise".
+     *
+     * "open" when the Open network tab was chosen ("wifiMode"), which wins over
+     * a stale dropdown value; otherwise "enterprise" if "wifiSecureMode" says so.
+     * Anything else -- unset (settings saved by an older Imager), unknown, or
+     * Wi-Fi not configured -- is "personal".
+     */
     static QString resolveWifiSecureMode(const QVariantMap& settings, bool wifiConfigured);
 
     static QString yamlEscapeString(const QString& value);

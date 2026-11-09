@@ -18,7 +18,7 @@ WizardStepBase {
     
     // "open" | "secure"
     property string wifiMode: "secure"
-    // "personal" | "enterprise" | "open"
+    // "personal" | "enterprise"
     property string wifiSecureMode: "personal"
     property string originalSavedSSID: ""
     property bool hadSavedPassword: false
@@ -502,6 +502,7 @@ WizardStepBase {
     // Validation: allow proceed when
     // - SSID entered and either a new passphrase provided or a saved one exists; or
     // - all WiFi fields are empty (skip)
+    // - for Enterprise wifi secure mode, ensure username isn't empty
     nextButtonEnabled: (function(){
         var haveSSID = fieldWifiSSID.value.length > 0
         if (!haveSSID) return true  // allow skipping by leaving fields empty
@@ -554,7 +555,7 @@ WizardStepBase {
         wizardContainer.customizationSettings.wifiMode = wifiMode
         wizardContainer.customizationSettings.wifiSecureMode = wifiSecureMode
 
-        // Handle SSID and password
+        // Handle SSID, password, and Enterprise username
         if (ssid.length > 0) {
             wizardContainer.customizationSettings.wifiSSID = ssid
             wizardContainer.customizationSettings.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
@@ -581,7 +582,7 @@ WizardStepBase {
             wizardContainer.customizationSettings.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else {
-            // No SSID -> clear SSID and password settings
+            // No SSID -> clear SSID, password, username settings
             delete wizardContainer.customizationSettings.wifiSSID
             delete wizardContainer.customizationSettings.wifiSsidOctetsBase64
             delete wizardContainer.customizationSettings.wifiPassword

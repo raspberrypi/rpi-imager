@@ -285,7 +285,7 @@ QString CustomisationGenerator::resolveWifiUsername(const QVariantMap& settings,
         return {};
 
     // Strip CR/LF: a pasted trailing newline would otherwise become part of
-    // the passphrase. See stripLineTerminators() and issue #1627.
+    // the username.
     return stripLineTerminators(settings.value(QStringLiteral("wifiUsername")).toString());
 }
 
