@@ -202,6 +202,9 @@ private:
      */
     static QString resolveWifiPassphrase(const QVariantMap& settings, bool wifiConfigured);
 
+    static QString resolveWifiUsername(const QVariantMap& settings, bool wifiConfigured);
+    static QString resolveWifiSecureMode(const QVariantMap& settings, bool wifiConfigured);
+
     static QString yamlEscapeString(const QString& value);
 };
 

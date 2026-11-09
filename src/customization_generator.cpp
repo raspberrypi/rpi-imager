@@ -280,6 +280,29 @@ QString CustomisationGenerator::resolveWifiPassphrase(const QVariantMap& setting
     return stripLineTerminators(settings.value(QStringLiteral("wifiPassword")).toString());
 }
 
+QString CustomisationGenerator::resolveWifiUsername(const QVariantMap& settings, bool wifiConfigured) {
+    if (!wifiConfigured)
+        return {};
+
+    // Strip CR/LF: a pasted trailing newline would otherwise become part of
+    // the passphrase. See stripLineTerminators() and issue #1627.
+    return stripLineTerminators(settings.value(QStringLiteral("wifiUsername")).toString());
+}
+
+QString CustomisationGenerator::resolveWifiSecureMode(const QVariantMap& settings,  bool wifiConfigured) {
+    if (!wifiConfigured)
+        return QStringLiteral("personal");
+
+    if (settings.value(QStringLiteral("wifiMode")).toString() == QStringLiteral("open")) {
+        return QStringLiteral("open");
+    }
+
+    const QString mode = settings.value(QStringLiteral("wifiSecureMode")).toString();
+    if (mode == QStringLiteral("enterprise"))
+        return mode;
+    return QStringLiteral("personal");
+}
+
 QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
 {
     // YAML's \xHH and \uHHHH escapes name code points, not bytes, so escaping
@@ -1080,8 +1103,19 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
+        
+        const QString secMode = resolveWifiSecureMode(settings, wifiConfigured);
+        const QString username = resolveWifiUsername(settings, wifiConfigured);
         const QString wifiPassphrase = resolveWifiPassphrase(settings, wifiConfigured);
-        if (wifiPassphrase.isEmpty()) {
+
+        if (secMode == QStringLiteral("enterprise")) {
+            push(QStringLiteral("          auth:"), netcfg);
+            push(QStringLiteral("            key-management: eap"), netcfg);
+            push(QStringLiteral("            method: peap"), netcfg);
+            push(QStringLiteral("            identity: \"") + yamlEscapeString(username) + QStringLiteral("\""), netcfg);
+            push(QStringLiteral("            password: \"") + yamlEscapeString(wifiPassphrase) + QStringLiteral("\""), netcfg);
+        } 
+        else if (wifiPassphrase.isEmpty()) {
             // Open network (no password) - use auth block with key-management: none
             // See: https://github.com/raspberrypi/rpi-imager/issues/1396
             push(QStringLiteral("          auth:"), netcfg);
