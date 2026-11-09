@@ -46,6 +46,14 @@ WizardStepBase {
         root.registerFocusGroup("wifi_fields", function(){
             var items = [labelSSID, fieldWifiSSID]
             if (showPw) {
+                items.push(labelWifiSecurity)
+                items.push(comboWifiSecurity)
+            }
+            if (showUsername) {
+                items.push(labelWifiUsername)
+                items.push(fieldWifiUsername)
+            }
+            if (showPw) {
                 items.push(lblPassword)
                 items.push(fieldWifiPassword)
                 items.push(lblPasswordConfirm)
@@ -55,18 +63,21 @@ WizardStepBase {
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
 
-        // Set SSID placeholder before prefilling text content
+        // Set placeholders before prefilling text content
         fieldWifiSSID.placeholderText = qsTr("Network name")
+        fieldWifiUsername.placeholderText = qsTr("Username")
 
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings
 
-        // Set SSID placeholder first (before setting any text)
-        fieldWifiSSID.placeholderText = qsTr("Network name")
-
         // Then set text values after, so they properly override the placeholder
         if (settings.wifiSSID) {
             fieldWifiSSID.text = settings.wifiSSID
+        }
+
+        // Restore the Enterprise username the same way
+        if (settings.wifiUsername) {
+            fieldWifiUsername.text = settings.wifiUsername
         }
 
         // If not saved, try to auto-detect the current SSID from the system
@@ -105,6 +116,10 @@ WizardStepBase {
         wifiMode = (settings.wifiMode === "secure" || settings.wifiMode === "open")
             ? settings.wifiMode
             : "secure"
+
+        // wifiSecureMode: restore the dropdown; its onCurrentValueChanged sets wifiSecureMode
+        var secIdx = comboWifiSecurity.indexOfValue(settings.wifiSecureMode || "personal")
+        comboWifiSecurity.currentIndex = secIdx >= 0 ? secIdx : 0
 
         updatePasswordFieldUI()
         // UpdatePasswordFieldUI already takes care of this
@@ -340,7 +355,7 @@ WizardStepBase {
                         id: labelWifiUsername
                         visible: root.showUsername
                         text: qsTr("Username:")
-                        accessibleDescription: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
+                        accessibleDescription: qsTr("Enter the username (identity) for your WPA2/WPA3 Enterprise network, for example user@example.com.")
                     }
 
                     ImTextField {
@@ -493,6 +508,9 @@ WizardStepBase {
 
         if (wifiMode === "open") return true
 
+        // Enterprise needs a username
+        if (wifiSecureMode === "enterprise" && fieldWifiUsername.value.length === 0) return false
+
         // secure / closed mode
         var ssidNow = fieldWifiSSID.value
         var canKeep = hadSavedPassword && ssidUnchanged(ssidNow, originalSavedSSID)
@@ -516,6 +534,8 @@ WizardStepBase {
     onNextClicked: {
         var ssid = fieldWifiSSID.value
         var pwd = fieldWifiPassword.text
+        var isEnterprise = wifiMode === "secure" && wifiSecureMode === "enterprise"
+        var username = fieldWifiUsername.value
         var prevSSID = wizardContainer.customizationSettings.wifiSSID || ""
         var hidden = chkWifiHidden.checked
         var hadPasswordBefore = !!wizardContainer.customizationSettings.wifiPassword
@@ -532,7 +552,8 @@ WizardStepBase {
 
         // Update conserved customization settings (runtime state)
         wizardContainer.customizationSettings.wifiMode = wifiMode
-        
+        wizardContainer.customizationSettings.wifiSecureMode = wifiSecureMode
+
         // Handle SSID and password
         if (ssid.length > 0) {
             wizardContainer.customizationSettings.wifiSSID = ssid
@@ -551,6 +572,12 @@ WizardStepBase {
                delete wizardContainer.customizationSettings.wifiPassword
             }
 
+            if (isEnterprise) {
+                wizardContainer.customizationSettings.wifiUsername = username
+            } else {
+                delete wizardContainer.customizationSettings.wifiUsername
+            }
+
             wizardContainer.customizationSettings.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else {
@@ -558,6 +585,7 @@ WizardStepBase {
             delete wizardContainer.customizationSettings.wifiSSID
             delete wizardContainer.customizationSettings.wifiSsidOctetsBase64
             delete wizardContainer.customizationSettings.wifiPassword
+            delete wizardContainer.customizationSettings.wifiUsername
             delete wizardContainer.customizationSettings.wifiHidden
             wizardContainer.wifiConfigured = false
         }
@@ -565,7 +593,13 @@ WizardStepBase {
         // Also persist for future sessions
         var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         saved.wifiMode = wifiMode
+        saved.wifiSecureMode = wifiSecureMode
         if (ssid.length > 0) {
+            if (isEnterprise) {
+                saved.wifiUsername = username
+            } else {
+                delete saved.wifiUsername
+            }
             saved.wifiSSID = ssid
             saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
             if (wifiMode === "open") {
@@ -582,6 +616,7 @@ WizardStepBase {
             delete saved.wifiSSID
             delete saved.wifiSsidOctetsBase64
             delete saved.wifiPassword
+            delete saved.wifiUsername
             delete saved.wifiHidden
         }
         ImageWriterSingleton.setSavedCustomisationSettings(saved)
