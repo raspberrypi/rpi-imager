@@ -130,7 +130,7 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + ": " + (root.wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
+                    Accessible.name: text + " " + (root.wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
                 }
 
                 MarqueeText {
@@ -170,7 +170,7 @@ WizardStepBase {
                     font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
-                    Accessible.name: text + ": " + (root.wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
+                    Accessible.name: text + " " + (root.wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
                 }
 
                 MarqueeText {

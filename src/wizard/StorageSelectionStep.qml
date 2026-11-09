@@ -60,6 +60,7 @@ WizardStepBase {
     
     property alias dstlist: dstlist
     property string selectedDeviceName: ""
+    property string chosenDevice: ""
     property bool hasValidStorageOptions: false
     property bool hasAnyDevices: false
     property bool hasOnlyReadOnlyDevices: false
@@ -87,6 +88,7 @@ WizardStepBase {
                 // Device was removed - clear the visual selection and ensure next button is disabled
                 dstlist.currentIndex = -1
                 root.selectedDeviceName = ""
+                root.chosenDevice = ""
                 root.nextButtonEnabled = false
             }
         }
@@ -382,7 +384,19 @@ WizardStepBase {
             Accessible.name: dstitem.description + ". " + ImageWriterSingleton.formatSize(parseFloat(dstitem.size)) + (dstitem.mountpoints.length > 0 ? ". " + qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : "") + (dstitem.unselectable ? ". " + qsTr("Read-only") : "")
             Accessible.focusable: true
             Accessible.ignored: false
-            
+            Accessible.selectable: !dstitem.unselectable
+            // The chosen drive, not the highlight the arrow keys move.
+            Accessible.selected: root.chosenDevice !== "" && root.chosenDevice === dstitem.device
+            // Switch access and voice control select by action, not by key.
+            Accessible.onPressAction: dstitem.activate()
+
+            function activate() {
+                if (!dstitem.unselectable) {
+                    dstlist.currentIndex = dstitem.index
+                    root.selectDstItem(dstitem)
+                }
+            }
+
             // Function called by keyboard selection
             function selectDrive() {
                 if (!unselectable) {
@@ -416,12 +430,7 @@ WizardStepBase {
                     cursorShape: dstitem.unselectable ? Qt.ForbiddenCursor : Qt.PointingHandCursor
                     enabled: !dstitem.unselectable
                     
-                    onClicked: {
-                        if (!dstitem.unselectable) {
-                            dstlist.currentIndex = dstitem.index
-                            root.selectDstItem(dstitem)
-                        }
-                    }
+                    onClicked: dstitem.activate()
                     
                     onDoubleClicked: {
                         if (!dstitem.unselectable) {
@@ -547,6 +556,7 @@ WizardStepBase {
             ImageWriterSingleton.setDst(dstitem.device, dstitem.size)
         }
         selectedDeviceName = dstitem.description || dstitem.device
+        chosenDevice = dstitem.device
         root.wizardContainer.selectedStorageName = dstitem.description || dstitem.device
         // Drives the org-mode branch in the Pi Connect customisation step
         // (device-identity registration vs. auth-key minting).  rpiboot
@@ -719,6 +729,7 @@ WizardStepBase {
         onConfirmed: {
             ImageWriterSingleton.setDst(systemDriveConfirm.device, systemDriveConfirm.deviceSize)
             root.selectedDeviceName = systemDriveConfirm.driveName || systemDriveConfirm.device
+            root.chosenDevice = systemDriveConfirm.device
             root.wizardContainer.selectedStorageName = systemDriveConfirm.driveName || systemDriveConfirm.device
             root.wizardContainer.targetIsFastboot = false
             if (typeof ImageWriterSingleton.discardOrgMintedConnectToken === "function")

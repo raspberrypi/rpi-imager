@@ -800,7 +800,9 @@ Item {
             id: wizardStack
             Layout.fillWidth: true
             Layout.fillHeight: true
-            
+            // Orca announced it as "layered pane 0 items" before every step.
+            Accessible.ignored: true
+
             // Skip device selection if offline (no network = no device list available)
             // Start with language selection if requested, otherwise device selection if online, or OS selection if offline
             initialItem: root.showLanguageSelection ? languageSelectionStep : 

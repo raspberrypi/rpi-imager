@@ -145,6 +145,45 @@ TestCase {
         compare(l.currentIndex, 1, "and the highlight moved with it")
     }
 
+    function test_the_press_action_chooses_the_drive_it_is_sent_to() {
+        // Switch access and voice control send the row an action, not a key.
+        const l = populate([card({ device: "/dev/sda", description: "Top card" }),
+                            card({ device: "/dev/sdb", description: "Bottom card" })])
+        const bottom = rowAt(l, 1)
+        verify(!bottom.Accessible.selected, "nothing is chosen yet")
+
+        bottom.Accessible.pressAction()
+
+        compare(containerStub.selectedStorageName, "Bottom card")
+        compare(l.currentIndex, 1)
+        verify(bottom.Accessible.selected, "the row says it is the chosen one")
+        verify(!rowAt(l, 0).Accessible.selected, "and its neighbour says it is not")
+    }
+
+    function test_a_read_only_drive_refuses_the_press_action() {
+        const l = populate([card({ device: "/dev/sdc", description: "Locked card",
+                                   isReadOnly: true })])
+        const row = rowAt(l, 0)
+        verify(!row.Accessible.selectable, "it does not offer itself as a choice")
+
+        row.Accessible.pressAction()
+
+        compare(containerStub.selectedStorageName, "")
+        verify(!row.Accessible.selected)
+    }
+
+    function test_moving_the_highlight_does_not_move_the_choice() {
+        // Arrow keys move the highlight; a screen reader must still report
+        // the drive that was actually chosen.
+        const l = populate([card({ device: "/dev/sda", description: "Top card" }),
+                            card({ device: "/dev/sdb", description: "Bottom card" })])
+        rowAt(l, 0).Accessible.pressAction()
+        l.currentIndex = 1
+
+        verify(rowAt(l, 0).Accessible.selected, "the chosen drive is still chosen")
+        verify(!rowAt(l, 1).Accessible.selected, "the highlighted one is not")
+    }
+
     function test_clicking_a_read_only_drive_chooses_nothing() {
         // A card with its lock tab across, or a device the system will not
         // let go of. The row is shown, dimmed, and must not respond.

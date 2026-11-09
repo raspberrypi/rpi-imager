@@ -388,6 +388,33 @@ TestCase {
         spy.destroy()
     }
 
+    // ── Choosing a board through the accessibility API ───────────────
+    //
+    // Switch access and voice control send the row an action rather than a
+    // key. Without one the row could be read out and never chosen.
+
+    function test_the_press_action_chooses_a_board_and_stays_put() {
+        var list = listWithBoards()
+        if (!list)
+            return
+        // An earlier case may have chosen a board, which the step restores
+        list.currentIndex = -1
+        const spy = nextSpy.createObject(testCase, { target: step })
+        verify(spy !== null)
+        var row = rowAt(list, 0)
+        verify(!row.Accessible.selected, "nothing is chosen yet")
+
+        row.Accessible.pressAction()
+        waitForRendering(testCase)
+        wait(200)
+
+        verify(step.hasDeviceSelected, "the action chose the board")
+        compare(list.currentIndex, 0)
+        verify(row.Accessible.selected, "and the row says it is the chosen one")
+        compare(spy.count, 0, "as a click does, without leaving the screen")
+        spy.destroy()
+    }
+
     function test_double_clicking_a_board_chooses_it_and_moves_on() {
         // The shortcut for someone who knows which board they have.
         var list = listWithBoards()
