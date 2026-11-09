@@ -1681,6 +1681,109 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config for open W
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("password:"));
 }
 
+namespace {
+// Settings for a secured network, with the Wi-Fi security dropdown left unset
+// so each case below adds only the keys it is about.
+QVariantMap securedWifiSettings()
+{
+    QVariantMap settings;
+    settings["wifiConfigured"] = true;
+    settings["wifiMode"] = "secure";
+    settings["wifiSSID"] = "CorpNet";
+    settings["wifiPassword"] = "correct horse";
+    return settings;
+}
+
+std::string networkConfigFor(const QVariantMap &settings)
+{
+    return CustomisationGenerator::generateCloudInitNetworkConfig(settings, false).toStdString();
+}
+} // namespace
+
+TEST_CASE("cloud-init network-config writes an EAP block for WPA2/WPA3 Enterprise",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("\"CorpNet\":"));
+    REQUIRE_THAT(yaml, ContainsSubstring("          auth:\n"
+                                         "            key-management: eap\n"
+                                         "            method: peap\n"
+                                         "            identity: \"user@example.com\"\n"
+                                         "            password: \"correct horse\"\n"));
+    // The password belongs inside auth:, not as the Personal shorthand
+    // (anchored on the newline: the auth: password line is indented further)
+    REQUIRE_THAT(yaml, !ContainsSubstring("\n          password:"));
+}
+
+TEST_CASE("cloud-init network-config keeps the password shorthand for WPA2/WPA3 Personal",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "personal";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("          password: \"correct horse\""));
+    REQUIRE_THAT(yaml, !ContainsSubstring("auth:"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("key-management"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("identity:"));
+}
+
+TEST_CASE("cloud-init network-config treats settings saved before the security dropdown as Personal",
+          "[cloudinit][network][wifi]") {
+    // No wifiSecureMode at all, as in settings persisted by an older Imager.
+    const std::string yaml = networkConfigFor(securedWifiSettings());
+
+    REQUIRE_THAT(yaml, ContainsSubstring("          password: \"correct horse\""));
+    REQUIRE_THAT(yaml, !ContainsSubstring("key-management"));
+}
+
+TEST_CASE("cloud-init network-config lets the Open tab win over a stale Enterprise choice",
+          "[cloudinit][network][wifi]") {
+    // The dropdown keeps its value when the user switches to the Open network tab.
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiMode"] = "open";
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiPassword"] = "";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("key-management: none"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("eap"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("identity:"));
+}
+
+TEST_CASE("cloud-init network-config falls back to Personal for an unknown security mode",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "bogus";
+    settings["wifiUsername"] = "user@example.com";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("          password: \"correct horse\""));
+    REQUIRE_THAT(yaml, !ContainsSubstring("key-management"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("bogus"));
+}
+
+TEST_CASE("cloud-init network-config escapes the Enterprise identity and drops line breaks",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    // A quote and a backslash would end or bend the YAML string; a pasted
+    // trailing newline would start a new line in the document.
+    settings["wifiUsername"] = QStringLiteral("us\"er\\x\r\n");
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("            identity: \"us\\\"er\\\\x\"\n"));
+    REQUIRE_THAT(yaml, ContainsSubstring("            password: \"correct horse\""));
+}
+
 TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[cloudinit][network]") {
     QVariantMap settings;
     // Set country code FR without SSID - tests regulatory domain configuration
