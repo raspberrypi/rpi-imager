@@ -10,6 +10,7 @@
 #include "config.h"
 #include "cmdline_params.h"
 #include "config_txt_merge.h"
+#include "customization_generator.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "systemmemorymanager.h"
@@ -2971,7 +2972,7 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
         "user-data",         // cloud-init customization
         "meta-data",         // cloud-init metadata
         "network-config",    // cloud-init network customization
-        "wifi-ca.pem",       // Enterprise Wi-Fi CA certificate, named by network-config
+        rpi_imager::CustomisationGenerator::wifiCaCertificateFileName(),  // Enterprise Wi-Fi CA certificate
         "rpi-preseed.toml"   // rpi-preseed customization
     };
     

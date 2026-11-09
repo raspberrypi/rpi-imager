@@ -138,9 +138,10 @@ public:
      * @brief Name of the Enterprise Wi-Fi CA certificate on the boot partition.
      *
      * Written next to network-config, which refers to it by its path on the
-     * running system (wifiCaCertificatePath()).
+     * running system (wifiCaCertificatePath()). Defined here, not in the .cpp,
+     * so the write thread can name it without linking the generator.
      */
-    static QString wifiCaCertificateFileName();
+    static QString wifiCaCertificateFileName() { return QStringLiteral("wifi-ca.pem"); }
 
     /**
      * @brief Where the CA certificate is found once the OS is running.
@@ -266,6 +267,15 @@ private:
     static QString resolveWifiEapMethod(const QVariantMap& settings);
 
     /**
+     * @brief Resolve the Enterprise phase 2 (inner) authentication ("wifiPhase2Auth"): "mschapv2" or "pap".
+     *
+     * Written unquoted into network-config, so only these two values are
+     * passed through. Anything else, or unset, is the usual one for the EAP
+     * method: "mschapv2" for PEAP, "pap" for TTLS.
+     */
+    static QString resolveWifiPhase2Auth(const QVariantMap& settings);
+
+    /**
      * @brief Resolve the optional Enterprise outer identity ("wifiAnonymousIdentity").
      *
      * CR/LF stripped and surrounding whitespace trimmed. Empty when unset or
@@ -276,9 +286,8 @@ private:
     /**
      * @brief Where the Enterprise CA certificate comes from: "none", "file" or "system".
      *
-     * "wifiCaCertificateSource" when it is one of those. Unset (settings saved
-     * before the choice existed) is "file" if a certificate was saved, else
-     * "none"; anything unknown is "none".
+     * "wifiCaCertificateSource" when it is one of those; unset or anything
+     * unknown is "none".
      */
     static QString resolveWifiCaCertificateSource(const QVariantMap& settings);
 

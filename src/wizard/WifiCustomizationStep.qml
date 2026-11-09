@@ -29,7 +29,17 @@ WizardStepBase {
     property bool isEnterprise: showSecurityChoice && wifiSecureMode === "enterprise"
     property bool showUsername: isEnterprise
     onShowSecurityChoiceChanged: rebuildFocusOrder()
-    onIsEnterpriseChanged: rebuildFocusOrder()
+    onIsEnterpriseChanged: {
+        rebuildFocusOrder()
+        // A keychain PSK is a WPA passphrase, not an Enterprise account password
+        if (isEnterprise && pskAutoFilled) {
+            fieldWifiPassword.text = ""
+            fieldWifiPasswordConfirm.text = ""
+        }
+    }
+
+    // The password fields hold a PSK read from the system keychain, not one typed
+    property bool pskAutoFilled: false
 
     // Enterprise CA certificate, as PEM text, and the file name it came from
     property string wifiCaCertificate: ""
@@ -39,8 +49,6 @@ WizardStepBase {
 
     // "none" | "file" | "system": where the CA certificate comes from
     property string wifiCaSource: "none"
-    // Pre-filled when "Already on the OS" is first chosen (Debian's ca-certificates)
-    readonly property string defaultCaSystemPath: "/etc/ssl/certs/USERTrust_RSA_Certification_Authority.pem"
     onWifiCaSourceChanged: rebuildFocusOrder()
 
     // A path on the OS is written into network-config as given, so it must be
@@ -64,8 +72,9 @@ WizardStepBase {
     }
     readonly property string caErrorText: wifiCaSource === "file" ? caCertificateError : caSystemPathError
 
-    property string originalSavedSecureMode: "personal" 
-    
+    // The mode the saved password was entered for ("wifiPasswordMode")
+    property string originalSavedSecureMode: "personal"
+
     function canKeepSavedPassword() {
         return hadSavedPassword
             && ssidUnchanged(fieldWifiSSID.value, originalSavedSSID)
@@ -123,6 +132,8 @@ WizardStepBase {
                 items.push(fieldWifiUsername)
                 items.push(labelWifiEapMethod)
                 items.push(comboWifiEapMethod)
+                items.push(labelWifiPhase2Auth)
+                items.push(comboWifiPhase2Auth)
                 items.push(labelWifiAnonymousIdentity)
                 items.push(fieldWifiAnonymousIdentity)
                 items.push(labelWifiCaCertificate)
@@ -186,8 +197,9 @@ WizardStepBase {
         }
 
         originalSavedSSID = settings.wifiSSID || ""
-
-        originalSavedSecureMode = settings.wifiSecureMode || "personal"
+        // Not the dropdown choice: the mode the password itself was saved for.
+        // Missing (saved by an earlier version) means Personal.
+        originalSavedSecureMode = settings.wifiPasswordMode || "personal"
 
         // Remember if a passphrase is already saved (affects placeholder/keep
         // semantics and keychain auto-prefill).
@@ -204,6 +216,7 @@ WizardStepBase {
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
                 fieldWifiPasswordConfirm.text = psk
+                pskAutoFilled = true
             }
         }
 
@@ -217,10 +230,11 @@ WizardStepBase {
         comboWifiSecurity.currentIndex = secIdx >= 0 ? secIdx : 0
         var eapIdx = comboWifiEapMethod.indexOfValue(settings.wifiEapMethod || "peap")
         comboWifiEapMethod.currentIndex = eapIdx >= 0 ? eapIdx : 0
-        // Settings from before the source choice: a saved certificate means "file"
-        var caSource = settings.wifiCaCertificateSource
-                       || (settings.wifiCaCertificate ? "file" : "none")
-        var caIdx = comboWifiCaSource.indexOfValue(caSource)
+        // Unset: the usual inner method for the EAP method, as resolveWifiPhase2Auth() does
+        var phase2Idx = comboWifiPhase2Auth.indexOfValue(settings.wifiPhase2Auth
+                            || (settings.wifiEapMethod === "ttls" ? "pap" : "mschapv2"))
+        comboWifiPhase2Auth.currentIndex = phase2Idx >= 0 ? phase2Idx : 0
+        var caIdx = comboWifiCaSource.indexOfValue(settings.wifiCaCertificateSource || "none")
         comboWifiCaSource.currentIndex = caIdx >= 0 ? caIdx : 0
 
         updatePasswordFieldUI()
@@ -249,6 +263,7 @@ WizardStepBase {
                         if (psk && psk.length > 0) {
                             fieldWifiPassword.text = psk
                             fieldWifiPasswordConfirm.text = psk
+                            root.pskAutoFilled = true
                         }
                     }
                 }
@@ -257,9 +272,6 @@ WizardStepBase {
     }
 
     function updatePasswordFieldUI() {
-        var ssid = fieldWifiSSID.value
-        var prevSSID = originalSavedSSID
-
         if (wifiMode === "open") {
             fieldWifiPassword.text = ""
             fieldWifiPassword.enabled = false
@@ -281,7 +293,6 @@ WizardStepBase {
         if (!showPw) return " ";
 
         // Gather state
-        var ssidNow = fieldWifiSSID.value;
         var canKeep = canKeepSavedPassword();
         var pwd = fieldWifiPassword.text || "";
         var conf = fieldWifiPasswordConfirm.text || "";
@@ -501,6 +512,30 @@ WizardStepBase {
                     }
 
                     WizardFormLabel {
+                        id: labelWifiPhase2Auth
+                        visible: root.isEnterprise
+                        text: qsTr("Phase 2:")
+                        accessibleDescription: qsTr("Choose the inner authentication your Enterprise network uses inside the EAP tunnel. Your network administrator's setup instructions name it; MSCHAPv2 is usual for PEAP, PAP for many TTLS networks.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiPhase2Auth
+                        objectName: "wifiPhase2AuthCombo"
+                        accessiblePurpose: labelWifiPhase2Auth.text
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("MSCHAPv2"), value: "mschapv2" },
+                            { text: qsTr("PAP"),      value: "pap" }
+                        ]
+                    }
+
+                    WizardFormLabel {
                         id: labelWifiAnonymousIdentity
                         visible: root.isEnterprise
                         text: qsTr("Anonymous identity:")
@@ -544,14 +579,7 @@ WizardStepBase {
                             { text: qsTr("Already on the OS"),           value: "system" }
                         ]
 
-                        onCurrentValueChanged: {
-                            root.wifiCaSource = valueAt(currentIndex)
-                            // Start from the CA eduroam and many university networks use,
-                            // as a real, editable value; a saved path is restored before
-                            // this runs and is never replaced.
-                            if (root.wifiCaSource === "system" && fieldWifiCaSystemPath.text.length === 0)
-                                fieldWifiCaSystemPath.text = root.defaultCaSystemPath
-                        }
+                        onCurrentValueChanged: root.wifiCaSource = valueAt(currentIndex)
                     }
 
                     // Keeps the grid's two-column pairing for the rows below
@@ -658,6 +686,8 @@ WizardStepBase {
                                 wifiScroll.scrollToItem(fieldWifiPassword);
                         }
                         textField.onTextChanged: {
+                            if (textField.text.length === 0)
+                                root.pskAutoFilled = false
                             updatePasswordFieldUI()
                             wifiScroll.scrollToItem(fieldWifiPassword)
                         }
@@ -791,7 +821,6 @@ WizardStepBase {
         if (caSystemPathError.length > 0) return false
 
         // secure / closed mode
-        var ssidNow = fieldWifiSSID.value
         var canKeep = canKeepSavedPassword()
         var pwd = fieldWifiPassword.text || ""
 
@@ -816,6 +845,7 @@ WizardStepBase {
         if (keep) {
             map.wifiUsername = fieldWifiUsername.value
             map.wifiEapMethod = comboWifiEapMethod.currentValue
+            map.wifiPhase2Auth = comboWifiPhase2Auth.currentValue
             if (fieldWifiAnonymousIdentity.value.length > 0)
                 map.wifiAnonymousIdentity = fieldWifiAnonymousIdentity.value
             else
@@ -838,6 +868,7 @@ WizardStepBase {
         } else {
             delete map.wifiUsername
             delete map.wifiEapMethod
+            delete map.wifiPhase2Auth
             delete map.wifiAnonymousIdentity
             delete map.wifiCaCertificateSource
             delete map.wifiCaCertificate
@@ -850,10 +881,9 @@ WizardStepBase {
     onNextClicked: {
         var ssid = fieldWifiSSID.value
         var pwd = fieldWifiPassword.text
-        var prevSSID = wizardContainer.customizationSettings.wifiSSID || ""
         var hidden = chkWifiHidden.checked
-        var hadPasswordBefore = !!wizardContainer.customizationSettings.wifiPassword
-        var sameSSID = ssidUnchanged(ssid, prevSSID)
+        // Saved with the password, so it is only reused for the same kind of network
+        var passwordMode = isEnterprise ? "enterprise" : "personal"
 
         // Stored in the clear: NetworkManager needs the passphrase itself to
         // negotiate WPA3/SAE, so it cannot be pre-derived into a PSK.
@@ -877,14 +907,17 @@ WizardStepBase {
             if (wifiMode === "open") {
                // always clear in open mode
                delete wizardContainer.customizationSettings.wifiPassword
+               delete wizardContainer.customizationSettings.wifiPasswordMode
             } else if (havePassword) {
                // overwrite with the newly entered passphrase
                wizardContainer.customizationSettings.wifiPassword = pwd
+               wizardContainer.customizationSettings.wifiPasswordMode = passwordMode
             } else if (canKeepSavedPassword()) {
                // keep the existing passphrase (do nothing)
             } else {
                // no password provided and can't keep -> ensure cleared
                delete wizardContainer.customizationSettings.wifiPassword
+               delete wizardContainer.customizationSettings.wifiPasswordMode
             }
 
             applyEnterpriseSettings(wizardContainer.customizationSettings, isEnterprise)
@@ -896,6 +929,7 @@ WizardStepBase {
             delete wizardContainer.customizationSettings.wifiSSID
             delete wizardContainer.customizationSettings.wifiSsidOctetsBase64
             delete wizardContainer.customizationSettings.wifiPassword
+            delete wizardContainer.customizationSettings.wifiPasswordMode
             applyEnterpriseSettings(wizardContainer.customizationSettings, false)
             delete wizardContainer.customizationSettings.wifiHidden
             wizardContainer.wifiConfigured = false
@@ -913,18 +947,22 @@ WizardStepBase {
             saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
             if (wifiMode === "open") {
                delete saved.wifiPassword
+               delete saved.wifiPasswordMode
             } else if (havePassword) {
                saved.wifiPassword = pwd
+               saved.wifiPasswordMode = passwordMode
             } else if (canKeepSavedPassword()) {
                // keep existing persisted passphrase
             } else {
                delete saved.wifiPassword
+               delete saved.wifiPasswordMode
             }
             saved.wifiHidden = hidden
         } else {
             delete saved.wifiSSID
             delete saved.wifiSsidOctetsBase64
             delete saved.wifiPassword
+            delete saved.wifiPasswordMode
             applyEnterpriseSettings(saved, false)
             delete saved.wifiHidden
         }

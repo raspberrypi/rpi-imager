@@ -310,15 +310,19 @@ QString CustomisationGenerator::resolveWifiEapMethod(const QVariantMap& settings
     return QStringLiteral("peap");
 }
 
+QString CustomisationGenerator::resolveWifiPhase2Auth(const QVariantMap& settings) {
+    const QString phase2 = settings.value(QStringLiteral("wifiPhase2Auth")).toString();
+    if (phase2 == QStringLiteral("mschapv2") || phase2 == QStringLiteral("pap"))
+        return phase2;
+    return resolveWifiEapMethod(settings) == QStringLiteral("ttls") ? QStringLiteral("pap")
+                                                                     : QStringLiteral("mschapv2");
+}
+
 QString CustomisationGenerator::resolveWifiAnonymousIdentity(const QVariantMap& settings, bool wifiConfigured) {
     if (!wifiConfigured)
         return {};
 
     return stripLineTerminators(settings.value(QStringLiteral("wifiAnonymousIdentity")).toString()).trimmed();
-}
-
-QString CustomisationGenerator::wifiCaCertificateFileName() {
-    return QStringLiteral("wifi-ca.pem");
 }
 
 QString CustomisationGenerator::wifiCaCertificatePath() {
@@ -403,13 +407,7 @@ QByteArray CustomisationGenerator::wifiCaCertificateForNetworkConfig(const QVari
 }
 
 QString CustomisationGenerator::resolveWifiCaCertificateSource(const QVariantMap& settings) {
-    const QVariant source = settings.value(QStringLiteral("wifiCaCertificateSource"));
-    if (!source.isValid()) {
-        return settings.value(QStringLiteral("wifiCaCertificate")).toString().isEmpty()
-                   ? QStringLiteral("none")
-                   : QStringLiteral("file");
-    }
-    const QString value = source.toString();
+    const QString value = settings.value(QStringLiteral("wifiCaCertificateSource")).toString();
     if (value == QStringLiteral("file") || value == QStringLiteral("system"))
         return value;
     return QStringLiteral("none");
@@ -1231,7 +1229,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
-        
+
         const QString secMode = resolveWifiSecureMode(settings, wifiConfigured);
         const QString username = resolveWifiUsername(settings, wifiConfigured);
         const QString wifiPassphrase = resolveWifiPassphrase(settings, wifiConfigured);
@@ -1240,7 +1238,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
             push(QStringLiteral("          auth:"), netcfg);
             push(QStringLiteral("            key-management: eap"), netcfg);
             push(QStringLiteral("            method: ") + resolveWifiEapMethod(settings), netcfg);
-            push(QStringLiteral("            phase2-auth: mschapv2"), netcfg);
+            push(QStringLiteral("            phase2-auth: ") + resolveWifiPhase2Auth(settings), netcfg);
             push(QStringLiteral("            identity: \"") + yamlEscapeString(username) + QStringLiteral("\""), netcfg);
             const QString anonymousIdentity = resolveWifiAnonymousIdentity(settings, wifiConfigured);
             if (!anonymousIdentity.isEmpty()) {
@@ -1260,8 +1258,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
                      + QStringLiteral("\""), netcfg);
             }
             push(QStringLiteral("            password: \"") + yamlEscapeString(wifiPassphrase) + QStringLiteral("\""), netcfg);
-        } 
-        else if (wifiPassphrase.isEmpty()) {
+        } else if (wifiPassphrase.isEmpty()) {
             // Open network (no password) - use auth block with key-management: none
             // See: https://github.com/raspberrypi/rpi-imager/issues/1396
             push(QStringLiteral("          auth:"), netcfg);

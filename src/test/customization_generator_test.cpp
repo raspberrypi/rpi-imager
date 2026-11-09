@@ -1747,6 +1747,61 @@ TEST_CASE("cloud-init network-config falls back to PEAP for an unknown EAP metho
     REQUIRE_THAT(yaml, !ContainsSubstring("evil"));
 }
 
+TEST_CASE("cloud-init network-config writes the chosen Enterprise phase 2",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    SECTION("PAP with TTLS") {
+        settings["wifiEapMethod"] = "ttls";
+        settings["wifiPhase2Auth"] = "pap";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            method: ttls\n"
+                                                                   "            phase2-auth: pap\n"));
+    }
+    SECTION("MSCHAPv2 with TTLS") {
+        settings["wifiEapMethod"] = "ttls";
+        settings["wifiPhase2Auth"] = "mschapv2";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: mschapv2\n"));
+    }
+    SECTION("PAP with PEAP") {
+        settings["wifiEapMethod"] = "peap";
+        settings["wifiPhase2Auth"] = "pap";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: pap\n"));
+    }
+}
+
+TEST_CASE("cloud-init network-config defaults the Enterprise phase 2 by EAP method",
+          "[cloudinit][network][wifi]") {
+    // Phase 2 is written unquoted, so only known values may pass through; an
+    // unknown or unset one becomes the usual choice for the method.
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    SECTION("unset with PEAP is MSCHAPv2") {
+        settings["wifiEapMethod"] = "peap";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: mschapv2\n"));
+    }
+    SECTION("unset with TTLS is PAP") {
+        settings["wifiEapMethod"] = "ttls";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: pap\n"));
+    }
+    SECTION("unknown with PEAP is MSCHAPv2, and nothing of it is written") {
+        settings["wifiEapMethod"] = "peap";
+        settings["wifiPhase2Auth"] = "gtc\n            ca-certificate: /evil";
+        const std::string yaml = networkConfigFor(settings);
+        REQUIRE_THAT(yaml, ContainsSubstring("            phase2-auth: mschapv2\n"));
+        REQUIRE_THAT(yaml, !ContainsSubstring("evil"));
+        REQUIRE_THAT(yaml, !ContainsSubstring("gtc"));
+    }
+    SECTION("unknown with TTLS is PAP") {
+        settings["wifiEapMethod"] = "ttls";
+        settings["wifiPhase2Auth"] = "bogus";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: pap\n"));
+    }
+}
+
 TEST_CASE("cloud-init network-config writes an Enterprise anonymous identity only when given",
           "[cloudinit][network][wifi]") {
     QVariantMap settings = securedWifiSettings();
@@ -1823,6 +1878,7 @@ TEST_CASE("cloud-init network-config names the CA certificate only for Enterpris
     QVariantMap settings = securedWifiSettings();
     settings["wifiSecureMode"] = "enterprise";
     settings["wifiUsername"] = "user@example.com";
+    settings["wifiCaCertificateSource"] = "file";
     settings["wifiCaCertificate"] = QString::fromLatin1(pemOf(kFakeDer));
 
     SECTION("Enterprise with a certificate: the line and the file go together") {
@@ -1913,6 +1969,10 @@ TEST_CASE("cloud-init network-config honours the CA certificate source choice",
     SECTION("an unknown source is treated as none") {
         settings["wifiCaCertificateSource"] = "bogus";
         REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+    }
+    SECTION("an unset source is none, even with a certificate saved") {
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
     }
     SECTION("\"file\" uses the copied certificate, not the path") {
         settings["wifiCaCertificateSource"] = "file";
