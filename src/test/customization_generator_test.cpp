@@ -1768,6 +1768,160 @@ TEST_CASE("cloud-init network-config writes an Enterprise anonymous identity onl
     }
 }
 
+namespace {
+// Not a real certificate: the normaliser checks the outer ASN.1 SEQUENCE (tag
+// and length), which is as far as it can look without a TLS library.
+const QByteArray kFakeDer = QByteArray::fromHex("3009020101020102020103");
+
+QByteArray pemOf(const QByteArray &der)
+{
+    return "-----BEGIN CERTIFICATE-----\n" + der.toBase64()
+           + "\n-----END CERTIFICATE-----\n";
+}
+} // namespace
+
+TEST_CASE("normaliseCaCertificate accepts PEM, PEM bundles and DER",
+          "[customization][wifi][certificate]") {
+    SECTION("a PEM certificate comes back as PEM") {
+        CHECK(CustomisationGenerator::normaliseCaCertificate(pemOf(kFakeDer)) == pemOf(kFakeDer));
+    }
+    SECTION("text around the PEM block, as some exports carry, is dropped") {
+        const QByteArray withText = "subject=CN=Example CA\r\n" + pemOf(kFakeDer) + "trailing\n";
+        CHECK(CustomisationGenerator::normaliseCaCertificate(withText) == pemOf(kFakeDer));
+    }
+    SECTION("a bundle keeps every certificate, in order") {
+        const QByteArray second = QByteArray::fromHex("3003020109");
+        CHECK(CustomisationGenerator::normaliseCaCertificate(pemOf(kFakeDer) + pemOf(second))
+              == pemOf(kFakeDer) + pemOf(second));
+    }
+    SECTION("a DER certificate is re-encoded as PEM") {
+        CHECK(CustomisationGenerator::normaliseCaCertificate(kFakeDer) == pemOf(kFakeDer));
+    }
+}
+
+TEST_CASE("normaliseCaCertificate refuses what is not a certificate",
+          "[customization][wifi][certificate]") {
+    CHECK(CustomisationGenerator::normaliseCaCertificate(QByteArray()).isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate("just some text\n").isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate("0 starts like DER but is text\n").isEmpty());
+    // A SEQUENCE whose length does not match the file is not one certificate
+    CHECK(CustomisationGenerator::normaliseCaCertificate(kFakeDer + "extra").isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate(kFakeDer.left(5)).isEmpty());
+    // A private key must never be copied onto the card as if it were a CA
+    CHECK(CustomisationGenerator::normaliseCaCertificate(
+              "-----BEGIN PRIVATE KEY-----\n" + kFakeDer.toBase64() + "\n-----END PRIVATE KEY-----\n")
+              .isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate(
+              "-----BEGIN CERTIFICATE-----\nnot*base64!\n-----END CERTIFICATE-----\n").isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate(
+              "-----BEGIN CERTIFICATE-----\n" + kFakeDer.toBase64()).isEmpty());   // no END
+    CHECK(CustomisationGenerator::normaliseCaCertificate(QByteArray(64 * 1024 + 1, '\x30')).isEmpty());
+}
+
+TEST_CASE("cloud-init network-config names the CA certificate only for Enterprise with a valid one",
+          "[cloudinit][network][wifi][certificate]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiCaCertificate"] = QString::fromLatin1(pemOf(kFakeDer));
+
+    SECTION("Enterprise with a certificate: the line and the file go together") {
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("            ca-certificate: \"/boot/firmware/wifi-ca.pem\"\n"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings) == pemOf(kFakeDer));
+        CHECK(CustomisationGenerator::wifiCaCertificatePath()
+              == "/boot/firmware/" + CustomisationGenerator::wifiCaCertificateFileName());
+    }
+    SECTION("Personal ignores a leftover certificate") {
+        settings["wifiSecureMode"] = "personal";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("the Open tab ignores a leftover certificate") {
+        settings["wifiMode"] = "open";
+        settings["wifiPassword"] = "";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("no SSID means no network-config, so no certificate either") {
+        settings.remove("wifiSSID");
+        CHECK(networkConfigFor(settings).empty());
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("an invalid certificate is left out rather than referenced") {
+        settings["wifiCaCertificate"] = "not a certificate";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+}
+
+TEST_CASE("cloud-init network-config can point at a CA certificate already on the OS",
+          "[cloudinit][network][wifi][certificate]") {
+    const QString usertrust = QStringLiteral("/etc/ssl/certs/USERTrust_RSA_Certification_Authority.pem");
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiCaCertificateSource"] = "system";
+    settings["wifiCaCertificatePath"] = usertrust;
+
+    SECTION("the path is written as given, and nothing is copied to the card") {
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("            ca-certificate: \"" + usertrust.toStdString() + "\"\n"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("a picked file left over from before is not used") {
+        settings["wifiCaCertificate"] = QString::fromLatin1(pemOf(kFakeDer));
+        const std::string yaml = networkConfigFor(settings);
+        REQUIRE_THAT(yaml, ContainsSubstring(usertrust.toStdString()));
+        REQUIRE_THAT(yaml, !ContainsSubstring("wifi-ca.pem"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("an unusable path is left out rather than written") {
+        for (const char *bad : {"etc/ssl/certs/relative.pem",
+                                "/etc/ssl/../../root/key.pem",
+                                "/etc/ssl/certs/a.pem\n            identity: \"x\"",
+                                ""}) {
+            INFO("path: " << bad);
+            settings["wifiCaCertificatePath"] = QString::fromUtf8(bad);
+            REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        }
+    }
+    SECTION("a quote in the path is escaped, not ending the string") {
+        settings["wifiCaCertificatePath"] = QStringLiteral("/etc/ssl/certs/odd\"name.pem");
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("ca-certificate: \"/etc/ssl/certs/odd\\\"name.pem\"\n"));
+    }
+    SECTION("Personal ignores the path") {
+        settings["wifiSecureMode"] = "personal";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+    }
+}
+
+TEST_CASE("cloud-init network-config honours the CA certificate source choice",
+          "[cloudinit][network][wifi][certificate]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiCaCertificate"] = QString::fromLatin1(pemOf(kFakeDer));
+    settings["wifiCaCertificatePath"] = "/etc/ssl/certs/x.pem";
+
+    SECTION("\"none\" writes no certificate even with both kinds saved") {
+        settings["wifiCaCertificateSource"] = "none";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("an unknown source is treated as none") {
+        settings["wifiCaCertificateSource"] = "bogus";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+    }
+    SECTION("\"file\" uses the copied certificate, not the path") {
+        settings["wifiCaCertificateSource"] = "file";
+        const std::string yaml = networkConfigFor(settings);
+        REQUIRE_THAT(yaml, ContainsSubstring("ca-certificate: \"/boot/firmware/wifi-ca.pem\""));
+        REQUIRE_THAT(yaml, !ContainsSubstring("/etc/ssl/certs/x.pem"));
+    }
+}
+
 TEST_CASE("cloud-init network-config keeps the password shorthand for WPA2/WPA3 Personal",
           "[cloudinit][network][wifi]") {
     QVariantMap settings = securedWifiSettings();

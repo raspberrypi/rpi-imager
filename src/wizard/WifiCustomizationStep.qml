@@ -31,6 +31,59 @@ WizardStepBase {
     onShowSecurityChoiceChanged: rebuildFocusOrder()
     onIsEnterpriseChanged: rebuildFocusOrder()
 
+    // Enterprise CA certificate, as PEM text, and the file name it came from
+    property string wifiCaCertificate: ""
+    property string wifiCaCertificateName: ""
+    property string caCertificateError: ""
+    onWifiCaCertificateChanged: rebuildFocusOrder()   // the Clear button comes and goes
+
+    // "none" | "file" | "system": where the CA certificate comes from
+    property string wifiCaSource: "none"
+    onWifiCaSourceChanged: rebuildFocusOrder()
+
+    // A path on the OS is written into network-config as given, so it must be
+    // absolute and stay where it says. Mirrors resolveWifiCaCertificateSystemPath().
+    function isValidCaSystemPath(p) {
+        if (!p || p.length === 0 || p.charAt(0) !== "/") return false
+        if (/[\x00-\x1f\x7f]/.test(p)) return false
+        var parts = p.split("/")
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] === "..") return false
+        }
+        return true
+    }
+
+    readonly property string caSystemPathError: {
+        if (!isEnterprise || wifiCaSource !== "system") return ""
+        var p = fieldWifiCaSystemPath.value
+        if (p.length === 0) return qsTr("Enter the path of the certificate on the OS, or choose another option.")
+        if (!isValidCaSystemPath(p)) return qsTr("Enter a full path starting with /, without \"..\".")
+        return ""
+    }
+    readonly property string caErrorText: wifiCaSource === "file" ? caCertificateError : caSystemPathError
+
+    function loadCaCertificate(fileUrlOrPath) {
+        var pem = ImageWriterSingleton.readWifiCaCertificate(fileUrlOrPath)
+        if (!pem || pem.length === 0) {
+            caCertificateError = qsTr("That file is not a certificate Imager can use. Choose a PEM or DER certificate file (.pem, .crt, .cer, .der).")
+            return
+        }
+        var s = String(fileUrlOrPath)
+        wifiCaCertificate = pem
+        wifiCaCertificateName = s.substring(Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\")) + 1)
+        caCertificateError = ""
+    }
+
+    function browseCaCertificate() {
+        if (ImageWriterSingleton.nativeFileDialogAvailable()) {
+            var picked = ImageWriterSingleton.getNativeOpenFileName(qsTr("Select CA certificate"), "", CommonStrings.caCertFiltersString)
+            if (picked && picked.length > 0)
+                loadCaCertificate(picked)
+        } else {
+            caCertFileDialog.open()
+        }
+    }
+
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
     title: qsTr("Customisation: Choose Wi‑Fi")
@@ -62,6 +115,14 @@ WizardStepBase {
                 items.push(comboWifiEapMethod)
                 items.push(labelWifiAnonymousIdentity)
                 items.push(fieldWifiAnonymousIdentity)
+                items.push(labelWifiCaCertificate)
+                items.push(comboWifiCaSource)
+                if (wifiCaSource === "file") {
+                    items.push(btnWifiCaCertificateBrowse)
+                    items.push(btnWifiCaCertificateClear)
+                } else if (wifiCaSource === "system") {
+                    items.push(fieldWifiCaSystemPath)
+                }
             }
             if (showPw) {
                 items.push(lblPassword)
@@ -92,6 +153,13 @@ WizardStepBase {
         }
         if (settings.wifiAnonymousIdentity) {
             fieldWifiAnonymousIdentity.text = settings.wifiAnonymousIdentity
+        }
+        if (settings.wifiCaCertificate) {
+            wifiCaCertificate = settings.wifiCaCertificate
+            wifiCaCertificateName = settings.wifiCaCertificateName || qsTr("Saved certificate")
+        }
+        if (settings.wifiCaCertificatePath) {
+            fieldWifiCaSystemPath.text = settings.wifiCaCertificatePath
         }
 
         // If not saved, try to auto-detect the current SSID from the system
@@ -136,6 +204,11 @@ WizardStepBase {
         comboWifiSecurity.currentIndex = secIdx >= 0 ? secIdx : 0
         var eapIdx = comboWifiEapMethod.indexOfValue(settings.wifiEapMethod || "peap")
         comboWifiEapMethod.currentIndex = eapIdx >= 0 ? eapIdx : 0
+        // Settings from before the source choice: a saved certificate means "file"
+        var caSource = settings.wifiCaCertificateSource
+                       || (settings.wifiCaCertificate ? "file" : "none")
+        var caIdx = comboWifiCaSource.indexOfValue(caSource)
+        comboWifiCaSource.currentIndex = caIdx >= 0 ? caIdx : 0
 
         updatePasswordFieldUI()
         // UpdatePasswordFieldUI already takes care of this
@@ -435,6 +508,108 @@ WizardStepBase {
                     }
 
                     WizardFormLabel {
+                        id: labelWifiCaCertificate
+                        visible: root.isEnterprise
+                        text: qsTr("CA certificate:")
+                        accessibleDescription: qsTr("Optional but recommended. The certificate your network's setup instructions name, so the device only sends your password to the real network. Pick a file, or give the path of one the OS already has.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiCaSource
+                        objectName: "wifiCaSourceCombo"
+                        accessiblePurpose: labelWifiCaCertificate.text
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("None (network not verified)"), value: "none" },
+                            { text: qsTr("From a file"),                 value: "file" },
+                            { text: qsTr("Already on the OS"),           value: "system" }
+                        ]
+
+                        onCurrentValueChanged: root.wifiCaSource = valueAt(currentIndex)
+                    }
+
+                    // Keeps the grid's two-column pairing for the rows below
+                    Item { width: 1; height: 1; visible: root.isEnterprise && root.wifiCaSource === "file" }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise && root.wifiCaSource === "file"
+                        spacing: Style.spacingSmall
+
+                        ImTextField {
+                            id: fieldWifiCaCertificate
+                            objectName: "wifiCaCertificateField"
+                            Layout.fillWidth: true
+                            readOnly: true
+                            font.pointSize: Style.fontSizeInput
+                            text: root.wifiCaCertificateName
+                            placeholderText: qsTr("No file chosen — the network will not be verified")
+                        }
+
+                        ImButton {
+                            id: btnWifiCaCertificateBrowse
+                            objectName: "wifiCaCertificateBrowseButton"
+                            text: CommonStrings.browse
+                            accessibleDescription: qsTr("Select the CA certificate file for this network")
+                            onClicked: root.browseCaCertificate()
+                            onActiveFocusChanged: {
+                                if (activeFocus)
+                                    wifiScroll.scrollToItem(this);
+                            }
+                        }
+
+                        ImButton {
+                            id: btnWifiCaCertificateClear
+                            objectName: "wifiCaCertificateClearButton"
+                            text: qsTr("Clear")
+                            visible: root.wifiCaCertificate.length > 0
+                            accessibleDescription: qsTr("Remove the selected CA certificate")
+                            onClicked: {
+                                root.wifiCaCertificate = ""
+                                root.wifiCaCertificateName = ""
+                                root.caCertificateError = ""
+                            }
+                        }
+                    }
+
+                    Item { width: 1; height: 1; visible: root.isEnterprise && root.wifiCaSource === "system" }
+
+                    ImTextField {
+                        id: fieldWifiCaSystemPath
+                        objectName: "wifiCaSystemPathField"
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise && root.wifiCaSource === "system"
+                        font.pointSize: Style.fontSizeInput
+                        trimWhitespace: true
+                        placeholderText: qsTr("/etc/ssl/certs/USERTrust_RSA_Certification_Authority.pem")
+                        Accessible.description: qsTr("The full path of a CA certificate already on the OS, as your network's setup instructions give it. Imager cannot check that the file exists on the OS.")
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
+                    }
+
+                    // Keeps the grid's two-column pairing for the error row below
+                    Item { width: 1; height: 1; visible: root.isEnterprise && root.caErrorText.length > 0 }
+
+                    Text {
+                        id: caCertificateErrorText
+                        textFormat: Text.PlainText
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise && root.caErrorText.length > 0
+                        wrapMode: Text.WordWrap
+                        text: root.caErrorText
+                        color: Style.formLabelErrorColor
+                        font.pointSize: Style.fontSizeDescription
+                    }
+
+                    WizardFormLabel {
                         id: lblPassword
                         text: CommonStrings.password
                         visible: root.showPw
@@ -538,6 +713,20 @@ WizardStepBase {
         }
     }
     ]
+
+    // Fallback CA certificate picker for when no native file dialog is available
+    ImFileDialog {
+        id: caCertFileDialog
+        objectName: "wifiCaCertificateFileDialog"
+        parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
+        anchors.centerIn: parent
+        dialogTitle: qsTr("Select CA certificate")
+        nameFilters: CommonStrings.caCertFiltersList
+        onAccepted: {
+            if (selectedFile && selectedFile.toString().length > 0)
+                root.loadCaCertificate(selectedFile.toString())
+        }
+    }
     
     // WPA2/3 passphrase validation helpers
     function isAsciiPrintable(text) {
@@ -578,6 +767,8 @@ WizardStepBase {
 
         // Enterprise needs a username
         if (isEnterprise && fieldWifiUsername.value.length === 0) return false
+        // ...and a usable path when the certificate is one already on the OS
+        if (caSystemPathError.length > 0) return false
 
         // secure / closed mode
         var ssidNow = fieldWifiSSID.value
@@ -609,10 +800,29 @@ WizardStepBase {
                 map.wifiAnonymousIdentity = fieldWifiAnonymousIdentity.value
             else
                 delete map.wifiAnonymousIdentity
+            // A CA certificate is public, so it is remembered like the rest.
+            // Both kinds are kept so switching the source back finds them; the
+            // source alone decides which one network-config uses.
+            map.wifiCaCertificateSource = wifiCaSource
+            if (wifiCaCertificate.length > 0) {
+                map.wifiCaCertificate = wifiCaCertificate
+                map.wifiCaCertificateName = wifiCaCertificateName
+            } else {
+                delete map.wifiCaCertificate
+                delete map.wifiCaCertificateName
+            }
+            if (fieldWifiCaSystemPath.value.length > 0)
+                map.wifiCaCertificatePath = fieldWifiCaSystemPath.value
+            else
+                delete map.wifiCaCertificatePath
         } else {
             delete map.wifiUsername
             delete map.wifiEapMethod
             delete map.wifiAnonymousIdentity
+            delete map.wifiCaCertificateSource
+            delete map.wifiCaCertificate
+            delete map.wifiCaCertificateName
+            delete map.wifiCaCertificatePath
         }
     }
 

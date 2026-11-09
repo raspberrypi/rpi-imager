@@ -2876,6 +2876,13 @@ bool DownloadThread::_customizeImage()
             {
                 fat->writeFile("network-config", _cloudinitNetwork);
                 _recordCustomisationWrite("network-config", _cloudinitNetwork);
+
+                // The Enterprise CA certificate network-config's ca-certificate: names
+                if (!_wifiCaCertificate.isEmpty() && !_wifiCaCertificateName.isEmpty())
+                {
+                    fat->writeFile(_wifiCaCertificateName, _wifiCaCertificate);
+                    _recordCustomisationWrite(_wifiCaCertificateName, _wifiCaCertificate);
+                }
             }
         }
 
@@ -2964,6 +2971,7 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
         "user-data",         // cloud-init customization
         "meta-data",         // cloud-init metadata
         "network-config",    // cloud-init network customization
+        "wifi-ca.pem",       // Enterprise Wi-Fi CA certificate, named by network-config
         "rpi-preseed.toml"   // rpi-preseed customization
     };
     

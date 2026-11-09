@@ -135,6 +135,43 @@ public:
     static QString sanitisedCountryCode(const QString& value);
 
     /**
+     * @brief Name of the Enterprise Wi-Fi CA certificate on the boot partition.
+     *
+     * Written next to network-config, which refers to it by its path on the
+     * running system (wifiCaCertificatePath()).
+     */
+    static QString wifiCaCertificateFileName();
+
+    /**
+     * @brief Where the CA certificate is found once the OS is running.
+     *
+     * cloud-init OSes for the Pi mount the boot partition at /boot/firmware.
+     */
+    static QString wifiCaCertificatePath();
+
+    /**
+     * @brief Turn a picked certificate file into PEM, or nothing.
+     *
+     * Accepts PEM, including a bundle of several certificates, and a single
+     * DER certificate (re-encoded as PEM). Anything else -- not a certificate,
+     * a private key, or larger than 64 KiB -- gives an empty result. Only the
+     * CERTIFICATE blocks are kept, so text around them is dropped.
+     */
+    static QByteArray normaliseCaCertificate(const QByteArray& raw);
+
+    /**
+     * @brief The CA certificate to write beside network-config, or nothing.
+     *
+     * Non-empty only when network-config will be an Enterprise one (Wi-Fi
+     * configured, an SSID, "enterprise" mode), the certificate source is
+     * "file", and "wifiCaCertificate" holds a valid certificate. A certificate
+     * already on the OS ("system" source) is referenced, never written. generateCloudInitNetworkConfig() writes the
+     * ca-certificate line under exactly the same condition, so the file and
+     * the reference to it are always written together.
+     */
+    static QByteArray wifiCaCertificateForNetworkConfig(const QVariantMap& settings);
+
+    /**
      * @brief Shell-quote a value for use as one argument in firstrun.sh
      *
      * Every value the user supplies ends up here on its way into a script
@@ -235,6 +272,25 @@ private:
      * Wi-Fi is not configured, in which case no anonymous-identity is written.
      */
     static QString resolveWifiAnonymousIdentity(const QVariantMap& settings, bool wifiConfigured);
+
+    /**
+     * @brief Where the Enterprise CA certificate comes from: "none", "file" or "system".
+     *
+     * "wifiCaCertificateSource" when it is one of those. Unset (settings saved
+     * before the choice existed) is "file" if a certificate was saved, else
+     * "none"; anything unknown is "none".
+     */
+    static QString resolveWifiCaCertificateSource(const QVariantMap& settings);
+
+    /**
+     * @brief The path of a CA certificate already on the OS ("wifiCaCertificatePath").
+     *
+     * Only for the "system" source. It is written into network-config as
+     * given, so it must be absolute, free of control characters and of ".."
+     * segments; anything else gives an empty result and no ca-certificate line.
+     * Whether the file exists on the OS cannot be known here.
+     */
+    static QString resolveWifiCaCertificateSystemPath(const QVariantMap& settings);
 
     static QString yamlEscapeString(const QString& value);
 };

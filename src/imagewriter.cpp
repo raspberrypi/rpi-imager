@@ -545,6 +545,31 @@ QString ImageWriter::readFileContents(const QString &filePath)
     return content.trimmed();
 }
 
+QString ImageWriter::readWifiCaCertificate(const QString &filePath)
+{
+    if (filePath.isEmpty())
+        return QString();
+
+    const QString path = filePath.startsWith(QLatin1String("file:"))
+                             ? QUrl(filePath).toLocalFile()
+                             : filePath;
+
+    // Elevated, a picked file could be a link to one only root can read.
+    PlatformQuirks::InvokingUserFsScope asUser;
+    QFile file(path);
+    // Binary, not Text: a DER certificate is not text and must not have its
+    // bytes translated. Read one byte past the limit so an oversized file is
+    // refused rather than silently truncated.
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "Failed to open CA certificate:" << path << "Error:" << file.errorString();
+        return QString();
+    }
+    const QByteArray raw = file.read(64 * 1024 + 1);
+    file.close();
+
+    return QString::fromLatin1(rpi_imager::CustomisationGenerator::normaliseCaCertificate(raw));
+}
+
 QString ImageWriter::localPathFromUrl(const QUrl &url) const
 {
     // Anything that is not a local file url is returned as it came
@@ -1051,6 +1076,8 @@ QString ImageWriter::getHardwareName()
 void ImageWriter::_configureAndStartFastbootFlash()
 {
     _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    _fastbootFlashThread->setWifiCaCertificate(rpi_imager::CustomisationGenerator::wifiCaCertificateFileName(),
+                                               _wifiCaCertificate);
     if (!_bmapUrl.isEmpty())
         _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
 
@@ -1493,6 +1520,8 @@ void ImageWriter::_configureWriteThread()
     _thread->setUserAgent(CurlNetworkConfig::instance().userAgent());
     qDebug() << "configureWriteThread: passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    _thread->setWifiCaCertificate(rpi_imager::CustomisationGenerator::wifiCaCertificateFileName(),
+                                  _wifiCaCertificate);
     
     // Pass debug options to the thread
     _thread->setDebugDirectIO(_debugDirectIO);
@@ -4218,8 +4247,11 @@ void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArr
     _firstrun = firstrun;
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudinitNetwork;
+    // Only the cloud-init path stages a certificate, after calling this; any
+    // other staging (or none) must not leave one from an earlier choice.
+    _wifiCaCertificate.clear();
     _advancedOptions = opts;
-    
+
     // If initFormat is provided, use it; otherwise keep current value
     // This allows CLI to explicitly set the format along with content
     if (!initFormat.isEmpty()) {
@@ -4346,6 +4378,9 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     }
 
     setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
+
+    // Under the same condition the generator wrote ca-certificate: into netcfg
+    _wifiCaCertificate = rpi_imager::CustomisationGenerator::wifiCaCertificateForNetworkConfig(s);
 }
 
 void ImageWriter::_applyRpiPreseedCustomisationFromSettings(const QVariantMap &s)
