@@ -2421,6 +2421,22 @@ bool DownloadThread::_verifyCustomisation()
     return false;
 }
 
+// Calculate and emit verification read throughput periodically
+void DownloadThread::_emitVerifyThroughput()
+{
+    qint64 elapsed = _verifyThroughputTimer.elapsed();
+    if (elapsed < 500)
+        return;
+    qint64 bytesDelta = _lastVerifyNow.load() - _verifyThroughputBytes;
+    quint32 throughputKBps = 0;
+    if (bytesDelta > 0) {
+        throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
+    }
+    _verifyThroughputBytes = _lastVerifyNow.load();
+    _verifyThroughputTimer.restart();
+    emit bottleneckStateChanged(BottleneckState::Verifying, throughputKBps);
+}
+
 bool DownloadThread::_verify()
 {
     _lastVerifyNow = 0;
@@ -2452,7 +2468,17 @@ bool DownloadThread::_verify()
         const std::uint64_t device_len = (std::uint64_t)_verifyTotal - device_off;
 
         auto fast = _file->FastVerifySha256(prefix, prefix_len,
-                                              device_off, device_len);
+                                              device_off, device_len,
+                                              [this, device_off](std::uint64_t hashed) {
+            _lastVerifyNow.store(static_cast<qint64>(device_off + hashed));
+            _emitVerifyThroughput();
+            _onVerifyProgress();
+            return !_cancelled;
+        });
+        // As the read-back loop below: a cancel is not a failure.
+        if (fast.supported && fast.error == rpi_imager::FileError::kCancelled) {
+            return true;
+        }
         if (fast.supported && fast.error == rpi_imager::FileError::kSuccess) {
             QByteArray helper_digest(fast.digest.data(),
                                        (int)fast.digest.size());
@@ -2521,20 +2547,7 @@ bool DownloadThread::_verify()
         _verifyhash.addData(verifyBuf, static_cast<qint64>(lenRead));
         _lastVerifyNow += static_cast<qint64>(lenRead);
 
-        // Calculate and emit verification read throughput periodically
-        {
-            qint64 elapsed = _verifyThroughputTimer.elapsed();
-            if (elapsed >= 500) {
-                qint64 bytesDelta = _lastVerifyNow.load() - _verifyThroughputBytes;
-                quint32 throughputKBps = 0;
-                if (bytesDelta > 0) {
-                    throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
-                }
-                _verifyThroughputBytes = _lastVerifyNow.load();
-                _verifyThroughputTimer.restart();
-                emit bottleneckStateChanged(BottleneckState::Verifying, throughputKBps);
-            }
-        }
+        _emitVerifyThroughput();
 
         // Allow subclasses to emit progress updates
         _onVerifyProgress();

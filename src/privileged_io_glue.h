@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include "file_operations.h"
 #include "privileged_io/privileged_writer.h"
 
 namespace rpi_imager {
@@ -29,5 +30,14 @@ rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter();
 // RPI_IMAGER_USE_WINDOWS_HELPER=0 / RPI_IMAGER_USE_LINUX_HELPER=0.
 // platform_opt_out_env may be null on platforms without a per-platform override.
 bool preferNativePrivilegedHelper(const char* platform_opt_out_env = nullptr);
+
+// FileOperations::FastVerifySha256 for the helper clients: hashes in chunks
+// so `progress` can report, or in one call where the backend cannot.
+FileOperations::FastVerifyResult helperFastVerifySha256(
+    const privileged::proto_ns::SessionId& sid,
+    const std::uint8_t* prefix, std::size_t prefix_len,
+    std::uint64_t device_offset, std::uint64_t length,
+    const FileOperations::VerifyProgress& progress,
+    const char* log_tag);
 
 } // namespace rpi_imager

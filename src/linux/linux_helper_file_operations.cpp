@@ -965,36 +965,22 @@ FileOperations::FastVerifyResult LinuxHelperFileOperations::FastVerifySha256(
     const std::uint8_t* prefix,
     std::size_t prefix_len,
     std::uint64_t device_offset,
-    std::uint64_t length) {
-    FastVerifyResult out;
+    std::uint64_t length,
+    const VerifyProgress& progress) {
     priv::proto::SessionId sid;
     {
         std::lock_guard<std::mutex> lk(state_->mutex);
         if (!state_->open) {
+            FastVerifyResult out;
             out.supported = true;
             out.error = FileError::kOpenError;
             return out;
         }
         sid = state_->session_id;
     }
-
-    std::string prefix_bytes;
-    if (prefix && prefix_len > 0) {
-        prefix_bytes.assign(reinterpret_cast<const char*>(prefix), prefix_len);
-    }
-
-    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
-    auto r = w.hashDeviceSha256(sid, prefix_bytes, device_offset, length);
-    out.supported = true;
-    if (!r.ok) {
-        FileOperationsLog("LinuxHelperFileOperations: hashDeviceSha256 failed: "
-                          + r.error.detail());
-        out.error = FileError::kReadError;
-        return out;
-    }
-    out.error = FileError::kSuccess;
-    out.digest = std::move(r.value);
-    return out;
+    return ::rpi_imager::helperFastVerifySha256(sid, prefix, prefix_len,
+                                                device_offset, length, progress,
+                                                "LinuxHelperFileOperations");
 }
 
 FileError LinuxHelperFileOperations::PrepareDevice(std::uint64_t /*device_size*/,

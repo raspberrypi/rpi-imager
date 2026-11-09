@@ -411,10 +411,14 @@ class FileOperations {
   // produce. Implementations that can't do this (legacy in-process,
   // tests) return `supported = false`; callers must then fall back to
   // the read-and-hash loop in DownloadThread::_verify().
+  // `progress` gets the device bytes hashed so far; returning false cancels,
+  // with error kCancelled.
+  using VerifyProgress = std::function<bool(std::uint64_t)>;
   virtual FastVerifyResult FastVerifySha256(const std::uint8_t* /*prefix*/,
                                               std::size_t /*prefix_len*/,
                                               std::uint64_t /*device_offset*/,
-                                              std::uint64_t /*length*/) {
+                                              std::uint64_t /*length*/,
+                                              const VerifyProgress& /*progress*/ = {}) {
     return {};  // supported=false, default
   }
 

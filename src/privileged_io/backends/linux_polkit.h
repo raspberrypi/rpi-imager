@@ -77,6 +77,13 @@ public:
         const std::string& prefix,
         std::uint64_t device_offset,
         std::uint64_t length) override;
+    Result<std::string> hashDeviceSha256Chunk(
+        const proto_ns::SessionId&,
+        const std::string& prefix,
+        std::uint64_t device_offset,
+        std::uint64_t length,
+        bool begin,
+        bool finish) override;
     Result<proto_ns::SessionStats> closeSession(const proto_ns::SessionId&) override;
 
     Result<void> unmount(const std::string& device_path) override;
@@ -110,6 +117,11 @@ public:
 public:
     struct State;
 private:
+    Result<std::string> hashRequest(const proto_ns::SessionId& sid,
+                                    const std::string& prefix,
+                                    std::uint64_t device_offset,
+                                    std::uint64_t length,
+                                    bool incremental, bool begin, bool finish);
     std::unique_ptr<State> state_;
 };
 

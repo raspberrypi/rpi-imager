@@ -72,7 +72,8 @@ public:
     FastVerifyResult FastVerifySha256(const std::uint8_t* prefix,
                                       std::size_t prefix_len,
                                       std::uint64_t device_offset,
-                                      std::uint64_t length) override;
+                                      std::uint64_t length,
+                                      const VerifyProgress& progress = {}) override;
     HelperSessionStats GetLastSessionStats() const override;
 
     int GetHandle() const override { return -1; }

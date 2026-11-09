@@ -91,6 +91,13 @@ public:
         const std::string& prefix,
         std::uint64_t device_offset,
         std::uint64_t length) override;
+    Result<std::string> hashDeviceSha256Chunk(
+        const proto_ns::SessionId& sid,
+        const std::string& prefix,
+        std::uint64_t device_offset,
+        std::uint64_t length,
+        bool begin,
+        bool finish) override;
     Result<proto_ns::SessionStats> closeSession(const proto_ns::SessionId&) override;
 
     // Maintenance.

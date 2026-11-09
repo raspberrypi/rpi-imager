@@ -188,6 +188,20 @@ extern NSString* const RpiImagerWriterServiceName;
                                    NSString* _Nullable errorDetail,
                                    int32_t kernelErrno))reply;
 
+// One chunk of the same hash, so the client can show progress: `begin`
+// starts the session's hash with the prefix, `finish` replies with the
+// digest. Between them `digest` is nil and errorDetail nil on success.
+- (void)hashDeviceSha256Chunk:(uint64_t)sessionToken
+                  prefixBytes:(NSData* _Nullable)prefixBytes
+                 deviceOffset:(uint64_t)deviceOffset
+                       length:(uint64_t)length
+                        begin:(BOOL)begin
+                       finish:(BOOL)finish
+                        reply:(void (^)(NSData* _Nullable digest,
+                                        uint64_t bytesHashed,
+                                        NSString* _Nullable errorDetail,
+                                        int32_t kernelErrno))reply;
+
 // Force all pending writes for the session's fd to physical storage
 // via fsync(2). Returns NO with an error string if fsync failed.
 - (void)syncSession:(uint64_t)sessionToken

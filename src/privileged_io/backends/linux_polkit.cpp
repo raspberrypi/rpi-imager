@@ -565,12 +565,30 @@ Result<void> LinuxPolkitBackend::syncDevice(const proto_ns::SessionId& sid) {
 Result<std::string> LinuxPolkitBackend::hashDeviceSha256(
     const proto_ns::SessionId& sid, const std::string& prefix,
     std::uint64_t device_offset, std::uint64_t length) {
+    return hashRequest(sid, prefix, device_offset, length, false, true, true);
+}
+
+Result<std::string> LinuxPolkitBackend::hashDeviceSha256Chunk(
+    const proto_ns::SessionId& sid, const std::string& prefix,
+    std::uint64_t device_offset, std::uint64_t length, bool begin, bool finish) {
+    return hashRequest(sid, prefix, device_offset, length, true, begin, finish);
+}
+
+Result<std::string> LinuxPolkitBackend::hashRequest(
+    const proto_ns::SessionId& sid, const std::string& prefix,
+    std::uint64_t device_offset, std::uint64_t length,
+    bool incremental, bool begin, bool finish) {
     std::lock_guard<std::mutex> lk(state_->mutex);
     proto_ns::HashDeviceRequest req;
     *req.mutable_session_id() = sid;
     req.set_prefix(prefix);
     req.set_device_offset(device_offset);
     req.set_length(length);
+    if (incremental) {
+        req.set_incremental(true);
+        req.set_begin(begin);
+        req.set_finish(finish);
+    }
     std::string req_ser;
     req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_HASH_DEVICE_SHA256, req_ser);

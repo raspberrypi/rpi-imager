@@ -161,6 +161,9 @@ struct Session {
     std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
     SessionTelemetry telemetry;
     SessionBulkWriter bulk_writer;
+    // An incremental hash between its begin and finish chunks.
+    std::unique_ptr<Sha256> hash;
+    std::chrono::steady_clock::duration hash_time{};
 };
 
 class Helper {
@@ -502,45 +505,64 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "hashDeviceSha256: no session");
 
-    s->bulk_writer.drainBeforeSync(s->fops.get());
-
+    const bool begin = !req.incremental() || req.begin();
+    const bool finish = !req.incremental() || req.finish();
     const auto t0 = std::chrono::steady_clock::now();
 
-    Sha256 sha;
-    if (!sha.init()) return fail(proto::ERROR_UNKNOWN, "SHA-256 init failed");
-    if (!req.prefix().empty() && !sha.update(req.prefix().data(), req.prefix().size())) {
-        return fail(proto::ERROR_UNKNOWN, "hash update (prefix) failed");
+    if (begin) {
+        s->bulk_writer.drainBeforeSync(s->fops.get());
+        s->hash = std::make_unique<Sha256>();
+        s->hash_time = {};
+        if (!s->hash->init()) {
+            s->hash.reset();
+            return fail(proto::ERROR_UNKNOWN, "SHA-256 init failed");
+        }
+        // The first block, written to disk last, is hashed first.
+        if (!req.prefix().empty() && !s->hash->update(req.prefix().data(), req.prefix().size())) {
+            s->hash.reset();
+            return fail(proto::ERROR_UNKNOWN, "hash update (prefix) failed");
+        }
+    } else if (!s->hash) {
+        return fail(proto::ERROR_UNKNOWN, "hashDeviceSha256: no hash in progress");
     }
 
     if (s->fops->Seek(req.device_offset()) != FileError::kSuccess) {
+        s->hash.reset();
         return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: seek failed");
     }
 
     constexpr std::size_t kChunk = 1u * 1024 * 1024;
     AlignedBuffer buf(kChunk);  // direct I/O, as in readChunk
-    if (!buf) return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: out of memory");
+    if (!buf) {
+        s->hash.reset();
+        return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: out of memory");
+    }
     std::uint64_t remaining = req.length();
     while (remaining > 0) {
         const std::size_t want = static_cast<std::size_t>(
             remaining < kChunk ? remaining : kChunk);
         std::size_t got = 0;
         if (s->fops->ReadSequential(buf.data(), want, got) != FileError::kSuccess || got == 0) {
+            s->hash.reset();
             return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: read failed");
         }
-        if (!sha.update(buf.data(), got)) {
+        if (!s->hash->update(buf.data(), got)) {
+            s->hash.reset();
             return fail(proto::ERROR_UNKNOWN, "hash update (device) failed");
         }
         remaining -= got;
     }
-
-    std::string digest;
-    if (!sha.finish(digest)) return fail(proto::ERROR_UNKNOWN, "hash finalize failed");
-
-    const auto t1 = std::chrono::steady_clock::now();
-    s->telemetry.recordHashDevice(t1 - t0);
+    s->hash_time += std::chrono::steady_clock::now() - t0;
 
     proto::HashDeviceReply reply;
-    reply.set_digest(digest);
+    if (finish) {
+        std::string digest;
+        const bool ok_digest = s->hash->finish(digest);
+        s->hash.reset();
+        if (!ok_digest) return fail(proto::ERROR_UNKNOWN, "hash finalize failed");
+        s->telemetry.recordHashDevice(s->hash_time);
+        reply.set_digest(digest);
+    }
     reply.SerializeToString(&out);
     return ok();
 }

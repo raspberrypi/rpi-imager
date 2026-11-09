@@ -4,6 +4,7 @@
 #include "privileged_io_glue.h"
 #include "local_shim_backend.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <memory>
 
@@ -54,6 +55,57 @@ rpi_imager::privileged::IPrivilegedWriter& getProcessPrivilegedWriter() {
             std::move(config));
     }();
     return *writer;
+}
+
+FileOperations::FastVerifyResult helperFastVerifySha256(
+    const privileged::proto_ns::SessionId& sid,
+    const std::uint8_t* prefix, std::size_t prefix_len,
+    std::uint64_t device_offset, std::uint64_t length,
+    const FileOperations::VerifyProgress& progress,
+    const char* log_tag) {
+    // Small enough for the bar to move every second or so on slow cards.
+    constexpr std::uint64_t kChunk = 64ull * 1024 * 1024;
+    FileOperations::FastVerifyResult out;
+    out.supported = true;
+    std::string prefix_bytes;
+    if (prefix && prefix_len > 0) {
+        prefix_bytes.assign(reinterpret_cast<const char*>(prefix), prefix_len);
+    }
+    auto failed = [&](const std::string& detail) {
+        FileOperationsLog(std::string(log_tag) + ": hashDeviceSha256 failed: " + detail);
+        out.error = FileError::kReadError;
+        return out;
+    };
+
+    auto& w = getProcessPrivilegedWriter();
+    std::uint64_t done = 0;
+    for (;;) {
+        const std::uint64_t n = std::min(kChunk, length - done);
+        const bool first = done == 0;
+        const bool last = done + n == length;
+        auto r = w.hashDeviceSha256Chunk(sid, first ? prefix_bytes : std::string(),
+                                         device_offset + done, n, first, last);
+        if (!r.ok && first
+            && r.error.code() == privileged::proto_ns::ERROR_NOT_IMPLEMENTED) {
+            r = w.hashDeviceSha256(sid, prefix_bytes, device_offset, length);
+            if (!r.ok) return failed(r.error.detail());
+            out.digest = std::move(r.value);
+            break;
+        }
+        if (!r.ok) return failed(r.error.detail());
+        done += n;
+        if (last) {
+            out.digest = std::move(r.value);
+            break;
+        }
+        if (progress && !progress(done)) {
+            out.error = FileError::kCancelled;
+            return out;
+        }
+    }
+    if (progress) progress(length);
+    out.error = FileError::kSuccess;
+    return out;
 }
 
 } // namespace rpi_imager

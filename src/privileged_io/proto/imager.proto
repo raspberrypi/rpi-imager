@@ -442,6 +442,12 @@ message HashDeviceRequest {
   bytes prefix = 2;                // optional first-block prefix hashed before device bytes
   uint64 device_offset = 3;
   uint64 length = 4;
+  // Incremental hashing, so the client can report progress: chunks share
+  // the session's SHA-256 state. begin starts it (with prefix), finish
+  // returns the digest. Unset incremental is one call doing both.
+  bool incremental = 5;
+  bool begin = 6;
+  bool finish = 7;
 }
 
 message HashDeviceReply {

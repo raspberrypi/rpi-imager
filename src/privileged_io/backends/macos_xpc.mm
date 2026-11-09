@@ -1169,6 +1169,16 @@ Result<std::string> MacOSXpcBackend::hashDeviceSha256(
     const std::string& prefix,
     std::uint64_t device_offset,
     std::uint64_t length) {
+    return hashDeviceSha256Chunk(sid, prefix, device_offset, length, true, true);
+}
+
+Result<std::string> MacOSXpcBackend::hashDeviceSha256Chunk(
+    const proto::SessionId& sid,
+    const std::string& prefix,
+    std::uint64_t device_offset,
+    std::uint64_t length,
+    bool begin,
+    bool finish) {
     @autoreleasepool {
         std::uint64_t token = 0;
         {
@@ -1216,11 +1226,13 @@ Result<std::string> MacOSXpcBackend::hashDeviceSha256(
                 sync->cv.notify_one();
             }];
 
-        [proxy hashDeviceSha256:token
-                    prefixBytes:prefixData
-                   deviceOffset:device_offset
-                         length:length
-                          reply:^(NSData* _Nullable digestData,
+        [proxy hashDeviceSha256Chunk:token
+                         prefixBytes:prefixData
+                        deviceOffset:device_offset
+                              length:length
+                               begin:begin ? YES : NO
+                              finish:finish ? YES : NO
+                               reply:^(NSData* _Nullable digestData,
                                   uint64_t bytesHashed,
                                   NSString* _Nullable detail,
                                   int32_t kerrno) {
@@ -1250,7 +1262,7 @@ Result<std::string> MacOSXpcBackend::hashDeviceSha256(
                 proto::ERROR_HELPER_NOT_INSTALLED,
                 "XPC error: " + sync->err_detail));
         }
-        if (sync->digest.empty()) {
+        if (!sync->err_detail.empty() || (finish && sync->digest.empty())) {
             return Result<std::string>::failure(makeError(
                 proto::ERROR_DEVICE_IO,
                 "hashDeviceSha256 failed: " + sync->err_detail,

@@ -230,6 +230,26 @@ public:
         return Result<std::string>::failure(err);
     }
 
+    // One chunk of an incremental hashDeviceSha256: `begin` starts the
+    // session's hash with `prefix`, each call adds the device range, and
+    // `finish` returns the digest (otherwise an empty string). Backends that
+    // cannot keep state across calls take only a single begin+finish call.
+    virtual Result<std::string> hashDeviceSha256Chunk(
+        const proto_ns::SessionId& sid,
+        const std::string& prefix,
+        std::uint64_t device_offset,
+        std::uint64_t length,
+        bool begin,
+        bool finish) {
+        if (begin && finish) {
+            return hashDeviceSha256(sid, prefix, device_offset, length);
+        }
+        proto_ns::ErrorInfo err;
+        err.set_code(proto_ns::ERROR_NOT_IMPLEMENTED);
+        err.set_detail("incremental hashDeviceSha256 not implemented by this backend");
+        return Result<std::string>::failure(err);
+    }
+
     // Closes the session and returns the accumulated SessionStats payload
     // (per §7a of the design doc). The session id is invalid afterwards.
     virtual Result<proto_ns::SessionStats> closeSession(

@@ -295,6 +295,7 @@ protected:
     void _performEject();
     virtual bool _verify();
     virtual void _onVerifyProgress() {}  // Called during verify loop for progress updates
+    void _emitVerifyThroughput();
     int _authopen(const QByteArray &filename);
     bool _openAndPrepareDevice();
     virtual void _onDevicePrepared() {}  // Hook for subclasses after device open, before writes

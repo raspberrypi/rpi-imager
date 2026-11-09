@@ -272,6 +272,11 @@ struct OpenSession {
     std::atomic<std::uint32_t> fsync_count{0};
     std::atomic<std::uint64_t> prepare_device_us{0};
     std::atomic<std::uint64_t> hash_device_us{0};
+    // An incremental hash between its begin and finish chunks; the client
+    // sends chunks one at a time.
+    CC_SHA256_CTX hash_ctx{};
+    bool hashing = false;
+    std::uint64_t hashed_bytes = 0;
     // §7a per-write latency histogram; latency_buckets[i] counts samples
     // whose latency fell in bucket i (see kLatencyBucketUpperUs).
     std::array<std::atomic<std::uint64_t>, kNumLatencyBuckets> latency_buckets{};
@@ -1603,9 +1608,28 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
                                    uint64_t,
                                    NSString* _Nullable,
                                    int32_t))reply {
+    [self hashDeviceSha256Chunk:sessionToken
+                    prefixBytes:prefixBytes
+                   deviceOffset:deviceOffset
+                         length:length
+                          begin:YES
+                         finish:YES
+                          reply:reply];
+}
+
+- (void)hashDeviceSha256Chunk:(uint64_t)sessionToken
+                  prefixBytes:(NSData* _Nullable)prefixBytes
+                 deviceOffset:(uint64_t)deviceOffset
+                       length:(uint64_t)length
+                        begin:(BOOL)begin
+                       finish:(BOOL)finish
+                        reply:(void (^)(NSData* _Nullable,
+                                        uint64_t,
+                                        NSString* _Nullable,
+                                        int32_t))reply {
     auto t_hash_start = std::chrono::steady_clock::now();
     int fd = -1;
-    OpenSession* sess_for_stats = nullptr;
+    OpenSession* sess = nullptr;
     {
         std::lock_guard<std::mutex> lk(sessionMutex());
         auto it = sessionTable().find(sessionToken);
@@ -1614,10 +1638,29 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
             return;
         }
         fd = it->second->fd;
-        sess_for_stats = it->second.get();
+        sess = it->second.get();
     }
 
-    // RAII duration capture for §7a hash_device_us regardless of exit path.
+    if (begin) {
+        sess->hash_device_us.store(0);
+        CC_SHA256_Init(&sess->hash_ctx);
+        sess->hashing = true;
+        sess->hashed_bytes = 0;
+        // Prefix is the imager's first block - written to disk last so it
+        // isn't on the device during verify, but it IS part of the
+        // logical hash the client computed during write.
+        if (prefixBytes && prefixBytes.length > 0) {
+            CC_SHA256_Update(&sess->hash_ctx,
+                             prefixBytes.bytes,
+                             (CC_LONG)prefixBytes.length);
+            sess->hashed_bytes = prefixBytes.length;
+        }
+    } else if (!sess->hashing) {
+        reply(nil, 0, @"hashDeviceSha256: no hash in progress", 0);
+        return;
+    }
+
+    // Accumulates §7a hash_device_us across chunks, whatever the exit path.
     struct HashTimer {
         std::atomic<std::uint64_t>* target;
         std::chrono::steady_clock::time_point start;
@@ -1626,10 +1669,10 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
             const std::uint64_t us = (std::uint64_t)
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     end - start).count();
-            target->store(us);
+            target->fetch_add(us);
         }
     };
-    HashTimer _hash_timer{&sess_for_stats->hash_device_us, t_hash_start};
+    HashTimer _hash_timer{&sess->hash_device_us, t_hash_start};
     (void)_hash_timer;
 
     // Hash buffer sized to amortise read syscall overhead while staying
@@ -1637,22 +1680,8 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     constexpr std::size_t kReadChunk = 16ull * 1024 * 1024;
     std::vector<std::uint8_t> buf(kReadChunk);
 
-    CC_SHA256_CTX ctx;
-    CC_SHA256_Init(&ctx);
-
-    // Prefix is the imager's first block - written to disk last so it
-    // isn't on the device during verify, but it IS part of the
-    // logical hash the client computed during write. Fold it into the
-    // hasher up-front so we end up with a single combined digest.
-    if (prefixBytes && prefixBytes.length > 0) {
-        CC_SHA256_Update(&ctx,
-                         prefixBytes.bytes,
-                         (CC_LONG)prefixBytes.length);
-    }
-
     std::uint64_t remaining = length;
     std::uint64_t cursor = deviceOffset;
-    std::uint64_t total_hashed = prefixBytes ? prefixBytes.length : 0;
 
     while (remaining > 0) {
         const std::size_t want =
@@ -1666,25 +1695,32 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
                      fd, want, (unsigned long long)cursor, strerror(e));
             auditLogf(@"FAIL hashDeviceSha256 session=%llu errno=%d",
                       (unsigned long long)sessionToken, e);
-            reply(nil, total_hashed,
+            sess->hashing = false;
+            reply(nil, sess->hashed_bytes,
                   [NSString stringWithUTF8String:msg], e);
             return;
         }
         if (got == 0) break;  // EOF
-        CC_SHA256_Update(&ctx, buf.data(), (CC_LONG)got);
+        CC_SHA256_Update(&sess->hash_ctx, buf.data(), (CC_LONG)got);
         cursor += (std::uint64_t)got;
         remaining -= (std::uint64_t)got;
-        total_hashed += (std::uint64_t)got;
+        sess->hashed_bytes += (std::uint64_t)got;
+    }
+
+    if (!finish) {
+        reply(nil, sess->hashed_bytes, nil, 0);
+        return;
     }
 
     std::uint8_t digest[CC_SHA256_DIGEST_LENGTH];
-    CC_SHA256_Final(digest, &ctx);
+    CC_SHA256_Final(digest, &sess->hash_ctx);
+    sess->hashing = false;
 
     auditLogf(@"OK hashDeviceSha256 session=%llu bytes=%llu",
               (unsigned long long)sessionToken,
-              (unsigned long long)total_hashed);
+              (unsigned long long)sess->hashed_bytes);
     NSData* d = [NSData dataWithBytes:digest length:CC_SHA256_DIGEST_LENGTH];
-    reply(d, total_hashed, nil, 0);
+    reply(d, sess->hashed_bytes, nil, 0);
 }
 
 - (void)syncSession:(uint64_t)sessionToken

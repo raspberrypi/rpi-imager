@@ -122,9 +122,10 @@ public:
     FileError PrepareDevice(std::uint64_t device_size,
                               bool zero_last_mb = true) override;
     FastVerifyResult FastVerifySha256(const std::uint8_t* prefix,
-                                        std::size_t prefix_len,
-                                        std::uint64_t device_offset,
-                                        std::uint64_t length) override;
+                                      std::size_t prefix_len,
+                                      std::uint64_t device_offset,
+                                      std::uint64_t length,
+                                      const VerifyProgress& progress = {}) override;
 
     // §7a SessionStats accessor. Populated by Close() from the helper's
     // closeSession reply. Read-only thereafter; cleared on next OpenDevice.
