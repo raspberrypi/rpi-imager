@@ -23,7 +23,7 @@
 
 class RingBuffer;
 class AcceleratedCryptographicHash;
-namespace fastboot { class FastbootProtocol; }
+namespace fastboot { class FastbootProtocol; class WriteManifest; }
 namespace rpiboot { class IUsbTransport; }
 
 namespace rpiboot { class IUsbTransport; class LibusbContext; struct UsbDeviceInfo; }
@@ -55,6 +55,9 @@ public:
     // Set optional bmap URL for DONT_CARE block optimisation.
     // When set, unmapped blocks are skipped during fastboot flash.
     void setBmapUrl(const QUrl &url) { _bmapUrl = url; }
+
+    // Have the device read back and hash what was written ("oem bmap-verify").
+    void setVerifyEnabled(bool verify) { _verifyEnabled = verify; }
 
     // Configure Raspberry Pi Connect Device Identity registration.
     // When apiKey is non-empty, the device will be registered with
@@ -91,6 +94,7 @@ signals:
     void preparationStatusUpdate(QString msg);
     void downloadProgress(quint64 dlnow, quint64 dltotal);
     void writeProgress(quint64 now, quint64 total);
+    void verifyProgress(quint64 now, quint64 total);
     void eventFastbootDeviceOpen(quint32 durationMs, bool success, QString metadata);
 
 protected:
@@ -104,6 +108,11 @@ protected:
     void decompressConsumerProducer();
     bool applyCustomisation(class fastboot::FastbootProtocol& fb,
                              class rpiboot::IUsbTransport& transport);
+    // False after reporting an error. A gadget too old to verify is
+    // logged and passed, as the block path passes with verify disabled.
+    bool verifyWrite(class fastboot::FastbootProtocol& fb,
+                     class rpiboot::IUsbTransport& transport,
+                     const fastboot::WriteManifest& manifest);
 
     // True when this is the special "Erase" OS-list entry
     // (_imageUrl == "internal://format") rather than a real image flash.
@@ -158,6 +167,7 @@ protected:
     QString _blockDevice;
     QUrl _imageUrl;
     QUrl _bmapUrl;
+    bool _verifyEnabled = true;
     quint64 _downloadLen;
     quint64 _extractLen;
     QByteArray _expectedHash;

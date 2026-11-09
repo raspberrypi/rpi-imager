@@ -199,6 +199,10 @@ void SparseEncoder::processBlock(const uint8_t* block)
         ++_statsRaw;
     }
 
+    if (_observer)
+        _observer(_processedBlocks, std::span<const uint8_t>(block, SPARSE_BLK_SZ),
+                  type != CHUNK_TYPE_DONT_CARE);
+
     // Does this block continue the current run?
     bool continues = (_runBlocks > 0 && type == _runType);
     if (continues && type == CHUNK_TYPE_FILL && fillVal != _runFillValue)

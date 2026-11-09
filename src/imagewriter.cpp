@@ -1058,6 +1058,7 @@ QString ImageWriter::getHardwareName()
 void ImageWriter::_configureAndStartFastbootFlash()
 {
     _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    _fastbootFlashThread->setVerifyEnabled(_verifyEnabled);
     if (!_bmapUrl.isEmpty())
         _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
 
@@ -1077,6 +1078,12 @@ void ImageWriter::_configureAndStartFastbootFlash()
     });
     connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
         emit writeProgress(QVariant(now), QVariant(total));
+    });
+    connect(_fastbootFlashThread, &FastbootFlashThread::verifyProgress, this, [this](quint64 now, quint64 total) {
+        if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
+            _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
+            setWriteState(WriteState::Verifying);
+        emit verifyProgress(QVariant(now), QVariant(total));
     });
     connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
     connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
@@ -1104,6 +1111,10 @@ void ImageWriter::_configureAndStartFastbootFlash()
     connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
             this, [this](quint64 now, quint64 total){
                 _performanceStats->recordWriteProgress(now, total);
+            });
+    connect(_fastbootFlashThread, &FastbootFlashThread::verifyProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordVerifyProgress(now, total);
             });
 
     _fastbootFlashThread->start();
