@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 Raspberry Pi Ltd
 //
-// macos_xpc_smoke - phase 1b proof-of-architecture smoke test.
+// macos_xpc_smoke - smoke test for the macOS XPC boundary.
 //
 // Drives MacOSXpcBackend directly to validate that the cross-process
 // XPC boundary works end-to-end. NOT a unit test - it requires the

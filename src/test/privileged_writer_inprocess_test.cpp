@@ -4,9 +4,8 @@
 // Round-trip and basic-API tests for InProcessTestBackend.
 //
 // These exercise the IPrivilegedWriter interface end-to-end against a
-// tempfile-backed pseudo-device. They run in milliseconds, no privilege,
-// no real disk; gating new test infrastructure for the wider phase 1a
-// migration.
+// tempfile-backed pseudo-device. They run in milliseconds, with no
+// privilege and no real disk.
 
 #include <catch2/catch_test_macros.hpp>
 

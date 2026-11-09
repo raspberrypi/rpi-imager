@@ -9,10 +9,9 @@
 // between processes. Adding methods here is a versioned change - see §8a /
 // §9 of the design doc for evolution rules.
 //
-// Phase 1b proof-of-architecture: only `pingWithReply:` (handshake) and
-// `unmountDevice:reply:` (one real method) are implemented. The protocol
-// is deliberately small while we validate the boundary; remaining methods
-// are added as the bulk-write/drive-subscription/etc. paths are migrated.
+// The protocol is deliberately narrow: handshake, drive enumeration and
+// push subscription, the write-session lifecycle (open/read/write/prepare/
+// sync/hash/close), the shared-memory bulk-write plane, and unmount.
 
 #pragma once
 
@@ -20,9 +19,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// The Mach service name registered by the helper. Production code will
-// install this via SMAppService; phase 1b development uses a launchctl
-// bootstrap of a hand-written plist (see writer/dev/<name>.plist).
+// The Mach service name registered by the helper. Production installs this
+// via SMAppService; development can launchctl-bootstrap a hand-written
+// plist (see writer/dev/<name>.plist).
 extern NSString* const RpiImagerWriterServiceName;
 
 // Helper -> client one-way notification surface. The helper invokes
@@ -109,10 +108,9 @@ extern NSString* const RpiImagerWriterServiceName;
 // Synchronous read of `length` bytes from `offset` on the FD held for
 // the given session.
 //
-// Phase 1b: this is intentionally simple and slow - data crosses the
-// XPC boundary as NSData. Suitable for verify-after-write and small
-// metadata reads (a few MB at most). The bulk verify path will be
-// re-routed through the shared-memory ring once that lands.
+// This is intentionally simple and slow - data crosses the XPC boundary
+// as NSData. Suitable for verify-after-write and small metadata reads (a
+// few MB at most); the bulk path uses the shared-memory ring instead.
 - (void)readAt:(uint64_t)sessionToken
          offset:(uint64_t)offset
          length:(uint64_t)length
@@ -123,9 +121,8 @@ extern NSString* const RpiImagerWriterServiceName;
 // Synchronous write of `data` at `offset` on the FD held for the given
 // session.
 //
-// Same caveat as readAt: small chunks only in phase 1b. The full
-// write pipeline routes through a shared-memory ring in subsequent
-// phases.
+// Same caveat as readAt: small chunks only. The high-throughput write
+// pipeline routes through the shared-memory ring instead.
 - (void)writeAt:(uint64_t)sessionToken
           offset:(uint64_t)offset
             data:(NSData*)data

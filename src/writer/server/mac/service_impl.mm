@@ -33,9 +33,12 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 #include <random>
+#include <array>
 #include <atomic>
+#include <limits>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -51,6 +54,33 @@ namespace {
 //     1; we allow a small headroom for batch-imaging UIs.
 constexpr std::uint64_t kMaxSessionBytesWritten = 64ull * 1024 * 1024 * 1024;
 constexpr std::size_t   kMaxSessionsPerClient   = 3;
+
+// Physical RAM, queried by the helper itself (never trusted from the
+// client). Returns 0 if the query fails.
+std::uint64_t physicalMemoryBytes() {
+    std::uint64_t mem = 0;
+    std::size_t len = sizeof(mem);
+    if (sysctlbyname("hw.memsize", &mem, &len, nullptr, 0) != 0) {
+        return 0;
+    }
+    return mem;
+}
+
+// Defense-in-depth ceiling for a single mapped bulk buffer. The client sizes
+// its write ring as a fraction of RAM (a slot count bounded by 20% of
+// available RAM, and hard-capped at 256 × 16 MB = 4 GB; see
+// SystemMemoryManager::getCoordinatedRingBufferConfig). A ceiling of 1/3 of
+// physical RAM comfortably covers any legitimate request while still bounding
+// a buggy/compromised client's RSS demand, and scales with the machine
+// instead of a fixed limit. Floored at 256 MB so low-RAM hosts still allow a
+// usable ring even if the RAM query is unavailable.
+std::uint64_t maxBulkBufferBytes() {
+    constexpr std::uint64_t kFloor = 256ull * 1024 * 1024;
+    const std::uint64_t phys = physicalMemoryBytes();
+    if (phys == 0) return kFloor;
+    const std::uint64_t third = phys / 3;
+    return third > kFloor ? third : kFloor;
+}
 
 // Maximum number of in-flight bulk pwrite()s per session. Tuned to
 // match typical SSD/SD card queue depths; larger values give more
@@ -188,6 +218,25 @@ void tearDownDriveSubSessionOnDriveSubQueueIfIdle() {
     g_drive_sub_da_session = nullptr;
 }
 
+// §7a per-write latency histogram bucket edges. Inclusive upper edge in
+// microseconds for each bucket; the final bucket is open-ended (sentinel
+// UINT64_MAX). Chosen to span fast NVMe (sub-100 µs) through slow SD-card
+// stalls (tens of ms). The edges travel on the wire so the client doesn't
+// hard-code them.
+constexpr std::array<std::uint64_t, 10> kLatencyBucketUpperUs = {
+    100ull, 250ull, 500ull, 1000ull, 2000ull, 5000ull,
+    10000ull, 25000ull, 50000ull,
+    std::numeric_limits<std::uint64_t>::max(),
+};
+constexpr std::size_t kNumLatencyBuckets = kLatencyBucketUpperUs.size();
+
+inline std::size_t latencyBucketIndex(std::uint64_t sample_us) {
+    for (std::size_t i = 0; i < kNumLatencyBuckets; ++i) {
+        if (sample_us <= kLatencyBucketUpperUs[i]) return i;
+    }
+    return kNumLatencyBuckets - 1;
+}
+
 struct OpenSession {
     int fd = -1;
     std::string device_path;
@@ -222,6 +271,9 @@ struct OpenSession {
     std::atomic<std::uint32_t> fsync_count{0};
     std::atomic<std::uint64_t> prepare_device_us{0};
     std::atomic<std::uint64_t> hash_device_us{0};
+    // §7a per-write latency histogram; latency_buckets[i] counts samples
+    // whose latency fell in bucket i (see kLatencyBucketUpperUs).
+    std::array<std::atomic<std::uint64_t>, kNumLatencyBuckets> latency_buckets{};
 };
 
 // Lock-free min/max update for the latency stats.
@@ -1135,8 +1187,8 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     }
 
     // Bound the read size to a sensible upper limit for the synchronous
-    // (NSData-over-XPC) path. Phase 1b is for small chunks only - the
-    // bulk read path will use shared memory.
+    // (NSData-over-XPC) path. This path is for small chunks only - the
+    // bulk read path uses shared memory.
     constexpr uint64_t kMaxBytes = 4ull * 1024 * 1024;
     if (length == 0 || length > kMaxBytes) {
         reply(nil,
@@ -1233,6 +1285,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     sess_ptr->total_write_latency_us.fetch_add(lat_us);
     updateLatencyMinMax(sess_ptr->min_write_latency_us,
                          sess_ptr->max_write_latency_us, lat_us);
+    sess_ptr->latency_buckets[latencyBucketIndex(lat_us)].fetch_add(1);
     // No per-write OK log; see bulkWriteFromBuffer for rationale.
     reply((uint64_t)wrote, nil, 0);
 }
@@ -1266,10 +1319,12 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         return;
     }
 
-    // Bound the size. Bulk buffers are intended for ring-style write
-    // throughput; cap at 256 MB for now (a generous ring of, say,
-    // 32 × 8 MB slots). Reject anything bigger to limit RSS exposure.
-    constexpr std::uint64_t kMaxBulkBuffer = 256ull * 1024 * 1024;
+    // Bound the size to a RAM-proportional ceiling (1/3 of physical RAM,
+    // floored at 256 MB; see maxBulkBufferBytes). This scales with the
+    // machine so it covers the client's RAM-aware write-ring sizing instead
+    // of fighting it with a fixed limit, while still bounding RSS exposure
+    // from a buggy/compromised client.
+    const std::uint64_t kMaxBulkBuffer = maxBulkBufferBytes();
     if (sizeBytes > kMaxBulkBuffer) {
         reply(nil,
               [NSString stringWithFormat:@"mapBulkBuffer: size %llu > cap %llu",
@@ -1367,6 +1422,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     std::atomic<std::uint64_t>* total_write_lat_ptr = nullptr;
     std::atomic<std::uint32_t>* min_lat_ptr = nullptr;
     std::atomic<std::uint32_t>* max_lat_ptr = nullptr;
+    std::array<std::atomic<std::uint64_t>, kNumLatencyBuckets>* latency_buckets_ptr = nullptr;
     dispatch_queue_t bulk_queue = nullptr;
     dispatch_semaphore_t inflight_sem = nullptr;
     {
@@ -1385,6 +1441,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         total_write_lat_ptr = &sess->total_write_latency_us;
         min_lat_ptr = &sess->min_write_latency_us;
         max_lat_ptr = &sess->max_write_latency_us;
+        latency_buckets_ptr = &sess->latency_buckets;
         bulk_queue = sess->bulk_queue;
         inflight_sem = sess->bulk_inflight_sem;
     }
@@ -1463,6 +1520,7 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         write_count_ptr->fetch_add(1);
         total_write_lat_ptr->fetch_add(lat_us);
         updateLatencyMinMax(*min_lat_ptr, *max_lat_ptr, lat_us);
+        (*latency_buckets_ptr)[latencyBucketIndex(lat_us)].fetch_add(1);
 
         if (wrote < 0) {
             // Roll back the CAS on failure.
@@ -1842,6 +1900,17 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     const std::uint64_t prep_us = drained->prepare_device_us.load();
     const std::uint64_t hash_us = drained->hash_device_us.load();
 
+    // §7a per-write latency histogram. Edges travel alongside counts so the
+    // client doesn't hard-code them.
+    NSMutableArray<NSNumber*>* bucketEdges =
+        [NSMutableArray arrayWithCapacity:kNumLatencyBuckets];
+    NSMutableArray<NSNumber*>* bucketCounts =
+        [NSMutableArray arrayWithCapacity:kNumLatencyBuckets];
+    for (std::size_t i = 0; i < kNumLatencyBuckets; ++i) {
+        [bucketEdges addObject:@((unsigned long long)kLatencyBucketUpperUs[i])];
+        [bucketCounts addObject:@((unsigned long long)drained->latency_buckets[i].load())];
+    }
+
     NSDictionary* stats = @{
         @"schemaVersion":     @(1),
         @"bytesWritten":      @((unsigned long long)bytes),
@@ -1854,6 +1923,8 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
         @"fsyncCount":        @((unsigned int)fsync_n),
         @"prepareDeviceUs":   @((unsigned long long)prep_us),
         @"hashDeviceUs":      @((unsigned long long)hash_us),
+        @"writeLatencyBucketUpperUs": bucketEdges,
+        @"writeLatencyBucketCounts":  bucketCounts,
     };
 
     auditLogf(@"OK closeSession session=%llu pid=%d device=%s "

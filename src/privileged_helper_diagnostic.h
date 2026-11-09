@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 Raspberry Pi Ltd
 //
-// Phase 1b end-to-end diagnostic for the privileged helper architecture.
+// End-to-end diagnostic for the privileged helper architecture.
 //
 // Triggered via the --test-privileged-helper CLI flag on macOS. Installs
 // the helper via SMAppService (prompting the user if needed), opens the

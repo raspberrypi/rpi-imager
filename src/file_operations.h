@@ -16,6 +16,10 @@
 #include <mutex>
 #include <vector>
 
+// Supplies RingBuffer slot memory; see write_buffer_provider.h. Declared at
+// global scope to match RingBuffer (which is not namespaced).
+class WriteBufferProvider;
+
 namespace rpi_imager {
 
 // Logging callback type - allows Qt layer to capture debug output without Qt dependency
@@ -181,6 +185,28 @@ class FileOperations {
   // Completion callback for async writes
   using AsyncWriteCallback = std::function<void(FileError result, std::size_t bytes_written)>;
   
+  // Optional hint: the maximum size of a single sequential write the caller
+  // will submit (e.g. the producer's ring-buffer slot size). Backends that
+  // pre-map I/O buffers (the macOS helper's shared-memory ring) use this to
+  // size their slots to the actual write size instead of assuming a
+  // worst-case maximum. No-op by default; safe to ignore. Call before
+  // SetAsyncQueueDepth().
+  virtual void SetMaxWriteSizeHint(std::size_t bytes) { (void)bytes; }
+
+  // Optionally supply the memory provider for the producer's write ring
+  // buffer. A backend that pre-maps device-write memory (the macOS helper's
+  // shared-memory bulk ring) can return a provider whose slots live in that
+  // memory, letting the producer fill it directly so the write path needs no
+  // copy. Returns nullptr by default, in which case the caller uses an
+  // aligned-heap provider (unchanged behaviour).
+  //
+  // Note: a zero-copy provider generally requires the device to be open (a
+  // write session established) before the region can be mapped, so callers
+  // should create/rebuild the write ring after OpenDevice().
+  virtual std::shared_ptr<WriteBufferProvider> CreateWriteBufferProvider() {
+    return nullptr;
+  }
+
   // Configure async I/O queue depth (1 = synchronous, >1 = async with that many in-flight)
   // Must be called before writes. Returns false if async I/O is not supported.
   virtual bool SetAsyncQueueDepth(int depth) = 0;
@@ -282,6 +308,19 @@ class FileOperations {
     write_latency_stats_.reset();
   }
 
+  // Zero-copy write observability. For backends that can write directly from
+  // caller/producer memory (e.g. the macOS helper's shared-memory ring),
+  // reports whether the zero-copy path was used this session and how many
+  // async submits took the zero-copy vs the buffer-copy path. Default: the
+  // backend has no distinct zero-copy path (engaged=false, counts 0).
+  virtual void GetZeroCopyWriteStats(bool& engaged,
+                                     std::uint64_t& zeroCopySubmits,
+                                     std::uint64_t& copySubmits) const {
+    engaged = false;
+    zeroCopySubmits = 0;
+    copySubmits = 0;
+  }
+
   // Device I/O limits discovered from the storage hardware.
   // Used to size write buffers and async queue depth to match device capabilities.
   // Zero values mean "unknown" — callers should fall back to their own heuristics.
@@ -336,6 +375,12 @@ class FileOperations {
     std::uint32_t fsync_count = 0;
     std::uint64_t prepare_device_us = 0;
     std::uint64_t hash_device_us = 0;
+    // §7a per-write latency histogram. write_latency_bucket_upper_us[i] is the
+    // inclusive upper edge (microseconds, final = UINT64_MAX) and
+    // write_latency_bucket_counts[i] the sample count for bucket i. Equal
+    // length, or both empty when the backend reported no buckets.
+    std::vector<std::uint64_t> write_latency_bucket_upper_us;
+    std::vector<std::uint64_t> write_latency_bucket_counts;
   };
 
   // Returns whatever was captured during the most recent Close() (or
