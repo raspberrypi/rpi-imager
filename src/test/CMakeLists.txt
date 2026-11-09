@@ -633,6 +633,29 @@ if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     target_link_libraries(win_pipe_stream_test PRIVATE Catch2::Catch2WithMain privileged_io)
     target_compile_features(win_pipe_stream_test PRIVATE cxx_std_20)
     rpi_discover_tests(win_pipe_stream_test)
+
+    # Asking after the helper must not start it: that raised a UAC prompt
+    # the moment the app opened.
+    add_executable(windows_uac_status_test windows_uac_status_test.cpp)
+    target_include_directories(windows_uac_status_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(windows_uac_status_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(windows_uac_status_test PRIVATE cxx_std_20)
+    rpi_discover_tests(windows_uac_status_test)
+endif()
+
+# The helper connection, built wherever a native helper backend is: a helper
+# that hung up mid-request crashed the client.
+if((WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+   OR (UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER))
+    add_executable(duplex_connection_test duplex_connection_test.cpp)
+    target_include_directories(duplex_connection_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(duplex_connection_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(duplex_connection_test PRIVATE cxx_std_20)
+    rpi_discover_tests(duplex_connection_test)
 endif()
 
 # The AppImage signature the Linux helper authenticates its client by.
