@@ -95,6 +95,8 @@ public:
     // Maintenance
     Result<void> unmount(const std::string& device_path) override;
     Result<void> eject(const std::string& device_path) override;
+    Result<void> cleanDisk(const std::string& device_path) override;
+    Result<void> rescanDisk(const std::string& device_path) override;
 
     // ---- Bulk-write shared-memory path (concrete-class-only) -----------
     // Mirrors MacOSXpcBackend so the Windows FileOperations adapter
@@ -122,6 +124,8 @@ public:
 public:
     struct State;
 private:
+    Result<void> pathRpc(proto_ns::WireMethod method, const std::string& device_path);
+
     std::unique_ptr<State> state_;
 };
 
