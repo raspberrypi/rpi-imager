@@ -652,6 +652,10 @@ public:
        user can flip the helper toggle. macOS only - no-op elsewhere. */
     Q_INVOKABLE void openLoginItemsSettings();
 
+    /* Register (macOS) or start (Windows, Linux) the helper, so the
+       system asks the user to allow it. Returns why it failed, or "". */
+    Q_INVOKABLE QString installPrivilegedHelper();
+
     /* Get access to performance stats for instrumentation */
     PerformanceStats* performanceStats() { return _performanceStats; }
 

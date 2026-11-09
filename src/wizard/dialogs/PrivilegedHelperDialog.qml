@@ -33,6 +33,11 @@ BaseDialog {
     id: root
 
     property int helperState: 0   // ImageWriter.PrivilegedHelperState enum
+    property string installError: ""
+    // Login Items and approval exist only on macOS; elsewhere Continue
+    // starts the helper, through UAC or polkit.
+    readonly property bool isMac: Qt.platform.os === "osx"
+    onHelperStateChanged: installError = ""
     readonly property bool isNeedsInstall:
         helperState === ImageWriterSingleton.NeedsInstall
     readonly property bool isNeedsApproval:
@@ -46,10 +51,12 @@ BaseDialog {
 
     Component.onCompleted: {
         registerFocusGroup("content", function(){
-            return [titleText, descriptionText, hintText]
+            return root.installError.length > 0
+                   ? [titleText, descriptionText, hintText, errorText]
+                   : [titleText, descriptionText, hintText]
         }, 0)
         registerFocusGroup("buttons", function(){
-            if (root.isNeedsApproval || root.isNeedsAttention) {
+            if (root.isMac && (root.isNeedsApproval || root.isNeedsAttention)) {
                 return [cancelButton, openSettingsButton]
             }
             return [cancelButton, primaryButton]
@@ -76,7 +83,15 @@ BaseDialog {
     Text {
         id: descriptionText
         textFormat: Text.PlainText
-        text: root.isNeedsAttention
+        text: !root.isMac
+              ? (root.isNeedsAttention
+                 ? qsTr("Raspberry Pi Imager could not communicate with its "
+                        + "privileged helper, which is required to unmount "
+                        + "and write to storage devices.")
+                 : qsTr("Raspberry Pi Imager uses a privileged helper to "
+                        + "write to storage devices safely. Your system will "
+                        + "ask for permission to start it."))
+              : root.isNeedsAttention
               ? qsTr("Raspberry Pi Imager could not communicate with its "
                      + "privileged helper service, which is required to "
                      + "unmount and write to storage devices.\n\n"
@@ -106,7 +121,11 @@ BaseDialog {
     Text {
         id: hintText
         textFormat: Text.PlainText
-        text: root.isNeedsAttention
+        text: !root.isMac
+              ? (Qt.platform.os === "windows"
+                 ? qsTr("Windows will ask through User Account Control.")
+                 : qsTr("You will be asked for your password."))
+              : root.isNeedsAttention
               ? qsTr("Use the signed app from /Applications if you are "
                      + "developing locally, or enable the helper under "
                      + "General → Login Items & Extensions → Allow in the Background.")
@@ -119,6 +138,19 @@ BaseDialog {
         font.pointSize: Style.fontSizeSmall
         Layout.fillWidth: true
         Accessible.role: Accessible.StaticText
+        Accessible.name: text
+    }
+
+    Text {
+        id: errorText
+        textFormat: Text.PlainText
+        text: root.installError
+        visible: text.length > 0
+        wrapMode: Text.WordWrap
+        color: Style.formLabelErrorColor
+        font.pointSize: Style.fontSizeSmall
+        Layout.fillWidth: true
+        Accessible.role: Accessible.AlertMessage
         Accessible.name: text
     }
 
@@ -138,7 +170,7 @@ BaseDialog {
 
         ImButtonRed {
             id: openSettingsButton
-            visible: root.isNeedsApproval || root.isNeedsAttention
+            visible: root.isMac && (root.isNeedsApproval || root.isNeedsAttention)
             text: qsTr("Open System Settings")
             accessibleDescription: qsTr("Open the Login Items pane in System Settings so you can allow the helper")
             Layout.preferredWidth: 200
@@ -153,13 +185,16 @@ BaseDialog {
 
         ImButtonRed {
             id: primaryButton
-            visible: root.isNeedsInstall
+            visible: root.isNeedsInstall || (!root.isMac && root.isNeedsAttention)
             text: qsTr("Continue")
-            accessibleDescription: qsTr("Trigger the macOS system prompt to allow the privileged helper")
+            accessibleDescription: qsTr("Ask the system to allow the privileged helper")
             Layout.preferredWidth: 130
             activeFocusOnTab: true
+            // Stays open: the new state turns it into the approval
+            // dialog, or closes it once the helper is ready.
             onClicked: {
-                root.accept()
+                root.installError = ImageWriterSingleton
+                    ? ImageWriterSingleton.installPrivilegedHelper() : ""
             }
         }
     }

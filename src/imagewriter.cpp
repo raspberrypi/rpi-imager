@@ -5719,6 +5719,33 @@ void ImageWriter::openLoginItemsSettings()
 #endif
 }
 
+QString ImageWriter::installPrivilegedHelper()
+{
+    using BK = ::rpi_imager::privileged::BackendKind;
+    QString failure;
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    const auto kind = w.backend();
+    // On Windows and Linux this starts the helper, with its UAC or polkit
+    // prompt; on macOS it registers it.
+    if (kind == BK::MacOSXpc || kind == BK::WindowsUac || kind == BK::LinuxPolkit) {
+        auto r = w.installHelper();
+        if (!r.ok) {
+            failure = QString::fromStdString(r.error.detail());
+            qDebug() << "installPrivilegedHelper:" << failure;
+        }
+    }
+    refreshPrivilegedHelperState();
+    // macOS's register() also fails when it has only queued the helper for
+    // the user's approval; that state is progress, not failure.
+    if (_privilegedHelperState == PrivilegedHelperState::Ready
+        || _privilegedHelperState == PrivilegedHelperState::NeedsApproval
+        || _privilegedHelperState == PrivilegedHelperState::Unavailable)
+        return {};
+    if (failure.isEmpty())
+        failure = tr("the helper did not respond.");
+    return tr("The privileged helper could not be started: %1").arg(failure);
+}
+
 void ImageWriter::_handleSetupException(const char* what)
 {
     qDebug() << "Exception during write setup:" << what;

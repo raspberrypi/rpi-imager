@@ -370,15 +370,6 @@ ApplicationWindow {
         parent: overlayRoot
         helperState: ImageWriterSingleton ? ImageWriterSingleton.privilegedHelperState
                                           : ImageWriterSingleton.Unknown
-        onAccepted: {
-            // User confirmed the explainer for first-time install.
-            // The first device-open call from the imager pipeline will
-            // call SMAppService.register() (via XpcFileOperations) and
-            // macOS will surface its native prompt. We could trigger it
-            // proactively here but that creates a chicken-and-egg with
-            // queryHelperStatus' caching; deferring to the next open
-            // keeps the flow uniform with returning users.
-        }
     }
     function _evaluatePrivilegedHelperState() {
         if (!ImageWriterSingleton) return
