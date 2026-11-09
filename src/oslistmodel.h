@@ -49,6 +49,7 @@ public:
         WebsiteRole,
         ArchitectureRole,
         PiConnectRole,
+        EulaUrlRole,
     };
 
     struct OS {
@@ -67,6 +68,7 @@ public:
         QString extractSha256;
         QString bmapUrl;       // Optional bmap file URL for fastboot DONT_CARE optimisation
         QString architecture; // Architecture this OS expects (armel, armhf, armv8)
+        QString eulaUrl;      // Optional licence the user must accept before writing
 
         quint64 imageDownloadSize = 0;
         quint64 extractSize = 0;

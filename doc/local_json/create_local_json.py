@@ -112,6 +112,8 @@ if __name__ == "__main__":
                         help="add OS capabilities to enable features in the customization wizard (see below)")
     parser.add_argument("--device-capabilities", nargs="+", metavar="CAP",
                         help="add device (hardware) capabilities to all devices (see below)")
+    parser.add_argument("--eula-url", metavar="URL",
+                        help="require every OS to have the plain-text licence at this https:// URL accepted before it is written")
 
     args = parser.parse_args()
 
@@ -126,6 +128,11 @@ if __name__ == "__main__":
         invalid_caps = set(args.device_capabilities) - VALID_DEVICE_CAPABILITIES.keys()
         if invalid_caps:
             fatal_error(f"Invalid device capabilities: {', '.join(sorted(invalid_caps))}. Valid capabilities are: {', '.join(VALID_DEVICE_CAPABILITIES.keys())}")
+
+    if args.eula_url:
+        eula_urlparts = urllib.parse.urlparse(args.eula_url)
+        if not eula_urlparts.netloc or eula_urlparts.scheme != "https":
+            fatal_error("Expected eula-url to be a https:// URL")
 
     repo_urlparts = urllib.parse.urlparse(args.repo)
     if not repo_urlparts.netloc or repo_urlparts.scheme not in ("http", "https"):
@@ -251,6 +258,9 @@ if __name__ == "__main__":
             existing_caps = set(os_entry.get("capabilities", []))
             merged_caps = existing_caps | set(args.capabilities)
             os_entry["capabilities"] = sorted(merged_caps)
+    if args.eula_url:
+        for os_entry in local_data["os_list"]:
+            os_entry["eula_url"] = args.eula_url
     # And finally write the local JSON file
     if args.dry_run:
         print(f"Would write {num_images} image{'s' if num_images > 1 else ''} to {args.output_json}")

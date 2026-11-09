@@ -102,6 +102,7 @@ bool OSListModel::reload()
         os.tooltip = obj["tooltip"].toString();
         os.website = obj["website"].toString();
         os.architecture = obj["architecture"].toString();
+        os.eulaUrl = obj["eula_url"].toString();
         os.enableRPiConnect = obj.value("enable_rpi_connect").toBool(false);
 
         next.append(os);
@@ -153,6 +154,7 @@ bool sameContents(const OSListModel::OS &a, const OSListModel::OS &b)
         && a.extractSha256 == b.extractSha256
         && a.bmapUrl == b.bmapUrl
         && a.architecture == b.architecture
+        && a.eulaUrl == b.eulaUrl
         && a.imageDownloadSize == b.imageDownloadSize
         && a.extractSize == b.extractSize
         && a.random == b.random
@@ -246,7 +248,8 @@ QHash<int, QByteArray> OSListModel::roleNames() const
         { TooltipRole, "tooltip" },
         { WebsiteRole, "website" },
         { ArchitectureRole, "architecture" },
-        { PiConnectRole, "enable_rpi_connect" }
+        { PiConnectRole, "enable_rpi_connect" },
+        { EulaUrlRole, "eula_url" }
     };
 }
 
@@ -294,6 +297,8 @@ QVariant OSListModel::data(const QModelIndex &index, int role) const {
             return os.architecture;
         case PiConnectRole:
             return os.enableRPiConnect;
+        case EulaUrlRole:
+            return os.eulaUrl;
     }
 
     return {};

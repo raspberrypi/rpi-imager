@@ -511,6 +511,17 @@
                                     ]
                                 }
                             },
+                            "eula_url": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/eula_url",
+                                "type": "string",
+                                "title": "The eula_url schema",
+                                "description": "Optional. https:// URL of a licence the user must accept before this OS is written. Served as plain UTF-8 text of at most 256 KiB, and shown as plain text, never as markup. Imager shows it on its own step after OS selection and will not write the OS until the text fetched has been accepted; acceptance is remembered until the text changes. Any other scheme is refused.",
+                                "default": "",
+                                "pattern": "^https://",
+                                "examples": [
+                                    "https://example.com/os/licence.txt"
+                                ]
+                            },
                             "bmap_url": {
                                 "$id": "#/properties/os_list/items/anyOf/0/properties/bmap_url",
                                 "type": "string",

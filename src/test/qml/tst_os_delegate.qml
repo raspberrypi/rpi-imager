@@ -41,6 +41,8 @@ TestCase {
         property bool secureBootEnabled: false
         property bool passwordlessSudoAvailable: false
         property bool userRequired: false
+        property bool eulaRequired: false
+        property bool eulaAccepted: false
         property bool hostnameConfigured: false
         property bool localeConfigured: false
         property bool userConfigured: false

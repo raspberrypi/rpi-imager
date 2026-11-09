@@ -37,6 +37,7 @@ You can customise the behaviour of `create_local_json.py` with the following com
   * `--verify-checksums` - check that any matching local filenames also match the `image_download_sha256` in the online manifest, before adding them to the output (ignored with `--online`)
   * `--capabilities CAP [CAP ...]` - add OS capabilities to enable features in the customization wizard
   * `--device-capabilities CAP [CAP ...]` - add device (hardware) capabilities to all devices
+  * `--eula-url URL` - require a licence to be accepted before any OS in the manifest is written; _URL_ must be `https://` and serve plain UTF-8 text of at most 256 KiB
 
 ### Available OS capabilities
 

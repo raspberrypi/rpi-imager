@@ -1060,6 +1060,13 @@ echo "All files validated successfully!"
    - OS-only capabilities (rpi_connect, secure_boot, passwordless_sudo, user_required) only need OS support
    - `user_required` is for an OS that ships with its account locked, such as an rpi-preseed appliance: the wizard offers no way to skip the user step, and Imager refuses to write without a username and password
 
+9. **Licences**
+   - Set `eula_url` on an OS whose vendor requires a licence to be accepted before it is used
+   - The URL must be `https://`; any other scheme is shown to the user as an error in the OS list, and the OS cannot be written
+   - Serve plain UTF-8 text of at most 256 KiB. It is shown as plain text, so markup appears literally
+   - Imager shows the licence on its own step after OS selection and refuses to write the OS until the text it fetched has been accepted
+   - Acceptance is remembered against a SHA-256 of the text, so changing the text asks every user again
+
 ## Common Pitfalls
 
 ### 1. **Missing Required Fields**

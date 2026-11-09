@@ -678,6 +678,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/WizardContainer.qml
         wizard/DeviceSelectionStep.qml
         wizard/OSSelectionStep.qml
+        wizard/EulaAcceptanceStep.qml
         wizard/StorageSelectionStep.qml
         wizard/HostnameCustomizationStep.qml
         wizard/IfAndFeaturesCustomizationStep.qml

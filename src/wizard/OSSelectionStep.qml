@@ -184,6 +184,8 @@ WizardStepBase {
             root.wizardContainer.selectedOsName = ImageWriterSingleton.srcFileName()
             root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
             root.wizardContainer.userRequired = ImageWriterSingleton.imageRequiresUser()
+            root.wizardContainer.eulaRequired = ImageWriterSingleton.imageRequiresEula()
+            root.wizardContainer.eulaAccepted = false
             // For custom images, customization is not supported; clear any staged flags
             if (!root.wizardContainer.customizationSupported) {
                 root.wizardContainer.hostnameConfigured = false
@@ -774,6 +776,7 @@ WizardStepBase {
                     description: qsTr("Go back to main menu"),
                     tooltip: "",
                     website: "",
+                    eula_url: "",
                     init_format: "",
                     capabilities: "",
                     devices: []
@@ -869,6 +872,8 @@ WizardStepBase {
                 root.wizardContainer.secureBootAvailable = ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
                 root.wizardContainer.passwordlessSudoAvailable = false
                 root.wizardContainer.userRequired = false
+                root.wizardContainer.eulaRequired = false
+                root.wizardContainer.eulaAccepted = false
                 root.wizardContainer.ccRpiAvailable = false
                 root.wizardContainer.ifAndFeaturesAvailable = false
                 root.nextButtonEnabled = true
@@ -897,6 +902,7 @@ WizardStepBase {
                     typeof(model.bmap_url) != "undefined" ? model.bmap_url : ""
                 )
                 ImageWriterSingleton.setSWCapabilitiesList(model.capabilities)
+                ImageWriterSingleton.setEulaUrl(typeof(model.eula_url) === "string" ? model.eula_url : "")
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
@@ -904,6 +910,8 @@ WizardStepBase {
                 root.wizardContainer.secureBootAvailable = ImageWriterSingleton.checkSWCapability("secure_boot") || ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
                 root.wizardContainer.passwordlessSudoAvailable = ImageWriterSingleton.checkSWCapability("passwordless_sudo")
                 root.wizardContainer.userRequired = ImageWriterSingleton.imageRequiresUser()
+                root.wizardContainer.eulaRequired = ImageWriterSingleton.imageRequiresEula()
+                root.wizardContainer.eulaAccepted = false
                 root.wizardContainer.ccRpiAvailable = ImageWriterSingleton.imageSupportsCcRpi()
                 
                 // Check if any interface/feature capabilities are available (requires both HW and SW support).
@@ -1030,6 +1038,7 @@ WizardStepBase {
                 entry.icon = String(entry.icon || "")
                 entry.subitems_url = String(entry.subitems_url || "")
                 entry.website = String(entry.website || "")
+                entry.eula_url = String(entry.eula_url || "")
                 entry.tooltip = String(entry.tooltip || "")
 
                 if (typeof entry.capabilities === "string") {

@@ -65,6 +65,8 @@ TestCase {
         wiz.if1WireEnabled = false
         wiz.ifSerial = ""
         wiz.featUsbGadgetEnabled = false
+        wiz.eulaRequired = false
+        wiz.eulaAccepted = false
         wiz.selectedOsName = ""
         wiz.selectedStorageName = ""
     }
@@ -101,7 +103,7 @@ TestCase {
 
     function test_every_step_can_be_marked_and_read_back() {
         // The bitmap is 1 << index, so an index past 31 would silently wrap
-        // onto another step. There are 13, but this pins that the last one
+        // onto another step. There are 14, but this pins that the last one
         // is genuinely distinguishable from the first.
         for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++) {
             wiz.permissibleStepsBitmap = 0
@@ -312,6 +314,7 @@ TestCase {
         wiz.piConnectAvailable = true
         wiz.ccRpiAvailable = true
         wiz.ifAndFeaturesAvailable = true
+        wiz.eulaRequired = false
         wiz.writeAnotherMode = false
         wiz.currentStep = step
     }
@@ -383,6 +386,89 @@ TestCase {
         wiz.nextStep()
 
         compare(wiz.currentStep, wiz.stepDone)
+    }
+
+    // -- An OS with a licence to accept -------------------------------------
+    //
+    // The licence step sits between the OS and the card, and only for an OS
+    // that names one. Every other OS must see the wizard exactly as before.
+
+    function test_an_os_with_a_licence_is_followed_by_its_step() {
+        ImageWriterSingleton.setEulaUrl("")
+        startAt(wiz.stepOSSelection)
+        wiz.eulaRequired = true
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepEulaAcceptance)
+    }
+
+    function test_an_os_without_a_licence_goes_straight_to_the_card() {
+        startAt(wiz.stepOSSelection)
+
+        wiz.nextStep()
+
+        compare(wiz.currentStep, wiz.stepStorageSelection)
+    }
+
+    function test_the_licence_step_does_not_advance_until_accepted() {
+        // With no licence fetched there is nothing to accept, so Next is
+        // dead and pressing it anyway goes nowhere.
+        ImageWriterSingleton.setEulaUrl("")
+        startAt(wiz.stepOSSelection)
+        wiz.eulaRequired = true
+        wiz.nextStep()
+
+        const step = findStepStack(wiz).currentItem
+        compare(step.objectName, "eulaAcceptanceStep")
+        verify(!step.nextButtonEnabled, "Next is disabled")
+        step.nextClicked()
+
+        compare(wiz.currentStep, wiz.stepEulaAcceptance)
+        verify(!wiz.eulaAccepted)
+    }
+
+    function test_going_back_from_the_card_passes_the_licence_data() {
+        return [
+            { tag: "with a licence",    eula: true,  to: "eula" },
+            { tag: "without a licence", eula: false, to: "os" }
+        ]
+    }
+
+    function test_going_back_from_the_card_passes_the_licence(data) {
+        ImageWriterSingleton.setEulaUrl("")
+        startAt(wiz.stepStorageSelection)
+        wiz.eulaRequired = data.eula
+
+        wiz.previousStep()
+
+        compare(wiz.currentStep,
+                data.to === "eula" ? wiz.stepEulaAcceptance : wiz.stepOSSelection,
+                data.tag)
+    }
+
+    function test_the_licence_step_is_drawn_under_the_os_row() {
+        compare(wiz.getSidebarIndex(wiz.stepEulaAcceptance),
+                wiz.getSidebarIndex(wiz.stepOSSelection))
+    }
+
+    function test_choosing_a_different_os_withdraws_the_licence() {
+        // The acceptance was for the other OS's text.
+        wiz.previousOsName = "Vendor OS"
+        wiz.selectedOsName = "Vendor OS"
+        for (let i = wiz.stepDeviceSelection; i <= wiz.stepDone; i++)
+            wiz.markStepPermissible(i)
+        wiz.eulaRequired = true
+        wiz.eulaAccepted = true
+
+        wiz.selectedOsName = "Another OS"
+
+        verify(wiz.isStepPermissible(wiz.stepOSSelection))
+        verify(!wiz.isStepPermissible(wiz.stepEulaAcceptance),
+               "the licence step must be passed again")
+        verify(!wiz.isStepPermissible(wiz.stepStorageSelection))
+        verify(!wiz.eulaAccepted)
+        verify(!wiz.eulaRequired, "until the new OS says it has one")
     }
 
     // -- Writing a second card ---------------------------------------------
@@ -533,7 +619,7 @@ TestCase {
     function test_jumping_outside_the_wizard_does_nothing_data() {
         return [
             { tag: "before the first", index: -1 },
-            { tag: "past the last",    index: 13 },
+            { tag: "past the last",    index: 14 },
             { tag: "far past",         index: 999 }
         ]
     }

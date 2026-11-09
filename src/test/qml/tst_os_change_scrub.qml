@@ -42,6 +42,8 @@ TestCase {
         property bool secureBootEnabled: false
         property bool passwordlessSudoAvailable: false
         property bool userRequired: false
+        property bool eulaRequired: false
+        property bool eulaAccepted: false
         property bool hostnameConfigured: false
         property bool localeConfigured: false
         property bool userConfigured: false
@@ -77,6 +79,8 @@ TestCase {
         fakeContainer.secureBootEnabled = false
         fakeContainer.passwordlessSudoAvailable = false
         fakeContainer.userRequired = false
+        fakeContainer.eulaRequired = false
+        fakeContainer.eulaAccepted = false
         fakeContainer.ifI2cEnabled = false
         fakeContainer.ifSpiEnabled = false
         fakeContainer.if1WireEnabled = false
@@ -93,6 +97,8 @@ TestCase {
             step = null
         }
         ImageWriterSingleton.clearSavedCustomisationSettings()
+        // Nothing after this file should find a licence left to fetch.
+        ImageWriterSingleton.setEulaUrl("")
     }
 
     // A concrete OS entry, as selectOSitem expects to be handed one.
@@ -311,6 +317,45 @@ TestCase {
         step.customImageFileDialog.accepted()
         tryVerify(function () { return !fakeContainer.userRequired }, 3000,
                   "the requirement went with the OS that made it")
+    }
+
+    // -- An OS with a licence to accept -------------------------------------
+
+    function test_an_os_with_a_licence_asks_for_it() {
+        chooseOs({ eula_url: "https://example.invalid/licence.txt" })
+        verify(fakeContainer.eulaRequired, "the licence step is shown")
+        verify(ImageWriterSingleton.imageRequiresEula(), "and the writer will enforce it")
+    }
+
+    function test_an_os_without_a_licence_changes_nothing() {
+        chooseOs({})
+        verify(!fakeContainer.eulaRequired, "no licence step")
+        verify(!ImageWriterSingleton.imageRequiresEula())
+    }
+
+    function test_choosing_again_forgets_an_earlier_acceptance() {
+        // Acceptance belongs to the text fetched for the OS on screen; even
+        // the same OS chosen again is shown its licence again.
+        chooseOs({ eula_url: "https://example.invalid/licence.txt" })
+        fakeContainer.eulaAccepted = true
+        chooseOs({ eula_url: "https://example.invalid/licence.txt" })
+        verify(!fakeContainer.eulaAccepted)
+    }
+
+    function test_the_next_os_does_not_inherit_the_licence() {
+        chooseOs({ eula_url: "https://example.invalid/licence.txt" })
+        chooseOs({})
+        verify(!fakeContainer.eulaRequired)
+        verify(!ImageWriterSingleton.imageRequiresEula())
+    }
+
+    function test_a_custom_image_does_not_inherit_the_licence() {
+        chooseOs({ eula_url: "https://example.invalid/licence.txt" })
+        step.customImageFileDialog.selectedFile = __qmlModuleRoot + "Style.qml"
+        step.customImageFileDialog.accepted()
+        tryVerify(function () { return !fakeContainer.eulaRequired }, 3000,
+                  "a custom image has no manifest to name a licence")
+        verify(!ImageWriterSingleton.imageRequiresEula())
     }
 
     function test_an_os_with_passwordless_sudo_keeps_it() {

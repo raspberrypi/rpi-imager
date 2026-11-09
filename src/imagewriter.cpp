@@ -74,6 +74,7 @@
 #include <QTranslator>
 #include <QVersionNumber>
 #include <QCryptographicHash>
+#include <QStringDecoder>
 #include <QRandomGenerator>
 #ifndef CLI_ONLY_BUILD
 #include <QDesktopServices>
@@ -683,6 +684,9 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osReleaseDate = releaseDate;
     _customisationCreatesUser = false;
     _bmapUrl = bmapUrl;
+    // A licence belongs to the OS that named it; setEulaUrl() names the next.
+    _forgetEula();
+    _eulaUrl.clear();
 
     qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
@@ -1676,6 +1680,12 @@ void ImageWriter::startWrite()
     if (imageRequiresUser() && !_customisationCreatesUser)
     {
         emit error(tr("Cannot start write. %1 needs a user account: set a username and password in the customisation settings.").arg(_osName));
+        return;
+    }
+
+    if (imageRequiresEula() && !isEulaAccepted())
+    {
+        emit error(tr("Cannot start write. The licence for %1 has not been accepted.").arg(_osName));
         return;
     }
 
@@ -4527,6 +4537,135 @@ bool ImageWriter::imageRequiresUser()
     // A custom image carries no manifest, so a capability left over from the
     // OS chosen before it does not apply.
     return imageSupportsCustomization() && checkSWCapability(QStringLiteral("user_required"));
+}
+
+namespace {
+const QString kAcceptedEulaDigests = QStringLiteral("accepted_eula_digests");
+}
+
+void ImageWriter::_forgetEula()
+{
+    _eulaText.clear();
+    _eulaDigest.clear();
+    if (_eulaFetcher)
+        _eulaFetcher->cancel();
+    _eulaFetcher.clear();
+}
+
+void ImageWriter::setEulaUrl(const QString &url)
+{
+    _forgetEula();
+    _eulaUrl = url.trimmed();
+}
+
+bool ImageWriter::imageRequiresEula() const
+{
+    return !_eulaUrl.isEmpty();
+}
+
+void ImageWriter::fetchEula()
+{
+    if (_eulaUrl.isEmpty())
+    {
+        emit eulaFailed(tr("The selected OS has no licence to accept."));
+        return;
+    }
+    if (!_eulaDigest.isEmpty())
+    {
+        emit eulaReady(_eulaText, isEulaAccepted());
+        return;
+    }
+    if (_eulaFetcher)
+        return;
+
+    const QUrl url(_eulaUrl, QUrl::StrictMode);
+    if (!url.isValid() || url.scheme() != QLatin1String("https") || url.host().isEmpty())
+    {
+        emit eulaFailed(tr("The OS list gives a licence address that is not https, so it cannot be shown. "
+                           "Please report this to whoever publishes the OS list."));
+        return;
+    }
+
+    auto *fetcher = new CurlFetcher(this);
+    fetcher->setMaxSize(maxEulaBytes);
+    _eulaFetcher = fetcher;
+    // The OS may have changed while this was under way; only the current
+    // fetch is listened to.
+    connect(fetcher, &CurlFetcher::finished, this,
+            [this, fetcher](const QByteArray &data, const QUrl &, const QUrl &effectiveUrl) {
+                if (_eulaFetcher.data() != fetcher)
+                    return;
+                _eulaFetcher.clear();
+                onEulaFetched(data, QString(), effectiveUrl);
+            });
+    connect(fetcher, &CurlFetcher::error, this,
+            [this, fetcher](const QString &message, const QUrl &requested) {
+                if (_eulaFetcher.data() != fetcher)
+                    return;
+                _eulaFetcher.clear();
+                onEulaFetched(QByteArray(), message, requested);
+            });
+    fetcher->fetch(url);
+}
+
+void ImageWriter::onEulaFetched(const QByteArray &body, const QString &fetchError, const QUrl &effectiveUrl)
+{
+    _eulaText.clear();
+    _eulaDigest.clear();
+
+    if (!fetchError.isEmpty())
+    {
+        emit eulaFailed(tr("The licence could not be downloaded: %1").arg(fetchError));
+        return;
+    }
+    // Redirects may leave https; what is accepted must have arrived over it.
+    if (effectiveUrl.scheme() != QLatin1String("https"))
+    {
+        emit eulaFailed(tr("The licence was redirected to an address that is not https, so it cannot be shown."));
+        return;
+    }
+    if (body.size() > maxEulaBytes)
+    {
+        emit eulaFailed(tr("The licence is larger than %1 KiB, so it cannot be shown.").arg(maxEulaBytes / 1024));
+        return;
+    }
+    QStringDecoder decoder(QStringDecoder::Utf8, QStringDecoder::Flag::Stateless);
+    const QString text = decoder(body);
+    if (decoder.hasError())
+    {
+        emit eulaFailed(tr("The licence is not UTF-8 text, so it cannot be shown."));
+        return;
+    }
+    if (text.trimmed().isEmpty())
+    {
+        emit eulaFailed(tr("The licence is empty."));
+        return;
+    }
+
+    _eulaText = text;
+    _eulaDigest = QString::fromLatin1(QCryptographicHash::hash(body, QCryptographicHash::Sha256).toHex());
+    emit eulaReady(_eulaText, isEulaAccepted());
+}
+
+void ImageWriter::setEulaAccepted(bool accepted)
+{
+    if (_eulaDigest.isEmpty())
+        return;
+    QStringList digests = _settings.value(kAcceptedEulaDigests).toStringList();
+    if (digests.contains(_eulaDigest) == accepted)
+        return;
+    if (accepted)
+        digests.append(_eulaDigest);
+    else
+        digests.removeAll(_eulaDigest);
+    _settings.setValue(kAcceptedEulaDigests, digests);
+    _settings.sync();
+}
+
+bool ImageWriter::isEulaAccepted() const
+{
+    return !_eulaDigest.isEmpty()
+        && _settings.value(kAcceptedEulaDigests).toStringList().contains(_eulaDigest);
 }
 
 bool ImageWriter::imageSupportsCcRpi()

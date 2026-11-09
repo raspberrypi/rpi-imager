@@ -30,7 +30,7 @@ Item {
     // NOT a binding, so it won't auto-change when hasNetworkConnectivity changes.
     // The onOsListUnavailableChanged handler manages the offline→online transition.
     property int currentStep: 0
-    readonly property int totalSteps: 13
+    readonly property int totalSteps: 14
     
     // Track which steps have been made permissible/unlocked for navigation
     // Each bit represents a step: bit 0 = Device, bit 1 = OS, etc.
@@ -87,6 +87,10 @@ Item {
     property bool passwordlessSudoAvailable: false
     // Whether selected OS must be written with a user account (user_required)
     property bool userRequired: false
+    // Whether selected OS names a licence to accept (eula_url), and whether
+    // the user has accepted the text fetched for it
+    property bool eulaRequired: false
+    property bool eulaAccepted: false
     // Whether secure boot key is configured in App Options
     property bool secureBootKeyConfigured: false
 
@@ -132,17 +136,19 @@ Item {
     readonly property int stepLanguageSelection: -1
     readonly property int stepDeviceSelection: 0
     readonly property int stepOSSelection: 1
-    readonly property int stepStorageSelection: 2
-    readonly property int stepHostnameCustomization: 3
-    readonly property int stepLocaleCustomization: 4
-    readonly property int stepUserCustomization: 5
-    readonly property int stepWifiCustomization: 6
-    readonly property int stepRemoteAccess: 7
-    readonly property int stepSecureBootCustomization: 8
-    readonly property int stepPiConnectCustomization: 9
-    readonly property int stepIfAndFeatures: 10
-    readonly property int stepWriting: 11
-    readonly property int stepDone: 12
+    // Shown only for an OS with a licence; drawn under the OS sidebar row
+    readonly property int stepEulaAcceptance: 2
+    readonly property int stepStorageSelection: 3
+    readonly property int stepHostnameCustomization: 4
+    readonly property int stepLocaleCustomization: 5
+    readonly property int stepUserCustomization: 6
+    readonly property int stepWifiCustomization: 7
+    readonly property int stepRemoteAccess: 8
+    readonly property int stepSecureBootCustomization: 9
+    readonly property int stepPiConnectCustomization: 10
+    readonly property int stepIfAndFeatures: 11
+    readonly property int stepWriting: 12
+    readonly property int stepDone: 13
     
     signal wizardCompleted()
     signal updatePopupRequested(url updateUrl, string version)
@@ -283,7 +289,7 @@ Item {
         if (wizardStep === stepDeviceSelection) {
             // Device is at index 0 when online, not shown when offline
             return hasNetworkConnectivity ? 0 : -1
-        } else if (wizardStep === stepOSSelection) {
+        } else if (wizardStep === stepOSSelection || wizardStep === stepEulaAcceptance) {
             return hasNetworkConnectivity ? 1 : 0
         } else if (wizardStep === stepStorageSelection) {
             return hasNetworkConnectivity ? 2 : 1
@@ -381,6 +387,8 @@ Item {
         piConnectEnabled = false
         piConnectAvailable = false
         secureBootAvailable = false
+        eulaRequired = false
+        eulaAccepted = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
@@ -390,8 +398,8 @@ Item {
     }
     
     function invalidateOSDependentSteps() {
-        // When OS changes, invalidate storage and later steps
-        invalidateStepsFrom(stepStorageSelection)
+        // When OS changes, invalidate its licence, storage and later steps
+        invalidateStepsFrom(stepEulaAcceptance)
         
         // Clear OS-dependent state
         selectedStorageName = ""
@@ -411,6 +419,8 @@ Item {
         secureBootAvailable = false
         passwordlessSudoAvailable = false
         userRequired = false
+        eulaRequired = false
+        eulaAccepted = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
@@ -589,7 +599,7 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === root.customizationSidebarIndex && root.customizationSupported && root.currentStep > root.stepOSSelection
+                            visible: stepItem.index === root.customizationSidebarIndex && root.customizationSupported && root.currentStep >= root.stepStorageSelection
 
                             Repeater {
                                 model: root.getCustomizationSubstepLabels()
@@ -630,7 +640,7 @@ Item {
                                         return labels[subItem.index] === currentStepLabel
                                     }
                                     property bool isConfigured: root.isCustomizationSubstepConfigured(subItem.index)
-                                    property bool isClickable: root.customizationSupported && !root.isWriting && root.currentStep > root.stepOSSelection && (
+                                    property bool isClickable: root.customizationSupported && !root.isWriting && root.currentStep >= root.stepStorageSelection && (
                                         // Allow navigation to any substep if we've reached customization
                                         root.currentStep >= root.firstCustomizationStep ||
                                         // Or if we've been to customization before (any substep configured)
@@ -879,6 +889,10 @@ Item {
             else if (!customizationSupported && nextIndex === firstCustomizationStep) {
                 nextIndex = stepWriting
             }
+            // Skip the licence step when the OS names no licence
+            if (!eulaRequired && nextIndex === stepEulaAcceptance) {
+                nextIndex++
+            }
             // Skip optional Secure Boot step when OS does not support it
             if (!secureBootAvailable && nextIndex === stepSecureBootCustomization) {
                 nextIndex++
@@ -952,6 +966,9 @@ Item {
                 if (prevIndex === stepSecureBootCustomization && !secureBootAvailable) {
                     prevIndex--
                 }
+                if (prevIndex === stepEulaAcceptance && !eulaRequired) {
+                    prevIndex--
+                }
                 // Skip device selection if offline (it would be empty/useless)
                 if (prevIndex === stepDeviceSelection && !hasNetworkConnectivity) {
                     // Can't go back further, stay at current step
@@ -990,6 +1007,7 @@ Item {
             case stepLanguageSelection: return languageSelectionStep
             case stepDeviceSelection: return deviceSelectionStep
             case stepOSSelection: return osSelectionStep
+            case stepEulaAcceptance: return eulaAcceptanceStep
             case stepStorageSelection: return storageSelectionStep
             case stepHostnameCustomization: return hostnameCustomizationStep
             case stepLocaleCustomization: return localeCustomizationStep
@@ -1045,6 +1063,21 @@ Item {
         }
     }
     
+    Component {
+        id: eulaAcceptanceStep
+        EulaAcceptanceStep {
+            wizardContainer: root
+            appOptionsButton: optionsButton
+            onNextClicked: {
+                // Only advance once the licence is accepted
+                if (isAccepted) {
+                    root.nextStep()
+                }
+            }
+            onBackClicked: root.previousStep()
+        }
+    }
+
     Component {
         id: storageSelectionStep
         StorageSelectionStep {
@@ -1564,6 +1597,8 @@ Item {
         piConnectEnabled = false
         piConnectAvailable = false
         targetIsFastboot = false
+        eulaRequired = false
+        eulaAccepted = false
 
         ccRpiAvailable = false
         ifI2cEnabled = false

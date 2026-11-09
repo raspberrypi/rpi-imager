@@ -275,6 +275,310 @@ TEST_CASE("Only an OS Imager can customise can require a user", "[imagewriter]")
 }
 
 // ══════════════════════════════════════════════════════════════
+// An OS with a licence to accept ("eula_url")
+//
+// "Write another", the sidebar and a replayed write bypass the wizard's
+// licence step, so the writer enforces it. Nothing here fetches.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+class EulaWriter : public ImageWriter
+{
+public:
+    EulaWriter() : ImageWriter(nullptr) {}
+    using ImageWriter::onEulaFetched;
+
+    void deliver(const QByteArray &body)
+    {
+        onEulaFetched(body, QString(), QUrl(QStringLiteral("https://example.invalid/licence.txt")));
+    }
+};
+
+struct EulaLog
+{
+    QStringList texts;
+    QList<bool> acceptedBefore;
+    QStringList failures;
+
+    explicit EulaLog(ImageWriter *w)
+    {
+        QObject::connect(w, &ImageWriter::eulaReady, [this](const QString &text, bool accepted) {
+            texts << text;
+            acceptedBefore << accepted;
+        });
+        QObject::connect(w, &ImageWriter::eulaFailed,
+                         [this](const QString &reason) { failures << reason; });
+    }
+};
+
+void forgetAcceptedEulas()
+{
+    QSettings settings;
+    settings.remove(QStringLiteral("accepted_eula_digests"));
+    settings.sync();
+}
+
+// Too big for the card: a write past the licence stops at capacity.
+void selectEulaOs(ImageWriter &writer, const SourceFile &source,
+                  const QString &eulaUrl = QStringLiteral("https://example.invalid/licence.txt"))
+{
+    writer.setSrc(source.url(), 0, 8ull * 1024 * 1024 * 1024, QByteArray(), false,
+                  QString(), QStringLiteral("Vendor OS"), "rpi-preseed");
+    writer.setEulaUrl(eulaUrl);
+    writer.setDst(QProcess::nullDevice(), 4ull * 1024 * 1024 * 1024);
+}
+
+bool refusedForLicence(const UiLog &log)
+{
+    for (const QString &e : log.errors)
+        if (e.contains(QStringLiteral("licence")))
+            return true;
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("An OS with a licence is not written until it is accepted", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+    REQUIRE(writer.imageRequiresEula());
+
+    writer.deliver("Terms of use\n");
+    CHECK_FALSE(writer.isEulaAccepted());
+    writer.startWrite();
+
+    REQUIRE(log.errors.size() == 1);
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("licence"));
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("Vendor OS"));
+}
+
+TEST_CASE("A licence that was never fetched cannot be accepted", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+
+    writer.setEulaAccepted(true);
+    CHECK_FALSE(writer.isEulaAccepted());
+    writer.startWrite();
+
+    CHECK(refusedForLicence(log));
+}
+
+TEST_CASE("An accepted licence lets the write go ahead", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+
+    writer.deliver("Terms of use\n");
+    writer.setEulaAccepted(true);
+    REQUIRE(writer.isEulaAccepted());
+    writer.startWrite();
+
+    CHECK_FALSE(refusedForLicence(log));
+    REQUIRE(log.errors.size() == 1);
+    CHECK_THAT(log.errors[0].toStdString(), ContainsSubstring("capacity"));
+}
+
+TEST_CASE("Acceptance of a licence outlasts the session", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    SourceFile source;
+    {
+        EulaWriter first;
+        selectEulaOs(first, source);
+        first.deliver("Terms of use\n");
+        first.setEulaAccepted(true);
+    }
+
+    EulaWriter second;
+    EulaLog eula(&second);
+    selectEulaOs(second, source);
+    second.deliver("Terms of use\n");
+
+    REQUIRE(eula.acceptedBefore.size() == 1);
+    CHECK(eula.acceptedBefore[0]);
+    CHECK(second.isEulaAccepted());
+}
+
+TEST_CASE("A changed licence is asked about again", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    EulaLog eula(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+    writer.deliver("Terms of use, first edition\n");
+    writer.setEulaAccepted(true);
+    REQUIRE(writer.isEulaAccepted());
+
+    writer.deliver("Terms of use, second edition\n");
+
+    REQUIRE(eula.acceptedBefore.size() == 2);
+    CHECK_FALSE(eula.acceptedBefore[1]);
+    CHECK_FALSE(writer.isEulaAccepted());
+    writer.startWrite();
+    CHECK(refusedForLicence(log));
+}
+
+TEST_CASE("Withdrawing acceptance of a licence stops the write again", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+    writer.deliver("Terms of use\n");
+    writer.setEulaAccepted(true);
+
+    writer.setEulaAccepted(false);
+    writer.startWrite();
+
+    CHECK(refusedForLicence(log));
+}
+
+TEST_CASE("A licence not served over https is refused", "[imagewriter][eula]")
+{
+    const QString url = GENERATE(QStringLiteral("http://example.invalid/licence.txt"),
+                                 QStringLiteral("ftp://example.invalid/licence.txt"),
+                                 QStringLiteral("file:///etc/passwd"),
+                                 QStringLiteral("licence.txt"),
+                                 QStringLiteral("https://"));
+    INFO("eula_url: " << url.toStdString());
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    EulaLog eula(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source, url);
+
+    // Refused before anything is fetched, so the answer is immediate.
+    writer.fetchEula();
+
+    REQUIRE(eula.failures.size() == 1);
+    CHECK(eula.texts.isEmpty());
+    CHECK_THAT(eula.failures[0].toStdString(), ContainsSubstring("https"));
+    CHECK(writer.imageRequiresEula());
+    writer.startWrite();
+    CHECK(refusedForLicence(log));
+}
+
+TEST_CASE("A licence redirected away from https is refused", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    EulaLog eula(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+
+    writer.onEulaFetched("Terms of use\n", QString(),
+                         QUrl(QStringLiteral("http://example.invalid/licence.txt")));
+
+    REQUIRE(eula.failures.size() == 1);
+    CHECK(eula.texts.isEmpty());
+    CHECK_FALSE(writer.isEulaAccepted());
+}
+
+TEST_CASE("A licence larger than the limit is refused", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    EulaLog eula(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+
+    writer.deliver(QByteArray(qsizetype(ImageWriter::maxEulaBytes) + 1, 'a'));
+
+    REQUIRE(eula.failures.size() == 1);
+    CHECK_THAT(eula.failures[0].toStdString(), ContainsSubstring("256 KiB"));
+    writer.setEulaAccepted(true);
+    CHECK_FALSE(writer.isEulaAccepted());
+    writer.startWrite();
+    CHECK(refusedForLicence(log));
+
+    // The limit itself is allowed.
+    writer.deliver(QByteArray(qsizetype(ImageWriter::maxEulaBytes), 'a'));
+    CHECK(eula.texts.size() == 1);
+}
+
+TEST_CASE("A licence that is not UTF-8 is refused", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    EulaLog eula(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+
+    writer.deliver(QByteArray("Conditions g\xe9n\xe9rales\n"));
+
+    REQUIRE(eula.failures.size() == 1);
+    CHECK_THAT(eula.failures[0].toStdString(), ContainsSubstring("UTF-8"));
+}
+
+TEST_CASE("A licence that could not be downloaded says why", "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    EulaLog eula(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+
+    writer.onEulaFetched(QByteArray(), QStringLiteral("HTTP 404: Not Found"),
+                         QUrl(QStringLiteral("https://example.invalid/licence.txt")));
+
+    REQUIRE(eula.failures.size() == 1);
+    CHECK_THAT(eula.failures[0].toStdString(), ContainsSubstring("HTTP 404"));
+}
+
+TEST_CASE("A licence already fetched is reported again rather than refetched",
+          "[imagewriter][eula]")
+{
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    EulaLog eula(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+    writer.deliver("Terms of use\n");
+
+    writer.fetchEula();
+
+    REQUIRE(eula.texts.size() == 2);
+    CHECK(eula.texts[1] == QStringLiteral("Terms of use\n"));
+    CHECK(eula.failures.isEmpty());
+}
+
+TEST_CASE("A custom image has no licence to accept", "[imagewriter][eula]")
+{
+    // No manifest, so the previous OS's licence must not follow it.
+    forgetAcceptedEulas();
+    EulaWriter writer;
+    UiLog log(&writer);
+    SourceFile source;
+    selectEulaOs(writer, source);
+    writer.deliver("Terms of use\n");
+
+    writer.setSrc(source.url(), 0, 8ull * 1024 * 1024 * 1024);
+
+    CHECK_FALSE(writer.imageRequiresEula());
+    CHECK_FALSE(writer.isEulaAccepted());
+    writer.startWrite();
+    CHECK_FALSE(refusedForLicence(log));
+    CHECK_THAT(log.errors.join(QLatin1Char('\n')).toStdString(), ContainsSubstring("capacity"));
+}
+
+// ══════════════════════════════════════════════════════════════
 // Refusing a card that cannot hold the image
 // ══════════════════════════════════════════════════════════════
 
@@ -13363,6 +13667,7 @@ OSListModel::OS fullyPopulatedEntry()
     os.extractSha256 = QStringLiteral("00112233445566778899aabbccddeeff");
     os.bmapUrl = QStringLiteral("https://downloads.raspberrypi.org/os.bmap");
     os.architecture = QStringLiteral("armv8");
+    os.eulaUrl = QStringLiteral("https://downloads.raspberrypi.org/os-licence.txt");
     os.imageDownloadSize = 1234567;
     os.extractSize = 7654321;
     os.random = true;
@@ -13419,6 +13724,7 @@ TEST_CASE("Every field the chooser shows comes back under the name QML asks for"
         {OSListModel::WebsiteRole,           "website",             os.website},
         {OSListModel::ArchitectureRole,      "architecture",        os.architecture},
         {OSListModel::PiConnectRole,         "enable_rpi_connect",  QVariant(os.enableRPiConnect)},
+        {OSListModel::EulaUrlRole,           "eula_url",            os.eulaUrl},
     };
 
     for (const Expected &e : expected) {
@@ -14029,6 +14335,7 @@ TEST_CASE("Every role the chooser binds to has the name QML uses",
         { OSListModel::WebsiteRole, "website" },
         { OSListModel::ArchitectureRole, "architecture" },
         { OSListModel::PiConnectRole, "enable_rpi_connect" },
+        { OSListModel::EulaUrlRole, "eula_url" },
     };
 
     for (const auto &pair : expected) {
