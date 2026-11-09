@@ -1171,4 +1171,8 @@ std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
   return std::make_unique<LinuxFileOperations>();
 }
 
+std::unique_ptr<FileOperations> CreateInProcessPlatformFileOperations() {
+  return std::make_unique<LinuxFileOperations>();
+}
+
 } // namespace rpi_imager
