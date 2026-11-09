@@ -18,9 +18,12 @@ WizardStepBase {
     
     // "open" | "secure"
     property string wifiMode: "secure"
+    // "personal" | "enterprise" | "open"
+    property string wifiSecureMode: "personal"
     property string originalSavedSSID: ""
     property bool hadSavedPassword: false
     property bool showPw: wifiMode === "secure"
+    property bool showUseranme: wifiSecureMode === "enterprise"
 
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
@@ -302,6 +305,54 @@ WizardStepBase {
                             if (activeFocus)
                                 wifiScroll.scrollToItem(this);
                         }
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiUsername
+                        visible: root.showUseranme
+                        text: qsTr("Username:")
+                        accessibleDescription: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
+                    }
+
+                    ImTextField {
+                        id: fieldWifiUsername
+                        objectName: "wifiUsernameField"
+                        Layout.fillWidth: true
+                        visible: root.showUseranme
+                        font.pointSize: Style.fontSizeInput
+                        trimWhitespace: true
+                        onTextChanged: updatePasswordFieldUI()
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiSecurity
+                        visible: root.showPw
+                        text: qsTr("Security:")
+                        accessibleDescription: qsTr("Choose the type of security your Wi-Fi network uses.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiSecurity
+                        objectName: "wifiSecurityCombo"
+                        accessiblePurpose: labelWifiSecurity.text
+                        Layout.fillWidth: true
+                        visible: root.showPw
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("WPA2/WPA3 Personal"),   value: "personal" },
+                            { text: qsTr("WPA2/WPA3 Enterprise"), value: "enterprise" },
+                            { text: qsTr("Open (no password)"),   value: "open" }
+                        ]
+
+                        onActivated: updatePasswordFieldUI()
                     }
 
                     WizardFormLabel {
