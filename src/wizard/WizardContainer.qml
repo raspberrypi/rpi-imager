@@ -1081,9 +1081,14 @@ Item {
     Component {
         id: storageSelectionStep
         StorageSelectionStep {
+            id: storageStep
             wizardContainer: root
             appOptionsButton: optionsButton
-            onNextClicked: root.nextStep()
+            onNextClicked: {
+                if (storageStep.deviceAccessAllowed())
+                    root.nextStep()
+            }
+            onAccessGranted: root.nextStep()
             onBackClicked: root.previousStep()
         }
     }

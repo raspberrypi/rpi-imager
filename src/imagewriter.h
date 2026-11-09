@@ -652,6 +652,12 @@ public:
        user can flip the helper toggle. macOS only - no-op elsewhere. */
     Q_INVOKABLE void openLoginItemsSettings();
 
+    /* macOS: true when the helper is refused the chosen storage device for
+       want of Full Disk Access. Asked on leaving storage selection, so the
+       grant (which has macOS reopen the app) comes before customisation. */
+    Q_INVOKABLE bool fullDiskAccessDenied();
+    Q_INVOKABLE void openFullDiskAccessSettings();
+
     /* Register (macOS) or start (Windows, Linux) the helper, so the
        system asks the user to allow it. Returns why it failed, or "". */
     Q_INVOKABLE QString installPrivilegedHelper();

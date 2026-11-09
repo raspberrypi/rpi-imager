@@ -1475,6 +1475,59 @@ Result<void> MacOSXpcBackend::unmount(const std::string& device_path) {
                              "unmount", proto::ERROR_UNMOUNT_FAILED);
 }
 
+Result<void> MacOSXpcBackend::probeDeviceAccess(const std::string& device_path) {
+    @autoreleasepool {
+        NSXPCConnection* conn = state_->ensureConnection();
+        if (!conn) {
+            return Result<void>::failure(makeError(
+                proto::ERROR_HELPER_NOT_INSTALLED,
+                "could not create XPC connection"));
+        }
+        struct St {
+            std::mutex m;
+            std::condition_variable cv;
+            bool done = false;
+            std::int32_t kernel_errno = 0;
+            std::string err_detail;
+            bool connection_error = false;
+        };
+        auto sync = std::make_shared<St>();
+        id<RpiImagerWriterProtocol> proxy = [conn remoteObjectProxyWithErrorHandler:
+            ^(NSError* error) {
+                std::lock_guard<std::mutex> lk(sync->m);
+                sync->connection_error = true;
+                if (error.localizedDescription) {
+                    sync->err_detail = error.localizedDescription.UTF8String;
+                }
+                sync->done = true;
+                sync->cv.notify_one();
+            }];
+        [proxy probeDeviceAccess:[NSString stringWithUTF8String:device_path.c_str()]
+                           reply:^(int32_t kerrno, NSString* _Nullable detail) {
+            std::lock_guard<std::mutex> lk(sync->m);
+            sync->kernel_errno = kerrno;
+            if (detail) sync->err_detail = detail.UTF8String;
+            sync->done = true;
+            sync->cv.notify_one();
+        }];
+        std::unique_lock<std::mutex> lk(sync->m);
+        if (!sync->cv.wait_for(lk, std::chrono::seconds(10), [&] { return sync->done; })) {
+            return Result<void>::failure(makeError(
+                proto::ERROR_UNKNOWN, "probeDeviceAccess timed out"));
+        }
+        if (sync->connection_error) {
+            return Result<void>::failure(makeError(
+                proto::ERROR_HELPER_NOT_INSTALLED, "XPC error: " + sync->err_detail));
+        }
+        if (sync->kernel_errno != 0) {
+            return Result<void>::failure(makeError(
+                proto::ERROR_DEVICE_PERMISSION,
+                "probeDeviceAccess: " + sync->err_detail, sync->kernel_errno));
+        }
+        return Result<void>::success();
+    }
+}
+
 Result<void> MacOSXpcBackend::eject(const std::string& device_path) {
     return doUnmountOrEject(*state_, device_path, /*eject_after=*/true,
                              "eject", proto::ERROR_EJECT_FAILED);

@@ -45,6 +45,7 @@
 #include <QTextStream>
 #include <QProcess>
 #include <QRegularExpression>
+#include <cerrno>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimeZone>
@@ -5708,6 +5709,32 @@ void ImageWriter::refreshPrivilegedHelperState()
 #ifdef Q_OS_DARWIN
 namespace rpi_imager { void OpenLoginItemsSettings(); }
 #endif
+
+bool ImageWriter::fullDiskAccessDenied()
+{
+#ifdef Q_OS_DARWIN
+    static const QRegularExpression wholeDisk(QStringLiteral("^/dev/r?disk(\\d+)$"));
+    const auto m = wholeDisk.match(_dst);
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    if (!m.hasMatch() || _privilegedHelperState != PrivilegedHelperState::Ready
+        || w.backend() != ::rpi_imager::privileged::BackendKind::MacOSXpc)
+        return false;
+    const auto r = w.probeDeviceAccess(
+        QStringLiteral("/dev/rdisk%1").arg(m.captured(1)).toStdString());
+    // Only the privacy refusal; anything else is left to the write to report.
+    return !r.ok && r.error.kernel_errno() == EPERM;
+#else
+    return false;
+#endif
+}
+
+void ImageWriter::openFullDiskAccessSettings()
+{
+#ifdef Q_OS_DARWIN
+    QDesktopServices::openUrl(QUrl(QStringLiteral(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")));
+#endif
+}
 
 void ImageWriter::openLoginItemsSettings()
 {

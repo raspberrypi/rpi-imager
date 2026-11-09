@@ -490,8 +490,10 @@ bool DownloadThread::_openAndPrepareDevice()
 #ifdef Q_OS_DARWIN
         // On macOS, this might be due to permission issues
         QString msg = tr("Error opening disk device '%1'").arg(QString(_filename));
-        msg += "<br>"+tr("Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').");
-        QStringList args("x-apple.systempreferences:com.apple.preference.security?Privacy_RemovableVolume");
+        // The helper opens the raw device, which 'Removable Volumes' under
+        // Files and Folders does not cover.
+        msg += "<br>"+tr("Please allow 'Raspberry Pi Imager' under Full Disk Access in System Settings, in Privacy & Security, then try again. macOS may ask you to reopen Raspberry Pi Imager.");
+        QStringList args("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
         QProcess::execute("open", args);
         emit error(msg);
 #elif defined(Q_OS_LINUX)

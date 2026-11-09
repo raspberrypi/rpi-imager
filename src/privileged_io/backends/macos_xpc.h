@@ -95,6 +95,7 @@ public:
 
     // Maintenance.
     Result<void> unmount(const std::string& device_path) override;
+    Result<void> probeDeviceAccess(const std::string& device_path) override;
     Result<void> eject(const std::string& device_path) override;
 
     // ---- Bulk-write shared-memory path (concrete-class-only) -----------

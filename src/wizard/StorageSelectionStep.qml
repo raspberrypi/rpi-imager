@@ -20,6 +20,18 @@ WizardStepBase {
     showNextButton: true
     nextButtonEnabled: wizardContainer && wizardContainer.selectedStorageName && wizardContainer.selectedStorageName.length > 0  // Disabled until user selects a storage device
     
+    // Leaving with access granted after fullDiskAccessDialog was shown.
+    signal accessGranted()
+
+    // False, asking for Full Disk Access, when macOS would refuse the write;
+    // asked here so granting it (macOS reopens the app) costs little.
+    function deviceAccessAllowed() {
+        if (!ImageWriterSingleton.fullDiskAccessDenied())
+            return true
+        fullDiskAccessDialog.open()
+        return false
+    }
+
     // Forward the nextClicked signal as next() function
     // Only auto-advance if no system drive confirmation dialog is needed
     function next() {
@@ -719,6 +731,12 @@ WizardStepBase {
                 filterSystemDrives.forceActiveFocus()
             }
         }
+    }
+
+    FullDiskAccessDialog {
+        id: fullDiskAccessDialog
+        overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
+        onGranted: root.accessGranted()
     }
 
     // Confirmation when selecting a system drive: type the exact name

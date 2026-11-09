@@ -240,6 +240,13 @@ public:
     // -------------------------------------------------------------------
 
     virtual Result<void> unmount(const std::string& device_path) = 0;
+
+    // Whether the helper may open the device at all, without writing to it;
+    // on macOS, Full Disk Access decides. The kernel's errno is in the error.
+    // Backends with no such gate report success.
+    virtual Result<void> probeDeviceAccess(const std::string& /*device_path*/) {
+        return Result<void>::success();
+    }
     virtual Result<void> eject(const std::string& device_path) = 0;
 
     // Dismounts the disk's volumes and deletes its partition table, holding

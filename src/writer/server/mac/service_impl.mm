@@ -586,6 +586,29 @@ const std::vector<std::string>& systemDiskBsdNames() {
     return cached;
 }
 
+// Exactly /dev/disk<digits> or /dev/rdisk<digits>, optionally followed by an
+// sN slice: BSD names like /dev/disk7s1 are legitimate too.
+static bool isValidDiskPath(const std::string& p) {
+    auto isDigit = [](char c) { return c >= '0' && c <= '9'; };
+    std::size_t pos = 0;
+    if (p.compare(pos, 5, "/dev/") != 0) return false;
+    pos = 5;
+    if (p.compare(pos, 5, "rdisk") == 0) pos += 5;
+    else if (p.compare(pos, 4, "disk") == 0) pos += 4;
+    else return false;
+    // require at least one digit after disk/rdisk
+    if (pos >= p.size() || !isDigit(p[pos])) return false;
+    // remainder must be digits and an optional 's<digits>' suffix
+    bool seen_s = false;
+    for (; pos < p.size(); ++pos) {
+        char c = p[pos];
+        if (isDigit(c)) continue;
+        if (c == 's' && !seen_s) { seen_s = true; continue; }
+        return false;
+    }
+    return true;
+}
+
 bool isSystemDiskPath(const std::string& path) {
     std::string base = bsdDiskBaseFromPath(path);
     if (base.empty()) return false;
@@ -1018,6 +1041,27 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     }
 }
 
+- (void)probeDeviceAccess:(NSString*)devicePath
+                    reply:(void (^)(int32_t, NSString* _Nullable))reply {
+    const std::string path = devicePath.UTF8String;
+    if (!isValidDiskPath(path) || isSystemDiskPath(path)) {
+        auditLogf(@"REJECT probeDeviceAccess path=%s", path.c_str());
+        reply(0, @"probeDeviceAccess: not a removable disk node");
+        return;
+    }
+    // O_RDWR, as openDevice:, so both meet the same checks.
+    int fd = ::open(path.c_str(), O_RDWR);
+    if (fd < 0) {
+        const int e = errno;
+        auditLogf(@"FAIL probeDeviceAccess path=%s errno=%d (%s)",
+                  path.c_str(), e, strerror(e));
+        reply(e, [NSString stringWithUTF8String:strerror(e)]);
+        return;
+    }
+    ::close(fd);
+    reply(0, nil);
+}
+
 - (void)openDevice:(NSString*)devicePath
               reply:(void (^)(uint64_t, NSString* _Nullable, int32_t))reply {
     NSLog(@"rpi-imager-writer: openDevice %@", devicePath);
@@ -1028,29 +1072,6 @@ shouldAcceptNewConnection:(NSXPCConnection*)connection {
     // a compromised client should not be able to open arbitrary paths.
     // Restrict the helper to /dev/diskN and /dev/rdiskN, and reject any
     // path containing characters that could enable traversal tricks.
-    auto isDigit = [](char c) { return c >= '0' && c <= '9'; };
-    auto isValidDiskPath = [&](const std::string& p) -> bool {
-        // Must be exactly /dev/disk<digits> or /dev/rdisk<digits>,
-        // optionally followed by sN slice; we allow the slice form
-        // because BSD names like /dev/disk7s1 are legitimate too.
-        std::size_t pos = 0;
-        if (p.compare(pos, 5, "/dev/") != 0) return false;
-        pos = 5;
-        if (p.compare(pos, 5, "rdisk") == 0) pos += 5;
-        else if (p.compare(pos, 4, "disk") == 0) pos += 4;
-        else return false;
-        // require at least one digit after disk/rdisk
-        if (pos >= p.size() || !isDigit(p[pos])) return false;
-        // remainder must be digits and an optional 's<digits>' suffix
-        bool seen_s = false;
-        for (; pos < p.size(); ++pos) {
-            char c = p[pos];
-            if (isDigit(c)) continue;
-            if (c == 's' && !seen_s) { seen_s = true; continue; }
-            return false;
-        }
-        return true;
-    };
 
     if (!isValidDiskPath(path)) {
         auditLogf(@"REJECT openDevice path=%s reason=invalid-path", path.c_str());

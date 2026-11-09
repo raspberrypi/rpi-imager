@@ -100,6 +100,13 @@ extern NSString* const RpiImagerWriterServiceName;
                               NSString* _Nullable errorDetail,
                               int32_t kernelErrno))reply;
 
+// Opens the device as openDevice: does and closes it at once, writing
+// nothing, so the client can learn early whether macOS's privacy controls
+// (Full Disk Access) will refuse the real open. kernelErrno 0 means allowed.
+- (void)probeDeviceAccess:(NSString*)devicePath
+                    reply:(void (^)(int32_t kernelErrno,
+                                    NSString* _Nullable errorDetail))reply;
+
 // Returns the device's size in bytes for the given session.
 - (void)queryDeviceSize:(uint64_t)sessionToken
                   reply:(void (^)(uint64_t sizeBytes,
