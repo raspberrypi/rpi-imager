@@ -39,6 +39,8 @@ WizardStepBase {
 
     // "none" | "file" | "system": where the CA certificate comes from
     property string wifiCaSource: "none"
+    // Pre-filled when "Already on the OS" is first chosen (Debian's ca-certificates)
+    readonly property string defaultCaSystemPath: "/etc/ssl/certs/USERTrust_RSA_Certification_Authority.pem"
     onWifiCaSourceChanged: rebuildFocusOrder()
 
     // A path on the OS is written into network-config as given, so it must be
@@ -531,7 +533,14 @@ WizardStepBase {
                             { text: qsTr("Already on the OS"),           value: "system" }
                         ]
 
-                        onCurrentValueChanged: root.wifiCaSource = valueAt(currentIndex)
+                        onCurrentValueChanged: {
+                            root.wifiCaSource = valueAt(currentIndex)
+                            // Start from the CA eduroam and many university networks use,
+                            // as a real, editable value; a saved path is restored before
+                            // this runs and is never replaced.
+                            if (root.wifiCaSource === "system" && fieldWifiCaSystemPath.text.length === 0)
+                                fieldWifiCaSystemPath.text = root.defaultCaSystemPath
+                        }
                     }
 
                     // Keeps the grid's two-column pairing for the rows below
@@ -587,7 +596,7 @@ WizardStepBase {
                         visible: root.isEnterprise && root.wifiCaSource === "system"
                         font.pointSize: Style.fontSizeInput
                         trimWhitespace: true
-                        placeholderText: qsTr("/etc/ssl/certs/USERTrust_RSA_Certification_Authority.pem")
+                        placeholderText: qsTr("Full path, e.g. /etc/ssl/certs/…pem")
                         Accessible.description: qsTr("The full path of a CA certificate already on the OS, as your network's setup instructions give it. Imager cannot check that the file exists on the OS.")
                         onActiveFocusChanged: {
                             if (activeFocus)
