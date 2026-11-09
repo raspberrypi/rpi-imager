@@ -13,6 +13,7 @@
 #include "../drive_watch_service.h"
 #include "../bulk_write_async.h"
 #include "../../../windows/helper_maintenance.h"
+#include "../../../aligned_buffer.h"
 
 // Resolved via privileged_io's PUBLIC include dirs (source dir for wire/,
 // binary dir for the generated proto/).
@@ -20,6 +21,7 @@
 #include "wire/handshake.h"
 #include "wire/protocol.h"
 #include "wire/win_shared_memory.h"
+#include "wire/win_pipe_stream.h"
 #include "proto/imager.pb.h"
 
 // The helper opens \\.\PhysicalDriveN with its own handle and writes from its
@@ -35,6 +37,10 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstring>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -55,6 +61,9 @@ constexpr std::uint32_t kProtocolVersion = wire::kProtocolVersion;
 constexpr std::size_t kMaxSyncChunk = 8u * 1024 * 1024;
 
 // Per-session bytes-written ceiling (defense in depth; mirrors macOS helper).
+// Under the client's kHardTimeoutSeconds, so the helper answers first.
+constexpr auto kPrepareTimeout = std::chrono::seconds(110);
+
 constexpr std::uint64_t kMaxSessionBytesWritten = 64ull * 1024 * 1024 * 1024;
 
 std::uint64_t physicalMemoryBytes() {
@@ -96,7 +105,7 @@ proto::ErrorCode mapFileError(FileError e) {
         case FileError::kLockError: return proto::ERROR_DEVICE_BUSY;
         case FileError::kSyncError: return proto::ERROR_SYNC_FAILED;
         case FileError::kFlushError: return proto::ERROR_SYNC_FAILED;
-        case FileError::kCancelled: return proto::ERROR_CANCELLED;
+        case FileError::kCancelled: return proto::ERROR_OPERATION_CANCELLED;
         case FileError::kTimeout:   return proto::ERROR_DEVICE_IO;
         default:                    return proto::ERROR_UNKNOWN;
     }
@@ -181,7 +190,10 @@ proto::ErrorInfo mapMaintenanceError(win_maint::Result r, const char* op) {
 }
 
 struct Session {
-    std::unique_ptr<rpi_imager::WindowsFileOperations> fops;
+    // Shared with a prepareDevice worker that may outlive the session.
+    std::shared_ptr<rpi_imager::WindowsFileOperations> fops;
+    // A prepareDevice write that never returned still owns the device.
+    bool wedged = false;
     wire::WinSharedMemory bulk;
     std::atomic<std::uint64_t> bytes_written{0};
     std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
@@ -330,8 +342,32 @@ proto::ErrorInfo Helper::handlePrepareDevice(const std::string& payload, std::st
     if (s->fops->GetSize(size) != FileError::kSuccess) {
         return fail(proto::ERROR_DEVICE_IO, "prepareDevice: GetSize failed");
     }
+    // A card advertising capacity it lacks never answers the write to its
+    // end. The dispatch loop is single-threaded, so give up before the
+    // client's 120 s limit rather than leave every later call queued behind it.
+    struct PrepareJob {
+        std::mutex m;
+        std::condition_variable cv;
+        bool done = false;
+        FileError result = FileError::kSuccess;
+    };
+    auto job = std::make_shared<PrepareJob>();
+    const bool zero_last_mb = req.options().zero_last_mb();
     const auto t0 = std::chrono::steady_clock::now();
-    const FileError e = s->fops->PrepareDevice(size, req.options().zero_last_mb());
+    std::thread([fops = s->fops, job, size, zero_last_mb] {
+        const FileError r = fops->PrepareDevice(size, zero_last_mb);
+        std::lock_guard<std::mutex> lk(job->m);
+        job->done = true;
+        job->result = r;
+        job->cv.notify_all();
+    }).detach();
+    std::unique_lock<std::mutex> lk(job->m);
+    if (!job->cv.wait_for(lk, kPrepareTimeout, [&] { return job->done; })) {
+        s->wedged = true;
+        return fail(proto::ERROR_DEVICE_IO,
+                    "prepareDevice: timed out writing to the end of the device");
+    }
+    const FileError e = job->result;
     const auto t1 = std::chrono::steady_clock::now();
     if (e != FileError::kSuccess) {
         return fail(mapFileError(e), "PrepareDevice failed");
@@ -429,14 +465,18 @@ proto::ErrorInfo Helper::handleWriteChunk(const std::string& payload, std::strin
         return fail(proto::ERROR_WRITE_FAILED, "writeChunk: chunk exceeds sync cap");
     }
 
+    // The device is opened for direct I/O, which refuses the protobuf
+    // string's unaligned buffer.
+    AlignedBuffer buf(req.data().size());
+    if (!buf) return fail(proto::ERROR_WRITE_FAILED, "writeChunk: out of memory");
+    std::memcpy(buf.data(), req.data().data(), req.data().size());
     const auto t0 = std::chrono::steady_clock::now();
-    const FileError e = s->fops->WriteAtOffset(
-        req.offset(),
-        reinterpret_cast<const std::uint8_t*>(req.data().data()),
-        req.data().size());
+    const FileError e = s->fops->WriteAtOffset(req.offset(), buf.data(), req.data().size());
     const auto t1 = std::chrono::steady_clock::now();
     if (e != FileError::kSuccess) {
-        return fail(mapFileError(e), "WriteAtOffset failed");
+        proto::ErrorInfo err = fail(mapFileError(e), "WriteAtOffset failed");
+        err.set_kernel_errno(s->fops->GetLastErrorCode());
+        return err;
     }
     s->bytes_written.fetch_add(req.data().size());
     const auto lat_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -460,11 +500,14 @@ proto::ErrorInfo Helper::handleReadChunk(const std::string& payload, std::string
     if (s->fops->Seek(req.offset()) != FileError::kSuccess) {
         return fail(proto::ERROR_DEVICE_IO, "readChunk: seek failed");
     }
-    std::vector<std::uint8_t> buf(static_cast<std::size_t>(req.length()));
+    AlignedBuffer buf(static_cast<std::size_t>(req.length()));
+    if (!buf) return fail(proto::ERROR_DEVICE_IO, "readChunk: out of memory");
     std::size_t got = 0;
     const FileError e = s->fops->ReadSequential(buf.data(), buf.size(), got);
     if (e != FileError::kSuccess) {
-        return fail(mapFileError(e), "ReadSequential failed");
+        proto::ErrorInfo err = fail(mapFileError(e), "ReadSequential failed");
+        err.set_kernel_errno(s->fops->GetLastErrorCode());
+        return err;
     }
 
     proto::ReadReply reply;
@@ -515,7 +558,8 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     // chunked read is adequate for bring-up and will be aligned during
     // hardware validation.
     constexpr std::size_t kChunk = 1u * 1024 * 1024;
-    std::vector<std::uint8_t> buf(kChunk);
+    AlignedBuffer buf(kChunk);  // direct I/O, as in readChunk
+    if (!buf) return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: out of memory");
     std::uint64_t remaining = req.length();
     while (remaining > 0) {
         const std::size_t want = static_cast<std::size_t>(
@@ -605,9 +649,13 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
 
     Session& s = it->second;
     s.bulk_writer.shutdown();
-    (void)s.fops->WaitForPendingWrites();
     s.bulk.release();
-    const FileError e = s.fops->Close();
+    // Waiting on a wedged device would block this loop as long as the write.
+    FileError e = FileError::kTimeout;
+    if (!s.wedged) {
+        (void)s.fops->WaitForPendingWrites();
+        e = s.fops->Close();
+    }
     const bool success = (e == FileError::kSuccess);
     proto::ErrorInfo terminal;
     if (!success) {
@@ -685,20 +733,6 @@ std::wstring pipeNameFromArgs(int argc, char** argv) {
     return std::wstring();
 }
 
-bool writeAll(HANDLE pipe, const char* data, std::size_t len) {
-    std::size_t off = 0;
-    while (off < len) {
-        DWORD wrote = 0;
-        const DWORD chunk = static_cast<DWORD>(
-            (len - off) > 0x7fffffffu ? 0x7fffffffu : (len - off));
-        if (!WriteFile(pipe, data + off, chunk, &wrote, nullptr) || wrote == 0) {
-            return false;
-        }
-        off += wrote;
-    }
-    return true;
-}
-
 // Creates a named-pipe security descriptor granting generic access to
 // interactive users (§14.4). Caller must LocalFree the returned descriptor.
 PSECURITY_DESCRIPTOR createPipeSecurityDescriptor() {
@@ -719,7 +753,8 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
         return;
     }
 
-    WireOutbound outbound(pipe);
+    wire::WinPipeStream stream(pipe);
+    WireOutbound outbound(stream);
     DriveWatchService drive_watch;
     Helper helper(client_pid);
     helper.setPushContext(&outbound, &drive_watch);
@@ -734,11 +769,11 @@ void serviceLoop(HANDLE pipe, DWORD client_pid) {
             if (oversize) {
                 break;
             }
-            DWORD got = 0;
-            if (!ReadFile(pipe, buf, sizeof(buf), &got, nullptr) || got == 0) {
+            const wire::StreamChunk chunk = stream.read(buf, sizeof(buf));
+            if (!chunk.ok) {
                 break;
             }
-            acc.append(buf, got);
+            acc.append(buf, chunk.len);
             continue;
         }
 
@@ -786,23 +821,13 @@ int RpiImagerWriterServiceMainWin(int argc, char** argv) {
     sa.lpSecurityDescriptor = psd;
     sa.bInheritHandle = FALSE;
 
-    HANDLE pipe = CreateNamedPipeW(
-        pipe_name.c_str(),
-        PIPE_ACCESS_DUPLEX,
-        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-        1,                       // a single client (the launching GUI)
-        64 * 1024, 64 * 1024,
-        0,
-        &sa);
+    HANDLE pipe = wire::createPipeServer(pipe_name, &sa);
     LocalFree(psd);
     if (pipe == INVALID_HANDLE_VALUE) {
         return 3;
     }
 
-    const BOOL connected =
-        ConnectNamedPipe(pipe, nullptr) ? TRUE
-                                        : (GetLastError() == ERROR_PIPE_CONNECTED);
-    if (connected) {
+    if (wire::connectPipeServer(pipe)) {
         DWORD client_pid = 0;
         if (GetNamedPipeClientProcessId(pipe, &client_pid) && client_pid != 0) {
             serviceLoop(pipe, client_pid);

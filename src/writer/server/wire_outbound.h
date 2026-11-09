@@ -6,33 +6,25 @@
 #pragma once
 
 #include "proto/imager.pb.h"
+#include "wire/duplex_stream.h"
 
-#include <mutex>
 #include <string>
 
 namespace rpi_imager::writer {
 
 class WireOutbound {
 public:
-#if defined(_WIN32)
-    explicit WireOutbound(void* pipe_handle);
-#else
-    explicit WireOutbound(int fd);
-#endif
+    // The stream must outlive this writer. Responses, drive events and async
+    // completions arrive from different threads; the stream keeps whole
+    // frames from interleaving and lets them go out while a read is pending.
+    explicit WireOutbound(rpi_imager::privileged::wire::DuplexStream& stream);
 
     bool sendResponse(const rpi_imager::privileged::proto::WireResponse& response,
                       int pass_fd = -1);
     bool sendEvent(const rpi_imager::privileged::proto::WireEvent& event);
 
 private:
-    bool sendFramePayload(const std::string& frame, int pass_fd);
-
-#if defined(_WIN32)
-    void* handle_ = nullptr;
-#else
-    int handle_ = -1;
-#endif
-    std::mutex write_mutex_;
+    rpi_imager::privileged::wire::DuplexStream& stream_;
 };
 
 } // namespace rpi_imager::writer
