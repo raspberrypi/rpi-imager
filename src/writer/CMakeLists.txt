@@ -7,9 +7,51 @@
 # port to Rust (or any non-C++ language) does not require ripping Qt out
 # of the codebase first. Only the Cocoa/Foundation frameworks are linked.
 #
-# Currently macOS-only. Linux and Windows helpers come in phases 2 and 3.
+# macOS is the shipping helper. The native Windows helper (phase 3, §14) is
+# built only when the experimental option is enabled. Linux is phase 2.
 
 if(NOT APPLE)
+    if(WIN32 AND RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+        # rpi-imager-writer.exe: the elevated Windows helper (§14.5).
+        #
+        # NOTE: built as a console-subsystem exe so the standard int main()
+        # entry works under MinGW. Production should move to the windows
+        # subsystem (wWinMain) to avoid a transient console window when the
+        # helper is launched elevated; deferred while the helper is brought up.
+        add_executable(rpi-imager-writer
+            main_win.cpp
+            server/win/service_impl.h
+            server/win/service_impl.cpp
+            server/win/peer_auth_win.h
+            server/win/peer_auth_win.cpp
+            # §14.5 - the helper performs device I/O with the SAME Qt-free
+            # WindowsFileOperations the client uses in-process today. These TUs
+            # carry no Qt (verified) so they satisfy the Qt-free rule (§8a).
+            # NOTE: compiled WITHOUT RPI_IMAGER_ENABLE_WINDOWS_HELPER on this
+            # target, so file_operations_windows.cpp's factory yields a plain
+            # WindowsFileOperations and never references the client adapter.
+            ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../windows/file_operations_windows.cpp
+        )
+        target_include_directories(rpi-imager-writer PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/..
+        )
+        # Peer authentication (§14.4): WinVerifyTrust + publisher org and
+        # optional thumbprint allowlist pinning uses wintrust; CertGetNameStringW
+        # and CertGetCertificateContextProperty use crypt32.
+        target_link_libraries(rpi-imager-writer PRIVATE
+            privileged_io
+            advapi32
+            bcrypt
+            crypt32
+            wintrust
+        )
+        target_compile_features(rpi-imager-writer PRIVATE cxx_std_20)
+        set_target_properties(rpi-imager-writer PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        )
+    endif()
     return()
 endif()
 
