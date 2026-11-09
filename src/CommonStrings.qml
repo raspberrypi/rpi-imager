@@ -61,6 +61,12 @@ Item {
     ])
     readonly property string sshFiltersString: toFilterString(sshFiltersList)
 
+    // --- Wi-Fi Enterprise CA certificate filters ---
+    readonly property var caCertFiltersList: withAll([
+        qsTr("Certificate files (*.pem *.crt *.cer *.der)")
+    ])
+    readonly property string caCertFiltersString: toFilterString(caCertFiltersList)
+
     // --- Common UI strings ---
     readonly property string cancel: qsTr("Cancel")
     readonly property string yes: qsTr("Yes")

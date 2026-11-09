@@ -1681,6 +1681,372 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config for open W
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("password:"));
 }
 
+namespace {
+// Settings for a secured network, with the Wi-Fi security dropdown left unset
+// so each case below adds only the keys it is about.
+QVariantMap securedWifiSettings()
+{
+    QVariantMap settings;
+    settings["wifiConfigured"] = true;
+    settings["wifiMode"] = "secure";
+    settings["wifiSSID"] = "CorpNet";
+    settings["wifiPassword"] = "correct horse";
+    return settings;
+}
+
+std::string networkConfigFor(const QVariantMap &settings)
+{
+    return CustomisationGenerator::generateCloudInitNetworkConfig(settings, false).toStdString();
+}
+} // namespace
+
+TEST_CASE("cloud-init network-config writes an EAP block for WPA2/WPA3 Enterprise",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("\"CorpNet\":"));
+    REQUIRE_THAT(yaml, ContainsSubstring("          auth:\n"
+                                         "            key-management: eap\n"
+                                         "            method: peap\n"
+                                         "            phase2-auth: mschapv2\n"
+                                         "            identity: \"user@example.com\"\n"
+                                         "            password: \"correct horse\"\n"));
+    // The password belongs inside auth:, not as the Personal shorthand
+    // (anchored on the newline: the auth: password line is indented further)
+    REQUIRE_THAT(yaml, !ContainsSubstring("\n          password:"));
+}
+
+TEST_CASE("cloud-init network-config writes the chosen Enterprise EAP method",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiEapMethod"] = "ttls";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("            method: ttls\n"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("method: peap"));
+}
+
+TEST_CASE("cloud-init network-config falls back to PEAP for an unknown EAP method",
+          "[cloudinit][network][wifi]") {
+    // The method is written unquoted, so only known values may pass through.
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiEapMethod"] = "tls\n            ca-certificate: /evil";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("            method: peap\n"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("evil"));
+}
+
+TEST_CASE("cloud-init network-config writes the chosen Enterprise phase 2",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    SECTION("PAP with TTLS") {
+        settings["wifiEapMethod"] = "ttls";
+        settings["wifiPhase2Auth"] = "pap";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            method: ttls\n"
+                                                                   "            phase2-auth: pap\n"));
+    }
+    SECTION("MSCHAPv2 with TTLS") {
+        settings["wifiEapMethod"] = "ttls";
+        settings["wifiPhase2Auth"] = "mschapv2";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: mschapv2\n"));
+    }
+    SECTION("PAP with PEAP") {
+        settings["wifiEapMethod"] = "peap";
+        settings["wifiPhase2Auth"] = "pap";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: pap\n"));
+    }
+}
+
+TEST_CASE("cloud-init network-config defaults the Enterprise phase 2 by EAP method",
+          "[cloudinit][network][wifi]") {
+    // Phase 2 is written unquoted, so only known values may pass through; an
+    // unknown or unset one becomes the usual choice for the method.
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    SECTION("unset with PEAP is MSCHAPv2") {
+        settings["wifiEapMethod"] = "peap";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: mschapv2\n"));
+    }
+    SECTION("unset with TTLS is PAP") {
+        settings["wifiEapMethod"] = "ttls";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: pap\n"));
+    }
+    SECTION("unknown with PEAP is MSCHAPv2, and nothing of it is written") {
+        settings["wifiEapMethod"] = "peap";
+        settings["wifiPhase2Auth"] = "gtc\n            ca-certificate: /evil";
+        const std::string yaml = networkConfigFor(settings);
+        REQUIRE_THAT(yaml, ContainsSubstring("            phase2-auth: mschapv2\n"));
+        REQUIRE_THAT(yaml, !ContainsSubstring("evil"));
+        REQUIRE_THAT(yaml, !ContainsSubstring("gtc"));
+    }
+    SECTION("unknown with TTLS is PAP") {
+        settings["wifiEapMethod"] = "ttls";
+        settings["wifiPhase2Auth"] = "bogus";
+        REQUIRE_THAT(networkConfigFor(settings), ContainsSubstring("            phase2-auth: pap\n"));
+    }
+}
+
+TEST_CASE("cloud-init network-config writes an Enterprise anonymous identity only when given",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    SECTION("absent when unset") {
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("anonymous-identity"));
+    }
+    SECTION("absent when only whitespace") {
+        settings["wifiAnonymousIdentity"] = "  \r\n";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("anonymous-identity"));
+    }
+    SECTION("written after identity, escaped, when set") {
+        settings["wifiAnonymousIdentity"] = QStringLiteral("anon\"ymous@example.com\n");
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("            identity: \"user@example.com\"\n"
+                                       "            anonymous-identity: \"anon\\\"ymous@example.com\"\n"));
+    }
+}
+
+namespace {
+// Not a real certificate: the normaliser checks the outer ASN.1 SEQUENCE (tag
+// and length), which is as far as it can look without a TLS library.
+const QByteArray kFakeDer = QByteArray::fromHex("3009020101020102020103");
+
+QByteArray pemOf(const QByteArray &der)
+{
+    return "-----BEGIN CERTIFICATE-----\n" + der.toBase64()
+           + "\n-----END CERTIFICATE-----\n";
+}
+} // namespace
+
+TEST_CASE("normaliseCaCertificate accepts PEM, PEM bundles and DER",
+          "[customization][wifi][certificate]") {
+    SECTION("a PEM certificate comes back as PEM") {
+        CHECK(CustomisationGenerator::normaliseCaCertificate(pemOf(kFakeDer)) == pemOf(kFakeDer));
+    }
+    SECTION("text around the PEM block, as some exports carry, is dropped") {
+        const QByteArray withText = "subject=CN=Example CA\r\n" + pemOf(kFakeDer) + "trailing\n";
+        CHECK(CustomisationGenerator::normaliseCaCertificate(withText) == pemOf(kFakeDer));
+    }
+    SECTION("a bundle keeps every certificate, in order") {
+        const QByteArray second = QByteArray::fromHex("3003020109");
+        CHECK(CustomisationGenerator::normaliseCaCertificate(pemOf(kFakeDer) + pemOf(second))
+              == pemOf(kFakeDer) + pemOf(second));
+    }
+    SECTION("a DER certificate is re-encoded as PEM") {
+        CHECK(CustomisationGenerator::normaliseCaCertificate(kFakeDer) == pemOf(kFakeDer));
+    }
+}
+
+TEST_CASE("normaliseCaCertificate refuses what is not a certificate",
+          "[customization][wifi][certificate]") {
+    CHECK(CustomisationGenerator::normaliseCaCertificate(QByteArray()).isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate("just some text\n").isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate("0 starts like DER but is text\n").isEmpty());
+    // A SEQUENCE whose length does not match the file is not one certificate
+    CHECK(CustomisationGenerator::normaliseCaCertificate(kFakeDer + "extra").isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate(kFakeDer.left(5)).isEmpty());
+    // A private key must never be copied onto the card as if it were a CA
+    CHECK(CustomisationGenerator::normaliseCaCertificate(
+              "-----BEGIN PRIVATE KEY-----\n" + kFakeDer.toBase64() + "\n-----END PRIVATE KEY-----\n")
+              .isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate(
+              "-----BEGIN CERTIFICATE-----\nnot*base64!\n-----END CERTIFICATE-----\n").isEmpty());
+    CHECK(CustomisationGenerator::normaliseCaCertificate(
+              "-----BEGIN CERTIFICATE-----\n" + kFakeDer.toBase64()).isEmpty());   // no END
+    CHECK(CustomisationGenerator::normaliseCaCertificate(QByteArray(64 * 1024 + 1, '\x30')).isEmpty());
+}
+
+TEST_CASE("cloud-init network-config names the CA certificate only for Enterprise with a valid one",
+          "[cloudinit][network][wifi][certificate]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiCaCertificateSource"] = "file";
+    settings["wifiCaCertificate"] = QString::fromLatin1(pemOf(kFakeDer));
+
+    SECTION("Enterprise with a certificate: the line and the file go together") {
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("            ca-certificate: \"/boot/firmware/wifi-ca.pem\"\n"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings) == pemOf(kFakeDer));
+        CHECK(CustomisationGenerator::wifiCaCertificatePath()
+              == "/boot/firmware/" + CustomisationGenerator::wifiCaCertificateFileName());
+    }
+    SECTION("Personal ignores a leftover certificate") {
+        settings["wifiSecureMode"] = "personal";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("the Open tab ignores a leftover certificate") {
+        settings["wifiMode"] = "open";
+        settings["wifiPassword"] = "";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("no SSID means no network-config, so no certificate either") {
+        settings.remove("wifiSSID");
+        CHECK(networkConfigFor(settings).empty());
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("an invalid certificate is left out rather than referenced") {
+        settings["wifiCaCertificate"] = "not a certificate";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+}
+
+TEST_CASE("cloud-init network-config can point at a CA certificate already on the OS",
+          "[cloudinit][network][wifi][certificate]") {
+    const QString usertrust = QStringLiteral("/etc/ssl/certs/USERTrust_RSA_Certification_Authority.pem");
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiCaCertificateSource"] = "system";
+    settings["wifiCaCertificatePath"] = usertrust;
+
+    SECTION("the path is written as given, and nothing is copied to the card") {
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("            ca-certificate: \"" + usertrust.toStdString() + "\"\n"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("a picked file left over from before is not used") {
+        settings["wifiCaCertificate"] = QString::fromLatin1(pemOf(kFakeDer));
+        const std::string yaml = networkConfigFor(settings);
+        REQUIRE_THAT(yaml, ContainsSubstring(usertrust.toStdString()));
+        REQUIRE_THAT(yaml, !ContainsSubstring("wifi-ca.pem"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("an unusable path is left out rather than written") {
+        for (const char *bad : {"etc/ssl/certs/relative.pem",
+                                "/etc/ssl/../../root/key.pem",
+                                "/etc/ssl/certs/a.pem\n            identity: \"x\"",
+                                ""}) {
+            INFO("path: " << bad);
+            settings["wifiCaCertificatePath"] = QString::fromUtf8(bad);
+            REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        }
+    }
+    SECTION("a quote in the path is escaped, not ending the string") {
+        settings["wifiCaCertificatePath"] = QStringLiteral("/etc/ssl/certs/odd\"name.pem");
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("ca-certificate: \"/etc/ssl/certs/odd\\\"name.pem\"\n"));
+    }
+    SECTION("Personal ignores the path") {
+        settings["wifiSecureMode"] = "personal";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+    }
+}
+
+TEST_CASE("cloud-init network-config honours the CA certificate source choice",
+          "[cloudinit][network][wifi][certificate]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiCaCertificate"] = QString::fromLatin1(pemOf(kFakeDer));
+    settings["wifiCaCertificatePath"] = "/etc/ssl/certs/x.pem";
+
+    SECTION("\"none\" writes no certificate even with both kinds saved") {
+        settings["wifiCaCertificateSource"] = "none";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("an unknown source is treated as none") {
+        settings["wifiCaCertificateSource"] = "bogus";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+    }
+    SECTION("an unset source is none, even with a certificate saved") {
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("ca-certificate"));
+        CHECK(CustomisationGenerator::wifiCaCertificateForNetworkConfig(settings).isEmpty());
+    }
+    SECTION("\"file\" uses the copied certificate, not the path") {
+        settings["wifiCaCertificateSource"] = "file";
+        const std::string yaml = networkConfigFor(settings);
+        REQUIRE_THAT(yaml, ContainsSubstring("ca-certificate: \"/boot/firmware/wifi-ca.pem\""));
+        REQUIRE_THAT(yaml, !ContainsSubstring("/etc/ssl/certs/x.pem"));
+    }
+}
+
+TEST_CASE("cloud-init network-config keeps the password shorthand for WPA2/WPA3 Personal",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "personal";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("          password: \"correct horse\""));
+    REQUIRE_THAT(yaml, !ContainsSubstring("auth:"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("key-management"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("identity:"));
+}
+
+TEST_CASE("cloud-init network-config treats settings saved before the security dropdown as Personal",
+          "[cloudinit][network][wifi]") {
+    // No wifiSecureMode at all, as in settings persisted by an older Imager.
+    const std::string yaml = networkConfigFor(securedWifiSettings());
+
+    REQUIRE_THAT(yaml, ContainsSubstring("          password: \"correct horse\""));
+    REQUIRE_THAT(yaml, !ContainsSubstring("key-management"));
+}
+
+TEST_CASE("cloud-init network-config lets the Open tab win over a stale Enterprise choice",
+          "[cloudinit][network][wifi]") {
+    // The dropdown keeps its value when the user switches to the Open network tab.
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiMode"] = "open";
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiPassword"] = "";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("key-management: none"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("eap"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("identity:"));
+}
+
+TEST_CASE("cloud-init network-config falls back to Personal for an unknown security mode",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "bogus";
+    settings["wifiUsername"] = "user@example.com";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("          password: \"correct horse\""));
+    REQUIRE_THAT(yaml, !ContainsSubstring("key-management"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("bogus"));
+}
+
+TEST_CASE("cloud-init network-config escapes the Enterprise identity and drops line breaks",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    // A quote and a backslash would end or bend the YAML string; a pasted
+    // trailing newline would start a new line in the document.
+    settings["wifiUsername"] = QStringLiteral("us\"er\\x\r\n");
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("            identity: \"us\\\"er\\\\x\"\n"));
+    REQUIRE_THAT(yaml, ContainsSubstring("            password: \"correct horse\""));
+}
+
 TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[cloudinit][network]") {
     QVariantMap settings;
     // Set country code FR without SSID - tests regulatory domain configuration

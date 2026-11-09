@@ -142,6 +142,16 @@ public:
     void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const ImageOptions::AdvancedOptions opts);
 
     /*
+     * Enterprise Wi-Fi CA certificate (PEM) to write beside network-config,
+     * under the name network-config refers to it by; empty pem for none.
+     */
+    void setWifiCaCertificate(const QString &fileName, const QByteArray &pem)
+    {
+        _wifiCaCertificateName = fileName;
+        _wifiCaCertificate = pem;
+    }
+
+    /*
      * Debug options (set before starting the thread)
      */
     void setDebugDirectIO(bool enabled);
@@ -315,6 +325,8 @@ protected:
     std::uint64_t _lastFailureOffset;
     qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
+    QString _wifiCaCertificateName;
+    QByteArray _wifiCaCertificate;
     ImageOptions::AdvancedOptions _advancedOptions;
     /* What customisation wrote to the boot partition, keyed by filename. A
        digest rather than the contents, so recording boot.img costs 32 bytes

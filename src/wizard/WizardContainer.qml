@@ -92,6 +92,8 @@ Item {
 
     // Interfaces & Features
     property bool ccRpiAvailable: false
+    // Whether the selected OS can take a WPA2/WPA3 Enterprise network (cloud-init only)
+    property bool wifiEnterpriseAvailable: false
     property bool ifAndFeaturesAvailable: false  // Whether any interface/feature capabilities are available
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
@@ -382,6 +384,7 @@ Item {
         piConnectAvailable = false
         secureBootAvailable = false
         ccRpiAvailable = false
+        wifiEnterpriseAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
         if1WireEnabled = false
@@ -412,6 +415,7 @@ Item {
         passwordlessSudoAvailable = false
         userRequired = false
         ccRpiAvailable = false
+        wifiEnterpriseAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
         if1WireEnabled = false
