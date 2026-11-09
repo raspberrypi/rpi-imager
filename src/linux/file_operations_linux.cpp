@@ -4,6 +4,7 @@
  */
 
 #include "file_operations_linux.h"
+#include "linux_helper_file_operations.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -1164,6 +1165,9 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
+  if (shouldUseLinuxHelperFileOperations()) {
+    return CreateLinuxHelperFileOperations();
+  }
   return std::make_unique<LinuxFileOperations>();
 }
 

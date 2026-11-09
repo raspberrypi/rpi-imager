@@ -26,4 +26,9 @@ inline constexpr size_t kTrustedSignerThumbprintCount =
 // Only this client binary may connect to the Windows privileged helper.
 inline constexpr wchar_t kWindowsClientExeName[] = L"@RPI_IMAGER_WINDOWS_CLIENT_EXE@";
 
+// GPG key fingerprints (hex) for AppImage embedded-signature peer auth on Linux.
+inline constexpr size_t kTrustedAppImageKeyFingerprintCount =
+    @RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_COUNT@;
+@RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_ARRAY@
+
 } // namespace rpi_imager::identity
