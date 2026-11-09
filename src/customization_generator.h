@@ -220,6 +220,22 @@ private:
      */
     static QString resolveWifiSecureMode(const QVariantMap& settings, bool wifiConfigured);
 
+    /**
+     * @brief Resolve the Enterprise EAP method ("wifiEapMethod"): "peap" or "ttls".
+     *
+     * Written unquoted into network-config, so only these two values are
+     * passed through; anything else, or unset, is "peap", the most common.
+     */
+    static QString resolveWifiEapMethod(const QVariantMap& settings);
+
+    /**
+     * @brief Resolve the optional Enterprise outer identity ("wifiAnonymousIdentity").
+     *
+     * CR/LF stripped and surrounding whitespace trimmed. Empty when unset or
+     * Wi-Fi is not configured, in which case no anonymous-identity is written.
+     */
+    static QString resolveWifiAnonymousIdentity(const QVariantMap& settings, bool wifiConfigured);
+
     static QString yamlEscapeString(const QString& value);
 };
 

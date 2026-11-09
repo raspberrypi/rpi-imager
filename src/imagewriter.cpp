@@ -4510,6 +4510,11 @@ bool ImageWriter::imageSupportsInterfaceCustomisation()
     return _initFormat == "cloudinit-rpi" || _initFormat == "rpi-preseed";
 }
 
+bool ImageWriter::imageSupportsWifiEnterprise()
+{
+    return _initFormat == "cloudinit" || _initFormat == "cloudinit-rpi";
+}
+
 QStringList ImageWriter::getTranslations()
 {
     QStringList t = _translations.keys();

@@ -460,6 +460,10 @@ public:
     // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
     // module; rpi-preseed configures them natively via raspi-config.
     Q_INVOKABLE bool imageSupportsInterfaceCustomisation();
+    // Whether the selected OS can join a WPA2/WPA3 Enterprise network from
+    // Imager's settings. Only the cloud-init network-config carries an EAP
+    // block; firstrun.sh and rpi-preseed.toml have no way to express one.
+    Q_INVOKABLE bool imageSupportsWifiEnterprise();
 
     // Hash the account password from plaintext for the UI. Hashing is
     // delegated to CustomisationGenerator (the single home for credential

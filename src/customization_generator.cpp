@@ -303,6 +303,20 @@ QString CustomisationGenerator::resolveWifiSecureMode(const QVariantMap& setting
     return QStringLiteral("personal");
 }
 
+QString CustomisationGenerator::resolveWifiEapMethod(const QVariantMap& settings) {
+    const QString method = settings.value(QStringLiteral("wifiEapMethod")).toString();
+    if (method == QStringLiteral("ttls"))
+        return method;
+    return QStringLiteral("peap");
+}
+
+QString CustomisationGenerator::resolveWifiAnonymousIdentity(const QVariantMap& settings, bool wifiConfigured) {
+    if (!wifiConfigured)
+        return {};
+
+    return stripLineTerminators(settings.value(QStringLiteral("wifiAnonymousIdentity")).toString()).trimmed();
+}
+
 QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
 {
     // YAML's \xHH and \uHHHH escapes name code points, not bytes, so escaping
@@ -1111,9 +1125,14 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (secMode == QStringLiteral("enterprise")) {
             push(QStringLiteral("          auth:"), netcfg);
             push(QStringLiteral("            key-management: eap"), netcfg);
-            push(QStringLiteral("            method: peap"), netcfg);
+            push(QStringLiteral("            method: ") + resolveWifiEapMethod(settings), netcfg);
             push(QStringLiteral("            phase2-auth: mschapv2"), netcfg);
             push(QStringLiteral("            identity: \"") + yamlEscapeString(username) + QStringLiteral("\""), netcfg);
+            const QString anonymousIdentity = resolveWifiAnonymousIdentity(settings, wifiConfigured);
+            if (!anonymousIdentity.isEmpty()) {
+                push(QStringLiteral("            anonymous-identity: \"") + yamlEscapeString(anonymousIdentity)
+                     + QStringLiteral("\""), netcfg);
+            }
             push(QStringLiteral("            password: \"") + yamlEscapeString(wifiPassphrase) + QStringLiteral("\""), netcfg);
         } 
         else if (wifiPassphrase.isEmpty()) {

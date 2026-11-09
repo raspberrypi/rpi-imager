@@ -1720,6 +1720,54 @@ TEST_CASE("cloud-init network-config writes an EAP block for WPA2/WPA3 Enterpris
     REQUIRE_THAT(yaml, !ContainsSubstring("\n          password:"));
 }
 
+TEST_CASE("cloud-init network-config writes the chosen Enterprise EAP method",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiEapMethod"] = "ttls";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("            method: ttls\n"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("method: peap"));
+}
+
+TEST_CASE("cloud-init network-config falls back to PEAP for an unknown EAP method",
+          "[cloudinit][network][wifi]") {
+    // The method is written unquoted, so only known values may pass through.
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+    settings["wifiEapMethod"] = "tls\n            ca-certificate: /evil";
+
+    const std::string yaml = networkConfigFor(settings);
+
+    REQUIRE_THAT(yaml, ContainsSubstring("            method: peap\n"));
+    REQUIRE_THAT(yaml, !ContainsSubstring("evil"));
+}
+
+TEST_CASE("cloud-init network-config writes an Enterprise anonymous identity only when given",
+          "[cloudinit][network][wifi]") {
+    QVariantMap settings = securedWifiSettings();
+    settings["wifiSecureMode"] = "enterprise";
+    settings["wifiUsername"] = "user@example.com";
+
+    SECTION("absent when unset") {
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("anonymous-identity"));
+    }
+    SECTION("absent when only whitespace") {
+        settings["wifiAnonymousIdentity"] = "  \r\n";
+        REQUIRE_THAT(networkConfigFor(settings), !ContainsSubstring("anonymous-identity"));
+    }
+    SECTION("written after identity, escaped, when set") {
+        settings["wifiAnonymousIdentity"] = QStringLiteral("anon\"ymous@example.com\n");
+        REQUIRE_THAT(networkConfigFor(settings),
+                     ContainsSubstring("            identity: \"user@example.com\"\n"
+                                       "            anonymous-identity: \"anon\\\"ymous@example.com\"\n"));
+    }
+}
+
 TEST_CASE("cloud-init network-config keeps the password shorthand for WPA2/WPA3 Personal",
           "[cloudinit][network][wifi]") {
     QVariantMap settings = securedWifiSettings();

@@ -23,7 +23,13 @@ WizardStepBase {
     property string originalSavedSSID: ""
     property bool hadSavedPassword: false
     property bool showPw: wifiMode === "secure"
-    property bool showUsername: wifiMode === "secure" && wifiSecureMode === "enterprise"
+    // Enterprise is only offered when the selected OS can apply it (cloud-init);
+    // otherwise a stale "enterprise" choice falls back to Personal.
+    property bool showSecurityChoice: showPw && wizardContainer.wifiEnterpriseAvailable
+    property bool isEnterprise: showSecurityChoice && wifiSecureMode === "enterprise"
+    property bool showUsername: isEnterprise
+    onShowSecurityChoiceChanged: rebuildFocusOrder()
+    onIsEnterpriseChanged: rebuildFocusOrder()
 
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
@@ -45,13 +51,17 @@ WizardStepBase {
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("wifi_fields", function(){
             var items = [labelSSID, fieldWifiSSID]
-            if (showPw) {
+            if (showSecurityChoice) {
                 items.push(labelWifiSecurity)
                 items.push(comboWifiSecurity)
             }
-            if (showUsername) {
+            if (isEnterprise) {
                 items.push(labelWifiUsername)
                 items.push(fieldWifiUsername)
+                items.push(labelWifiEapMethod)
+                items.push(comboWifiEapMethod)
+                items.push(labelWifiAnonymousIdentity)
+                items.push(fieldWifiAnonymousIdentity)
             }
             if (showPw) {
                 items.push(lblPassword)
@@ -66,6 +76,7 @@ WizardStepBase {
         // Set placeholders before prefilling text content
         fieldWifiSSID.placeholderText = qsTr("Network name")
         fieldWifiUsername.placeholderText = qsTr("Username")
+        fieldWifiAnonymousIdentity.placeholderText = qsTr("Anonymous identity (optional)")
 
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings
@@ -78,6 +89,9 @@ WizardStepBase {
         // Restore the Enterprise username the same way
         if (settings.wifiUsername) {
             fieldWifiUsername.text = settings.wifiUsername
+        }
+        if (settings.wifiAnonymousIdentity) {
+            fieldWifiAnonymousIdentity.text = settings.wifiAnonymousIdentity
         }
 
         // If not saved, try to auto-detect the current SSID from the system
@@ -120,6 +134,8 @@ WizardStepBase {
         // wifiSecureMode: restore the dropdown; its onCurrentValueChanged sets wifiSecureMode
         var secIdx = comboWifiSecurity.indexOfValue(settings.wifiSecureMode || "personal")
         comboWifiSecurity.currentIndex = secIdx >= 0 ? secIdx : 0
+        var eapIdx = comboWifiEapMethod.indexOfValue(settings.wifiEapMethod || "peap")
+        comboWifiEapMethod.currentIndex = eapIdx >= 0 ? eapIdx : 0
 
         updatePasswordFieldUI()
         // UpdatePasswordFieldUI already takes care of this
@@ -172,7 +188,7 @@ WizardStepBase {
         var canKeep = hadSavedPassword && ssidUnchanged(ssid, prevSSID)
         fieldWifiPassword.placeholderText = canKeep
            ? qsTr("Saved (hidden) — leave blank to keep")
-           : qsTr("Network password")
+           : (isEnterprise ? qsTr("Account password") : qsTr("Network password"))
     }
 
     function passwordErrorMessage() {
@@ -195,8 +211,10 @@ WizardStepBase {
         if (pwd.length === 0) return qsTr("Enter a password");
 
         // Detailed validity (mirrors isValidWifiPassword)
-        // 64 hex is allowed => if it's 64 chars but not hex, say invalid chars
-        if (!isHex64(pwd)) {
+        // 64 hex is allowed => if it's 64 chars but not hex, say invalid chars.
+        // Enterprise passwords are account passwords, not WPA passphrases, so
+        // the 8-63 ASCII rule does not apply to them.
+        if (!isEnterprise && !isHex64(pwd)) {
             if (pwd.length < 8) return qsTr("Password is too short (min 8 characters)");
             if (pwd.length > 63) return qsTr("Password is too long (max 63 characters)");
             if (!isAsciiPrintable(pwd)) return qsTr("Password contains unsupported characters");
@@ -324,7 +342,7 @@ WizardStepBase {
 
                     WizardFormLabel {
                         id: labelWifiSecurity
-                        visible: root.showPw
+                        visible: root.showSecurityChoice
                         text: qsTr("Security:")
                         accessibleDescription: qsTr("Choose the type of security your Wi-Fi network uses.")
                     }
@@ -334,7 +352,7 @@ WizardStepBase {
                         objectName: "wifiSecurityCombo"
                         accessiblePurpose: labelWifiSecurity.text
                         Layout.fillWidth: true
-                        visible: root.showPw
+                        visible: root.showSecurityChoice
                         editable: false
                         font.pointSize: Style.fontSizeInput
 
@@ -373,12 +391,61 @@ WizardStepBase {
                     }
 
                     WizardFormLabel {
+                        id: labelWifiEapMethod
+                        visible: root.isEnterprise
+                        text: qsTr("EAP method:")
+                        accessibleDescription: qsTr("Choose how your device signs in to the Enterprise network. Your network administrator's setup instructions name it; PEAP is the most common.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiEapMethod
+                        objectName: "wifiEapMethodCombo"
+                        accessiblePurpose: labelWifiEapMethod.text
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("PEAP"), value: "peap" },
+                            { text: qsTr("TTLS"), value: "ttls" }
+                        ]
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiAnonymousIdentity
+                        visible: root.isEnterprise
+                        text: qsTr("Anonymous identity:")
+                        accessibleDescription: qsTr("Optional. The outer identity some Enterprise networks ask for, for example anonymous@example.com. Leave blank unless your network's setup instructions give one.")
+                    }
+
+                    ImTextField {
+                        id: fieldWifiAnonymousIdentity
+                        objectName: "wifiAnonymousIdentityField"
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        font.pointSize: Style.fontSizeInput
+                        trimWhitespace: true
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
+                    }
+
+                    WizardFormLabel {
                         id: lblPassword
                         text: CommonStrings.password
                         visible: root.showPw
                         accessibleDescription: {
                             var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
-                            return canKeep 
+                            if (root.isEnterprise) {
+                                return canKeep
+                                    ? qsTr("Enter a new password for your Enterprise account, or leave blank to keep the previously saved password.")
+                                    : qsTr("Enter the password for your Enterprise account. You will need to re-enter it in the next field to confirm.")
+                            }
+                            return canKeep
                                 ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
                                 : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
                         }
@@ -510,7 +577,7 @@ WizardStepBase {
         if (wifiMode === "open") return true
 
         // Enterprise needs a username
-        if (wifiSecureMode === "enterprise" && fieldWifiUsername.value.length === 0) return false
+        if (isEnterprise && fieldWifiUsername.value.length === 0) return false
 
         // secure / closed mode
         var ssidNow = fieldWifiSSID.value
@@ -524,19 +591,35 @@ WizardStepBase {
 
         // Need a new password -> must be valid and must match confirm (like user customization step)
         if (pwd.length === 0) return false
-        if (root.wifiSecureMode !== "enterprise" && !root.isValidWifiPassword(pwd)) return false
+        if (!root.isEnterprise && !root.isValidWifiPassword(pwd)) return false
 
         // Always check that passwords match
         if (pwd !== (fieldWifiPasswordConfirm.text || "")) return false
         return true
     })()
 
+    // Write or clear the Enterprise-only fields in a settings map. Kept only
+    // while Enterprise is in effect, so a Personal or Open network never
+    // carries a stale identity.
+    function applyEnterpriseSettings(map, keep) {
+        if (keep) {
+            map.wifiUsername = fieldWifiUsername.value
+            map.wifiEapMethod = comboWifiEapMethod.currentValue
+            if (fieldWifiAnonymousIdentity.value.length > 0)
+                map.wifiAnonymousIdentity = fieldWifiAnonymousIdentity.value
+            else
+                delete map.wifiAnonymousIdentity
+        } else {
+            delete map.wifiUsername
+            delete map.wifiEapMethod
+            delete map.wifiAnonymousIdentity
+        }
+    }
+
     // Save settings when moving to next step
     onNextClicked: {
         var ssid = fieldWifiSSID.value
         var pwd = fieldWifiPassword.text
-        var isEnterprise = wifiMode === "secure" && wifiSecureMode === "enterprise"
-        var username = fieldWifiUsername.value
         var prevSSID = wizardContainer.customizationSettings.wifiSSID || ""
         var hidden = chkWifiHidden.checked
         var hadPasswordBefore = !!wizardContainer.customizationSettings.wifiPassword
@@ -553,9 +636,10 @@ WizardStepBase {
 
         // Update conserved customization settings (runtime state)
         wizardContainer.customizationSettings.wifiMode = wifiMode
-        wizardContainer.customizationSettings.wifiSecureMode = wifiSecureMode
+        // What this write will use: Personal whenever the OS cannot take Enterprise
+        wizardContainer.customizationSettings.wifiSecureMode = isEnterprise ? "enterprise" : "personal"
 
-        // Handle SSID, password, and Enterprise username
+        // Handle SSID, password, and Enterprise fields
         if (ssid.length > 0) {
             wizardContainer.customizationSettings.wifiSSID = ssid
             wizardContainer.customizationSettings.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
@@ -573,20 +657,16 @@ WizardStepBase {
                delete wizardContainer.customizationSettings.wifiPassword
             }
 
-            if (isEnterprise) {
-                wizardContainer.customizationSettings.wifiUsername = username
-            } else {
-                delete wizardContainer.customizationSettings.wifiUsername
-            }
+            applyEnterpriseSettings(wizardContainer.customizationSettings, isEnterprise)
 
             wizardContainer.customizationSettings.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else {
-            // No SSID -> clear SSID, password, username settings
+            // No SSID -> clear SSID, password and Enterprise settings
             delete wizardContainer.customizationSettings.wifiSSID
             delete wizardContainer.customizationSettings.wifiSsidOctetsBase64
             delete wizardContainer.customizationSettings.wifiPassword
-            delete wizardContainer.customizationSettings.wifiUsername
+            applyEnterpriseSettings(wizardContainer.customizationSettings, false)
             delete wizardContainer.customizationSettings.wifiHidden
             wizardContainer.wifiConfigured = false
         }
@@ -594,13 +674,11 @@ WizardStepBase {
         // Also persist for future sessions
         var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         saved.wifiMode = wifiMode
+        // The dropdown choice itself is remembered even for an OS that cannot
+        // use it, so picking a cloud-init OS next time brings it back.
         saved.wifiSecureMode = wifiSecureMode
         if (ssid.length > 0) {
-            if (isEnterprise) {
-                saved.wifiUsername = username
-            } else {
-                delete saved.wifiUsername
-            }
+            applyEnterpriseSettings(saved, isEnterprise)
             saved.wifiSSID = ssid
             saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
             if (wifiMode === "open") {
@@ -617,7 +695,7 @@ WizardStepBase {
             delete saved.wifiSSID
             delete saved.wifiSsidOctetsBase64
             delete saved.wifiPassword
-            delete saved.wifiUsername
+            applyEnterpriseSettings(saved, false)
             delete saved.wifiHidden
         }
         ImageWriterSingleton.setSavedCustomisationSettings(saved)

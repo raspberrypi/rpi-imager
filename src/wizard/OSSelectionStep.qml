@@ -863,6 +863,7 @@ WizardStepBase {
                 root.wizardContainer.passwordlessSudoAvailable = false
                 root.wizardContainer.userRequired = false
                 root.wizardContainer.ccRpiAvailable = false
+                root.wizardContainer.wifiEnterpriseAvailable = ImageWriterSingleton.imageSupportsWifiEnterprise()
                 root.wizardContainer.ifAndFeaturesAvailable = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
@@ -898,6 +899,7 @@ WizardStepBase {
                 root.wizardContainer.passwordlessSudoAvailable = ImageWriterSingleton.checkSWCapability("passwordless_sudo")
                 root.wizardContainer.userRequired = ImageWriterSingleton.imageRequiresUser()
                 root.wizardContainer.ccRpiAvailable = ImageWriterSingleton.imageSupportsCcRpi()
+                root.wizardContainer.wifiEnterpriseAvailable = ImageWriterSingleton.imageSupportsWifiEnterprise()
                 
                 // Check if any interface/feature capabilities are available (requires both HW and SW support).
                 // Gated on the OS being able to apply the toggles at all: cloud-init via cc_raspberry_pi,
