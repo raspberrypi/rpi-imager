@@ -73,10 +73,9 @@ On each new client connection the helper:
 4. If `APPIMAGE` is unset and release keys are pinned: **reject** (native dev fallback is disabled).
 5. If `APPIMAGE` is unset and no keys are pinned: allow co-installed `rpi-imager` / `rpi-imager-cli` beside the helper (dev only).
 
-Enable the helper path at runtime:
+Run the signed AppImage (helper path is default when built):
 
 ```bash
-export RPI_IMAGER_USE_LINUX_HELPER=1
 ./Raspberry_Pi_Imager-x86_64.AppImage
 ```
 

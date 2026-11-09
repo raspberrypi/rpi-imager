@@ -1,9 +1,10 @@
 # Windows privileged helper — FOSS developer signing guide
 
 The Windows helper path (built by default; disable with
-`RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON`) uses `RPI_IMAGER_USE_WINDOWS_HELPER=1`
-at runtime and enforces **publisher-pinned peer
-authentication** before honoring pipe RPCs (`peer_auth_win.cpp`). There is
+`RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON`) is the default at runtime. Opt out with
+`RPI_IMAGER_USE_LEGACY_INPROCESS=1` or `RPI_IMAGER_USE_WINDOWS_HELPER=0`.
+It enforces **publisher-pinned peer authentication** before honoring pipe RPCs
+(`peer_auth_win.cpp`). There is
 **no runtime bypass**: the connecting client must be
 
 1. named `rpi-imager.exe` (or whatever `RPI_IMAGER_WINDOWS_CLIENT_EXE` is set to),
@@ -11,6 +12,13 @@ authentication** before honoring pipe RPCs (`peer_auth_win.cpp`). There is
 3. **Authenticode-signed**, with signer certificate **Organization (O=)** matching
    `RPI_IMAGER_PUBLISHER_ORG`, and leaf **SHA-1 thumbprint** in the peer-auth
    allowlist (auto-populated from your cert store by default).
+
+The GUI client (`rpi-imager.exe`) runs with an **`asInvoker` UAC manifest** — no
+administrator badge on launch. Privileged disk I/O is delegated to
+`rpi-imager-writer.exe`, which the client elevates via `ShellExecuteEx` with the
+`runas` verb when a write session starts (one UAC prompt per app run, not per
+chunk). The installer still requires admin to write `HKLM` keys and install the
+USB driver; that is separate from the app's execution level.
 
 Unsigned local builds therefore fail peer auth. This guide explains how FOSS
 developers can sign **both** binaries for local testing without a commercial
@@ -141,12 +149,18 @@ $IMAGER_SIGNING_CERT_SHA1` (auto-discovered or set explicitly) for
 Timestamping (`/tr http://timestamp.digicert.com`) is optional for local dev;
 omit it if you are offline.
 
-### 5. Run with the helper opt-in
+### 5. Run the helper path (default)
 
 Both binaries must sit in the **same directory** (peer auth checks co-location).
 
 ```powershell
-$env:RPI_IMAGER_USE_WINDOWS_HELPER = "1"
+.\build\rpi-imager.exe
+```
+
+Opt out for legacy in-process I/O:
+
+```powershell
+$env:RPI_IMAGER_USE_LEGACY_INPROCESS = "1"
 .\build\rpi-imager.exe
 ```
 
@@ -225,6 +239,7 @@ releases.
 | `IMAGER_SIGNING_CERT_SHA1` | `signtool /sha1` cert; auto-discovered when empty |
 | `RPI_IMAGER_WINDOWS_CLIENT_EXE` | Client basename check (default `rpi-imager.exe`) |
 | `IMAGER_SIGNED_APP` | Post-build `signtool` for app, relay, and helper |
-| `RPI_IMAGER_USE_WINDOWS_HELPER=1` | Runtime opt-in (environment variable) |
+| `RPI_IMAGER_USE_LEGACY_INPROCESS=1` | Opt out of helper path (all platforms) |
+| `RPI_IMAGER_USE_WINDOWS_HELPER=0` | Opt out of Windows helper only |
 
 See also `CONTRIBUTING.md` (Windows build).

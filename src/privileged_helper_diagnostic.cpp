@@ -286,18 +286,19 @@ int runPrivilegedHelperDiagnostic(const std::string& device_path,
 #if !defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
     if (::geteuid() != 0) {
         std::fprintf(stderr,
-            "Build without -DRPI_IMAGER_DISABLE_LINUX_HELPER=ON and set\n"
-            "RPI_IMAGER_USE_LINUX_HELPER=1, or run as root for the embedded path.\n");
+            "Build without -DRPI_IMAGER_DISABLE_LINUX_HELPER=ON, or run as root "
+            "for the embedded path.\n");
         return 2;
     }
-#endif
-    const char* use = std::getenv("RPI_IMAGER_USE_LINUX_HELPER");
-    if (::geteuid() != 0 && !(use && use[0] == '1')) {
+#elif !preferNativePrivilegedHelper("RPI_IMAGER_USE_LINUX_HELPER")
+    if (::geteuid() != 0) {
         std::fprintf(stderr,
-            "Set RPI_IMAGER_USE_LINUX_HELPER=1 for the polkit helper path,\n"
+            "Helper path disabled (RPI_IMAGER_USE_LEGACY_INPROCESS=1 or "
+            "RPI_IMAGER_USE_LINUX_HELPER=0). Unset those to test the polkit helper,\n"
             "or run as root for the embedded in-process path.\n");
         return 2;
     }
+#endif
 
     auto& backend = getProcessPrivilegedWriter();
     return runDiagnosticCore(backend, device_path, allow_write, exercise_bulk,
@@ -311,15 +312,14 @@ int runPrivilegedHelperDiagnostic(const std::string& device_path,
                                   bool exercise_bulk) {
 #if !defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
     std::fprintf(stderr,
-        "Build without -DRPI_IMAGER_DISABLE_WINDOWS_HELPER=ON and set\n"
-        "RPI_IMAGER_USE_WINDOWS_HELPER=1.\n");
+        "Build without -DRPI_IMAGER_DISABLE_WINDOWS_HELPER=ON.\n");
+    return 2;
+#elif !preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")
+    std::fprintf(stderr,
+        "Helper path disabled (RPI_IMAGER_USE_LEGACY_INPROCESS=1 or "
+        "RPI_IMAGER_USE_WINDOWS_HELPER=0).\n");
     return 2;
 #endif
-    const char* use = std::getenv("RPI_IMAGER_USE_WINDOWS_HELPER");
-    if (!(use && use[0] == '1')) {
-        std::fprintf(stderr, "Set RPI_IMAGER_USE_WINDOWS_HELPER=1.\n");
-        return 2;
-    }
 
     auto& backend = getProcessPrivilegedWriter();
     return runDiagnosticCore(backend, device_path, allow_write, exercise_bulk,
@@ -330,9 +330,9 @@ int runPrivilegedHelperDiagnostic(const std::string& device_path,
 
 int runPrivilegedHelperDiagnostic(const std::string&, bool, bool) {
     std::fprintf(stderr,
-        "--test-privileged-helper: use macOS (default), Linux "
-        "(RPI_IMAGER_USE_LINUX_HELPER=1), or Windows "
-        "(RPI_IMAGER_USE_WINDOWS_HELPER=1).\n");
+        "--test-privileged-helper: supported on macOS, Linux, and Windows "
+        "(helper path is default when built; opt out with "
+        "RPI_IMAGER_USE_LEGACY_INPROCESS=1).\n");
     return 2;
 }
 

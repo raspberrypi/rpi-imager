@@ -111,7 +111,7 @@ set(PRIVILEGED_IO_SOURCES
 
 # Native Windows privileged backend (§14). Omitted when
 # RPI_IMAGER_DISABLE_WINDOWS_HELPER is set; otherwise Windows uses the
-# LocalShimBackend when RPI_IMAGER_USE_WINDOWS_HELPER is unset.
+# LocalShimBackend when the helper path is opted out.
 if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     list(APPEND PRIVILEGED_IO_SOURCES
         backends/windows_uac.h
