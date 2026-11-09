@@ -18,8 +18,6 @@ WizardStepBase {
     
     // "open" | "secure"
     property string wifiMode: "secure"
-    // "personal" | "enterprise"
-    property string wifiSecureMode: "personal"
     property string originalSavedSSID: ""
     property bool hadSavedPassword: false
     property bool showPw: wifiMode === "secure"
@@ -27,6 +25,8 @@ WizardStepBase {
     // otherwise a stale "enterprise" choice falls back to Personal.
     property bool showSecurityChoice: showPw && wizardContainer.wifiEnterpriseAvailable
     property bool isEnterprise: showSecurityChoice && wifiSecureMode === "enterprise"
+        // "personal" | "enterprise"
+    property string wifiSecureMode: isEnterprise ? "enterprise" : "personal"
     property bool showUsername: isEnterprise
     onShowSecurityChoiceChanged: rebuildFocusOrder()
     onIsEnterpriseChanged: rebuildFocusOrder()
@@ -63,6 +63,14 @@ WizardStepBase {
         return ""
     }
     readonly property string caErrorText: wifiCaSource === "file" ? caCertificateError : caSystemPathError
+
+    property string originalSavedSecureMode: "personal" 
+    
+    function canKeepSavedPassword() {
+        return hadSavedPassword
+            && ssidUnchanged(fieldWifiSSID.value, originalSavedSSID)
+            && (isEnterprise ? "enterprise" : "personal") === originalSavedSecureMode
+    }
 
     function loadCaCertificate(fileUrlOrPath) {
         var pem = ImageWriterSingleton.readWifiCaCertificate(fileUrlOrPath)
@@ -178,6 +186,9 @@ WizardStepBase {
         }
 
         originalSavedSSID = settings.wifiSSID || ""
+
+        originalSavedSecureMode = settings.wifiSecureMode || "personal"
+
         // Remember if a passphrase is already saved (affects placeholder/keep
         // semantics and keychain auto-prefill).
         hadSavedPassword = !!settings.wifiPassword
@@ -260,7 +271,7 @@ WizardStepBase {
 
         // secure
         fieldWifiPassword.enabled = true
-        var canKeep = hadSavedPassword && ssidUnchanged(ssid, prevSSID)
+        var canKeep = canKeepSavedPassword()
         fieldWifiPassword.placeholderText = canKeep
            ? qsTr("Saved (hidden) — leave blank to keep")
            : (isEnterprise ? qsTr("Account password") : qsTr("Network password"))
@@ -271,7 +282,7 @@ WizardStepBase {
 
         // Gather state
         var ssidNow = fieldWifiSSID.value;
-        var canKeep = hadSavedPassword && ssidUnchanged(ssidNow, originalSavedSSID);
+        var canKeep = canKeepSavedPassword();
         var pwd = fieldWifiPassword.text || "";
         var conf = fieldWifiPasswordConfirm.text || "";
 
@@ -623,7 +634,7 @@ WizardStepBase {
                         text: CommonStrings.password
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword()
                             if (root.isEnterprise) {
                                 return canKeep
                                     ? qsTr("Enter a new password for your Enterprise account, or leave blank to keep the previously saved password.")
@@ -658,7 +669,7 @@ WizardStepBase {
                         text: qsTr("Confirm password:")
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword()
                             return canKeep 
                                 ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
                                 : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
@@ -671,7 +682,7 @@ WizardStepBase {
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         placeholderText: {
-                            var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword()
                             return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                         }
                         visible: root.showPw
@@ -781,7 +792,7 @@ WizardStepBase {
 
         // secure / closed mode
         var ssidNow = fieldWifiSSID.value
-        var canKeep = hadSavedPassword && ssidUnchanged(ssidNow, originalSavedSSID)
+        var canKeep = canKeepSavedPassword()
         var pwd = fieldWifiPassword.text || ""
 
         // If we *can* keep and user left blank, OK
