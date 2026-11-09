@@ -1112,6 +1112,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
             push(QStringLiteral("          auth:"), netcfg);
             push(QStringLiteral("            key-management: eap"), netcfg);
             push(QStringLiteral("            method: peap"), netcfg);
+            push(QStringLiteral("            phase2-auth: mschapv2"), netcfg);
             push(QStringLiteral("            identity: \"") + yamlEscapeString(username) + QStringLiteral("\""), netcfg);
             push(QStringLiteral("            password: \"") + yamlEscapeString(wifiPassphrase) + QStringLiteral("\""), netcfg);
         } 

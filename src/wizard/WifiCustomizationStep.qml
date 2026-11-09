@@ -524,7 +524,7 @@ WizardStepBase {
 
         // Need a new password -> must be valid and must match confirm (like user customization step)
         if (pwd.length === 0) return false
-        if (!root.isValidWifiPassword(pwd)) return false
+        if (root.wifiSecureMode !== "enterprise" && !root.isValidWifiPassword(pwd)) return false
 
         // Always check that passwords match
         if (pwd !== (fieldWifiPasswordConfirm.text || "")) return false
