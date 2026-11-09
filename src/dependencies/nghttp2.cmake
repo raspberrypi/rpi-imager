@@ -15,6 +15,16 @@ if(NOT nghttp2_POPULATED)
     FetchContent_Populate(nghttp2)
     add_subdirectory(${nghttp2_SOURCE_DIR} ${nghttp2_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+rpi_imager_sbom_add_component(nghttp2
+    VERSION "${NGHTTP2_VERSION}"
+    SUPPLIER "nghttp2 project"
+    VCS_URL "https://github.com/nghttp2/nghttp2.git"
+    GIT_TAG "v${NGHTTP2_VERSION}"
+    SOURCE_DIR "${nghttp2_SOURCE_DIR}"
+    LICENSE "MIT"
+    PURL "pkg:github/nghttp2/nghttp2@v${NGHTTP2_VERSION}"
+    CPE "cpe:2.3:a:nghttp2:nghttp2:${NGHTTP2_VERSION}:*:*:*:*:*:*:*"
+    USED_BY curl)
 unset(ENABLE_LIB_ONLY)
 unset(ENABLE_FAILMALLOC)
 unset(BUILD_EXAMPLES)

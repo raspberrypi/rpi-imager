@@ -21,6 +21,16 @@ if(NOT zlib_POPULATED)
     FetchContent_Populate(zlib)
     add_subdirectory(${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+rpi_imager_sbom_add_component(zlib
+    VERSION "${ZLIB_VERSION}"
+    SUPPLIER "zlib project"
+    VCS_URL "https://github.com/madler/zlib.git"
+    GIT_TAG "v${ZLIB_VERSION}"
+    SOURCE_DIR "${zlib_SOURCE_DIR}"
+    LICENSE "Zlib"
+    PURL "pkg:github/madler/zlib@v${ZLIB_VERSION}"
+    CPE "cpe:2.3:a:zlib:zlib:${ZLIB_VERSION}:*:*:*:*:*:*:*"
+    USED_BY rpi-imager libarchive curl)
 unset(ZLIB_BUILD_EXAMPLES)
 unset(ZLIB_BUILD_SHARED)
 unset(ZLIB_BUILD_STATIC)

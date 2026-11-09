@@ -100,4 +100,49 @@ add_definitions(-DHAVE_GNUTLS)
 # libusb requires libudev for rpiboot support
 pkg_check_modules(UDEV REQUIRED libudev)
 
+# Dynamically linked system libraries, at the versions found here. idn2 and
+# nettle are named directly in EXTRALIBS, so pkg-config is asked separately.
+pkg_check_modules(_RPI_SBOM_IDN2 QUIET libidn2)
+pkg_check_modules(_RPI_SBOM_NETTLE QUIET nettle)
+if(GNUTLS_VERSION)
+    set(_rpi_gnutls_version "${GNUTLS_VERSION}")
+else()
+    set(_rpi_gnutls_version "${GNUTLS_VERSION_STRING}")
+endif()
+set(_rpi_sbom_system ORIGIN "system library, version as found at configure time")
+set(_rpi_sbom_users USED_BY rpi-imager rpi-imager-writer)
+rpi_imager_sbom_add_component(gnutls
+    NAME "GnuTLS"
+    VERSION "${_rpi_gnutls_version}"
+    SUPPLIER "GnuTLS project"
+    LICENSE "LGPL-2.1-or-later"
+    CPE "cpe:2.3:a:gnu:gnutls:${_rpi_gnutls_version}:*:*:*:*:*:*:*"
+    ${_rpi_sbom_system} ${_rpi_sbom_users})
+rpi_imager_sbom_add_component(libidn2
+    VERSION "${_RPI_SBOM_IDN2_VERSION}"
+    SUPPLIER "GNU Project"
+    LICENSE "LGPL-3.0-or-later OR GPL-2.0-or-later"
+    CPE "cpe:2.3:a:gnu:libidn2:${_RPI_SBOM_IDN2_VERSION}:*:*:*:*:*:*:*"
+    ${_rpi_sbom_system})
+rpi_imager_sbom_add_component(nettle
+    VERSION "${_RPI_SBOM_NETTLE_VERSION}"
+    SUPPLIER "Nettle project"
+    LICENSE "LGPL-3.0-or-later OR GPL-2.0-or-later"
+    CPE "cpe:2.3:a:nettle_project:nettle:${_RPI_SBOM_NETTLE_VERSION}:*:*:*:*:*:*:*"
+    ${_rpi_sbom_system})
+rpi_imager_sbom_add_component(libudev
+    VERSION "${UDEV_VERSION}"
+    SUPPLIER "systemd project"
+    LICENSE "LGPL-2.1-or-later"
+    CPE "cpe:2.3:a:systemd_project:systemd:${UDEV_VERSION}:*:*:*:*:*:*:*"
+    ${_rpi_sbom_system} ${_rpi_sbom_users})
+# The helper library links liburing whenever it is found, usable or not.
+if(LIBURING_USABLE OR (LIBURING_FOUND AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER))
+    rpi_imager_sbom_add_component(liburing
+        VERSION "${LIBURING_VERSION}"
+        SUPPLIER "liburing project"
+        LICENSE "LGPL-2.1-only OR MIT"
+        ${_rpi_sbom_system} ${_rpi_sbom_users})
+endif()
+
 

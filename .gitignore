@@ -46,6 +46,10 @@ debian/com.raspberrypi.rpi-imager.metainfo.xml
 /debroot-embedded-*
 /rpi-imager-embedded*.deb
 
+# SBOMs published beside the artefacts above, and their staged links
+/*.spdx.json
+/*.cdx.json
+
 # Qt related
 # build-qt*.sh creates these as $PWD/qt-src and $PWD/qt-build[-suffix], so they
 # land wherever the script was run from -- usually qt/, per the READMEs. Hence

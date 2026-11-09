@@ -737,6 +737,110 @@ appimage_deploy_lib_closure() {
 		"$_appdir" appimage_lib_excluded "$(deploy_lib_search_dirs "${2:-}")"
 }
 
+# Debian package owning a library file. Tries the /usr-merged spelling too,
+# since dpkg records whichever path the package shipped.
+sbom_dpkg_owner() {
+	command -v dpkg >/dev/null 2>&1 || return 1
+	_so=$(readlink -f "$1" 2>/dev/null || printf '%s' "$1")
+	case "$_so" in
+	/usr/*) _so_alt=${_so#/usr} ;;
+	*) _so_alt=/usr$_so ;;
+	esac
+	for _so_c in "$_so" "$_so_alt"; do
+		_so_o=$(dpkg -S "$_so_c" 2>/dev/null | grep -v '^diversion' | head -n 1)
+		[ -n "$_so_o" ] || continue
+		printf '%s\n' "${_so_o%%[,:]*}"
+		return 0
+	done
+	return 1
+}
+
+# Bundled-library manifest for src/cmake/GenerateSbom.cmake: for each shared
+# object under $1, its path and, where dpkg can place the same soname on this
+# system, the package, version, supplier and purl, tab-separated. Qt's files
+# are left for the generator to classify.
+sbom_bundled_manifest() {
+	_sm_root=$1
+	_sm_dirs=$(deploy_lib_search_dirs "")
+	_sm_distro=$([ -r /etc/os-release ] && . /etc/os-release; printf '%s' "${ID:-debian}")
+	_sm_supplier=$([ -r /etc/os-release ] && . /etc/os-release; printf '%s' "${NAME:-}")
+	_sm_arch=$(dpkg --print-architecture 2>/dev/null || true)
+	(cd "$_sm_root" && find . -type f \( -name '*.so' -o -name '*.so.*' \)) |
+		sed 's|^\./||' | LC_ALL=C sort |
+		while IFS= read -r _sm_rel; do
+			_sm_base=${_sm_rel##*/}
+			_sm_pkg=""
+			case "$_sm_rel" in
+			*plugins/*|*qml/*|*/libQt6*|libQt6*) ;;
+			*)
+				for _sm_d in $_sm_dirs; do
+					[ -e "$_sm_d/$_sm_base" ] || continue
+					_sm_pkg=$(sbom_dpkg_owner "$_sm_d/$_sm_base") && break
+				done
+				;;
+			esac
+			if [ -z "$_sm_pkg" ]; then
+				printf '%s\t\t\t\t\t\n' "$_sm_rel"
+				continue
+			fi
+			# shellcheck disable=SC2016
+			_sm_ver=$(dpkg-query -W -f='${Version}' "$_sm_pkg" 2>/dev/null | head -n 1)
+			_sm_purl="pkg:deb/$_sm_distro/$_sm_pkg@$(printf '%s' "$_sm_ver" |
+				sed 's/%/%25/g; s/:/%3A/g; s/+/%2B/g')"
+			[ -n "$_sm_arch" ] && _sm_purl="$_sm_purl?arch=$_sm_arch"
+			printf '%s\t%s\t%s\t%s\t%s\t\n' "$_sm_rel" "$_sm_pkg" "$_sm_ver" \
+				"$_sm_supplier" "$_sm_purl"
+		done
+}
+
+# Regenerate the SBOM for a staged package tree so that it also lists what
+# the tree bundles and hashes its files: call it once the tree is final.
+# $1 package root, $2 CMake build directory, $3 SBOM directory under the root,
+# $4 optional file of extra manifest lines (e.g. fonts)
+sbom_package_tree() {
+	_sp_root=$1
+	_sp_build=$2
+	_sp_out=$3
+	_sp_inputs="$_sp_build/sbom/sbom-inputs.cmake"
+	if [ ! -f "$_sp_inputs" ]; then
+		echo "Error: $_sp_inputs missing; the build did not configure the SBOM" >&2
+		return 1
+	fi
+	_sp_manifest="$_sp_build/sbom/bundled.tsv"
+	sbom_bundled_manifest "$_sp_root" > "$_sp_manifest"
+	if [ -n "${4:-}" ]; then
+		cat "$4" >> "$_sp_manifest"
+	fi
+	cmake -DSBOM_INPUTS="$_sp_inputs" \
+		-DSBOM_OUTPUT_DIR="$_sp_out" \
+		-DSBOM_SCAN_ROOT= -DSBOM_SCAN_DIRS= -DSBOM_COPY_DIRS= \
+		-DSBOM_BUNDLE_MANIFEST="$_sp_manifest" \
+		-DSBOM_HASH_ROOT="$_sp_root" -DSBOM_HASH_EXCLUDE= \
+		-DSBOM_LIFECYCLE=post-build \
+		-P "$TOP/src/cmake/GenerateSbom.cmake"
+}
+
+# Write the SBOM beside the artefact $3, named after it, hashing the artefact
+# and the package tree $1 it was made from. Uses sbom_package_tree's manifest.
+# $1 package root, $2 CMake build directory, $3 artefact
+sbom_publish_beside() {
+	_pb_manifest="$2/sbom/bundled.tsv"
+	if [ ! -f "$_pb_manifest" ]; then
+		echo "Error: $_pb_manifest missing; run sbom_package_tree first" >&2
+		return 1
+	fi
+	_pb_name=${3##*/}
+	cmake -DSBOM_INPUTS="$2/sbom/sbom-inputs.cmake" \
+		-DSBOM_OUTPUT_DIR="$(dirname "$3")" \
+		-DSBOM_OUTPUT_STEM="${_pb_name%.*}" \
+		-DSBOM_ARTEFACT="$3" \
+		-DSBOM_SCAN_ROOT= -DSBOM_SCAN_DIRS= -DSBOM_COPY_DIRS= \
+		-DSBOM_BUNDLE_MANIFEST="$_pb_manifest" \
+		-DSBOM_HASH_ROOT="$1" -DSBOM_HASH_EXCLUDE= \
+		-DSBOM_LIFECYCLE=post-build \
+		-P "$TOP/src/cmake/GenerateSbom.cmake"
+}
+
 # Complete the closure of the vendored /opt tree.
 #
 # The explicit cp -d list in create-embedded.sh is deliberately curated: this

@@ -425,6 +425,26 @@ if [ "$APPIMAGE_PACKAGING" != pack ]; then
     appimage_deploy_lib_closure "$APPDIR" "$QT_DIR/lib" || exit 1
 fi
 
+export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
+
+# linuxdeploy only deploys here: the SBOM hashes the AppDir, so nothing may
+# change it between the SBOM and packing.
+if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
+export APPIMAGE_EXTRACT_AND_RUN=1
+"$LINUXDEPLOY" --appdir="$APPDIR" \
+    --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
+    --exclude-library="libsystemd*" \
+    --exclude-library="libdbus-*" \
+    --exclude-library="libcap*" \
+    --exclude-library="libwayland-*" \
+    --verbosity=0
+fi
+
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
+    sbom_package_tree "$APPDIR" "$PWD/$BUILD_DIR" \
+        "$APPDIR/usr/share/doc/rpi-imager/sbom" || exit 1
+fi
+
 if [ "$APPIMAGE_PACKAGING" = build ]; then
     prepare_appdir_for_appimagetool "$APPDIR" com.raspberrypi.rpi-imager
     echo "create-appimage: build stage complete (AppDir at $APPDIR)"
@@ -436,30 +456,7 @@ echo "Creating AppImage..."
 rm -f "$PWD/rpi-imager-desktop-$ARCH.AppImage"
 rm -f "$PWD/rpi-imager-$ARCH.AppImage"
 
-export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
-
-if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
-export APPIMAGE_EXTRACT_AND_RUN=1
-"$LINUXDEPLOY" --appdir="$APPDIR" \
-    --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
-    --exclude-library="libsystemd*" \
-    --exclude-library="libdbus-*" \
-    --exclude-library="libcap*" \
-    --exclude-library="libwayland-*" \
-    --output=appimage \
-    --verbosity=0
-
-LINUXDEPLOY_OUTPUT="Raspberry_Pi_Imager-${ARCH}.AppImage"
-if [ -f "$LINUXDEPLOY_OUTPUT" ]; then
-    echo "Renaming '$LINUXDEPLOY_OUTPUT' to '$(basename "$OUTPUT_FILE")'"
-    mv "$LINUXDEPLOY_OUTPUT" "$OUTPUT_FILE"
-elif [ -f "$OUTPUT_FILE" ]; then
-    echo "Output file already exists: $OUTPUT_FILE"
-else
-    echo "Warning: Expected linuxdeploy output '$LINUXDEPLOY_OUTPUT' not found"
-    ls -la ./*.AppImage 2>/dev/null || true
-fi
-elif [ -n "${APPIMAGETOOL:-}" ] && [ -f "$APPIMAGETOOL" ]; then
+if [ -n "${APPIMAGETOOL:-}" ] && [ -f "$APPIMAGETOOL" ]; then
     appimage_pack_with_tool "$APPIMAGETOOL" "$APPDIR" "$OUTPUT_FILE" \
         "$ARCH" "$TOOL_ARCH" com.raspberrypi.rpi-imager || exit 1
 else
@@ -501,6 +498,8 @@ if [ -n "${RPI_IMAGER_APPIMAGE_SIGN_KEY:-}" ]; then
     fi
     echo "Signed AppImage at $OUTPUT_FILE"
 fi
+
+sbom_publish_beside "$APPDIR" "$PWD/$BUILD_DIR" "$OUTPUT_FILE" || exit 1
 
 # Create symlinks for debian packaging and user convenience
 # Primary symlink matches debian/rpi-imager.install expectations

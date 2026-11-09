@@ -115,6 +115,8 @@ Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-callback-relay.exe"; DestDir: "{ap
 ; RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON (skipifsourcedoesntexist).
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-writer.exe"; DestDir: "{app}"; Flags: ignoreversion signonce skipifsourcedoesntexist
 Source: "@CMAKE_BINARY_DIR@\deploy\license.txt"; DestDir: "{app}"; Flags: ignoreversion
+; SPDX and CycloneDX SBOMs, written by the rpi_imager_sbom build target.
+Source: "@CMAKE_BINARY_DIR@\deploy\sbom\*.json"; DestDir: "{app}\sbom"; Flags: ignoreversion
 
 ; Core DLLs
 Source: "@CMAKE_BINARY_DIR@\deploy\D3Dcompiler_47.dll"; DestDir: "{app}"; Flags: ignoreversion

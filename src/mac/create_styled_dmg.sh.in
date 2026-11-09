@@ -156,7 +156,22 @@ if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNIN
     else
         echo "Note: no privileged helper found at $HELPER_PATH (skipping)"
     fi
+fi
 
+# Sealing the bundle covers the SBOM, so it is written between the two
+# signing passes; the main executable and CodeResources change after it.
+"@CMAKE_COMMAND@" -DSBOM_INPUTS="@RPI_IMAGER_SBOM_INPUTS@" \
+    -DSBOM_HASH_ROOT="$DMG_APP_PATH" \
+    -DSBOM_SCAN_ROOT="$DMG_APP_PATH/Contents" \
+    -DSBOM_COPY_DIRS="$DMG_APP_PATH/Contents/Resources/sbom" \
+    -DSBOM_HASH_EXCLUDE="Contents/MacOS/${PROJECT_NAME};Contents/_CodeSignature/CodeResources" \
+    -DSBOM_LIFECYCLE=post-build \
+    -P "@RPI_IMAGER_SBOM_GENERATOR@" || {
+    echo "Error: failed to write the SBOM"
+    exit 1
+}
+
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
     # Sign the main app bundle
     echo "Signing main app bundle: $DMG_APP_PATH"
     
@@ -354,6 +369,21 @@ if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_P
     fi
  fi
  
+ # Last, as stapling changes the DMG, and before the bundle it hashes goes.
+ _dmg_name=$(basename "$FINAL_DMG_PATH")
+ "@CMAKE_COMMAND@" -DSBOM_INPUTS="@RPI_IMAGER_SBOM_INPUTS@" \
+     -DSBOM_HASH_ROOT="$DMG_APP_PATH" \
+     -DSBOM_SCAN_ROOT="$DMG_APP_PATH/Contents" \
+     -DSBOM_COPY_DIRS= -DSBOM_HASH_EXCLUDE= \
+     -DSBOM_OUTPUT_DIR="$(dirname "$FINAL_DMG_PATH")" \
+     -DSBOM_OUTPUT_STEM="${_dmg_name%.dmg}" \
+     -DSBOM_ARTEFACT="$FINAL_DMG_PATH" \
+     -DSBOM_LIFECYCLE=post-build \
+     -P "@RPI_IMAGER_SBOM_GENERATOR@" || {
+     echo "Error: failed to write the SBOM beside the DMG"
+     exit 1
+ }
+
  # Clean up temporary app bundle copy
  echo "Cleaning up temporary app bundle..."
  rm -rf "$DMG_APP_PATH"

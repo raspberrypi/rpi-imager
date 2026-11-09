@@ -227,6 +227,8 @@ file(WRITE "${_dmg_extra_vars}"
     "set(IMAGER_SIGNING_IDENTITY \"${IMAGER_SIGNING_IDENTITY}\")\n"
     "set(IMAGER_NOTARIZE_APP \"${IMAGER_NOTARIZE_APP}\")\n"
     "set(IMAGER_NOTARIZE_KEYCHAIN_PROFILE \"${IMAGER_NOTARIZE_KEYCHAIN_PROFILE}\")\n"
+    "set(RPI_IMAGER_SBOM_INPUTS \"${RPI_IMAGER_SBOM_INPUTS}\")\n"
+    "set(RPI_IMAGER_SBOM_GENERATOR \"${RPI_IMAGER_SBOM_GENERATOR}\")\n"
 )
 
 if(IMAGER_SIGNED_APP)
@@ -285,6 +287,24 @@ else()
         COMMENT "Creating macOS DMG"
         VERBATIM)
 endif()
+
+    # The bundle carries the SBOM in Contents/Resources/sbom. The signed path
+    # rewrites it, and writes the copy beside the DMG, in create_styled_dmg.sh.
+    add_dependencies(dmg rpi_imager_sbom)
+    if(NOT IMAGER_SIGNED_APP)
+        set(_dmg_stem "${APP_NAME}-@IMAGER_VERSION_STR@")
+        add_custom_command(TARGET dmg POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                "-DSBOM_INPUTS=${RPI_IMAGER_SBOM_INPUTS}"
+                "-DSBOM_COPY_DIRS="
+                "-DSBOM_OUTPUT_DIR=${CMAKE_BINARY_DIR}"
+                "-DSBOM_OUTPUT_STEM=${_dmg_stem}"
+                "-DSBOM_ARTEFACT=${CMAKE_BINARY_DIR}/${_dmg_stem}.dmg"
+                "-DSBOM_LIFECYCLE=post-build"
+                -P "${RPI_IMAGER_SBOM_GENERATOR}"
+            COMMENT "Writing the SBOM beside the DMG"
+            VERBATIM)
+    endif()
 
     message(STATUS "Added 'dmg' target to build the macOS DMG installer")
 endif() # BUILD_CLI_ONLY

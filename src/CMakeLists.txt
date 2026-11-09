@@ -280,6 +280,8 @@ set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
 
 include(FetchContent)
+# Before any dependency, so each can register itself for the SBOM.
+include(cmake/sbom.cmake)
 include(dependencies/fetch-vendor.cmake)
 
 # Bundled liblzma
@@ -309,6 +311,14 @@ if(APPLE)
     find_package(CURL REQUIRED)
     # Normalize variable naming used later in include_directories
     set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    rpi_imager_sbom_add_component(curl-macos-sdk
+        NAME "libcurl (macOS SDK)"
+        VERSION "${CURL_VERSION_STRING}"
+        SUPPLIER "Apple Inc."
+        LICENSE "curl"
+        CPE "cpe:2.3:a:haxx:libcurl:${CURL_VERSION_STRING}:*:*:*:*:*:*:*"
+        ORIGIN "system library from the macOS SDK"
+        DESCRIPTION "Dynamically linked from the operating system")
     
     # Note: No need to find OpenSSL on macOS - we use native Security.framework
     # for RSA operations and CommonCrypto for hashing
@@ -425,6 +435,22 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "privileged_helper_diagnostic.cpp"
     "file_operations_benchmark.cpp")
 
+rpi_imager_sbom_add_component(qrcodegen
+    NAME "QR Code generator library (C++)"
+    SUPPLIER "Project Nayuki"
+    VCS_URL "https://github.com/nayuki/QR-Code-generator.git"
+    COMMIT "3c6d0b3cefb4"
+    LICENSE "MIT"
+    PURL "pkg:github/nayuki/QR-Code-generator@3c6d0b3cefb4"
+    ORIGIN "source copy in src/dependencies/qrcodegen")
+rpi_imager_sbom_add_component(sha256crypt
+    NAME "SHA-crypt (SHA-256)"
+    SUPPLIER "Person: Ulrich Drepper"
+    DOWNLOAD_LOCATION "https://www.akkadia.org/drepper/SHA-crypt.txt"
+    LICENSE "LicenseRef-Public-Domain"
+    LICENSE_TEXT "Released into the public domain by its author."
+    ORIGIN "source copy in src/dependencies/sha256crypt")
+
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
     # CLI builds need imagewriter but not the GUI components
@@ -500,6 +526,24 @@ if(${QT}WinExtras_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)
 endif()
 
+# Keep in step with the target_link_libraries() calls below.
+if(BUILD_CLI_ONLY)
+    rpi_imager_sbom_add_qt(Core Network)
+elseif(UNIX AND NOT APPLE AND NOT BUILD_EMBEDDED)
+    rpi_imager_sbom_add_qt(Core Gui Qml Quick Svg Network DBus)
+else()
+    rpi_imager_sbom_add_qt(Core Gui Qml Quick Svg Network)
+endif()
+if(NOT BUILD_CLI_ONLY)
+    rpi_imager_sbom_add_component(roboto
+        NAME "Roboto"
+        SUPPLIER "Google LLC"
+        VCS_URL "https://github.com/googlefonts/roboto.git"
+        LICENSE "Apache-2.0"
+        TYPE data
+        ORIGIN "font files in src/fonts, compiled into the Qt resources")
+endif()
+
 # Find all translation files automatically
 file(GLOB TRANSLATIONS CONFIGURE_DEPENDS "i18n/*.ts")
 
@@ -549,6 +593,15 @@ if(GENERATE_TIMEZONES_FROM_IANA)
             -DTZDATA_DIR=${CMAKE_CURRENT_BINARY_DIR}/tzdata
     )
     list(APPEND SOURCES "${GENERATED_TZ_QRC}")
+    rpi_imager_sbom_add_component(tzdata
+        NAME "tzdata"
+        VERSION "${TZDATA_VERSION}"
+        SUPPLIER "IANA"
+        DOWNLOAD_LOCATION "${TZDATA_URL}"
+        LICENSE "LicenseRef-Public-Domain"
+        LICENSE_TEXT "Released into the public domain by its author."
+        TYPE data
+        DESCRIPTION "Time zone names, or the source-tree list when the download fails")
 endif()
 
 option(GENERATE_COUNTRIES_FROM_REGDB "Generate countries list from latest wireless-regdb" ON)
@@ -565,6 +618,14 @@ if(GENERATE_COUNTRIES_FROM_REGDB)
         EXTRA_CMAKE_ARGS -DREGDB_URL=${REGDB_URL}
     )
     list(APPEND SOURCES "${GENERATED_COUNTRIES_QRC}")
+    rpi_imager_sbom_add_component(wireless-regdb
+        NAME "wireless-regdb"
+        SUPPLIER "wireless-regdb maintainers"
+        DOWNLOAD_LOCATION "${REGDB_URL}"
+        VCS_URL "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git"
+        LICENSE "ISC"
+        TYPE data
+        DESCRIPTION "Country list from db.txt at build time, or the source-tree list when the download fails")
 endif()
 
 # Create the application target before tools reference it
@@ -730,6 +791,9 @@ if(NOT BUILD_CLI_ONLY)
         NO_PLUGIN
     )
 endif()
+
+# Defined before packaging so the platform hooks can depend on it.
+rpi_imager_sbom_add_target(${PROJECT_NAME})
 
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)

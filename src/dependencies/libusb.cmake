@@ -11,6 +11,16 @@ FetchContent_GetProperties(libusb)
 if(NOT libusb_POPULATED)
     FetchContent_Populate(libusb)
 endif()
+rpi_imager_sbom_add_component(libusb
+    VERSION "${LIBUSB_VERSION}"
+    SUPPLIER "libusb project"
+    VCS_URL "https://github.com/libusb/libusb.git"
+    GIT_TAG "v${LIBUSB_VERSION}"
+    SOURCE_DIR "${libusb_SOURCE_DIR}"
+    LICENSE "LGPL-2.1-or-later"
+    PURL "pkg:github/libusb/libusb@v${LIBUSB_VERSION}"
+    CPE "cpe:2.3:a:libusb:libusb:${LIBUSB_VERSION}:*:*:*:*:*:*:*"
+    DESCRIPTION "Built by src/dependencies/libusb-cmake")
 
 # libusb doesn't have native CMake support, so we use our own wrapper
 add_subdirectory(dependencies/libusb-cmake EXCLUDE_FROM_ALL)

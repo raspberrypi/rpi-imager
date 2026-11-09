@@ -382,23 +382,11 @@ fi
 cd "$SAVED_DIR"
 fi
 
-if [ "$APPIMAGE_PACKAGING" = build ]; then
-    prepare_appdir_for_appimagetool "$APPDIR" com.raspberrypi.rpi-imager-cli
-    echo "create-appimage-cli: build stage complete (AppDir at $APPDIR)"
-    exit 0
-fi
-
-echo "Creating CLI-only AppImage..."
-# Remove old symlinks for CLI variant only
-rm -f "$PWD/rpi-imager-cli.AppImage"
-rm -f "$PWD/rpi-imager-cli-$ARCH.AppImage"
-
+# linuxdeploy only deploys here: the SBOM hashes the AppDir, so nothing may
+# change it between the SBOM and packing.
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
-    # Create AppImage using linuxdeploy
-    # Explicitly specify the desktop file to ensure correct naming
     LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" \
         --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-cli.desktop" \
-        --output=appimage \
         --exclude-library="libwayland-*" \
         --exclude-library="libX11*" \
         --exclude-library="libxcb*" \
@@ -414,21 +402,25 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] 
     # It must come from the host system to work with lsblk/libmount/DBus
     # (see https://github.com/raspberrypi/rpi-imager/issues/1304, #1577)
     rm -f "$APPDIR/usr/lib/libsystemd"*
+fi
 
-    # Rename the output file from linuxdeploy's default name to our versioned name
-    # linuxdeploy creates: Raspberry_Pi_Imager_(CLI)-${ARCH}.AppImage (based on Name= in desktop file)
-    LINUXDEPLOY_OUTPUT="Raspberry_Pi_Imager_(CLI)-${ARCH}.AppImage"
-    if [ -f "$LINUXDEPLOY_OUTPUT" ]; then
-        echo "Renaming '$LINUXDEPLOY_OUTPUT' to '$(basename "$OUTPUT_FILE")'"
-        mv "$LINUXDEPLOY_OUTPUT" "$OUTPUT_FILE"
-    elif [ -f "$OUTPUT_FILE" ]; then
-        echo "Output file already exists: $OUTPUT_FILE"
-    else
-        echo "Warning: Expected linuxdeploy output '$LINUXDEPLOY_OUTPUT' not found"
-        echo "Looking for any matching AppImage..."
-        ls -la ./*.AppImage 2>/dev/null || true
-    fi
-elif [ -n "${APPIMAGETOOL:-}" ] && [ -f "$APPIMAGETOOL" ]; then
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
+    sbom_package_tree "$APPDIR" "$PWD/$BUILD_DIR" \
+        "$APPDIR/usr/share/doc/rpi-imager-cli/sbom" || exit 1
+fi
+
+if [ "$APPIMAGE_PACKAGING" = build ]; then
+    prepare_appdir_for_appimagetool "$APPDIR" com.raspberrypi.rpi-imager-cli
+    echo "create-appimage-cli: build stage complete (AppDir at $APPDIR)"
+    exit 0
+fi
+
+echo "Creating CLI-only AppImage..."
+# Remove old symlinks for CLI variant only
+rm -f "$PWD/rpi-imager-cli.AppImage"
+rm -f "$PWD/rpi-imager-cli-$ARCH.AppImage"
+
+if [ -n "${APPIMAGETOOL:-}" ] && [ -f "$APPIMAGETOOL" ]; then
     appimage_pack_with_tool "$APPIMAGETOOL" "$APPDIR" "$OUTPUT_FILE" \
         "$ARCH" "$TOOL_ARCH" com.raspberrypi.rpi-imager-cli || exit 1
 else
@@ -443,6 +435,7 @@ fi
 
 if [ -f "$OUTPUT_FILE" ]; then
     echo "CLI-only AppImage created at $OUTPUT_FILE"
+    sbom_publish_beside "$APPDIR" "$PWD/$BUILD_DIR" "$OUTPUT_FILE" || exit 1
     
     # Create symlinks for debian packaging and user convenience
     # Primary symlink matches debian/rpi-imager-cli.install expectations

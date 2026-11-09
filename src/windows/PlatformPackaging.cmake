@@ -229,6 +229,21 @@ if(ENABLE_INNO_INSTALLER)
                 COMMENT "Building Inno Setup installer"
                 VERBATIM)
         endif()
+        # deploy/sbom, which the installer ships, hashes deploy/ once POST_BUILD
+        # has signed it; signonce then leaves those files alone. The copy
+        # beside the installer also hashes the installer.
+        add_dependencies(inno_installer rpi_imager_sbom)
+        add_custom_command(TARGET inno_installer POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                "-DSBOM_INPUTS=${RPI_IMAGER_SBOM_INPUTS}"
+                "-DSBOM_COPY_DIRS="
+                "-DSBOM_OUTPUT_DIR=${CMAKE_BINARY_DIR}/installer"
+                "-DSBOM_OUTPUT_STEM=imager-@IMAGER_VERSION_STR@"
+                "-DSBOM_ARTEFACT=${CMAKE_BINARY_DIR}/installer/imager-@IMAGER_VERSION_STR@.exe"
+                "-DSBOM_LIFECYCLE=post-build"
+                -P "${RPI_IMAGER_SBOM_GENERATOR}"
+            COMMENT "Writing the SBOM beside the installer"
+            VERBATIM)
         message(STATUS "Added 'inno_installer' target to build the Inno Setup installer")
     else()
         message(WARNING "Inno Setup compiler not found. Install Inno Setup from https://jrsoftware.org/isinfo.php")

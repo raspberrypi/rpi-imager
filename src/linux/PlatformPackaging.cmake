@@ -33,6 +33,16 @@ add_dependencies(${PROJECT_NAME} generate_metainfo)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
+# The packaging scripts regenerate these in place once the bundled libraries
+# are known (debian/lib.sh: sbom_package_tree).
+if(BUILD_CLI_ONLY)
+    set(_sbom_doc_dir share/doc/rpi-imager-cli/sbom)
+else()
+    set(_sbom_doc_dir share/doc/rpi-imager/sbom)
+endif()
+install(DIRECTORY "${RPI_IMAGER_SBOM_DIR}/" DESTINATION ${_sbom_doc_dir}
+    FILES_MATCHING PATTERN "*.spdx.json" PATTERN "*.cdx.json")
+
 # Install udev rules granting unprivileged USB access to rpiboot/fastboot
 # devices (a CM in rpiboot boot mode, and the fastboot gadget it re-enumerates
 # into). Without these, libusb_open() fails for non-root users and the device

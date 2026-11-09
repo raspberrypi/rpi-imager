@@ -30,6 +30,17 @@ if(NOT xz_POPULATED)
     FetchContent_Populate(xz)
     add_subdirectory(${xz_SOURCE_DIR} ${xz_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+rpi_imager_sbom_add_component(xz
+    NAME "liblzma (XZ Utils)"
+    VERSION "${LIBLZMA_VERSION}"
+    SUPPLIER "Tukaani Project"
+    VCS_URL "https://github.com/tukaani-project/xz.git"
+    GIT_TAG "v${LIBLZMA_VERSION}"
+    SOURCE_DIR "${xz_SOURCE_DIR}"
+    LICENSE "0BSD"
+    PURL "pkg:github/tukaani-project/xz@v${LIBLZMA_VERSION}"
+    CPE "cpe:2.3:a:tukaani:xz:${LIBLZMA_VERSION}:*:*:*:*:*:*:*"
+    USED_BY rpi-imager libarchive)
 unset(XZ_MICROLZMA_DECODER)
 unset(XZ_MICROLZMA_ENCODER)
 unset(XZ_LZIP_DECODER)

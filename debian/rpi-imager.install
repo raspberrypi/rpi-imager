@@ -5,6 +5,14 @@
 [linux-arm64] rpi-imager-aarch64.AppImage => /usr/bin/rpi-imager
 [linux-armhf] rpi-imager-armhf.AppImage => /usr/bin/rpi-imager
 
+# SBOMs of the AppImage above, staged by debian/stage-appimages.sh
+[linux-amd64] rpi-imager-x86_64.spdx.json => /usr/share/doc/rpi-imager/sbom/rpi-imager.spdx.json
+[linux-amd64] rpi-imager-x86_64.cdx.json => /usr/share/doc/rpi-imager/sbom/rpi-imager.cdx.json
+[linux-arm64] rpi-imager-aarch64.spdx.json => /usr/share/doc/rpi-imager/sbom/rpi-imager.spdx.json
+[linux-arm64] rpi-imager-aarch64.cdx.json => /usr/share/doc/rpi-imager/sbom/rpi-imager.cdx.json
+[linux-armhf] rpi-imager-armhf.spdx.json => /usr/share/doc/rpi-imager/sbom/rpi-imager.spdx.json
+[linux-armhf] rpi-imager-armhf.cdx.json => /usr/share/doc/rpi-imager/sbom/rpi-imager.cdx.json
+
 # Install PolicyKit policy for privilege escalation
 debian/com.raspberrypi.rpi-imager.policy /usr/share/polkit-1/actions/
 debian/com.raspberrypi.rpi-imager.writer.policy /usr/share/polkit-1/actions/

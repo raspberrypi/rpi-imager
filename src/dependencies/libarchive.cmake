@@ -48,6 +48,16 @@ if(NOT libarchive_POPULATED)
     rpi_imager_patch_libarchive("${libarchive_SOURCE_DIR}")
     add_subdirectory(${libarchive_SOURCE_DIR} ${libarchive_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+rpi_imager_sbom_add_component(libarchive
+    VERSION "${LIBARCHIVE_VERSION}"
+    SUPPLIER "libarchive project"
+    VCS_URL "https://github.com/libarchive/libarchive.git"
+    GIT_TAG "v${LIBARCHIVE_VERSION}"
+    SOURCE_DIR "${libarchive_SOURCE_DIR}"
+    LICENSE "BSD-2-Clause"
+    PURL "pkg:github/libarchive/libarchive@v${LIBARCHIVE_VERSION}"
+    CPE "cpe:2.3:a:libarchive:libarchive:${LIBARCHIVE_VERSION}:*:*:*:*:*:*:*"
+    DESCRIPTION "Built with a patched CMakeLists.txt (static zstd detection); see fetch-vendor.cmake")
 
 if (TARGET archive_static AND TARGET ZLIB::ZLIB)
     add_dependencies(archive_static ZLIB::ZLIB)

@@ -36,6 +36,7 @@ function(rpi_imager_fetch_git_or_vendor _name)
 	endif()
 
 	if(_use_vendor)
+		set_property(GLOBAL PROPERTY RPI_IMAGER_SBOM_FETCH_ORIGIN_${_name} "vendored source in src/dependencies/vendor")
 		message(STATUS "Using vendored ${_name} from ${_vendor}")
 		FetchContent_Declare(${_name}
 			SOURCE_DIR "${_vendor}"
@@ -43,6 +44,7 @@ function(rpi_imager_fetch_git_or_vendor _name)
 			${USE_OVERRIDE_FIND_PACKAGE}
 		)
 	else()
+		set_property(GLOBAL PROPERTY RPI_IMAGER_SBOM_FETCH_ORIGIN_${_name} "fetched from git at configure time")
 		FetchContent_Declare(${_name}
 			GIT_REPOSITORY ${_arg_GIT_REPOSITORY}
 			GIT_TAG ${_arg_GIT_TAG}

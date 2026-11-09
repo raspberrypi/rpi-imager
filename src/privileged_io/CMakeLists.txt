@@ -54,6 +54,23 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(protobuf)
+# Only the libprotobuf runtime ships; protoc is a build tool. The macOS helper
+# does not link this library.
+set(_protobuf_users rpi-imager)
+if(NOT APPLE)
+    list(APPEND _protobuf_users rpi-imager-writer)
+endif()
+rpi_imager_sbom_add_component(protobuf
+    NAME "Protocol Buffers (libprotobuf)"
+    VERSION "21.12"
+    SUPPLIER "Google LLC"
+    VCS_URL "https://github.com/protocolbuffers/protobuf.git"
+    GIT_TAG "v21.12"
+    SOURCE_DIR "${protobuf_SOURCE_DIR}"
+    LICENSE "BSD-3-Clause"
+    PURL "pkg:github/protocolbuffers/protobuf@v21.12"
+    ORIGIN "fetched from git at configure time"
+    USED_BY ${_protobuf_users})
 
 # Provide a clean alias for the runtime library, matching the namespace
 # used by modern config-mode protobuf (so call sites can write

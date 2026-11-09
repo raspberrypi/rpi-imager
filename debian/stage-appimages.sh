@@ -114,11 +114,28 @@ link_artifact() {
 	echo "stage-appimages: $dest_name -> $src"
 }
 
+# The SBOMs create-appimage*.sh leave beside each AppImage, staged under the
+# names debian/*.install expect. Missing ones fail the build rather than ship
+# a package without them.
+stage_sbom() {
+	stem="$1"
+	real=$(readlink -f "$2" 2>/dev/null || printf '%s\n' "$2")
+	for fmt in spdx cdx; do
+		side="${real%.AppImage}.$fmt.json"
+		if [ ! -f "$side" ]; then
+			echo "stage-appimages: missing $side; rebuild the AppImage to produce it" >&2
+			return 1
+		fi
+		link_artifact "$stem.$fmt.json" "$side"
+	done
+}
+
 stage_desktop() {
 	img_arch=$(deb_arch_to_image_arch "$(target_deb_arch)")
 	canonical="rpi-imager-${img_arch}.AppImage"
 	src=$(resolve_artifact "$canonical" "Raspberry_Pi_Imager-*-desktop-${img_arch}.AppImage")
 	link_artifact "$canonical" "$src"
+	stage_sbom "rpi-imager-${img_arch}" "$src"
 }
 
 stage_cli() {
@@ -126,6 +143,7 @@ stage_cli() {
 	canonical="rpi-imager-cli-${img_arch}.AppImage"
 	src=$(resolve_artifact "$canonical" "Raspberry_Pi_Imager-*-cli-${img_arch}.AppImage")
 	link_artifact "$canonical" "$src"
+	stage_sbom "rpi-imager-cli-${img_arch}" "$src"
 }
 
 case "$PROFILE" in

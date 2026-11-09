@@ -18,6 +18,17 @@ if(NOT zstd_POPULATED)
     FetchContent_Populate(zstd)
     add_subdirectory(${zstd_SOURCE_DIR}/build/cmake ${zstd_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+rpi_imager_sbom_add_component(zstd
+    NAME "Zstandard"
+    VERSION "${ZSTD_VERSION}"
+    SUPPLIER "Meta Platforms, Inc."
+    VCS_URL "https://github.com/facebook/zstd.git"
+    GIT_TAG "v${ZSTD_VERSION}"
+    SOURCE_DIR "${zstd_SOURCE_DIR}"
+    LICENSE "BSD-3-Clause OR GPL-2.0-only"
+    PURL "pkg:github/facebook/zstd@v${ZSTD_VERSION}"
+    CPE "cpe:2.3:a:facebook:zstandard:${ZSTD_VERSION}:*:*:*:*:*:*:*"
+    USED_BY rpi-imager libarchive curl)
 unset(ZSTD_BUILD_PROGRAMS)
 unset(ZSTD_BUILD_SHARED)
 unset(ZSTD_BUILD_STATIC)
