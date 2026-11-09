@@ -54,6 +54,11 @@ ApplicationWindow {
     Component.onCompleted: {
         // Set the main window for modal file dialogs
         ImageWriterSingleton.setMainWindow(window)
+        // Initial privileged-helper-state evaluation: the C++ constructor
+        // probes state before QML is wired, so a startup with the helper
+        // already disabled produces no transition for Connections to fire
+        // on. Evaluate once here so the dialog opens at launch when needed.
+        window._evaluatePrivilegedHelperState()
     }
 
     onClosing: function (close) {
@@ -354,6 +359,63 @@ ApplicationWindow {
         }
         onRejected: {
             ImageWriterSingleton.keychainPermissionResponse(false);
+        }
+    }
+
+    // Privileged-helper UX (macOS SMAppService). Shown automatically when
+    // the helper isn't ready: first-time install, disabled in Settings,
+    // or registered but unreachable over XPC.
+    PrivilegedHelperDialog {
+        id: privilegedHelperDialog
+        parent: overlayRoot
+        helperState: ImageWriterSingleton ? ImageWriterSingleton.privilegedHelperState
+                                          : ImageWriterSingleton.Unknown
+        onAccepted: {
+            // User confirmed the explainer for first-time install.
+            // The first device-open call from the imager pipeline will
+            // call SMAppService.register() (via XpcFileOperations) and
+            // macOS will surface its native prompt. We could trigger it
+            // proactively here but that creates a chicken-and-egg with
+            // queryHelperStatus' caching; deferring to the next open
+            // keeps the flow uniform with returning users.
+        }
+    }
+    function _evaluatePrivilegedHelperState() {
+        if (!ImageWriterSingleton) return
+        const s = ImageWriterSingleton.privilegedHelperState
+        if (s === ImageWriterSingleton.NeedsInstall ||
+            s === ImageWriterSingleton.NeedsApproval ||
+            s === ImageWriterSingleton.Unknown) {
+            if (!privilegedHelperDialog.opened) privilegedHelperDialog.open()
+        } else if (privilegedHelperDialog.opened) {
+            privilegedHelperDialog.close()
+        }
+    }
+    Connections {
+        target: ImageWriterSingleton
+        function onPrivilegedHelperStateChanged() {
+            window._evaluatePrivilegedHelperState()
+        }
+        function onError() {
+            // After any open/write failure, re-probe the helper state.
+            // If the user disabled it from Settings mid-session, this is
+            // how we discover that and surface the right dialog instead
+            // of a bare "Failed to open disk" message.
+            ImageWriterSingleton.refreshPrivilegedHelperState()
+        }
+    }
+    Timer {
+        // While the user is parked on the helper dialog, re-probe
+        // periodically so that enabling it in Settings closes the
+        // dialog without further interaction.
+        interval: 2000
+        repeat: true
+        running: privilegedHelperDialog.opened
+                  && ImageWriterSingleton
+                  && (ImageWriterSingleton.privilegedHelperState === ImageWriterSingleton.NeedsApproval
+                      || ImageWriterSingleton.privilegedHelperState === ImageWriterSingleton.Unknown)
+        onTriggered: {
+            ImageWriterSingleton.refreshPrivilegedHelperState()
         }
     }
 
