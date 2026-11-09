@@ -39,6 +39,8 @@
 #endif
 #include "platformquirks.h"
 #include "userfiles.h"
+#include "privileged_helper_diagnostic.h"
+#include "file_operations_benchmark.h"
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #endif
@@ -567,13 +569,68 @@ int main(int argc, char *argv[])
         {"disable-telemetry", "Disable telemetry (persist setting)"},
         {"enable-telemetry", "Use default telemetry setting (clear override)"},
         {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"},
-        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"}
+        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"},
+        // End-to-end privileged helper diagnostic. Installs the helper via
+        // SMAppService (prompting if needed), opens the given device,
+        // queries its size, optionally writes a 4 KB pattern + verifies,
+        // then exits.
+        {"test-privileged-helper", "Run privileged helper diagnostic against the given device path", "device"},
+        {"test-privileged-helper-allow-write", "When set with --test-privileged-helper, also writes a 4 KB test pattern at offset 0 (DESTRUCTIVE)"},
+        {"test-privileged-helper-bulk", "When set with --test-privileged-helper-allow-write, also exercises the shared-memory bulk write path"},
+        // Throughput benchmark: writes a configurable amount of zero
+        // data through FileOperations::Create() so the platform factory
+        // selection rules apply (env vars control which backend is used).
+        // DESTRUCTIVE - overwrites the start of the target device.
+        {"benchmark-write", "Run FileOperations write-throughput benchmark against the given device (DESTRUCTIVE)", "device"},
+        {"benchmark-size-mb", "Total bytes to write in --benchmark-write mode (default 1024 MiB)", "mb", "1024"},
+        {"benchmark-chunk-kb", "Per-write chunk size in --benchmark-write mode (default 16384 KiB)", "kb", "16384"},
+        {"benchmark-queue-depth", "Async queue depth in --benchmark-write mode (default 8; 1 = synchronous)", "n", "8"},
+        {"benchmark-no-direct-io", "Disable direct I/O in --benchmark-write mode"},
+        {"benchmark-output", "Path to write a JSON performance capture (per-write timings, config, audit-log tail)", "path", ""},
+        {"benchmark-verify", "After writing, also time a verify pass (helper-side SHA-256 when available)"}
     });
 
     // Accept rpi-imager:// callback URLs as positional argument (used by callback relay on Windows)
     // Note: This is NOT for passing image files - use --cli mode for that
     parser.addPositionalArgument("callback-url", "rpi-imager:// callback URL (internal use)", "[callback-url]");
     parser.process(app);
+
+    // Privileged helper end-to-end diagnostic. When invoked, we run the
+    // diagnostic in the foreground (no QML / GUI), print results, and
+    // exit. This is the smallest entry point that demonstrates the
+    // architecture working on someone else's Mac:
+    //
+    //   /Applications/Raspberry\ Pi\ Imager.app/Contents/MacOS/rpi-imager \
+    //       --test-privileged-helper /dev/disk7
+    //
+    // First invocation triggers SMAppService.register() which surfaces
+    // the "Allow in Background?" prompt. After approval, subsequent
+    // invocations open the device through the helper and report
+    // results.
+    if (parser.isSet("test-privileged-helper")) {
+        const QString device_qstr = parser.value("test-privileged-helper");
+        const bool allow_write = parser.isSet("test-privileged-helper-allow-write");
+        const bool exercise_bulk = parser.isSet("test-privileged-helper-bulk");
+        return rpi_imager::runPrivilegedHelperDiagnostic(
+            device_qstr.toStdString(), allow_write, exercise_bulk);
+    }
+
+    // Throughput benchmark. Same factory selection rules as the real
+    // imager pipeline, so the env-var controlled backend choice
+    // (RPI_IMAGER_USE_LEGACY_AUTHOPEN) determines which path is timed.
+    if (parser.isSet("benchmark-write")) {
+        rpi_imager::BenchmarkOptions opts;
+        opts.device_path = parser.value("benchmark-write").toStdString();
+        opts.total_bytes = (std::size_t)parser.value("benchmark-size-mb").toULongLong()
+                            * 1024ull * 1024ull;
+        opts.chunk_bytes = (std::size_t)parser.value("benchmark-chunk-kb").toULongLong()
+                            * 1024ull;
+        opts.queue_depth = parser.value("benchmark-queue-depth").toInt();
+        opts.direct_io   = !parser.isSet("benchmark-no-direct-io");
+        opts.output_path = parser.value("benchmark-output").toStdString();
+        opts.verify_after_write = parser.isSet("benchmark-verify");
+        return rpi_imager::runFileOperationsBenchmark(opts);
+    }
 
 
     const QString repoVal = parser.value("repo");
