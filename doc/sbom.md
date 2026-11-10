@@ -10,6 +10,13 @@ recorded component list:
 `linux-embedded-aarch64`, `windows-x86_64` or `macos-universal`. The CLI build
 is named `rpi-imager-cli-…` instead.
 
+`<arch>` is the compiler's target, taken from its Debian multiarch triplet
+where there is one, never the host kernel's: a VM, chroot or container, or
+32-bit Pi OS on a 64-bit kernel, would otherwise be mislabelled. Imager's own
+components carry it as the purl's `arch` qualifier, and the SPDX root package
+says it in its comment. Bundled Debian libraries take theirs from the package
+dpkg reports as owning them.
+
 Imager links most of its dependencies statically, so a binary scanner such as
 syft cannot see them. The SBOM is therefore built from the build system's own
 metadata: each dependency registers itself in CMake where it is declared.

@@ -764,7 +764,8 @@ sbom_dpkg_owner() {
 	for _so_c in "$_so" "$_so_alt"; do
 		_so_o=$(dpkg -S "$_so_c" 2>/dev/null | grep -v '^diversion' | head -n 1)
 		[ -n "$_so_o" ] || continue
-		printf '%s\n' "${_so_o%%[,:]*}"
+		_so_o=${_so_o%%: /*}
+		printf '%s\n' "${_so_o%%,*}"
 		return 0
 	done
 	return 1
@@ -798,11 +799,18 @@ sbom_bundled_manifest() {
 				printf '%s\t\t\t\t\t\n' "$_sm_rel"
 				continue
 			fi
+			# The owner's own arch, not this system's: they differ when
+			# cross-building against multiarch libraries.
+			_sm_parch=$_sm_arch
+			_sm_query=$_sm_pkg
+			case "$_sm_pkg" in
+			*:*) _sm_parch=${_sm_pkg#*:}; _sm_pkg=${_sm_pkg%%:*} ;;
+			esac
 			# shellcheck disable=SC2016
-			_sm_ver=$(dpkg-query -W -f='${Version}' "$_sm_pkg" 2>/dev/null | head -n 1)
+			_sm_ver=$(dpkg-query -W -f='${Version}' "$_sm_query" 2>/dev/null | head -n 1)
 			_sm_purl="pkg:deb/$_sm_distro/$_sm_pkg@$(printf '%s' "$_sm_ver" |
 				sed 's/%/%25/g; s/:/%3A/g; s/+/%2B/g')"
-			[ -n "$_sm_arch" ] && _sm_purl="$_sm_purl?arch=$_sm_arch"
+			[ -n "$_sm_parch" ] && _sm_purl="$_sm_purl?arch=$_sm_parch"
 			printf '%s\t%s\t%s\t%s\t%s\t\n' "$_sm_rel" "$_sm_pkg" "$_sm_ver" \
 				"$_sm_supplier" "$_sm_purl"
 		done
