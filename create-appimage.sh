@@ -196,9 +196,10 @@ if [ "$APPIMAGE_PACKAGING" = pack ] && [ ! -d "$APPDIR/usr/bin" ]; then
     exit 1
 fi
 
-if [ "$APPIMAGE_PACKAGING" != pack ]; then
-# Set up build directory
+# Set up build directory; the pack stage needs it too for the SBOM
 BUILD_DIR="build-$ARCH"
+
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
 
 # Clean up previous builds if requested
 if [ "$CLEAN_BUILD" -eq 1 ]; then
