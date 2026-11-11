@@ -100,11 +100,14 @@ cleared.
 | Build | Inside the package | Beside the artefact |
 | --- | --- | --- |
 | All | `<build>/sbom/` | |
-| macOS | `Contents/Resources/sbom/` in the app bundle | `<dmg name>.spdx.json`, `.cdx.json` |
-| Windows | `{app}\sbom\` (from `<build>/deploy/sbom/`) | `<build>/installer/imager-<version>.spdx.json`, … |
-| AppImage | `usr/share/doc/rpi-imager[-cli]/sbom/` | `<AppImage name>.spdx.json`, … |
+| macOS | `Contents/Resources/sbom/` in the app bundle | `<name>.dmg.spdx.json`, `.dmg.cdx.json` |
+| Windows | `{app}\sbom\` (from `<build>/deploy/sbom/`) | `<build>/installer/imager-<version>.exe.spdx.json`, … |
+| AppImage | `usr/share/doc/rpi-imager[-cli]/sbom/` | `<name>.AppImage.spdx.json`, … |
 | Debian (desktop, CLI) | `/usr/share/doc/rpi-imager[-cli]/sbom/` | |
-| Embedded `.deb` | `/usr/share/doc/rpi-imager-embedded/sbom/` | `<deb name>.spdx.json`, … |
+| Embedded `.deb` | `/usr/share/doc/rpi-imager-embedded/sbom/` | `<name>.deb.spdx.json`, … |
+
+Beside an artefact, the SBOM takes the artefact's whole filename, extension
+included, so it names the file it describes.
 
 The `rpi_imager_sbom` target is part of `ALL` and depends on the application,
 so it runs after the link and after macdeployqt or windeployqt. The `dmg` and
@@ -186,7 +189,7 @@ These may be overridden with `-D`:
 | `SBOM_HASH_ROOT` | Package tree to hash; defaults to the app bundle on macOS and `deploy` on Windows |
 | `SBOM_HASH_EXCLUDE` | Paths under it, relative, to leave unhashed |
 | `SBOM_ARTEFACT` | Release artefact to hash as the root package |
-| `SBOM_OUTPUT_STEM` | Write `<stem>.{spdx,cdx}.json` into `SBOM_OUTPUT_DIR` |
+| `SBOM_OUTPUT_STEM` | Write `<stem>.{spdx,cdx}.json` into `SBOM_OUTPUT_DIR`; defaults to the artefact's filename when `SBOM_ARTEFACT` is set |
 | `SBOM_LIFECYCLE` | CycloneDX lifecycle phase; `build` by default |
 | `SBOM_STAMP` | File touched on success |
 

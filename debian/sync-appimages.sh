@@ -45,8 +45,8 @@ copy_one() {
 	cp -f "$src" "$DEST/$(basename "$src")"
 	# The SBOM sidecars travel with the AppImage; stage-appimages.sh needs them.
 	for _fmt in spdx cdx; do
-		if [ -f "${src%.AppImage}.$_fmt.json" ]; then
-			cp -f "${src%.AppImage}.$_fmt.json" "$DEST/"
+		if [ -f "$src.$_fmt.json" ]; then
+			cp -f "$src.$_fmt.json" "$DEST/"
 		fi
 	done
 	ln -sfn "$(basename "$src")" "$DEST/$dest_name"

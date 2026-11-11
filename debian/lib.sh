@@ -829,10 +829,8 @@ sbom_publish_beside() {
 		echo "Error: $_pb_manifest missing; run sbom_package_tree first" >&2
 		return 1
 	fi
-	_pb_name=${3##*/}
 	cmake -DSBOM_INPUTS="$2/sbom/sbom-inputs.cmake" \
 		-DSBOM_OUTPUT_DIR="$(dirname "$3")" \
-		-DSBOM_OUTPUT_STEM="${_pb_name%.*}" \
 		-DSBOM_ARTEFACT="$3" \
 		-DSBOM_SCAN_ROOT= -DSBOM_SCAN_DIRS= -DSBOM_COPY_DIRS= \
 		-DSBOM_BUNDLE_MANIFEST="$_pb_manifest" \

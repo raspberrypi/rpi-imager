@@ -298,7 +298,6 @@ endif()
                 "-DSBOM_INPUTS=${RPI_IMAGER_SBOM_INPUTS}"
                 "-DSBOM_COPY_DIRS="
                 "-DSBOM_OUTPUT_DIR=${CMAKE_BINARY_DIR}"
-                "-DSBOM_OUTPUT_STEM=${_dmg_stem}"
                 "-DSBOM_ARTEFACT=${CMAKE_BINARY_DIR}/${_dmg_stem}.dmg"
                 "-DSBOM_LIFECYCLE=post-build"
                 -P "${RPI_IMAGER_SBOM_GENERATOR}"

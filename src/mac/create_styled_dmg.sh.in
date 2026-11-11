@@ -345,13 +345,11 @@ if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_P
  fi
  
  # Last, as stapling changes the DMG, and before the bundle it hashes goes.
- _dmg_name=$(basename "$FINAL_DMG_PATH")
  "@CMAKE_COMMAND@" -DSBOM_INPUTS="@RPI_IMAGER_SBOM_INPUTS@" \
      -DSBOM_HASH_ROOT="$DMG_APP_PATH" \
      -DSBOM_SCAN_ROOT="$DMG_APP_PATH/Contents" \
      -DSBOM_COPY_DIRS= -DSBOM_HASH_EXCLUDE= \
      -DSBOM_OUTPUT_DIR="$(dirname "$FINAL_DMG_PATH")" \
-     -DSBOM_OUTPUT_STEM="${_dmg_name%.dmg}" \
      -DSBOM_ARTEFACT="$FINAL_DMG_PATH" \
      -DSBOM_LIFECYCLE=post-build \
      -P "@RPI_IMAGER_SBOM_GENERATOR@" || {

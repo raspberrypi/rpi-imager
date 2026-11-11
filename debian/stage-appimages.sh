@@ -121,7 +121,7 @@ stage_sbom() {
 	stem="$1"
 	real=$(readlink -f "$2" 2>/dev/null || printf '%s\n' "$2")
 	for fmt in spdx cdx; do
-		side="${real%.AppImage}.$fmt.json"
+		side="$real.$fmt.json"
 		if [ ! -f "$side" ]; then
 			echo "stage-appimages: missing $side; rebuild the AppImage to produce it" >&2
 			return 1

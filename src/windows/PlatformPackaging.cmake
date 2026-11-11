@@ -238,7 +238,6 @@ if(ENABLE_INNO_INSTALLER)
                 "-DSBOM_INPUTS=${RPI_IMAGER_SBOM_INPUTS}"
                 "-DSBOM_COPY_DIRS="
                 "-DSBOM_OUTPUT_DIR=${CMAKE_BINARY_DIR}/installer"
-                "-DSBOM_OUTPUT_STEM=imager-@IMAGER_VERSION_STR@"
                 "-DSBOM_ARTEFACT=${CMAKE_BINARY_DIR}/installer/imager-@IMAGER_VERSION_STR@.exe"
                 "-DSBOM_LIFECYCLE=post-build"
                 -P "${RPI_IMAGER_SBOM_GENERATOR}"
