@@ -36,7 +36,7 @@ This will build and install the version of Qt preferred for Raspberry Pi Imager 
 #### Get dependencies
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
-  - During installation, choose Qt 6.11 with Mingw64 64-bit toolchain.
+  - During installation, choose Qt 6.12 with Mingw64 64-bit toolchain.
 - For building the installer, install Inno Setup 6.5 or later 6.x (Inno Setup 7 is not yet supported): https://jrsoftware.org/isdl.php
 - Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
 - It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
@@ -76,7 +76,7 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
 
 - Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
 - Open the CMake plugin settings, and set the following Configure Args:
-  - `-DQt6_ROOT=C:\Qt\6.11.2\mingw_64` - or the equivalent path you installed Qt 6.11 to.
+  - `-DQt6_ROOT=C:\Qt\6.12.0\mingw_64` - or the equivalent path you installed Qt 6.12 to.
   - `-DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64` - or the equivalent path you installed mingw64 to.
   - `-DENABLE_INNO_INSTALLER=ON` - to enable the Inno Setup installer, rather than the legacy NSIS installer.
   - `-DIMAGER_SIGNED_APP=ON` - to enable code signing for redistribution.

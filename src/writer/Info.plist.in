@@ -38,6 +38,6 @@
 
     <!-- Hardened runtime is required by SMAppService for daemons. -->
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>14.4</string>
 </dict>
 </plist>

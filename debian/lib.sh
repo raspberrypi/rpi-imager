@@ -52,7 +52,7 @@ fi
 QT_BUILD=${QT_BUILD:-auto}
 
 # bookworm (glibc 2.36) is the baseline for all arches: modern enough for Qt
-# 6.11 / liburing 2.2+ yet old enough that the resulting AppImages/.debs stay
+# 6.12 / liburing 2.2+ yet old enough that the resulting AppImages/.debs stay
 # portable to current Debian/Ubuntu/Raspberry Pi OS releases.
 CHROOT_DIST=${CHROOT_DIST:-bookworm}
 # Chroot name suffix (dir: <dist>-<arch>-<suffix>, e.g. bookworm-arm64-rpi-imager).
