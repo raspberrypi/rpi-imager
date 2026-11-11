@@ -23,6 +23,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <objbase.h>
+#include <aclapi.h>
 
 #include <algorithm>
 #include <atomic>
@@ -71,6 +72,44 @@ std::wstring clientExeDir() {
 std::wstring helperExePath(const WindowsUacBackend::Options& options) {
     return options.helper_exe_path.empty() ? clientExeDir() + L"rpi-imager-writer.exe"
                                            : widen(options.helper_exe_path);
+}
+
+// When a standard user's write is approved with an administrator's
+// credentials, the helper runs as that administrator, and this process's
+// default DACL names only its own user: the helper's OpenProcess for
+// DuplicateHandle is refused and the bulk ring falls back to copying through
+// the pipe. Administrators can already open any process with SeDebugPrivilege,
+// so granting them handle duplication here widens nothing. Best effort: on
+// failure the write still works, only slower.
+void allowAdministratorsToShareHandles() {
+    BYTE sid_buf[SECURITY_MAX_SID_SIZE];
+    DWORD sid_size = sizeof(sid_buf);
+    if (!CreateWellKnownSid(WinBuiltinAdministratorsSid, nullptr, sid_buf, &sid_size)) {
+        return;
+    }
+
+    PACL old_dacl = nullptr;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (GetSecurityInfo(GetCurrentProcess(), SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
+                        nullptr, nullptr, &old_dacl, nullptr, &sd) != ERROR_SUCCESS) {
+        return;
+    }
+
+    EXPLICIT_ACCESSW ea{};
+    ea.grfAccessPermissions = PROCESS_DUP_HANDLE | PROCESS_QUERY_LIMITED_INFORMATION;
+    ea.grfAccessMode = GRANT_ACCESS;
+    ea.grfInheritance = NO_INHERITANCE;
+    ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea.Trustee.TrusteeType = TRUSTEE_IS_GROUP;
+    ea.Trustee.ptstrName = reinterpret_cast<LPWSTR>(sid_buf);
+
+    PACL new_dacl = nullptr;
+    if (SetEntriesInAclW(1, &ea, old_dacl, &new_dacl) == ERROR_SUCCESS) {
+        SetSecurityInfo(GetCurrentProcess(), SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
+                        nullptr, nullptr, new_dacl, nullptr);
+        LocalFree(new_dacl);
+    }
+    LocalFree(sd);
 }
 
 } // namespace
@@ -142,6 +181,7 @@ bool ensureConnectedImpl(WindowsUacBackend::State* st,
     sei.lpParameters = params.c_str();
     sei.nShow = SW_HIDE;
 
+    allowAdministratorsToShareHandles();
     if (!ShellExecuteExW(&sei)) {
         const DWORD gle = GetLastError();
         if (gle == ERROR_CANCELLED) {
