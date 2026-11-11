@@ -104,6 +104,9 @@ add_custom_command(TARGET ${PROJECT_NAME}
     COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fluentwinui3styleimplplugin.dylib"
     COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fluentwinui3styleplugin.dylib"
     COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2nativestyleplugin.dylib"
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquicknativestyleplugin.dylib"
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libquicktestplugin.dylib"
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqmldesignsupportplugin.dylib"
     COMMENT "Removing unused QuickControls2 style plugins (keeping Material + Basic fallback)"
 )
 
@@ -178,12 +181,21 @@ add_custom_command(TARGET ${PROJECT_NAME}
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/macOS"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/FluentWinUI3"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/designer"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/Native"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQml/DesignSupport"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/VirtualKeyboard"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtTest"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/test"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Assets"
     COMMAND /bin/sh -c "find \"${APP_BUNDLE_PATH}/Contents/Resources/qml\" -type d -name 'objects-*' -prune -exec rm -rf {} +"
     COMMENT "Removing unused QML theme directories and modules (keeping Material theme + Basic fallback)"
+)
+
+# Runs after every prune above: it removes the libraries they leave unloaded.
+add_custom_command(TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND /bin/sh "${CMAKE_CURRENT_SOURCE_DIR}/mac/prune_unlinked_libs.sh" "${APP_BUNDLE_PATH}"
+    COMMENT "Removing Qt libraries nothing in the bundle loads"
 )
 
 # Install pre-compiled icon assets for dark mode + Liquid Glass support (macOS Tahoe+)
