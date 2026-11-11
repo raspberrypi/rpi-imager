@@ -1,36 +1,5 @@
 # Windows platform-specific sources and link settings
 
-# Find dlltool for creating import library
-if(NOT CMAKE_DLLTOOL)
-    find_program(CMAKE_DLLTOOL NAMES dlltool x86_64-w64-mingw32-dlltool)
-    if(NOT CMAKE_DLLTOOL)
-        # Try to find it in the same directory as the compiler
-        get_filename_component(COMPILER_DIR ${CMAKE_C_COMPILER} DIRECTORY)
-        find_program(CMAKE_DLLTOOL NAMES dlltool x86_64-w64-mingw32-dlltool PATHS ${COMPILER_DIR} NO_DEFAULT_PATH)
-    endif()
-    if(NOT CMAKE_DLLTOOL)
-        message(FATAL_ERROR "Could not find dlltool, needed for creating wlanapi import library")
-    endif()
-    message(STATUS "Found dlltool: ${CMAKE_DLLTOOL}")
-endif()
-
-# The OUTPUT is absolute, and has to be: src/test builds this same DEPENDENCIES
-# list into rpi_imager_testable, and a relative output is resolved against the
-# directory that consumes it -- so from src/test CMake went looking for
-# src/test/wlanapi_delayed.lib, found nothing, and failed the generate step
-# outright with "Cannot find source file". The application target never noticed,
-# because it is declared in this same scope. An absolute path is visible from
-# any directory, which is how rpi-imager.rc beside it has always worked.
-add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib
-    COMMAND ${CMAKE_DLLTOOL} --input-def "${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def"
-            --output-delaylib "${CMAKE_BINARY_DIR}/wlanapi_delayed.lib" --dllname "wlanapi.dll"
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Creating wlanapi delay-load library"
-    VERBATIM
-)
-
 set(PLATFORM_SOURCES
     windows/acceleratedcryptographichash_cng.cpp
     drivelist/drivelist_windows.cpp
@@ -68,11 +37,13 @@ else()
     )
 endif()
 
+# The rc path is absolute because src/test builds this same list into
+# rpi_imager_testable, and a relative one resolves against that directory.
 set(DEPENDENCIES
     ${CMAKE_BINARY_DIR}/rpi-imager.rc
-    ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib
 )
-set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll crypt32 wtsapi32 ole32 oleaut32 wbemuuid virtdisk)
+# No wlanapi: winwlancredentials.cpp resolves it at run time.
+set(EXTRALIBS setupapi Bcrypt.dll crypt32 wtsapi32 ole32 oleaut32 wbemuuid virtdisk)
 
 # Add winusb for rpiboot support
 set(EXTRALIBS ${EXTRALIBS} winusb)

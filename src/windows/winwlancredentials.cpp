@@ -8,7 +8,6 @@
 #include <winioctl.h>
 #include <wlanapi.h>
 #include <Windot11.h>
-#include <delayimp.h>
 #include <QDebug>
 #include <QRegularExpression>
 
@@ -17,21 +16,49 @@
 #define WLAN_PROFILE_GET_PLAINTEXT_KEY 4
 #endif
 
-static HINSTANCE hWlanApi = NULL;
+namespace {
 
-/* Called by dlltool generated delaylib code that is used for lazy loading
-   wlanapi.dll */
-FARPROC WINAPI dllDelayNotifyHook(unsigned dliNotify, PDelayLoadInfo)
+// wlanapi.dll is absent where the WLAN service is not installed, so it is
+// resolved at run time rather than linked. Not delay-loaded either: the
+// thunks write to an import table that GNU ld 2.44 places in a read-only
+// .idata.
+struct WlanApi {
+    decltype(&::WlanOpenHandle) openHandle = nullptr;
+    decltype(&::WlanCloseHandle) closeHandle = nullptr;
+    decltype(&::WlanEnumInterfaces) enumInterfaces = nullptr;
+    decltype(&::WlanQueryInterface) queryInterface = nullptr;
+    decltype(&::WlanGetProfileList) getProfileList = nullptr;
+    decltype(&::WlanGetProfile) getProfile = nullptr;
+    decltype(&::WlanFreeMemory) freeMemory = nullptr;
+};
+
+template <typename Fn>
+bool resolve(HMODULE module, const char *name, Fn &out)
 {
-    if (dliNotify == dliNotePreLoadLibrary)
-    {
-        return (FARPROC) hWlanApi;
-    }
-
-    return NULL;
+    out = reinterpret_cast<Fn>(reinterpret_cast<void *>(GetProcAddress(module, name)));
+    return out != nullptr;
 }
 
-PfnDliHook __pfnDliNotifyHook2 = dllDelayNotifyHook;
+const WlanApi *wlanApi()
+{
+    static const WlanApi *api = [] () -> const WlanApi * {
+        HMODULE module = LoadLibraryExA("wlanapi.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if (!module)
+            return nullptr;
+        static WlanApi loaded;
+        const bool complete = resolve(module, "WlanOpenHandle", loaded.openHandle)
+            && resolve(module, "WlanCloseHandle", loaded.closeHandle)
+            && resolve(module, "WlanEnumInterfaces", loaded.enumInterfaces)
+            && resolve(module, "WlanQueryInterface", loaded.queryInterface)
+            && resolve(module, "WlanGetProfileList", loaded.getProfileList)
+            && resolve(module, "WlanGetProfile", loaded.getProfile)
+            && resolve(module, "WlanFreeMemory", loaded.freeMemory);
+        return complete ? &loaded : nullptr;
+    }();
+    return api;
+}
+
+} // namespace
 
 
 WinWlanCredentials::~WinWlanCredentials()
@@ -53,9 +80,8 @@ WinWlanCredentials::~WinWlanCredentials()
 
 WinWlanCredentials::WinWlanCredentials()
 {
-    if (!hWlanApi)
-        hWlanApi = LoadLibraryExA("wlanapi.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!hWlanApi)
+    const WlanApi *api = wlanApi();
+    if (!api)
     {
         qDebug() << "wlanapi.dll not available";
         return;
@@ -66,12 +92,12 @@ WinWlanCredentials::WinWlanCredentials()
     DWORD supportedVersion = 0;
     DWORD clientVersion = 2;
 
-    if (WlanOpenHandle(clientVersion, NULL, &supportedVersion, &h) != ERROR_SUCCESS)
+    if (api->openHandle(clientVersion, NULL, &supportedVersion, &h) != ERROR_SUCCESS)
         return;
 
     PWLAN_INTERFACE_INFO_LIST ifList = NULL;
 
-    if (WlanEnumInterfaces(h, NULL, &ifList) == ERROR_SUCCESS)
+    if (api->enumInterfaces(h, NULL, &ifList) == ERROR_SUCCESS)
     {
         for (DWORD i=0; i < ifList->dwNumberOfItems; i++)
         {
@@ -85,7 +111,7 @@ WinWlanCredentials::WinWlanCredentials()
             DWORD connectInfoSize = sizeof(WLAN_CONNECTION_ATTRIBUTES);
             WLAN_OPCODE_VALUE_TYPE opCode = wlan_opcode_value_type_invalid;
 
-            if (WlanQueryInterface(h, &ifList->InterfaceInfo[i].InterfaceGuid,
+            if (api->queryInterface(h, &ifList->InterfaceInfo[i].InterfaceGuid,
                                wlan_intf_opcode_current_connection, NULL,
                                &connectInfoSize, (PVOID *) &pConnectInfo, &opCode) != ERROR_SUCCESS || !pConnectInfo)
             {
@@ -97,12 +123,12 @@ WinWlanCredentials::WinWlanCredentials()
                 _ssid = QByteArray((const char *) pConnectInfo->wlanAssociationAttributes.dot11Ssid.ucSSID,
                                    pConnectInfo->wlanAssociationAttributes.dot11Ssid.uSSIDLength);
             }
-            WlanFreeMemory(pConnectInfo);
+            api->freeMemory(pConnectInfo);
 
             if (_ssid.isEmpty())
                 continue;
 
-            if (WlanGetProfileList(h, &ifList->InterfaceInfo[i].InterfaceGuid,
+            if (api->getProfileList(h, &ifList->InterfaceInfo[i].InterfaceGuid,
                                    NULL, &profileList) == ERROR_SUCCESS)
             {
                 for (DWORD j=0; j < profileList->dwNumberOfItems; j++)
@@ -116,7 +142,7 @@ WinWlanCredentials::WinWlanCredentials()
                         DWORD ret = 0;
                         LPWSTR xmlstr = NULL;
 
-                        if ( (ret = WlanGetProfile(h, &ifList->InterfaceInfo[i].InterfaceGuid, profileList->ProfileInfo[j].strProfileName,
+                        if ( (ret = api->getProfile(h, &ifList->InterfaceInfo[i].InterfaceGuid, profileList->ProfileInfo[j].strProfileName,
                                           NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
                         {
                             QString xml = QString::fromWCharArray(xmlstr);
@@ -133,7 +159,7 @@ WinWlanCredentials::WinWlanCredentials()
                                 SecureZeroMemory(xml.data(), xml.size() * sizeof(QChar));
                             }
 
-                            WlanFreeMemory(xmlstr);
+                            api->freeMemory(xmlstr);
                             break;
                         }
                     }
@@ -141,14 +167,14 @@ WinWlanCredentials::WinWlanCredentials()
             }
 
             if (profileList) {
-                WlanFreeMemory(profileList);
+                api->freeMemory(profileList);
             }
         }
     }
 
     if (ifList)
-        WlanFreeMemory(ifList);
-    WlanCloseHandle(h, NULL);
+        api->freeMemory(ifList);
+    api->closeHandle(h, NULL);
 }
 
 QByteArray WinWlanCredentials::getSSID()
