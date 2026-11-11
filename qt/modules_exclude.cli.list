@@ -63,3 +63,6 @@ qtlottie
 qtremoteobjects
 qt5compat
 qtscxml
+qtnetworkauth
+qttasktree
+qtopenapi
