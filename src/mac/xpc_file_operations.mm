@@ -85,6 +85,8 @@ struct XpcFileOperations::State {
     std::size_t max_write_hint = 0;          // set by SetMaxWriteSizeHint
     std::size_t slot_bytes = kMaxSlotBytes;  // finalised at SetAsyncQueueDepth
     int  queue_depth = 1;
+    // The device caps writes in flight below the slot count.
+    int  pipeline_depth = 0;
     bool async_ready = false;
     void* ring_base = nullptr;
     std::size_t ring_size = 0;
@@ -491,6 +493,7 @@ bool XpcFileOperations::SetAsyncQueueDepth(int depth) {
     state_->slot_in_use.assign(static_cast<std::size_t>(depth), false);
     state_->slot_limit.store(static_cast<std::size_t>(depth));
     state_->queue_depth = depth;
+    state_->pipeline_depth = pipeline_depth;
     state_->async_ready = true;
     state_->cancelled.store(false);
     state_->had_error.store(false);
@@ -552,6 +555,7 @@ bool XpcFileOperations::adoptZeroCopyRing(std::size_t count, std::size_t slotSiz
     state_->zerocopy_engaged = true;
     state_->zc_slot_bytes = slotSize;
     state_->async_ready = true;
+    state_->pipeline_depth = pipeline_depth;
     if (state_->queue_depth < 2) {
         // count is bounded by the 256 MB cap / slotSize, so it fits an int.
         state_->queue_depth = static_cast<int>(count);
@@ -630,7 +634,10 @@ std::shared_ptr<WriteBufferProvider> XpcFileOperations::CreateWriteBufferProvide
 
 int XpcFileOperations::GetAsyncQueueDepth() const {
     std::lock_guard<std::mutex> lk(state_->mutex);
-    return state_->queue_depth;
+    // The bottleneck check waits for most of this depth to be pending, so it
+    // must be a depth the helper can reach.
+    return state_->pipeline_depth > 0 ? std::min(state_->queue_depth, state_->pipeline_depth)
+                                      : state_->queue_depth;
 }
 
 bool XpcFileOperations::IsAsyncIOSupported() const {
