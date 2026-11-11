@@ -137,6 +137,21 @@ deb_to_image_arch() {
 	esac
 }
 
+image_to_deb_arch() {
+	case "$1" in
+		x86_64) printf '%s\n' amd64 ;;
+		aarch64) printf '%s\n' arm64 ;;
+		*) printf '%s\n' "$1" ;;
+	esac
+}
+
+# Release asset name: imager_2.0.12_amd64.AppImage, imager-cli_… for the CLI.
+# One pattern with the .exe and .dmg, which have no arch or variant to carry.
+# $1 asset prefix (imager, imager-cli), $2 git describe output, $3 image arch
+appimage_release_name() {
+	printf '%s_%s_%s.AppImage\n' "$1" "${2#v}" "$(image_to_deb_arch "$3")"
+}
+
 # Normalise kernel uname values on 32-bit Raspberry Pi OS to Debian armhf.
 normalize_image_arch() {
 	case "$1" in

@@ -100,8 +100,8 @@ cleared.
 | Build | Inside the package | Beside the artefact |
 | --- | --- | --- |
 | All | `<build>/sbom/` | |
-| macOS | `Contents/Resources/sbom/` in the app bundle | `<name>.dmg.spdx.json`, `.dmg.cdx.json` |
-| Windows | `{app}\sbom\` (from `<build>/deploy/sbom/`) | `<build>/installer/imager-<version>.exe.spdx.json`, … |
+| macOS | `Contents/Resources/sbom/` in the app bundle | `imager_<version>.dmg.spdx.json`, … |
+| Windows | `{app}\sbom\` (from `<build>/deploy/sbom/`) | `<build>/installer/imager_<version>.exe.spdx.json`, … |
 | AppImage | `usr/share/doc/rpi-imager[-cli]/sbom/` | `<name>.AppImage.spdx.json`, … |
 | Debian (desktop, CLI) | `/usr/share/doc/rpi-imager[-cli]/sbom/` | |
 | Embedded `.deb` | `/usr/share/doc/rpi-imager-embedded/sbom/` | `<name>.deb.spdx.json`, … |

@@ -64,7 +64,7 @@ Uses `LinuxEmbeddedBackend` in-process; no helper process.
 Verify AppImage embedded signature (helper-enabled build):
 
 ```bash
-./build/rpi-imager --verify-appimage-signature ./Raspberry_Pi_Imager-x86_64.AppImage
+./build/rpi-imager --verify-appimage-signature ./imager_2.0.12_amd64.AppImage
 ```
 
 ## Benchmark

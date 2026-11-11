@@ -3,8 +3,8 @@
 #
 # AppImages are not part of the quilt orig tarball. Before a binary build,
 # place artifacts in APPIMAGE_DIR (default: package root) under the names
-# expected by debian/*.install, or use the Raspberry_Pi_Imager-* naming
-# from create-appimage.sh / create-appimage-cli.sh.
+# expected by debian/*.install, or use the release names (imager_<version>_
+# <arch>.AppImage, imager-cli_…) from create-appimage.sh / create-appimage-cli.sh.
 #
 # Usage:
 #   APPIMAGE_DIR=../artifacts debian/stage-appimages.sh desktop
@@ -133,7 +133,7 @@ stage_sbom() {
 stage_desktop() {
 	img_arch=$(deb_arch_to_image_arch "$(target_deb_arch)")
 	canonical="rpi-imager-${img_arch}.AppImage"
-	src=$(resolve_artifact "$canonical" "Raspberry_Pi_Imager-*-desktop-${img_arch}.AppImage")
+	src=$(resolve_artifact "$canonical" "imager_*_$(target_deb_arch).AppImage")
 	link_artifact "$canonical" "$src"
 	stage_sbom "rpi-imager-${img_arch}" "$src"
 }
@@ -141,7 +141,7 @@ stage_desktop() {
 stage_cli() {
 	img_arch=$(deb_arch_to_image_arch "$(target_deb_arch)")
 	canonical="rpi-imager-cli-${img_arch}.AppImage"
-	src=$(resolve_artifact "$canonical" "Raspberry_Pi_Imager-*-cli-${img_arch}.AppImage")
+	src=$(resolve_artifact "$canonical" "imager-cli_*_$(target_deb_arch).AppImage")
 	link_artifact "$canonical" "$src"
 	stage_sbom "rpi-imager-cli-${img_arch}" "$src"
 }

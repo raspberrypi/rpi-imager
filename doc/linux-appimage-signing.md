@@ -76,7 +76,7 @@ On each new client connection the helper:
 Run the signed AppImage (helper path is default when built):
 
 ```bash
-./Raspberry_Pi_Imager-x86_64.AppImage
+./imager_2.0.12_amd64.AppImage
 ```
 
 ## Verification during development
@@ -84,7 +84,7 @@ Run the signed AppImage (helper path is default when built):
 With a helper-enabled build you can verify an AppImage path without starting the GUI:
 
 ```bash
-./build/rpi-imager --verify-appimage-signature /path/to/Raspberry_Pi_Imager-x86_64.AppImage
+./build/rpi-imager --verify-appimage-signature /path/to/imager_2.0.12_amd64.AppImage
 ```
 
 Exit code `0` means the signature is valid and the key is trusted (or unsigned allowed when no keys are pinned).

@@ -232,7 +232,7 @@ BUILD_TYPE="MinSizeRel"  # Optimize for size
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-cli-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-cli-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/$(appimage_release_name imager-cli "$GIT_VERSION" "$ARCH")"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -456,8 +456,7 @@ if [ -f "$OUTPUT_FILE" ]; then
     echo "Created symlink: $SIMPLE_SYMLINK -> $(basename "$OUTPUT_FILE")"
     
     # Show size comparison if desktop AppImage exists
-    # Desktop AppImage uses GIT_VERSION and has -desktop- suffix
-    REGULAR_APPIMAGE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-desktop-${ARCH}.AppImage"
+    REGULAR_APPIMAGE="$PWD/$(appimage_release_name imager "$GIT_VERSION" "$ARCH")"
     if [ -f "$REGULAR_APPIMAGE" ]; then
         CLI_SIZE=$(stat -f%z "$OUTPUT_FILE" 2>/dev/null || stat -c%s "$OUTPUT_FILE" 2>/dev/null || echo "unknown")
         REGULAR_SIZE=$(stat -f%z "$REGULAR_APPIMAGE" 2>/dev/null || stat -c%s "$REGULAR_APPIMAGE" 2>/dev/null || echo "unknown")

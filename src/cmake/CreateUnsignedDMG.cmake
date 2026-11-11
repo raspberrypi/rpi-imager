@@ -9,7 +9,7 @@
 include("${VERSION_VARS_FILE}")
 
 set(DMG_PATH "${BUILD_DIR}/${APP_NAME}.dmg")
-set(FINAL_DMG_PATH "${BUILD_DIR}/${APP_NAME}-${IMAGER_VERSION_STR}.dmg")
+set(FINAL_DMG_PATH "${BUILD_DIR}/imager_${IMAGER_FILE_VERSION}.dmg")
 
 message(STATUS "Creating DMG...")
 

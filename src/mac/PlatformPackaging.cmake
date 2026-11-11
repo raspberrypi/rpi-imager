@@ -292,7 +292,7 @@ endif()
     # rewrites it, and writes the copy beside the DMG, in create_styled_dmg.sh.
     add_dependencies(dmg rpi_imager_sbom)
     if(NOT IMAGER_SIGNED_APP)
-        set(_dmg_stem "${APP_NAME}-@IMAGER_VERSION_STR@")
+        set(_dmg_stem "imager_@IMAGER_FILE_VERSION@")
         add_custom_command(TARGET dmg POST_BUILD
             COMMAND ${CMAKE_COMMAND}
                 "-DSBOM_INPUTS=${RPI_IMAGER_SBOM_INPUTS}"
