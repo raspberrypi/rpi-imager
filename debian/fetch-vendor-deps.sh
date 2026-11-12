@@ -7,7 +7,7 @@
 #   zlib       v1.3.2       (ZLIB_VERSION)
 #   nghttp2    v1.69.0      (NGHTTP2_VERSION)
 #   libarchive v3.8.7       (LIBARCHIVE_VERSION)
-#   curl       curl-8_20_0  (CURL_VERSION 8.20.0)
+#   curl       curl-8_23_0  (CURL_VERSION 8.23.0)
 #   libusb     v1.0.30      (LIBUSB_VERSION)
 #
 # Usage:
@@ -61,7 +61,7 @@ check_submodule src/dependencies/vendor/zstd v1.5.7 build/cmake/CMakeLists.txt
 check_submodule src/dependencies/vendor/zlib v1.3.2 CMakeLists.txt
 check_submodule src/dependencies/vendor/nghttp2 v1.69.0 lib/CMakeLists.txt
 check_submodule src/dependencies/vendor/libarchive v3.8.7 CMakeLists.txt
-check_submodule src/dependencies/vendor/curl curl-8_20_0 CMakeLists.txt
+check_submodule src/dependencies/vendor/curl curl-8_23_0 CMakeLists.txt
 check_submodule src/dependencies/vendor/libusb v1.0.30 libusb/libusb.h
 
 echo "fetch-vendor-deps: ready"

@@ -1,6 +1,6 @@
 # Bundled libcurl
 
-set(CURL_VERSION "8.20.0")
+set(CURL_VERSION "8.23.0")
 string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
 rpi_imager_fetch_git_or_vendor(curl
     VENDOR_DIR curl
