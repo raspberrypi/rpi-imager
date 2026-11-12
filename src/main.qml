@@ -494,7 +494,7 @@ ApplicationWindow {
                 visible: ImageWriterSingleton && ImageWriterSingleton.isElevatableBundle()
                 // Make button wide enough to fit the text, with sensible bounds
                 Layout.minimumWidth: Style.buttonWidthMinimum
-                Layout.maximumWidth: Style.buttonWidthMinimum * 2  // Cap at 2x to handle long translations
+                Layout.maximumWidth: Style.scaled(240)  // Cap for long translations
                 implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
                 onClicked: {
                     if (ImageWriterSingleton.installElevationPolicy()) {

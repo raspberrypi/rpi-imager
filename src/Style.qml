@@ -138,7 +138,7 @@ Item {
 
     // === SIZES (scaled by text scale factor) ===
     readonly property int buttonHeightStandard: scaled(40)
-    readonly property int buttonWidthMinimum: scaled(120)
+    readonly property int buttonWidthMinimum: scaled(90)
     readonly property int buttonWidthSkip: scaled(150)
 
     // Wide enough that a resized window gives the form room rather than margins,

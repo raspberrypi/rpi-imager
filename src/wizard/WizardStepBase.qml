@@ -205,8 +205,10 @@ FocusScope {
                 visible: customButtonArea.children.length === 0 && root.showBackButton
                 enabled: root.backButtonEnabled
                 accessibleDescription: root.backButtonAccessibleDescription
+                // Back and Next never shrink below their label, so a row too
+                // narrow for a long translation elides Skip instead of them.
                 Layout.fillWidth: true
-                Layout.minimumWidth: Style.buttonWidthMinimum
+                Layout.minimumWidth: Math.ceil(implicitWidth)
                 Layout.maximumWidth: Math.ceil(implicitWidth)
                 Layout.leftMargin: Style.spacingSmall
                 Layout.preferredHeight: Style.buttonHeightStandard
@@ -223,7 +225,7 @@ FocusScope {
                 enabled: root.nextButtonEnabled
                 accessibleDescription: root.nextButtonAccessibleDescription
                 Layout.fillWidth: true
-                Layout.minimumWidth: Style.buttonWidthMinimum
+                Layout.minimumWidth: Math.ceil(implicitWidth)
                 Layout.maximumWidth: Math.ceil(implicitWidth)
                 Layout.leftMargin: Style.spacingSmall
                 Layout.preferredHeight: Style.buttonHeightStandard
