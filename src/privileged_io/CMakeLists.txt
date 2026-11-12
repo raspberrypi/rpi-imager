@@ -69,6 +69,8 @@ rpi_imager_sbom_add_component(protobuf
     SOURCE_DIR "${protobuf_SOURCE_DIR}"
     LICENSE "BSD-3-Clause"
     PURL "pkg:github/protocolbuffers/protobuf@v21.12"
+    # NVD files C++ advisories under protobuf-cpp, versioned 3.21.12 for 21.12.
+    CPE "cpe:2.3:a:google:protobuf-cpp:3.21.12:*:*:*:*:*:*:*"
     ORIGIN "fetched from git at configure time"
     USED_BY ${_protobuf_users})
 

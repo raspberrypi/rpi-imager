@@ -39,7 +39,8 @@ metadata: each dependency registers itself in CMake where it is declared.
   pkg-config reported at configure time. Where dpkg knows the package that
   provides one, it is identified by that package's `pkg:deb` purl rather than
   an upstream CPE, since the distro's version carries backported fixes the
-  upstream version number does not show. On macOS, the SDK's libcurl.
+  upstream version number does not show. On macOS, the SDK's libcurl, without
+  a CPE for the same reason: Apple patches the installed library.
 - Everything the package bundles: the libraries and plugins deployed by
   macdeployqt and windeployqt, the MinGW runtime DLLs, and the AppImage and
   embedded library closures (see below).

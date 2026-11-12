@@ -311,14 +311,15 @@ if(APPLE)
     find_package(CURL REQUIRED)
     # Normalize variable naming used later in include_directories
     set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    # No CPE: the version is the SDK stub's, not the installed macOS's
+    # Apple-patched library, so scanners would report CVEs it does not have.
     rpi_imager_sbom_add_component(curl-macos-sdk
         NAME "libcurl (macOS SDK)"
         VERSION "${CURL_VERSION_STRING}"
         SUPPLIER "Apple Inc."
         LICENSE "curl"
-        CPE "cpe:2.3:a:haxx:libcurl:${CURL_VERSION_STRING}:*:*:*:*:*:*:*"
         ORIGIN "system library from the macOS SDK"
-        DESCRIPTION "Dynamically linked from the operating system")
+        DESCRIPTION "Not bundled: /usr/lib/libcurl.4.dylib from the installed macOS, which Apple maintains; the version is the build SDK's")
     
     # Note: No need to find OpenSSL on macOS - we use native Security.framework
     # for RSA operations and CommonCrypto for hashing
