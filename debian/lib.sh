@@ -780,6 +780,9 @@ sbom_bundled_manifest() {
 	_sm_dirs=$(deploy_lib_search_dirs "")
 	_sm_distro=$([ -r /etc/os-release ] && . /etc/os-release; printf '%s' "${ID:-debian}")
 	_sm_supplier=$([ -r /etc/os-release ] && . /etc/os-release; printf '%s' "${NAME:-}")
+	# Scanners pick the distro's security data from the purl's distro
+	# qualifier, as src/cmake/sbom.cmake writes it for linked libraries.
+	_sm_release=$([ -r /etc/os-release ] && . /etc/os-release; printf '%s' "${VERSION_ID:-}")
 	_sm_arch=$(dpkg --print-architecture 2>/dev/null || true)
 	(cd "$_sm_root" && find . -type f \( -name '*.so' -o -name '*.so.*' \)) |
 		sed 's|^\./||' | LC_ALL=C sort |
@@ -810,7 +813,10 @@ sbom_bundled_manifest() {
 			_sm_ver=$(dpkg-query -W -f='${Version}' "$_sm_query" 2>/dev/null | head -n 1)
 			_sm_purl="pkg:deb/$_sm_distro/$_sm_pkg@$(printf '%s' "$_sm_ver" |
 				sed 's/%/%25/g; s/:/%3A/g; s/+/%2B/g')"
-			[ -n "$_sm_parch" ] && _sm_purl="$_sm_purl?arch=$_sm_parch"
+			_sm_q=""
+			[ -n "$_sm_parch" ] && _sm_q="arch=$_sm_parch"
+			[ -n "$_sm_release" ] && _sm_q="${_sm_q:+$_sm_q&}distro=$_sm_distro-$_sm_release"
+			[ -n "$_sm_q" ] && _sm_purl="$_sm_purl?$_sm_q"
 			printf '%s\t%s\t%s\t%s\t%s\t\n' "$_sm_rel" "$_sm_pkg" "$_sm_ver" \
 				"$_sm_supplier" "$_sm_purl"
 		done

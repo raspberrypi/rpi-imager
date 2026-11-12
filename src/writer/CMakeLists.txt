@@ -18,12 +18,14 @@ if(NOT APPLE)
         pkg_check_modules(UDEV REQUIRED libudev)
         pkg_check_modules(GPGME REQUIRED gpgme)
         # rpi_imager_writer_linux is linked into the client as well.
+        rpi_imager_sbom_system_ids(_rpi_gpgme_ids "${GPGME_LINK_LIBRARIES}"
+            "cpe:2.3:a:gnupg:gpgme:${GPGME_VERSION}:*:*:*:*:*:*:*")
         rpi_imager_sbom_add_component(gpgme
             NAME "GPGME"
             VERSION "${GPGME_VERSION}"
             SUPPLIER "g10 Code GmbH"
             LICENSE "LGPL-2.1-or-later"
-            CPE "cpe:2.3:a:gnupg:gpgme:${GPGME_VERSION}:*:*:*:*:*:*:*"
+            ${_rpi_gpgme_ids}
             ORIGIN "system library, version from pkg-config at configure time"
             USED_BY rpi-imager rpi-imager-writer)
 

@@ -36,7 +36,10 @@ metadata: each dependency registers itself in CMake where it is declared.
   font.
 - On Linux, the system libraries linked dynamically (GnuTLS, libidn2, nettle,
   libudev, liburing when used, GPGME for the helper), at the versions
-  pkg-config reported at configure time. On macOS, the SDK's libcurl.
+  pkg-config reported at configure time. Where dpkg knows the package that
+  provides one, it is identified by that package's `pkg:deb` purl rather than
+  an upstream CPE, since the distro's version carries backported fixes the
+  upstream version number does not show. On macOS, the SDK's libcurl.
 - Everything the package bundles: the libraries and plugins deployed by
   macdeployqt and windeployqt, the MinGW runtime DLLs, and the AppImage and
   embedded library closures (see below).
@@ -139,7 +142,12 @@ name.
 On Linux, `sbom_bundled_manifest` asks dpkg which package provides each
 bundled soname on the build system and records that package, its version and a
 `pkg:deb` purl. A library dpkg cannot place is still listed, by file name, with
-no version; the generator notes its soname.
+no version; the generator notes its soname. A bundled package that is also one
+of the linked system libraries is listed once, under the system library.
+
+Every `pkg:deb` purl carries a `distro` qualifier from `/etc/os-release` (for
+example `distro=debian-12`), so scanners such as grype check it against that
+distro's security data without being told the distro.
 
 ## Adding a dependency
 
