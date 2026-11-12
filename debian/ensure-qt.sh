@@ -79,6 +79,7 @@ deps_installed() {
 	command -v cmake >/dev/null 2>&1 && \
 		command -v ninja >/dev/null 2>&1 && \
 		dpkg -s libgnutls28-dev >/dev/null 2>&1 && \
+		dpkg -s libgpgme-dev >/dev/null 2>&1 && \
 		dpkg -s liburing-dev >/dev/null 2>&1
 }
 
