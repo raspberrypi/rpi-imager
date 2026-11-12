@@ -34,7 +34,6 @@ sql
 systemsemaphore
 systemtrayicon
 tabletevent
-texthtmlparser
 textmarkdownreader
 textmarkdownwriter
 textodfwriter
