@@ -53,6 +53,13 @@ if(NOT APPLE)
             ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist.h
         )
 
+        # gpgme.h refuses to compile on 32-bit targets unless off_t matches
+        # the 64-bit one gpgme was built with. Only this file sees gpgme, so
+        # the rest of the library keeps the off_t its peers were built with.
+        set_source_files_properties(
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/appimage_signature.cpp
+            PROPERTIES COMPILE_DEFINITIONS _FILE_OFFSET_BITS=64)
+
         add_library(rpi_imager_writer_linux STATIC ${_writer_linux_sources})
         target_include_directories(rpi_imager_writer_linux PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}
