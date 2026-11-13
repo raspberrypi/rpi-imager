@@ -26,11 +26,11 @@ metadata: each dependency registers itself in CMake where it is declared.
 - Imager itself (`rpi-imager` or `rpi-imager-cli`), plus `rpi-imager-writer`
   and, on Windows, `rpi-imager-callback-relay` where they are built.
 - Every bundled or vendored library: curl, libarchive, xz (liblzma), zstd, zlib,
-  nghttp2, libusb, bzip2, protobuf, and the source copies of yescrypt,
-  sha256crypt and qrcodegen. Each carries its version, supplier, repository,
-  git tag, the commit of the checkout it was built from when that can be read
-  at configure time, an SPDX licence expression, and a purl and CPE where one
-  is well established.
+  nghttp2, libusb, bzip2, protobuf with Abseil and utf8_range, and the source
+  copies of yescrypt, sha256crypt and qrcodegen. Each carries its version,
+  supplier, repository, git tag, the commit of the checkout it was built from
+  when that can be read at configure time, an SPDX licence expression, and a
+  purl and CPE where one is well established.
 - The Qt modules linked, at `Qt6_VERSION`.
 - Data compiled in: tzdata (`TZDATA_VERSION`), wireless-regdb, and the Roboto
   font.

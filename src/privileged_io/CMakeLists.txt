@@ -26,13 +26,29 @@
 #   * Pinning the version isolates us from upstream protobuf API churn.
 #   * Matches the pattern documented in CLAUDE.md.
 #
-# We pin to v21.12 - the last protobuf release that does NOT require
-# Abseil. Pulling in Abseil's full CMake tree across two architectures
-# would dramatically inflate build time and binary size for what is
-# (in our use case) a small structured-message serialisation library.
-# Our .proto schema uses no features beyond proto3 basics, so 21.12 is
-# sufficient.
+# Abseil is fetched first, at the release protobuf pins in
+# cmake/dependencies.cmake: protobuf then uses these targets instead of a
+# system Abseil or its own unpinned fetch.
 include(FetchContent)
+
+set(PROTOBUF_TAG "v36.2")
+# The C++ runtime's own version, which NVD's protobuf-cpp CPE uses.
+set(PROTOBUF_CPP_VERSION "7.36.2")
+set(ABSEIL_VERSION "20250512.1")
+
+# Inherited from src/, it puts absl/time on the include path, where its
+# time.h shadows the C library's.
+set(CMAKE_INCLUDE_CURRENT_DIR OFF)
+set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
+set(ABSL_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(ABSL_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    abseil-cpp
+    GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+    GIT_TAG ${ABSEIL_VERSION}
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(abseil-cpp)
 
 set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(protobuf_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -42,6 +58,8 @@ set(protobuf_BUILD_PROTOC_BINARIES ON CACHE BOOL "" FORCE)
 set(protobuf_BUILD_LIBPROTOC ON CACHE BOOL "" FORCE)
 set(protobuf_MSVC_STATIC_RUNTIME OFF CACHE BOOL "" FORCE)
 set(protobuf_DISABLE_RTTI OFF CACHE BOOL "" FORCE)
+set(protobuf_WITH_ZLIB OFF CACHE BOOL "" FORCE)
+set(protobuf_LOCAL_DEPENDENCIES_ONLY ON CACHE BOOL "" FORCE)
 
 # Minor warning hygiene: protobuf's generated code triggers strict
 # warnings; we suppress at the consumer level (target_compile_options
@@ -50,29 +68,51 @@ set(protobuf_DISABLE_RTTI OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     protobuf
     GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
-    GIT_TAG v21.12
+    GIT_TAG ${PROTOBUF_TAG}
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(protobuf)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Only the libprotobuf runtime ships; protoc is a build tool. The macOS helper
 # does not link this library.
 set(_protobuf_users rpi-imager)
 if(NOT APPLE)
     list(APPEND _protobuf_users rpi-imager-writer)
 endif()
+string(REGEX REPLACE "^v" "" _protobuf_release "${PROTOBUF_TAG}")
 rpi_imager_sbom_add_component(protobuf
     NAME "Protocol Buffers (libprotobuf)"
-    VERSION "21.12"
+    VERSION "${_protobuf_release}"
     SUPPLIER "Google LLC"
     VCS_URL "https://github.com/protocolbuffers/protobuf.git"
-    GIT_TAG "v21.12"
+    GIT_TAG "${PROTOBUF_TAG}"
     SOURCE_DIR "${protobuf_SOURCE_DIR}"
     LICENSE "BSD-3-Clause"
-    PURL "pkg:github/protocolbuffers/protobuf@v21.12"
-    # NVD files C++ advisories under protobuf-cpp, versioned 3.21.12 for 21.12.
-    CPE "cpe:2.3:a:google:protobuf-cpp:3.21.12:*:*:*:*:*:*:*"
+    PURL "pkg:github/protocolbuffers/protobuf@${PROTOBUF_TAG}"
+    CPE "cpe:2.3:a:google:protobuf-cpp:${PROTOBUF_CPP_VERSION}:*:*:*:*:*:*:*"
     ORIGIN "fetched from git at configure time"
     USED_BY ${_protobuf_users})
+rpi_imager_sbom_add_component(abseil-cpp
+    NAME "Abseil C++"
+    VERSION "${ABSEIL_VERSION}"
+    SUPPLIER "Google LLC"
+    VCS_URL "https://github.com/abseil/abseil-cpp.git"
+    GIT_TAG "${ABSEIL_VERSION}"
+    SOURCE_DIR "${abseil-cpp_SOURCE_DIR}"
+    LICENSE "Apache-2.0"
+    PURL "pkg:github/abseil/abseil-cpp@${ABSEIL_VERSION}"
+    CPE "cpe:2.3:a:abseil:common_libraries:${ABSEIL_VERSION}:*:*:*:*:*:*:*"
+    ORIGIN "fetched from git at configure time"
+    USED_BY protobuf)
+rpi_imager_sbom_add_component(utf8-range
+    NAME "utf8_range"
+    VERSION "${_protobuf_release}"
+    SUPPLIER "Google LLC"
+    VCS_URL "https://github.com/protocolbuffers/protobuf.git"
+    GIT_TAG "${PROTOBUF_TAG}"
+    LICENSE "MIT"
+    ORIGIN "third_party/utf8_range in the protobuf source"
+    USED_BY protobuf)
 
 # Provide a clean alias for the runtime library, matching the namespace
 # used by modern config-mode protobuf (so call sites can write
@@ -88,11 +128,8 @@ set(PROTO_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/proto/imager.proto
 )
 
-# Run protoc as a custom command. Protobuf 21.x doesn't expose the
-# `protobuf_generate` macro that 22+ provides via its config-mode
-# package, but the `protoc` executable target is reachable directly,
-# so we drive code generation explicitly. This pattern works across
-# every protobuf version we'd realistically pin to.
+# Run protoc as a custom command: the `protoc` target is reachable directly,
+# whether or not `protobuf_generate` is.
 set(PROTO_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(PROTO_GENERATED_HDR ${PROTO_GENERATED_DIR}/proto/imager.pb.h)
 set(PROTO_GENERATED_SRC ${PROTO_GENERATED_DIR}/proto/imager.pb.cc)
