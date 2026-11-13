@@ -186,6 +186,7 @@ add_custom_command(TARGET ${PROJECT_NAME}
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/FluentWinUI3"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/designer"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/Native"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/NativeStyle"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQml/DesignSupport"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/VirtualKeyboard"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtTest"
