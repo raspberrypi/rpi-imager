@@ -21,6 +21,7 @@
 #include "test_scratch.h"
 
 #include <QAccessible>
+#include <QDesktopServices>
 #include <QUrl>
 #include <QCoreApplication>
 #include <QHash>
@@ -383,6 +384,16 @@ QmlCoverage *coverageCounter()
     return counter;
 }
 
+// Takes the URLs QML hands straight to Qt.openUrlExternally, which never pass
+// through ImageWriter and would otherwise open on the desktop running the run.
+class TestUrlSink : public QObject
+{
+    Q_OBJECT
+
+public slots:
+    void open(const QUrl &url) { qDebug() << "Sandboxed, not opening:" << url; }
+};
+
 class Setup : public QObject
 {
     Q_OBJECT
@@ -405,6 +416,15 @@ public slots:
         // in-app dialogs they are ordinary QML and can be driven, and the
         // suite behaves the same on a machine with a portal and one without.
         NativeFileDialog::setForceQmlDialogs(true);
+
+        // The storms click every help link and settings button they reach. On
+        // macOS each Wi-Fi step also waited 30 s on an unanswered keychain
+        // prompt, nine times a run.
+        ImageWriter::setDesktopSandboxed(true);
+        static TestUrlSink urlSink;
+        for (const char *scheme : {"http", "https", "file", "mailto",
+                                   "x-apple.systempreferences"})
+            QDesktopServices::setUrlHandler(QString::fromLatin1(scheme), &urlSink, "open");
 
         // The types the components reference. Registered by hand for the same
         // reason qml_load_test does it: the generated registration function
