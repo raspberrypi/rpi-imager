@@ -110,6 +110,15 @@ namespace {
 // Initialize static member for secure boot CLI override
 bool ImageWriter::_forceSecureBootEnabled = false;
 
+bool ImageWriter::s_desktopSandboxed = false;
+
+bool ImageWriter::sandboxRefuses(const char *what)
+{
+    if (s_desktopSandboxed)
+        qDebug() << "Sandboxed, not:" << what;
+    return s_desktopSandboxed;
+}
+
 #ifndef CLI_ONLY_BUILD
 ImageWriter *ImageWriter::s_qmlInstance = nullptr;
 
@@ -3806,6 +3815,8 @@ static void locationPermissionCallback(int authorized, void *context)
 
 QString ImageWriter::getSSID()
 {
+    if (sandboxRefuses("reading the Wi-Fi SSID"))
+        return QString();
 #ifdef Q_OS_DARWIN
     // On macOS, set up a callback to be notified if location permission is granted
     // after the initial timeout. This handles the race condition where the user
@@ -3818,6 +3829,8 @@ QString ImageWriter::getSSID()
 
 QString ImageWriter::getPSK()
 {
+    if (sandboxRefuses("reading the Wi-Fi key"))
+        return QString();
 #ifdef Q_OS_DARWIN
     /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
      * Request user permission through QML dialog instead of QtWidgets QMessageBox. */
@@ -3858,6 +3871,8 @@ QString ImageWriter::getPSKForSSID(const QString &ssid)
         qDebug() << "ImageWriter::getPSKForSSID(): Empty SSID provided, cannot retrieve PSK";
         return QString();
     }
+    if (sandboxRefuses("reading the Wi-Fi key"))
+        return QString();
 
 #ifdef Q_OS_DARWIN
     /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
@@ -5185,6 +5200,8 @@ ImageWriter::RebootPath ImageWriter::rebootPathFor(bool embedded)
 
 void ImageWriter::reboot()
 {
+    if (sandboxRefuses("rebooting"))
+        return;
     qDebug() << "Rebooting system.";
     if (rebootPathFor(isEmbeddedMode()) == RebootPath::KernelCallThenQuit) {
 #ifdef Q_OS_LINUX
@@ -5226,6 +5243,8 @@ void ImageWriter::openUrl(const QUrl &url)
         qWarning() << "Refusing to open URL that is not a web page:" << url.scheme();
         return;
     }
+    if (sandboxRefuses("opening a URL"))
+        return;
 
     // Platform-native URL launching lives in the PAL (PlatformQuirks). It
     // returns false when it cannot — or deliberately will not — open the URL
@@ -5466,6 +5485,8 @@ bool ImageWriter::installElevationPolicy()
 
 void ImageWriter::restartWithElevatedPrivileges()
 {
+    if (sandboxRefuses("restarting elevated"))
+        return;
     // Pass through --log-file if present
     QStringList extraArgs;
     QStringList appArgs = QCoreApplication::arguments();
@@ -5730,6 +5751,8 @@ bool ImageWriter::fullDiskAccessDenied()
 
 void ImageWriter::openFullDiskAccessSettings()
 {
+    if (sandboxRefuses("opening System Settings"))
+        return;
 #ifdef Q_OS_DARWIN
     QDesktopServices::openUrl(QUrl(QStringLiteral(
         "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")));
@@ -5738,6 +5761,8 @@ void ImageWriter::openFullDiskAccessSettings()
 
 void ImageWriter::openLoginItemsSettings()
 {
+    if (sandboxRefuses("opening System Settings"))
+        return;
 #ifdef Q_OS_DARWIN
     // Routes via SMAppService.openSystemSettingsLoginItems on macOS 13+,
     // which Apple maintains across pane renames - the x-apple.systempreferences
@@ -5748,6 +5773,8 @@ void ImageWriter::openLoginItemsSettings()
 
 QString ImageWriter::installPrivilegedHelper()
 {
+    if (sandboxRefuses("installing the privileged helper"))
+        return {};
     using BK = ::rpi_imager::privileged::BackendKind;
     QString failure;
     auto& w = ::rpi_imager::getProcessPrivilegedWriter();

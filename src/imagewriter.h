@@ -118,6 +118,10 @@ public:
     static void setQmlInstance(ImageWriter *instance) { s_qmlInstance = instance; }
 #endif
 
+    // For UI test harnesses: refuse everything that reaches past the app --
+    // browser, System Settings, keychain, Wi-Fi, helper install, reboot.
+    static void setDesktopSandboxed(bool sandboxed) { s_desktopSandboxed = sandboxed; }
+
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
     Q_PROPERTY(EjectState ejectState READ ejectState NOTIFY ejectStateChanged)
     Q_PROPERTY(bool isOsListUnavailable READ isOsListUnavailable NOTIFY osListUnavailableChanged)
@@ -753,6 +757,8 @@ private:
 #ifndef CLI_ONLY_BUILD
     static ImageWriter *s_qmlInstance;   // app-owned instance returned by create()
 #endif
+    static bool s_desktopSandboxed;
+    static bool sandboxRefuses(const char *what);
     void setWriteState(WriteState state);
     WriteState writeState() const { return _writeState; }
     void setEjectState(EjectState state);
