@@ -33,7 +33,13 @@ WizardStepBase {
     // Track if a custom local image has been chosen in this step
     property bool customSelected: false
     property real customSelectedSize: 0
-    
+
+    // Nothing in the embedded build mounts a drive when it is plugged in,
+    // so the image picker mounts what it finds and opens there. Both are
+    // here, not inline, so a test can drive this without mounting anything.
+    property bool mountsUsbImages: ImageWriterSingleton.isEmbeddedMode()
+    function mountUsbImages() { return ImageWriterSingleton.mountUsbImageFolder() }
+
     // Property to trigger cache status re-evaluation when cache changes
     property int cacheStatusVersion: 0
     
@@ -841,12 +847,21 @@ WizardStepBase {
                     // Ensure reasonable defaults
                     customImageFileDialog.dialogTitle = qsTr("Select image")
                     customImageFileDialog.nameFilters = CommonStrings.imageFiltersList
-                    // Default to Downloads. writableLocation() already returns a
-                    // platform-correct file:// URL, so use it directly.
-                    var dl = String(StandardPaths.writableLocation(StandardPaths.DownloadLocation))
-                    if (dl.length > 0) {
-                        customImageFileDialog.currentFolder = dl
-                        customImageFileDialog.folder = dl
+                    var start
+                    if (root.mountsUsbImages) {
+                        start = root.mountUsbImages()
+                        // Empty when no drive mounted; the user has been told why.
+                        if (!start)
+                            return
+                        customImageFileDialog.removableDrivesFolder = start
+                    } else {
+                        // writableLocation() already returns a platform-correct
+                        // file:// URL, so use it directly.
+                        start = String(StandardPaths.writableLocation(StandardPaths.DownloadLocation))
+                    }
+                    if (start.length > 0) {
+                        customImageFileDialog.currentFolder = start
+                        customImageFileDialog.folder = start
                     }
                     customImageFileDialog.open()
                 } else {

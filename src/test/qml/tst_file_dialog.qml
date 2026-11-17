@@ -185,6 +185,15 @@ TestCase {
         verify(found, "the save dialog offers Home")
     }
 
+    function test_removable_drives_goes_where_the_caller_says() {
+        // Set after the places are built, as the embedded wizard does once
+        // it has mounted something.
+        const d = create({})
+        const places = findChild(d, "placesModel")
+        d.removableDrivesFolder = "file:///media"
+        compare(String(places.get(0).url), "file:///media")
+    }
+
     function test_an_empty_path_yields_nothing() {
         const d = create({})
         compare(d._toFileUrl(""), "")

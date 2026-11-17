@@ -3579,6 +3579,15 @@ QString ImageWriter::usbMediaRoot() const
     return QStringLiteral("/media");
 }
 
+QString ImageWriter::mountUsbImageFolder()
+{
+    if (!mountUsbSourceMedia()) {
+        emit error(tr("No USB drive could be read. Connect a USB drive containing images and try again."));
+        return QString();
+    }
+    return QUrl::fromLocalFile(usbMediaRoot()).toString();
+}
+
 QByteArray ImageWriter::getUsbSourceOSlist()
 {
 #ifdef Q_OS_LINUX

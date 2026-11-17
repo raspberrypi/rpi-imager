@@ -5,6 +5,7 @@
  * OSSelectionStep: what choosing a row actually does.
  */
 
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtTest
@@ -59,6 +60,24 @@ TestCase {
             wizardContainer: fakeContainer
             width: 900
             height: 700
+        }
+    }
+
+    // The embedded build, with the mount stood in for: a QML run must not
+    // go mounting the host's disks to find out whether this works.
+    Component {
+        id: embeddedStepComponent
+        OSSelectionStep {
+            wizardContainer: fakeContainer
+            width: 900
+            height: 700
+            mountsUsbImages: true
+            property string mountedAt: ""
+            property int mountCalls: 0
+            function mountUsbImages() {
+                mountCalls++
+                return mountedAt
+            }
         }
     }
 
@@ -270,6 +289,64 @@ TestCase {
                "and it still advertises customisation")
         verify(fakeContainer.wifiConfigured,
                "so the staged settings are still there")
+    }
+
+    // -----------------------------------------------------------------
+    // Where "Use custom" looks for an image (#1799)
+    // -----------------------------------------------------------------
+
+    readonly property var theCustomRow: ({
+        name: "Use custom",
+        subitems_json: "",
+        subitems_url: "",
+        url: "internal://custom"
+    })
+
+    function embeddedStep(mountedAt) {
+        const s = createTemporaryObject(embeddedStepComponent, testCase,
+                                        { mountedAt: mountedAt })
+        verify(s, "the embedded step was created")
+        return s
+    }
+
+    function test_on_embedded_the_picker_opens_on_the_drives_it_mounted() {
+        const s = embeddedStep("file:///media")
+        const picker = s.customImageFileDialog
+        s.selectOSitem(theCustomRow, false, false)
+
+        tryVerify(function () { return picker.opened }, 3000,
+                  "the picker came up")
+        compare(s.mountCalls, 1, "drives were mounted before it opened")
+        compare(String(picker.currentFolder), "file:///media",
+                "and it opened where they were mounted")
+        const places = findChild(picker, "placesModel")
+        compare(String(places.get(0).url), "file:///media",
+                "Removable drives leads there too, not to /mnt")
+        picker.close()
+    }
+
+    function test_on_embedded_with_no_drive_the_picker_stays_shut() {
+        // The mount has already put up the reason. A picker on an empty
+        // folder as well would leave the user hunting for a drive that is
+        // not there.
+        const s = embeddedStep("")
+        s.selectOSitem(theCustomRow, false, false)
+        wait(50)
+        compare(s.mountCalls, 1, "a mount was tried")
+        verify(!s.customImageFileDialog.visible, "no picker came up")
+    }
+
+    function test_on_the_desktop_nothing_is_mounted() {
+        verify(!step.mountsUsbImages,
+               "this is not an embedded build, so the desktop mounts drives")
+        const picker = step.customImageFileDialog
+        step.selectOSitem(theCustomRow, false, false)
+        tryVerify(function () { return picker.opened }, 3000,
+                  "the picker came up")
+        compare(String(picker.currentFolder),
+                String(StandardPaths.writableLocation(StandardPaths.DownloadLocation)),
+                "on Downloads, as before")
+        picker.close()
     }
 
     // -----------------------------------------------------------------

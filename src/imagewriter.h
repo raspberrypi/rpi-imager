@@ -386,6 +386,11 @@ public:
     /* Returns a json formatted list of the OS images found on USB stick */
     Q_INVOKABLE QByteArray getUsbSourceOSlist();
 
+    /* Mounts USB media for the custom-image picker and returns the folder,
+       as a file URL, that it was mounted under. Empty, with the reason
+       already raised through error(), when no drive could be mounted. */
+    Q_INVOKABLE QString mountUsbImageFolder();
+
 protected:
     // Where inserted media appears. Virtual so the scan above can be run
     // against a directory a test lays out, rather than only against real

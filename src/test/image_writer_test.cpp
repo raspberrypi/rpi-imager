@@ -8253,6 +8253,53 @@ TEST_CASE("No block devices at all mounts nothing", "[imagewriter][usbmount]")
     CHECK(w.mountAttempts.isEmpty());
 }
 
+// The image picker on an embedded build opens wherever this says. Before it
+// was wired up nothing mounted a drive at all, and the picker opened on an
+// empty Downloads folder with the user's drive nowhere to be found (#1799).
+TEST_CASE("The image picker is sent to the drives it mounted",
+          "[imagewriter][usbmount]")
+{
+    SKIP_WITHOUT_LINUX_MEDIA();
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    layOutBlockDevices(blocks, {QStringLiteral("sda1")});
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = tmp.filePath(QStringLiteral("media"));
+
+    QStringList errors;
+    QObject::connect(&w, &ImageWriter::error,
+                     [&](QVariant m) { errors << m.toString(); });
+
+    CHECK(w.mountUsbImageFolder()
+          == QUrl::fromLocalFile(w.mediaRoot).toString());
+    CHECK(errors.isEmpty());
+}
+
+TEST_CASE("With no drive to mount the user is told, and given nowhere to go",
+          "[imagewriter][usbmount]")
+{
+    SKIP_WITHOUT_LINUX_MEDIA();
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString blocks = tmp.filePath(QStringLiteral("sys/class/block"));
+    REQUIRE(QDir().mkpath(blocks));
+
+    MediaImageWriter w;
+    w.blockRoot = blocks;
+    w.mediaRoot = tmp.filePath(QStringLiteral("media"));
+
+    QStringList errors;
+    QObject::connect(&w, &ImageWriter::error,
+                     [&](QVariant m) { errors << m.toString(); });
+
+    CHECK(w.mountUsbImageFolder().isEmpty());
+    REQUIRE(errors.size() == 1);
+    CHECK(errors.front().contains(QStringLiteral("USB drive")));
+}
+
 // ══════════════════════════════════════════════════════════════
 // The SSH key offered for public-key authentication
 //
