@@ -4,7 +4,7 @@
 # Submodule paths and pinned tags match src/dependencies/*.cmake:
 #   xz         v5.8.3       (LIBLZMA_VERSION)
 #   zstd       v1.5.7       (ZSTD_VERSION)
-#   zlib       v1.3.2       (ZLIB_VERSION)
+#   zlib       v1.4         (ZLIB_VERSION)
 #   nghttp2    v1.69.0      (NGHTTP2_VERSION)
 #   libarchive v3.8.11      (LIBARCHIVE_VERSION)
 #   curl       curl-8_23_0  (CURL_VERSION 8.23.0)
@@ -58,7 +58,7 @@ check_submodule() {
 
 check_submodule src/dependencies/vendor/xz v5.8.3 CMakeLists.txt
 check_submodule src/dependencies/vendor/zstd v1.5.7 build/cmake/CMakeLists.txt
-check_submodule src/dependencies/vendor/zlib v1.3.2 CMakeLists.txt
+check_submodule src/dependencies/vendor/zlib v1.4 CMakeLists.txt
 check_submodule src/dependencies/vendor/nghttp2 v1.69.0 lib/CMakeLists.txt
 check_submodule src/dependencies/vendor/libarchive v3.8.11 CMakeLists.txt
 check_submodule src/dependencies/vendor/curl curl-8_23_0 CMakeLists.txt
