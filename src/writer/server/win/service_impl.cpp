@@ -341,7 +341,7 @@ proto::ErrorInfo Helper::handleQueryDeviceLimits(const std::string& payload, std
     proto::DeviceLimits out_limits;
     out_limits.set_total_bytes(size);
     out_limits.set_max_transfer_bytes(static_cast<std::uint32_t>(lim.max_transfer_bytes));
-    out_limits.set_logical_block_size(512);  // TODO(§14.5): query actual LBS
+    out_limits.set_logical_block_size(lim.blockSizeOr512());
     if (lim.suggested_queue_depth > 0) {
         out_limits.set_suggested_queue_depth(
             static_cast<std::uint32_t>(lim.suggested_queue_depth));

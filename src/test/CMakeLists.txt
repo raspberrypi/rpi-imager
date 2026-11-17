@@ -684,6 +684,15 @@ if((WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     rpi_discover_tests(wire_codec_test)
 endif()
 
+# The helper's drive list: which sector sizes it reads from lsblk.
+if(TARGET rpi_imager_writer_linux)
+    add_executable(drivelist_linux_helper_test drivelist_linux_helper_test.cpp)
+    target_include_directories(drivelist_linux_helper_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(drivelist_linux_helper_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(drivelist_linux_helper_test PRIVATE cxx_std_20)
+    rpi_discover_tests(drivelist_linux_helper_test)
+endif()
+
 # The AppImage signature the Linux helper authenticates its client by.
 if(TARGET rpi_imager_writer_linux)
     add_executable(appimage_signature_test appimage_signature_test.cpp)

@@ -1165,6 +1165,13 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
           static_cast<std::uint64_t>(val) * 1024, std::numeric_limits<size_t>::max()));
   }
 
+  {
+    std::ifstream f(queueDir + "logical_block_size");
+    std::uint32_t val = 0;
+    if (f >> val && val > 0)
+      limits.logical_block_size = val;
+  }
+
   return limits;
 }
 

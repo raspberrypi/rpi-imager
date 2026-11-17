@@ -240,6 +240,7 @@ FileError LinuxHelperFileOperations::OpenDevice(const std::string& path) {
         std::lock_guard<std::mutex> lk(state_->mutex);
         state_->total_size = limits.value.total_bytes();
         device_io_limits_.max_transfer_bytes = limits.value.max_transfer_bytes();
+        device_io_limits_.logical_block_size = limits.value.logical_block_size();
         if (limits.value.suggested_queue_depth() > 0) {
             device_io_limits_.suggested_queue_depth =
                 static_cast<int>(limits.value.suggested_queue_depth());

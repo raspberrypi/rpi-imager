@@ -2094,6 +2094,18 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
   if (haveAdapter && adapterDesc.MaximumTransferLength > 0)
     limits.max_transfer_bytes = static_cast<size_t>(adapterDesc.MaximumTransferLength);
 
+  // --- Access alignment: the logical sector size FILE_FLAG_NO_BUFFERING
+  // transfers must be multiples of, 4096 on a 4K-native drive ---
+  query.PropertyId = StorageAccessAlignmentProperty;
+  query.QueryType = PropertyStandardQuery;
+  STORAGE_ACCESS_ALIGNMENT_DESCRIPTOR alignDesc = {};
+  if (DeviceIoControl(h, IOCTL_STORAGE_QUERY_PROPERTY,
+                      &query, sizeof(query),
+                      &alignDesc, sizeof(alignDesc),
+                      &bytesReturned, nullptr)
+      && alignDesc.BytesPerLogicalSector > 0)
+    limits.logical_block_size = static_cast<std::uint32_t>(alignDesc.BytesPerLogicalSector);
+
   // --- IoCapability descriptor: exact device queue depth (Win10 1607+) ---
   // StorageDeviceIoCapabilityProperty = 48.  LunMaxIoCount is the actual max
   // outstanding I/O the device can service, no heuristic needed.

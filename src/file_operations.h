@@ -328,6 +328,13 @@ class FileOperations {
   struct DeviceIOLimits {
     size_t max_transfer_bytes = 0;   // Max single I/O request size in bytes (0 = unknown)
     int suggested_queue_depth = 0;   // Device/bus-informed queue depth limit (0 = unknown)
+    // O_DIRECT offsets and lengths must be multiples of this: 4096 on a
+    // drive with 4K native sectors (0 = unknown).
+    std::uint32_t logical_block_size = 0;
+
+    std::uint32_t blockSizeOr512() const {
+      return logical_block_size ? logical_block_size : 512;
+    }
 
     // Cap a requested async pipeline depth using the same 3× device rule as
     // DownloadThread (see #1592). No-op when suggested_queue_depth is unknown.

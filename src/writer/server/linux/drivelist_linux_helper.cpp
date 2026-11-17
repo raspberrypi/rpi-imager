@@ -19,7 +19,7 @@ std::string runLsblk() {
     // Same columns as drivelist_linux.cpp, key=value format for easy parsing.
     const char* cmd =
         "lsblk -dn -b -P -o NAME,PATH,TYPE,SIZE,RM,RO,MODEL,VENDOR,TRAN,"
-        "MOUNTPOINT,FSTYPE,SUBSYSTEMS 2>/dev/null";
+        "MOUNTPOINT,FSTYPE,SUBSYSTEMS,LOG-SEC,PHY-SEC 2>/dev/null";
     FILE* pipe = ::popen(cmd, "r");
     if (!pipe) {
         return {};
@@ -76,6 +76,11 @@ std::uint64_t parseU64Field(const std::string& line, const char* key) {
     return out;
 }
 
+
+} // namespace
+
+namespace detail {
+
 std::optional<Drivelist::DeviceDescriptor> parseLsblkLine(const std::string& line) {
     const auto name = parseQuotedValue(line, "NAME");
     const auto path = parseQuotedValue(line, "PATH");
@@ -110,8 +115,14 @@ std::optional<Drivelist::DeviceDescriptor> parseLsblkLine(const std::string& lin
     device.isReadOnly = parseBoolField(line, "RO");
     device.isRemovable = parseBoolField(line, "RM");
     device.size = parseU64Field(line, "SIZE");
-    device.blockSize = 512;
-    device.logicalBlockSize = 512;
+    // util-linux 2.38 and later spell these LOG_SEC and PHY_SEC under -P.
+    const auto sectorField = [&line](const char* dashed, const char* underscored) {
+        std::uint64_t v = parseU64Field(line, dashed);
+        if (v == 0) v = parseU64Field(line, underscored);
+        return v ? static_cast<std::uint32_t>(v) : 512u;
+    };
+    device.logicalBlockSize = sectorField("LOG-SEC", "LOG_SEC");
+    device.blockSize = sectorField("PHY-SEC", "PHY_SEC");
 
     device.isCard = subsystems.find("mmc") != std::string::npos;
     device.isUSB = subsystems.find("usb") != std::string::npos;
@@ -149,7 +160,7 @@ std::optional<Drivelist::DeviceDescriptor> parseLsblkLine(const std::string& lin
     return device;
 }
 
-} // namespace
+} // namespace detail
 
 std::vector<Drivelist::DeviceDescriptor> listStorageDevices() {
     std::vector<Drivelist::DeviceDescriptor> devices;
@@ -167,7 +178,7 @@ std::vector<Drivelist::DeviceDescriptor> listStorageDevices() {
         if (line.empty()) {
             continue;
         }
-        if (auto d = parseLsblkLine(line)) {
+        if (auto d = detail::parseLsblkLine(line)) {
             devices.push_back(std::move(*d));
         }
     }
