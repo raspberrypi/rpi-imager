@@ -541,13 +541,22 @@ void DownloadExtractThread::extractImageRun()
                 _writeRingBuffer->releaseReadSlot(slot);
                 break;
             }
-            if (size % 512 != 0)
+            // O_DIRECT refuses a write that is not a whole number of the
+            // device's blocks, and on a 4K-native drive 512 is not enough.
+            const size_t blockSize = _file ? _file->GetDeviceIOLimits().blockSizeOr512() : 512;
+            size_t slotPadding = 0;
+            if (size % blockSize != 0)
             {
-                size_t paddingBytes = 512-(size % 512);
-                qDebug() << "Image is NOT a valid disk image, as its length is not a multiple of the sector size of 512 bytes long";
+                size_t paddingBytes = blockSize - (size % blockSize);
+                if (paddingBytes > slot->capacity - static_cast<size_t>(size)) {
+                    _writeRingBuffer->releaseReadSlot(slot);
+                    throw runtime_error(tr("The write buffer is too small to pad the last block to the device's block size.").toStdString());
+                }
+                qDebug() << "Image length is not a multiple of the device's" << blockSize << "byte blocks";
                 qDebug() << "Last write() would be" << size << "bytes, but padding to" << size + paddingBytes << "bytes";
                 memset(slot->data + size, 0, paddingBytes);
                 size += paddingBytes;
+                slotPadding = paddingBytes;
             }
             
             // Track decompressed bytes
@@ -578,7 +587,7 @@ void DownloadExtractThread::extractImageRun()
             // With async I/O, _writeFile returns quickly after queuing the I/O operation,
             // so running it synchronously in the extraction thread doesn't block progress.
             // The actual I/O happens asynchronously via io_uring/IOCP.
-            bool writeOk = _writeFile(slot->data, static_cast<size_t>(size), releaseCallback) > 0;
+            bool writeOk = _writeFile(slot->data, static_cast<size_t>(size), releaseCallback, slotPadding) > 0;
             if (!writeOk && !_cancelled) {
                 // Wait for pending async writes before cleanup
                 if (_file && _file->IsAsyncIOSupported()) {

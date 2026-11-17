@@ -605,10 +605,6 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
         return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: seek failed");
     }
 
-    // TODO(§14.5): with direct I/O the tail read must be sector-aligned; the
-    // shipping verify path reads in aligned chunks. This straightforward
-    // chunked read is adequate for bring-up and will be aligned during
-    // hardware validation.
     constexpr std::size_t kChunk = 1u * 1024 * 1024;
     AlignedBuffer buf(kChunk);  // direct I/O, as in readChunk
     if (!buf) {
@@ -616,19 +612,27 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
         return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: out of memory");
     }
     std::uint64_t remaining = req.length();
+    // The length stops where the source did, not necessarily on a block
+    // boundary, and direct I/O reads only whole blocks: the last read takes
+    // the rest of the block (the writer's padding) and only the length asked
+    // for is hashed.
+    const std::size_t block = s->fops->GetDeviceIOLimits().blockSizeOr512();
     while (remaining > 0) {
         const std::size_t want = static_cast<std::size_t>(
             remaining < kChunk ? remaining : kChunk);
+        const std::size_t readLen = (want + block - 1) / block * block;
         std::size_t got = 0;
-        if (s->fops->ReadSequential(buf.data(), want, got) != FileError::kSuccess || got == 0) {
+        if (readLen > kChunk
+            || s->fops->ReadSequential(buf.data(), readLen, got) != FileError::kSuccess || got == 0) {
             s->hash.reset();
             return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: read failed");
         }
-        if (!s->hash->update(buf.data(), got)) {
+        const std::size_t use = got < want ? got : want;
+        if (!s->hash->update(buf.data(), use)) {
             s->hash.reset();
             return fail(proto::ERROR_UNKNOWN, "hash update (device) failed");
         }
-        remaining -= got;
+        remaining -= use;
     }
     s->hash_time += std::chrono::steady_clock::now() - t0;
 

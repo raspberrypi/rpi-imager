@@ -2192,6 +2192,58 @@ TEST_CASE("An image that does not fill its last sector is padded, not truncated"
     CHECK(written.at(image.size() + padding) == '\xEE');
 }
 
+// The padding is the writer's, not the image's: hashing it made an image
+// that was correct, but not a whole number of blocks, fail its own SHA-256.
+TEST_CASE("A ragged image still matches its published hash", "[extract]")
+{
+    if (!haveTool(QStringLiteral("xz")))
+        SKIP("xz is not installed, so no .xz image can be built to extract");
+
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(1024 * 1024 + 317, 29);
+    REQUIRE(image.size() % 512 != 0);
+    const QByteArray hash = QCryptographicHash::hash(image, QCryptographicHash::Sha256).toHex();
+
+    const QString raw = scratch.filePath(QStringLiteral("ragged-hashed.img"));
+    REQUIRE(writeFile(raw, image));
+    REQUIRE(runTool(QStringLiteral("xz"), {QStringLiteral("-T1"), QStringLiteral("-2"), raw}));
+    const QString archive = raw + QStringLiteral(".xz");
+
+    const QString dest = scratch.filePath(QStringLiteral("ragged-hashed-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (2 * 1024 * 1024), '\xEE')));
+
+    DownloadExtractThread dt(QUrl::fromLocalFile(archive).toEncoded(), dest.toUtf8(), hash);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+    dt.setVerifyEnabled(true);
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK(outcome.succeeded);
+}
+
+TEST_CASE("A ragged local image still matches its published hash", "[extract][local]")
+{
+    ScratchDir scratch;
+    const QByteArray image = imageOfSize(64 * 1024 + 5, 97);
+    REQUIRE(image.size() % 512 != 0);
+    const QByteArray hash = QCryptographicHash::hash(image, QCryptographicHash::Sha256).toHex();
+
+    const QString raw = scratch.filePath(QStringLiteral("ragged-local-hashed.img"));
+    REQUIRE(writeFile(raw, image));
+    const QString dest = scratch.filePath(QStringLiteral("ragged-local-hashed-dest.img"));
+    REQUIRE(writeFile(dest, QByteArray(image.size() + (1024 * 1024), '\xEE')));
+
+    LocalFileExtractThread dt(QUrl::fromLocalFile(raw).toEncoded(), dest.toUtf8(), hash);
+    dt.setVerifyEnabled(true);
+    dt.setExtractTotal(static_cast<uint64_t>(image.size()));
+
+    const Outcome outcome = runToCompletion(dt, 180000);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    CHECK(outcome.succeeded);
+}
+
 TEST_CASE("A ragged local image is written whole", "[extract][local]")
 {
     // The same length with no container around it. LocalFileExtractThread

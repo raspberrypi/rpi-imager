@@ -163,16 +163,18 @@ void LocalFileExtractThread::extractRawImageRun()
         }
         
         // Write the data directly to the output device, padding the last
-        // block out to a whole sector.
+        // block out to a whole device block: 4096 on a 4K-native drive.
+        const size_t blockSize = _file ? _file->GetDeviceIOLimits().blockSizeOr512() : 512;
         size_t toWrite = static_cast<size_t>(len);
-        if (toWrite % 512 != 0 && toWrite + (512 - (toWrite % 512)) <= _inputBufSize)
+        size_t padding = 0;
+        if (toWrite % blockSize != 0 && toWrite + (blockSize - (toWrite % blockSize)) <= _inputBufSize)
         {
-            const size_t padding = 512 - (toWrite % 512);
+            padding = blockSize - (toWrite % blockSize);
             memset(_inputBuf + toWrite, 0, padding);
             toWrite += padding;
         }
 
-        size_t written = _writeFile(_inputBuf, toWrite);
+        size_t written = _writeFile(_inputBuf, toWrite, nullptr, padding);
         if (written != toWrite)
         {
             _onDownloadError(_writeFailureReason());

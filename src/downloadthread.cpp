@@ -7,6 +7,8 @@
 
 #include <QCoreApplication>
 #include "aligned_buffer.h"
+#include <algorithm>
+#include <cstring>
 #include "config.h"
 #include "cmdline_params.h"
 #include "config_txt_merge.h"
@@ -170,6 +172,8 @@ DownloadThread::~DownloadThread()
 
     if (_firstBlock)
         qFreeAligned(_firstBlock);
+    if (_stage)
+        qFreeAligned(_stage);
     
     // Note: curl_global_cleanup() is not called here - it happens at process exit.
     // This is safe and avoids issues with multiple DownloadThread instances.
@@ -1013,7 +1017,27 @@ size_t DownloadThread::_writeData(const char *buf, size_t len)
 
     if (!_filename.isEmpty())
     {
-        return _writeFileZeroSkip(buf, len);
+        size_t taken = 0;
+        while (taken < len)
+        {
+            if (!_stage)
+            {
+                _stage = static_cast<char *>(qMallocAligned(kStageSize, 4096));
+                if (!_stage)
+                    return 0;
+            }
+            const size_t n = std::min(len - taken, kStageSize - _stageFill);
+            ::memcpy(_stage + _stageFill, buf + taken, n);
+            _stageFill += n;
+            taken += n;
+            if (_stageFill == kStageSize)
+            {
+                _stageFill = 0;
+                if (_writeFileZeroSkip(_stage, kStageSize) != kStageSize)
+                    return 0;
+            }
+        }
+        return len;
     }
     else
     {
@@ -1093,6 +1117,25 @@ void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
 void DownloadThread::_hashData(const char *buf, size_t len)
 {
     _writehash.addData(buf, len);
+}
+
+size_t DownloadThread::_deviceBlockSize() const
+{
+    return _file ? _file->GetDeviceIOLimits().blockSizeOr512() : 512;
+}
+
+bool DownloadThread::_flushStage()
+{
+    if (!_stage || _stageFill == 0)
+        return true;
+    const size_t block = _deviceBlockSize();
+    const size_t padding = (block - _stageFill % block) % block;
+    if (padding > kStageSize - _stageFill)
+        return false;
+    ::memset(_stage + _stageFill, 0, padding);
+    const size_t total = _stageFill + padding;
+    _stageFill = 0;
+    return _writeFile(_stage, total, nullptr, padding) == total;
 }
 
 /*
@@ -1200,16 +1243,20 @@ QString DownloadThread::_writeFailureReason() const
     return tr("Error writing to device.");
 }
 
-size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete)
+size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete,
+                                  size_t padding)
 {
     if (_cancelled) {
         if (onComplete) onComplete();
         return len;
     }
 
+    const size_t hashLen = padding < len ? len - padding : 0;
+    _paddingBytes += padding;
+
     if (!_firstBlock)
     {
-        _writehash.addData(buf, len);
+        _writehash.addData(buf, hashLen);
         _firstBlock = (char *) qMallocAligned(len, 4096);
         _firstBlockSize = len;
         ::memcpy(_firstBlock, buf, len);
@@ -1254,9 +1301,9 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
 
     // Start hash computation for current buffer
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    _pendingHashFuture = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
+    _pendingHashFuture = QtConcurrent::run(&DownloadThread::_hashData, this, buf, hashLen);
 #else
-    _pendingHashFuture = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
+    _pendingHashFuture = QtConcurrent::run(this, &DownloadThread::_hashData, buf, hashLen);
 #endif
     _hasPendingHash = true;
 
@@ -1909,6 +1956,12 @@ void DownloadThread::_closeFiles()
 
 void DownloadThread::_writeComplete()
 {
+    if (!_cancelled && !_flushStage())
+    {
+        _onDownloadError(_writeFailureReason());
+        return;
+    }
+
     // Wait for all async writes to complete before proceeding
     // This is critical for data integrity before verification
     if (_file && _file->IsAsyncIOSupported() && _file->GetAsyncQueueDepth() > 1) {
@@ -2456,16 +2509,19 @@ bool DownloadThread::_verify()
     //
     // Layout of the data being hashed must match the write-time hash:
     //   firstBlock (held in client memory, written to disk last) ||
-    //   device[firstBlockSize..verifyTotal]
+    //   device[firstBlockSize..sourceTotal]
+    // where sourceTotal stops short of the zeroes that padded the last block:
+    // the write hash left them out so it would match the source's own hash.
+    const quint64 sourceTotal = (quint64)_verifyTotal - std::min<quint64>(_paddingBytes, _verifyTotal);
     {
         const std::uint8_t* prefix = _firstBlock
             ? reinterpret_cast<const std::uint8_t*>(_firstBlock)
             : nullptr;
         const std::size_t prefix_len = _firstBlock
-            ? (std::size_t)_firstBlockSize
+            ? (std::size_t)std::min<quint64>(_firstBlockSize, sourceTotal)
             : 0;
         const std::uint64_t device_off = (std::uint64_t)_firstBlockSize;
-        const std::uint64_t device_len = (std::uint64_t)_verifyTotal - device_off;
+        const std::uint64_t device_len = sourceTotal > device_off ? sourceTotal - device_off : 0;
 
         auto fast = _file->FastVerifySha256(prefix, prefix_len,
                                               device_off, device_len,
@@ -2520,13 +2576,16 @@ bool DownloadThread::_verify()
     // Invalidates cache and enables read-ahead hints
     _file->PrepareForSequentialRead(0, _verifyTotal);
 
+    // Device bytes read so far that belong to the source, and so are hashed.
+    quint64 hashed = 0;
     if (!_firstBlock)
     {
         _file->Seek(0);
     }
     else
     {
-        _verifyhash.addData(_firstBlock, _firstBlockSize);
+        hashed = std::min<quint64>(_firstBlockSize, sourceTotal);
+        _verifyhash.addData(_firstBlock, static_cast<qint64>(hashed));
         _file->Seek(_firstBlockSize);
         _lastVerifyNow += _firstBlockSize;
     }
@@ -2544,7 +2603,11 @@ bool DownloadThread::_verify()
             return false;
         }
 
-        _verifyhash.addData(verifyBuf, static_cast<qint64>(lenRead));
+        // Whole blocks are read, as O_DIRECT requires; the padding at the end
+        // of the last one is not hashed.
+        const quint64 toHash = std::min<quint64>(lenRead, sourceTotal - std::min(hashed, sourceTotal));
+        _verifyhash.addData(verifyBuf, static_cast<qint64>(toHash));
+        hashed += toHash;
         _lastVerifyNow += static_cast<qint64>(lenRead);
 
         _emitVerifyThroughput();

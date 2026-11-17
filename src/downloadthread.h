@@ -204,8 +204,20 @@ public:
     // actually finishes (not when it's queued). The caller should NOT free/reuse the
     // buffer until onComplete is called.
     // If onComplete is null or async is disabled, the buffer can be reused after return.
+    //
+    // `padding` is how many bytes at the end of buf are zeroes added to fill
+    // the device's last block. They are written but not hashed, so the hash
+    // stays the hash of the source and still matches its published SHA-256.
     size_t _writeFileZeroSkip(const char *buf, size_t len);
-    size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr);
+    size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr,
+                      size_t padding = 0);
+
+    // Bytes the device holds that the source did not: zeroes written to
+    // fill the last block. Verification reads them but does not hash them.
+    quint64 _paddingBytes = 0;
+
+    // The block size writes must be multiples of, under O_DIRECT.
+    size_t _deviceBlockSize() const;
 
     // Why a write to the device failed, in terms the reader can act on.
     // The system knows -- ENOSPC, EIO, ENXIO -- and a bare "Error writing to
@@ -348,6 +360,14 @@ protected:
     QMap<QString, CustomisationExpectation> _customisationDigests;
     char *_firstBlock;
     size_t _firstBlockSize;
+
+    // The plain (uncompressed, downloaded) path receives whatever lengths curl
+    // hands over. They are gathered here so the device only ever sees whole
+    // blocks, and what is left at the end goes out padded.
+    char *_stage = nullptr;
+    size_t _stageFill = 0;
+    static constexpr size_t kStageSize = 1024 * 1024;
+    bool _flushStage();
     static QByteArray _proxy;
     std::atomic<bool> _cancelled;  // Atomic for safe access from timeout utility
     bool _successful, _verifyEnabled, _cacheEnabled, _ejectEnabled;
