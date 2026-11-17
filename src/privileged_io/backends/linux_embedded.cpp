@@ -10,6 +10,7 @@
 
 #include "../../dependencies/yescrypt/sha256.h"
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cerrno>
@@ -60,6 +61,17 @@ std::uint64_t deviceSizeBytes(int fd) {
         return static_cast<std::uint64_t>(st.st_size);
     }
     return 0;
+}
+
+// O_DIRECT offsets and lengths must be multiples of this, and a drive with
+// 4K native sectors needs 4096. Anything the ioctl cannot answer for, such
+// as a regular file, is treated as 512.
+std::uint32_t logicalBlockSize(int fd) {
+    int lbs = 0;
+    if (::ioctl(fd, BLKSSZGET, &lbs) == 0 && lbs > 0) {
+        return static_cast<std::uint32_t>(lbs);
+    }
+    return 512;
 }
 
 } // namespace
@@ -198,7 +210,7 @@ Result<proto_ns::DeviceLimits> LinuxEmbeddedBackend::queryDeviceLimits(
     proto_ns::DeviceLimits lim;
     lim.set_total_bytes(size);
     lim.set_max_transfer_bytes(32u * 1024u * 1024u);
-    lim.set_logical_block_size(512);
+    lim.set_logical_block_size(logicalBlockSize(it->second.fd));
     return Result<proto_ns::DeviceLimits>::success(std::move(lim));
 }
 
@@ -317,18 +329,29 @@ Result<std::string> LinuxEmbeddedBackend::hashDeviceSha256(
     }
     std::uint64_t remaining = length;
     const int fd = it->second.fd;
+    // The length asked for stops where the source did, which need not be on
+    // a block boundary. O_DIRECT reads only whole blocks, so the last read
+    // takes the rest of the block -- padding the writer put there -- and
+    // only what was asked for is hashed.
+    const std::size_t block = logicalBlockSize(fd);
     while (remaining > 0) {
         const std::size_t want = static_cast<std::size_t>(
             remaining < kChunk ? remaining : kChunk);
-        const ssize_t got = ::pread(fd, buf.data(), want,
+        const std::size_t readLen = (want + block - 1) / block * block;
+        if (readLen > kChunk) {
+            return Result<std::string>::failure(
+                makeError(proto_ns::ERROR_DEVICE_IO, "hash: block larger than read buffer"));
+        }
+        const ssize_t got = ::pread(fd, buf.data(), readLen,
                                     static_cast<off_t>(device_offset));
         if (got <= 0) {
             return Result<std::string>::failure(
                 makeError(proto_ns::ERROR_DEVICE_IO, "hash read failed", errno));
         }
-        SHA256_Update(&ctx, buf.data(), static_cast<std::size_t>(got));
-        device_offset += static_cast<std::uint64_t>(got);
-        remaining -= static_cast<std::uint64_t>(got);
+        const std::size_t use = std::min(static_cast<std::size_t>(got), want);
+        SHA256_Update(&ctx, buf.data(), use);
+        device_offset += use;
+        remaining -= use;
     }
 
     uint8_t digest[32] = {0};

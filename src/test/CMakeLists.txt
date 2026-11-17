@@ -311,6 +311,23 @@ target_compile_options(privileged_writer_inprocess_test PRIVATE
 
 catch_discover_tests(privileged_writer_inprocess_test)
 
+# The embedded backend writes as root with O_DIRECT, which refuses unaligned
+# buffers. pread/pwrite are wrapped on this target alone to see what it hands
+# the kernel, since no unprivileged run can open a block device O_DIRECT;
+# ioctl is wrapped so a test can stand in for a drive with 4K sectors.
+if(UNIX AND NOT APPLE)
+    add_executable(linux_embedded_backend_test linux_embedded_backend_test.cpp)
+    target_include_directories(linux_embedded_backend_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(linux_embedded_backend_test PRIVATE
+        Catch2::Catch2WithMain privileged_io)
+    target_link_options(linux_embedded_backend_test PRIVATE
+        -Wl,--wrap=pwrite,--wrap=pwrite64,--wrap=pread,--wrap=pread64,--wrap=ioctl)
+    target_compile_features(linux_embedded_backend_test PRIVATE cxx_std_20)
+    rpi_discover_tests(linux_embedded_backend_test)
+endif()
+
 add_custom_target(test_privileged_writer_inprocess
     COMMAND privileged_writer_inprocess_test
     DEPENDS privileged_writer_inprocess_test
