@@ -200,3 +200,24 @@ set(RPI_FUZZ_FAT_SOURCES
 )
 rpi_add_fuzzer(fuzz_fatdir    MOC SOURCES ${RPI_FUZZ_FAT_SOURCES})
 rpi_add_fuzzer(fuzz_parttable MOC SOURCES ${RPI_FUZZ_FAT_SOURCES})
+
+# The privileged helper's request loop. Its own sources are compiled here so
+# libFuzzer sees their edges; the library supplies everything else.
+if(TARGET rpi_imager_writer_linux)
+    set(WSRV ${SRC}/writer/server)
+    set(PIO ${SRC}/privileged_io)
+    rpi_add_fuzzer(fuzz_helper_wire
+        SOURCES ${WSRV}/linux/service_impl.cpp
+                ${WSRV}/bulk_write_async.cpp
+                ${WSRV}/wire_outbound.cpp
+                ${WSRV}/session_telemetry.cpp
+                ${PIO}/wire/frame.cpp
+                ${PIO}/wire/server_message.cpp
+                ${PIO}/wire/linux_socket_io.cpp
+                ${PIO}/wire/linux_socket_stream.cpp
+                ${PIO}/wire/linux_shared_memory.cpp
+                ${SRC}/file_operations.cpp
+                ${SRC}/linux/file_operations_linux.cpp
+        LIBS rpi_imager_writer_linux)
+    target_include_directories(fuzz_helper_wire PRIVATE ${WSRV} ${PIO})
+endif()

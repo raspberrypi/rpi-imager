@@ -537,6 +537,69 @@ def drivelist_seeds(root):
         write(root, "corpus_drivelist", "lsblk_%d" % i, body.encode())
 
 
+def _varint(n):
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        out.append(b | (0x80 if n else 0))
+        if not n:
+            return bytes(out)
+
+
+def _pb(*fields):
+    """(number, value) pairs: ints as varints, bytes length-delimited."""
+    out = b""
+    for num, val in fields:
+        if isinstance(val, int):
+            out += _varint(num << 3) + _varint(val)
+        else:
+            out += _varint(num << 3 | 2) + _varint(len(val)) + val
+    return out
+
+
+def helper_wire_seeds(root):
+    """Whole sessions against the card run_fuzzers.sh provides, and a refusal.
+
+    Calls name a method by its index in the harness's table, so these
+    indices follow kMethods in fuzz_helper_wire.cpp.
+    """
+    sid = _pb((1, _pb((1, 1))))
+    calls = {
+        "hello": (0, _pb((1, 1))),
+        "list": (2, b""),
+        "limits": (6, sid),
+        "prepare": (7, sid + _pb((2, _pb((2, 1))))),
+        "map": (8, sid + _pb((2, 1 << 20), (3, 4))),
+        "bulk": (9, sid + _pb((3, 0), (4, 4096))),
+        "read": (10, sid + _pb((2, 0), (3, 512))),
+        "write": (11, sid + _pb((2, 512), (3, bytes(128)))),
+        "sync": (12, sid),
+        "hash": (13, sid + _pb((2, b"prefix"), (4, 8192))),
+        "hash_begin": (13, sid + _pb((4, 4096), (5, 1), (6, 1))),
+        "hash_end": (13, sid + _pb((3, 4096), (4, 4096), (5, 1), (7, 1))),
+        "close": (14, sid),
+        "unmount": (15, _pb((1, b"/dev/null"))),
+        "usb": (17, _pb((1, 1), (2, 2))),
+    }
+
+    def seq(*names):
+        return b"".join(bytes([m, len(p)]) + p for m, p in (calls[n] for n in names))
+
+    for dev in ("fuzzcard", "null"):
+        payload = _pb((1, ("/dev/" + dev).encode()))
+        open_ = bytes([5, len(payload)]) + payload
+        write(root, "corpus_helper_wire", "session_" + dev,
+              seq("hello") + open_ + seq("limits", "prepare", "map", "bulk",
+                                          "sync", "write", "read", "hash",
+                                          "close"))
+        write(root, "corpus_helper_wire", "incremental_" + dev,
+              open_ + seq("hash_begin", "bulk", "hash_end", "map", "bulk",
+                          "bulk", "close"))
+    write(root, "corpus_helper_wire", "maintenance",
+          seq("hello", "list", "unmount", "usb"))
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(root, exist_ok=True)
@@ -562,6 +625,7 @@ def main():
     regression_seeds(root)
     drivelist_seeds(root)
     oslist_seeds(root)
+    helper_wire_seeds(root)
     print(f"seeds written under {os.path.abspath(root)}")
     if os.path.exists(template):
         print(f"FUZZ_FAT_TEMPLATE={os.path.abspath(template)}")
