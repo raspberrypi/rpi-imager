@@ -35,7 +35,14 @@ public:
 
     void start(rpi_imager::FileOperations* fops, WireOutbound* outbound);
 
+    // FileOperations is single-threaded, and the worker writes and reaps on
+    // it while requests arrive on the dispatch thread. Both reaped the same
+    // io_uring completion, and its ring then stalled for minutes. Hold this
+    // for any call on the session's FileOperations.
+    std::unique_lock<std::mutex> lockDevice() { return std::unique_lock<std::mutex>(device_mutex_); }
+
     // Configure IOCP/io_uring queue depth when the client maps its bulk ring.
+    // The caller holds lockDevice().
     void configureAsyncQueueDepth(int depth);
 
     int asyncQueueDepth() const { return async_queue_depth_; }
@@ -52,7 +59,9 @@ public:
 
     // Block until queued jobs and in-flight callbacks complete, then drain
     // the FileOperations async queue. Safe to call from the dispatch thread.
-    void drainBeforeSync(rpi_imager::FileOperations* fops);
+    // Returns holding lockDevice(), so the caller's sync or read follows the
+    // drain with nothing written in between.
+    [[nodiscard]] std::unique_lock<std::mutex> drainBeforeSync(rpi_imager::FileOperations* fops);
 
     // Stop the worker and join it. Does not call WaitForPendingWrites; the
     // caller should do that before closing the device handle.
@@ -80,6 +89,7 @@ private:
     int async_queue_depth_ = 0;
 
     std::thread worker_;
+    std::mutex device_mutex_;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<Job> queue_;

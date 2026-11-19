@@ -71,14 +71,18 @@ void SessionBulkWriter::shutdown() {
     queue_.clear();
 }
 
-void SessionBulkWriter::drainBeforeSync(rpi_imager::FileOperations* fops) {
+std::unique_lock<std::mutex> SessionBulkWriter::drainBeforeSync(rpi_imager::FileOperations* fops) {
     {
         std::unique_lock<std::mutex> lk(mutex_);
         cv_.wait(lk, [this] { return queue_.empty() && active_jobs_ == 0; });
     }
+    // The last callback ends the job from inside the worker's reap, which
+    // is still running: waiting here keeps this thread out of it.
+    std::unique_lock<std::mutex> device(device_mutex_);
     if (fops) {
         (void)fops->WaitForPendingWrites();
     }
+    return device;
 }
 
 bool SessionBulkWriter::submit(std::uint64_t request_id,
@@ -244,6 +248,7 @@ void SessionBulkWriter::workerLoop() {
         // Completions are only reaped on the submitting thread, and nothing
         // else here would: without this the last writes are never answered.
         if (reap) {
+            std::lock_guard<std::mutex> device(device_mutex_);
             if (fops_) fops_->PollAsyncCompletions();
             continue;
         }
@@ -256,6 +261,7 @@ void SessionBulkWriter::workerLoop() {
             queue_.pop_front();
             ++active_jobs_;
         }
+        std::lock_guard<std::mutex> device(device_mutex_);
         runJob(std::move(job));
     }
 }

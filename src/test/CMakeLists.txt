@@ -682,6 +682,18 @@ if(TARGET rpi_imager_writer_linux)
     target_compile_features(usb_device_access_test PRIVATE cxx_std_20)
     rpi_discover_tests(usb_device_access_test)
 
+    # The bulk writer's worker and the dispatch thread on one device.
+    add_executable(bulk_write_async_test bulk_write_async_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.cpp)
+    target_include_directories(bulk_write_async_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io
+        ${CMAKE_CURRENT_SOURCE_DIR}/../writer/server)
+    target_link_libraries(bulk_write_async_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(bulk_write_async_test PRIVATE cxx_std_20)
+    rpi_discover_tests(bulk_write_async_test)
+
     # The client backend and the helper loop, talking over a socketpair.
     add_executable(linux_helper_wire_test linux_helper_wire_test.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp

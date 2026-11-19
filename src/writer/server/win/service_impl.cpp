@@ -330,6 +330,7 @@ proto::ErrorInfo Helper::handleQueryDeviceLimits(const std::string& payload, std
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad SessionRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "queryDeviceLimits: no session");
+    const auto device = s->bulk_writer.lockDevice();
 
     std::uint64_t size = 0;
     if (s->fops->GetSize(size) != FileError::kSuccess) {
@@ -354,6 +355,7 @@ proto::ErrorInfo Helper::handlePrepareDevice(const std::string& payload, std::st
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad PrepareDeviceRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "prepareDevice: no session");
+    const auto device = s->bulk_writer.lockDevice();
 
     std::uint64_t size = 0;
     if (s->fops->GetSize(size) != FileError::kSuccess) {
@@ -414,6 +416,7 @@ proto::ErrorInfo Helper::handleMapBulkBuffer(const std::string& payload, std::st
                     "mapBulkBuffer: session bytes-written cap exhausted");
     }
 
+    const auto device = s->bulk_writer.lockDevice();
     const auto& io_lim = s->fops->GetDeviceIOLimits();
     int async_depth = static_cast<int>(req.async_queue_depth());
     if (async_depth <= 0) {
@@ -478,6 +481,7 @@ proto::ErrorInfo Helper::handleWriteChunk(const std::string& payload, std::strin
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad WriteChunkRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "writeChunk: no session");
+    const auto device = s->bulk_writer.lockDevice();
     if (req.data().size() > kMaxSyncChunk) {
         return fail(proto::ERROR_WRITE_FAILED, "writeChunk: chunk exceeds sync cap");
     }
@@ -510,6 +514,7 @@ proto::ErrorInfo Helper::handleReadChunk(const std::string& payload, std::string
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad ReadRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "readChunk: no session");
+    const auto device = s->bulk_writer.lockDevice();
     if (req.length() > kMaxSyncChunk) {
         return fail(proto::ERROR_DEVICE_IO, "readChunk: length exceeds sync cap");
     }
@@ -538,7 +543,7 @@ proto::ErrorInfo Helper::handleSyncDevice(const std::string& payload, std::strin
     if (!req.ParseFromString(payload)) return fail(proto::ERROR_UNKNOWN, "bad SessionRequest");
     Session* s = find(req.session_id());
     if (!s) return fail(proto::ERROR_SESSION_NOT_FOUND, "syncDevice: no session");
-    s->bulk_writer.drainBeforeSync(s->fops.get());
+    const auto device = s->bulk_writer.drainBeforeSync(s->fops.get());
     const auto t0 = std::chrono::steady_clock::now();
     const FileError e = s->fops->ForceSync();
     const auto t1 = std::chrono::steady_clock::now();
@@ -559,8 +564,9 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     const bool finish = !req.incremental() || req.finish();
     const auto t0 = std::chrono::steady_clock::now();
 
+    std::unique_lock<std::mutex> device;
     if (begin) {
-        s->bulk_writer.drainBeforeSync(s->fops.get());
+        device = s->bulk_writer.drainBeforeSync(s->fops.get());
         s->hash = std::make_unique<Sha256>();
         s->hash_time = {};
         if (!s->hash->init()) {
@@ -576,6 +582,9 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
         return fail(proto::ERROR_UNKNOWN, "hashDeviceSha256: no hash in progress");
     }
 
+    if (!device.owns_lock()) {
+        device = s->bulk_writer.lockDevice();
+    }
     if (s->fops->Seek(req.device_offset()) != FileError::kSuccess) {
         s->hash.reset();
         return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: seek failed");
