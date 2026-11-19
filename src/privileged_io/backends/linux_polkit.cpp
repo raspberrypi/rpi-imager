@@ -47,6 +47,13 @@ proto_ns::ErrorInfo makeError(proto_ns::ErrorCode code,
     return e;
 }
 
+// A reply that does not parse fails the call: read as a default message,
+// it became session 0, an empty digest or a read of nothing.
+proto_ns::ErrorInfo malformedReply(const google::protobuf::MessageLite& m) {
+    return makeError(proto_ns::ERROR_UNKNOWN,
+                     "malformed " + std::string(m.GetTypeName()) + " from helper");
+}
+
 std::string clientExePath() {
     char buf[PATH_MAX] = {0};
     const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
@@ -357,7 +364,7 @@ Result<proto_ns::HelperStatus> LinuxPolkitBackend::queryHelperStatus() {
     proto_ns::ProtocolVersion pv;
     pv.set_version(kProtocolVersion);
     std::string pv_ser;
-    pv.SerializeToString(&pv_ser);
+    (void)pv.SerializeToString(&pv_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_HELLO, pv_ser);
     if (!rpc.ok) {
         proto_ns::HelperStatus s;
@@ -370,7 +377,9 @@ Result<proto_ns::HelperStatus> LinuxPolkitBackend::queryHelperStatus() {
         return Result<proto_ns::HelperStatus>::success(std::move(s));
     }
     proto_ns::HelperStatus s;
-    s.ParseFromString(rpc.payload);
+    if (!s.ParseFromString(rpc.payload)) {
+        return Result<proto_ns::HelperStatus>::failure(malformedReply(s));
+    }
     wire::applyClientProtocolVersion(s, kProtocolVersion);
     return Result<proto_ns::HelperStatus>::success(std::move(s));
 }
@@ -406,7 +415,9 @@ Result<std::vector<proto_ns::DriveInfo>> LinuxPolkitBackend::listDrivesNow() {
         return Result<std::vector<proto_ns::DriveInfo>>::failure(std::move(rpc.err));
     }
     proto_ns::DriveList list;
-    list.ParseFromString(rpc.payload);
+    if (!list.ParseFromString(rpc.payload)) {
+        return Result<std::vector<proto_ns::DriveInfo>>::failure(malformedReply(list));
+    }
     std::vector<proto_ns::DriveInfo> out(list.drives().begin(), list.drives().end());
     return Result<std::vector<proto_ns::DriveInfo>>::success(std::move(out));
 }
@@ -453,7 +464,9 @@ LinuxPolkitBackend::listDevicesNow() {
             std::move(rpc.err));
     }
     proto_ns::DriveList list;
-    list.ParseFromString(rpc.payload);
+    if (!list.ParseFromString(rpc.payload)) {
+        return Result<std::vector<Drivelist::DeviceDescriptor>>::failure(malformedReply(list));
+    }
     return Result<std::vector<Drivelist::DeviceDescriptor>>::success(
         wire::deviceDescriptorsFromDriveList(list));
 }
@@ -465,13 +478,15 @@ Result<proto_ns::SessionId> LinuxPolkitBackend::openSession(
     req.set_device_path(device_path);
     *req.mutable_options() = opts;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_OPEN_SESSION, req_ser);
     if (!rpc.ok) {
         return Result<proto_ns::SessionId>::failure(std::move(rpc.err));
     }
     proto_ns::SessionId sid;
-    sid.ParseFromString(rpc.payload);
+    if (!sid.ParseFromString(rpc.payload)) {
+        return Result<proto_ns::SessionId>::failure(malformedReply(sid));
+    }
     return Result<proto_ns::SessionId>::success(std::move(sid));
 }
 
@@ -481,13 +496,15 @@ Result<proto_ns::DeviceLimits> LinuxPolkitBackend::queryDeviceLimits(
     proto_ns::SessionRequest req;
     *req.mutable_session_id() = sid;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_QUERY_DEVICE_LIMITS, req_ser);
     if (!rpc.ok) {
         return Result<proto_ns::DeviceLimits>::failure(std::move(rpc.err));
     }
     proto_ns::DeviceLimits limits;
-    limits.ParseFromString(rpc.payload);
+    if (!limits.ParseFromString(rpc.payload)) {
+        return Result<proto_ns::DeviceLimits>::failure(malformedReply(limits));
+    }
     return Result<proto_ns::DeviceLimits>::success(std::move(limits));
 }
 
@@ -498,7 +515,7 @@ Result<void> LinuxPolkitBackend::prepareDevice(
     *req.mutable_session_id() = sid;
     *req.mutable_options() = opts;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_PREPARE_DEVICE, req_ser);
     if (!rpc.ok) {
         return Result<void>::failure(std::move(rpc.err));
@@ -532,13 +549,15 @@ Result<std::size_t> LinuxPolkitBackend::readChunk(
     req.set_offset(offset);
     req.set_length(len);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_READ_CHUNK, req_ser);
     if (!rpc.ok) {
         return Result<std::size_t>::failure(std::move(rpc.err));
     }
     proto_ns::ReadReply rr;
-    rr.ParseFromString(rpc.payload);
+    if (!rr.ParseFromString(rpc.payload)) {
+        return Result<std::size_t>::failure(malformedReply(rr));
+    }
     const std::size_t n = std::min<std::size_t>(len, rr.data().size());
     std::memcpy(out, rr.data().data(), n);
     return Result<std::size_t>::success(n);
@@ -553,13 +572,15 @@ Result<std::size_t> LinuxPolkitBackend::writeChunk(
     req.set_offset(offset);
     req.set_data(std::string(reinterpret_cast<const char*>(in), len));
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_WRITE_CHUNK, req_ser);
     if (!rpc.ok) {
         return Result<std::size_t>::failure(std::move(rpc.err));
     }
     proto_ns::WriteChunkReply wr;
-    wr.ParseFromString(rpc.payload);
+    if (!wr.ParseFromString(rpc.payload)) {
+        return Result<std::size_t>::failure(malformedReply(wr));
+    }
     return Result<std::size_t>::success(static_cast<std::size_t>(wr.bytes_written()));
 }
 
@@ -568,7 +589,7 @@ Result<void> LinuxPolkitBackend::syncDevice(const proto_ns::SessionId& sid) {
     proto_ns::SessionRequest req;
     *req.mutable_session_id() = sid;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_SYNC_DEVICE, req_ser);
     if (!rpc.ok) {
         return Result<void>::failure(std::move(rpc.err));
@@ -604,13 +625,15 @@ Result<std::string> LinuxPolkitBackend::hashRequest(
         req.set_finish(finish);
     }
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_HASH_DEVICE_SHA256, req_ser);
     if (!rpc.ok) {
         return Result<std::string>::failure(std::move(rpc.err));
     }
     proto_ns::HashDeviceReply hr;
-    hr.ParseFromString(rpc.payload);
+    if (!hr.ParseFromString(rpc.payload)) {
+        return Result<std::string>::failure(malformedReply(hr));
+    }
     return Result<std::string>::success(hr.digest());
 }
 
@@ -621,13 +644,15 @@ Result<proto_ns::SessionStats> LinuxPolkitBackend::closeSession(
     proto_ns::SessionRequest req;
     *req.mutable_session_id() = sid;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_CLOSE_SESSION, req_ser);
     if (!rpc.ok) {
         return Result<proto_ns::SessionStats>::failure(std::move(rpc.err));
     }
     proto_ns::SessionStats stats;
-    stats.ParseFromString(rpc.payload);
+    if (!stats.ParseFromString(rpc.payload)) {
+        return Result<proto_ns::SessionStats>::failure(malformedReply(stats));
+    }
     return Result<proto_ns::SessionStats>::success(std::move(stats));
 }
 
@@ -636,7 +661,7 @@ Result<void> LinuxPolkitBackend::unmount(const std::string& device_path) {
     proto_ns::PathRequest req;
     req.set_device_path(device_path);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_UNMOUNT, req_ser);
     if (!rpc.ok) {
         return Result<void>::failure(std::move(rpc.err));
@@ -649,7 +674,7 @@ Result<void> LinuxPolkitBackend::eject(const std::string& device_path) {
     proto_ns::PathRequest req;
     req.set_device_path(device_path);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_EJECT, req_ser);
     if (!rpc.ok) {
         return Result<void>::failure(std::move(rpc.err));
@@ -663,7 +688,7 @@ Result<int> LinuxPolkitBackend::openUsbDevice(std::uint32_t bus, std::uint32_t a
     req.set_bus(bus);
     req.set_address(address);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_OPEN_USB_DEVICE, req_ser, true);
     if (!rpc.ok) {
         return Result<int>::failure(std::move(rpc.err));
@@ -680,7 +705,7 @@ Result<void> LinuxPolkitBackend::mapBulkBuffer(const proto_ns::SessionId& sid,
     req.set_size_bytes(size_bytes);
     req.set_async_queue_depth(async_queue_depth);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     if (size_bytes == 0) {
         const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_MAP_BULK_BUFFER, req_ser);
@@ -740,13 +765,15 @@ Result<std::size_t> LinuxPolkitBackend::bulkWriteFromBuffer(
     req.set_offset(device_offset);
     req.set_length(length);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
     const auto rpc = callRpcLocked(state_.get(), proto_ns::WIRE_BULK_WRITE, req_ser);
     if (!rpc.ok) {
         return Result<std::size_t>::failure(std::move(rpc.err));
     }
     proto_ns::WriteResult wr;
-    wr.ParseFromString(rpc.payload);
+    if (!wr.ParseFromString(rpc.payload)) {
+        return Result<std::size_t>::failure(malformedReply(wr));
+    }
     return Result<std::size_t>::success(static_cast<std::size_t>(wr.bytes_written()));
 }
 
@@ -773,7 +800,7 @@ void LinuxPolkitBackend::submitBulkWriteAsync(const proto_ns::SessionId& sid,
     req.set_offset(device_offset);
     req.set_length(length);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     {
         std::lock_guard<std::mutex> lk(state_->mutex);

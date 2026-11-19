@@ -222,7 +222,7 @@ void SessionBulkWriter::runJob(Job job) {
             wr.set_bytes_written(bytes);
             wr.set_latency_us(static_cast<std::uint64_t>(lat_us));
             std::string payload;
-            wr.SerializeToString(&payload);
+            (void)wr.SerializeToString(&payload);
             sendResponse(request_id, ok(), payload);
             jobFinished();
         });

@@ -321,7 +321,7 @@ proto::ErrorInfo Helper::handleOpenSession(const std::string& payload, std::stri
 
     proto::SessionId sid;
     sid.set_v(id);
-    sid.SerializeToString(&out);
+    (void)sid.SerializeToString(&out);
     return ok();
 }
 
@@ -346,7 +346,7 @@ proto::ErrorInfo Helper::handleQueryDeviceLimits(const std::string& payload, std
         out_limits.set_suggested_queue_depth(
             static_cast<std::uint32_t>(lim.suggested_queue_depth));
     }
-    out_limits.SerializeToString(&out);
+    (void)out_limits.SerializeToString(&out);
     return ok();
 }
 
@@ -441,7 +441,7 @@ proto::ErrorInfo Helper::handleMapBulkBuffer(const std::string& payload, std::st
     proto::MapBulkBufferReply reply;
     reply.set_section_handle(handle_value);
     reply.set_size_bytes(want);
-    reply.SerializeToString(&out);
+    (void)reply.SerializeToString(&out);
     return ok();
 }
 
@@ -505,7 +505,7 @@ proto::ErrorInfo Helper::handleWriteChunk(const std::string& payload, std::strin
 
     proto::WriteChunkReply reply;
     reply.set_bytes_written(req.data().size());
-    reply.SerializeToString(&out);
+    (void)reply.SerializeToString(&out);
     return ok();
 }
 
@@ -534,7 +534,7 @@ proto::ErrorInfo Helper::handleReadChunk(const std::string& payload, std::string
 
     proto::ReadReply reply;
     reply.set_data(reinterpret_cast<const char*>(buf.data()), got);
-    reply.SerializeToString(&out);
+    (void)reply.SerializeToString(&out);
     return ok();
 }
 
@@ -626,7 +626,7 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
         s->telemetry.recordHashDevice(s->hash_time);
         reply.set_digest(digest);
     }
-    reply.SerializeToString(&out);
+    (void)reply.SerializeToString(&out);
     return ok();
 }
 
@@ -638,7 +638,7 @@ proto::ErrorInfo Helper::handleListDrives(std::string& out) {
         return fail(proto::ERROR_UNKNOWN, std::string("listDrives: ") + e.what());
     }
     const proto::DriveList list = buildDriveList(devices);
-    list.SerializeToString(&out);
+    (void)list.SerializeToString(&out);
     return ok();
 }
 
@@ -762,7 +762,7 @@ proto::ErrorInfo Helper::handleCloseSession(const std::string& payload, std::str
     proto::SessionStats stats;
     s.telemetry.fillSessionStats(stats, s.bytes_written.load(), s.started, success,
                                  success ? nullptr : &terminal);
-    stats.SerializeToString(&out);
+    (void)stats.SerializeToString(&out);
 
     sessions_.erase(it);
     return ok();
@@ -788,7 +788,7 @@ proto::ErrorInfo Helper::dispatch(const proto::WireRequest& req, std::string& ou
                     wire::applyClientProtocolVersion(status, pv.version());
                 }
             }
-            status.SerializeToString(&out_payload);
+            (void)status.SerializeToString(&out_payload);
             return ok();
         }
         case proto::WIRE_OPEN_SESSION:        return handleOpenSession(req.payload(), out_payload);

@@ -49,6 +49,13 @@ proto_ns::ErrorInfo makeError(proto_ns::ErrorCode code,
     return e;
 }
 
+// A reply that does not parse fails the call: read as a default message,
+// it became session 0, an empty digest or a read of nothing.
+proto_ns::ErrorInfo malformedReply(const google::protobuf::MessageLite& m) {
+    return makeError(proto_ns::ERROR_UNKNOWN,
+                     "malformed " + std::string(m.GetTypeName()) + " from helper");
+}
+
 std::wstring widen(const std::string& s) {
     if (s.empty()) return std::wstring();
     const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(),
@@ -289,7 +296,7 @@ Result<proto_ns::HelperStatus> WindowsUacBackend::queryHelperStatus() {
     proto_ns::ProtocolVersion pv;
     pv.set_version(kProtocolVersion);
     std::string pv_ser;
-    pv.SerializeToString(&pv_ser);
+    (void)pv.SerializeToString(&pv_ser);
     if (!callRpcLocked(state_.get(), proto_ns::WIRE_HELLO, pv_ser, err, reply)) {
         proto_ns::HelperStatus s;
         if (err.code() == proto_ns::ERROR_HELPER_VERSION_MISMATCH) {
@@ -301,7 +308,9 @@ Result<proto_ns::HelperStatus> WindowsUacBackend::queryHelperStatus() {
         return Result<proto_ns::HelperStatus>::success(std::move(s));
     }
     proto_ns::HelperStatus s;
-    s.ParseFromString(reply);
+    if (!s.ParseFromString(reply)) {
+        return Result<proto_ns::HelperStatus>::failure(malformedReply(s));
+    }
     wire::applyClientProtocolVersion(s, kProtocolVersion);
     return Result<proto_ns::HelperStatus>::success(std::move(s));
 }
@@ -345,7 +354,9 @@ Result<std::vector<proto_ns::DriveInfo>> WindowsUacBackend::listDrivesNow() {
         return Result<std::vector<proto_ns::DriveInfo>>::failure(std::move(err));
     }
     proto_ns::DriveList list;
-    list.ParseFromString(reply);
+    if (!list.ParseFromString(reply)) {
+        return Result<std::vector<proto_ns::DriveInfo>>::failure(malformedReply(list));
+    }
     std::vector<proto_ns::DriveInfo> out(list.drives().begin(), list.drives().end());
     return Result<std::vector<proto_ns::DriveInfo>>::success(std::move(out));
 }
@@ -395,7 +406,9 @@ WindowsUacBackend::listDevicesNow() {
         return Result<std::vector<Drivelist::DeviceDescriptor>>::failure(std::move(err));
     }
     proto_ns::DriveList list;
-    list.ParseFromString(reply);
+    if (!list.ParseFromString(reply)) {
+        return Result<std::vector<Drivelist::DeviceDescriptor>>::failure(malformedReply(list));
+    }
     return Result<std::vector<Drivelist::DeviceDescriptor>>::success(
         wire::deviceDescriptorsFromDriveList(list));
 }
@@ -411,7 +424,7 @@ Result<proto_ns::SessionId> WindowsUacBackend::openSession(
     req.set_device_path(device_path);
     *req.mutable_options() = opts;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -419,7 +432,9 @@ Result<proto_ns::SessionId> WindowsUacBackend::openSession(
         return Result<proto_ns::SessionId>::failure(std::move(err));
     }
     proto_ns::SessionId sid;
-    sid.ParseFromString(reply);
+    if (!sid.ParseFromString(reply)) {
+        return Result<proto_ns::SessionId>::failure(malformedReply(sid));
+    }
     return Result<proto_ns::SessionId>::success(std::move(sid));
 }
 
@@ -429,7 +444,7 @@ Result<proto_ns::DeviceLimits> WindowsUacBackend::queryDeviceLimits(
     proto_ns::SessionRequest req;
     *req.mutable_session_id() = sid;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -437,7 +452,9 @@ Result<proto_ns::DeviceLimits> WindowsUacBackend::queryDeviceLimits(
         return Result<proto_ns::DeviceLimits>::failure(std::move(err));
     }
     proto_ns::DeviceLimits limits;
-    limits.ParseFromString(reply);
+    if (!limits.ParseFromString(reply)) {
+        return Result<proto_ns::DeviceLimits>::failure(malformedReply(limits));
+    }
     return Result<proto_ns::DeviceLimits>::success(std::move(limits));
 }
 
@@ -448,7 +465,7 @@ Result<void> WindowsUacBackend::prepareDevice(
     *req.mutable_session_id() = sid;
     *req.mutable_options() = opts;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -488,7 +505,7 @@ Result<std::size_t> WindowsUacBackend::readChunk(
     req.set_offset(offset);
     req.set_length(len);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -496,7 +513,9 @@ Result<std::size_t> WindowsUacBackend::readChunk(
         return Result<std::size_t>::failure(std::move(err));
     }
     proto_ns::ReadReply rr;
-    rr.ParseFromString(reply);
+    if (!rr.ParseFromString(reply)) {
+        return Result<std::size_t>::failure(malformedReply(rr));
+    }
     const std::size_t n = std::min<std::size_t>(len, rr.data().size());
     std::memcpy(out, rr.data().data(), n);
     return Result<std::size_t>::success(n);
@@ -511,7 +530,7 @@ Result<std::size_t> WindowsUacBackend::writeChunk(
     req.set_offset(offset);
     req.set_data(std::string(reinterpret_cast<const char*>(in), len));
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -519,7 +538,9 @@ Result<std::size_t> WindowsUacBackend::writeChunk(
         return Result<std::size_t>::failure(std::move(err));
     }
     proto_ns::WriteChunkReply wr;
-    wr.ParseFromString(reply);
+    if (!wr.ParseFromString(reply)) {
+        return Result<std::size_t>::failure(malformedReply(wr));
+    }
     return Result<std::size_t>::success(static_cast<std::size_t>(wr.bytes_written()));
 }
 
@@ -528,7 +549,7 @@ Result<void> WindowsUacBackend::syncDevice(const proto_ns::SessionId& sid) {
     proto_ns::SessionRequest req;
     *req.mutable_session_id() = sid;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -566,7 +587,7 @@ Result<std::string> WindowsUacBackend::hashRequest(
         req.set_finish(finish);
     }
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -574,7 +595,9 @@ Result<std::string> WindowsUacBackend::hashRequest(
         return Result<std::string>::failure(std::move(err));
     }
     proto_ns::HashDeviceReply hr;
-    hr.ParseFromString(reply);
+    if (!hr.ParseFromString(reply)) {
+        return Result<std::string>::failure(malformedReply(hr));
+    }
     return Result<std::string>::success(hr.digest());
 }
 
@@ -585,7 +608,7 @@ Result<proto_ns::SessionStats> WindowsUacBackend::closeSession(
     proto_ns::SessionRequest req;
     *req.mutable_session_id() = sid;
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -593,7 +616,9 @@ Result<proto_ns::SessionStats> WindowsUacBackend::closeSession(
         return Result<proto_ns::SessionStats>::failure(std::move(err));
     }
     proto_ns::SessionStats stats;
-    stats.ParseFromString(reply);
+    if (!stats.ParseFromString(reply)) {
+        return Result<proto_ns::SessionStats>::failure(malformedReply(stats));
+    }
     return Result<proto_ns::SessionStats>::success(std::move(stats));
 }
 
@@ -606,7 +631,7 @@ Result<void> WindowsUacBackend::unmount(const std::string& device_path) {
     proto_ns::PathRequest req;
     req.set_device_path(device_path);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -621,7 +646,7 @@ Result<void> WindowsUacBackend::eject(const std::string& device_path) {
     proto_ns::PathRequest req;
     req.set_device_path(device_path);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -645,7 +670,7 @@ Result<void> WindowsUacBackend::pathRpc(proto_ns::WireMethod method,
     proto_ns::PathRequest req;
     req.set_device_path(device_path);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -669,7 +694,7 @@ Result<void> WindowsUacBackend::mapBulkBuffer(const proto_ns::SessionId& sid,
     req.set_size_bytes(size_bytes);
     req.set_async_queue_depth(async_queue_depth);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -734,7 +759,7 @@ Result<std::size_t> WindowsUacBackend::bulkWriteFromBuffer(
     req.set_offset(device_offset);
     req.set_length(length);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     proto_ns::ErrorInfo err;
     std::string reply;
@@ -742,7 +767,9 @@ Result<std::size_t> WindowsUacBackend::bulkWriteFromBuffer(
         return Result<std::size_t>::failure(std::move(err));
     }
     proto_ns::WriteResult wr;
-    wr.ParseFromString(reply);
+    if (!wr.ParseFromString(reply)) {
+        return Result<std::size_t>::failure(malformedReply(wr));
+    }
     return Result<std::size_t>::success(static_cast<std::size_t>(wr.bytes_written()));
 }
 
@@ -770,7 +797,7 @@ void WindowsUacBackend::submitBulkWriteAsync(const proto_ns::SessionId& sid,
     req.set_offset(device_offset);
     req.set_length(length);
     std::string req_ser;
-    req.SerializeToString(&req_ser);
+    (void)req.SerializeToString(&req_ser);
 
     {
         std::lock_guard<std::mutex> lk(state_->mutex);

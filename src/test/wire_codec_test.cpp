@@ -165,12 +165,12 @@ TEST_CASE("The handshake accepts only the version it speaks", "[wire][handshake]
 
     SECTION("the same version") {
         pv.set_version(7);
-        pv.SerializeToString(&ser);
+        (void)pv.SerializeToString(&ser);
         CHECK(wire::checkProtocolVersion(ser, 7).code() == proto::ERROR_NONE);
     }
     SECTION("another version") {
         pv.set_version(6);
-        pv.SerializeToString(&ser);
+        (void)pv.SerializeToString(&ser);
         const auto err = wire::checkProtocolVersion(ser, 7);
         CHECK(err.code() == proto::ERROR_HELPER_VERSION_MISMATCH);
         CHECK(err.detail() == "protocol version mismatch: client=6 helper=7");

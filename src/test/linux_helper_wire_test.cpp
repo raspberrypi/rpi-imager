@@ -163,7 +163,7 @@ proto::SessionId bogusSession() {
 
 std::string serialised(const google::protobuf::MessageLite& m) {
     std::string out;
-    m.SerializeToString(&out);
+    (void)m.SerializeToString(&out);
     return out;
 }
 
@@ -483,6 +483,68 @@ TEST_CASE("A device error the helper reports leaves the connection up",
     CHECK(backend->helperActive());
     CHECK(backend->queryDeviceLimits(opened.value).ok);
     CHECK(backend->closeSession(opened.value).ok);
+}
+
+TEST_CASE("A reply that does not parse fails the call", "[privileged][linux][wire]")
+{
+    int fds[2];
+    REQUIRE(::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) == 0);
+
+    // Answers every request "successfully" with a payload no message parses:
+    // a length-delimited field claiming more bytes than follow.
+    std::thread helper([fd = fds[1]] {
+        wire::FrameAccumulator acc;
+        char buf[8192];
+        std::string frame;
+        for (;;) {
+            const ssize_t got = ::read(fd, buf, sizeof(buf));
+            if (got <= 0) {
+                return;
+            }
+            acc.append(buf, static_cast<std::size_t>(got));
+            bool oversize = false;
+            while (acc.next(frame, oversize)) {
+                proto::WireRequest req;
+                if (!req.ParseFromString(frame)) {
+                    return;
+                }
+                proto::WireResponse resp;
+                resp.set_request_id(req.request_id());
+                resp.set_payload(std::string("\x0a\x7f", 2));
+                const std::string out = wire::encodeServerResponse(resp);
+                if (::write(fd, out.data(), out.size()) != static_cast<ssize_t>(out.size())) {
+                    return;
+                }
+            }
+        }
+    });
+
+    {
+        LinuxPolkitBackend::Options opts;
+        opts.connected_socket = fds[0];
+        LinuxPolkitBackend backend(opts);
+        REQUIRE(backend.installHelper().ok);
+
+        const proto::SessionId sid = bogusSession();
+        std::byte buf[16] = {};
+        auto malformed = [](const proto::ErrorInfo& e) {
+            return e.code() == proto::ERROR_UNKNOWN
+                   && e.detail().find("malformed") != std::string::npos;
+        };
+        CHECK(malformed(backend.queryHelperStatus().error));
+        CHECK(malformed(backend.listDrivesNow().error));
+        CHECK(malformed(backend.listDevicesNow().error));
+        CHECK(malformed(backend.openSession("/dev/sdz", {}).error));
+        CHECK(malformed(backend.queryDeviceLimits(sid).error));
+        CHECK(malformed(backend.readChunk(sid, 0, buf, sizeof(buf)).error));
+        CHECK(malformed(backend.writeChunk(sid, 0, buf, sizeof(buf)).error));
+        CHECK(malformed(backend.hashDeviceSha256(sid, "", 0, 16).error));
+        CHECK(malformed(backend.closeSession(sid).error));
+        CHECK(backend.helperActive());
+    }
+    ::shutdown(fds[1], SHUT_RDWR);
+    helper.join();
+    ::close(fds[1]);
 }
 
 TEST_CASE("A helper that goes away fails every later call", "[privileged][linux][wire]")
