@@ -34,7 +34,8 @@ bool LinuxSocketStream::write(const char* data, std::size_t len, int pass_fd) {
     }
     std::size_t off = 0;
     while (off < len) {
-        const ssize_t n = ::write(fd_, data + off, len - off);
+        // Neither process ignores SIGPIPE; a peer gone mid-write is an error.
+        const ssize_t n = ::send(fd_, data + off, len - off, MSG_NOSIGNAL);
         if (n <= 0) {
             return failWrite();
         }

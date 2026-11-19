@@ -55,7 +55,7 @@ bool sendFrame(int fd, const std::string& frame, int pass_fd) {
         std::memcpy(CMSG_DATA(cmsg), &pass_fd, sizeof(pass_fd));
     }
 
-    const ssize_t n = ::sendmsg(fd, &msg, 0);
+    const ssize_t n = ::sendmsg(fd, &msg, MSG_NOSIGNAL);
     return n == static_cast<ssize_t>(frame.size());
 }
 
