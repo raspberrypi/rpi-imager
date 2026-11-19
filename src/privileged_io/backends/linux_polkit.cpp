@@ -129,6 +129,7 @@ struct LinuxPolkitBackend::State {
     // Atomic so helperActive() can read it without the mutex, which a
     // connect holds for as long as the polkit prompt is open.
     std::atomic<bool> connected{false};
+    bool adopted = false;
     wire::DuplexConnection duplex;
 
     wire::LinuxSharedMemory bulk;
@@ -179,6 +180,18 @@ std::string clientAppImagePath() {
 
 bool ensureConnectedImpl(LinuxPolkitBackend::State* st, proto_ns::ErrorInfo& err) {
     if (st->connected && st->sock >= 0 && st->duplex.isAttached()) {
+        return true;
+    }
+    if (st->options.connected_socket >= 0) {
+        // Once only: the descriptor may be closed, and its number reused.
+        if (st->adopted) {
+            err = makeError(proto_ns::ERROR_DEVICE_DISCONNECTED, "helper connection closed");
+            return false;
+        }
+        st->adopted = true;
+        st->sock = st->options.connected_socket;
+        st->connected = true;
+        st->duplex.attach(std::make_unique<wire::LinuxSocketStream>(st->sock));
         return true;
     }
 

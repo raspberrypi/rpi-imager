@@ -656,6 +656,15 @@ if((WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
     target_link_libraries(duplex_connection_test PRIVATE Catch2::Catch2WithMain privileged_io)
     target_compile_features(duplex_connection_test PRIVATE cxx_std_20)
     rpi_discover_tests(duplex_connection_test)
+
+    # The helper protocol's encoders and decoders.
+    add_executable(wire_codec_test wire_codec_test.cpp)
+    target_include_directories(wire_codec_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(wire_codec_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(wire_codec_test PRIVATE cxx_std_20)
+    rpi_discover_tests(wire_codec_test)
 endif()
 
 # The AppImage signature the Linux helper authenticates its client by.
@@ -672,6 +681,18 @@ if(TARGET rpi_imager_writer_linux)
     target_link_libraries(usb_device_access_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
     target_compile_features(usb_device_access_test PRIVATE cxx_std_20)
     rpi_discover_tests(usb_device_access_test)
+
+    # The client backend and the helper loop, talking over a socketpair.
+    add_executable(linux_helper_wire_test linux_helper_wire_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.cpp)
+    target_include_directories(linux_helper_wire_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io
+        ${CMAKE_CURRENT_SOURCE_DIR}/../writer/server)
+    target_link_libraries(linux_helper_wire_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(linux_helper_wire_test PRIVATE cxx_std_20)
+    rpi_discover_tests(linux_helper_wire_test)
 endif()
 
 # ============================================================================

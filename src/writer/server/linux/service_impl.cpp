@@ -747,6 +747,12 @@ void serviceLoop(int client_fd) {
     }
     helperLog("client authenticated");
 
+    ServeClientLinux(client_fd);
+}
+
+} // namespace
+
+void ServeClientLinux(int client_fd) {
     wire::LinuxSocketStream stream(client_fd);
     WireOutbound outbound(stream);
     DriveWatchService drive_watch;
@@ -802,8 +808,6 @@ void serviceLoop(int client_fd) {
 
     drive_watch.unsubscribe();
 }
-
-} // namespace
 
 int RpiImagerWriterServiceMainLinux(int argc, char** argv) {
     const std::string socket_path = socketPathFromArgs(argc, argv);

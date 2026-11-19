@@ -32,6 +32,10 @@ public:
         // may be minutes with a screen reader. Cancelling ends pkexec, so
         // this only bounds a helper that hangs.
         std::uint32_t handshake_timeout_ms = 600000;
+
+        // A helper connection already made, adopted instead of starting one
+        // through pkexec; the backend closes it. For tests.
+        int connected_socket = -1;
     };
 
     LinuxPolkitBackend();
