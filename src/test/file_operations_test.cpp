@@ -717,6 +717,49 @@ TEST_CASE("Tell follows Seek and the writes that follow it", "[file-ops]") {
   CHECK(readBack(path, 4096, 1024) == data);
 }
 
+TEST_CASE("After a read, Tell says where the next write lands", "[file-ops]") {
+  // The helper's bulk writer seeks only when Tell() differs from the write's
+  // offset. On Linux, after Seek(0) and a read, Tell() gave the read's end
+  // while the write cursor stayed at 0, so a write meant for the read's end
+  // skipped the seek and landed at 0.
+  const std::string path = makeImage("tell-read.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  REQUIRE(ops->Seek(0) == FileError::kSuccess);
+  std::vector<std::uint8_t> buf(4096);
+  std::size_t got = 0;
+  REQUIRE(ops->ReadSequential(buf.data(), buf.size(), got) == FileError::kSuccess);
+  REQUIRE(got == buf.size());
+  const std::uint64_t at = ops->Tell();
+
+  const auto data = pattern(1024, 0x52);
+  REQUIRE(ops->WriteSequential(data.data(), data.size()) == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK(readBack(path, at, 1024) == data);
+}
+
+TEST_CASE("Toggling direct I/O keeps where the next write goes", "[file-ops]") {
+  // On Linux the toggle reopens the handle, which zeroed the write cursor:
+  // Tell() still looked right, but the next write went to the start.
+  const std::string path = makeImage("directio-write.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  REQUIRE(ops->Seek(8192) == FileError::kSuccess);
+  const bool before = ops->IsDirectIOEnabled();
+  REQUIRE(ops->SetDirectIOEnabled(!before) == FileError::kSuccess);
+  REQUIRE(ops->SetDirectIOEnabled(before) == FileError::kSuccess);
+
+  const auto data = pattern(4096, 0x63);
+  REQUIRE(ops->WriteSequential(data.data(), data.size()) == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK(readBack(path, 8192, 4096) == data);
+  CHECK(readBack(path, 0, 4096) == std::vector<std::uint8_t>(4096, 0));
+}
+
 TEST_CASE("Direct I/O can be turned on and off on an open handle",
           "[file-ops]") {
   // The imager switches between buffered and direct I/O depending on the

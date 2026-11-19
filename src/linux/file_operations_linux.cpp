@@ -432,6 +432,7 @@ FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
   
   // Save current position before reopening
   off_t currentPos = lseek(fd_, 0, SEEK_CUR);
+  const std::uint64_t writeCursor = async_write_offset_;
   std::string savedPath = current_path_;
   
   close(fd_);
@@ -475,7 +476,9 @@ FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
   if (currentPos > 0) {
     lseek(fd_, currentPos, SEEK_SET);
   }
-  
+  // The reopen zeroed it; the next write would have gone to the start.
+  async_write_offset_ = writeCursor;
+
   std::ostringstream oss;
   oss << "O_DIRECT " << (using_direct_io_ ? "enabled" : "disabled");
   Log(oss.str());
@@ -582,14 +585,10 @@ std::uint64_t LinuxFileOperations::Tell() const {
     return 0;
   }
 
-  // If async I/O has been used, return the async write offset
-  // (pwrite/io_uring doesn't update the file descriptor position)
-  if (async_write_offset_ > 0) {
-    return async_write_offset_;
-  }
-
-  off_t pos = lseek(fd_, 0, SEEK_CUR);
-  return (pos == -1) ? 0 : static_cast<std::uint64_t>(pos);
+  // Where the next write goes. Every write is at this cursor, not the file
+  // position, which reads also move: after Seek(0) and a read, the position
+  // said the helper's bulk writer need not seek, and it wrote at 0.
+  return async_write_offset_;
 }
 
 FileError LinuxFileOperations::ForceSync() {
