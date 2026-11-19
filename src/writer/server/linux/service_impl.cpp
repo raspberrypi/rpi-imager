@@ -31,6 +31,7 @@
 #include <chrono>
 #include <sys/stat.h>
 #include <cstdio>
+#include <climits>
 #include <cstdlib>
 #include <condition_variable>
 #include <mutex>
@@ -125,6 +126,20 @@ proto::ErrorCode mapFileError(FileError e) {
 
 bool isBlockDevicePath(const std::string& p) {
     return p.size() > 5 && p.compare(0, 5, "/dev/") == 0;
+}
+
+// The canonical path of a block device under /dev, or empty.
+std::string resolvedBlockDevice(const std::string& p) {
+    char buf[PATH_MAX];
+    if (!::realpath(p.c_str(), buf)) {
+        return {};
+    }
+    const std::string real(buf);
+    struct stat st {};
+    if (!isBlockDevicePath(real) || ::stat(real.c_str(), &st) != 0 || !S_ISBLK(st.st_mode)) {
+        return {};
+    }
+    return real;
 }
 
 class Sha256 {
@@ -263,15 +278,29 @@ proto::ErrorInfo Helper::handleOpenSession(const std::string& payload, std::stri
     if (!isBlockDevicePath(req.device_path())) {
         return fail(proto::ERROR_DEVICE_PERMISSION, "helper only opens /dev/* paths");
     }
+    // Resolved and opened by its real name: any user can put a symlink in
+    // /dev/shm, and "/dev/../" leaves /dev altogether.
+    const std::string path = resolvedBlockDevice(req.device_path());
+    if (path.empty()) {
+        return fail(proto::ERROR_DEVICE_PERMISSION,
+                    "not a block device: " + req.device_path());
+    }
 
     // Built in place: the atomics make Session immovable.
     const std::uint64_t id = next_id_++;
     auto it = sessions_.try_emplace(id).first;
     it->second.fops = std::make_shared<rpi_imager::LinuxFileOperations>();
-    const FileError e = it->second.fops->OpenDevice(req.device_path());
+    const FileError e = it->second.fops->OpenDevice(path);
     if (e != FileError::kSuccess) {
         sessions_.erase(it);
         return fail(mapFileError(e), "OpenDevice failed for " + req.device_path());
+    }
+    struct stat st {};
+    if (::fstat(it->second.fops->GetHandle(), &st) != 0 || !S_ISBLK(st.st_mode)) {
+        (void)it->second.fops->Close();
+        sessions_.erase(it);
+        return fail(proto::ERROR_DEVICE_PERMISSION,
+                    "not a block device: " + req.device_path());
     }
     it->second.bulk_writer.start(it->second.fops.get(), outbound_);
 
@@ -513,6 +542,21 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     const bool begin = !req.incremental() || req.begin();
     const bool finish = !req.incremental() || req.finish();
     const auto t0 = std::chrono::steady_clock::now();
+
+    // Checked before any reading: past the end, the loop below fails only
+    // after reading to it, with every other call queued behind.
+    std::uint64_t device_size = 0;
+    {
+        const auto device = s->bulk_writer.lockDevice();
+        if (s->fops->GetSize(device_size) != FileError::kSuccess) {
+            s->hash.reset();
+            return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: GetSize failed");
+        }
+    }
+    if (req.device_offset() > device_size || req.length() > device_size - req.device_offset()) {
+        s->hash.reset();
+        return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: range beyond the device");
+    }
 
     std::unique_lock<std::mutex> device;
     if (begin) {

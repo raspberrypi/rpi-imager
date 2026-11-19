@@ -3,9 +3,11 @@
 //
 // The Linux client backend and the real helper loop over a socketpair, so
 // every message crosses the wire as in production, without pkexec or root.
-// The helper opens only /dev/* paths, so the card is a file in /dev/shm.
+// The helper opens only block devices, so the card is a loop device.
 
 #include <catch2/catch_test_macros.hpp>
+
+#include "loop_device.h"
 
 #include "backends/linux_polkit.h"
 #include "linux/service_impl.h"
@@ -20,6 +22,7 @@
 #include <cerrno>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <memory>
@@ -94,28 +97,31 @@ std::unique_ptr<LinuxPolkitBackend> connectedBackend(HelperPeer& peer) {
 class ScratchCard {
 public:
     explicit ScratchCard(std::size_t bytes = kCardBytes) : bytes_(bytes) {
-        char tmpl[] = "/dev/shm/rpi-imager-wire-XXXXXX";
-        const int fd = ::mkstemp(tmpl);
+        const char* dir = std::getenv("TMPDIR");
+        backing_ = std::string(dir && *dir ? dir : "/tmp") + "/rpi-imager-wire-XXXXXX";
+        const int fd = ::mkstemp(backing_.data());
         if (fd < 0) {
+            backing_.clear();
             return;
         }
-        if (::ftruncate(fd, static_cast<off_t>(bytes)) == 0) {
-            path_ = tmpl;
-        } else {
-            ::unlink(tmpl);
-        }
+        const bool sized = ::ftruncate(fd, static_cast<off_t>(bytes)) == 0;
         ::close(fd);
+        if (sized) {
+            loop_ = std::make_unique<rpi_test::LoopDevice>(backing_);
+        }
     }
     ~ScratchCard() {
-        if (!path_.empty()) {
-            ::unlink(path_.c_str());
+        loop_.reset();
+        if (!backing_.empty()) {
+            ::unlink(backing_.c_str());
         }
     }
-    const std::string& path() const { return path_; }
+    std::string path() const { return loop_ && loop_->valid() ? loop_->path() : std::string(); }
+    const std::string& backing() const { return backing_; }
 
     std::string contents() const {
         std::string out(bytes_, '\0');
-        const int fd = ::open(path_.c_str(), O_RDONLY | O_CLOEXEC);
+        const int fd = ::open(backing_.c_str(), O_RDONLY | O_CLOEXEC);
         const ssize_t n = fd >= 0 ? ::pread(fd, out.data(), out.size(), 0) : -1;
         if (fd >= 0) {
             ::close(fd);
@@ -126,7 +132,8 @@ public:
 
 private:
     std::size_t bytes_;
-    std::string path_;
+    std::string backing_;
+    std::unique_ptr<rpi_test::LoopDevice> loop_;
 };
 
 std::string sha256(const std::string& data) {
@@ -261,6 +268,44 @@ TEST_CASE("The helper refuses what it must not open", "[privileged][linux][wire]
     CHECK_FALSE(backend->openUsbDevice(999, 999).ok);
 }
 
+TEST_CASE("The helper opens a block device and nothing posing as one",
+          "[privileged][linux][wire]")
+{
+    HelperPeer peer;
+    REQUIRE(peer.ok());
+    auto backend = connectedBackend(peer);
+    auto refused = [&](const std::string& path) {
+        CAPTURE(path);
+        const auto r = backend->openSession(path, {});
+        CHECK(r.error.code() == proto::ERROR_DEVICE_PERMISSION);
+    };
+
+    refused("/dev/null");
+    char file[] = "/tmp/rpi-imager-wire-file-XXXXXX";
+    const int fd = ::mkstemp(file);
+    REQUIRE(fd >= 0);
+    ::close(fd);
+    refused(std::string("/dev/..") + file);
+
+    // Any user can write /dev/shm, so a link there must not reach a file.
+    const std::string link = "/dev/shm/rpi-imager-wire-link-" + std::to_string(::getpid());
+    if (::symlink(file, link.c_str()) == 0) {
+        refused(link);
+        ::unlink(link.c_str());
+    }
+
+    // A link to a real device, as /dev/disk/by-id holds, still opens.
+    ScratchCard card;
+    if (!card.path().empty() && ::symlink(card.path().c_str(), link.c_str()) == 0) {
+        const auto opened = backend->openSession(link, {});
+        ::unlink(link.c_str());
+        INFO(opened.error.detail());
+        REQUIRE(opened.ok);
+        CHECK(backend->closeSession(opened.value).ok);
+    }
+    ::unlink(file);
+}
+
 TEST_CASE("Every session request names a session the helper holds",
           "[privileged][linux][wire]")
 {
@@ -324,7 +369,7 @@ TEST_CASE("A card is written, read back, hashed and closed through the helper",
 {
     ScratchCard card;
     if (card.path().empty()) {
-        SKIP("no writable /dev/shm");
+        SKIP("no loop device (needs root or passwordless sudo)");
     }
     HelperPeer peer;
     REQUIRE(peer.ok());
@@ -418,6 +463,10 @@ TEST_CASE("A card is written, read back, hashed and closed through the helper",
     CHECK(pieces.value == whole.value);
 
     CHECK_FALSE(backend->hashDeviceSha256(sid, "", kCardBytes - 512, 4096).ok);
+    const auto endless = backend->hashDeviceSha256(sid, "", 0, std::uint64_t{1} << 40);
+    CHECK(endless.error.code() == proto::ERROR_DEVICE_IO);
+    CHECK(endless.error.detail().find("beyond") != std::string::npos);
+    CHECK_FALSE(backend->hashDeviceSha256(sid, "", kCardBytes + 512, 0).ok);
 
     REQUIRE(backend->mapBulkBuffer(sid, 0).ok);
     CHECK(backend->bulkBufferBase() == nullptr);
@@ -433,7 +482,7 @@ TEST_CASE("A card is prepared through the helper", "[privileged][linux][wire]")
     constexpr std::size_t kBytes = 3 * 1024 * 1024;
     ScratchCard card(kBytes);
     if (card.path().empty()) {
-        SKIP("no writable /dev/shm");
+        SKIP("no loop device (needs root or passwordless sudo)");
     }
     HelperPeer peer;
     REQUIRE(peer.ok());
@@ -468,7 +517,7 @@ TEST_CASE("A device error the helper reports leaves the connection up",
     // Read as a lost helper, this started a second through pkexec.
     ScratchCard card;
     if (card.path().empty()) {
-        SKIP("no writable /dev/shm");
+        SKIP("no loop device (needs root or passwordless sudo)");
     }
     HelperPeer peer;
     REQUIRE(peer.ok());

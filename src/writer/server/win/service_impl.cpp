@@ -564,6 +564,21 @@ proto::ErrorInfo Helper::handleHashDevice(const std::string& payload, std::strin
     const bool finish = !req.incremental() || req.finish();
     const auto t0 = std::chrono::steady_clock::now();
 
+    // Checked before any reading: past the end, the loop below fails only
+    // after reading to it, with every other call queued behind.
+    std::uint64_t device_size = 0;
+    {
+        const auto device = s->bulk_writer.lockDevice();
+        if (s->fops->GetSize(device_size) != FileError::kSuccess) {
+            s->hash.reset();
+            return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: GetSize failed");
+        }
+    }
+    if (req.device_offset() > device_size || req.length() > device_size - req.device_offset()) {
+        s->hash.reset();
+        return fail(proto::ERROR_DEVICE_IO, "hashDeviceSha256: range beyond the device");
+    }
+
     std::unique_lock<std::mutex> device;
     if (begin) {
         device = s->bulk_writer.drainBeforeSync(s->fops.get());
