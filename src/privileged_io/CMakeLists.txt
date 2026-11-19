@@ -39,6 +39,13 @@ set(ABSEIL_VERSION "20250512.1")
 # Inherited from src/, it puts absl/time on the include path, where its
 # time.h shadows the C library's.
 set(CMAKE_INCLUDE_CURRENT_DIR OFF)
+# Neither is in the coverage report, and GCC refuses protobuf's musttail
+# calls under --coverage at -O0.
+get_directory_property(_rpi_compile_options COMPILE_OPTIONS)
+set(_rpi_dep_options ${_rpi_compile_options})
+list(REMOVE_ITEM _rpi_dep_options --coverage -fprofile-update=atomic
+     -fprofile-instr-generate -fcoverage-mapping)
+set_directory_properties(PROPERTIES COMPILE_OPTIONS "${_rpi_dep_options}")
 set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
 set(ABSL_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
 set(ABSL_BUILD_TESTING OFF CACHE BOOL "" FORCE)
@@ -73,6 +80,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(protobuf)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set_directory_properties(PROPERTIES COMPILE_OPTIONS "${_rpi_compile_options}")
 # Only the libprotobuf runtime ships; protoc is a build tool. The macOS helper
 # does not link this library.
 set(_protobuf_users rpi-imager)
