@@ -71,6 +71,7 @@ public:
 
 private:
     void readerLoop();
+    void detachImpl(bool from_reader);
     void handleServerPayload(const std::string& payload, int ancillary_fd);
     bool writeRequest(const proto::WireRequest& req, int& os_error);
     void failAllOutstandingAsyncLocked(const proto::ErrorInfo& err);

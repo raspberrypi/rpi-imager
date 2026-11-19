@@ -81,6 +81,14 @@ RpcResult DuplexConnection::rpcResultFromResponse(const proto::WireResponse& res
 }
 
 void DuplexConnection::detach() {
+    detachImpl(false);
+}
+
+void DuplexConnection::detachImpl(const bool from_reader) {
+    // The reader reads reader_ only via the owner's path: attach() may still
+    // be assigning it when a peer that hangs up at once has the reader detach.
+    const bool on_reader = from_reader
+        || (reader_.joinable() && reader_.get_id() == std::this_thread::get_id());
     stop_.store(true);
     attached_.store(false);
     // The reader blocks reading the connection until the peer speaks;
@@ -91,14 +99,18 @@ void DuplexConnection::detach() {
     if (stream_) {
         stream_->cancel();
     }
-    if (reader_.joinable() && reader_.get_id() != std::this_thread::get_id()) {
-        reader_.join();
+    // Only the owner frees the stream, once the reader is joined: freed by a
+    // reader detaching itself, it was cancelled by a concurrent owner after.
+    if (!on_reader) {
+        if (reader_.joinable()) {
+            reader_.join();
+        }
+        {
+            std::lock_guard<std::mutex> lk(write_mutex_);
+            stream_.reset();
+        }
+        acc_ = FrameAccumulator{};
     }
-    {
-        std::lock_guard<std::mutex> lk(write_mutex_);
-        stream_.reset();
-    }
-    acc_ = FrameAccumulator{};
 
     const proto::ErrorInfo disconnected =
         makeIoError(proto::ERROR_DEVICE_DISCONNECTED, "connection detached", 0);
@@ -275,7 +287,7 @@ void DuplexConnection::handleServerPayload(const std::string& payload, int ancil
     proto::WireEvent event;
     bool is_event = false;
     if (!decodeServerMessage(payload, response, event, is_event)) {
-        detach();
+        detachImpl(true);
         return;
     }
 
@@ -335,13 +347,13 @@ void DuplexConnection::readerLoop() {
             continue;
         }
         if (oversize) {
-            detach();
+            detachImpl(true);
             return;
         }
 
         const StreamChunk chunk = stream_->read(buf, sizeof(buf));
         if (!chunk.ok) {
-            detach();
+            detachImpl(true);
             return;
         }
         if (chunk.ancillary_fd >= 0) {
