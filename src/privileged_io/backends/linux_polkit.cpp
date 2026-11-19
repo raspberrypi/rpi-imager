@@ -304,8 +304,9 @@ RpcResult callRpcLocked(LinuxPolkitBackend::State* st,
         st->duplex.call(method, request_payload, expect_ancillary_fd);
     if (!rpc.ok) {
         out.err = rpc.error;
-        if (out.err.code() == proto_ns::ERROR_DEVICE_DISCONNECTED
-            || out.err.code() == proto_ns::ERROR_DEVICE_IO) {
+        // Not by error code: the helper reports a failing card as
+        // ERROR_DEVICE_IO too, and that is no reason to start another.
+        if (!st->duplex.isAttached()) {
             st->connected = false;
         }
         return out;
@@ -778,8 +779,7 @@ void LinuxPolkitBackend::submitBulkWriteAsync(const proto_ns::SessionId& sid,
             if (!rpc.ok) {
                 {
                     std::lock_guard<std::mutex> lk(self->state_->mutex);
-                    if (rpc.error.code() == proto_ns::ERROR_DEVICE_DISCONNECTED
-                        || rpc.error.code() == proto_ns::ERROR_DEVICE_IO) {
+                    if (!self->state_->duplex.isAttached()) {
                         self->state_->connected = false;
                     }
                 }
