@@ -36,7 +36,9 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+#include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -73,7 +75,10 @@ std::uint64_t maxBulkBufferBytes() {
     constexpr std::uint64_t kFloor = 256ull * 1024 * 1024;
     const std::uint64_t phys = physicalMemoryBytes();
     if (phys == 0) return kFloor;
-    const std::uint64_t third = phys / 3;
+    // Must fit size_t: the request is narrowed to it after this check, and
+    // a 32-bit helper on a 64-bit kernel is told about more RAM than that.
+    const std::uint64_t cap = std::numeric_limits<std::size_t>::max() / 8;
+    const std::uint64_t third = std::min(phys / 3, cap);
     return third > kFloor ? third : kFloor;
 }
 

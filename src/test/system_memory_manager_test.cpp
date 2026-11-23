@@ -14,6 +14,7 @@
 #include <QString>
 #include <QtGlobal>
 
+#include <algorithm>
 #include <cstdlib>
 
 namespace {
@@ -373,7 +374,7 @@ TEST_CASE("Ring buffer slots fall as the slot size rises", "[memory]")
         // number here only passes on a machine small enough that 30% of its
         // available RAM lands under it, and fails on a large one for no fault
         // of the code.
-        CHECK(slotCount * slot <= size_t(16) * 1024 * 1024 * 1024);
+        CHECK(quint64(slotCount) * slot <= 16ULL * 1024 * 1024 * 1024);
         CHECK(slotCount <= previous);
         previous = slotCount;
     }
@@ -417,7 +418,7 @@ TEST_CASE("The two ring buffers are sized to fit together", "[memory]")
         CHECK(total == inputSlots * actualInput + writeSlots * actualWrite);
 
         // And it must not promise more than the machine has.
-        CHECK(total <= size_t(mgr.getTotalMemoryMB()) * 1024 * 1024);
+        CHECK(total <= quint64(mgr.getTotalMemoryMB()) * 1024 * 1024);
     }
 }
 
@@ -426,12 +427,14 @@ TEST_CASE("An absurd slot hint is overruled rather than honoured", "[memory]")
     auto &mgr = SystemMemoryManager::instance();
 
     size_t inputSlots = 0, writeSlots = 0, actualInput = 0, actualWrite = 0;
-    const size_t huge = size_t(64) * 1024 * 1024 * 1024;   // 64 GB per slot
+    // 64 GB per slot, or half the address space where size_t cannot say that.
+    const size_t huge = static_cast<size_t>(
+        std::min<quint64>(64ULL * 1024 * 1024 * 1024, SIZE_MAX / 2));
     const size_t total = mgr.getCoordinatedRingBufferConfig(
         huge, huge, inputSlots, writeSlots, actualInput, actualWrite);
 
     INFO("total: " << total << " sizes " << actualInput << "/" << actualWrite
-         << " physical " << (size_t(mgr.getTotalMemoryMB()) * 1024 * 1024));
+         << " physical " << (quint64(mgr.getTotalMemoryMB()) * 1024 * 1024));
 
     // The per-slot sizes are cut down, which is the part that matters.
     CHECK(actualInput < huge);
@@ -444,7 +447,7 @@ TEST_CASE("An absurd slot hint is overruled rather than honoured", "[memory]")
     // but the slot count is not reduced to compensate, so a caller that
     // honoured the answer would allocate half as much again as the machine
     // has.
-    const size_t physical = size_t(mgr.getTotalMemoryMB()) * 1024 * 1024;
+    const quint64 physical = quint64(mgr.getTotalMemoryMB()) * 1024 * 1024;
     if (total > physical) {
         WARN("coordinated total " << total << " exceeds physical memory " << physical
              << " for an out-of-range hint");
@@ -856,6 +859,12 @@ TEST_CASE("The async queue depth follows what is free, not what is installed",
         // The budget is a quantity of memory, not a count of writes.
         CHECK(SystemMemoryManager::asyncQueueDepthFor(2048, 8 * 1024 * 1024) <=
               SystemMemoryManager::asyncQueueDepthFor(2048, 256 * 1024));
+    }
+
+    SECTION("more free memory than a 32-bit size_t can count is still plenty") {
+        // armhf userland on a 64-bit kernel: 8GB free wrapped to zero.
+        CHECK(SystemMemoryManager::asyncQueueDepthFor(8192, kBlock) == 256);
+        CHECK(SystemMemoryManager::asyncQueueDepthFor(16384, kBlock) == 256);
     }
 
     SECTION("a machine reporting nothing free still gets a working queue") {
