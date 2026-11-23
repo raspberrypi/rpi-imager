@@ -4,6 +4,7 @@
 #include "linux_embedded.h"
 
 #include "../wire/linux_shared_memory.h"
+#include "../../aligned_buffer.h"
 
 #include "../../linux/helper_maintenance.h"
 
@@ -210,7 +211,13 @@ Result<void> LinuxEmbeddedBackend::prepareDevice(
             makeError(proto_ns::ERROR_SESSION_NOT_FOUND, "no such session"));
     }
     constexpr std::size_t kMb = 1ull * 1024 * 1024;
-    std::vector<std::uint8_t> zeros(kMb, 0);
+    // Aligned: the session fd may be O_DIRECT, which rejects a heap buffer
+    // with EINVAL on devices that need sector-aligned memory.
+    AlignedBuffer zeros(kMb);
+    if (!zeros) {
+        return Result<void>::failure(
+            makeError(proto_ns::ERROR_WRITE_FAILED, "prepareDevice: out of memory"));
+    }
     State::Session& s = it->second;
     const std::uint64_t dev_size = deviceSizeBytes(s.fd);
 
@@ -303,7 +310,11 @@ Result<std::string> LinuxEmbeddedBackend::hashDeviceSha256(
     }
 
     constexpr std::size_t kChunk = 1u * 1024 * 1024;
-    std::vector<std::uint8_t> buf(kChunk);
+    AlignedBuffer buf(kChunk);  // direct I/O, as in prepareDevice
+    if (!buf) {
+        return Result<std::string>::failure(
+            makeError(proto_ns::ERROR_DEVICE_IO, "hash: out of memory"));
+    }
     std::uint64_t remaining = length;
     const int fd = it->second.fd;
     while (remaining > 0) {
