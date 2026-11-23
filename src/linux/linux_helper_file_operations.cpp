@@ -17,6 +17,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <limits>
 #include <cstring>
 #include <unistd.h>
 #include <functional>
@@ -75,7 +76,10 @@ std::size_t maxZeroCopyRingBytes() {
     long psz = ::sysconf(_SC_PAGE_SIZE);
     if (pages <= 0 || psz <= 0) return static_cast<std::size_t>(kFloor);
     const std::uint64_t phys = static_cast<std::uint64_t>(pages) * static_cast<std::uint64_t>(psz);
-    const std::uint64_t third = phys / 3;
+    // Capped to an eighth of the address space: a 32-bit process on a
+    // 64-bit kernel cannot map a third of the RAM it is told about.
+    const std::uint64_t cap = std::numeric_limits<std::size_t>::max() / 8;
+    const std::uint64_t third = std::min(phys / 3, cap);
     return static_cast<std::size_t>(third > kFloor ? third : kFloor);
 }
 

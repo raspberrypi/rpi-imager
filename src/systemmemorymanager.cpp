@@ -10,6 +10,7 @@
 #include <QTextStream>
 #include <QRegularExpression>
 #include <cmath>
+#include <limits>
 
 // Platform-specific includes
 #ifdef Q_OS_WIN
@@ -192,7 +193,7 @@ qint64 SystemMemoryManager::getPlatformTotalMemoryMB()
     struct sysinfo info;
     if (sysinfo(&info) == 0) {
         // Convert to MB
-        return static_cast<qint64>(info.totalram * info.mem_unit / (1024 * 1024));
+        return static_cast<qint64>(static_cast<quint64>(info.totalram) * info.mem_unit / (1024 * 1024));
     }
     
     // Method 2: Fallback to /proc/meminfo
@@ -232,7 +233,7 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
     struct sysinfo info;
     if (sysinfo(&info) == 0) {
         // Available = free + buffers + cached (approximation)
-        qint64 available = (info.freeram + info.bufferram) * info.mem_unit;
+        qint64 available = (static_cast<qint64>(info.freeram) + info.bufferram) * info.mem_unit;
         return static_cast<qint64>(available / (1024 * 1024));
     }
     
@@ -300,6 +301,22 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
 #endif
 
 // Memory-aware buffer sizing implementations
+
+namespace {
+
+// A 32-bit process on a 64-bit kernel is told about more RAM than it can
+// map, so every byte budget is computed in 64 bits and capped to an
+// eighth of the address space. The cap is out of reach on 64-bit hosts.
+constexpr quint64 kMaxBudgetBytes = std::numeric_limits<size_t>::max() / 8;
+
+size_t memoryShareBytes(qint64 memMB, int percent)
+{
+    const quint64 share =
+        static_cast<quint64>(qMax<qint64>(memMB, 0)) * 1024 * 1024 * percent / 100;
+    return static_cast<size_t>(qMin(share, kMaxBudgetBytes));
+}
+
+} // namespace
 
 size_t SystemMemoryManager::getOptimalWriteBufferSize()
 {
@@ -472,13 +489,14 @@ size_t SystemMemoryManager::getOptimalRingBufferSlots(size_t slotSize)
     // - 5 GB buffer = 10 seconds of absorption
     
     // Calculate target: 30% of available RAM
-    size_t targetFromAvailable = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 3 / 10;
+    size_t targetFromAvailable = memoryShareBytes(availableMemMB, 30);
     
     // Minimum: 2 MB (ensures basic functionality)
     const size_t minimumBuffer = 2 * 1024 * 1024;
     
     // Maximum: 16 GB (sanity cap)
-    const size_t maximumBuffer = static_cast<size_t>(16) * 1024 * 1024 * 1024;
+    const size_t maximumBuffer = static_cast<size_t>(
+        qMin<quint64>(16ULL * 1024 * 1024 * 1024, kMaxBudgetBytes));
     
     // Apply bounds
     size_t targetMemory = qMax(minimumBuffer, qMin(maximumBuffer, targetFromAvailable));
@@ -540,7 +558,7 @@ int SystemMemoryManager::asyncQueueDepthFor(qint64 availableMemMB, size_t writeB
     
     // Target: Use up to 15% of available memory for async buffers
     // (Reduced from 30% since input buffer also needs memory)
-    size_t asyncBufferBudget = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 15 / 100;
+    size_t asyncBufferBudget = memoryShareBytes(availableMemMB, 15);
     
     // Calculate depth from budget
     int depthFromMemory = static_cast<int>(asyncBufferBudget / writeBlockSize);
@@ -614,14 +632,15 @@ size_t SystemMemoryManager::getCoordinatedRingBufferConfig(size_t inputSlotSizeH
     const size_t maxWriteSlots = 256;
     
     // Calculate budget: 30% of available RAM
-    size_t budgetBytes = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 30 / 100;
+    size_t budgetBytes = memoryShareBytes(availableMemMB, 30);
     
     // Absolute minimum budget floor (need at least some working memory)
     const size_t absoluteMinBudget = 4 * 1024 * 1024;  // 4 MB floor
     budgetBytes = qMax(budgetBytes, absoluteMinBudget);
     
     // Step 1: Check if minimum slots fit at optimal sizes
-    size_t minMemoryNeeded = (minInputSlots * inputSlotSizeHint) + (minWriteSlots * writeSlotSizeHint);
+    // 64-bit: twelve slots of a large hint overflow a 32-bit size_t.
+    quint64 minMemoryNeeded = (quint64(minInputSlots) * inputSlotSizeHint) + (quint64(minWriteSlots) * writeSlotSizeHint);
     
     // Step 2: If minimum exceeds budget, scale down buffer sizes
     actualInputSize = inputSlotSizeHint;
@@ -656,7 +675,7 @@ size_t SystemMemoryManager::getCoordinatedRingBufferConfig(size_t inputSlotSizeH
     }
     
     // Step 3: Recalculate minimum memory with adjusted sizes
-    minMemoryNeeded = (minInputSlots * actualInputSize) + (minWriteSlots * actualWriteSize);
+    minMemoryNeeded = (quint64(minInputSlots) * actualInputSize) + (quint64(minWriteSlots) * actualWriteSize);
     
     // Step 4: Calculate slot counts from remaining budget
     // Split: 1/3 for input, 2/3 for write (prioritize write for latency smoothing)
@@ -676,7 +695,7 @@ size_t SystemMemoryManager::getCoordinatedRingBufferConfig(size_t inputSlotSizeH
     size_t totalActual = actualInputBytes + actualWriteBytes;
     
     // Final safety check: if still over 40% (due to minimums), log warning
-    size_t safetyLimit = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 40 / 100;
+    size_t safetyLimit = memoryShareBytes(availableMemMB, 40);
     if (totalActual > safetyLimit) {
         qDebug() << "Warning: Ring buffer allocation" << (totalActual / (1024 * 1024)) << "MB"
                  << "exceeds 40% of available memory (" << availableMemMB << "MB)"
@@ -693,7 +712,7 @@ size_t SystemMemoryManager::getCoordinatedRingBufferConfig(size_t inputSlotSizeH
     qDebug() << "  Write:" << writeSlots << "slots x" << (actualWriteSize / 1024) << "KB ="
              << (actualWriteBytes / (1024 * 1024)) << "MB";
     qDebug() << "  Total:" << (totalActual / (1024 * 1024)) << "MB"
-             << "(" << (availableMemMB > 0 ? ((totalActual * 100) / (static_cast<size_t>(availableMemMB) * 1024 * 1024)) : 0) << "% of available)";
+             << "(" << (availableMemMB > 0 ? ((static_cast<quint64>(totalActual) * 100) / (static_cast<quint64>(availableMemMB) * 1024 * 1024)) : 0) << "% of available)";
     
     return totalActual;
 }

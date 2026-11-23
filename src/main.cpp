@@ -3,6 +3,7 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#include <limits>
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QFile>
@@ -700,8 +701,11 @@ int main(int argc, char *argv[])
     if (parser.isSet("benchmark-write")) {
         rpi_imager::BenchmarkOptions opts;
         opts.device_path = parser.value("benchmark-write").toStdString();
-        opts.total_bytes = (std::size_t)parser.value("benchmark-size-mb").toULongLong()
-                            * 1024ull * 1024ull;
+        // total_bytes is a size_t: clamp rather than wrap on 32-bit hosts.
+        const qulonglong benchBytes = qMin<qulonglong>(
+            parser.value("benchmark-size-mb").toULongLong() * 1024ull * 1024ull,
+            std::numeric_limits<std::size_t>::max());
+        opts.total_bytes = static_cast<std::size_t>(benchBytes);
         opts.chunk_bytes = (std::size_t)parser.value("benchmark-chunk-kb").toULongLong()
                             * 1024ull;
         opts.queue_depth = parser.value("benchmark-queue-depth").toInt();
