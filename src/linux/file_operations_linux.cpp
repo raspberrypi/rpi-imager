@@ -16,6 +16,8 @@
 #include <sstream>
 #include <cstring>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <thread>
 #include <functional>
 #include "../timeout_utils.h"
@@ -35,6 +37,9 @@ using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
 #endif
 
 #include <fstream>
+
+// A 32-bit off_t fails every write past 2 GiB with EINVAL (#1801).
+static_assert(sizeof(off_t) == 8, "build with _FILE_OFFSET_BITS=64");
 
 namespace rpi_imager {
 
@@ -1156,7 +1161,8 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
     std::ifstream f(queueDir + "max_sectors_kb");
     int val = 0;
     if (f >> val && val > 0)
-      limits.max_transfer_bytes = static_cast<size_t>(val) * 1024;
+      limits.max_transfer_bytes = static_cast<size_t>(std::min<std::uint64_t>(
+          static_cast<std::uint64_t>(val) * 1024, std::numeric_limits<size_t>::max()));
   }
 
   return limits;

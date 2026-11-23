@@ -806,6 +806,39 @@ TEST_CASE("A write past the end of the file extends it", "[file-ops]") {
   CHECK(readBack(path, beyond, 512) == data);
 }
 
+TEST_CASE("Writes land past the 2 GiB and 4 GiB offset boundaries", "[file-ops]") {
+  // #1801: a 32-bit off_t turned 2 GiB negative, and every armhf write of a
+  // larger image failed there. The scratch image is sparse, so this costs
+  // three sectors of disk.
+  const std::string path = makeImage("large-offsets.img", 512);
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  struct { std::uint64_t offset; std::uint8_t seed; } writes[] = {
+      {(1ull << 31) - 512, 0x51},   // last sector a signed 32-bit offset reaches
+      {1ull << 31,         0x52},   // first one it does not
+      {(1ull << 32) + 4096, 0x53},  // past where an unsigned one wraps to 4096
+  };
+
+  for (const auto& w : writes) {
+    const auto data = pattern(512, w.seed);
+    INFO("offset " << w.offset);
+    REQUIRE(ops->WriteAtOffset(w.offset, data.data(), data.size()) == FileError::kSuccess);
+  }
+  REQUIRE(ops->ForceSync() == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+
+  for (const auto& w : writes) {
+    INFO("offset " << w.offset);
+    CHECK(readBack(path, w.offset, 512) == pattern(512, w.seed));
+  }
+  // A wrapped offset would have landed here instead.
+  const auto low = readBack(path, 4096, 512);
+  CHECK(std::all_of(low.begin(), low.end(), [](std::uint8_t b) { return b == 0; }));
+  CHECK(fs::file_size(path) == (1ull << 32) + 4096 + 512);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // The async write path and its recovery ladder
 //
