@@ -58,6 +58,17 @@ endif()
 
 project(rpi-imager LANGUAGES CXX C)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # 32-bit off_t wraps at 2 GiB and fails every larger device write (#1801).
+    # Set through the flags so the vendored trees' configure probes see it too.
+    #
+    # _TIME_BITS is deliberately left at the toolchain default: time_t crosses
+    # into the distribution's GnuTLS (via curl), so it must match the ABI
+    # those libraries were built with -- 32-bit on bookworm, 64-bit on trixie.
+    string(APPEND CMAKE_C_FLAGS " -D_FILE_OFFSET_BITS=64")
+    string(APPEND CMAKE_CXX_FLAGS " -D_FILE_OFFSET_BITS=64")
+endif()
+
 find_package(Git QUIET)
 
 # Build-time version: re-runs `git describe` on every build so that dirty

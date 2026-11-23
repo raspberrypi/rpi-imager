@@ -24,6 +24,9 @@
 #include <unistd.h>
 #include <vector>
 
+// A 32-bit off_t wraps device offsets past 2 GiB (#1801).
+static_assert(sizeof(off_t) == 8, "build with _FILE_OFFSET_BITS=64");
+
 namespace rpi_imager::privileged::backends {
 
 namespace {
