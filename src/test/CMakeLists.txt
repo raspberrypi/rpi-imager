@@ -986,21 +986,28 @@ endif()
 #
 # libusb is linked statically, so this wraps the plain symbol rather than an
 # import pointer. Its own binary, like the others: the wrap is target-wide.
-add_executable(libusb_init_fault_test
-    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_scanner.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/libusb_transport.cpp
-    libusb_init_fault_test.cpp
-)
-target_link_libraries(libusb_init_fault_test PRIVATE
-    Catch2::Catch2WithMain
-    Qt6::Core
-    ${LIBUSB_LIBRARIES}
-)
-target_link_options(libusb_init_fault_test PRIVATE -Wl,--wrap=libusb_init)
-target_include_directories(libusb_init_fault_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_compile_features(libusb_init_fault_test PRIVATE cxx_std_20)
-rpi_discover_tests(libusb_init_fault_test)
+#
+# Apple's linker has no --wrap, so this and the libarchive fault test are
+# built only where the linker takes it.
+include(CheckLinkerFlag)
+check_linker_flag(CXX "LINKER:--wrap=rpi_wrap_probe" RPI_LINKER_HAS_WRAP)
+if(RPI_LINKER_HAS_WRAP)
+    add_executable(libusb_init_fault_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_scanner.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/libusb_transport.cpp
+        libusb_init_fault_test.cpp
+    )
+    target_link_libraries(libusb_init_fault_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+        ${LIBUSB_LIBRARIES}
+    )
+    target_link_options(libusb_init_fault_test PRIVATE -Wl,--wrap=libusb_init)
+    target_include_directories(libusb_init_fault_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_compile_features(libusb_init_fault_test PRIVATE cxx_std_20)
+    rpi_discover_tests(libusb_init_fault_test)
+endif()
 
 # Custom target for manual running
 add_custom_target(test_drivelist
@@ -1137,28 +1144,30 @@ add_custom_target(test_rpiboot_protocol
 #
 # A binary of its own: the wraps below apply to everything linked with them,
 # including the fixture that builds the archive a case starts from.
-add_executable(bootfiles_archive_fault_test
-    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.cpp
-    bootfiles_archive_fault.cpp
-    bootfiles_archive_fault_test.cpp
-)
-target_link_libraries(bootfiles_archive_fault_test PRIVATE
-    Catch2::Catch2WithMain
-    Qt6::Core
-    ${LibArchive_LIBRARIES}
-    ${ZLIB_LIBRARIES}
-    ${LIBLZMA_LIBRARIES}
-    ${ZSTD_LIBRARIES}
-)
-target_link_options(bootfiles_archive_fault_test PRIVATE
-    -Wl,--wrap=archive_write_header
-    -Wl,--wrap=archive_write_data
-    -Wl,--wrap=archive_write_close)
-target_include_directories(bootfiles_archive_fault_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${LibArchive_INCLUDE_DIR})
-target_compile_features(bootfiles_archive_fault_test PRIVATE cxx_std_20)
-rpi_discover_tests(bootfiles_archive_fault_test)
+if(RPI_LINKER_HAS_WRAP)
+    add_executable(bootfiles_archive_fault_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.cpp
+        bootfiles_archive_fault.cpp
+        bootfiles_archive_fault_test.cpp
+    )
+    target_link_libraries(bootfiles_archive_fault_test PRIVATE
+        Catch2::Catch2WithMain
+        Qt6::Core
+        ${LibArchive_LIBRARIES}
+        ${ZLIB_LIBRARIES}
+        ${LIBLZMA_LIBRARIES}
+        ${ZSTD_LIBRARIES}
+    )
+    target_link_options(bootfiles_archive_fault_test PRIVATE
+        -Wl,--wrap=archive_write_header
+        -Wl,--wrap=archive_write_data
+        -Wl,--wrap=archive_write_close)
+    target_include_directories(bootfiles_archive_fault_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${LibArchive_INCLUDE_DIR})
+    target_compile_features(bootfiles_archive_fault_test PRIVATE cxx_std_20)
+    rpi_discover_tests(bootfiles_archive_fault_test)
+endif()
 
 add_executable(rpiboot_bootfiles_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.h
