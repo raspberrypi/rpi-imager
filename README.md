@@ -19,6 +19,20 @@ For the Linux release pipeline — the rootless, multi-architecture chroot build
 
 ## Other notes
 
+### Customisation profiles
+
+For projects with different settings, choose **Profiles…** on the hostname
+customisation page to load a named profile. Review the restored settings using
+the usual customisation steps. On the write summary, choose **Profiles…** to save
+new profiles or update an existing one. The same dialog lets you rename,
+duplicate and delete profiles.
+
+Profiles apply to the operating system and Raspberry Pi you selected; they do
+not select a storage device. They are stored locally alongside Imager's settings,
+including password hashes and derived Wi-Fi credentials. Raspberry Pi Connect
+credentials, Secure Boot and passwordless sudo are excluded and need to be
+configured separately for each write.
+
 ### Custom repository
 
 If the application is started with "--repo [your own URL]" it will use a custom image repository.
