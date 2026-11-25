@@ -27,6 +27,8 @@ constexpr auto PI_CONNECT_STATE_FILENAME = "state.json";
  */
 class CustomisationGenerator {
 public:
+    // WPA2-only hotspot key derivation; client networks retain passphrases for SAE.
+    static QString hotspotPsk(const QVariantMap& settings, const QByteArray& ssid);
     /**
      * @brief Generate a firstrun.sh script from settings
      * 
@@ -183,6 +185,8 @@ public:
     static bool isYescryptHash(const QString& cryptHash);
 
 private:
+    // Install an offline-capable NetworkManager AP profile without storing a passphrase.
+    static QString wifiHotspotSetupCommand(const QVariantMap& settings);
 
     /**
      * @brief Resolve the crypted account password from settings.

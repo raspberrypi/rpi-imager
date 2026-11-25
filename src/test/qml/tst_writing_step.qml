@@ -26,6 +26,7 @@ TestCase {
         property bool hostnameConfigured: false
         property bool localeConfigured: false
         property bool userConfigured: false
+        property var customizationSettings: ({})
         property bool wifiConfigured: false
         property bool sshEnabled: false
         property bool piConnectEnabled: false
@@ -77,6 +78,7 @@ TestCase {
         fakeContainer.localeConfigured = false
         fakeContainer.userConfigured = false
         fakeContainer.wifiConfigured = false
+        fakeContainer.customizationSettings = ({})
         fakeContainer.sshEnabled = false
         fakeContainer.piConnectEnabled = false
         fakeContainer.featUsbGadgetEnabled = false
@@ -857,4 +859,13 @@ TestCase {
         verify(step.bytesAnnouncement(600).length > 0,
                "but does once it has got somewhere")
     }
+    function test_summary_identifies_hotspot_configuration() {
+        fakeContainer.customizationSettings = ({wifiNetworkMode: "hotspot"})
+        fakeContainer.wifiConfigured = true
+        var label = findChild(step, "writingWifiSummaryLabel")
+        verify(label)
+        verify(label.visible)
+        compare(label.text, "• " + CommonStrings.wifiHotspotConfigured)
+    }
+
 }
