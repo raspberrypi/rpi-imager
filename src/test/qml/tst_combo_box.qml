@@ -428,4 +428,101 @@ TestCase {
         box.currentIndex = 0
         compare(box.Accessible.name, testCase.zones[0])
     }
+    function typeText(text) {
+        for (let i = 0; i < text.length; i++)
+            keyClick(text.charAt(i))
+    }
+
+    function test_searchable_labels_keep_the_original_value() {
+        const box = create({model: ["us", "de", "gb"],
+                            displayLabels: ["English — United States", "German — Germany", "English — United Kingdom"],
+                            searchable: true, currentIndex: 0})
+        box.popup.open()
+        tryVerify(function() { return box.popup.opened })
+        const field = findChild(box.popup.contentItem, "comboSearchField")
+        verify(field && field.visible)
+        tryVerify(function() { return field.activeFocus })
+        typeText("germany")
+        compare(box.filteredCount, 1)
+        keyClick(Qt.Key_Return)
+        compare(box.currentText, "de")
+        compare(box.editText, "de")
+        compare(box.displayText, "German — Germany")
+        tryVerify(function() { return !box.popup.visible })
+    }
+
+    function test_search_can_be_edited_and_no_match_does_not_commit() {
+        const box = create({searchable: true, currentIndex: 4})
+        box.popup.open()
+        tryVerify(function() { return box.popup.opened })
+        const field = findChild(box.popup.contentItem, "comboSearchField")
+        field.text = "no such timezone"
+        compare(box.filteredCount, 0)
+        keyClick(Qt.Key_Return)
+        verify(box.popup.visible)
+        compare(box.currentIndex, 4)
+        field.selectAll()
+        typeText("paris")
+        compare(box.filteredCount, 1)
+        keyClick(Qt.Key_Escape)
+        tryVerify(function() { return !box.popup.visible })
+        compare(box.currentIndex, 4)
+        box.popup.open()
+        tryVerify(function() { return box.popup.opened })
+        compare(field.text, "")
+        compare(box.filteredCount, testCase.zones.length)
+    }
+
+    function test_search_arrows_and_enter_choose_a_filtered_row() {
+        const box = create({searchable: true})
+        box.popup.open()
+        tryVerify(function() { return box.popup.opened })
+        typeText("europe")
+        compare(box.filteredCount, 3)
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Return)
+        compare(box.currentText, "Europe/Lisbon")
+    }
+
+    function test_labels_are_sorted_and_country_codes_are_searchable() {
+        const box = create({model: ["US", "DE", "GB"],
+                            displayLabels: ["United States", "Germany", "United Kingdom"],
+                            searchable: true})
+        box.popup.open()
+        tryVerify(function() { return box.popup.opened })
+        const list = dropdown(box)
+        compare(list.model.get(0).displayText, "Germany")
+        const field = findChild(box.popup.contentItem, "comboSearchField")
+        field.text = "gb"
+        compare(box.filteredCount, 1)
+        keyClick(Qt.Key_Return)
+        compare(box.currentText, "GB")
+        compare(box.displayText, "United Kingdom")
+    }
+
+    Component {
+        id: focusFlowComponent
+        Row {
+            ImComboBox {
+                objectName: "searchableCombo"
+                width: 200
+                searchable: true
+                model: ["Germany", "United Kingdom"]
+            }
+            Button { objectName: "followingButton"; text: "Continue" }
+        }
+    }
+
+    function test_tab_leaves_search_and_continues_the_form() {
+        const form = createTemporaryObject(focusFlowComponent, testCase)
+        const box = findChild(form, "searchableCombo")
+        const next = findChild(form, "followingButton")
+        box.forceActiveFocus()
+        box.popup.open()
+        tryVerify(function() { return box.popup.opened })
+        keyClick(Qt.Key_Tab)
+        tryVerify(function() { return !box.popup.visible })
+        tryVerify(function() { return next.activeFocus })
+    }
+
 }
