@@ -200,7 +200,9 @@ Run runImager(const QStringList &args, bool asRoot)
     }
     p.start(cliBinary(), args);
 #else
-    if (asRoot) {
+    // Already root, the binary inherits it: going through sudo regardless
+    // failed every write case where root has no sudo, as in a container.
+    if (asRoot && !runningElevated()) {
         QStringList sudoArgs{QStringLiteral("-n"), QStringLiteral(IMAGER_BINARY)};
         sudoArgs << args;
         p.start(QStringLiteral("sudo"), sudoArgs);
