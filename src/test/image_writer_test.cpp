@@ -915,6 +915,23 @@ TEST_CASE("A leading v on the version is tolerated", "[imagewriter]")
     CHECK_FALSE(writer.isVersionNewer(QStringLiteral("v0.0.1")));
 }
 
+TEST_CASE("A release candidate is offered its final release", "[imagewriter]")
+{
+    CHECK(ImageWriter::isVersionNewerThan(QStringLiteral("2.1.0"), QStringLiteral("v2.1.0-rc1")));
+    CHECK(ImageWriter::isVersionNewerThan(QStringLiteral("2.1.0"),
+                                          QStringLiteral("v2.1.0-rc1-5-g1234abc-dirty")));
+    CHECK(ImageWriter::isVersionNewerThan(QStringLiteral("v2.1.0"), QStringLiteral("2.1.0-BETA2")));
+    CHECK(ImageWriter::isVersionNewerThan(QStringLiteral("2.1.1"), QStringLiteral("v2.1.0")));
+
+    // A build past a release is not behind it, nor is a candidate ahead of it.
+    CHECK_FALSE(ImageWriter::isVersionNewerThan(QStringLiteral("2.1.0"),
+                                                QStringLiteral("v2.1.0-5-g1234abc")));
+    CHECK_FALSE(ImageWriter::isVersionNewerThan(QStringLiteral("2.1.0-rc1"), QStringLiteral("v2.1.0")));
+    CHECK_FALSE(ImageWriter::isVersionNewerThan(QStringLiteral("2.0.12"), QStringLiteral("v2.1.0-rc1")));
+    CHECK_FALSE(ImageWriter::isVersionNewerThan(QStringLiteral("2.1.0-rc1"),
+                                                QStringLiteral("v2.1.0-rc1")));
+}
+
 // ══════════════════════════════════════════════════════════════
 // Naming a download
 // ══════════════════════════════════════════════════════════════

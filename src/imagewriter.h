@@ -221,6 +221,7 @@ public:
 
     /* Returns true if version argument is newer than current program */
     Q_INVOKABLE bool isVersionNewer(const QString &version);
+    static bool isVersionNewerThan(const QString &candidate, const QString &current);
 
     /* Set custom repository */
     Q_INVOKABLE void setCustomOsListUrl(const QUrl &url);

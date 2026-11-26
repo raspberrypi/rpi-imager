@@ -2304,14 +2304,30 @@ QString ImageWriter::constantVersion() const
 /* Returns true if version argument is newer than current program */
 bool ImageWriter::isVersionNewer(const QString &version)
 {
-    // Strip 'v' prefix if present - QVersionNumber requires strings to start with a digit
-    QString serverVersion = version.startsWith('v', Qt::CaseInsensitive) ? version.mid(1) : version;
-    QString currentVersion = QString(IMAGER_VERSION_STR);
-    if (currentVersion.startsWith('v', Qt::CaseInsensitive)) {
-        currentVersion = currentVersion.mid(1);
-    }
-    
-    return QVersionNumber::fromString(serverVersion) > QVersionNumber::fromString(currentVersion);
+    return isVersionNewerThan(version, QStringLiteral(IMAGER_VERSION_STR));
+}
+
+bool ImageWriter::isVersionNewerThan(const QString &candidate, const QString &current)
+{
+    struct Parsed { QVersionNumber number; bool prerelease; };
+    const auto parse = [](QString v) {
+        // QVersionNumber wants a digit first.
+        if (v.startsWith('v', Qt::CaseInsensitive))
+            v = v.mid(1);
+        qsizetype suffixAt = 0;
+        const QVersionNumber number = QVersionNumber::fromString(v, &suffixAt);
+        // "-rc1", "-beta2": before the release they number. "-5-gabc" is
+        // after it, as git describe writes a build past a tag.
+        static const QRegularExpression pre(
+            QStringLiteral("^-(rc|beta|alpha)\\d*"),
+            QRegularExpression::CaseInsensitiveOption);
+        return Parsed{number, pre.match(v.mid(suffixAt)).hasMatch()};
+    };
+    const Parsed c = parse(candidate);
+    const Parsed cur = parse(current);
+    if (c.number != cur.number)
+        return c.number > cur.number;
+    return cur.prerelease && !c.prerelease;
 }
 
 void ImageWriter::setCustomOsListUrl(const QUrl &url)
