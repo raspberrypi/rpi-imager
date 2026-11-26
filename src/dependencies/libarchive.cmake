@@ -53,6 +53,13 @@ if(NOT libarchive_POPULATED)
     set(HAVE_LIBZSTD 1)
     set(HAVE_ZSTD_compressStream 1)
     set(HAVE_ZSTD_minCLevel 1)
+    # libarchive before 3.8.11 cached these as probe results, and 3.8.11 sets
+    # them only with ENABLE_CNG. A tree configured against the older one keeps
+    # them TRUE without the ARCHIVE_CRYPTO_WIN they now need, and
+    # archive_digest.c fails to compile.
+    foreach(_alg MD5 SHA1 SHA256 SHA384 SHA512)
+        unset(ARCHIVE_CRYPTO_${_alg}_WIN CACHE)
+    endforeach()
     add_subdirectory(${libarchive_SOURCE_DIR} ${libarchive_BINARY_DIR} EXCLUDE_FROM_ALL)
     unset(HAVE_LIBZSTD)
     unset(HAVE_ZSTD_compressStream)
