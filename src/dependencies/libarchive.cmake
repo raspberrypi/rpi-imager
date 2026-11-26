@@ -47,8 +47,16 @@ rpi_imager_fetch_git_or_vendor(libarchive
 FetchContent_GetProperties(libarchive)
 if(NOT libarchive_POPULATED)
     FetchContent_Populate(libarchive)
-    rpi_imager_patch_libarchive("${libarchive_SOURCE_DIR}")
+    # libarchive links probes against libzstd.a, which is not built until after
+    # configure, so they would fail. CHECK_FUNCTION_EXISTS skips a result that
+    # is already defined; answering here leaves the submodule unmodified.
+    set(HAVE_LIBZSTD 1)
+    set(HAVE_ZSTD_compressStream 1)
+    set(HAVE_ZSTD_minCLevel 1)
     add_subdirectory(${libarchive_SOURCE_DIR} ${libarchive_BINARY_DIR} EXCLUDE_FROM_ALL)
+    unset(HAVE_LIBZSTD)
+    unset(HAVE_ZSTD_compressStream)
+    unset(HAVE_ZSTD_minCLevel)
 endif()
 rpi_imager_sbom_add_component(libarchive
     VERSION "${LIBARCHIVE_VERSION}"
@@ -58,8 +66,7 @@ rpi_imager_sbom_add_component(libarchive
     SOURCE_DIR "${libarchive_SOURCE_DIR}"
     LICENSE "BSD-2-Clause"
     PURL "pkg:github/libarchive/libarchive@v${LIBARCHIVE_VERSION}"
-    CPE "cpe:2.3:a:libarchive:libarchive:${LIBARCHIVE_VERSION}:*:*:*:*:*:*:*"
-    DESCRIPTION "Built with a patched CMakeLists.txt (static zstd detection); see fetch-vendor.cmake")
+    CPE "cpe:2.3:a:libarchive:libarchive:${LIBARCHIVE_VERSION}:*:*:*:*:*:*:*")
 
 if (TARGET archive_static AND TARGET ZLIB::ZLIB)
     add_dependencies(archive_static ZLIB::ZLIB)
