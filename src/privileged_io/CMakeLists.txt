@@ -77,6 +77,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
     GIT_TAG ${PROTOBUF_TAG}
     GIT_SHALLOW TRUE
+    PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/PatchProtobufMusttail.cmake
 )
 FetchContent_MakeAvailable(protobuf)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
