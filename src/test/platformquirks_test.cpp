@@ -520,7 +520,7 @@ static bool writeExecutable(const QString& path, const QByteArray& body)
 TEST_CASE("A program named without a path is looked for in fixed directories, "
           "not on PATH", "[platformquirks][linux][launch]")
 {
-    // launchDetached runs xdg-open, xhost and the audio players, and it can be
+    // launchDetached runs xdg-open and the audio players, and it can be
     // running as root -- Imager elevates itself to write to a disk. Resolving
     // a bare program name against PATH there would mean whoever set PATH
     // before the elevation chooses what runs as root. The code searches
@@ -4307,7 +4307,7 @@ TEST_CASE("The compositor socket is found, whatever it is numbered",
 
     CHECK(reportedValue(out, QStringLiteral("AFTER_WAYLAND_DISPLAY"))
           == QStringLiteral("wayland-3"));
-    // And no X11 display was invented, which is what keeps xhost out of it.
+    // And no X11 display was invented, which is what keeps the display grant out of it.
     CHECK(reportedValue(out, QStringLiteral("AFTER_DISPLAY")).isEmpty());
 }
 

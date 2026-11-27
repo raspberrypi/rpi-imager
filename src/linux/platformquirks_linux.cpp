@@ -13,8 +13,10 @@
 
 #include "../platformquirks.h"
 #include "../userfiles.h"
+#include "x11hostaccess.h"
 #include <cstdlib>
 #include <unistd.h>
+#include <grp.h>
 #include <pwd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -180,24 +182,74 @@ namespace {
         return nullptr;
     }
 
-    // Grant root access to the user's X11 display via xhost.
-    // Must be run as the original (non-root) user who owns the display session,
-    // since root doesn't yet have permission to connect.
-    // Uses +SI:localuser:root (server-interpreted, narrowly scoped to root only).
-    void grantRootDisplayAccess(uid_t uid, gid_t gid) {
-        pid_t pid = fork();
-        if (pid < 0) return;
-
-        if (pid == 0) {
-            // POSIX: only async-signal-safe functions between fork() and exec()
-            if (setgid(gid) != 0) _exit(1);
-            if (setuid(uid) != 0) _exit(1);
-            execlp("xhost", "xhost", "+SI:localuser:root", nullptr);
-            _exit(127);
+    // The child drops privileges before reading Xauthority or connecting to X11.
+    // Use the same narrow localuser grant as `xhost +SI:localuser:root`, but
+    // don't depend on xhost(1) being installed on the host.
+    void grantRootDisplayAccess(uid_t uid, gid_t gid, const char* originalHome) {
+        if (uid == 0) return;
+        const char* display = ::getenv("DISPLAY");
+        X11HostAccess::GrantPlan plan;
+        char reason[X11HostAccess::kMaxReason];
+        if (!X11HostAccess::prepareGrant(display, ::getenv("XAUTHORITY"), originalHome, "root", plan,
+                                         reason, sizeof(reason))) {
+            std::fprintf(stderr, "Not granting root access to the X11 display: %s\n", reason);
+            return;
         }
 
-        int status;
-        waitpid(pid, &status, 0);
+        // The child reports what it saw (result or failure) through this pipe.
+        int reportPipe[2];
+        if (pipe2(reportPipe, O_CLOEXEC) != 0) {
+            reportPipe[0] = reportPipe[1] = -1;
+        }
+
+        const pid_t pid = fork();
+        if (pid < 0) {
+            const int error = errno;
+            if (reportPipe[0] >= 0) {
+                close(reportPipe[0]);
+                close(reportPipe[1]);
+            }
+            std::fprintf(stderr, "WARNING: could not start the X11 grant helper: %s\n", strerror(error));
+            return;
+        }
+
+        if (pid == 0) {
+            if (reportPipe[0] >= 0) close(reportPipe[0]);
+            // In particular, do not retain root's supplementary groups while
+            // opening the invoking user's authority file.
+            if (setgroups(0, nullptr) != 0 || setgid(gid) != 0 || setuid(uid) != 0) {
+                _exit(X11HostAccess::PrivilegeDropFailed);
+            }
+            X11HostAccess::runGrant(plan, reportPipe[1]);
+        }
+
+        char report[X11HostAccess::kMaxReason] = {0};
+        if (reportPipe[0] >= 0) {
+            close(reportPipe[1]);
+            size_t total = 0;
+            while (total < sizeof(report) - 1) {
+                const ssize_t n = read(reportPipe[0], report + total, sizeof(report) - 1 - total);
+                if (n < 0 && errno == EINTR) continue;
+                if (n <= 0) break;
+                total += static_cast<size_t>(n);
+            }
+            close(reportPipe[0]);
+        }
+
+        int status = 0;
+        pid_t waited;
+        do {
+            waited = waitpid(pid, &status, 0);
+        } while (waited < 0 && errno == EINTR);
+        if (waited < 0) {
+            std::fprintf(stderr, "WARNING: could not wait for the X11 grant helper: %s\n", strerror(errno));
+            return;
+        }
+
+        const bool granted = X11HostAccess::describeOutcome(status, report, reason, sizeof(reason));
+        std::fprintf(stderr, granted ? "Granted root access to X11 display %s (%s)\n"
+                                     : "WARNING: could not grant root access to X11 display %s: %s\n",
+                     display, reason);
     }
 }
 
@@ -368,11 +420,11 @@ void applyQuirks() {
                     std::fprintf(stderr, "XAUTHORITY already set to: %s\n", currentXauthority);
                 }
                 
-                // If an X11 display is available, grant root access via xhost.
+                // If an X11 display is available, grant root access to it.
                 // This runs as the original user (who owns the display session)
                 // and must happen after DISPLAY and XAUTHORITY are configured.
                 if (::getenv("DISPLAY")) {
-                    grantRootDisplayAccess(originalUid, pwResult->pw_gid);
+                    grantRootDisplayAccess(originalUid, pwResult->pw_gid, pwResult->pw_dir);
                 }
                 
                 std::fprintf(stderr, "Set HOME to: %s\n", pwResult->pw_dir);
