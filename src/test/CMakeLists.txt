@@ -3988,3 +3988,13 @@ rpi_link_platform_file_ops(firmware_manager_test)
 target_compile_features(firmware_manager_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(firmware_manager_test)
+
+# Test targets compile app sources that include the generated imager_version.h;
+# only the app target waited for it, so building one test in a fresh tree failed.
+get_property(_rpi_test_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(_t IN LISTS _rpi_test_targets)
+    get_target_property(_type ${_t} TYPE)
+    if(_type MATCHES "EXECUTABLE|LIBRARY$")
+        add_dependencies(${_t} generate_version)
+    endif()
+endforeach()
