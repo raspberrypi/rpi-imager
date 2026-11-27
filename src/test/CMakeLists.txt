@@ -412,8 +412,13 @@ elseif(APPLE)
 else()
     set(PLATFORM_USERFILES_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/userfiles_linux.cpp)
+    # x11hostaccess.cpp belongs to the backend, not to any one test:
+    # platformquirks_linux.cpp calls X11HostAccess to give the elevated instance
+    # access to the X display, so every target that compiles that backend has to
+    # carry it as well.
     set(PLATFORM_QUIRKS_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/x11hostaccess.cpp
         ${PLATFORM_USERFILES_SRC})
     set(PLATFORM_SECUREBOOT_CRYPTO_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/../linux/secureboot_crypto_linux.cpp
@@ -845,6 +850,9 @@ add_executable(platformquirks_test
     ${PLATFORMQUIRKS_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/platformquirks_test.cpp
 )
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(platformquirks_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/x11hostaccess_test.cpp)
+endif()
 
 # Enable test API for Windows parseDeviceNumber
 target_compile_definitions(platformquirks_test PRIVATE PLATFORMQUIRKS_ENABLE_TEST_API)

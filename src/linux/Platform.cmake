@@ -46,6 +46,8 @@ set(PLATFORM_SOURCES
     linux/secureboot_crypto_linux.cpp
     linux/file_operations_linux.cpp
     linux/platformquirks_linux.cpp
+    linux/x11hostaccess.h
+    linux/x11hostaccess.cpp
     linux/userfiles_linux.cpp
 )
 
