@@ -18,9 +18,90 @@ WizardStepBase {
     
     // "open" | "secure"
     property string wifiMode: "secure"
+    // "personal" | "enterprise"
+    property string wifiSecureMode: "personal"
     property string originalSavedSSID: ""
     property bool hadSavedPassword: false
     property bool showPw: wifiMode === "secure"
+    // Enterprise is only offered when the selected OS can apply it (cloud-init);
+    // otherwise a stale "enterprise" choice falls back to Personal.
+    property bool showSecurityChoice: showPw && wizardContainer.wifiEnterpriseAvailable
+    property bool isEnterprise: showSecurityChoice && wifiSecureMode === "enterprise"
+    property bool showUsername: isEnterprise
+    onShowSecurityChoiceChanged: rebuildFocusOrder()
+    onIsEnterpriseChanged: {
+        rebuildFocusOrder()
+        // A keychain PSK is a WPA passphrase, not an Enterprise account password
+        if (isEnterprise && pskAutoFilled) {
+            fieldWifiPassword.text = ""
+            fieldWifiPasswordConfirm.text = ""
+        }
+    }
+
+    // The password fields hold a PSK read from the system keychain, not one typed
+    property bool pskAutoFilled: false
+
+    // Enterprise CA certificate, as PEM text, and the file name it came from
+    property string wifiCaCertificate: ""
+    property string wifiCaCertificateName: ""
+    property string caCertificateError: ""
+    onWifiCaCertificateChanged: rebuildFocusOrder()   // the Clear button comes and goes
+
+    // "none" | "file" | "system": where the CA certificate comes from
+    property string wifiCaSource: "none"
+    onWifiCaSourceChanged: rebuildFocusOrder()
+
+    // A path on the OS is written into network-config as given, so it must be
+    // absolute and stay where it says. Mirrors resolveWifiCaCertificateSystemPath().
+    function isValidCaSystemPath(p) {
+        if (!p || p.length === 0 || p.charAt(0) !== "/") return false
+        if (/[\x00-\x1f\x7f]/.test(p)) return false
+        var parts = p.split("/")
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] === "..") return false
+        }
+        return true
+    }
+
+    readonly property string caSystemPathError: {
+        if (!isEnterprise || wifiCaSource !== "system") return ""
+        var p = fieldWifiCaSystemPath.value
+        if (p.length === 0) return qsTr("Enter the path of the certificate on the OS, or choose another option.")
+        if (!isValidCaSystemPath(p)) return qsTr("Enter a full path starting with /, without \"..\".")
+        return ""
+    }
+    readonly property string caErrorText: wifiCaSource === "file" ? caCertificateError : caSystemPathError
+
+    // The mode the saved password was entered for ("wifiPasswordMode")
+    property string originalSavedSecureMode: "personal"
+
+    function canKeepSavedPassword() {
+        return hadSavedPassword
+            && ssidUnchanged(fieldWifiSSID.value, originalSavedSSID)
+            && (isEnterprise ? "enterprise" : "personal") === originalSavedSecureMode
+    }
+
+    function loadCaCertificate(fileUrlOrPath) {
+        var pem = ImageWriterSingleton.readWifiCaCertificate(fileUrlOrPath)
+        if (!pem || pem.length === 0) {
+            caCertificateError = qsTr("That file is not a certificate Imager can use. Choose a PEM or DER certificate file (.pem, .crt, .cer, .der).")
+            return
+        }
+        var s = String(fileUrlOrPath)
+        wifiCaCertificate = pem
+        wifiCaCertificateName = s.substring(Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\")) + 1)
+        caCertificateError = ""
+    }
+
+    function browseCaCertificate() {
+        if (ImageWriterSingleton.nativeFileDialogAvailable()) {
+            var picked = ImageWriterSingleton.getNativeOpenFileName(qsTr("Select CA certificate"), "", CommonStrings.caCertFiltersString)
+            if (picked && picked.length > 0)
+                loadCaCertificate(picked)
+        } else {
+            caCertFileDialog.open()
+        }
+    }
 
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
@@ -42,6 +123,28 @@ WizardStepBase {
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("wifi_fields", function(){
             var items = [labelSSID, fieldWifiSSID]
+            if (showSecurityChoice) {
+                items.push(labelWifiSecurity)
+                items.push(comboWifiSecurity)
+            }
+            if (isEnterprise) {
+                items.push(labelWifiUsername)
+                items.push(fieldWifiUsername)
+                items.push(labelWifiEapMethod)
+                items.push(comboWifiEapMethod)
+                items.push(labelWifiPhase2Auth)
+                items.push(comboWifiPhase2Auth)
+                items.push(labelWifiAnonymousIdentity)
+                items.push(fieldWifiAnonymousIdentity)
+                items.push(labelWifiCaCertificate)
+                items.push(comboWifiCaSource)
+                if (wifiCaSource === "file") {
+                    items.push(btnWifiCaCertificateBrowse)
+                    items.push(btnWifiCaCertificateClear)
+                } else if (wifiCaSource === "system") {
+                    items.push(fieldWifiCaSystemPath)
+                }
+            }
             if (showPw) {
                 items.push(lblPassword)
                 items.push(fieldWifiPassword)
@@ -52,18 +155,32 @@ WizardStepBase {
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
 
-        // Set SSID placeholder before prefilling text content
+        // Set placeholders before prefilling text content
         fieldWifiSSID.placeholderText = qsTr("Network name")
+        fieldWifiUsername.placeholderText = qsTr("Username")
+        fieldWifiAnonymousIdentity.placeholderText = qsTr("Anonymous identity (optional)")
 
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings
 
-        // Set SSID placeholder first (before setting any text)
-        fieldWifiSSID.placeholderText = qsTr("Network name")
-
         // Then set text values after, so they properly override the placeholder
         if (settings.wifiSSID) {
             fieldWifiSSID.text = settings.wifiSSID
+        }
+
+        // Restore the Enterprise username the same way
+        if (settings.wifiUsername) {
+            fieldWifiUsername.text = settings.wifiUsername
+        }
+        if (settings.wifiAnonymousIdentity) {
+            fieldWifiAnonymousIdentity.text = settings.wifiAnonymousIdentity
+        }
+        if (settings.wifiCaCertificate) {
+            wifiCaCertificate = settings.wifiCaCertificate
+            wifiCaCertificateName = settings.wifiCaCertificateName || qsTr("Saved certificate")
+        }
+        if (settings.wifiCaCertificatePath) {
+            fieldWifiCaSystemPath.text = settings.wifiCaCertificatePath
         }
 
         // If not saved, try to auto-detect the current SSID from the system
@@ -80,6 +197,10 @@ WizardStepBase {
         }
 
         originalSavedSSID = settings.wifiSSID || ""
+        // Not the dropdown choice: the mode the password itself was saved for.
+        // Missing (saved by an earlier version) means Personal.
+        originalSavedSecureMode = settings.wifiPasswordMode || "personal"
+
         // Remember if a passphrase is already saved (affects placeholder/keep
         // semantics and keychain auto-prefill).
         hadSavedPassword = !!settings.wifiPassword
@@ -95,6 +216,7 @@ WizardStepBase {
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
                 fieldWifiPasswordConfirm.text = psk
+                pskAutoFilled = true
             }
         }
 
@@ -102,6 +224,18 @@ WizardStepBase {
         wifiMode = (settings.wifiMode === "secure" || settings.wifiMode === "open")
             ? settings.wifiMode
             : "secure"
+
+        // wifiSecureMode: restore the dropdown; its onCurrentValueChanged sets wifiSecureMode
+        var secIdx = comboWifiSecurity.indexOfValue(settings.wifiSecureMode || "personal")
+        comboWifiSecurity.currentIndex = secIdx >= 0 ? secIdx : 0
+        var eapIdx = comboWifiEapMethod.indexOfValue(settings.wifiEapMethod || "peap")
+        comboWifiEapMethod.currentIndex = eapIdx >= 0 ? eapIdx : 0
+        // Unset: the usual inner method for the EAP method, as resolveWifiPhase2Auth() does
+        var phase2Idx = comboWifiPhase2Auth.indexOfValue(settings.wifiPhase2Auth
+                            || (settings.wifiEapMethod === "ttls" ? "pap" : "mschapv2"))
+        comboWifiPhase2Auth.currentIndex = phase2Idx >= 0 ? phase2Idx : 0
+        var caIdx = comboWifiCaSource.indexOfValue(settings.wifiCaCertificateSource || "none")
+        comboWifiCaSource.currentIndex = caIdx >= 0 ? caIdx : 0
 
         updatePasswordFieldUI()
         // UpdatePasswordFieldUI already takes care of this
@@ -129,6 +263,7 @@ WizardStepBase {
                         if (psk && psk.length > 0) {
                             fieldWifiPassword.text = psk
                             fieldWifiPasswordConfirm.text = psk
+                            root.pskAutoFilled = true
                         }
                     }
                 }
@@ -137,9 +272,6 @@ WizardStepBase {
     }
 
     function updatePasswordFieldUI() {
-        var ssid = fieldWifiSSID.value
-        var prevSSID = originalSavedSSID
-
         if (wifiMode === "open") {
             fieldWifiPassword.text = ""
             fieldWifiPassword.enabled = false
@@ -151,18 +283,17 @@ WizardStepBase {
 
         // secure
         fieldWifiPassword.enabled = true
-        var canKeep = hadSavedPassword && ssidUnchanged(ssid, prevSSID)
+        var canKeep = canKeepSavedPassword()
         fieldWifiPassword.placeholderText = canKeep
            ? qsTr("Saved (hidden) — leave blank to keep")
-           : qsTr("Network password")
+           : (isEnterprise ? qsTr("Account password") : qsTr("Network password"))
     }
 
     function passwordErrorMessage() {
         if (!showPw) return " ";
 
         // Gather state
-        var ssidNow = fieldWifiSSID.value;
-        var canKeep = hadSavedPassword && ssidUnchanged(ssidNow, originalSavedSSID);
+        var canKeep = canKeepSavedPassword();
         var pwd = fieldWifiPassword.text || "";
         var conf = fieldWifiPasswordConfirm.text || "";
 
@@ -177,8 +308,10 @@ WizardStepBase {
         if (pwd.length === 0) return qsTr("Enter a password");
 
         // Detailed validity (mirrors isValidWifiPassword)
-        // 64 hex is allowed => if it's 64 chars but not hex, say invalid chars
-        if (!isHex64(pwd)) {
+        // 64 hex is allowed => if it's 64 chars but not hex, say invalid chars.
+        // Enterprise passwords are account passwords, not WPA passphrases, so
+        // the 8-63 ASCII rule does not apply to them.
+        if (!isEnterprise && !isHex64(pwd)) {
             if (pwd.length < 8) return qsTr("Password is too short (min 8 characters)");
             if (pwd.length > 63) return qsTr("Password is too long (max 63 characters)");
             if (!isAsciiPrintable(pwd)) return qsTr("Password contains unsupported characters");
@@ -305,12 +438,237 @@ WizardStepBase {
                     }
 
                     WizardFormLabel {
+                        id: labelWifiSecurity
+                        visible: root.showSecurityChoice
+                        text: qsTr("Security:")
+                        accessibleDescription: qsTr("Choose the type of security your Wi-Fi network uses.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiSecurity
+                        objectName: "wifiSecurityCombo"
+                        accessiblePurpose: labelWifiSecurity.text
+                        Layout.fillWidth: true
+                        visible: root.showSecurityChoice
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("WPA2/WPA3 Personal"),   value: "personal" },
+                            { text: qsTr("WPA2/WPA3 Enterprise"), value: "enterprise" },
+                        ]
+
+                        onCurrentValueChanged: {
+                            root.wifiSecureMode = valueAt(currentIndex);
+                            updatePasswordFieldUI();
+                        }
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiUsername
+                        visible: root.showUsername
+                        text: qsTr("Username:")
+                        accessibleDescription: qsTr("Enter the username (identity) for your WPA2/WPA3 Enterprise network, for example user@example.com.")
+                    }
+
+                    ImTextField {
+                        id: fieldWifiUsername
+                        objectName: "wifiUsernameField"
+                        Layout.fillWidth: true
+                        visible: root.showUsername
+                        font.pointSize: Style.fontSizeInput
+                        trimWhitespace: true
+                        onTextChanged: updatePasswordFieldUI()
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiEapMethod
+                        visible: root.isEnterprise
+                        text: qsTr("EAP method:")
+                        accessibleDescription: qsTr("Choose how your device signs in to the Enterprise network. Your network administrator's setup instructions name it; PEAP is the most common.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiEapMethod
+                        objectName: "wifiEapMethodCombo"
+                        accessiblePurpose: labelWifiEapMethod.text
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("PEAP"), value: "peap" },
+                            { text: qsTr("TTLS"), value: "ttls" }
+                        ]
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiPhase2Auth
+                        visible: root.isEnterprise
+                        text: qsTr("Phase 2:")
+                        accessibleDescription: qsTr("Choose the inner authentication your Enterprise network uses inside the EAP tunnel. Your network administrator's setup instructions name it; MSCHAPv2 is usual for PEAP, PAP for many TTLS networks.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiPhase2Auth
+                        objectName: "wifiPhase2AuthCombo"
+                        accessiblePurpose: labelWifiPhase2Auth.text
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("MSCHAPv2"), value: "mschapv2" },
+                            { text: qsTr("PAP"),      value: "pap" }
+                        ]
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiAnonymousIdentity
+                        visible: root.isEnterprise
+                        text: qsTr("Anonymous identity:")
+                        accessibleDescription: qsTr("Optional. The outer identity some Enterprise networks ask for, for example anonymous@example.com. Leave blank unless your network's setup instructions give one.")
+                    }
+
+                    ImTextField {
+                        id: fieldWifiAnonymousIdentity
+                        objectName: "wifiAnonymousIdentityField"
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        font.pointSize: Style.fontSizeInput
+                        trimWhitespace: true
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
+                    }
+
+                    WizardFormLabel {
+                        id: labelWifiCaCertificate
+                        visible: root.isEnterprise
+                        text: qsTr("CA certificate:")
+                        accessibleDescription: qsTr("Optional but recommended. The certificate your network's setup instructions name, so the device only sends your password to the real network. Pick a file, or give the path of one the OS already has.")
+                    }
+
+                    ImComboBox {
+                        id: comboWifiCaSource
+                        objectName: "wifiCaSourceCombo"
+                        accessiblePurpose: labelWifiCaCertificate.text
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise
+                        editable: false
+                        font.pointSize: Style.fontSizeInput
+
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("None (network not verified)"), value: "none" },
+                            { text: qsTr("From a file"),                 value: "file" },
+                            { text: qsTr("Already on the OS"),           value: "system" }
+                        ]
+
+                        onCurrentValueChanged: root.wifiCaSource = valueAt(currentIndex)
+                    }
+
+                    // Keeps the grid's two-column pairing for the rows below
+                    Item { width: 1; height: 1; visible: root.isEnterprise && root.wifiCaSource === "file" }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise && root.wifiCaSource === "file"
+                        spacing: Style.spacingSmall
+
+                        ImTextField {
+                            id: fieldWifiCaCertificate
+                            objectName: "wifiCaCertificateField"
+                            Layout.fillWidth: true
+                            readOnly: true
+                            font.pointSize: Style.fontSizeInput
+                            text: root.wifiCaCertificateName
+                            placeholderText: qsTr("No file chosen — the network will not be verified")
+                        }
+
+                        ImButton {
+                            id: btnWifiCaCertificateBrowse
+                            objectName: "wifiCaCertificateBrowseButton"
+                            text: CommonStrings.browse
+                            accessibleDescription: qsTr("Select the CA certificate file for this network")
+                            onClicked: root.browseCaCertificate()
+                            onActiveFocusChanged: {
+                                if (activeFocus)
+                                    wifiScroll.scrollToItem(this);
+                            }
+                        }
+
+                        ImButton {
+                            id: btnWifiCaCertificateClear
+                            objectName: "wifiCaCertificateClearButton"
+                            text: qsTr("Clear")
+                            visible: root.wifiCaCertificate.length > 0
+                            accessibleDescription: qsTr("Remove the selected CA certificate")
+                            onClicked: {
+                                root.wifiCaCertificate = ""
+                                root.wifiCaCertificateName = ""
+                                root.caCertificateError = ""
+                            }
+                        }
+                    }
+
+                    Item { width: 1; height: 1; visible: root.isEnterprise && root.wifiCaSource === "system" }
+
+                    ImTextField {
+                        id: fieldWifiCaSystemPath
+                        objectName: "wifiCaSystemPathField"
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise && root.wifiCaSource === "system"
+                        font.pointSize: Style.fontSizeInput
+                        trimWhitespace: true
+                        placeholderText: qsTr("Full path, e.g. /etc/ssl/certs/…pem")
+                        Accessible.description: qsTr("The full path of a CA certificate already on the OS, as your network's setup instructions give it. Imager cannot check that the file exists on the OS.")
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
+                    }
+
+                    // Keeps the grid's two-column pairing for the error row below
+                    Item { width: 1; height: 1; visible: root.isEnterprise && root.caErrorText.length > 0 }
+
+                    Text {
+                        id: caCertificateErrorText
+                        textFormat: Text.PlainText
+                        Layout.fillWidth: true
+                        visible: root.isEnterprise && root.caErrorText.length > 0
+                        wrapMode: Text.WordWrap
+                        text: root.caErrorText
+                        color: Style.formLabelErrorColor
+                        font.pointSize: Style.fontSizeDescription
+                    }
+
+                    WizardFormLabel {
                         id: lblPassword
                         text: CommonStrings.password
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
-                            return canKeep 
+                            var canKeep = root.canKeepSavedPassword()
+                            if (root.isEnterprise) {
+                                return canKeep
+                                    ? qsTr("Enter a new password for your Enterprise account, or leave blank to keep the previously saved password.")
+                                    : qsTr("Enter the password for your Enterprise account. You will need to re-enter it in the next field to confirm.")
+                            }
+                            return canKeep
                                 ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
                                 : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
                         }
@@ -328,6 +686,8 @@ WizardStepBase {
                                 wifiScroll.scrollToItem(fieldWifiPassword);
                         }
                         textField.onTextChanged: {
+                            if (textField.text.length === 0)
+                                root.pskAutoFilled = false
                             updatePasswordFieldUI()
                             wifiScroll.scrollToItem(fieldWifiPassword)
                         }
@@ -339,7 +699,7 @@ WizardStepBase {
                         text: qsTr("Confirm password:")
                         visible: root.showPw
                         accessibleDescription: {
-                            var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword()
                             return canKeep 
                                 ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
                                 : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
@@ -352,7 +712,7 @@ WizardStepBase {
                         Layout.fillWidth: true
                         font.pointSize: Style.fontSizeInput
                         placeholderText: {
-                            var canKeep = root.hadSavedPassword && ssidUnchanged(fieldWifiSSID.value, root.originalSavedSSID)
+                            var canKeep = root.canKeepSavedPassword()
                             return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                         }
                         visible: root.showPw
@@ -403,6 +763,20 @@ WizardStepBase {
         }
     }
     ]
+
+    // Fallback CA certificate picker for when no native file dialog is available
+    ImFileDialog {
+        id: caCertFileDialog
+        objectName: "wifiCaCertificateFileDialog"
+        parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
+        anchors.centerIn: parent
+        dialogTitle: qsTr("Select CA certificate")
+        nameFilters: CommonStrings.caCertFiltersList
+        onAccepted: {
+            if (selectedFile && selectedFile.toString().length > 0)
+                root.loadCaCertificate(selectedFile.toString())
+        }
+    }
     
     // WPA2/3 passphrase validation helpers
     function isAsciiPrintable(text) {
@@ -434,15 +808,20 @@ WizardStepBase {
     // Validation: allow proceed when
     // - SSID entered and either a new passphrase provided or a saved one exists; or
     // - all WiFi fields are empty (skip)
+    // - for Enterprise wifi secure mode, ensure username isn't empty
     nextButtonEnabled: (function(){
         var haveSSID = fieldWifiSSID.value.length > 0
         if (!haveSSID) return true  // allow skipping by leaving fields empty
 
         if (wifiMode === "open") return true
 
+        // Enterprise needs a username
+        if (isEnterprise && fieldWifiUsername.value.length === 0) return false
+        // ...and a usable path when the certificate is one already on the OS
+        if (caSystemPathError.length > 0) return false
+
         // secure / closed mode
-        var ssidNow = fieldWifiSSID.value
-        var canKeep = hadSavedPassword && ssidUnchanged(ssidNow, originalSavedSSID)
+        var canKeep = canKeepSavedPassword()
         var pwd = fieldWifiPassword.text || ""
 
         // If we *can* keep and user left blank, OK
@@ -452,21 +831,59 @@ WizardStepBase {
 
         // Need a new password -> must be valid and must match confirm (like user customization step)
         if (pwd.length === 0) return false
-        if (!root.isValidWifiPassword(pwd)) return false
+        if (!root.isEnterprise && !root.isValidWifiPassword(pwd)) return false
 
         // Always check that passwords match
         if (pwd !== (fieldWifiPasswordConfirm.text || "")) return false
         return true
     })()
 
+    // Write or clear the Enterprise-only fields in a settings map. Kept only
+    // while Enterprise is in effect, so a Personal or Open network never
+    // carries a stale identity.
+    function applyEnterpriseSettings(map, keep) {
+        if (keep) {
+            map.wifiUsername = fieldWifiUsername.value
+            map.wifiEapMethod = comboWifiEapMethod.currentValue
+            map.wifiPhase2Auth = comboWifiPhase2Auth.currentValue
+            if (fieldWifiAnonymousIdentity.value.length > 0)
+                map.wifiAnonymousIdentity = fieldWifiAnonymousIdentity.value
+            else
+                delete map.wifiAnonymousIdentity
+            // A CA certificate is public, so it is remembered like the rest.
+            // Both kinds are kept so switching the source back finds them; the
+            // source alone decides which one network-config uses.
+            map.wifiCaCertificateSource = wifiCaSource
+            if (wifiCaCertificate.length > 0) {
+                map.wifiCaCertificate = wifiCaCertificate
+                map.wifiCaCertificateName = wifiCaCertificateName
+            } else {
+                delete map.wifiCaCertificate
+                delete map.wifiCaCertificateName
+            }
+            if (fieldWifiCaSystemPath.value.length > 0)
+                map.wifiCaCertificatePath = fieldWifiCaSystemPath.value
+            else
+                delete map.wifiCaCertificatePath
+        } else {
+            delete map.wifiUsername
+            delete map.wifiEapMethod
+            delete map.wifiPhase2Auth
+            delete map.wifiAnonymousIdentity
+            delete map.wifiCaCertificateSource
+            delete map.wifiCaCertificate
+            delete map.wifiCaCertificateName
+            delete map.wifiCaCertificatePath
+        }
+    }
+
     // Save settings when moving to next step
     onNextClicked: {
         var ssid = fieldWifiSSID.value
         var pwd = fieldWifiPassword.text
-        var prevSSID = wizardContainer.customizationSettings.wifiSSID || ""
         var hidden = chkWifiHidden.checked
-        var hadPasswordBefore = !!wizardContainer.customizationSettings.wifiPassword
-        var sameSSID = ssidUnchanged(ssid, prevSSID)
+        // Saved with the password, so it is only reused for the same kind of network
+        var passwordMode = isEnterprise ? "enterprise" : "personal"
 
         // Stored in the clear: NetworkManager needs the passphrase itself to
         // negotiate WPA3/SAE, so it cannot be pre-derived into a PSK.
@@ -479,8 +896,10 @@ WizardStepBase {
 
         // Update conserved customization settings (runtime state)
         wizardContainer.customizationSettings.wifiMode = wifiMode
-        
-        // Handle SSID and password
+        // What this write will use: Personal whenever the OS cannot take Enterprise
+        wizardContainer.customizationSettings.wifiSecureMode = isEnterprise ? "enterprise" : "personal"
+
+        // Handle SSID, password, and Enterprise fields
         if (ssid.length > 0) {
             wizardContainer.customizationSettings.wifiSSID = ssid
             wizardContainer.customizationSettings.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
@@ -488,23 +907,30 @@ WizardStepBase {
             if (wifiMode === "open") {
                // always clear in open mode
                delete wizardContainer.customizationSettings.wifiPassword
+               delete wizardContainer.customizationSettings.wifiPasswordMode
             } else if (havePassword) {
                // overwrite with the newly entered passphrase
                wizardContainer.customizationSettings.wifiPassword = pwd
-            } else if (hadPasswordBefore && sameSSID) {
+               wizardContainer.customizationSettings.wifiPasswordMode = passwordMode
+            } else if (canKeepSavedPassword()) {
                // keep the existing passphrase (do nothing)
             } else {
                // no password provided and can't keep -> ensure cleared
                delete wizardContainer.customizationSettings.wifiPassword
+               delete wizardContainer.customizationSettings.wifiPasswordMode
             }
+
+            applyEnterpriseSettings(wizardContainer.customizationSettings, isEnterprise)
 
             wizardContainer.customizationSettings.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else {
-            // No SSID -> clear SSID and password settings
+            // No SSID -> clear SSID, password and Enterprise settings
             delete wizardContainer.customizationSettings.wifiSSID
             delete wizardContainer.customizationSettings.wifiSsidOctetsBase64
             delete wizardContainer.customizationSettings.wifiPassword
+            delete wizardContainer.customizationSettings.wifiPasswordMode
+            applyEnterpriseSettings(wizardContainer.customizationSettings, false)
             delete wizardContainer.customizationSettings.wifiHidden
             wizardContainer.wifiConfigured = false
         }
@@ -512,23 +938,32 @@ WizardStepBase {
         // Also persist for future sessions
         var saved = ImageWriterSingleton.getSavedCustomisationSettings()
         saved.wifiMode = wifiMode
+        // The dropdown choice itself is remembered even for an OS that cannot
+        // use it, so picking a cloud-init OS next time brings it back.
+        saved.wifiSecureMode = wifiSecureMode
         if (ssid.length > 0) {
+            applyEnterpriseSettings(saved, wifiSecureMode === "enterprise")
             saved.wifiSSID = ssid
             saved.wifiSsidOctetsBase64 = ImageWriterSingleton.wifiSsidOctetsBase64(ssid)
             if (wifiMode === "open") {
                delete saved.wifiPassword
+               delete saved.wifiPasswordMode
             } else if (havePassword) {
                saved.wifiPassword = pwd
-            } else if (hadPasswordBefore && sameSSID) {
+               saved.wifiPasswordMode = passwordMode
+            } else if (canKeepSavedPassword()) {
                // keep existing persisted passphrase
             } else {
                delete saved.wifiPassword
+               delete saved.wifiPasswordMode
             }
             saved.wifiHidden = hidden
         } else {
             delete saved.wifiSSID
             delete saved.wifiSsidOctetsBase64
             delete saved.wifiPassword
+            delete saved.wifiPasswordMode
+            applyEnterpriseSettings(saved, false)
             delete saved.wifiHidden
         }
         ImageWriterSingleton.setSavedCustomisationSettings(saved)

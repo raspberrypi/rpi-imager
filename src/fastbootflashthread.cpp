@@ -499,6 +499,16 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
                            .arg(QString::fromStdString(fb.lastError())));
                 return false;
             }
+
+            // The Enterprise CA certificate network-config's ca-certificate: names
+            if (!_wifiCaCertificate.isEmpty() && !_wifiCaCertificateName.isEmpty()) {
+                if (!fb.writeDeviceFile(transport, BOOT + _wifiCaCertificateName.toStdString(),
+                                         toSpan(_wifiCaCertificate), _cancelled)) {
+                    emit error(tr("Failed to write the Wi-Fi CA certificate: %1")
+                               .arg(QString::fromStdString(fb.lastError())));
+                    return false;
+                }
+            }
         }
     }
 

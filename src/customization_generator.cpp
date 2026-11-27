@@ -280,6 +280,155 @@ QString CustomisationGenerator::resolveWifiPassphrase(const QVariantMap& setting
     return stripLineTerminators(settings.value(QStringLiteral("wifiPassword")).toString());
 }
 
+QString CustomisationGenerator::resolveWifiUsername(const QVariantMap& settings, bool wifiConfigured) {
+    if (!wifiConfigured)
+        return {};
+
+    // Strip CR/LF: a pasted trailing newline would otherwise become part of
+    // the username.
+    return stripLineTerminators(settings.value(QStringLiteral("wifiUsername")).toString());
+}
+
+QString CustomisationGenerator::resolveWifiSecureMode(const QVariantMap& settings,  bool wifiConfigured) {
+    if (!wifiConfigured)
+        return QStringLiteral("personal");
+
+    if (settings.value(QStringLiteral("wifiMode")).toString() == QStringLiteral("open")) {
+        return QStringLiteral("open");
+    }
+
+    const QString mode = settings.value(QStringLiteral("wifiSecureMode")).toString();
+    if (mode == QStringLiteral("enterprise"))
+        return mode;
+    return QStringLiteral("personal");
+}
+
+QString CustomisationGenerator::resolveWifiEapMethod(const QVariantMap& settings) {
+    const QString method = settings.value(QStringLiteral("wifiEapMethod")).toString();
+    if (method == QStringLiteral("ttls"))
+        return method;
+    return QStringLiteral("peap");
+}
+
+QString CustomisationGenerator::resolveWifiPhase2Auth(const QVariantMap& settings) {
+    const QString phase2 = settings.value(QStringLiteral("wifiPhase2Auth")).toString();
+    if (phase2 == QStringLiteral("mschapv2") || phase2 == QStringLiteral("pap"))
+        return phase2;
+    return resolveWifiEapMethod(settings) == QStringLiteral("ttls") ? QStringLiteral("pap")
+                                                                     : QStringLiteral("mschapv2");
+}
+
+QString CustomisationGenerator::resolveWifiAnonymousIdentity(const QVariantMap& settings, bool wifiConfigured) {
+    if (!wifiConfigured)
+        return {};
+
+    return stripLineTerminators(settings.value(QStringLiteral("wifiAnonymousIdentity")).toString()).trimmed();
+}
+
+QString CustomisationGenerator::wifiCaCertificatePath() {
+    return QStringLiteral("/boot/firmware/") + wifiCaCertificateFileName();
+}
+
+QByteArray CustomisationGenerator::normaliseCaCertificate(const QByteArray& raw) {
+    static constexpr qsizetype kMaxCertificateBytes = 64 * 1024;
+    if (raw.isEmpty() || raw.size() > kMaxCertificateBytes)
+        return {};
+
+    static const QByteArray kBegin("-----BEGIN CERTIFICATE-----");
+    static const QByteArray kEnd("-----END CERTIFICATE-----");
+
+    // One DER certificate is exactly one ASN.1 SEQUENCE: tag 0x30, a length,
+    // and that many bytes -- nothing more. Checking the length against the
+    // size tells a binary certificate apart from text that starts with "0".
+    auto isDerSequence = [](const QByteArray& der) {
+        if (der.size() < 2 || static_cast<unsigned char>(der.at(0)) != 0x30)
+            return false;
+        const unsigned char first = static_cast<unsigned char>(der.at(1));
+        qsizetype header = 2;
+        qsizetype length = first;
+        if (first & 0x80) {
+            const int count = first & 0x7F;
+            if (count < 1 || count > 3 || der.size() < 2 + count)
+                return false;
+            length = 0;
+            for (int i = 0; i < count; ++i)
+                length = (length << 8) | static_cast<unsigned char>(der.at(2 + i));
+            header += count;
+        }
+        return header + length == der.size();
+    };
+
+    auto toPem = [](const QByteArray& der) {
+        const QByteArray b64 = der.toBase64();
+        QByteArray pem = kBegin + '\n';
+        for (qsizetype i = 0; i < b64.size(); i += 64)
+            pem += b64.mid(i, 64) + '\n';
+        pem += kEnd + '\n';
+        return pem;
+    };
+
+    if (raw.contains(kBegin)) {
+        // PEM, possibly a bundle. Keep each CERTIFICATE block, re-encoded from
+        // its decoded body, so nothing but certificates reaches the card.
+        QByteArray out;
+        qsizetype pos = 0;
+        while ((pos = raw.indexOf(kBegin, pos)) >= 0) {
+            const qsizetype bodyStart = pos + kBegin.size();
+            const qsizetype end = raw.indexOf(kEnd, bodyStart);
+            if (end < 0)
+                return {};
+            const auto decoded = QByteArray::fromBase64Encoding(
+                raw.mid(bodyStart, end - bodyStart).trimmed(),
+                QByteArray::AbortOnBase64DecodingErrors);
+            if (!decoded || !isDerSequence(decoded.decoded))
+                return {};
+            out += toPem(decoded.decoded);
+            pos = end + kEnd.size();
+        }
+        return out;
+    }
+
+    // DER: one binary certificate
+    if (isDerSequence(raw))
+        return toPem(raw);
+
+    return {};
+}
+
+QByteArray CustomisationGenerator::wifiCaCertificateForNetworkConfig(const QVariantMap& settings) {
+    const bool wifiConfigured = settings.value(QStringLiteral("wifiConfigured"), true).toBool();
+    if (ssidOctetsFromSettings(settings, wifiConfigured).isEmpty())
+        return {};
+    if (resolveWifiSecureMode(settings, wifiConfigured) != QStringLiteral("enterprise"))
+        return {};
+    if (resolveWifiCaCertificateSource(settings) != QStringLiteral("file"))
+        return {};
+    return normaliseCaCertificate(settings.value(QStringLiteral("wifiCaCertificate")).toByteArray());
+}
+
+QString CustomisationGenerator::resolveWifiCaCertificateSource(const QVariantMap& settings) {
+    const QString value = settings.value(QStringLiteral("wifiCaCertificateSource")).toString();
+    if (value == QStringLiteral("file") || value == QStringLiteral("system"))
+        return value;
+    return QStringLiteral("none");
+}
+
+QString CustomisationGenerator::resolveWifiCaCertificateSystemPath(const QVariantMap& settings) {
+    if (resolveWifiCaCertificateSource(settings) != QStringLiteral("system"))
+        return {};
+
+    const QString path = settings.value(QStringLiteral("wifiCaCertificatePath")).toString().trimmed();
+    if (!path.startsWith(QLatin1Char('/')))
+        return {};
+    for (const QChar c : path) {
+        if (c.unicode() < 0x20 || c.unicode() == 0x7f)
+            return {};
+    }
+    if (path.split(QLatin1Char('/')).contains(QStringLiteral("..")))
+        return {};
+    return path;
+}
+
 QByteArray CustomisationGenerator::yamlEscapeSsidOctets(const QByteArray& value)
 {
     // YAML's \xHH and \uHHHH escapes name code points, not bytes, so escaping
@@ -1080,8 +1229,36 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
+
+        const QString secMode = resolveWifiSecureMode(settings, wifiConfigured);
+        const QString username = resolveWifiUsername(settings, wifiConfigured);
         const QString wifiPassphrase = resolveWifiPassphrase(settings, wifiConfigured);
-        if (wifiPassphrase.isEmpty()) {
+
+        if (secMode == QStringLiteral("enterprise")) {
+            push(QStringLiteral("          auth:"), netcfg);
+            push(QStringLiteral("            key-management: eap"), netcfg);
+            push(QStringLiteral("            method: ") + resolveWifiEapMethod(settings), netcfg);
+            push(QStringLiteral("            phase2-auth: ") + resolveWifiPhase2Auth(settings), netcfg);
+            push(QStringLiteral("            identity: \"") + yamlEscapeString(username) + QStringLiteral("\""), netcfg);
+            const QString anonymousIdentity = resolveWifiAnonymousIdentity(settings, wifiConfigured);
+            if (!anonymousIdentity.isEmpty()) {
+                push(QStringLiteral("            anonymous-identity: \"") + yamlEscapeString(anonymousIdentity)
+                     + QStringLiteral("\""), netcfg);
+            }
+            // A picked file is written to the boot partition by the write
+            // thread (see wifiCaCertificateForNetworkConfig()); a certificate
+            // already on the OS is only referenced.
+            QString caPath;
+            if (!wifiCaCertificateForNetworkConfig(settings).isEmpty())
+                caPath = wifiCaCertificatePath();
+            else
+                caPath = resolveWifiCaCertificateSystemPath(settings);
+            if (!caPath.isEmpty()) {
+                push(QStringLiteral("            ca-certificate: \"") + yamlEscapeString(caPath)
+                     + QStringLiteral("\""), netcfg);
+            }
+            push(QStringLiteral("            password: \"") + yamlEscapeString(wifiPassphrase) + QStringLiteral("\""), netcfg);
+        } else if (wifiPassphrase.isEmpty()) {
             // Open network (no password) - use auth block with key-management: none
             // See: https://github.com/raspberrypi/rpi-imager/issues/1396
             push(QStringLiteral("          auth:"), netcfg);

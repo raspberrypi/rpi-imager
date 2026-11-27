@@ -2817,13 +2817,15 @@ TEST_CASE("Each init format offers the right parts of the dialog",
         bool customisation;
         bool ccRpi;
         bool interfaces;
+        bool wifiEnterprise;
     };
 
+    // Wi-Fi Enterprise needs an EAP block, which only network-config can carry.
     const Case cases[] = {
-        {"systemd",       true,  false, false},
-        {"cloudinit",     true,  false, false},
-        {"cloudinit-rpi", true,  true,  true },
-        {"rpi-preseed",   true,  false, true },
+        {"systemd",       true,  false, false, false},
+        {"cloudinit",     true,  false, false, true },
+        {"cloudinit-rpi", true,  true,  true,  true },
+        {"rpi-preseed",   true,  false, true,  false},
     };
 
     for (const Case &c : cases) {
@@ -2833,6 +2835,7 @@ TEST_CASE("Each init format offers the right parts of the dialog",
         CHECK(w.imageSupportsCustomization() == c.customisation);
         CHECK(w.imageSupportsCcRpi() == c.ccRpi);
         CHECK(w.imageSupportsInterfaceCustomisation() == c.interfaces);
+        CHECK(w.imageSupportsWifiEnterprise() == c.wifiEnterprise);
     }
 }
 

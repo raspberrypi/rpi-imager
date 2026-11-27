@@ -52,6 +52,14 @@ public:
                                 const QByteArray &cloudinitNetwork,
                                 const QByteArray &initFormat);
 
+    // Enterprise Wi-Fi CA certificate (PEM) to write beside network-config,
+    // under the name network-config refers to it by; empty pem for none.
+    void setWifiCaCertificate(const QString &fileName, const QByteArray &pem)
+    {
+        _wifiCaCertificateName = fileName;
+        _wifiCaCertificate = pem;
+    }
+
     // Set optional bmap URL for DONT_CARE block optimisation.
     // When set, unmapped blocks are skipped during fastboot flash.
     void setBmapUrl(const QUrl &url) { _bmapUrl = url; }
@@ -184,6 +192,8 @@ protected:
     QByteArray _firstrun;
     QByteArray _cloudinit;
     QByteArray _cloudinitNetwork;
+    QString _wifiCaCertificateName;
+    QByteArray _wifiCaCertificate;
     QByteArray _initFormat;
 
     // Raspberry Pi Connect Device Identity registration (optional)

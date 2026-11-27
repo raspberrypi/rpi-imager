@@ -10,6 +10,7 @@
 #include "config.h"
 #include "cmdline_params.h"
 #include "config_txt_merge.h"
+#include "customization_generator.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "systemmemorymanager.h"
@@ -2876,6 +2877,13 @@ bool DownloadThread::_customizeImage()
             {
                 fat->writeFile("network-config", _cloudinitNetwork);
                 _recordCustomisationWrite("network-config", _cloudinitNetwork);
+
+                // The Enterprise CA certificate network-config's ca-certificate: names
+                if (!_wifiCaCertificate.isEmpty() && !_wifiCaCertificateName.isEmpty())
+                {
+                    fat->writeFile(_wifiCaCertificateName, _wifiCaCertificate);
+                    _recordCustomisationWrite(_wifiCaCertificateName, _wifiCaCertificate);
+                }
             }
         }
 
@@ -2964,6 +2972,7 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
         "user-data",         // cloud-init customization
         "meta-data",         // cloud-init metadata
         "network-config",    // cloud-init network customization
+        rpi_imager::CustomisationGenerator::wifiCaCertificateFileName(),  // Enterprise Wi-Fi CA certificate
         "rpi-preseed.toml"   // rpi-preseed customization
     };
     

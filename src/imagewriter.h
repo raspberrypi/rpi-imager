@@ -284,6 +284,11 @@ public:
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
+    /* Read a CA certificate picked for an Enterprise Wi-Fi network (a path
+     * or file:// URL). Returns it as PEM, or an empty string when the file
+     * cannot be read or is not a certificate (PEM or DER, at most 64 KiB). */
+    Q_INVOKABLE QString readWifiCaCertificate(const QString &filePath);
+
     /* Fetch the public SSH keys a GitHub account publishes, for a machine with
        no clipboard or file browser to bring a key in. The answer arrives as
        gitHubKeysImported(); see github_keys.h for what each status means, and
@@ -460,6 +465,10 @@ public:
     // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
     // module; rpi-preseed configures them natively via raspi-config.
     Q_INVOKABLE bool imageSupportsInterfaceCustomisation();
+    // Whether the selected OS can join a WPA2/WPA3 Enterprise network from
+    // Imager's settings. Only the cloud-init network-config carries an EAP
+    // block; firstrun.sh and rpi-preseed.toml have no way to express one.
+    Q_INVOKABLE bool imageSupportsWifiEnterprise();
 
     // Hash the account password from plaintext for the UI. Hashing is
     // delegated to CustomisationGenerator (the single home for credential
@@ -751,6 +760,9 @@ protected:
     QUrl _src, _repo;
     QString _dst, _parentCategory, _osName, _osReleaseDate, _currentLang, _currentLangcode, _currentKeyboard, _bmapUrl;
     QByteArray _expectedHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
+    // Enterprise Wi-Fi CA certificate written beside network-config; empty
+    // unless the staged network-config refers to it.
+    QByteArray _wifiCaCertificate;
     ImageOptions::AdvancedOptions _advancedOptions;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
