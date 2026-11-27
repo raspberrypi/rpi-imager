@@ -56,7 +56,7 @@ public:
     // Open a specific device for communication
     virtual std::unique_ptr<IUsbTransport> openDevice(const UsbDeviceInfo& info) const = 0;
 
-    enum class OpenFailure { None, NotFound, AccessDenied, Other };
+    enum class OpenFailure { None, NotFound, AccessDenied, DriverMissing, Other };
     // Why the last openDevice() returned nothing.
     virtual OpenFailure lastOpenFailure() const { return OpenFailure::None; }
 };

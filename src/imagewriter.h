@@ -621,6 +621,15 @@ public:
     /* Returns true if the current target is a fastboot storage device */
     Q_INVOKABLE bool isFastbootDevice() const;
 
+    /* True when the last write failed because Windows has no driver bound to
+       the board in USB boot or fastboot mode. */
+    Q_INVOKABLE bool usbDriverMissing() const { return _usbDriverMissing; }
+    /* True on Windows when the bundled driver INF is present to install. */
+    Q_INVOKABLE bool canInstallUsbDriver() const;
+    /* Installs the bundled driver elevated, off the GUI thread; the outcome
+       arrives as usbDriverInstallFinished(). */
+    Q_INVOKABLE void installUsbDriver();
+
     // Mint a single-use Raspberry Pi Connect auth key for the
     // currently configured organisation API key.  Used when the
     // target is not a fastboot device — the returned secret is
@@ -682,6 +691,7 @@ signals:
     void writeProgress(QVariant now, QVariant total);
     void verifyProgress(QVariant now, QVariant total);
     void error(QVariant msg);
+    void usbDriverInstallFinished(bool ok, QString message);
     void success();
     void fileSelected(QVariant filename, QString purpose);
     void cancelled();
@@ -903,6 +913,8 @@ protected:
     QString _rpibootStorageTarget;  // block device on the CM to flash after bootstrap (e.g. "mmcblk0", "nvme0n1")
     bool _isRpibootDevice = false;
     RpibootThread *_rpibootThread = nullptr;
+    bool _usbDriverMissing = false;
+    bool _usbDriverInstalling = false;
     FastbootFlashThread *_fastbootFlashThread = nullptr;
     rpiboot::SideloadMode _rpibootSideloadMode = rpiboot::SideloadMode::Fastboot;
 

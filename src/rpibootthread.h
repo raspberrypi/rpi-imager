@@ -50,12 +50,16 @@ signals:
     void preparationStatusUpdate(QString msg);
     void progressChanged(quint64 current, quint64 total);
     void fastbootDeviceReady(const QString& fastbootId);
+    // Emitted just before error() when Windows has no driver for the board.
+    void usbDriverMissing();
     void eventFirmwareSetup(quint32 durationMs, bool success, QString metadata);
     void eventRpibootProtocol(quint32 durationMs, bool success, QString metadata);
     void eventFastbootWait(quint32 durationMs, bool success);
 
 protected:
     void run() override;
+
+    void reportOpenFailure(const rpiboot::IUsbContext *ctx, const QString &fallback);
 
     // The whole sideload sequence talks to the bus through this. Each step
     // used to construct a LibusbContext inline, which is what kept every

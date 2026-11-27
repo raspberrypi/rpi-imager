@@ -75,6 +75,8 @@ struct FakeBus {
     // Opening the board throws rather than returning nothing: a cable pulled
     // between the scan and the open, which libusb reports as an exception.
     bool throwOnOpen = false;
+    // Why an open that returned nothing failed.
+    rpiboot::IUsbContext::OpenFailure openFailure = rpiboot::IUsbContext::OpenFailure::Other;
     // Runs the first time the file server reads from the board, so a test can
     // act at a point the phase has definitely reached.
     std::function<void()> onFirstRead;
@@ -157,6 +159,11 @@ public:
         if (!_bus.transport)
             return nullptr;
         return std::make_unique<TransportView>(*_bus.transport, &_bus.onFirstRead);
+    }
+
+    OpenFailure lastOpenFailure() const override
+    {
+        return _bus.transport ? OpenFailure::None : _bus.openFailure;
     }
 
 private:
@@ -744,6 +751,42 @@ TEST_CASE("A device that cannot be opened is reported", "[rpiboot][phase]")
 
     REQUIRE_FALSE(log.errors.isEmpty());
     CHECK(log.errors.last().contains(QStringLiteral("open")));
+}
+
+TEST_CASE("A board with no driver is reported as needing one", "[rpiboot][phase]")
+{
+    // Windows lists a board with no WinUSB driver bound but cannot open it.
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+    t.bus.openFailure = rpiboot::IUsbContext::OpenFailure::DriverMissing;
+
+    SignalLog log;
+    log.attach(&t);
+    int driverMissing = 0;
+    QObject::connect(&t, &RpibootThread::usbDriverMissing, [&] { ++driverMissing; });
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+
+    CHECK(driverMissing == 1);
+    REQUIRE_FALSE(log.errors.isEmpty());
+    CHECK(log.errors.last().contains(QStringLiteral("driver")));
+}
+
+TEST_CASE("A device that will not open for another reason does not ask for a driver",
+          "[rpiboot][phase]")
+{
+    TestableRpibootThread t{chosenDevice(), rpiboot::SideloadMode::Fastboot};
+    t.firmwareDir = std::filesystem::temp_directory_path();
+    t.bus.bootDevices = { device(1, 4, {1, 2}, 0) };
+
+    int driverMissing = 0;
+    QObject::connect(&t, &RpibootThread::usbDriverMissing, [&] { ++driverMissing; });
+
+    QString fbId, bcDiag, fsDiag;
+    CHECK_FALSE(t.runPhase(rpiboot::SideloadMode::Fastboot, fbId, bcDiag, fsDiag));
+    CHECK(driverMissing == 0);
 }
 
 TEST_CASE("A bus that cannot be opened ends the phase, and says so",

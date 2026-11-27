@@ -969,9 +969,18 @@ void FastbootFlashThread::runImpl()
     transport = openFastbootTransport(ctx, targetInfo);
     if (!transport || !transport->isOpen()) {
         emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), false, _fastbootId);
-        emit error(ctx.lastOpenFailure() == rpiboot::IUsbContext::OpenFailure::AccessDenied
-                       ? tr("Raspberry Pi Imager was not given permission to use the USB device.")
-                       : tr("Failed to open fastboot device: %1").arg(_fastbootId));
+        switch (ctx.lastOpenFailure()) {
+        case rpiboot::IUsbContext::OpenFailure::DriverMissing:
+            emit usbDriverMissing();
+            emit error(tr("The Raspberry Pi USB boot driver is not installed."));
+            break;
+        case rpiboot::IUsbContext::OpenFailure::AccessDenied:
+            emit error(tr("Raspberry Pi Imager was not given permission to use the USB device."));
+            break;
+        default:
+            emit error(tr("Failed to open fastboot device: %1").arg(_fastbootId));
+            break;
+        }
         return;
     }
 

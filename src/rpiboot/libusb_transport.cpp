@@ -159,6 +159,13 @@ std::unique_ptr<IUsbTransport> LibusbContext::openDevice(const UsbDeviceInfo& in
         _lastOpenFailure = OpenFailure::None;
         return std::make_unique<LibusbTransport>(handle);
     }
+#ifdef _WIN32
+    // libusb lists a device that has no WinUSB driver bound but cannot open it.
+    if (rc == LIBUSB_ERROR_NOT_SUPPORTED) {
+        _lastOpenFailure = OpenFailure::DriverMissing;
+        return nullptr;
+    }
+#endif
     if (rc != LIBUSB_ERROR_ACCESS) {
         _lastOpenFailure = rc == LIBUSB_ERROR_NOT_FOUND || rc == LIBUSB_ERROR_NO_DEVICE
                                ? OpenFailure::NotFound

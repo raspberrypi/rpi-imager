@@ -213,6 +213,112 @@ ApplicationWindow {
         }
     }
 
+    // Offered when a write fails because Windows has no driver bound to the
+    // board in USB boot mode, e.g. after a silent install skipped it (#1804).
+    BaseDialog {
+        id: usbDriverDialog
+        objectName: "usbDriverDialog"
+        parent: overlayRoot
+        anchors.centerIn: parent
+
+        property string message: ""
+        property bool installing: false
+        property bool finished: false
+
+        function show(msg) {
+            message = msg + "\n\n" + qsTr("Raspberry Pi Imager can install the driver now. Windows will ask for administrator permission, and may ask you to trust the driver publisher.")
+            installing = false
+            finished = false
+            open()
+        }
+
+        function escapePressed() {
+            if (!installing)
+                usbDriverDialog.close()
+        }
+
+        Component.onCompleted: {
+            registerFocusGroup("content", function(){
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
+                    return [usbDriverTitle, usbDriverMessage]
+                }
+                return []
+            }, 0)
+            registerFocusGroup("buttons", function(){
+                return usbDriverDialog.finished ? [usbDriverCloseButton]
+                                                : [usbDriverCancelButton, usbDriverInstallButton]
+            }, 1)
+        }
+
+        FocusableHeading {
+            id: usbDriverTitle
+            text: qsTr("USB driver needed")
+            font.pointSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            Layout.fillWidth: true
+        }
+
+        FocusableText {
+            id: usbDriverMessage
+            text: usbDriverDialog.message.replace(/\n/g, "<br>")
+            textFormat: Text.StyledText
+            wrapMode: Text.WordWrap
+            font.pointSize: Style.fontSizeDescription
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            Layout.fillWidth: true
+            Accessible.name: text.replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '')
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            Item {
+                Layout.fillWidth: true
+            }
+            ImButton {
+                id: usbDriverCancelButton
+                visible: !usbDriverDialog.finished
+                enabled: !usbDriverDialog.installing
+                text: CommonStrings.cancel
+                accessibleDescription: qsTr("Close without installing the USB driver")
+                activeFocusOnTab: true
+                onClicked: usbDriverDialog.close()
+            }
+            ImButtonRed {
+                id: usbDriverInstallButton
+                visible: !usbDriverDialog.finished
+                enabled: !usbDriverDialog.installing
+                text: usbDriverDialog.installing ? qsTr("Installing...") : qsTr("Install driver")
+                accessibleDescription: qsTr("Install the Raspberry Pi USB boot driver. Windows asks for administrator permission.")
+                activeFocusOnTab: true
+                onClicked: {
+                    usbDriverDialog.installing = true
+                    ImageWriterSingleton.installUsbDriver()
+                }
+            }
+            ImButton {
+                id: usbDriverCloseButton
+                visible: usbDriverDialog.finished
+                text: CommonStrings.continueText
+                accessibleDescription: qsTr("Close the USB driver dialog and continue")
+                activeFocusOnTab: true
+                onClicked: usbDriverDialog.close()
+            }
+        }
+
+        Connections {
+            target: ImageWriterSingleton
+            function onUsbDriverInstallFinished(ok, msg) {
+                usbDriverDialog.installing = false
+                usbDriverDialog.finished = true
+                usbDriverDialog.message = msg
+            }
+        }
+    }
+
     // Specific dialog for storage removal during write
     BaseDialog {
         id: storageRemovedDialog
@@ -604,6 +710,12 @@ ApplicationWindow {
     }
 
     function onError(msg) {
+        if (typeof ImageWriterSingleton.usbDriverMissing === "function"
+                && ImageWriterSingleton.usbDriverMissing()
+                && ImageWriterSingleton.canInstallUsbDriver()) {
+            usbDriverDialog.show(msg);
+            return;
+        }
         errorDialog.titleText = qsTr("Error");
         errorDialog.message = msg;
         errorDialog.open();

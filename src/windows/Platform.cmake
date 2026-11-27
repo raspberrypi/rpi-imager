@@ -12,6 +12,8 @@ set(PLATFORM_SOURCES
     windows/platformquirks_windows.cpp
     windows/userfiles_windows.cpp
     windows/windows_suspend_inhibitor.cpp
+    windows/usbdriver_windows.cpp
+    windows/usbdriver_windows.h
 )
 
 # Native Windows privileged-helper adapter (§14.6). Omitted when
@@ -46,7 +48,7 @@ set(DEPENDENCIES
 set(EXTRALIBS setupapi Bcrypt.dll crypt32 wtsapi32 ole32 oleaut32 wbemuuid virtdisk)
 
 # Add winusb for rpiboot support
-set(EXTRALIBS ${EXTRALIBS} winusb)
+set(EXTRALIBS ${EXTRALIBS} winusb shell32)
 
 # ---- Relay exe ----
 add_executable(rpi-imager-callback-relay WIN32 windows/CallbackRelay.cpp)

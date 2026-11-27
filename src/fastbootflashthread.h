@@ -90,6 +90,8 @@ signals:
     void writing();   // Emitted when download+flash pipeline starts
     void success();
     void error(QString msg);
+    // Emitted just before error() when Windows has no driver for the gadget.
+    void usbDriverMissing();
     void finalizing();
     void preparationStatusUpdate(QString msg);
     void downloadProgress(quint64 dlnow, quint64 dltotal);

@@ -52,6 +52,8 @@
 #include <QNetworkInterface>
 #include <QCoreApplication>
 #include <QPointer>
+#include <QDir>
+#include <QThread>
 #ifndef CLI_ONLY_BUILD
 #include <QQmlContext>
 #include <QWindow>
@@ -89,6 +91,7 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include "windows/usbdriver_windows.h"
 #include <QProcessEnvironment>
 #endif
 
@@ -1017,6 +1020,58 @@ void ImageWriter::onRpibootError(const QString &msg)
     onError(msg);
 }
 
+static QString bundledUsbDriverInf()
+{
+    return QDir::toNativeSeparators(QCoreApplication::applicationDirPath()
+                                    + QStringLiteral("/rpiboot-winusb.inf"));
+}
+
+bool ImageWriter::canInstallUsbDriver() const
+{
+#ifdef Q_OS_WIN
+    return QFileInfo::exists(bundledUsbDriverInf());
+#else
+    return false;
+#endif
+}
+
+void ImageWriter::installUsbDriver()
+{
+#ifdef Q_OS_WIN
+    if (_usbDriverInstalling)
+        return;
+    _usbDriverInstalling = true;
+    const std::wstring inf = bundledUsbDriverInf().toStdWString();
+    QPointer<ImageWriter> self(this);
+    QThread *worker = QThread::create([self, inf]() {
+        unsigned long detail = 0;
+        const auto result = UsbDriverWindows::installRpibootDriver(inf, detail);
+        qDebug() << "USB driver install: result" << static_cast<int>(result) << "detail" << detail;
+        QMetaObject::invokeMethod(qApp, [self, result, detail]() {
+            if (!self)
+                return;
+            self->_usbDriverInstalling = false;
+            using R = UsbDriverWindows::InstallResult;
+            if (result == R::Installed) {
+                self->_usbDriverMissing = false;
+                emit self->usbDriverInstallFinished(true,
+                    tr("The driver is installed. Unplug the device, plug it in again, then write again."));
+            } else if (result == R::Declined) {
+                emit self->usbDriverInstallFinished(false,
+                    tr("The driver was not installed because administrator permission was not given."));
+            } else {
+                emit self->usbDriverInstallFinished(false,
+                    tr("The driver could not be installed (error %1).").arg(detail));
+            }
+        }, Qt::QueuedConnection);
+    });
+    connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+    worker->start();
+#else
+    emit usbDriverInstallFinished(false, tr("Installing a USB driver is only needed on Windows."));
+#endif
+}
+
 /* Returns true if src and dst are set and destination device is still valid */
 bool ImageWriter::readyToWrite()
 {
@@ -1085,6 +1140,7 @@ void ImageWriter::_configureAndStartFastbootFlash()
     if (_connectOrgRegistrationForWrite(orgKey, orgDesc))
         _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
     connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(_fastbootFlashThread, &FastbootFlashThread::usbDriverMissing, this, [this]() { _usbDriverMissing = true; });
     connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
     connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
     connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
@@ -1701,6 +1757,7 @@ void ImageWriter::startWrite()
 
     setWriteState(WriteState::Preparing);
     setEjectState(EjectState::EjectIdle);
+    _usbDriverMissing = false;
 
     if (choosePath() == WritePath::FastbootDevice)
     {
@@ -1746,6 +1803,7 @@ void ImageWriter::startWrite()
         // After sideload, start FastbootFlashThread
         connect(_rpibootThread, &RpibootThread::fastbootDeviceReady, this, &ImageWriter::onRpibootFastbootReady);
 
+        connect(_rpibootThread, &RpibootThread::usbDriverMissing, this, [this]() { _usbDriverMissing = true; });
         connect(_rpibootThread, &RpibootThread::error, this, &ImageWriter::onRpibootError);
         connect(_rpibootThread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
 

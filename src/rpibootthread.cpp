@@ -39,6 +39,20 @@ std::unique_ptr<rpiboot::FirmwareManager> RpibootThread::makeFirmwareManager()
     return std::make_unique<rpiboot::FirmwareManager>();
 }
 
+void RpibootThread::reportOpenFailure(const rpiboot::IUsbContext *ctx, const QString &fallback)
+{
+    using Failure = rpiboot::IUsbContext::OpenFailure;
+    const Failure why = ctx ? ctx->lastOpenFailure() : Failure::None;
+    if (why == Failure::DriverMissing) {
+        emit usbDriverMissing();
+        emit error(tr("The Raspberry Pi USB boot driver is not installed."));
+    } else if (why == Failure::AccessDenied) {
+        emit error(tr("Raspberry Pi Imager was not given permission to use the USB device."));
+    } else {
+        emit error(fallback);
+    }
+}
+
 std::unique_ptr<rpiboot::IUsbContext> RpibootThread::makeUsbContext()
 {
     // LibusbContext's constructor throws if libusb will not initialise --
@@ -158,9 +172,7 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device"));
-                emit error(ctx && ctx->lastOpenFailure() == rpiboot::IUsbContext::OpenFailure::AccessDenied
-                               ? tr("Raspberry Pi Imager was not given permission to use the USB device.")
-                               : tr("Failed to open USB device"));
+                reportOpenFailure(ctx.get(), tr("Failed to open USB device"));
                 return false;
             }
 
@@ -225,9 +237,7 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device after re-enumeration"));
-                emit error(ctx && ctx->lastOpenFailure() == rpiboot::IUsbContext::OpenFailure::AccessDenied
-                               ? tr("Raspberry Pi Imager was not given permission to use the USB device.")
-                               : tr("Failed to open USB device after re-enumeration"));
+                reportOpenFailure(ctx.get(), tr("Failed to open USB device after re-enumeration"));
                 return false;
             }
 
