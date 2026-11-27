@@ -4,6 +4,7 @@
  */
 
 #include "file_operations.h"
+#include "aligned_buffer.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -38,14 +39,41 @@ void FileOperationsLog(const std::string& msg) {
 // These functions are implemented in the platform-specific source files
 // Each platform provides its own implementation
 extern std::unique_ptr<FileOperations> CreatePlatformFileOperations();
+extern std::unique_ptr<FileOperations> CreateInProcessPlatformFileOperations();
 extern FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path);
 
 std::unique_ptr<FileOperations> FileOperations::Create() {
   return CreatePlatformFileOperations();
 }
 
+std::unique_ptr<FileOperations> FileOperations::CreateInProcess() {
+  return CreateInProcessPlatformFileOperations();
+}
+
 FileOperations::DeviceIOLimits FileOperations::QueryDeviceIOLimits(const std::string& path) {
   return QueryPlatformDeviceIOLimits(path);
 }
 
-} // namespace rpi_imager 
+FileError FileOperations::PrepareDevice(std::uint64_t device_size,
+                                          bool zero_last_mb) {
+  constexpr std::size_t kOneMB = 1024ull * 1024ull;
+  // Aligned for O_DIRECT on Linux; a std::vector's storage is not.
+  AlignedBuffer zeros(kOneMB);
+  if (!zeros) return FileError::kWriteError;
+
+  if (Seek(0) != FileError::kSuccess) return FileError::kSeekError;
+  if (auto r = WriteSequential(zeros.data(), kOneMB); r != FileError::kSuccess) return r;
+  if (auto r = Flush(); r != FileError::kSuccess) return r;
+
+  if (zero_last_mb && device_size > kOneMB) {
+    if (Seek(device_size - kOneMB) != FileError::kSuccess) return FileError::kSeekError;
+    if (auto r = WriteSequential(zeros.data(), kOneMB); r != FileError::kSuccess) return r;
+    if (auto r = Flush(); r != FileError::kSuccess) return r;
+    if (auto r = ForceSync(); r != FileError::kSuccess) return r;
+  }
+
+  (void)Seek(0);
+  return FileError::kSuccess;
+}
+
+} // namespace rpi_imager

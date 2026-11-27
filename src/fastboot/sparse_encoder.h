@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -139,6 +140,12 @@ public:
     // Must be called before the first feed().  Takes ownership.
     void setBlockMap(std::unique_ptr<class BlockMap> map);
 
+    // Called for every block, in order, as the device will receive it;
+    // `written` is false for DONT_CARE. Feeds a WriteManifest.
+    using BlockObserver = std::function<void(uint64_t index, std::span<const uint8_t> block,
+                                             bool written)>;
+    void setBlockObserver(BlockObserver observer) { _observer = std::move(observer); }
+
     // Feed raw decompressed data.  May be called with any size.
     // Internally buffers partial blocks and emits complete segments.
     // Returns the number of bytes consumed.  When fewer than `size`
@@ -184,6 +191,7 @@ private:
 
     // Optional block map for DONT_CARE optimisation
     std::unique_ptr<class BlockMap> _blockMap;
+    BlockObserver _observer;
 
     // Output buffer — one segment at a time
     std::vector<uint8_t> _out;

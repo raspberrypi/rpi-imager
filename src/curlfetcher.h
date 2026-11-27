@@ -63,6 +63,13 @@ public:
      */
     QUrl url() const { return _url; }
 
+    /**
+     * Refuse a body longer than this many bytes, failing the fetch instead.
+     * 0, the default, sets no limit. Set before fetch().
+     */
+    void setMaxSize(qint64 bytes) { _maxSize = bytes; }
+    qint64 maxSize() const { return _maxSize; }
+
 signals:
     /**
      * Emitted when the fetch completes successfully.
@@ -93,6 +100,7 @@ public slots:
 
 private:
     QUrl _url;
+    qint64 _maxSize = 0;
     std::atomic<bool> _cancelled{false};
 };
 

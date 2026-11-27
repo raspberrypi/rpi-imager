@@ -256,6 +256,14 @@ either a seed or a dictionary.
 | `fuzz_blconfig` | the bootloader flash region, which can name the OS list repository |
 | `fuzz_drivelist` | the lsblk JSON that decides which drives are offered as a target |
 | `fuzz_asn1_length` | one DER length, with arbitrary bytes and an arbitrary offset |
+| `fuzz_helper_wire` | calls to the root helper over its socket; sandboxed, see below |
+
+`fuzz_helper_wire` runs only under `run_fuzzers.sh`, which starts it in
+bubblewrap: the filesystem read-only apart from the corpus, a bare `/dev`,
+no network, and a loop device over a scratch file as `/dev/fuzzcard`, which
+needs passwordless sudo to set up. The helper writes whatever block device it
+is named, so the harness refuses to start as root or without the sandbox. Its oracle is that every reply decodes and answers a request that
+was sent, once.
 
 ## Defects these found
 

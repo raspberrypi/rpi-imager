@@ -253,7 +253,7 @@ flags any whose ELF header is the wrong architecture.
 `linuxdeploy` has no armhf build, so armhf always goes through `appimagetool`.
 
 `debian/sync-appimages.sh` then copies the versioned
-`Raspberry_Pi_Imager-<git-describe>-{desktop,cli}-<arch>.AppImage` into
+`imager{,-cli}_<version>_<deb-arch>.AppImage` into
 `.debian/appimages/<arch>/` and points the stable `rpi-imager-<arch>.AppImage`
 symlinks at them.
 

@@ -17,7 +17,7 @@ QT_BUILD_COMMON_LOADED=1
 # =============================================================================
 
 # Qt Version Configuration
-QT_VERSION_DEFAULT="6.11.2"    # Default version for all platforms
+QT_VERSION_DEFAULT="6.12.0"    # Default version for all platforms
 
 # Build Configuration Defaults
 PREFIX_DEFAULT="/opt/Qt"       # Base installation prefix (version will be appended)
@@ -559,9 +559,9 @@ EOF
 
     # Add macOS-specific settings
     if [ "$IS_MACOS" -eq 1 ]; then
-        # Qt 6.11 requires macOS 13.0 as its minimum deployment target.
+        # Qt 6.12 supports macOS 14.4 and later.
         # Keep this in sync with setup_macos_flags and src/CMakeLists.txt.
-        _deploy_target="13.0"
+        _deploy_target="14.4"
         cat >> "$toolchain_file" << EOF
 
 # macOS specific settings
@@ -836,11 +836,11 @@ setup_macos_flags() {
 
     echo "Detected macOS $MACOS_VERSION"
 
-    # Qt 6.11 requires macOS 13.0 as its minimum deployment target.
+    # Qt 6.12 supports macOS 14.4 and later.
     # Keep this in sync with the toolchain file above and src/CMakeLists.txt.
     if [ "$UNIVERSAL_BUILD" -eq 1 ]; then
         echo "  Optimizing for Universal Binary (Intel + Apple Silicon)"
-        MAC_CFLAGS="-mmacos-version-min=13.0"
+        MAC_CFLAGS="-mmacos-version-min=14.4"
         MAC_CFLAGS_X86_64="-march=x86-64-v2 -mtune=intel"
         MAC_CFLAGS_ARM64="-march=armv8.4-a+crypto -mtune=apple-a14"
         echo "  Intel optimizations: $MAC_CFLAGS_X86_64"
@@ -854,7 +854,7 @@ setup_macos_flags() {
             MAC_CFLAGS="-march=x86-64-v2 -mtune=intel"
         fi
 
-        MAC_CFLAGS="$MAC_CFLAGS -mmacos-version-min=13.0"
+        MAC_CFLAGS="$MAC_CFLAGS -mmacos-version-min=14.4"
     fi
     
     export MAC_CFLAGS MAC_CFLAGS_X86_64 MAC_CFLAGS_ARM64

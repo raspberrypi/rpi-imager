@@ -4,6 +4,14 @@
 [linux-arm64] rpi-imager-cli-aarch64.AppImage => /usr/bin/rpi-imager-cli
 [linux-armhf] rpi-imager-cli-armhf.AppImage => /usr/bin/rpi-imager-cli
 
+# SBOMs of the AppImage above, staged by debian/stage-appimages.sh
+[linux-amd64] rpi-imager-cli-x86_64.spdx.json => /usr/share/doc/rpi-imager-cli/sbom/rpi-imager-cli.spdx.json
+[linux-amd64] rpi-imager-cli-x86_64.cdx.json => /usr/share/doc/rpi-imager-cli/sbom/rpi-imager-cli.cdx.json
+[linux-arm64] rpi-imager-cli-aarch64.spdx.json => /usr/share/doc/rpi-imager-cli/sbom/rpi-imager-cli.spdx.json
+[linux-arm64] rpi-imager-cli-aarch64.cdx.json => /usr/share/doc/rpi-imager-cli/sbom/rpi-imager-cli.cdx.json
+[linux-armhf] rpi-imager-cli-armhf.spdx.json => /usr/share/doc/rpi-imager-cli/sbom/rpi-imager-cli.spdx.json
+[linux-armhf] rpi-imager-cli-armhf.cdx.json => /usr/share/doc/rpi-imager-cli/sbom/rpi-imager-cli.cdx.json
+
 src/linux/icon/rpi-imager.svg /usr/share/icons/hicolor/scalable/apps/
 
 debian/com.raspberrypi.rpi-imager-cli.desktop /usr/share/applications/

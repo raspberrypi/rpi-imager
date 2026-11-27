@@ -185,6 +185,15 @@ TestCase {
         verify(found, "the save dialog offers Home")
     }
 
+    function test_removable_drives_goes_where_the_caller_says() {
+        // Set after the places are built, as the embedded wizard does once
+        // it has mounted something.
+        const d = create({})
+        const places = findChild(d, "placesModel")
+        d.removableDrivesFolder = "file:///media"
+        compare(String(places.get(0).url), "file:///media")
+    }
+
     function test_an_empty_path_yields_nothing() {
         const d = create({})
         compare(d._toFileUrl(""), "")
@@ -199,7 +208,9 @@ TestCase {
     function test_a_tilde_expands_to_the_home_directory() {
         const d = create({})
         const home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
-        const homePath = home.indexOf("file://") === 0 ? home.substring(7) : home
+        // file:///C:/Users/pi is the path C:/Users/pi, so the slash before a
+        // drive letter belongs to the URL; file:///home/pi keeps its slash.
+        const homePath = home.replace(/^file:\/\/(\/(?=[A-Za-z]:))?/, "")
 
         compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl("~")), homePath)
         compare(ImageWriterSingleton.localPathFromUrl(d._toFileUrl("~/os.img")), homePath + "/os.img")

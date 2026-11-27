@@ -10,7 +10,10 @@
 
 #include "fastboot/bmap.h"
 #include "fastboot/sparse_encoder.h"
+#include "fastboot/write_manifest.h"
 #include "sparse_decode.h"
+
+#include <QCryptographicHash>
 
 #include <algorithm>
 #include <cstring>
@@ -606,3 +609,131 @@ TEST_CASE("A mapped run split across segments keeps its blocks", "[sparse][bmap]
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// WriteManifest: ranges hash exactly the bytes sent, padded tail included,
+// DONT_CARE blocks left out.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+std::array<uint8_t, 32> sha256Of(const uint8_t *data, size_t size)
+{
+    const QByteArray d = QCryptographicHash::hash(
+        QByteArrayView(reinterpret_cast<const char *>(data), static_cast<qsizetype>(size)),
+        QCryptographicHash::Sha256);
+    std::array<uint8_t, 32> out{};
+    std::memcpy(out.data(), d.constData(), out.size());
+    return out;
+}
+
+// Encode with a manifest attached and apply the segments over a device that
+// still holds an older image, as bmap-verify would find it.
+std::vector<uint8_t> encodeOntoUsedDevice(const std::vector<uint8_t> &raw,
+                                          std::unique_ptr<fastboot::BlockMap> map,
+                                          size_t maxSegment, WriteManifest &manifest)
+{
+    SparseEncoder enc(maxSegment, raw.size());
+    if (map)
+        enc.setBlockMap(std::move(map));
+    enc.setBlockObserver([&manifest](uint64_t i, std::span<const uint8_t> b, bool w) {
+        manifest.addBlock(i, b, w);
+    });
+
+    const size_t blocks = (raw.size() + SPARSE_BLK_SZ - 1) / SPARSE_BLK_SZ;
+    std::vector<uint8_t> device(blocks * SPARSE_BLK_SZ, 0xEE);
+    size_t fed = 0;
+    while (fed < raw.size()) {
+        const size_t took = enc.feed(raw.data() + fed, raw.size() - fed);
+        fed += took;
+        auto seg = enc.takeSegment();
+        if (!seg.empty())
+            applySparse(seg, device);
+        else if (took == 0)
+            break;
+    }
+    enc.finish();
+    for (;;) {
+        auto seg = enc.takeSegment();
+        if (seg.empty())
+            break;
+        applySparse(seg, device);
+        enc.finish();
+    }
+    manifest.finish();
+    return device;
+}
+
+} // namespace
+
+TEST_CASE("Every manifest range hashes to what the device then holds", "[sparse][manifest]")
+{
+    // Distinct blocks, a zero run that becomes FILL, a ragged tail that is
+    // padded, and a map leaving blocks 10-19 unwritten.
+    auto raw = distinctBlocks(40);
+    std::fill(raw.begin() + 25 * SPARSE_BLK_SZ, raw.begin() + 30 * SPARSE_BLK_SZ, 0);
+    raw.resize(raw.size() + 100, 0x5A);
+    auto map = mapCovering("    <Range>0-9</Range>\n    <Range>20-40</Range>\n", 41);
+    REQUIRE(map);
+
+    WriteManifest manifest(SPARSE_BLK_SZ, 8);
+    const auto device = encodeOntoUsedDevice(raw, std::move(map), 64 * 1024, manifest);
+
+    REQUIRE(manifest.representable());
+    CHECK(manifest.writtenBlocks() == 31);
+    for (const auto &r : manifest.ranges()) {
+        INFO("range " << r.begin << "-" << r.end);
+        CHECK(r.end - r.begin <= 8);
+        CHECK((r.end <= 10 || r.begin >= 20));
+        CHECK(r.sha256 == sha256Of(device.data() + r.begin * SPARSE_BLK_SZ,
+                                   (r.end - r.begin) * SPARSE_BLK_SZ));
+    }
+    // Together they cover exactly the written blocks.
+    uint64_t covered = 0;
+    for (const auto &r : manifest.ranges())
+        covered += r.end - r.begin;
+    CHECK(covered == manifest.writtenBlocks());
+}
+
+TEST_CASE("A manifest catches a block the device did not take", "[sparse][manifest][negative]")
+{
+    const auto raw = distinctBlocks(12);
+    WriteManifest manifest;
+    auto device = encodeOntoUsedDevice(raw, nullptr, 1024 * 1024, manifest);
+    REQUIRE(manifest.ranges().size() == 1);
+
+    device[7 * SPARSE_BLK_SZ + 123] ^= 0x01;
+    const auto &r = manifest.ranges().front();
+    CHECK(r.sha256 != sha256Of(device.data(), (r.end - r.begin) * SPARSE_BLK_SZ));
+}
+
+TEST_CASE("A manifest serialises to what oem bmap-load reads", "[sparse][manifest]")
+{
+    WriteManifest manifest(SPARSE_BLK_SZ, 2);
+    const std::vector<uint8_t> block(SPARSE_BLK_SZ, 0x42);
+    for (uint64_t i = 0; i < 3; ++i)
+        manifest.addBlock(i, block, true);
+    manifest.addBlock(3, block, false);
+    manifest.addBlock(4, block, true);
+    manifest.finish();
+
+    const auto wire = manifest.serialize();
+    REQUIRE(wire.size() == sizeof(BmapWireHeader) + 3 * sizeof(BmapWireRange));
+    CHECK(std::string(wire.begin(), wire.begin() + 4) == "BMAP");
+
+    auto le32 = [&](size_t off) {
+        uint32_t v;
+        std::memcpy(&v, wire.data() + off, 4);
+        return v;
+    };
+    CHECK(le32(4) == SPARSE_BLK_SZ);
+    CHECK(le32(8) == 3);
+    const size_t base = sizeof(BmapWireHeader);
+    // [0,1] and [2,2] split at two blocks, then [4,4] after the gap.
+    CHECK((le32(base + 0) == 0 && le32(base + 4) == 1));
+    CHECK((le32(base + 40) == 2 && le32(base + 44) == 2));
+    CHECK((le32(base + 80) == 4 && le32(base + 84) == 4));
+    std::vector<uint8_t> two(block);
+    two.insert(two.end(), block.begin(), block.end());
+    CHECK(std::memcmp(wire.data() + base + 8, sha256Of(two.data(), two.size()).data(), 32) == 0);
+}

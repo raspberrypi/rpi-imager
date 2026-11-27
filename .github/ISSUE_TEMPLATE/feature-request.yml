@@ -47,6 +47,7 @@ body:
       label: Version
       description: What version of our software did you last run?
       options:
+        - 2.1.0-rc1
         - 2.0.12 (Default)
         - 2.0.11.1
         - 2.0.11

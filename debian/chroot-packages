@@ -77,3 +77,4 @@ libwayland-bin
 fuse
 libfuse2
 liburing-dev
+libgpgme-dev

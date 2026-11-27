@@ -12,6 +12,12 @@
 #include <sstream>
 #include <chrono>
 #include <algorithm>
+#include <cstdlib>
+
+#if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+#include "../privileged_io_glue.h"
+#include "windows_helper_file_operations.h"
+#endif
 
 using rpi_imager::TimeoutDefaults::kSyncWriteTimeoutSeconds;
 using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
@@ -1436,7 +1442,11 @@ long cfaModeRead()
 #endif
 
 WriteErrorClass WindowsFileOperations::ClassifyLastWriteError() const {
-    const DWORD error = static_cast<DWORD>(last_error_code_);
+    return ClassifyWin32WriteError(static_cast<unsigned long>(last_error_code_));
+}
+
+WriteErrorClass ClassifyWin32WriteError(unsigned long win32_error) {
+    const DWORD error = static_cast<DWORD>(win32_error);
 
     // Asked only where the answer could differ. Every other error means
     // something Defender has no part in, and the registry read is not free.
@@ -2084,6 +2094,18 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
   if (haveAdapter && adapterDesc.MaximumTransferLength > 0)
     limits.max_transfer_bytes = static_cast<size_t>(adapterDesc.MaximumTransferLength);
 
+  // --- Access alignment: the logical sector size FILE_FLAG_NO_BUFFERING
+  // transfers must be multiples of, 4096 on a 4K-native drive ---
+  query.PropertyId = StorageAccessAlignmentProperty;
+  query.QueryType = PropertyStandardQuery;
+  STORAGE_ACCESS_ALIGNMENT_DESCRIPTOR alignDesc = {};
+  if (DeviceIoControl(h, IOCTL_STORAGE_QUERY_PROPERTY,
+                      &query, sizeof(query),
+                      &alignDesc, sizeof(alignDesc),
+                      &bytesReturned, nullptr)
+      && alignDesc.BytesPerLogicalSector > 0)
+    limits.logical_block_size = static_cast<std::uint32_t>(alignDesc.BytesPerLogicalSector);
+
   // --- IoCapability descriptor: exact device queue depth (Win10 1607+) ---
   // StorageDeviceIoCapabilityProperty = 48.  LunMaxIoCount is the actual max
   // outstanding I/O the device can service, no heuristic needed.
@@ -2156,8 +2178,21 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
   return limits;
 }
 
-// Platform-specific factory function implementation
+// Platform-specific factory function implementation.
+//
+// The default Windows path routes through the elevated rpi-imager-writer.exe
+// helper when built. Opt out with RPI_IMAGER_USE_LEGACY_INPROCESS=1 or
+// RPI_IMAGER_USE_WINDOWS_HELPER=0 for the in-process WindowsFileOperations path.
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
+#if defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+  if (preferNativePrivilegedHelper("RPI_IMAGER_USE_WINDOWS_HELPER")) {
+    return CreateWindowsHelperFileOperations();
+  }
+#endif
+  return std::make_unique<WindowsFileOperations>();
+}
+
+std::unique_ptr<FileOperations> CreateInProcessPlatformFileOperations() {
   return std::make_unique<WindowsFileOperations>();
 }
 

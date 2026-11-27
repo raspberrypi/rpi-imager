@@ -41,6 +41,8 @@ TestCase {
         property bool secureBootEnabled: false
         property bool passwordlessSudoAvailable: false
         property bool userRequired: false
+        property bool eulaRequired: false
+        property bool eulaAccepted: false
         property bool hostnameConfigured: false
         property bool localeConfigured: false
         property bool userConfigured: false
@@ -243,6 +245,22 @@ TestCase {
         wait(150)
 
         compare(advanced.count, 0, "a single click chooses and stays put")
+    }
+
+    function test_the_press_action_chooses_that_entry_and_stays_put() {
+        // Switch access and voice control send the row an action, not a key.
+        const l = osList()
+        const beta = rowNamed(l, "Test OS Beta")
+        verify(!beta.Accessible.selected, "nothing is chosen yet")
+
+        beta.Accessible.pressAction()
+        wait(150)
+
+        compare(fakeContainer.selectedOsName, "Test OS Beta")
+        verify(beta.Accessible.selected, "the row says it is the chosen one")
+        verify(!rowNamed(l, "Test OS Alpha").Accessible.selected,
+               "and its neighbour says it is not")
+        compare(advanced.count, 0, "as a click does, without advancing")
     }
 
     function test_pressing_a_row_gives_the_list_the_keyboard() {

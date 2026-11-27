@@ -30,4 +30,9 @@ qtopcua
 qtscxml
 qtsensors
 qtwebsockets
-
+qtcanvaspainter
+qtquickeffectmaker
+qtquicktimeline
+qtnetworkauth
+qttasktree
+qtopenapi

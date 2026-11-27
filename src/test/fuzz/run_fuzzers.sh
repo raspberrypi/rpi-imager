@@ -59,6 +59,41 @@ fi
 CORPUS=${CORPUS:-$BUILD/fuzz-corpus}
 FINDINGS=$CORPUS/findings
 mkdir -p "$CORPUS" "$FINDINGS"
+CORPUS=$(cd "$CORPUS" && pwd)
+FINDINGS=$CORPUS/findings
+
+# fuzz_helper_wire drives a helper that opens block devices read-write, so
+# it runs with the filesystem read-only bar the corpus, a bare /dev, and a
+# loop device over a scratch file as /dev/fuzzcard. Without passwordless sudo
+# there is no card, and only the refusals are fuzzed.
+launch() {
+    local name=$1
+    shift
+    if [ "$name" != fuzz_helper_wire ]; then
+        "$@"
+        return
+    fi
+    if ! command -v bwrap >/dev/null; then
+        echo "fuzz_helper_wire needs bwrap (bubblewrap)" >&2
+        return 2
+    fi
+    local backing loop card=() rc
+    backing=$(mktemp "$CORPUS/fuzzcard-XXXXXX")
+    truncate -s 8M "$backing"
+    if loop=$(sudo -n losetup --find --show "$backing" 2>/dev/null) &&
+       sudo -n chown "$(id -u)" "$loop"; then
+        card=(--dev-bind "$loop" /dev/fuzzcard)
+    else
+        echo "fuzz_helper_wire: no loop device, so no card to write" >&2
+    fi
+    bwrap --ro-bind / / --dev /dev "${card[@]}" --proc /proc --tmpfs /tmp \
+          --bind "$CORPUS" "$CORPUS" --unshare-all --die-with-parent \
+          --setenv RPI_FUZZ_SANDBOXED 1 "$@"
+    rc=$?
+    [ -n "${loop:-}" ] && sudo -n losetup -d "$loop"
+    rm -f "$backing"
+    return $rc
+}
 
 # The seeds and the FAT template. Four harnesses cannot get started without
 # them and two cannot start at all; make_seeds.py leaves anything already
@@ -120,7 +155,7 @@ run_one() {
         # -merge=1 keeps only the inputs that each add coverage. A corpus
         # grown over several sessions is mostly inputs that no longer do.
         min=$(mktemp -d "$CORPUS/min-XXXXXX")
-        "$bin" -merge=1 "$min" "$dir" >/dev/null 2>&1
+        launch "$target" "$bin" -merge=1 "$min" "$dir" >/dev/null 2>&1
         if [ -n "$(ls -A "$min" 2>/dev/null)" ]; then
             rm -rf "$dir" && mv "$min" "$dir"
         else
@@ -162,7 +197,7 @@ run_one() {
     esac
     maxlen=$(( largest > floor ? largest : floor ))
 
-    out=$("$bin" "$dir" -max_total_time="$SECS" -timeout=25 -max_len="$maxlen" \
+    out=$(launch "$target" "$bin" "$dir" -max_total_time="$SECS" -timeout=25 -max_len="$maxlen" \
           -print_final_stats=1 -artifact_prefix="$FINDINGS/$target-" 2>&1)
     rc=$?
     after=$(find "$dir" -type f | wc -l)

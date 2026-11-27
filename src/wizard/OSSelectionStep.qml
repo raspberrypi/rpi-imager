@@ -33,7 +33,13 @@ WizardStepBase {
     // Track if a custom local image has been chosen in this step
     property bool customSelected: false
     property real customSelectedSize: 0
-    
+
+    // Nothing in the embedded build mounts a drive when it is plugged in,
+    // so the image picker mounts what it finds and opens there. Both are
+    // here, not inline, so a test can drive this without mounting anything.
+    property bool mountsUsbImages: ImageWriterSingleton.isEmbeddedMode()
+    function mountUsbImages() { return ImageWriterSingleton.mountUsbImageFolder() }
+
     // Property to trigger cache status re-evaluation when cache changes
     property int cacheStatusVersion: 0
     
@@ -184,6 +190,8 @@ WizardStepBase {
             root.wizardContainer.selectedOsName = ImageWriterSingleton.srcFileName()
             root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
             root.wizardContainer.userRequired = ImageWriterSingleton.imageRequiresUser()
+            root.wizardContainer.eulaRequired = ImageWriterSingleton.imageRequiresEula()
+            root.wizardContainer.eulaAccepted = false
             // For custom images, customization is not supported; clear any staged flags
             if (!root.wizardContainer.customizationSupported) {
                 root.wizardContainer.hostnameConfigured = false
@@ -456,7 +464,21 @@ WizardStepBase {
             Accessible.name: delegateItem.name + ". " + delegateItem.description + (delegateItem.release_date !== "" ? ". " + qsTr("Released: %1").arg(delegateItem.release_date) : "")
             Accessible.focusable: true
             Accessible.ignored: false
-            
+            Accessible.selectable: true
+            // The chosen OS, not the highlight the arrow keys move.
+            Accessible.selected: !!root.wizardContainer && delegateItem.name !== ""
+                                 && root.wizardContainer.selectedOsName === delegateItem.name
+            // Switch access and voice control select by action, not by key.
+            // As a click: selects without advancing, unlike Return.
+            Accessible.onPressAction: delegateItem.activate()
+
+            function activate() {
+                if (delegateItem.parentListView) {
+                    delegateItem.parentListView.currentSelectionIsFromMouse = true
+                    delegateItem.parentListView.itemSelected(delegateItem.index, delegateItem)
+                }
+            }
+
             Rectangle {
                 id: osbgrect
                 anchors.left: parent.left
@@ -488,14 +510,7 @@ WizardStepBase {
                         }
                     }
 
-                    onClicked: {
-                        // Trigger the itemSelected signal to handle selection with scroll preservation
-                        if (delegateItem.parentListView) {
-                            // Set flag to indicate this is a mouse click
-                            delegateItem.parentListView.currentSelectionIsFromMouse = true
-                            delegateItem.parentListView.itemSelected(delegateItem.index, delegateItem)
-                        }
-                    }
+                    onClicked: delegateItem.activate()
                     
                     onDoubleClicked: {
                         // Double-click acts like pressing Return - select and advance
@@ -767,6 +782,7 @@ WizardStepBase {
                     description: qsTr("Go back to main menu"),
                     tooltip: "",
                     website: "",
+                    eula_url: "",
                     init_format: "",
                     capabilities: "",
                     devices: []
@@ -831,12 +847,21 @@ WizardStepBase {
                     // Ensure reasonable defaults
                     customImageFileDialog.dialogTitle = qsTr("Select image")
                     customImageFileDialog.nameFilters = CommonStrings.imageFiltersList
-                    // Default to Downloads. writableLocation() already returns a
-                    // platform-correct file:// URL, so use it directly.
-                    var dl = String(StandardPaths.writableLocation(StandardPaths.DownloadLocation))
-                    if (dl.length > 0) {
-                        customImageFileDialog.currentFolder = dl
-                        customImageFileDialog.folder = dl
+                    var start
+                    if (root.mountsUsbImages) {
+                        start = root.mountUsbImages()
+                        // Empty when no drive mounted; the user has been told why.
+                        if (!start)
+                            return
+                        customImageFileDialog.removableDrivesFolder = start
+                    } else {
+                        // writableLocation() already returns a platform-correct
+                        // file:// URL, so use it directly.
+                        start = String(StandardPaths.writableLocation(StandardPaths.DownloadLocation))
+                    }
+                    if (start.length > 0) {
+                        customImageFileDialog.currentFolder = start
+                        customImageFileDialog.folder = start
                     }
                     customImageFileDialog.open()
                 } else {
@@ -862,6 +887,8 @@ WizardStepBase {
                 root.wizardContainer.secureBootAvailable = ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
                 root.wizardContainer.passwordlessSudoAvailable = false
                 root.wizardContainer.userRequired = false
+                root.wizardContainer.eulaRequired = false
+                root.wizardContainer.eulaAccepted = false
                 root.wizardContainer.ccRpiAvailable = false
                 root.wizardContainer.ifAndFeaturesAvailable = false
                 root.nextButtonEnabled = true
@@ -890,6 +917,7 @@ WizardStepBase {
                     typeof(model.bmap_url) != "undefined" ? model.bmap_url : ""
                 )
                 ImageWriterSingleton.setSWCapabilitiesList(model.capabilities)
+                ImageWriterSingleton.setEulaUrl(typeof(model.eula_url) === "string" ? model.eula_url : "")
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = ImageWriterSingleton.imageSupportsCustomization()
@@ -897,6 +925,8 @@ WizardStepBase {
                 root.wizardContainer.secureBootAvailable = ImageWriterSingleton.checkSWCapability("secure_boot") || ImageWriterSingleton.isSecureBootForcedByCliFlag() || ImageWriterSingleton.getDebugForceSecureBoot()
                 root.wizardContainer.passwordlessSudoAvailable = ImageWriterSingleton.checkSWCapability("passwordless_sudo")
                 root.wizardContainer.userRequired = ImageWriterSingleton.imageRequiresUser()
+                root.wizardContainer.eulaRequired = ImageWriterSingleton.imageRequiresEula()
+                root.wizardContainer.eulaAccepted = false
                 root.wizardContainer.ccRpiAvailable = ImageWriterSingleton.imageSupportsCcRpi()
                 
                 // Check if any interface/feature capabilities are available (requires both HW and SW support).
@@ -1023,6 +1053,7 @@ WizardStepBase {
                 entry.icon = String(entry.icon || "")
                 entry.subitems_url = String(entry.subitems_url || "")
                 entry.website = String(entry.website || "")
+                entry.eula_url = String(entry.eula_url || "")
                 entry.tooltip = String(entry.tooltip || "")
 
                 if (typeof entry.capabilities === "string") {

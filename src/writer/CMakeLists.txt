@@ -1,0 +1,294 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (C) 2026 Raspberry Pi Ltd
+#
+# rpi-imager-writer: the privileged helper.
+#
+# Per design doc §8a, this binary is intentionally Qt-free so that a future
+# port to Rust (or any non-C++ language) does not require ripping Qt out
+# of the codebase first. Only the Cocoa/Foundation frameworks are linked.
+#
+# macOS is the shipping helper. Windows and Linux helpers are built by default;
+# pass RPI_IMAGER_DISABLE_WINDOWS_HELPER or RPI_IMAGER_DISABLE_LINUX_HELPER to omit.
+
+if(NOT APPLE)
+    if(UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+        find_package(GnuTLS REQUIRED)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(LIBURING liburing)
+        pkg_check_modules(UDEV REQUIRED libudev)
+        pkg_check_modules(GPGME REQUIRED gpgme)
+        # rpi_imager_writer_linux is linked into the client as well.
+        rpi_imager_sbom_system_ids(_rpi_gpgme_ids "${GPGME_LINK_LIBRARIES}"
+            "cpe:2.3:a:gnupg:gpgme:${GPGME_VERSION}:*:*:*:*:*:*:*")
+        rpi_imager_sbom_add_component(gpgme
+            NAME "GPGME"
+            VERSION "${GPGME_VERSION}"
+            SUPPLIER "g10 Code GmbH"
+            LICENSE "LGPL-2.1-or-later"
+            ${_rpi_gpgme_ids}
+            ORIGIN "system library, version from pkg-config at configure time"
+            USED_BY rpi-imager rpi-imager-writer)
+
+        set(_writer_linux_sources
+            server/session_telemetry.h
+            server/session_telemetry.cpp
+            server/drive_list_rpc.h
+            server/wire_outbound.h
+            server/wire_outbound.cpp
+            server/drive_watch_service.h
+            server/linux/drive_watch_linux.cpp
+            server/bulk_write_async.h
+            server/bulk_write_async.cpp
+            server/linux/service_impl.h
+            server/linux/service_impl.cpp
+            server/linux/drivelist_linux_helper.h
+            server/linux/drivelist_linux_helper.cpp
+            server/linux/helper_log.h
+            server/linux/helper_log.cpp
+            server/linux/peer_auth_linux.h
+            server/linux/peer_auth_linux.cpp
+            server/linux/usb_device_access.h
+            server/linux/usb_device_access.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/helper_maintenance.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/appimage_signature.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/proc_environ.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist.h
+        )
+
+        add_library(rpi_imager_writer_linux STATIC ${_writer_linux_sources})
+        target_include_directories(rpi_imager_writer_linux PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/..
+            ${CMAKE_CURRENT_BINARY_DIR}/..
+        )
+        if(LIBURING_FOUND)
+            target_compile_definitions(rpi_imager_writer_linux PRIVATE HAVE_LIBURING)
+            target_include_directories(rpi_imager_writer_linux PRIVATE ${LIBURING_INCLUDE_DIRS})
+        endif()
+        target_link_libraries(rpi_imager_writer_linux PUBLIC
+            privileged_io
+            GnuTLS::GnuTLS
+            ${UDEV_LIBRARIES}
+            ${GPGME_LIBRARIES}
+        )
+        target_include_directories(rpi_imager_writer_linux PUBLIC
+            ${UDEV_INCLUDE_DIRS}
+            ${GPGME_INCLUDE_DIRS}
+        )
+        if(LIBURING_FOUND)
+            target_link_libraries(rpi_imager_writer_linux PUBLIC ${LIBURING_LIBRARIES})
+        endif()
+        target_compile_features(rpi_imager_writer_linux PUBLIC cxx_std_20)
+
+        add_executable(rpi-imager-writer
+            main_linux.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.cpp
+        )
+        target_link_libraries(rpi-imager-writer PRIVATE rpi_imager_writer_linux)
+        target_compile_features(rpi-imager-writer PRIVATE cxx_std_20)
+        set_target_properties(rpi-imager-writer PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        )
+    elseif(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+        # rpi-imager-writer.exe: the elevated Windows helper (§14.5).
+        #
+        # NOTE: built as a console-subsystem exe so the standard int main()
+        # entry works under MinGW. Production should move to the windows
+        # subsystem (wWinMain) to avoid a transient console window when the
+        # helper is launched elevated; deferred while the helper is brought up.
+        add_executable(rpi-imager-writer
+            main_win.cpp
+            server/session_telemetry.h
+            server/session_telemetry.cpp
+            server/drive_list_rpc.h
+            server/wire_outbound.h
+            server/wire_outbound.cpp
+            server/drive_watch_service.h
+            server/win/drive_watch_win.cpp
+            server/bulk_write_async.h
+            server/bulk_write_async.cpp
+            server/win/service_impl.h
+            server/win/service_impl.cpp
+            server/win/peer_auth_win.h
+            server/win/peer_auth_win.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../windows/helper_maintenance.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp
+            # §14.5 - the helper performs device I/O with the SAME Qt-free
+            # WindowsFileOperations the client uses in-process today. These TUs
+            # carry no Qt (verified) so they satisfy the Qt-free rule (§8a).
+            # NOTE: compiled WITHOUT RPI_IMAGER_ENABLE_WINDOWS_HELPER on this
+            # target, so file_operations_windows.cpp's factory yields a plain
+            # WindowsFileOperations and never references the client adapter.
+            ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../windows/file_operations_windows.cpp
+        )
+        target_include_directories(rpi-imager-writer PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/..
+        )
+        # Name and icon for the UAC prompt; generated at build time, like
+        # rpi-imager.rc, so the version matches the binary.
+        add_custom_command(
+            OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager-writer.rc"
+            COMMAND ${CMAKE_COMMAND}
+                -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+                -DEXTRA_VARS_FILE=${CMAKE_CURRENT_SOURCE_DIR}/../cmake/rpi_imager_identity.cmake
+                -DRPI_IMAGER_ICON=${CMAKE_CURRENT_SOURCE_DIR}/../icons/rpi-imager.ico
+                -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../windows/rpi-imager-writer.rc.in
+                -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/rpi-imager-writer.rc
+                -P ${CONFIGURE_VERSIONED_SCRIPT}
+            DEPENDS
+                ${IMAGER_VERSION_VARS}
+                ${CMAKE_CURRENT_SOURCE_DIR}/../windows/rpi-imager-writer.rc.in
+                ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/rpi_imager_identity.cmake
+            COMMENT "Configuring rpi-imager-writer.rc with build-time version"
+            VERBATIM
+        )
+        target_sources(rpi-imager-writer PRIVATE
+            "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager-writer.rc")
+        # Peer authentication (§14.4): WinVerifyTrust + publisher org and
+        # optional thumbprint allowlist pinning uses wintrust; CertGetNameStringW
+        # and CertGetCertificateContextProperty use crypt32. drivelist_windows.cpp
+        # names setupapi with #pragma comment(lib), which only MSVC honours.
+        target_link_libraries(rpi-imager-writer PRIVATE
+            privileged_io
+            advapi32
+            bcrypt
+            crypt32
+            setupapi
+            virtdisk
+            wintrust
+        )
+        target_compile_features(rpi-imager-writer PRIVATE cxx_std_20)
+        set_target_properties(rpi-imager-writer PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        )
+    endif()
+    return()
+endif()
+
+add_executable(rpi-imager-writer
+    main.mm
+    server/mac/RpiImagerWriterProtocol.h
+    server/mac/RpiImagerWriterProtocol.m
+    server/mac/disk_arbitration.h
+    server/mac/disk_arbitration.mm
+    server/mac/service_impl.mm
+    # §5 - block-device enumeration runs on the helper side. The same
+    # DiskArbitration/IOKit source the client compiles in is reused
+    # here verbatim; the helper's listDrivesNow XPC entry point
+    # marshals the resulting std::vector<DeviceDescriptor> to NSArray.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_darwin.mm
+)
+
+target_include_directories(rpi-imager-writer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/server/mac
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(rpi-imager-writer PRIVATE
+    "-framework Foundation"
+    "-framework CoreFoundation"
+    "-framework DiskArbitration"
+    "-framework Security"
+    "-framework IOKit"
+    "-framework Cocoa"
+)
+
+target_compile_features(rpi-imager-writer PRIVATE cxx_std_20)
+target_compile_options(rpi-imager-writer PRIVATE
+    -Wall -Wextra -Wpedantic -fobjc-arc
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+# drivelist_darwin.mm uses manual retain/release patterns (CFRetain /
+# bridged-cast omissions) that the helper's default -fobjc-arc rejects.
+# It compiles cleanly under MRR; rather than rewrite the file (it's
+# shared with the main app's MRR build) just disable ARC for this
+# translation unit inside the helper target.
+set_source_files_properties(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_darwin.mm
+    TARGET_DIRECTORY rpi-imager-writer
+    PROPERTIES COMPILE_FLAGS "-fno-objc-arc"
+)
+
+# Embed an Info.plist into the helper binary's __TEXT __info_plist section.
+# launchd / SMAppService read the helper's bundle identifier and version
+# directly from the Mach-O - no separate .plist file needed alongside.
+set(_helper_info_plist "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
+    "${_helper_info_plist}"
+    @ONLY
+)
+target_link_options(rpi-imager-writer PRIVATE
+    "-Wl,-sectcreate,__TEXT,__info_plist,${_helper_info_plist}"
+)
+set_target_properties(rpi-imager-writer PROPERTIES
+    LINK_DEPENDS "${_helper_info_plist}"
+)
+
+# Place the helper next to the main app's executable inside the bundle.
+# Production placement is Contents/MacOS/rpi-imager-writer alongside the
+# main rpi-imager binary; for dev builds we put it in the same build dir
+# so a launchctl plist can point at it via absolute path.
+set_target_properties(rpi-imager-writer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
+# Generate a launchd plist for dev installation. See dev/...plist.in
+# for installation instructions.
+set(RPI_IMAGER_WRITER_PATH "${CMAKE_BINARY_DIR}/rpi-imager-writer")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/dev/com.raspberrypi.rpi-imager.writer.plist.in"
+    "${CMAKE_BINARY_DIR}/com.raspberrypi.rpi-imager.writer.plist"
+    @ONLY
+)
+
+# -----------------------------------------------------------------------
+# Bundle the helper into the main RpiImager.app
+# -----------------------------------------------------------------------
+#
+# Production layout:
+#   RpiImager.app/
+#     Contents/
+#       MacOS/
+#         rpi-imager
+#         rpi-imager-writer        <- our helper
+#       Library/
+#         LaunchDaemons/
+#           com.raspberrypi.rpi-imager.writer.plist
+#
+# SMAppService.daemonServiceWithPlistName: looks up the plist by name in
+# Contents/Library/LaunchDaemons/ relative to the calling bundle. Both the
+# main app and the helper must be signed with the same Team ID.
+
+set(_smapp_plist_in
+    "${CMAKE_CURRENT_SOURCE_DIR}/com.raspberrypi.rpi-imager.writer.plist.in")
+set(_smapp_plist_generated
+    "${CMAKE_CURRENT_BINARY_DIR}/com.raspberrypi.rpi-imager.writer.smapp.plist")
+configure_file("${_smapp_plist_in}" "${_smapp_plist_generated}" @ONLY)
+
+# `rpi-imager` is the main app target name; APP_BUNDLE_PATH is set by
+# mac/PlatformPackaging.cmake. We add a custom command on the helper
+# itself - the main app target then DEPENDS on this so the helper is
+# in place before macdeployqt and signing run.
+set(_app_bundle_helper_path
+    "${CMAKE_BINARY_DIR}/rpi-imager.app/Contents/MacOS/rpi-imager-writer")
+set(_app_bundle_smapp_plist
+    "${CMAKE_BINARY_DIR}/rpi-imager.app/Contents/Library/LaunchDaemons/com.raspberrypi.rpi-imager.writer.plist")
+
+# Note: the actual `add_custom_command` that copies the helper + plist
+# into the main app's bundle lives in src/CMakeLists.txt, because the
+# `rpi-imager` executable target isn't defined until after this
+# subdirectory has been processed. We expose the paths it needs as
+# CACHE-internal variables so the parent scope can pick them up.
+set(RPI_IMAGER_WRITER_BUNDLED_HELPER_PATH "${_app_bundle_helper_path}"
+    CACHE INTERNAL "Path inside RpiImager.app where the helper binary lands")
+set(RPI_IMAGER_WRITER_BUNDLED_PLIST_PATH "${_app_bundle_smapp_plist}"
+    CACHE INTERNAL "Path inside RpiImager.app where the SMAppService plist lands")
+set(RPI_IMAGER_WRITER_SMAPP_PLIST_GENERATED "${_smapp_plist_generated}"
+    CACHE INTERNAL "Generated SMAppService plist source path")

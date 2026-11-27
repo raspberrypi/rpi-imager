@@ -302,6 +302,41 @@ TEST_CASE("DownloadThread verifies a correct hash", "[download]")
     CHECK(outcome.succeeded);
 }
 
+// curl hands over whatever lengths arrive, and the last of them need not
+// fill a block. Under O_DIRECT a device refuses that write, so the plain path
+// gathers whole blocks and pads the last one -- and the padding must not leak
+// into the hash, or a correct image fails its own published SHA-256.
+TEST_CASE("DownloadThread pads a ragged image and still matches its hash", "[download]")
+{
+    ScratchDir scratch;
+    const QByteArray payload = patternOfSize(2 * 1024 * 1024 + 317, 41);
+    REQUIRE(payload.size() % 512 != 0);
+    const QByteArray hash =
+        QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex();
+
+    const QString source = scratch.filePath(QStringLiteral("ragged-src.img"));
+    const QString dest = scratch.filePath(QStringLiteral("ragged-dest.img"));
+    REQUIRE(writeFile(source, payload));
+    // Not zeroes, so padding that was written can be told from ground that
+    // was already there. Two spare MiB, as the writer zeroes the last one.
+    REQUIRE(writeFile(dest, QByteArray(payload.size() + (2 * 1024 * 1024), '\xEE')));
+
+    DownloadThread dt(QUrl::fromLocalFile(source).toEncoded(), dest.toUtf8(), hash);
+    dt.setVerifyEnabled(true);
+
+    const Outcome outcome = runToCompletion(dt);
+    INFO("error: " << outcome.errorMessage.toStdString());
+    REQUIRE(outcome.finished);
+    REQUIRE(outcome.succeeded);
+
+    const QByteArray written = readFile(dest);
+    CHECK(written.left(payload.size()) == payload);
+    // A scratch file has no block size of its own, so 512 is the fallback.
+    const int padding = 512 - (payload.size() % 512);
+    CHECK(written.mid(payload.size(), padding) == QByteArray(padding, '\0'));
+    CHECK(written.at(payload.size() + padding) == '\xEE');
+}
+
 TEST_CASE("DownloadThread rejects a payload whose hash does not match", "[download]")
 {
     ScratchDir scratch;

@@ -31,6 +31,7 @@
 #include <QWindow>
 #endif
 #include "cachemanager.h"
+#include "curlfetcher.h"
 #include "device_info.h"
 #include "imageadvancedoptions.h"
 #include "performancestats.h"
@@ -83,6 +84,19 @@ public:
     };
     Q_ENUM(EjectState)
 
+    // State of the privileged-write helper. macOS only - other platforms
+    // always report Ready (their elevation models don't have an equivalent
+    // "user must approve in Settings" gate). QML drives the explainer /
+    // re-enable dialogs off this.
+    enum class PrivilegedHelperState {
+        Ready,            // helper installed, approved, responsive
+        NeedsInstall,     // SMAppService not yet registered for this app
+        NeedsApproval,    // registered but user must approve in Settings
+        Unavailable,      // platform doesn't support this (< macOS 13, etc.)
+        Unknown           // initial; queried lazily on first probe
+    };
+    Q_ENUM(PrivilegedHelperState)
+
     // NB: the parent argument is deliberately mandatory (no `= nullptr`).
     // ImageWriter is a QML_SINGLETON whose instance is supplied by main() via
     // setQmlInstance()/create(). Qt's qmlRegisterTypesAndRevisions only honours a
@@ -104,10 +118,17 @@ public:
     static void setQmlInstance(ImageWriter *instance) { s_qmlInstance = instance; }
 #endif
 
+    // For UI test harnesses: refuse everything that reaches past the app --
+    // browser, System Settings, keychain, Wi-Fi, helper install, reboot.
+    static void setDesktopSandboxed(bool sandboxed) { s_desktopSandboxed = sandboxed; }
+
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
     Q_PROPERTY(EjectState ejectState READ ejectState NOTIFY ejectStateChanged)
     Q_PROPERTY(bool isOsListUnavailable READ isOsListUnavailable NOTIFY osListUnavailableChanged)
     Q_PROPERTY(bool screenReaderActive READ isScreenReaderActive NOTIFY screenReaderActiveChanged)
+    Q_PROPERTY(PrivilegedHelperState privilegedHelperState
+               READ privilegedHelperState
+               NOTIFY privilegedHelperStateChanged)
 
     /* Returns true if the extract size is reliably known (false for gz files which can't store sizes >4GB) */
     Q_INVOKABLE bool isExtractSizeKnown() const { return _extractSizeKnown; }
@@ -200,6 +221,7 @@ public:
 
     /* Returns true if version argument is newer than current program */
     Q_INVOKABLE bool isVersionNewer(const QString &version);
+    static bool isVersionNewerThan(const QString &candidate, const QString &current);
 
     /* Set custom repository */
     Q_INVOKABLE void setCustomOsListUrl(const QUrl &url);
@@ -364,6 +386,11 @@ public:
     /* Returns a json formatted list of the OS images found on USB stick */
     Q_INVOKABLE QByteArray getUsbSourceOSlist();
 
+    /* Mounts USB media for the custom-image picker and returns the folder,
+       as a file URL, that it was mounted under. Empty, with the reason
+       already raised through error(), when no drive could be mounted. */
+    Q_INVOKABLE QString mountUsbImageFolder();
+
 protected:
     // Where inserted media appears. Virtual so the scan above can be run
     // against a directory a test lays out, rather than only against real
@@ -456,6 +483,19 @@ public:
     // The OS ships with no usable account and declares 'user_required': it is
     // written only with customisation that creates a user with a password.
     Q_INVOKABLE bool imageRequiresUser();
+
+    // A licence the selected OS asks the user to accept ("eula_url"). Set
+    // after setSrc(), which forgets it. Only https is fetched, as plain text.
+    Q_INVOKABLE void setEulaUrl(const QString &url);
+    Q_INVOKABLE bool imageRequiresEula() const;
+    // Answered by eulaReady() or eulaFailed(); a licence already fetched for
+    // this OS is reported again rather than fetched again.
+    Q_INVOKABLE void fetchEula();
+    // Accepting stores the SHA-256 of the text, so a changed text is asked
+    // about again.
+    Q_INVOKABLE void setEulaAccepted(bool accepted);
+    Q_INVOKABLE bool isEulaAccepted() const;
+    static constexpr qint64 maxEulaBytes = 256 * 1024;
     // Whether the selected OS can apply the GPIO/hardware interface toggles
     // (I2C/SPI/1-Wire/serial/USB gadget). cloud-init needs the cc_raspberry_pi
     // module; rpi-preseed configures them natively via raspi-config.
@@ -581,6 +621,15 @@ public:
     /* Returns true if the current target is a fastboot storage device */
     Q_INVOKABLE bool isFastbootDevice() const;
 
+    /* True when the last write failed because Windows has no driver bound to
+       the board in USB boot or fastboot mode. */
+    Q_INVOKABLE bool usbDriverMissing() const { return _usbDriverMissing; }
+    /* True on Windows when the bundled driver INF is present to install. */
+    Q_INVOKABLE bool canInstallUsbDriver() const;
+    /* Installs the bundled driver elevated, off the GUI thread; the outcome
+       arrives as usbDriverInstallFinished(). */
+    Q_INVOKABLE void installUsbDriver();
+
     // Mint a single-use Raspberry Pi Connect auth key for the
     // currently configured organisation API key.  Used when the
     // target is not a fastboot device — the returned secret is
@@ -608,6 +657,30 @@ public:
     /* Check if OS list is unavailable - derived from whether we have data (for QML offline UI) */
     bool isOsListUnavailable() const { return _completeOsList.isEmpty(); }
 
+    /* Current privileged-helper state. macOS-meaningful; other platforms
+       always report Ready. QML drives the explainer / re-enable UI off
+       this property. Refresh it via refreshPrivilegedHelperState(). */
+    PrivilegedHelperState privilegedHelperState() const { return _privilegedHelperState; }
+
+    /* Re-probe the backend (SMAppService.status + ping) and update
+       privilegedHelperState. Cheap, safe to call on Q_INVOKABLE from QML
+       (e.g. when the user returns from System Settings). */
+    Q_INVOKABLE void refreshPrivilegedHelperState();
+
+    /* Open System Settings > General > Login Items & Extensions so the
+       user can flip the helper toggle. macOS only - no-op elsewhere. */
+    Q_INVOKABLE void openLoginItemsSettings();
+
+    /* macOS: true when the helper is refused the chosen storage device for
+       want of Full Disk Access. Asked on leaving storage selection, so the
+       grant (which has macOS reopen the app) comes before customisation. */
+    Q_INVOKABLE bool fullDiskAccessDenied();
+    Q_INVOKABLE void openFullDiskAccessSettings();
+
+    /* Register (macOS) or start (Windows, Linux) the helper, so the
+       system asks the user to allow it. Returns why it failed, or "". */
+    Q_INVOKABLE QString installPrivilegedHelper();
+
     /* Get access to performance stats for instrumentation */
     PerformanceStats* performanceStats() { return _performanceStats; }
 
@@ -618,6 +691,7 @@ signals:
     void writeProgress(QVariant now, QVariant total);
     void verifyProgress(QVariant now, QVariant total);
     void error(QVariant msg);
+    void usbDriverInstallFinished(bool ok, QString message);
     void success();
     void fileSelected(QVariant filename, QString purpose);
     void cancelled();
@@ -639,6 +713,7 @@ signals:
     void keychainPermissionResponseReceived();
     void writeStateChanged();
     void ejectStateChanged();
+    void privilegedHelperStateChanged();
     void connectTokenReceived(const QString &token);
     void connectDeviceCodeReady(const QString &userCode, const QString &verificationUri,
                                 int expiresInSecs);
@@ -658,6 +733,8 @@ signals:
     void locationPermissionGranted();
     void performanceSaveDialogNeeded(const QString &suggestedFilename, const QString &initialDir);
     void screenReaderActiveChanged();
+    void eulaReady(const QString &text, bool accepted);
+    void eulaFailed(const QString &reason);
 
 protected slots:
     void startProgressPolling();
@@ -689,11 +766,15 @@ protected slots:
                                   const QList<uint8_t> &portPath, uint16_t productId);
     void onBootstrapComplete(const QString &portPathKey, const QString &fastbootId);
     void onBootstrapError(const QString &portPathKey, const QString &msg);
+    // What a licence fetch came to; `fetchError` is empty on success.
+    void onEulaFetched(const QByteArray &body, const QString &fetchError, const QUrl &effectiveUrl);
 
 private:
 #ifndef CLI_ONLY_BUILD
     static ImageWriter *s_qmlInstance;   // app-owned instance returned by create()
 #endif
+    static bool s_desktopSandboxed;
+    static bool sandboxRefuses(const char *what);
     void setWriteState(WriteState state);
     WriteState writeState() const { return _writeState; }
     void setEjectState(EjectState state);
@@ -758,6 +839,7 @@ protected:
     WriteState _writeState;
     EjectState _ejectState = EjectState::EjectIdle;
     QThread *_manualEjectThread = nullptr;
+    PrivilegedHelperState _privilegedHelperState = PrivilegedHelperState::Unknown;
     bool _cancelledDueToDeviceRemoval;
     HWListModel _hwlist;
     OSListModel _oslist;
@@ -787,6 +869,11 @@ protected:
     bool _piConnectTokenIsOrgMinted = false;
     // Whether the staged customisation creates a user with a password.
     bool _customisationCreatesUser = false;
+    // The selected OS's licence: where it is, and the text and digest of
+    // the copy fetched this session (empty until one is).
+    QString _eulaUrl, _eulaText;
+    QString _eulaDigest;
+    QPointer<CurlFetcher> _eulaFetcher;
     // CLI flag to force enable secure boot regardless of OS capabilities
     static bool _forceSecureBootEnabled;
 #ifndef CLI_ONLY_BUILD
@@ -826,6 +913,8 @@ protected:
     QString _rpibootStorageTarget;  // block device on the CM to flash after bootstrap (e.g. "mmcblk0", "nvme0n1")
     bool _isRpibootDevice = false;
     RpibootThread *_rpibootThread = nullptr;
+    bool _usbDriverMissing = false;
+    bool _usbDriverInstalling = false;
     FastbootFlashThread *_fastbootFlashThread = nullptr;
     rpiboot::SideloadMode _rpibootSideloadMode = rpiboot::SideloadMode::Fastboot;
 
@@ -850,6 +939,7 @@ protected:
     void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
     void _applyRpiPreseedCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
+    void _forgetEula();
     void scheduleOsListRefresh();
     bool _connectOrgRegistrationForWrite(QString &apiKey, QString &description) const;
     void _handleMemoryAllocationFailure(const char* what);

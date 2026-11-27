@@ -24,6 +24,16 @@ FetchContent_GetProperties(bzip2)
 if(NOT bzip2_POPULATED)
     FetchContent_Populate(bzip2)
 endif()
+rpi_imager_sbom_add_component(bzip2
+    VERSION "${BZIP2_VERSION}"
+    SUPPLIER "bzip2 project"
+    VCS_URL "https://gitlab.com/bzip2/bzip2.git"
+    GIT_TAG "bzip2-${BZIP2_VERSION}"
+    SOURCE_DIR "${bzip2_SOURCE_DIR}"
+    LICENSE "bzip2-1.0.6"
+    PURL "pkg:gitlab/bzip2/bzip2@bzip2-${BZIP2_VERSION}"
+    CPE "cpe:2.3:a:bzip:bzip2:${BZIP2_VERSION}:*:*:*:*:*:*:*"
+    USED_BY libarchive)
 
 # bzip2.c and bzip2recover.c carry main() and are deliberately left out.
 add_library(bz2_static STATIC

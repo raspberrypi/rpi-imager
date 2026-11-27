@@ -33,6 +33,15 @@ set_property(TARGET yescrypt PROPERTY POSITION_INDEPENDENT_CODE ON)
 # Exclude from all builds by default (will be linked when needed)
 set_target_properties(yescrypt PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
+# A snapshot taken after the 1.1.0 release; see CHANGES.
+rpi_imager_sbom_add_component(yescrypt
+    VERSION "1.1.0+"
+    SUPPLIER "Openwall"
+    VCS_URL "https://github.com/openwall/yescrypt.git"
+    LICENSE "BSD-2-Clause"
+    PURL "pkg:github/openwall/yescrypt"
+    ORIGIN "source copy in src/dependencies/yescrypt")
+
 set(YESCRYPT_INCLUDE_DIR ${YESCRYPT_SOURCE_DIR})
 set(YESCRYPT_LIBRARIES yescrypt)
 

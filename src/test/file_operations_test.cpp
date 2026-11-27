@@ -717,6 +717,49 @@ TEST_CASE("Tell follows Seek and the writes that follow it", "[file-ops]") {
   CHECK(readBack(path, 4096, 1024) == data);
 }
 
+TEST_CASE("After a read, Tell says where the next write lands", "[file-ops]") {
+  // The helper's bulk writer seeks only when Tell() differs from the write's
+  // offset. On Linux, after Seek(0) and a read, Tell() gave the read's end
+  // while the write cursor stayed at 0, so a write meant for the read's end
+  // skipped the seek and landed at 0.
+  const std::string path = makeImage("tell-read.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  REQUIRE(ops->Seek(0) == FileError::kSuccess);
+  std::vector<std::uint8_t> buf(4096);
+  std::size_t got = 0;
+  REQUIRE(ops->ReadSequential(buf.data(), buf.size(), got) == FileError::kSuccess);
+  REQUIRE(got == buf.size());
+  const std::uint64_t at = ops->Tell();
+
+  const auto data = pattern(1024, 0x52);
+  REQUIRE(ops->WriteSequential(data.data(), data.size()) == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK(readBack(path, at, 1024) == data);
+}
+
+TEST_CASE("Toggling direct I/O keeps where the next write goes", "[file-ops]") {
+  // On Linux the toggle reopens the handle, which zeroed the write cursor:
+  // Tell() still looked right, but the next write went to the start.
+  const std::string path = makeImage("directio-write.img");
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  REQUIRE(ops->Seek(8192) == FileError::kSuccess);
+  const bool before = ops->IsDirectIOEnabled();
+  REQUIRE(ops->SetDirectIOEnabled(!before) == FileError::kSuccess);
+  REQUIRE(ops->SetDirectIOEnabled(before) == FileError::kSuccess);
+
+  const auto data = pattern(4096, 0x63);
+  REQUIRE(ops->WriteSequential(data.data(), data.size()) == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+  CHECK(readBack(path, 8192, 4096) == data);
+  CHECK(readBack(path, 0, 4096) == std::vector<std::uint8_t>(4096, 0));
+}
+
 TEST_CASE("Direct I/O can be turned on and off on an open handle",
           "[file-ops]") {
   // The imager switches between buffered and direct I/O depending on the
@@ -761,6 +804,39 @@ TEST_CASE("A write past the end of the file extends it", "[file-ops]") {
 
   REQUIRE(ops->Close() == FileError::kSuccess);
   CHECK(readBack(path, beyond, 512) == data);
+}
+
+TEST_CASE("Writes land past the 2 GiB and 4 GiB offset boundaries", "[file-ops]") {
+  // #1801: a 32-bit off_t turned 2 GiB negative, and every armhf write of a
+  // larger image failed there. The scratch image is sparse, so this costs
+  // three sectors of disk.
+  const std::string path = makeImage("large-offsets.img", 512);
+
+  auto ops = FileOperations::Create();
+  REQUIRE(ops->OpenDevice(path) == FileError::kSuccess);
+
+  struct { std::uint64_t offset; std::uint8_t seed; } writes[] = {
+      {(1ull << 31) - 512, 0x51},   // last sector a signed 32-bit offset reaches
+      {1ull << 31,         0x52},   // first one it does not
+      {(1ull << 32) + 4096, 0x53},  // past where an unsigned one wraps to 4096
+  };
+
+  for (const auto& w : writes) {
+    const auto data = pattern(512, w.seed);
+    INFO("offset " << w.offset);
+    REQUIRE(ops->WriteAtOffset(w.offset, data.data(), data.size()) == FileError::kSuccess);
+  }
+  REQUIRE(ops->ForceSync() == FileError::kSuccess);
+  REQUIRE(ops->Close() == FileError::kSuccess);
+
+  for (const auto& w : writes) {
+    INFO("offset " << w.offset);
+    CHECK(readBack(path, w.offset, 512) == pattern(512, w.seed));
+  }
+  // A wrapped offset would have landed here instead.
+  const auto low = readBack(path, 4096, 512);
+  CHECK(std::all_of(low.begin(), low.end(), [](std::uint8_t b) { return b == 0; }));
+  CHECK(fs::file_size(path) == (1ull << 32) + 4096 + 512);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

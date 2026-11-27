@@ -1,6 +1,26 @@
 #include "drivelistmodelpollthread.h"
 #include <QElapsedTimer>
 #include <QDebug>
+
+#ifdef Q_OS_DARWIN
+// §5: route block-device enumeration through the privileged helper when
+// the macOS XPC backend is in use. Falls back to the in-process
+// Drivelist::ListStorageDevices() path if the helper isn't reachable
+// or returns an error.
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
+#include "privileged_io/backends/macos_xpc.h"
+#endif
+#if defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
+#include "privileged_io/backends/windows_uac.h"
+#endif
+#if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
+#include "privileged_io/backends/linux_polkit.h"
+#endif
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -9,6 +29,111 @@
 #include "fastboot/fastboot_protocol.h"
 #include <set>
 #include <sstream>
+
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+namespace {
+
+bool tryListDevicesFromHelper(std::vector<Drivelist::DeviceDescriptor>& out) {
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    using BK = ::rpi_imager::privileged::BackendKind;
+
+    // Listing needs no privilege, so it is no reason to start the helper and
+    // raise an elevation prompt; in-process enumeration covers it until a
+    // write has started the helper.
+    if (!w.helperActive()) {
+        return false;
+    }
+
+#ifdef Q_OS_DARWIN
+    if (w.backend() == BK::MacOSXpc) {
+        auto* xpc = dynamic_cast<
+            ::rpi_imager::privileged::backends::MacOSXpcBackend*>(&w);
+        if (!xpc) {
+            return false;
+        }
+        auto r = xpc->listDevicesNow();
+        if (!r.ok) {
+            qDebug() << "[drivelist] helper listDevicesNow failed:"
+                     << QString::fromStdString(r.error.detail())
+                     << "- falling back to in-process enumeration";
+            return false;
+        }
+        out = std::move(r.value);
+        return true;
+    }
+#endif
+#if defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    if (w.backend() == BK::WindowsUac) {
+        auto* uac = dynamic_cast<
+            ::rpi_imager::privileged::backends::WindowsUacBackend*>(&w);
+        if (!uac) {
+            return false;
+        }
+        auto r = uac->listDevicesNow();
+        if (!r.ok) {
+            qDebug() << "[drivelist] helper listDevicesNow failed:"
+                     << QString::fromStdString(r.error.detail())
+                     << "- falling back to in-process enumeration";
+            return false;
+        }
+        out = std::move(r.value);
+        return true;
+    }
+#endif
+#if defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+    if (w.backend() == BK::LinuxPolkit) {
+        auto* polkit = dynamic_cast<
+            ::rpi_imager::privileged::backends::LinuxPolkitBackend*>(&w);
+        if (!polkit) {
+            return false;
+        }
+        auto r = polkit->listDevicesNow();
+        if (!r.ok) {
+            qDebug() << "[drivelist] helper listDevicesNow failed:"
+                     << QString::fromStdString(r.error.detail())
+                     << "- falling back to in-process enumeration";
+            return false;
+        }
+        out = std::move(r.value);
+        return true;
+    }
+#endif
+    return false;
+}
+
+bool usesHelperDriveNotifications() {
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    using BK = ::rpi_imager::privileged::BackendKind;
+    const auto kind = w.backend();
+    return kind == BK::MacOSXpc || kind == BK::WindowsUac || kind == BK::LinuxPolkit;
+}
+
+// Returns false, without trying, while the helper is not running: subscribing
+// would start it, and the elevation prompt with it, before the user has asked
+// to write anything. The poll thread retries once a write has started it.
+bool trySubscribeToHelperDriveChanges(DriveListModelPollThread* self) {
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    if (!w.helperActive()) {
+        return false;
+    }
+    auto r = w.subscribeDrives(
+        [self](const ::rpi_imager::privileged::proto::DriveChange&) {
+            self->requestImmediateRescan();
+        });
+    if (!r.ok) {
+        qDebug() << "[drivelist] subscribeDrives failed:"
+                 << QString::fromStdString(r.error.detail())
+                 << "- falling back to pure polling";
+    } else {
+        qDebug() << "[drivelist] subscribed to helper drive notifications";
+    }
+    return true;
+}
+
+} // namespace
+#endif
 
 /*
  * SPDX-License-Identifier: Apache-2.0
@@ -39,12 +164,34 @@ void DriveListModelPollThread::stop()
 {
     _terminate = true;
     _modeChanged.wakeAll();  // Wake thread to check terminate flag
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+    if (usesHelperDriveNotifications() && _helperSubscriptionTried.exchange(false)) {
+        auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+        (void)w.unsubscribeDrives();
+    }
+#endif
 }
 
 void DriveListModelPollThread::start()
 {
     _terminate = false;
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+    if (usesHelperDriveNotifications()) {
+        _helperSubscriptionTried = trySubscribeToHelperDriveChanges(this);
+    }
+#endif
     QThread::start();
+}
+
+void DriveListModelPollThread::requestImmediateRescan()
+{
+    QMutexLocker lock(&_mutex);
+    _rescanRequested = true;
+    _modeChanged.wakeAll();
 }
 
 void DriveListModelPollThread::setScanMode(ScanMode mode)
@@ -128,7 +275,22 @@ void DriveListModelPollThread::run()
         
         // Perform the scan
         t1.start();
-        auto driveList = Drivelist::ListStorageDevices();
+
+        std::vector<Drivelist::DeviceDescriptor> driveList;
+        bool drivelistFromHelper = false;
+#if defined(Q_OS_DARWIN) || \
+    (defined(Q_OS_WIN) && defined(RPI_IMAGER_ENABLE_WINDOWS_HELPER)) || \
+    (defined(Q_OS_LINUX) && defined(RPI_IMAGER_ENABLE_LINUX_HELPER))
+        if (usesHelperDriveNotifications() && !_helperSubscriptionTried.load()) {
+            _helperSubscriptionTried = trySubscribeToHelperDriveChanges(this);
+        }
+        if (tryListDevicesFromHelper(driveList)) {
+            drivelistFromHelper = true;
+        }
+#endif
+        if (!drivelistFromHelper) {
+            driveList = Drivelist::ListStorageDevices();
+        }
         if (_rpibootEnabled.load(std::memory_order_relaxed)) {
             auto rpibootDevices = rpiboot::scanRpibootDevices();
             driveList.insert(driveList.end(), rpibootDevices.begin(), rpibootDevices.end());
@@ -147,17 +309,22 @@ void DriveListModelPollThread::run()
         if (elapsed > 1000)
             qDebug() << "Enumerating drives took a long time:" << elapsed/1000.0 << "seconds";
         
-        // Sleep based on current mode
-        int sleepSeconds = (currentMode == ScanMode::Slow) ? 5 : 1;
-        
-        // Use interruptible sleep - check mode periodically
-        for (int i = 0; i < sleepSeconds && !_terminate; ++i) {
+        // Sleep based on current mode. Sleep on the wait condition so
+        // a push notification (requestImmediateRescan) or a mode change
+        // can short-circuit the wait and re-poll immediately.
+        const int sleepMs = (currentMode == ScanMode::Slow) ? 5000 : 1000;
+        {
             QMutexLocker lock(&_mutex);
-            if (_scanMode == ScanMode::Paused) {
-                break;  // Mode changed to paused, exit sleep early
+            // If a rescan was requested while we were polling, honour
+            // it without waiting at all.
+            if (_rescanRequested) {
+                _rescanRequested = false;
+            } else if (!_terminate && _scanMode != ScanMode::Paused) {
+                _modeChanged.wait(&_mutex, sleepMs);
+                // The flag is consumed here so the next iteration
+                // performs exactly one extra poll, not a flood.
+                _rescanRequested = false;
             }
-            lock.unlock();
-            QThread::sleep(1);
         }
     }
 }
@@ -169,7 +336,8 @@ void DriveListModelPollThread::run()
 std::unique_ptr<rpiboot::IUsbContext> DriveListModelPollThread::makeUsbContext()
 {
     try {
-        return std::make_unique<rpiboot::LibusbContext>();
+        return std::make_unique<rpiboot::LibusbContext>(
+            rpiboot::LibusbContext::Elevation::IfHelperRunning);
     } catch (...) {
         // No USB, no permissions. The rest of the drive list is unaffected.
         return nullptr;

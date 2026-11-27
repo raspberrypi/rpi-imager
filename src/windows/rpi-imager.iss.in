@@ -1,6 +1,6 @@
 #define MyAppName "Raspberry Pi Imager"
 #define MyAppVersion "@IMAGER_VERSION_STR@"
-#define MyAppPublisher "Raspberry Pi Ltd"
+#define MyAppPublisher "@RPI_IMAGER_PUBLISHER_ORG@"
 #define RaspberryPiSoftwareURL "https://www.raspberrypi.com/software"
 #define ImagerRepoRootURL "https://github.com/raspberrypi/rpi-imager"
 #define ImagerRepoIssuesURL "https://github.com/raspberrypi/rpi-imager/issues"
@@ -20,7 +20,7 @@ DefaultGroupName=Raspberry Pi
 AllowNoIcons=yes
 LicenseFile=@CMAKE_BINARY_DIR@\deploy\license.txt
 OutputDir=@CMAKE_BINARY_DIR@\installer
-OutputBaseFilename=imager-{#MyAppVersion}
+OutputBaseFilename=imager_@IMAGER_FILE_VERSION@
 SetupIconFile=@CMAKE_SOURCE_DIR@\icons\rpi-imager.ico
 Compression=lzma2/max
 SolidCompression=yes
@@ -110,7 +110,13 @@ Source: "@CMAKE_BINARY_DIR@\deploy\{#MyAppExeName}"; DestDir: "{app}"; Flags: ig
 
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-cli.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-callback-relay.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Privileged helper (§14). Omitted from installs built without
+; Built when the Windows helper is enabled (default). Omitted when
+; RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON (skipifsourcedoesntexist).
+Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-writer.exe"; DestDir: "{app}"; Flags: ignoreversion signonce skipifsourcedoesntexist
 Source: "@CMAKE_BINARY_DIR@\deploy\license.txt"; DestDir: "{app}"; Flags: ignoreversion
+; SPDX and CycloneDX SBOMs, written by the rpi_imager_sbom build target.
+Source: "@CMAKE_BINARY_DIR@\deploy\sbom\*.json"; DestDir: "{app}\sbom"; Flags: ignoreversion
 
 ; Core DLLs
 Source: "@CMAKE_BINARY_DIR@\deploy\D3Dcompiler_47.dll"; DestDir: "{app}"; Flags: ignoreversion
@@ -135,14 +141,16 @@ Source: "@CMAKE_BINARY_DIR@\deploy\tls\*"; DestDir: "{app}\tls"; Flags: ignoreve
 Source: "@CMAKE_BINARY_DIR@\deploy\qml\*"; DestDir: "{app}\qml"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{cm:ProgramName}"; Filename: "{app}\{#MyAppExeName}"; AfterInstall: SetElevationBit('{group}\{cm:ProgramName}.lnk')
-Name: "{commondesktop}\{cm:ProgramName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AfterInstall: SetElevationBit('{commondesktop}\{cm:ProgramName}.lnk')
+Name: "{group}\{cm:ProgramName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{commondesktop}\{cm:ProgramName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 ; Stage and install WinUSB driver for Raspberry Pi USB boot mode devices.
 ; pnputil /install also applies the driver to any currently-connected device.
 ; Return code 3010 means success-with-reboot-required and is treated as success.
-Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\rpiboot-winusb.inf"" /install"; Flags: runhidden waituntilterminated; StatusMsg: "Installing USB driver for Raspberry Pi boot mode..."
+; Skipped by /SILENT and /VERYSILENT unless /USBDRIVER=1: a first install raises a
+; driver-trust prompt that blocks unattended deployment (#1804).
+Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\rpiboot-winusb.inf"" /install"; Flags: runhidden waituntilterminated; Check: ShouldInstallUSBDriver; StatusMsg: "Installing USB driver for Raspberry Pi boot mode..."
 
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser
 
@@ -163,32 +171,14 @@ Type: files; Name: "{commondesktop}\树莓派启动盘制作工具.lnk"; Check: 
 
 [Code]
 
-// Inno doesn't support setting 'Run as Administrator' on icons natively
-// https://stackoverflow.com/a/44082068
-procedure SetElevationBit(Filename: string);
-var
-  Buffer: string;
-  Stream: TStream;
-begin
-  Filename := ExpandConstant(Filename);
-  Log('Setting elevation bit for ' + Filename);
-
-  Stream := TFileStream.Create(FileName, fmOpenReadWrite);
-  try
-    Stream.Seek(21, soFromBeginning);
-    SetLength(Buffer, 1);
-    Stream.ReadBuffer(Buffer, 1);
-    Buffer[1] := Chr(Ord(Buffer[1]) or $20);
-    Stream.Seek(-1, soFromCurrent);
-    Stream.WriteBuffer(Buffer, 1);
-  finally
-    Stream.Free;
-  end;
-end;
-
 function IsChineseSimplified: Boolean;
 begin
   Result := ActiveLanguage = 'chinesesimplified';
+end;
+
+function ShouldInstallUSBDriver: Boolean;
+begin
+  Result := not WizardSilent or (ExpandConstant('{param:USBDRIVER|0}') = '1');
 end;
 
 // Helper function to find a process by name

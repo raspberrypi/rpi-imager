@@ -23,18 +23,20 @@ set(ENABLE_LZO OFF CACHE BOOL "")
 set(ENABLE_LIBB2 OFF CACHE BOOL "")
 set(ENABLE_LIBXML2 OFF CACHE BOOL "")
 set(ENABLE_EXPAT OFF CACHE BOOL "")
+set(ENABLE_BSDXML OFF CACHE BOOL "")
 set(ENABLE_PCREPOSIX OFF CACHE BOOL "")
 set(ENABLE_PCRE2POSIX OFF CACHE BOOL "")
 set(ENABLE_LIBGCC OFF CACHE BOOL "")
 set(ENABLE_TAR OFF CACHE BOOL "")
 set(ENABLE_CPIO OFF CACHE BOOL "")
 set(ENABLE_CAT OFF CACHE BOOL "")
+set(ENABLE_UNZIP OFF CACHE BOOL "")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 set(ARCHIVE_BUILD_STATIC_LIBS ON CACHE BOOL "")
 set(ARCHIVE_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(ENABLE_ZSTD ON CACHE BOOL "")
 set(POSIX_REGEX_LIB "libc" CACHE STRING "" FORCE)
-set(LIBARCHIVE_VERSION "3.8.7")
+set(LIBARCHIVE_VERSION "3.8.11")
 
 rpi_imager_fetch_git_or_vendor(libarchive
     VENDOR_DIR libarchive
@@ -45,9 +47,33 @@ rpi_imager_fetch_git_or_vendor(libarchive
 FetchContent_GetProperties(libarchive)
 if(NOT libarchive_POPULATED)
     FetchContent_Populate(libarchive)
-    rpi_imager_patch_libarchive("${libarchive_SOURCE_DIR}")
+    # libarchive links probes against libzstd.a, which is not built until after
+    # configure, so they would fail. CHECK_FUNCTION_EXISTS skips a result that
+    # is already defined; answering here leaves the submodule unmodified.
+    set(HAVE_LIBZSTD 1)
+    set(HAVE_ZSTD_compressStream 1)
+    set(HAVE_ZSTD_minCLevel 1)
+    # libarchive before 3.8.11 cached these as probe results, and 3.8.11 sets
+    # them only with ENABLE_CNG. A tree configured against the older one keeps
+    # them TRUE without the ARCHIVE_CRYPTO_WIN they now need, and
+    # archive_digest.c fails to compile.
+    foreach(_alg MD5 SHA1 SHA256 SHA384 SHA512)
+        unset(ARCHIVE_CRYPTO_${_alg}_WIN CACHE)
+    endforeach()
     add_subdirectory(${libarchive_SOURCE_DIR} ${libarchive_BINARY_DIR} EXCLUDE_FROM_ALL)
+    unset(HAVE_LIBZSTD)
+    unset(HAVE_ZSTD_compressStream)
+    unset(HAVE_ZSTD_minCLevel)
 endif()
+rpi_imager_sbom_add_component(libarchive
+    VERSION "${LIBARCHIVE_VERSION}"
+    SUPPLIER "libarchive project"
+    VCS_URL "https://github.com/libarchive/libarchive.git"
+    GIT_TAG "v${LIBARCHIVE_VERSION}"
+    SOURCE_DIR "${libarchive_SOURCE_DIR}"
+    LICENSE "BSD-2-Clause"
+    PURL "pkg:github/libarchive/libarchive@v${LIBARCHIVE_VERSION}"
+    CPE "cpe:2.3:a:libarchive:libarchive:${LIBARCHIVE_VERSION}:*:*:*:*:*:*:*")
 
 if (TARGET archive_static AND TARGET ZLIB::ZLIB)
     add_dependencies(archive_static ZLIB::ZLIB)
@@ -75,12 +101,14 @@ unset(ENABLE_LZO)
 unset(ENABLE_LIBB2)
 unset(ENABLE_LIBXML2)
 unset(ENABLE_EXPAT)
+unset(ENABLE_BSDXML)
 unset(ENABLE_PCREPOSIX)
 unset(ENABLE_PCRE2POSIX)
 unset(ENABLE_LIBGCC)
 unset(ENABLE_TAR)
 unset(ENABLE_CPIO)
 unset(ENABLE_CAT)
+unset(ENABLE_UNZIP)
 unset(ARCHIVE_BUILD_STATIC_LIBS)
 unset(ENABLE_ZSTD)
 set(LibArchive_FOUND true CACHE BOOL "" FORCE)

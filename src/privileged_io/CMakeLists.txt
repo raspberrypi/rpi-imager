@@ -1,0 +1,314 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (C) 2026 Raspberry Pi Ltd
+#
+# Privileged I/O Platform Abstraction Layer.
+#
+# Builds a static library `privileged_io` that gets linked into:
+#   - the unprivileged client (rpi-imager)
+#   - the privileged helper (rpi-imager-writer, future)
+#   - test executables
+#
+# The library is intentionally Qt-free (per design doc §8a) so that the
+# helper-side use case can be ported to Rust without dragging Qt out of
+# the codebase first.
+
+# -----------------------------------------------------------------------
+# Protobuf
+# -----------------------------------------------------------------------
+
+# Vendor protobuf via FetchContent, matching the project convention for
+# all major C/C++ dependencies (libcurl, libarchive, zstd, xz, zlib).
+#
+# Why vendor rather than rely on a system install:
+#   * macOS ships universal (arm64+x86_64) binaries. Homebrew only
+#     installs protobuf for the host arch, so a universal link fails
+#     to find the cross-arch libraries.
+#   * Pinning the version isolates us from upstream protobuf API churn.
+#   * Matches the pattern documented in CLAUDE.md.
+#
+# Abseil is fetched first, at the release protobuf pins in
+# cmake/dependencies.cmake: protobuf then uses these targets instead of a
+# system Abseil or its own unpinned fetch.
+include(FetchContent)
+
+set(PROTOBUF_TAG "v36.2")
+# The C++ runtime's own version, which NVD's protobuf-cpp CPE uses.
+set(PROTOBUF_CPP_VERSION "7.36.2")
+set(ABSEIL_VERSION "20250512.1")
+
+# Inherited from src/, it puts absl/time on the include path, where its
+# time.h shadows the C library's.
+set(CMAKE_INCLUDE_CURRENT_DIR OFF)
+# Neither is in the coverage report, and GCC refuses protobuf's musttail
+# calls under --coverage at -O0.
+get_directory_property(_rpi_compile_options COMPILE_OPTIONS)
+set(_rpi_dep_options ${_rpi_compile_options})
+list(REMOVE_ITEM _rpi_dep_options --coverage -fprofile-update=atomic
+     -fprofile-instr-generate -fcoverage-mapping)
+set_directory_properties(PROPERTIES COMPILE_OPTIONS "${_rpi_dep_options}")
+set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
+set(ABSL_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(ABSL_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    abseil-cpp
+    GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+    GIT_TAG ${ABSEIL_VERSION}
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(abseil-cpp)
+
+set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(protobuf_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(protobuf_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(protobuf_INSTALL OFF CACHE BOOL "" FORCE)
+set(protobuf_BUILD_PROTOC_BINARIES ON CACHE BOOL "" FORCE)
+set(protobuf_BUILD_LIBPROTOC ON CACHE BOOL "" FORCE)
+set(protobuf_MSVC_STATIC_RUNTIME OFF CACHE BOOL "" FORCE)
+set(protobuf_DISABLE_RTTI OFF CACHE BOOL "" FORCE)
+set(protobuf_WITH_ZLIB OFF CACHE BOOL "" FORCE)
+set(protobuf_LOCAL_DEPENDENCIES_ONLY ON CACHE BOOL "" FORCE)
+
+# Minor warning hygiene: protobuf's generated code triggers strict
+# warnings; we suppress at the consumer level (target_compile_options
+# below) rather than disabling the project-wide flags here.
+
+FetchContent_Declare(
+    protobuf
+    GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
+    GIT_TAG ${PROTOBUF_TAG}
+    GIT_SHALLOW TRUE
+    PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/PatchProtobufMusttail.cmake
+)
+FetchContent_MakeAvailable(protobuf)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set_directory_properties(PROPERTIES COMPILE_OPTIONS "${_rpi_compile_options}")
+# Only the libprotobuf runtime ships; protoc is a build tool. The macOS helper
+# does not link this library.
+set(_protobuf_users rpi-imager)
+if(NOT APPLE)
+    list(APPEND _protobuf_users rpi-imager-writer)
+endif()
+string(REGEX REPLACE "^v" "" _protobuf_release "${PROTOBUF_TAG}")
+rpi_imager_sbom_add_component(protobuf
+    NAME "Protocol Buffers (libprotobuf)"
+    VERSION "${_protobuf_release}"
+    SUPPLIER "Google LLC"
+    VCS_URL "https://github.com/protocolbuffers/protobuf.git"
+    GIT_TAG "${PROTOBUF_TAG}"
+    SOURCE_DIR "${protobuf_SOURCE_DIR}"
+    LICENSE "BSD-3-Clause"
+    PURL "pkg:github/protocolbuffers/protobuf@${PROTOBUF_TAG}"
+    CPE "cpe:2.3:a:google:protobuf-cpp:${PROTOBUF_CPP_VERSION}:*:*:*:*:*:*:*"
+    ORIGIN "fetched from git at configure time"
+    USED_BY ${_protobuf_users})
+rpi_imager_sbom_add_component(abseil-cpp
+    NAME "Abseil C++"
+    VERSION "${ABSEIL_VERSION}"
+    SUPPLIER "Google LLC"
+    VCS_URL "https://github.com/abseil/abseil-cpp.git"
+    GIT_TAG "${ABSEIL_VERSION}"
+    SOURCE_DIR "${abseil-cpp_SOURCE_DIR}"
+    LICENSE "Apache-2.0"
+    PURL "pkg:github/abseil/abseil-cpp@${ABSEIL_VERSION}"
+    CPE "cpe:2.3:a:abseil:common_libraries:${ABSEIL_VERSION}:*:*:*:*:*:*:*"
+    ORIGIN "fetched from git at configure time"
+    USED_BY protobuf)
+rpi_imager_sbom_add_component(utf8-range
+    NAME "utf8_range"
+    VERSION "${_protobuf_release}"
+    SUPPLIER "Google LLC"
+    VCS_URL "https://github.com/protocolbuffers/protobuf.git"
+    GIT_TAG "${PROTOBUF_TAG}"
+    LICENSE "MIT"
+    ORIGIN "third_party/utf8_range in the protobuf source"
+    USED_BY protobuf)
+
+# Provide a clean alias for the runtime library, matching the namespace
+# used by modern config-mode protobuf (so call sites can write
+# `protobuf::libprotobuf` regardless of how protobuf was acquired).
+if(NOT TARGET protobuf::libprotobuf)
+    add_library(protobuf::libprotobuf ALIAS libprotobuf)
+endif()
+if(NOT TARGET protobuf::protoc)
+    add_executable(protobuf::protoc ALIAS protoc)
+endif()
+
+set(PROTO_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/proto/imager.proto
+)
+
+# Run protoc as a custom command: the `protoc` target is reachable directly,
+# whether or not `protobuf_generate` is.
+set(PROTO_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR})
+set(PROTO_GENERATED_HDR ${PROTO_GENERATED_DIR}/proto/imager.pb.h)
+set(PROTO_GENERATED_SRC ${PROTO_GENERATED_DIR}/proto/imager.pb.cc)
+
+add_custom_command(
+    OUTPUT  ${PROTO_GENERATED_HDR} ${PROTO_GENERATED_SRC}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTO_GENERATED_DIR}/proto
+    COMMAND $<TARGET_FILE:protoc>
+            --cpp_out=${PROTO_GENERATED_DIR}
+            --proto_path=${CMAKE_CURRENT_SOURCE_DIR}
+            ${PROTO_FILES}
+    DEPENDS protoc ${PROTO_FILES}
+    COMMENT "Generating C++ from imager.proto"
+    VERBATIM
+)
+
+# -----------------------------------------------------------------------
+# Library target
+# -----------------------------------------------------------------------
+
+set(PRIVILEGED_IO_SOURCES
+    privileged_writer.h
+    factory.cpp
+    backends/in_process_test.h
+    backends/in_process_test.cpp
+    backends/fault_injecting.h
+    backends/fault_injecting.cpp
+    # Named-pipe transport framing (§14.3). Qt-free and platform-agnostic;
+    # used by the Windows backend and shared with the helper.
+    wire/frame.h
+    wire/frame.cpp
+    ${PROTO_GENERATED_SRC}
+    ${PROTO_GENERATED_HDR}
+)
+
+# Native Windows privileged backend (§14). Omitted when
+# RPI_IMAGER_DISABLE_WINDOWS_HELPER is set; otherwise Windows uses the
+# LocalShimBackend when the helper path is opted out.
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+    list(APPEND PRIVILEGED_IO_SOURCES
+        backends/windows_uac.h
+        backends/windows_uac.cpp
+        wire/win_shared_memory.h
+        wire/win_shared_memory.cpp
+        wire/win_pipe_stream.h
+        wire/win_pipe_stream.cpp
+        wire/drive_descriptor_json.h
+        wire/drive_descriptor_json.cpp
+        wire/duplex_stream.h
+        wire/duplex_connection.h
+        wire/duplex_connection.cpp
+        wire/server_message.h
+        wire/server_message.cpp
+        wire/protocol.h
+    )
+endif()
+
+# Linux backends (phase 2). LinuxEmbedded is always built on Linux (root
+# in-process path). LinuxPolkit + socket transport are omitted when
+# RPI_IMAGER_DISABLE_LINUX_HELPER is set.
+if(UNIX AND NOT APPLE)
+    list(APPEND PRIVILEGED_IO_SOURCES
+        backends/linux_embedded.h
+        backends/linux_embedded.cpp
+        wire/linux_shared_memory.h
+        wire/linux_shared_memory.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/helper_maintenance.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/sha256.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/sha256.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../dependencies/yescrypt/insecure_memzero.c
+    )
+    if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+        list(APPEND PRIVILEGED_IO_SOURCES
+            backends/linux_polkit.h
+            backends/linux_polkit.cpp
+            wire/linux_socket_io.h
+            wire/linux_socket_io.cpp
+            wire/linux_socket_stream.h
+            wire/linux_socket_stream.cpp
+            wire/drive_descriptor_json.h
+            wire/drive_descriptor_json.cpp
+            wire/duplex_stream.h
+            wire/duplex_connection.h
+            wire/duplex_connection.cpp
+            wire/server_message.h
+            wire/server_message.cpp
+            wire/protocol.h
+        )
+    endif()
+endif()
+
+if(APPLE)
+    list(APPEND PRIVILEGED_IO_SOURCES
+        backends/macos_xpc.h
+        backends/macos_xpc.mm
+        # The protocol header + constants are shared with the helper
+        # binary (under src/writer/). Compiling the .m file into both
+        # targets gives each process its own copy of the constant; the
+        # alternative would be a third tiny shared library. Two
+        # compilations of a one-line .m is the cheaper option.
+        ../writer/server/mac/RpiImagerWriterProtocol.h
+        ../writer/server/mac/RpiImagerWriterProtocol.m
+    )
+endif()
+
+add_library(privileged_io STATIC ${PRIVILEGED_IO_SOURCES})
+
+if(APPLE)
+    # The XPC backend uses NSXPC (Foundation) and SMAppService for
+    # helper installation. ServiceManagement (the framework that
+    # provides SMAppService on macOS 13+) lives alongside Foundation;
+    # both are platform-native, not Qt - this does not violate §8a.
+    target_link_libraries(privileged_io PUBLIC
+        "-framework Foundation"
+        "-framework ServiceManagement"
+    )
+    target_compile_options(privileged_io PRIVATE -fobjc-arc)
+    target_include_directories(privileged_io PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+endif()
+
+# Generated protobuf headers live in the binary dir; consumers need both
+# the source dir (for privileged_writer.h) and the binary dir (for
+# proto/imager.pb.h).
+target_include_directories(privileged_io
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_link_libraries(privileged_io
+    PUBLIC
+        protobuf::libprotobuf
+)
+
+# The Windows backend launches the elevated helper (ShellExecuteExW -> shell32)
+# and mints a unique pipe-name GUID (CoCreateGuid/StringFromGUID2 -> ole32).
+#
+# The RPI_IMAGER_ENABLE_WINDOWS_HELPER define is PRIVATE so it reaches the
+# factory here but does NOT propagate to every consumer. The client adapter
+# selection (in the main app's file_operations_windows.cpp) is enabled by the
+# main app defining it on itself; the helper target deliberately does not, so
+# the helper never pulls in the client-side adapter. The shell32/ole32 link
+# deps stay PUBLIC so the final client executable resolves them.
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+    target_compile_definitions(privileged_io PRIVATE RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+    target_link_libraries(privileged_io PUBLIC shell32 ole32)
+    target_include_directories(privileged_io PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+endif()
+
+if(UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+    target_compile_definitions(privileged_io PRIVATE RPI_IMAGER_ENABLE_LINUX_HELPER)
+    target_include_directories(privileged_io PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+endif()
+
+target_compile_features(privileged_io PUBLIC cxx_std_20)
+
+# Strict warnings - this is new code; keep it clean.
+if(MSVC)
+    target_compile_options(privileged_io PRIVATE /W4)
+else()
+    target_compile_options(privileged_io PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Generated protobuf code triggers strict-warning noise; relax for the
+# library as a whole rather than per-file (since `protobuf_generate` doesn't
+# expose the file list in a way we can attach properties to).
+if(NOT MSVC)
+    target_compile_options(privileged_io PRIVATE
+        -Wno-unused-parameter
+    )
+endif()

@@ -353,7 +353,8 @@ ListView {
             if (value === undefined || value === null) {
                 if (roleName === "url" || roleName === "icon" || roleName === "subitems_json" || 
                     roleName === "extract_sha256" || roleName === "init_format" || roleName === "release_date" ||
-                    roleName === "tooltip" || roleName === "website" || roleName === "architecture") {
+                    roleName === "tooltip" || roleName === "website" || roleName === "architecture" ||
+                    roleName === "eula_url") {
                     value = ""
                 } else if (roleName === "image_download_size" || roleName === "extract_size") {
                     value = 0

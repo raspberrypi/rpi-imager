@@ -592,6 +592,27 @@ if [ -n "$SO_FILES" ]; then
     strip --strip-unneeded $SO_FILES 2>/dev/null || true
 fi
 
+# SBOM: the build's component list plus everything vendored under /opt,
+# hashed once stripped. The fonts are copied above rather than linked, so
+# they are described here.
+SBOM_DIR="$DEBDIR/usr/share/doc/rpi-imager-embedded/sbom"
+SBOM_EXTRA="$BUILD_DIR/sbom/embedded-fonts.tsv"
+_fonts="opt/rpi-imager-embedded/share/fonts/truetype"
+{
+    printf '%s\t%s\t\t%s\t\t%s\n' \
+        "$_fonts/dejavu/DejaVuSans.ttf" "DejaVu fonts" "DejaVu fonts project" "Bitstream-Vera" \
+        "$_fonts/dejavu/DejaVuSans-Bold.ttf" "DejaVu fonts" "DejaVu fonts project" "Bitstream-Vera" \
+        "$_fonts/freefont/FreeSans.ttf" "GNU FreeFont" "GNU Project" "GPL-3.0-or-later WITH Font-exception-2.0" \
+        "$_fonts/roboto/Roboto-Regular.ttf" "Roboto" "Google LLC" "Apache-2.0" \
+        "$_fonts/roboto/Roboto-Bold.ttf" "Roboto" "Google LLC" "Apache-2.0" \
+        "$_fonts/roboto/Roboto-Light.ttf" "Roboto" "Google LLC" "Apache-2.0"
+    if [ "$INCLUDE_CJK_FONTS" -eq 1 ]; then
+        printf '%s\t%s\t\t%s\t\t%s\n' \
+            "$_fonts/droid/DroidSansFallbackFull.ttf" "Droid Sans Fallback" "Google LLC" "Apache-2.0"
+    fi
+} > "$SBOM_EXTRA"
+sbom_package_tree "$DEBDIR" "$PWD/$BUILD_DIR" "$SBOM_DIR" "$SBOM_EXTRA" || exit 1
+
 # ---------------------------------------------------------------------------
 # Assemble the .deb via debhelper, so debian/control is the single source of
 # the package metadata (Depends, version, description) and md5sums are
@@ -629,6 +650,7 @@ _out=$(ls "$TOP"/${_pkg}_*_"${DEB_ARCH}".deb 2>/dev/null | head -1)
 if [ -n "$_out" ] && [ -f "$_out" ]; then
     echo ""
     echo "Embedded .deb created: $_out"
+    sbom_publish_beside "$DEBDIR" "$PWD/$BUILD_DIR" "$_out" || exit 1
     echo "Embedded .deb build completed successfully for $ARCH."
     echo "Install with: sudo dpkg -i $(basename "$_out")"
 else

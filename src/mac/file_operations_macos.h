@@ -87,6 +87,7 @@ class MacOSFileOperations : public FileOperations {
   bool SetAsyncQueueDepth(int depth) override;
   int GetAsyncQueueDepth() const override { return async_queue_depth_; }
   bool IsAsyncIOSupported() const override { return true; }
+
   FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
                                   AsyncWriteCallback callback = nullptr) override;
   int GetPendingWriteCount() const override { return pending_writes_.load(); }

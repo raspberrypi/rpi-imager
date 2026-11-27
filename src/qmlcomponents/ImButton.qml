@@ -47,7 +47,7 @@ Button {
     Accessible.role: Accessible.Button
     Accessible.name: CommonStrings.controlAccessibleName(text, accessibleDescription, enabled)
     Accessible.description: ""
-    Accessible.onPressAction: clicked()
+    Accessible.onPressAction: if (control.enabled) control.clicked()
     
     Keys.onEnterPressed: clicked()
     Keys.onReturnPressed: clicked()

@@ -59,6 +59,7 @@ protected:
     // ninety seconds of real waiting each, which no suite can sit through.
     // RingBuffer's constructor already takes this -- nothing here passed it.
     uint32_t _stallTimeoutMs;
+    size_t _writeSlots = 0;  // write ring-buffer slot count (for rebuild)
     _extractThreadClass *_extractThread;
     
     // Zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
@@ -108,6 +109,7 @@ protected:
 
     virtual void _onDevicePrepared() override;
     virtual size_t _writeData(const char *buf, size_t len) override;
+    size_t _maxWriteChunkHint() const override { return _writeBufferSize; }
     virtual void _onDownloadSuccess() override;
     virtual void _onDownloadError(const QString &msg) override;
     void _emitProgressUpdate();

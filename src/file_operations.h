@@ -12,9 +12,14 @@
 #include <memory>
 #include <functional>
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <vector>
+
+// Supplies RingBuffer slot memory; see write_buffer_provider.h. Declared at
+// global scope to match RingBuffer (which is not namespaced).
+class WriteBufferProvider;
 
 namespace rpi_imager {
 
@@ -181,6 +186,28 @@ class FileOperations {
   // Completion callback for async writes
   using AsyncWriteCallback = std::function<void(FileError result, std::size_t bytes_written)>;
   
+  // Optional hint: the maximum size of a single sequential write the caller
+  // will submit (e.g. the producer's ring-buffer slot size). Backends that
+  // pre-map I/O buffers (the macOS helper's shared-memory ring) use this to
+  // size their slots to the actual write size instead of assuming a
+  // worst-case maximum. No-op by default; safe to ignore. Call before
+  // SetAsyncQueueDepth().
+  virtual void SetMaxWriteSizeHint(std::size_t bytes) { (void)bytes; }
+
+  // Optionally supply the memory provider for the producer's write ring
+  // buffer. A backend that pre-maps device-write memory (the macOS helper's
+  // shared-memory bulk ring) can return a provider whose slots live in that
+  // memory, letting the producer fill it directly so the write path needs no
+  // copy. Returns nullptr by default, in which case the caller uses an
+  // aligned-heap provider (unchanged behaviour).
+  //
+  // Note: a zero-copy provider generally requires the device to be open (a
+  // write session established) before the region can be mapped, so callers
+  // should create/rebuild the write ring after OpenDevice().
+  virtual std::shared_ptr<WriteBufferProvider> CreateWriteBufferProvider() {
+    return nullptr;
+  }
+
   // Configure async I/O queue depth (1 = synchronous, >1 = async with that many in-flight)
   // Must be called before writes. Returns false if async I/O is not supported.
   virtual bool SetAsyncQueueDepth(int depth) = 0;
@@ -282,12 +309,48 @@ class FileOperations {
     write_latency_stats_.reset();
   }
 
+  // Zero-copy write observability. For backends that can write directly from
+  // caller/producer memory (e.g. the macOS helper's shared-memory ring),
+  // reports whether the zero-copy path was used this session and how many
+  // async submits took the zero-copy vs the buffer-copy path. Default: the
+  // backend has no distinct zero-copy path (engaged=false, counts 0).
+  virtual void GetZeroCopyWriteStats(bool& engaged,
+                                     std::uint64_t& zeroCopySubmits,
+                                     std::uint64_t& copySubmits) const {
+    engaged = false;
+    zeroCopySubmits = 0;
+    copySubmits = 0;
+  }
+
   // Device I/O limits discovered from the storage hardware.
   // Used to size write buffers and async queue depth to match device capabilities.
   // Zero values mean "unknown" — callers should fall back to their own heuristics.
   struct DeviceIOLimits {
     size_t max_transfer_bytes = 0;   // Max single I/O request size in bytes (0 = unknown)
     int suggested_queue_depth = 0;   // Device/bus-informed queue depth limit (0 = unknown)
+    // O_DIRECT offsets and lengths must be multiples of this: 4096 on a
+    // drive with 4K native sectors (0 = unknown).
+    std::uint32_t logical_block_size = 0;
+
+    std::uint32_t blockSizeOr512() const {
+      return logical_block_size ? logical_block_size : 512;
+    }
+
+    // Cap a requested async pipeline depth using the same 3× device rule as
+    // DownloadThread (see #1592). No-op when suggested_queue_depth is unknown.
+    int capAsyncQueueDepth(int requested_depth) const {
+      if (requested_depth <= 1) {
+        return requested_depth;
+      }
+      int depth = requested_depth;
+      if (suggested_queue_depth > 0) {
+        const int device_cap = std::max(4, suggested_queue_depth * 3);
+        if (device_cap < depth) {
+          depth = device_cap;
+        }
+      }
+      return depth;
+    }
   };
 
  protected:
@@ -307,6 +370,84 @@ class FileOperations {
   // Prepare for sequential read (e.g., verification)
   // Invalidates cache and enables read-ahead hints for optimal sequential read performance
   virtual void PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) = 0;
+
+  // Result of FastVerifySha256.
+  //   supported=false  - this implementation has no fast path; caller should
+  //                      read the device and hash client-side as before
+  //   supported=true,
+  //   error=kSuccess   - digest is the 32-byte SHA-256 of (prefix || device range)
+  //   supported=true,
+  //   error=other      - implementation tried and failed (real I/O error)
+  struct FastVerifyResult {
+    bool        supported = false;
+    FileError   error = FileError::kSuccess;
+    std::string digest;  // raw 32-byte SHA-256 on success
+  };
+
+  // Helper-side per-session telemetry. macOS XpcFileOperations populates
+  // this from the rpi-imager-writer's closeSession reply (§7a); other
+  // implementations leave `valid = false`. Read after Close() succeeds.
+  struct HelperSessionStats {
+    bool          valid = false;
+    std::uint64_t bytes_written = 0;
+    std::uint64_t duration_ms = 0;
+    std::uint32_t write_count = 0;
+    std::uint32_t min_write_latency_us = 0;
+    std::uint32_t avg_write_latency_us = 0;
+    std::uint32_t max_write_latency_us = 0;
+    std::uint64_t total_fsync_us = 0;
+    std::uint32_t fsync_count = 0;
+    std::uint64_t prepare_device_us = 0;
+    std::uint64_t hash_device_us = 0;
+    // §7a per-write latency histogram. write_latency_bucket_upper_us[i] is the
+    // inclusive upper edge (microseconds, final = UINT64_MAX) and
+    // write_latency_bucket_counts[i] the sample count for bucket i. Equal
+    // length, or both empty when the backend reported no buckets.
+    std::vector<std::uint64_t> write_latency_bucket_upper_us;
+    std::vector<std::uint64_t> write_latency_bucket_counts;
+  };
+
+  // Returns whatever was captured during the most recent Close() (or
+  // an unpopulated struct if the platform has no helper-side telemetry).
+  // Default returns empty so non-helper backends require no change.
+  virtual HelperSessionStats GetLastSessionStats() const { return {}; }
+
+  // Optional fast-path verify: compute SHA-256(prefix || device[offset..offset+length])
+  // *inside* the underlying I/O layer so the data never crosses the IPC
+  // boundary. Returned digest matches what client-side hashing would
+  // produce. Implementations that can't do this (legacy in-process,
+  // tests) return `supported = false`; callers must then fall back to
+  // the read-and-hash loop in DownloadThread::_verify().
+  // `progress` gets the device bytes hashed so far; returning false cancels,
+  // with error kCancelled.
+  using VerifyProgress = std::function<bool(std::uint64_t)>;
+  virtual FastVerifyResult FastVerifySha256(const std::uint8_t* /*prefix*/,
+                                              std::size_t /*prefix_len*/,
+                                              std::uint64_t /*device_offset*/,
+                                              std::uint64_t /*length*/,
+                                              const VerifyProgress& /*progress*/ = {}) {
+    return {};  // supported=false, default
+  }
+
+  // Pre-image scrub: zero the first MB and (optionally) the last MB of the
+  // device, then fsync. Returns kSuccess if both succeeded.
+  //
+  // The default implementation runs the legacy in-process sequence
+  // (Seek + WriteSequential + Flush + ForceSync) so platforms with a
+  // direct fd path keep their existing behaviour. Implementations whose
+  // writes route through a privileged helper (e.g. XpcFileOperations on
+  // macOS) override this to delegate the scrub *inside* the helper as a
+  // single transaction, which avoids races between the unmount/open/zero
+  // sequence and other kernel actors during the prepare window.
+  //
+  // `device_size` is the total device length in bytes, as returned by
+  // GetSize(); used to locate the last MB.
+  // `zero_last_mb=false` skips the end-of-device scrub (used when callers
+  // suspect counterfeit media).
+  //
+  // After this call the file position is reset to 0.
+  virtual FileError PrepareDevice(std::uint64_t device_size,
+                                    bool zero_last_mb = true);
   
   // Get platform-specific file handle (for compatibility with existing code)
   virtual int GetHandle() const = 0;
@@ -366,6 +507,10 @@ class FileOperations {
 
   // Factory method to create platform-specific implementation
   static std::unique_ptr<FileOperations> Create();
+
+  // The platform implementation without the privileged helper, for regular
+  // files: the helpers only open devices.
+  static std::unique_ptr<FileOperations> CreateInProcess();
 };
 
 // The write buffer a device will actually take in one request.

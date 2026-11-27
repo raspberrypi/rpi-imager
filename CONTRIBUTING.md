@@ -191,7 +191,10 @@ sent, which is what lets the bulk transfer tests check a real round trip.
   - During installation, choose the Qt version named by `QT_VERSION_DEFAULT` in [qt/qt-build-common.sh](./qt/qt-build-common.sh), with the Mingw64 64-bit toolchain. Any newer Qt 6 that satisfies the `find_package(Qt6 ...)` minimum in `src/CMakeLists.txt` will also configure.
 - For building the installer, install Inno Setup 6.5 or later 6.x (Inno Setup 7 is not yet supported): https://jrsoftware.org/isdl.php
 - Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
-- It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
+- Install the **Windows 10 SDK** (provides `signtool.exe` for Authenticode signing).
+- A **code signing certificate** is required for redistribution (`-DIMAGER_SIGNED_APP=ON`).
+  For local testing of the experimental Windows privileged helper, a self-signed
+  cert is sufficient — see [`doc/windows-privileged-helper-dev.md`](doc/windows-privileged-helper-dev.md).
 
 #### Building
 
@@ -203,6 +206,8 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
   - `-DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64` - or the equivalent path you installed mingw64 to.
   - `-DENABLE_INNO_INSTALLER=ON` - to enable the Inno Setup installer, rather than the legacy NSIS installer.
   - `-DIMAGER_SIGNED_APP=ON` - to enable code signing for redistribution.
+  - Privileged helpers (`rpi-imager-writer`) are built by default on Windows and Linux. Use `-DRPI_IMAGER_DISABLE_WINDOWS_HELPER=ON` or `-DRPI_IMAGER_DISABLE_LINUX_HELPER=ON` to omit them. The helper path is the default at runtime; opt out with `RPI_IMAGER_USE_LEGACY_INPROCESS=1` or `RPI_IMAGER_USE_WINDOWS_HELPER=0` / `RPI_IMAGER_USE_LINUX_HELPER=0`. On Linux, running as root uses the embedded in-process path. See [doc/linux-appimage-signing.md](doc/linux-appimage-signing.md) for AppImage GPG signing and peer auth.
+  - `-DRPI_IMAGER_SIGNER_ORG="Your Org"` - when using a dev code-signing cert; must match cert `O=` (see dev signing doc). Thumbprints are auto-discovered on Windows when this matches a cert in your store.
 - In the CMake plugin tab, ensure you have selected the `MinSizeRel` variant if you intend to distribute to others.
 - In the CMake plugin tab, select the 'inno_installer' target, and build it
 - Your resultant installer will be located in `%WORKSPACE%\build\installer`
@@ -233,7 +238,7 @@ Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a
   - `-DIMAGER_NOTARIZE_KEYCHAIN_PROFILE=notarytool-password` - specify the name of the keychain item containing your Apple ID credentials for notarizing.
 - In the CMake plugin tab, ensure you have selected the `MinSizeRel` variant if you intend to distribute to others.
 - In the CMake plugin tab, select the 'rpi_imager' target, and build it
-- Your resultant DMG will be located at `$WORKSPACE/build/Raspberry Pi Imager-$VERSION.dmg`
+- Your resultant DMG will be located at `$WORKSPACE/build/imager_$VERSION.dmg` (the version without its leading `v`)
 
 ### Linux embedded (netboot) build
 

@@ -21,6 +21,7 @@
 #include <catch2/catch_session.hpp>
 
 #include "fastboot/sparse_encoder.h"
+#include "fastboot/write_manifest.h"
 
 #include "fastbootflashthread.h"
 #include "fastboot/fastboot_protocol.h"
@@ -79,6 +80,7 @@ public:
     using FastbootFlashThread::registerWithConnect;
     using FastbootFlashThread::setConnectRegistration;
     using FastbootFlashThread::runImpl;
+    using FastbootFlashThread::verifyWrite;
     using FastbootFlashThread::run;
 };
 
@@ -2340,4 +2342,116 @@ TEST_CASE("With no Connect key the device is not registered", "[fastboot][connec
     fastboot::FastbootProtocol fb;
     CHECK_NOTHROW(t.registerWithConnect(fb, mock));
     CHECK(mock.capturedBulkWrites().empty());
+}
+
+// ══════════════════════════════════════════════════════════════
+// Device-side verification of the write
+//
+// After the last segment the device reads each written range back and
+// hashes it ("oem bmap-verify"). A mismatch must fail the write the way the
+// block path does; a gadget too old to verify must not.
+// ══════════════════════════════════════════════════════════════
+
+namespace {
+
+fastboot::WriteManifest twoRangeManifest()
+{
+    fastboot::WriteManifest m(4096, 2);
+    const std::vector<uint8_t> block(4096, 0x11);
+    for (uint64_t i = 0; i < 3; ++i)
+        m.addBlock(i, block, true);
+    m.finish();
+    return m;
+}
+
+void queueRangesAccepted(MockUsbTransport& mock, size_t size)
+{
+    char hex[9];
+    snprintf(hex, sizeof(hex), "%08x", static_cast<unsigned>(size));
+    const std::string data = std::string("DATA") + hex;
+    mock.queueBulkReadResponse({data.begin(), data.end()});
+    mock.queueBulkReadResponse(okay());
+}
+
+} // namespace
+
+TEST_CASE("A verified write reports progress up to every byte written", "[fastboot][verify]")
+{
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img"))};
+    SignalLog log;
+    log.attach(&t);
+    std::vector<std::pair<quint64, quint64>> progress;
+    QObject::connect(&t, &FastbootFlashThread::verifyProgress,
+                     [&](quint64 now, quint64 total) { progress.emplace_back(now, total); });
+
+    const auto manifest = twoRangeManifest();
+    MockUsbTransport mock;
+    queueRangesAccepted(mock, manifest.serialize().size());
+    mock.queueBulkReadResponse(okay("bmap loaded: 2 ranges"));
+    const std::string info0 = "INFOverifying range 0/2 (blocks 0-1)";
+    const std::string info1 = "INFOverifying range 1/2 (blocks 2-2)";
+    mock.queueBulkReadResponse({info0.begin(), info0.end()});
+    mock.queueBulkReadResponse({info1.begin(), info1.end()});
+    mock.queueBulkReadResponse(okay("verified 2 ranges ok"));
+
+    fastboot::FastbootProtocol fb;
+    CHECK(t.verifyWrite(fb, mock, manifest));
+    CHECK(log.errors.isEmpty());
+    REQUIRE_FALSE(progress.empty());
+    CHECK(progress.front() == std::make_pair<quint64, quint64>(0, 3 * 4096));
+    CHECK(std::find(progress.begin(), progress.end(),
+                    std::make_pair<quint64, quint64>(2 * 4096, 3 * 4096)) != progress.end());
+    CHECK(progress.back() == std::make_pair<quint64, quint64>(3 * 4096, 3 * 4096));
+}
+
+TEST_CASE("A write the device reads back differently fails", "[fastboot][verify][negative]")
+{
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img"))};
+    SignalLog log;
+    log.attach(&t);
+
+    const auto manifest = twoRangeManifest();
+    MockUsbTransport mock;
+    queueRangesAccepted(mock, manifest.serialize().size());
+    mock.queueBulkReadResponse(okay("bmap loaded: 2 ranges"));
+    mock.queueBulkReadResponse(fail("1:" + std::string(64, 'a') + ":" + std::string(64, 'b')));
+
+    fastboot::FastbootProtocol fb;
+    CHECK_FALSE(t.verifyWrite(fb, mock, manifest));
+    REQUIRE(log.errors.size() == 1);
+    CHECK_THAT(log.errors.front().toStdString(), ContainsSubstring("Verifying write failed"));
+}
+
+TEST_CASE("A gadget that cannot verify lets the write stand", "[fastboot][verify]")
+{
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img"))};
+    SignalLog log;
+    log.attach(&t);
+
+    const auto manifest = twoRangeManifest();
+    MockUsbTransport mock;
+    queueRangesAccepted(mock, manifest.serialize().size());
+    mock.queueBulkReadResponse(fail("Unknown OEM command."));
+
+    fastboot::FastbootProtocol fb;
+    CHECK(t.verifyWrite(fb, mock, manifest));
+    CHECK(log.errors.isEmpty());
+}
+
+TEST_CASE("A device that cannot read its storage back fails the write", "[fastboot][verify][negative]")
+{
+    TestableFlashThread t{QUrl(QStringLiteral("https://example.invalid/os.img"))};
+    SignalLog log;
+    log.attach(&t);
+
+    const auto manifest = twoRangeManifest();
+    MockUsbTransport mock;
+    queueRangesAccepted(mock, manifest.serialize().size());
+    mock.queueBulkReadResponse(okay("bmap loaded: 2 ranges"));
+    mock.queueBulkReadResponse(fail("bmap-verify: read error at range 0: Input/output error"));
+
+    fastboot::FastbootProtocol fb;
+    CHECK_FALSE(t.verifyWrite(fb, mock, manifest));
+    REQUIRE(log.errors.size() == 1);
+    CHECK_THAT(log.errors.front().toStdString(), ContainsSubstring("Input/output error"));
 }

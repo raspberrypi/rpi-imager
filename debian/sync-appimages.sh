@@ -43,19 +43,25 @@ copy_one() {
 	fi
 
 	cp -f "$src" "$DEST/$(basename "$src")"
+	# The SBOM sidecars travel with the AppImage; stage-appimages.sh needs them.
+	for _fmt in spdx cdx; do
+		if [ -f "$src.$_fmt.json" ]; then
+			cp -f "$src.$_fmt.json" "$DEST/"
+		fi
+	done
 	ln -sfn "$(basename "$src")" "$DEST/$dest_name"
 	echo "sync-appimages: $dest_name -> $DEST/$(basename "$src")"
 }
 
-DESKTOP=$(pick_in_dir "$SRC_DIR" "Raspberry_Pi_Imager-*-desktop-${IMG_ARCH}.AppImage")
-CLI=$(pick_in_dir "$SRC_DIR" "Raspberry_Pi_Imager-*-cli-${IMG_ARCH}.AppImage")
+DESKTOP=$(pick_in_dir "$SRC_DIR" "imager_*_${ARCH}.AppImage")
+CLI=$(pick_in_dir "$SRC_DIR" "imager-cli_*_${ARCH}.AppImage")
 
 # Fall back to files already placed in the cache directory.
 if [ -z "$DESKTOP" ]; then
-	DESKTOP=$(pick_in_dir "$DEST" "Raspberry_Pi_Imager-*-desktop-${IMG_ARCH}.AppImage")
+	DESKTOP=$(pick_in_dir "$DEST" "imager_*_${ARCH}.AppImage")
 fi
 if [ -z "$CLI" ]; then
-	CLI=$(pick_in_dir "$DEST" "Raspberry_Pi_Imager-*-cli-${IMG_ARCH}.AppImage")
+	CLI=$(pick_in_dir "$DEST" "imager-cli_*_${ARCH}.AppImage")
 fi
 
 copy_one desktop "$DESKTOP" "rpi-imager-${IMG_ARCH}.AppImage"

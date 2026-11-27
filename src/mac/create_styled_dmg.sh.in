@@ -10,7 +10,7 @@ APP_NAME="Raspberry Pi Imager"
 PROJECT_NAME="@CMAKE_PROJECT_NAME@"
 SOURCE_APP_PATH="@CMAKE_BINARY_DIR@/${PROJECT_NAME}.app"
 DMG_APP_PATH="@CMAKE_BINARY_DIR@/${APP_NAME}.app"
-FINAL_DMG_PATH="@CMAKE_BINARY_DIR@/${PROJECT_NAME}-@IMAGER_VERSION_STR@.dmg"
+FINAL_DMG_PATH="@CMAKE_BINARY_DIR@/imager_@IMAGER_FILE_VERSION@.dmg"
 DMG_BACKGROUND_PATH="@CMAKE_BINARY_DIR@/dmg_background.png"
 SIGNING_IDENTITY="@IMAGER_SIGNING_IDENTITY@"
 SHOULD_NOTARIZE="@IMAGER_NOTARIZE_APP@"
@@ -47,33 +47,8 @@ echo "Copying app bundle with display name..."
 rm -rf "$DMG_APP_PATH"
 cp -R "$SOURCE_APP_PATH" "$DMG_APP_PATH"
 
-# Deploy Qt dependencies to the copied app bundle
-echo "Deploying Qt dependencies to app bundle..."
-"@CMAKE_COMMAND@" -E echo "Running macdeployqt on: $DMG_APP_PATH"
-
-# Find macdeployqt (it should be in the Qt6_ROOT/bin directory)
-MACDEPLOYQT_PATH="@Qt6_ROOT@/bin/macdeployqt"
-if [ ! -f "$MACDEPLOYQT_PATH" ]; then
-    echo "Error: macdeployqt not found at $MACDEPLOYQT_PATH"
-    echo "Checking alternative locations..."
-    
-    # Try some common Qt installation paths
-    for qt_path in "@QT_DIR@" "@CMAKE_PREFIX_PATH@" "/usr/local/qt6" "/opt/homebrew/opt/qt6"; do
-        if [ -f "$qt_path/bin/macdeployqt" ]; then
-            MACDEPLOYQT_PATH="$qt_path/bin/macdeployqt"
-            echo "Found macdeployqt at: $MACDEPLOYQT_PATH"
-            break
-        fi
-    done
-    
-    if [ ! -f "$MACDEPLOYQT_PATH" ]; then
-        echo "Error: Could not locate macdeployqt"
-        exit 1
-    fi
-fi
-
-echo "Using macdeployqt: $MACDEPLOYQT_PATH"
-"$MACDEPLOYQT_PATH" "$DMG_APP_PATH" -qmldir="@CMAKE_CURRENT_SOURCE_DIR@" -always-overwrite
+# The source bundle was deployed and pruned at build time; deploying again
+# here would restore what the pruning removed.
 
 # Validate and clean up problematic symlinks under QML tree (targets that don't exist or escape the bundle)
 echo "Validating symlinks under QML directory..."
@@ -139,7 +114,39 @@ if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNIN
             echo "Warning: Failed to sign dylib $dylib"
         }
     done
-    
+
+    # Sign the privileged helper executable (rpi-imager-writer).
+    # SMAppService requires the helper to be signed by the same Team ID
+    # as the main app, with hardened runtime enabled. We sign it before
+    # the parent bundle so the bundle's seal includes it.
+    HELPER_PATH="$DMG_APP_PATH/Contents/MacOS/rpi-imager-writer"
+    if [ -f "$HELPER_PATH" ]; then
+        echo "Signing privileged helper: $HELPER_PATH"
+        codesign --force --verify --verbose --sign "$SIGNING_IDENTITY" \
+                 --timestamp --options runtime "$HELPER_PATH" || {
+            echo "Error: Failed to sign privileged helper"
+            exit 1
+        }
+        echo "✓ Privileged helper signed"
+    else
+        echo "Note: no privileged helper found at $HELPER_PATH (skipping)"
+    fi
+fi
+
+# Sealing the bundle covers the SBOM, so it is written between the two
+# signing passes; the main executable and CodeResources change after it.
+"@CMAKE_COMMAND@" -DSBOM_INPUTS="@RPI_IMAGER_SBOM_INPUTS@" \
+    -DSBOM_HASH_ROOT="$DMG_APP_PATH" \
+    -DSBOM_SCAN_ROOT="$DMG_APP_PATH/Contents" \
+    -DSBOM_COPY_DIRS="$DMG_APP_PATH/Contents/Resources/sbom" \
+    -DSBOM_HASH_EXCLUDE="Contents/MacOS/${PROJECT_NAME};Contents/_CodeSignature/CodeResources" \
+    -DSBOM_LIFECYCLE=post-build \
+    -P "@RPI_IMAGER_SBOM_GENERATOR@" || {
+    echo "Error: failed to write the SBOM"
+    exit 1
+}
+
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
     # Sign the main app bundle
     echo "Signing main app bundle: $DMG_APP_PATH"
     
@@ -211,6 +218,70 @@ fi
 
 echo "✓ DMG created successfully: $FINAL_DMG_PATH"
 
+# Sign the DMG container itself if a signing identity is configured.
+# notarytool requires the submission to be signed; without this step
+# notarisation submission fails with "The signature of the binary is
+# invalid".
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
+    echo "Signing DMG container: $FINAL_DMG_PATH"
+    codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$FINAL_DMG_PATH" || {
+        echo "Error: Failed to sign DMG container"
+        exit 1
+    }
+    echo "✓ DMG container signed"
+fi
+
+# Pre-flight notarisation prerequisites check. Catches structural
+# problems before we burn time on a notarytool round-trip.
+preflight_notarisation_ready() {
+    local app="$1"
+    local helper="$app/Contents/MacOS/rpi-imager-writer"
+
+    # 1. App bundle deep-verifies.
+    if ! codesign --verify --deep --strict --verbose=0 "$app" 2>/dev/null; then
+        echo "PREFLIGHT FAIL: bundle does not deep-verify"
+        codesign --verify --deep --strict --verbose=2 "$app" || true
+        return 1
+    fi
+
+    # 2. Helper present + has hardened runtime.
+    if [ ! -f "$helper" ]; then
+        echo "PREFLIGHT FAIL: privileged helper missing at $helper"
+        return 1
+    fi
+    if ! codesign -dvv "$helper" 2>&1 | grep -q "flags=.*runtime"; then
+        echo "PREFLIGHT FAIL: helper not signed with hardened runtime"
+        codesign -dvv "$helper" 2>&1 | head -5
+        return 1
+    fi
+
+    # 3. Helper team identifier matches app team identifier.
+    local app_team helper_team
+    app_team=$(codesign -dvv "$app" 2>&1 | grep TeamIdentifier | awk -F= '{print $2}')
+    helper_team=$(codesign -dvv "$helper" 2>&1 | grep TeamIdentifier | awk -F= '{print $2}')
+    if [ "$app_team" != "$helper_team" ] || [ -z "$app_team" ]; then
+        echo "PREFLIGHT FAIL: app team ($app_team) != helper team ($helper_team)"
+        return 1
+    fi
+
+    # 4. SMAppService plist present.
+    if [ ! -f "$app/Contents/Library/LaunchDaemons/com.raspberrypi.rpi-imager.writer.plist" ]; then
+        echo "PREFLIGHT FAIL: SMAppService plist missing"
+        return 1
+    fi
+
+    return 0
+}
+
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
+    echo "Running notarisation pre-flight checks..."
+    if ! preflight_notarisation_ready "$DMG_APP_PATH"; then
+        echo "Error: pre-flight checks failed; refusing to submit to notarytool"
+        exit 1
+    fi
+    echo "✓ pre-flight passed"
+fi
+
 # Notarize and staple if requested
 if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_PROFILE" != "" ]; then
     echo "Submitting DMG for notarization using keychain profile '$KEYCHAIN_PROFILE'..."
@@ -273,6 +344,19 @@ if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_P
     fi
  fi
  
+ # Last, as stapling changes the DMG, and before the bundle it hashes goes.
+ "@CMAKE_COMMAND@" -DSBOM_INPUTS="@RPI_IMAGER_SBOM_INPUTS@" \
+     -DSBOM_HASH_ROOT="$DMG_APP_PATH" \
+     -DSBOM_SCAN_ROOT="$DMG_APP_PATH/Contents" \
+     -DSBOM_COPY_DIRS= -DSBOM_HASH_EXCLUDE= \
+     -DSBOM_OUTPUT_DIR="$(dirname "$FINAL_DMG_PATH")" \
+     -DSBOM_ARTEFACT="$FINAL_DMG_PATH" \
+     -DSBOM_LIFECYCLE=post-build \
+     -P "@RPI_IMAGER_SBOM_GENERATOR@" || {
+     echo "Error: failed to write the SBOM beside the DMG"
+     exit 1
+ }
+
  # Clean up temporary app bundle copy
  echo "Cleaning up temporary app bundle..."
  rm -rf "$DMG_APP_PATH"

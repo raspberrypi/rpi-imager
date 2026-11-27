@@ -27,6 +27,27 @@ BaseDialog {
     property bool isSaveDialog: false
     property string suggestedFilename: ""
 
+    // Where an open dialog's "Removable drives" leads. Empty means the
+    // platform's usual place; a caller that mounts drives itself, as the
+    // embedded build does, says where it put them.
+    property string removableDrivesFolder: ""
+    onRemovableDrivesFolderChanged: {
+        if (!dialog.isSaveDialog && placesModel.count > 0)
+            placesModel.setProperty(0, "url", dialog._removableDrivesPath())
+    }
+
+    function _removableDrivesPath() {
+        if (dialog.removableDrivesFolder.length > 0)
+            return dialog.removableDrivesFolder
+        if (Qt.platform.os === "linux")
+            return "file:///mnt"
+        if (Qt.platform.os === "osx" || Qt.platform.os === "darwin")
+            return "file:///Volumes"
+        // Windows lists every drive at the root, and anything else has
+        // nowhere better to go.
+        return "file:///"
+    }
+
     // Use Dialog's built-in accepted/rejected signals; do not redeclare to avoid overrides
 
     property string _currentFilename: suggestedFilename
@@ -239,20 +260,7 @@ BaseDialog {
                 placesModel.append({ label: qsTr("Home"), url: homePath })
             }
         } else {
-            // Open dialogs get removable drives shortcut based on platform
-            var removableDrivesPath = ""
-            if (Qt.platform.os === "linux") {
-                removableDrivesPath = "file:///mnt"
-            } else if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
-                removableDrivesPath = "file:///Volumes"
-            } else if (Qt.platform.os === "windows") {
-                // On Windows, show root which lists all drives
-                removableDrivesPath = "file:///"
-            } else {
-                // Fallback to root for other platforms
-                removableDrivesPath = "file:///"
-            }
-            placesModel.append({ label: qsTr("Removable drives"), url: removableDrivesPath })
+            placesModel.append({ label: qsTr("Removable drives"), url: dialog._removableDrivesPath() })
         }
         
         // Initialize path field text

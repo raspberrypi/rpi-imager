@@ -19,7 +19,7 @@ class CurlFetchTask : public QRunnable
 {
 public:
     CurlFetchTask(CurlFetcher *fetcher, const QUrl &url)
-        : _fetcher(fetcher), _url(url)
+        : _fetcher(fetcher), _url(url), _maxSize(fetcher->maxSize())
     {
         setAutoDelete(true);
     }
@@ -32,7 +32,9 @@ public:
             return;
         }
         
-        QByteArray data;
+        Sink sink;
+        sink.limit = _maxSize;
+        QByteArray &data = sink.data;
         QString error;
         QString stats;
         char errorBuffer[CURL_ERROR_SIZE] = {0};
@@ -57,7 +59,7 @@ public:
         
         // Set up write callback to capture response data
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sink);
         
         // Set up progress callback for cancellation support
         curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progressCallback);
@@ -72,6 +74,9 @@ public:
         
         if (res == CURLE_ABORTED_BY_CALLBACK) {
             error = QStringLiteral("Cancelled");
+        } else if (res == CURLE_WRITE_ERROR && sink.exceeded) {
+            error = QStringLiteral("Response is larger than %1 bytes").arg(sink.limit);
+            data.clear();
         } else if (res != CURLE_OK) {
             // Build detailed error message
             long httpCode = 0;
@@ -142,11 +147,23 @@ public:
     }
     
 private:
+    struct Sink {
+        QByteArray data;
+        qint64 limit = 0;
+        bool exceeded = false;
+    };
+
     static size_t writeCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
     {
-        auto *buffer = static_cast<QByteArray*>(userdata);
+        auto *sink = static_cast<Sink*>(userdata);
         size_t totalSize = size * nmemb;
-        buffer->append(ptr, static_cast<qsizetype>(totalSize));
+        // Checked as the body arrives, so an oversized one is never held whole.
+        if (sink->limit > 0
+            && sink->data.size() + static_cast<qint64>(totalSize) > sink->limit) {
+            sink->exceeded = true;
+            return 0;  // curl ends the transfer with CURLE_WRITE_ERROR
+        }
+        sink->data.append(ptr, static_cast<qsizetype>(totalSize));
         return totalSize;
     }
     
@@ -175,6 +192,7 @@ private:
     
     QPointer<CurlFetcher> _fetcher;  // QPointer to detect fetcher destruction
     QUrl _url;
+    qint64 _maxSize;
 };
 
 // ----------------------------------------------------------------------------

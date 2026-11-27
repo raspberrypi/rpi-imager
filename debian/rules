@@ -33,6 +33,11 @@ prune-build-tree:
 override_dh_strip:
 	dh_strip --exclude=rpi-imager
 
+# SBOMs stay plain JSON so scanners read them in place.
+.PHONY: override_dh_compress
+override_dh_compress:
+	dh_compress -X.json
+
 # Desktop/cli packages ship self-contained AppImages; skip shlib scanning
 # (also avoids needing cross-arch objdump when packaging amd64 on arm64).
 .PHONY: override_dh_makeshlibs override_dh_shlibdeps

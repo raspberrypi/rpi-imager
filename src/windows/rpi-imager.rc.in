@@ -11,7 +11,7 @@ PRODUCTVERSION @IMAGER_VERSION_MAJOR@,@IMAGER_VERSION_MINOR@,@IMAGER_VERSION_PAT
     {
         BLOCK "040904b0"
         {
-            VALUE "CompanyName",     "Raspberry Pi Ltd"
+            VALUE "CompanyName",     "@RPI_IMAGER_PUBLISHER_ORG@"
             VALUE "FileDescription", "Raspberry Pi Imager"
             VALUE "FileVersion",     "@IMAGER_VERSION_STR@"
             VALUE "ProductVersion",  "@IMAGER_VERSION_STR@"

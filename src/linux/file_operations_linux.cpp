@@ -4,6 +4,7 @@
  */
 
 #include "file_operations_linux.h"
+#include "linux_helper_file_operations.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -15,6 +16,8 @@
 #include <sstream>
 #include <cstring>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <thread>
 #include <functional>
 #include "../timeout_utils.h"
@@ -34,6 +37,9 @@ using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
 #endif
 
 #include <fstream>
+
+// A 32-bit off_t fails every write past 2 GiB with EINVAL (#1801).
+static_assert(sizeof(off_t) == 8, "build with _FILE_OFFSET_BITS=64");
 
 namespace rpi_imager {
 
@@ -431,6 +437,7 @@ FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
   
   // Save current position before reopening
   off_t currentPos = lseek(fd_, 0, SEEK_CUR);
+  const std::uint64_t writeCursor = async_write_offset_;
   std::string savedPath = current_path_;
   
   close(fd_);
@@ -474,7 +481,9 @@ FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
   if (currentPos > 0) {
     lseek(fd_, currentPos, SEEK_SET);
   }
-  
+  // The reopen zeroed it; the next write would have gone to the start.
+  async_write_offset_ = writeCursor;
+
   std::ostringstream oss;
   oss << "O_DIRECT " << (using_direct_io_ ? "enabled" : "disabled");
   Log(oss.str());
@@ -581,14 +590,10 @@ std::uint64_t LinuxFileOperations::Tell() const {
     return 0;
   }
 
-  // If async I/O has been used, return the async write offset
-  // (pwrite/io_uring doesn't update the file descriptor position)
-  if (async_write_offset_ > 0) {
-    return async_write_offset_;
-  }
-
-  off_t pos = lseek(fd_, 0, SEEK_CUR);
-  return (pos == -1) ? 0 : static_cast<std::uint64_t>(pos);
+  // Where the next write goes. Every write is at this cursor, not the file
+  // position, which reads also move: after Seek(0) and a read, the position
+  // said the helper's bulk writer need not seek, and it wrote at 0.
+  return async_write_offset_;
 }
 
 FileError LinuxFileOperations::ForceSync() {
@@ -1156,7 +1161,15 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
     std::ifstream f(queueDir + "max_sectors_kb");
     int val = 0;
     if (f >> val && val > 0)
-      limits.max_transfer_bytes = static_cast<size_t>(val) * 1024;
+      limits.max_transfer_bytes = static_cast<size_t>(std::min<std::uint64_t>(
+          static_cast<std::uint64_t>(val) * 1024, std::numeric_limits<size_t>::max()));
+  }
+
+  {
+    std::ifstream f(queueDir + "logical_block_size");
+    std::uint32_t val = 0;
+    if (f >> val && val > 0)
+      limits.logical_block_size = val;
   }
 
   return limits;
@@ -1164,6 +1177,15 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
+#if defined(RPI_IMAGER_ENABLE_LINUX_HELPER)
+  if (shouldUseLinuxHelperFileOperations()) {
+    return CreateLinuxHelperFileOperations();
+  }
+#endif
+  return std::make_unique<LinuxFileOperations>();
+}
+
+std::unique_ptr<FileOperations> CreateInProcessPlatformFileOperations() {
   return std::make_unique<LinuxFileOperations>();
 }
 

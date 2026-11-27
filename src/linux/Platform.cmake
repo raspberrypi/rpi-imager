@@ -48,6 +48,12 @@ set(PLATFORM_SOURCES
     linux/platformquirks_linux.cpp
     linux/userfiles_linux.cpp
 )
+if(NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+    list(APPEND PLATFORM_SOURCES
+        linux/linux_helper_file_operations.h
+        linux/linux_helper_file_operations.cpp
+    )
+endif()
 
 # DBus-backed components. The embedded (linuxfb netboot) build has no session
 # bus and is built without QtDBus, so it uses the same stubs as the CLI build
@@ -93,5 +99,60 @@ add_definitions(-DHAVE_GNUTLS)
 
 # libusb requires libudev for rpiboot support
 pkg_check_modules(UDEV REQUIRED libudev)
+
+# Dynamically linked system libraries, at the versions found here. idn2 and
+# nettle are named directly in EXTRALIBS, so pkg-config is asked separately.
+pkg_check_modules(_RPI_SBOM_IDN2 QUIET libidn2)
+pkg_check_modules(_RPI_SBOM_NETTLE QUIET nettle)
+if(GNUTLS_VERSION)
+    set(_rpi_gnutls_version "${GNUTLS_VERSION}")
+else()
+    set(_rpi_gnutls_version "${GNUTLS_VERSION_STRING}")
+endif()
+set(_rpi_sbom_system ORIGIN "system library, version as found at configure time")
+set(_rpi_sbom_users USED_BY rpi-imager rpi-imager-writer)
+rpi_imager_sbom_system_ids(_rpi_gnutls_ids "${GNUTLS_LIBRARIES}"
+    "cpe:2.3:a:gnu:gnutls:${_rpi_gnutls_version}:*:*:*:*:*:*:*")
+rpi_imager_sbom_system_ids(_rpi_idn2_ids "${_RPI_SBOM_IDN2_LINK_LIBRARIES}"
+    "cpe:2.3:a:gnu:libidn2:${_RPI_SBOM_IDN2_VERSION}:*:*:*:*:*:*:*")
+rpi_imager_sbom_system_ids(_rpi_nettle_ids "${_RPI_SBOM_NETTLE_LINK_LIBRARIES}"
+    "cpe:2.3:a:nettle_project:nettle:${_RPI_SBOM_NETTLE_VERSION}:*:*:*:*:*:*:*")
+rpi_imager_sbom_system_ids(_rpi_udev_ids "${UDEV_LINK_LIBRARIES}"
+    "cpe:2.3:a:systemd_project:systemd:${UDEV_VERSION}:*:*:*:*:*:*:*")
+rpi_imager_sbom_add_component(gnutls
+    NAME "GnuTLS"
+    VERSION "${_rpi_gnutls_version}"
+    SUPPLIER "GnuTLS project"
+    LICENSE "LGPL-2.1-or-later"
+    ${_rpi_gnutls_ids}
+    ${_rpi_sbom_system} ${_rpi_sbom_users})
+rpi_imager_sbom_add_component(libidn2
+    VERSION "${_RPI_SBOM_IDN2_VERSION}"
+    SUPPLIER "GNU Project"
+    LICENSE "LGPL-3.0-or-later OR GPL-2.0-or-later"
+    ${_rpi_idn2_ids}
+    ${_rpi_sbom_system})
+rpi_imager_sbom_add_component(nettle
+    VERSION "${_RPI_SBOM_NETTLE_VERSION}"
+    SUPPLIER "Nettle project"
+    LICENSE "LGPL-3.0-or-later OR GPL-2.0-or-later"
+    ${_rpi_nettle_ids}
+    ${_rpi_sbom_system})
+rpi_imager_sbom_add_component(libudev
+    VERSION "${UDEV_VERSION}"
+    SUPPLIER "systemd project"
+    LICENSE "LGPL-2.1-or-later"
+    ${_rpi_udev_ids}
+    ${_rpi_sbom_system} ${_rpi_sbom_users})
+# The helper library links liburing whenever it is found, usable or not.
+if(LIBURING_USABLE OR (LIBURING_FOUND AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER))
+    rpi_imager_sbom_system_ids(_rpi_uring_ids "${LIBURING_LINK_LIBRARIES}" "")
+    rpi_imager_sbom_add_component(liburing
+        VERSION "${LIBURING_VERSION}"
+        ${_rpi_uring_ids}
+        SUPPLIER "liburing project"
+        LICENSE "LGPL-2.1-only OR MIT"
+        ${_rpi_sbom_system} ${_rpi_sbom_users})
+endif()
 
 

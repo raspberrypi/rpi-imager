@@ -204,8 +204,20 @@ public:
     // actually finishes (not when it's queued). The caller should NOT free/reuse the
     // buffer until onComplete is called.
     // If onComplete is null or async is disabled, the buffer can be reused after return.
+    //
+    // `padding` is how many bytes at the end of buf are zeroes added to fill
+    // the device's last block. They are written but not hashed, so the hash
+    // stays the hash of the source and still matches its published SHA-256.
     size_t _writeFileZeroSkip(const char *buf, size_t len);
-    size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr);
+    size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr,
+                      size_t padding = 0);
+
+    // Bytes the device holds that the source did not: zeroes written to
+    // fill the last block. Verification reads them but does not hash them.
+    quint64 _paddingBytes = 0;
+
+    // The block size writes must be multiples of, under O_DIRECT.
+    size_t _deviceBlockSize() const;
 
     // Why a write to the device failed, in terms the reader can act on.
     // The system knows -- ENOSPC, EIO, ENXIO -- and a bare "Error writing to
@@ -246,6 +258,12 @@ signals:
     void eventPartitionTableWrite(quint32 durationMs, bool success);  // MBR/partition table write
     void eventFatPartitionSetup(quint32 durationMs, bool success);    // FAT partition parsing
     void eventDeviceClose(quint32 durationMs, bool success);          // Device handle close
+
+    // §7a per-session telemetry from the privileged helper (macOS). The
+    // metadata is a semicolon-separated key:value sequence that
+    // PerformanceStats records verbatim against helperSessionSummary,
+    // so the existing exporter picks it up without further changes.
+    void eventHelperSessionSummary(quint32 durationMs, QString metadata);
     void eventNetworkRetry(quint32 sleepMs, QString metadata);        // Network retry with reason
     void eventNetworkConnectionStats(QString metadata);               // CURL connection timing stats
     void eventDeviceIOTimeout(quint32 pendingWrites, QString metadata); // Device failed to complete I/O
@@ -253,13 +271,19 @@ signals:
     void eventDrainAndHotSwap(quint32 durationMs, int pendingBefore, bool success); // Drained queue and switched to sync
     void syncFallbackActivated(QString reason); // Async I/O stalled, fell back to sync mode
     void requestWriteRestart(QString reason);  // Request ImageWriter to restart write from scratch
-    
+
+    // macOS: helper not installed, disabled, or unreachable. ImageWriter
+    // refreshes privilegedHelperState so QML can surface the helper dialog
+    // instead of a misleading "failed to unmount" message.
+    void privilegedHelperRequired();
+
     // Write timing breakdown signals (for hypothesis testing)
     void eventWriteTimingBreakdown(quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
                                    quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount);
     void eventWriteSizeDistribution(quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount);
     void eventWriteAfterSyncImpact(quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount);
-    void eventAsyncIOConfig(bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd);
+    void eventAsyncIOConfig(bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd,
+                            bool zeroCopyEngaged, quint64 zeroCopySubmits, quint64 copySubmits);
     void eventAsyncIOTiming(quint32 totalMs, quint64 bytesWritten, quint32 writeCount);
     
     // Bottleneck state signal for UI feedback
@@ -283,6 +307,7 @@ protected:
     void _performEject();
     virtual bool _verify();
     virtual void _onVerifyProgress() {}  // Called during verify loop for progress updates
+    void _emitVerifyThroughput();
     int _authopen(const QByteArray &filename);
     bool _openAndPrepareDevice();
     virtual void _onDevicePrepared() {}  // Hook for subclasses after device open, before writes
@@ -302,6 +327,12 @@ protected:
      * libcurl callbacks
      */
     virtual size_t _writeData(const char *buf, size_t len);
+
+    // Largest single sequential write this thread will submit (the producer's
+    // write ring-buffer slot size). Used to size the macOS helper's
+    // shared-memory ring. 0 = unknown (backend assumes its worst-case cap).
+    virtual size_t _maxWriteChunkHint() const { return 0; }
+
     bool _progress(curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
     void _header(const std::string &header);
 
@@ -329,6 +360,14 @@ protected:
     QMap<QString, CustomisationExpectation> _customisationDigests;
     char *_firstBlock;
     size_t _firstBlockSize;
+
+    // The plain (uncompressed, downloaded) path receives whatever lengths curl
+    // hands over. They are gathered here so the device only ever sees whole
+    // blocks, and what is left at the end goes out padded.
+    char *_stage = nullptr;
+    size_t _stageFill = 0;
+    static constexpr size_t kStageSize = 1024 * 1024;
+    bool _flushStage();
     static QByteArray _proxy;
     std::atomic<bool> _cancelled;  // Atomic for safe access from timeout utility
     bool _successful, _verifyEnabled, _cacheEnabled, _ejectEnabled;

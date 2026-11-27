@@ -201,21 +201,27 @@ bool BlockMap::parse(std::string_view xml, std::string* errorMsg)
 
 std::vector<uint8_t> BlockMap::serialize() const
 {
+    return serializeBlockRanges(_ranges, _blockSize);
+}
+
+std::vector<uint8_t> serializeBlockRanges(const std::vector<BlockRange>& ranges,
+                                          uint64_t blockSize)
+{
     size_t payloadSize = sizeof(BmapWireHeader)
-                       + _ranges.size() * sizeof(BmapWireRange);
+                       + ranges.size() * sizeof(BmapWireRange);
     std::vector<uint8_t> buf(payloadSize, 0);
 
     // Header
     BmapWireHeader hdr{};
     hdr.magic = BMAP_WIRE_MAGIC;
-    hdr.block_size = static_cast<uint32_t>(_blockSize);
-    hdr.range_count = static_cast<uint32_t>(_ranges.size());
+    hdr.block_size = static_cast<uint32_t>(blockSize);
+    hdr.range_count = static_cast<uint32_t>(ranges.size());
     hdr.reserved = 0;
     std::memcpy(buf.data(), &hdr, sizeof(hdr));
 
     // Ranges — convert from half-open [begin, end) to inclusive [start, end]
     auto* dst = buf.data() + sizeof(BmapWireHeader);
-    for (const auto& r : _ranges) {
+    for (const auto& r : ranges) {
         BmapWireRange wr{};
         wr.start_block = static_cast<uint32_t>(r.begin);
         wr.end_block = static_cast<uint32_t>(r.end - 1);  // inclusive

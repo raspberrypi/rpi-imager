@@ -54,6 +54,11 @@ ApplicationWindow {
     Component.onCompleted: {
         // Set the main window for modal file dialogs
         ImageWriterSingleton.setMainWindow(window)
+        // Initial privileged-helper-state evaluation: the C++ constructor
+        // probes state before QML is wired, so a startup with the helper
+        // already disabled produces no transition for Connections to fire
+        // on. Evaluate once here so the dialog opens at launch when needed.
+        window._evaluatePrivilegedHelperState()
     }
 
     onClosing: function (close) {
@@ -208,6 +213,112 @@ ApplicationWindow {
         }
     }
 
+    // Offered when a write fails because Windows has no driver bound to the
+    // board in USB boot mode, e.g. after a silent install skipped it (#1804).
+    BaseDialog {
+        id: usbDriverDialog
+        objectName: "usbDriverDialog"
+        parent: overlayRoot
+        anchors.centerIn: parent
+
+        property string message: ""
+        property bool installing: false
+        property bool finished: false
+
+        function show(msg) {
+            message = msg + "\n\n" + qsTr("Raspberry Pi Imager can install the driver now. Windows will ask for administrator permission, and may ask you to trust the driver publisher.")
+            installing = false
+            finished = false
+            open()
+        }
+
+        function escapePressed() {
+            if (!installing)
+                usbDriverDialog.close()
+        }
+
+        Component.onCompleted: {
+            registerFocusGroup("content", function(){
+                if (ImageWriterSingleton && ImageWriterSingleton.screenReaderActive) {
+                    return [usbDriverTitle, usbDriverMessage]
+                }
+                return []
+            }, 0)
+            registerFocusGroup("buttons", function(){
+                return usbDriverDialog.finished ? [usbDriverCloseButton]
+                                                : [usbDriverCancelButton, usbDriverInstallButton]
+            }, 1)
+        }
+
+        FocusableHeading {
+            id: usbDriverTitle
+            text: qsTr("USB driver needed")
+            font.pointSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            Layout.fillWidth: true
+        }
+
+        FocusableText {
+            id: usbDriverMessage
+            text: usbDriverDialog.message.replace(/\n/g, "<br>")
+            textFormat: Text.StyledText
+            wrapMode: Text.WordWrap
+            font.pointSize: Style.fontSizeDescription
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            Layout.fillWidth: true
+            Accessible.name: text.replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '')
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            Item {
+                Layout.fillWidth: true
+            }
+            ImButton {
+                id: usbDriverCancelButton
+                visible: !usbDriverDialog.finished
+                enabled: !usbDriverDialog.installing
+                text: CommonStrings.cancel
+                accessibleDescription: qsTr("Close without installing the USB driver")
+                activeFocusOnTab: true
+                onClicked: usbDriverDialog.close()
+            }
+            ImButtonRed {
+                id: usbDriverInstallButton
+                visible: !usbDriverDialog.finished
+                enabled: !usbDriverDialog.installing
+                text: usbDriverDialog.installing ? qsTr("Installing...") : qsTr("Install driver")
+                accessibleDescription: qsTr("Install the Raspberry Pi USB boot driver. Windows asks for administrator permission.")
+                activeFocusOnTab: true
+                onClicked: {
+                    usbDriverDialog.installing = true
+                    ImageWriterSingleton.installUsbDriver()
+                }
+            }
+            ImButton {
+                id: usbDriverCloseButton
+                visible: usbDriverDialog.finished
+                text: CommonStrings.continueText
+                accessibleDescription: qsTr("Close the USB driver dialog and continue")
+                activeFocusOnTab: true
+                onClicked: usbDriverDialog.close()
+            }
+        }
+
+        Connections {
+            target: ImageWriterSingleton
+            function onUsbDriverInstallFinished(ok, msg) {
+                usbDriverDialog.installing = false
+                usbDriverDialog.finished = true
+                usbDriverDialog.message = msg
+            }
+        }
+    }
+
     // Specific dialog for storage removal during write
     BaseDialog {
         id: storageRemovedDialog
@@ -357,6 +468,54 @@ ApplicationWindow {
         }
     }
 
+    // Privileged-helper UX (macOS SMAppService). Shown automatically when
+    // the helper isn't ready: first-time install, disabled in Settings,
+    // or registered but unreachable over XPC.
+    PrivilegedHelperDialog {
+        id: privilegedHelperDialog
+        parent: overlayRoot
+        helperState: ImageWriterSingleton ? ImageWriterSingleton.privilegedHelperState
+                                          : ImageWriterSingleton.Unknown
+    }
+    function _evaluatePrivilegedHelperState() {
+        if (!ImageWriterSingleton) return
+        const s = ImageWriterSingleton.privilegedHelperState
+        if (s === ImageWriterSingleton.NeedsInstall ||
+            s === ImageWriterSingleton.NeedsApproval ||
+            s === ImageWriterSingleton.Unknown) {
+            if (!privilegedHelperDialog.opened) privilegedHelperDialog.open()
+        } else if (privilegedHelperDialog.opened) {
+            privilegedHelperDialog.close()
+        }
+    }
+    Connections {
+        target: ImageWriterSingleton
+        function onPrivilegedHelperStateChanged() {
+            window._evaluatePrivilegedHelperState()
+        }
+        function onError() {
+            // After any open/write failure, re-probe the helper state.
+            // If the user disabled it from Settings mid-session, this is
+            // how we discover that and surface the right dialog instead
+            // of a bare "Failed to open disk" message.
+            ImageWriterSingleton.refreshPrivilegedHelperState()
+        }
+    }
+    Timer {
+        // While the user is parked on the helper dialog, re-probe
+        // periodically so that enabling it in Settings closes the
+        // dialog without further interaction.
+        interval: 2000
+        repeat: true
+        running: privilegedHelperDialog.opened
+                  && ImageWriterSingleton
+                  && (ImageWriterSingleton.privilegedHelperState === ImageWriterSingleton.NeedsApproval
+                      || ImageWriterSingleton.privilegedHelperState === ImageWriterSingleton.Unknown)
+        onTriggered: {
+            ImageWriterSingleton.refreshPrivilegedHelperState()
+        }
+    }
+
     // Track whether update popup has been shown this session
     property bool updatePopupShown: false
 
@@ -441,7 +600,7 @@ ApplicationWindow {
                 visible: ImageWriterSingleton && ImageWriterSingleton.isElevatableBundle()
                 // Make button wide enough to fit the text, with sensible bounds
                 Layout.minimumWidth: Style.buttonWidthMinimum
-                Layout.maximumWidth: Style.buttonWidthMinimum * 2  // Cap at 2x to handle long translations
+                Layout.maximumWidth: Style.scaled(240)  // Cap for long translations
                 implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
                 onClicked: {
                     if (ImageWriterSingleton.installElevationPolicy()) {
@@ -551,6 +710,12 @@ ApplicationWindow {
     }
 
     function onError(msg) {
+        if (typeof ImageWriterSingleton.usbDriverMissing === "function"
+                && ImageWriterSingleton.usbDriverMissing()
+                && ImageWriterSingleton.canInstallUsbDriver()) {
+            usbDriverDialog.show(msg);
+            return;
+        }
         errorDialog.titleText = qsTr("Error");
         errorDialog.message = msg;
         errorDialog.open();

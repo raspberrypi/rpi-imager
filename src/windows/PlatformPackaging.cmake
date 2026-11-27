@@ -45,14 +45,23 @@ if (IMAGER_SIGNED_APP)
     if (NOT SIGNTOOL)
         message(FATAL_ERROR "Unable to locate signtool.exe used for code signing")
     endif()
+
+    set(_IMAGER_SIGNTOOL_CERT_ARGS /a)
+    if(IMAGER_SIGNING_CERT_SHA1 AND NOT IMAGER_SIGNING_CERT_SHA1 STREQUAL "")
+        set(_IMAGER_SIGNTOOL_CERT_ARGS /sha1 "${IMAGER_SIGNING_CERT_SHA1}")
+        message(STATUS "signtool will use certificate SHA-1 ${IMAGER_SIGNING_CERT_SHA1}")
+    endif()
+
     add_definitions(-DSIGNTOOL="${SIGNTOOL}")
 
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a
+        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256
+                ${_IMAGER_SIGNTOOL_CERT_ARGS}
                 "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
 
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a
+        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256
+                ${_IMAGER_SIGNTOOL_CERT_ARGS}
                 "${CMAKE_BINARY_DIR}/rpi-imager-callback-relay.exe")
 
     # inf2cat.exe is always x86 regardless of host/target architecture
@@ -94,7 +103,8 @@ if (IMAGER_SIGNED_APP)
         VERBATIM)
 
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a
+        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256
+                ${_IMAGER_SIGNTOOL_CERT_ARGS}
                 "${_DRIVER_STAGING}/rpiboot-winusb.cat"
         COMMENT "Signing WinUSB driver catalog"
         VERBATIM)
@@ -134,6 +144,30 @@ add_custom_command(TARGET ${PROJECT_NAME}
         "${CMAKE_BINARY_DIR}/rpi-imager-callback-relay.exe"
         "${CMAKE_BINARY_DIR}/deploy")
 
+# Ship the privileged helper beside the main exe when the experimental Windows
+# helper is enabled (§14.5). Publisher pinning (§14.4) requires co-location.
+if(NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER AND TARGET rpi-imager-writer)
+    add_dependencies(${PROJECT_NAME} rpi-imager-writer)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "$<TARGET_FILE:rpi-imager-writer>"
+            "${CMAKE_BINARY_DIR}/deploy"
+        COMMENT "Staging rpi-imager-writer.exe into deploy/"
+        VERBATIM)
+
+    # The helper must carry the same signature as rpi-imager.exe for §14.4
+    # pinning. A POST_BUILD step can only attach to a target from the directory
+    # that created it, so this signs the staged copy, which is what ships.
+    if(IMAGER_SIGNED_APP)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256
+                    ${_IMAGER_SIGNTOOL_CERT_ARGS}
+                    "${CMAKE_BINARY_DIR}/deploy/rpi-imager-writer.exe"
+            COMMENT "Signing rpi-imager-writer.exe (§14.4 peer auth)"
+            VERBATIM)
+    endif()
+endif()
+
 add_custom_command(TARGET ${PROJECT_NAME}
     POST_BUILD
     COMMAND "${WINDEPLOYQT}" --no-translations --no-widgets --skip-plugin-types qmltooling --exclude-plugins qtiff,qwebp,qgif --no-quickcontrols2fusion --no-quickcontrols2fusionstyleimpl --no-quickcontrols2universal --no-quickcontrols2universalstyleimpl --no-quickcontrols2imagine --no-quickcontrols2imaginestyleimpl --no-quickcontrols2fluentwinui3styleimpl --no-quickcontrols2windowsstyleimpl --verbose 2 --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
@@ -147,6 +181,7 @@ set(_installer_extra_vars "${CMAKE_CURRENT_BINARY_DIR}/installer_extra_vars.cmak
 file(WRITE "${_installer_extra_vars}"
     "set(CMAKE_BINARY_DIR \"${CMAKE_BINARY_DIR}\")\n"
     "set(CMAKE_SOURCE_DIR \"${CMAKE_SOURCE_DIR}\")\n"
+    "include(\"${CMAKE_CURRENT_SOURCE_DIR}/cmake/rpi_imager_identity.cmake\")\n"
 )
 
 if(ENABLE_INNO_INSTALLER)
@@ -175,8 +210,15 @@ if(ENABLE_INNO_INSTALLER)
 
     if(INNO_COMPILER)
         if(IMAGER_SIGNED_APP)
+            if(IMAGER_SIGNING_CERT_SHA1 AND NOT IMAGER_SIGNING_CERT_SHA1 STREQUAL "")
+                set(_INNO_SIGNTOOL_ARGS
+                    "${SIGNTOOL} sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /sha1 ${IMAGER_SIGNING_CERT_SHA1} $p")
+            else()
+                set(_INNO_SIGNTOOL_ARGS
+                    "${SIGNTOOL} sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a $p")
+            endif()
             add_custom_target(inno_installer
-                COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss" "/DSIGNING_ENABLED" "/Ssign=${SIGNTOOL} sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a $p"
+                COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss" "/DSIGNING_ENABLED" "/Ssign=${_INNO_SIGNTOOL_ARGS}"
                 DEPENDS ${PROJECT_NAME} "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
                 COMMENT "Building Inno Setup installer"
                 VERBATIM)
@@ -187,6 +229,20 @@ if(ENABLE_INNO_INSTALLER)
                 COMMENT "Building Inno Setup installer"
                 VERBATIM)
         endif()
+        # deploy/sbom, which the installer ships, hashes deploy/ once POST_BUILD
+        # has signed it; signonce then leaves those files alone. The copy
+        # beside the installer also hashes the installer.
+        add_dependencies(inno_installer rpi_imager_sbom)
+        add_custom_command(TARGET inno_installer POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                "-DSBOM_INPUTS=${RPI_IMAGER_SBOM_INPUTS}"
+                "-DSBOM_COPY_DIRS="
+                "-DSBOM_OUTPUT_DIR=${CMAKE_BINARY_DIR}/installer"
+                "-DSBOM_ARTEFACT=${CMAKE_BINARY_DIR}/installer/imager_@IMAGER_FILE_VERSION@.exe"
+                "-DSBOM_LIFECYCLE=post-build"
+                -P "${RPI_IMAGER_SBOM_GENERATOR}"
+            COMMENT "Writing the SBOM beside the installer"
+            VERBATIM)
         message(STATUS "Added 'inno_installer' target to build the Inno Setup installer")
     else()
         message(WARNING "Inno Setup compiler not found. Install Inno Setup from https://jrsoftware.org/isinfo.php")
@@ -234,12 +290,14 @@ add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.rc"
     COMMAND ${CMAKE_COMMAND}
         -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+        -DEXTRA_VARS_FILE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/rpi_imager_identity.cmake
         -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.rc.in
         -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.rc
         -P ${CONFIGURE_VERSIONED_SCRIPT}
     DEPENDS
         ${IMAGER_VERSION_VARS}
         ${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.rc.in
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/rpi_imager_identity.cmake
         "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest"
     COMMENT "Configuring rpi-imager.rc with build-time version"
     VERBATIM

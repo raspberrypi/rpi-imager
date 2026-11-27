@@ -79,7 +79,7 @@ RadioButton {
     Accessible.description: ""
     Accessible.checkable: true
     Accessible.checked: checked
-    Accessible.onPressAction: click()
+    Accessible.onPressAction: if (control.enabled) control.click()
     
     // Add visual focus indicator
     Rectangle {

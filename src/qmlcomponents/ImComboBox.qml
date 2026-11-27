@@ -306,6 +306,7 @@ ComboBox {
                 anchors.bottom: parent.bottom
                 model: filteredModel
                 boundsBehavior: Flickable.StopAtBounds
+                Accessible.name: root._purposeWithoutColon
             
             focus: popupComponent.visible
             interactive: true
@@ -354,6 +355,9 @@ ComboBox {
                 }
                 
                 highlighted: dropdownList.currentIndex === filterDelegate.index
+                // The custom contentItem leaves `text` unset, which is where the
+                // accessible name would otherwise come from.
+                Accessible.name: filterDelegate.displayText
                 
                 onClicked: {
                     root.selectFilteredItem(filterDelegate.index)

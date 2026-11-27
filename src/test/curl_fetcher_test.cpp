@@ -288,6 +288,43 @@ TEST_CASE("CurlFetcher retrieves a document larger than one buffer", "[curl-fetc
     CHECK(result.data == body);
 }
 
+TEST_CASE("CurlFetcher refuses a body over its size limit", "[curl-fetcher]")
+{
+    // A licence is capped so a hostile or broken server cannot fill memory
+    // with one; the cap is enforced as the body arrives.
+    ScratchDir scratch;
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("big.txt")), QByteArray(4097, 'a')));
+
+    LocalHttpServer server(scratch.path());
+    REQUIRE_SERVER(server);
+
+    CurlFetcher fetcher;
+    fetcher.setMaxSize(4096);
+    const FetchResult result = fetchAndWait(fetcher, server.urlFor(QStringLiteral("big.txt")));
+
+    REQUIRE(result.failed);
+    CHECK_FALSE(result.finished);
+    CHECK(result.errorMessage.contains(QStringLiteral("larger than 4096 bytes")));
+}
+
+TEST_CASE("CurlFetcher accepts a body exactly at its size limit", "[curl-fetcher]")
+{
+    ScratchDir scratch;
+    const QByteArray body(4096, 'a');
+    REQUIRE(writeFile(scratch.filePath(QStringLiteral("exact.txt")), body));
+
+    LocalHttpServer server(scratch.path());
+    REQUIRE_SERVER(server);
+
+    CurlFetcher fetcher;
+    fetcher.setMaxSize(4096);
+    const FetchResult result = fetchAndWait(fetcher, server.urlFor(QStringLiteral("exact.txt")));
+
+    INFO("error: " << result.errorMessage.toStdString());
+    REQUIRE(result.finished);
+    CHECK(result.data == body);
+}
+
 TEST_CASE("CurlFetcher reports the effective URL", "[curl-fetcher]")
 {
     ScratchDir scratch;

@@ -1,3 +1,84 @@
+rpi-imager (2.1.0~rc1-1) unstable; urgency=medium
+
+  * Release candidate for 2.1.0, for public beta testing.
+  * Privileged writer:
+    - Imager no longer runs as administrator or root. A small helper,
+      rpi-imager-writer, does the device I/O: an SMAppService helper on macOS,
+      an elevated helper over a named pipe on Windows, and a pkexec helper on
+      Linux. The GUI and CLI stay unprivileged, so AT-SPI keeps working on
+      Linux (#1671), and macOS no longer borrows a descriptor from authopen
+      (#1605).
+    - The helper starts, with its UAC or polkit prompt, only when a write
+      needs it, and only once per run. A dialog explains a macOS helper that
+      needs installing or approving in Login Items, and asks for Full Disk
+      Access at storage selection rather than mid-write.
+    - The helper opens only block devices, and Raspberry Pi USB boot devices,
+      so rpiboot and fastboot work without udev rules. Regular files and
+      boot.img are written in process.
+    - Peers are authenticated: Authenticode pinned to the publisher on
+      Windows, the AppImage's embedded GPG signature on Linux.
+    - Writes go through a zero-copy shared-memory ring and are pipelined to
+      the device's queue depth. Verify reports progress and speed as it
+      hashes.
+    - To write in process, as 2.0 did, set RPI_IMAGER_USE_LEGACY_INPROCESS=1
+      and run elevated, or RPI_IMAGER_USE_LEGACY_AUTHOPEN=1 on macOS.
+    - New CLI options: --benchmark-write and --test-privileged-helper.
+  * OS list and wizard:
+    - An OS may name a licence (eula_url). Imager shows it after OS selection
+      and will not write until it is accepted.
+    - An OS may require a user account ("user_required"): the user step cannot
+      be left empty and customisation cannot be skipped.
+    - A release candidate is now offered its final release by the update
+      check.
+    - Keyboard and screen-reader access throughout the wizard: lists answer
+      Enter before a highlight, Next waits for a choice, disabled controls
+      stay in the tab order, and controls are named and in reading order.
+    - Skip customisation is no longer truncated, and the embedded button row
+      fits narrow screens.
+  * Windows:
+    - Saved secrets (Wi-Fi passphrase, password hash, SSH keys, Connect API
+      key) are sealed with DPAPI for the account; older plaintext values are
+      sealed at startup.
+    - Stop creating an empty folder at the root of the system drive for
+      registry-backed settings.
+    - Check a custom image is readable by opening it, not through ACLs that
+      refused readable files on domain-joined machines (#1776).
+    - Restore the Controlled Folder Access, access-denied and write-protect
+      hints.
+    - Simplified Chinese in the installer; complete zh-TW translation.
+  * Linux:
+    - armhf: devices past 2 GiB no longer fail with "Invalid drive
+      parameter", and RAM-based buffer sizing no longer overflows on a 64-bit
+      kernel.
+  * CLI:
+    - --disable-eject applies to that run only, and an elevated run hands the
+      user's settings files back.
+  * Embedded (Raspberry Pi network installer):
+    - Mount a USB drive before choosing a custom image, so images on a USB
+      drive can be reached, and say so when no drive can be read (#1799).
+  * Fixes:
+    - Drives with 4K logical sectors: the helpers report each drive's real
+      block size instead of 512 bytes, and writes use whole, aligned blocks.
+    - An image whose size is not a whole number of blocks is padded with
+      zeros for the last write, and verified against its own bytes only, so
+      it no longer fails its published SHA-256.
+    - A cache verification still running when the cache file changed is no
+      longer taken for the new file, which wrote a corrupt custom cache.
+    - Fastboot: send the bmap magic the right way round, and have the device
+      hash what it stored.
+  * Build and dependencies:
+    - Qt 6.12.0 on every platform. macOS now needs 14.4 or later; earlier
+      versions stay on 2.0.x.
+    - curl 8.23.0, libarchive 3.8.11, zlib 1.4, protobuf 36.2 with Abseil.
+    - SPDX and CycloneDX SBOMs for every release artefact.
+    - Release files are named imager_<version>.<ext> on every platform.
+    - libgpgme-dev is a build dependency.
+  * Testing:
+    - Tests for the helpers and their wire protocol, and a sandboxed fuzzer
+      for the Linux helper's request loop.
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 26 Nov 2026 15:24:30 +0000
+
 rpi-imager (2.0.12-1) unstable; urgency=medium
 
   * Embedded (Raspberry Pi network installer):

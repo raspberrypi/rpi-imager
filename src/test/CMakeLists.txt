@@ -133,7 +133,12 @@ function(rpi_discover_tests target)
     endif()
     set(_test_env "${_telemetry_off}" "RPI_IMAGER_CONNECT_URL=http://127.0.0.1:1"
                   "XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/scratch-config;BROWSER=true"
-                  "BROWSER=true")
+                  "BROWSER=true"
+                  # Device I/O in process, as these tests were written for: the
+                  # helper cannot register for a test binary and opens no
+                  # scratch files. The PAL has its own suites.
+                  "RPI_IMAGER_USE_LEGACY_AUTHOPEN=1"
+                  "RPI_IMAGER_USE_LEGACY_INPROCESS=1")
     # Without this Qt's default handler on Windows sends qDebug/qWarning to the
     # debugger rather than to stderr, so a test that fails under CTest comes
     # back with an exit code and not one line of why. The QtQuickTest binary was
@@ -279,6 +284,112 @@ add_custom_target(test_customization_generator
     COMMENT "Running customization generator tests"
 )
 
+
+# -----------------------------------------------------------------------
+# Privileged I/O PAL tests. No Qt dependency - the PAL is Qt-free
+# (see doc/privileged-helper-plan.md §8a).
+# -----------------------------------------------------------------------
+
+add_executable(privileged_writer_inprocess_test
+    privileged_writer_inprocess_test.cpp
+)
+
+target_link_libraries(privileged_writer_inprocess_test PRIVATE
+    Catch2::Catch2WithMain
+    privileged_io
+)
+
+target_include_directories(privileged_writer_inprocess_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(privileged_writer_inprocess_test PRIVATE cxx_std_20)
+target_compile_options(privileged_writer_inprocess_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+catch_discover_tests(privileged_writer_inprocess_test)
+
+# The embedded backend writes as root with O_DIRECT, which refuses unaligned
+# buffers. pread/pwrite are wrapped on this target alone to see what it hands
+# the kernel, since no unprivileged run can open a block device O_DIRECT;
+# ioctl is wrapped so a test can stand in for a drive with 4K sectors.
+if(UNIX AND NOT APPLE)
+    add_executable(linux_embedded_backend_test linux_embedded_backend_test.cpp)
+    target_include_directories(linux_embedded_backend_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(linux_embedded_backend_test PRIVATE
+        Catch2::Catch2WithMain privileged_io)
+    target_link_options(linux_embedded_backend_test PRIVATE
+        -Wl,--wrap=pwrite,--wrap=pwrite64,--wrap=pread,--wrap=pread64,--wrap=ioctl)
+    target_compile_features(linux_embedded_backend_test PRIVATE cxx_std_20)
+    rpi_discover_tests(linux_embedded_backend_test)
+endif()
+
+add_custom_target(test_privileged_writer_inprocess
+    COMMAND privileged_writer_inprocess_test
+    DEPENDS privileged_writer_inprocess_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running privileged writer in-process backend tests"
+)
+
+# Fault-injection tests use the FaultInjectingBackend wrapper to
+# deterministically reproduce failure modes (eg. mid-stream EIO, the
+# Tahoe authopen-FD failure shape) without needing real hardware.
+add_executable(privileged_writer_fault_test
+    privileged_writer_fault_test.cpp
+)
+
+target_link_libraries(privileged_writer_fault_test PRIVATE
+    Catch2::Catch2WithMain
+    privileged_io
+)
+
+target_include_directories(privileged_writer_fault_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(privileged_writer_fault_test PRIVATE cxx_std_20)
+target_compile_options(privileged_writer_fault_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+catch_discover_tests(privileged_writer_fault_test)
+
+add_custom_target(test_privileged_writer_fault
+    COMMAND privileged_writer_fault_test
+    DEPENDS privileged_writer_fault_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running privileged writer fault-injection tests"
+)
+
+# macOS XPC smoke test - manual integration test, deliberately NOT
+# discovered by CTest because it requires an out-of-band launchctl
+# bootstrap of the helper. Run manually:
+#   build/test/macos_xpc_smoke
+if(APPLE)
+    add_executable(macos_xpc_smoke
+        macos_xpc_smoke.cpp
+    )
+
+    target_link_libraries(macos_xpc_smoke PRIVATE
+        privileged_io
+    )
+
+    target_include_directories(macos_xpc_smoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    target_compile_features(macos_xpc_smoke PRIVATE cxx_std_20)
+    target_compile_options(macos_xpc_smoke PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+endif()
+
 # Determine platform-specific file operations implementation for FAT partition test
 if(WIN32)
     set(PLATFORM_FILE_OPS
@@ -291,6 +402,10 @@ elseif(APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/file_operations_macos.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/macfile.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../mac/macfile.cpp
+        # Stub for the helper-routed factory entry point; see file for
+        # rationale (avoids pulling privileged_io / protobuf into tests
+        # that only need a real-fd path).
+        ${CMAKE_CURRENT_SOURCE_DIR}/xpc_file_operations_stub.cpp
     )
 else()
     set(PLATFORM_FILE_OPS
@@ -518,6 +633,104 @@ if(WIN32)
     target_link_libraries(winfile_test PRIVATE Catch2::Catch2WithMain Qt6::Core)
     target_compile_features(winfile_test PRIVATE cxx_std_20)
     rpi_discover_tests(winfile_test)
+endif()
+
+# ============================================================================
+# WinPipeStream -- Windows only, with the helper
+# ============================================================================
+# The pipe between the client and its privileged helper. A synchronous pipe
+# handle queues a write behind the transport's ever-pending read, so the
+# first RPC never completed and the GUI never left start-up; no test opened
+# a real pipe, so nothing showed it.
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+    add_executable(win_pipe_stream_test win_pipe_stream_test.cpp)
+    target_include_directories(win_pipe_stream_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(win_pipe_stream_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(win_pipe_stream_test PRIVATE cxx_std_20)
+    rpi_discover_tests(win_pipe_stream_test)
+
+    # Asking after the helper must not start it: that raised a UAC prompt
+    # the moment the app opened.
+    add_executable(windows_uac_status_test windows_uac_status_test.cpp)
+    target_include_directories(windows_uac_status_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(windows_uac_status_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(windows_uac_status_test PRIVATE cxx_std_20)
+    rpi_discover_tests(windows_uac_status_test)
+endif()
+
+# The helper connection, built wherever a native helper backend is: a helper
+# that hung up mid-request crashed the client.
+if((WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+   OR (UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER))
+    add_executable(duplex_connection_test duplex_connection_test.cpp)
+    target_include_directories(duplex_connection_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(duplex_connection_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(duplex_connection_test PRIVATE cxx_std_20)
+    rpi_discover_tests(duplex_connection_test)
+
+    # The helper protocol's encoders and decoders.
+    add_executable(wire_codec_test wire_codec_test.cpp)
+    target_include_directories(wire_codec_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io)
+    target_link_libraries(wire_codec_test PRIVATE Catch2::Catch2WithMain privileged_io)
+    target_compile_features(wire_codec_test PRIVATE cxx_std_20)
+    rpi_discover_tests(wire_codec_test)
+endif()
+
+# The helper's drive list: which sector sizes it reads from lsblk.
+if(TARGET rpi_imager_writer_linux)
+    add_executable(drivelist_linux_helper_test drivelist_linux_helper_test.cpp)
+    target_include_directories(drivelist_linux_helper_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(drivelist_linux_helper_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(drivelist_linux_helper_test PRIVATE cxx_std_20)
+    rpi_discover_tests(drivelist_linux_helper_test)
+endif()
+
+# The AppImage signature the Linux helper authenticates its client by.
+if(TARGET rpi_imager_writer_linux)
+    add_executable(appimage_signature_test appimage_signature_test.cpp)
+    target_include_directories(appimage_signature_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(appimage_signature_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(appimage_signature_test PRIVATE cxx_std_20)
+    rpi_discover_tests(appimage_signature_test)
+
+    # What the helper will open for a client that is booting a Pi over USB.
+    add_executable(usb_device_access_test usb_device_access_test.cpp)
+    target_include_directories(usb_device_access_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(usb_device_access_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(usb_device_access_test PRIVATE cxx_std_20)
+    rpi_discover_tests(usb_device_access_test)
+
+    # The bulk writer's worker and the dispatch thread on one device.
+    add_executable(bulk_write_async_test bulk_write_async_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.cpp)
+    target_include_directories(bulk_write_async_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io
+        ${CMAKE_CURRENT_SOURCE_DIR}/../writer/server)
+    target_link_libraries(bulk_write_async_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(bulk_write_async_test PRIVATE cxx_std_20)
+    rpi_discover_tests(bulk_write_async_test)
+
+    # The client backend and the helper loop, talking over a socketpair.
+    add_executable(linux_helper_wire_test linux_helper_wire_test.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.cpp)
+    target_include_directories(linux_helper_wire_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io
+        ${CMAKE_CURRENT_SOURCE_DIR}/../writer/server)
+    target_link_libraries(linux_helper_wire_test PRIVATE Catch2::Catch2WithMain rpi_imager_writer_linux)
+    target_compile_features(linux_helper_wire_test PRIVATE cxx_std_20)
+    rpi_discover_tests(linux_helper_wire_test)
 endif()
 
 # ============================================================================
@@ -1060,6 +1273,7 @@ add_executable(sparse_encoder_test
     # only map it is ever handed came out of this parser. Qt comes with it:
     # the bmap is XML.
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/write_manifest.cpp
     sparse_encoder_test.cpp
 )
 
@@ -2550,6 +2764,9 @@ set(RPI_DOWNLOAD_PIPELINE_SOURCES
     ${PLATFORM_ACCEL_HASH_SRC}
     ${PLATFORM_DRIVELIST_SRC}
     ${PLATFORM_FILE_OPS}
+    # DownloadThread unmounts through the privileged-writer PAL.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../privileged_io_glue.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../local_shim_backend.cpp
 )
 
 # ── bmap ────────────────────────────────────────────────────────────────────
@@ -2714,6 +2931,7 @@ if(NOT BUILD_CLI_ONLY)
         ${GNUTLS_LIBRARIES}
         ${LIBUSB_LIBRARIES}
         ${CMAKE_DL_LIBS}
+        privileged_io
     )
 
     # The platform libraries the application itself links. This target
@@ -3301,6 +3519,7 @@ add_executable(fastboot_flash_thread_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastbootflashthread.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/write_manifest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/bmap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/pieeprom.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/eeprom_signer.cpp
@@ -3346,6 +3565,7 @@ add_executable(download_thread_test
     ${RPI_DOWNLOAD_PIPELINE_SOURCES}
     download_thread_test.cpp
 )
+target_link_libraries(download_thread_test PRIVATE privileged_io)
 
 set_target_properties(download_thread_test PROPERTIES AUTOMOC ON)
 
@@ -3406,6 +3626,7 @@ add_executable(download_extract_thread_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
     download_extract_thread_test.cpp
 )
+target_link_libraries(download_extract_thread_test PRIVATE privileged_io)
 
 set_target_properties(download_extract_thread_test PROPERTIES AUTOMOC ON)
 
@@ -3458,6 +3679,7 @@ if(UNIX AND NOT APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/../ringbuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/download_extract_multifile_probe.cpp
     )
+    target_link_libraries(download_extract_multifile_probe PRIVATE privileged_io)
 
     set_target_properties(download_extract_multifile_probe PROPERTIES AUTOMOC ON)
 
@@ -3766,3 +3988,13 @@ rpi_link_platform_file_ops(firmware_manager_test)
 target_compile_features(firmware_manager_test PRIVATE cxx_std_20)
 
 rpi_discover_tests(firmware_manager_test)
+
+# Test targets compile app sources that include the generated imager_version.h;
+# only the app target waited for it, so building one test in a fresh tree failed.
+get_property(_rpi_test_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(_t IN LISTS _rpi_test_targets)
+    get_target_property(_type ${_t} TYPE)
+    if(_type MATCHES "EXECUTABLE|LIBRARY$")
+        add_dependencies(${_t} generate_version)
+    endif()
+endforeach()

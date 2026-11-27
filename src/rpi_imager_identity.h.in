@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Raspberry Pi Ltd
+//
+// Shipping identity constants for Raspberry Pi Imager.
+//
+// Generated from cmake/rpi_imager_identity.cmake — do not edit the literals
+// here; change them in that CMake file instead.
+
+#pragma once
+
+#include <cstddef>
+
+namespace rpi_imager::identity {
+
+// Authenticode signer Organization (O=). Must match the cert used to sign
+// shipping Windows builds; the helper pins this in peer auth (§14.4).
+inline constexpr char kSignerOrganizationUtf8[] = "@RPI_IMAGER_SIGNER_ORG@";
+inline constexpr wchar_t kSignerOrganizationWide[] = L"@RPI_IMAGER_SIGNER_ORG@";
+
+// SHA-1 thumbprints (40 hex chars) of leaf code-signing certs accepted by peer
+// auth when non-empty. Multiple entries support cert rotation windows.
+inline constexpr size_t kTrustedSignerThumbprintCount =
+    @RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINT_COUNT@;
+@RPI_IMAGER_TRUSTED_SIGNER_THUMBPRINT_ARRAY@
+
+// Only this client binary may connect to the Windows privileged helper.
+inline constexpr wchar_t kWindowsClientExeName[] = L"@RPI_IMAGER_WINDOWS_CLIENT_EXE@";
+
+// GPG key fingerprints (hex) for AppImage embedded-signature peer auth on Linux.
+inline constexpr size_t kTrustedAppImageKeyFingerprintCount =
+    @RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_COUNT@;
+@RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINT_ARRAY@
+
+} // namespace rpi_imager::identity

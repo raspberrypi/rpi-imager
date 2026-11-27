@@ -39,13 +39,28 @@ std::unique_ptr<rpiboot::FirmwareManager> RpibootThread::makeFirmwareManager()
     return std::make_unique<rpiboot::FirmwareManager>();
 }
 
+void RpibootThread::reportOpenFailure(const rpiboot::IUsbContext *ctx, const QString &fallback)
+{
+    using Failure = rpiboot::IUsbContext::OpenFailure;
+    const Failure why = ctx ? ctx->lastOpenFailure() : Failure::None;
+    if (why == Failure::DriverMissing) {
+        emit usbDriverMissing();
+        emit error(tr("The Raspberry Pi USB boot driver is not installed."));
+    } else if (why == Failure::AccessDenied) {
+        emit error(tr("Raspberry Pi Imager was not given permission to use the USB device."));
+    } else {
+        emit error(fallback);
+    }
+}
+
 std::unique_ptr<rpiboot::IUsbContext> RpibootThread::makeUsbContext()
 {
     // LibusbContext's constructor throws if libusb will not initialise --
     // no permissions, no usbfs. Callers get nullptr and report it rather
     // than the exception escaping into a QThread::run().
     try {
-        return std::make_unique<rpiboot::LibusbContext>();
+        return std::make_unique<rpiboot::LibusbContext>(
+            rpiboot::LibusbContext::Elevation::Allowed);
     } catch (const std::exception &e) {
         qWarning() << "RpibootThread: cannot open the USB bus:" << e.what();
         return nullptr;
@@ -157,7 +172,7 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device"));
-                emit error(tr("Failed to open USB device"));
+                reportOpenFailure(ctx.get(), tr("Failed to open USB device"));
                 return false;
             }
 
@@ -222,7 +237,7 @@ bool RpibootThread::runPhase(rpiboot::SideloadMode mode,
             if (!transport || !transport->isOpen()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device after re-enumeration"));
-                emit error(tr("Failed to open USB device after re-enumeration"));
+                reportOpenFailure(ctx.get(), tr("Failed to open USB device after re-enumeration"));
                 return false;
             }
 

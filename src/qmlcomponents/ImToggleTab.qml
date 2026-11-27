@@ -76,7 +76,7 @@ Button {
         }
     }
     Accessible.description: ""
-    Accessible.onPressAction: clicked()
+    Accessible.onPressAction: if (control.enabled) control.clicked()
     
     Keys.onEnterPressed: clicked()
     Keys.onReturnPressed: clicked()

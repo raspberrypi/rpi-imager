@@ -1,6 +1,6 @@
 # Bundled libcurl
 
-set(CURL_VERSION "8.20.0")
+set(CURL_VERSION "8.23.0")
 string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
 rpi_imager_fetch_git_or_vendor(curl
     VENDOR_DIR curl
@@ -82,6 +82,16 @@ if(NOT curl_POPULATED)
     FetchContent_Populate(curl)
     add_subdirectory(${curl_SOURCE_DIR} ${curl_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+rpi_imager_sbom_add_component(curl
+    NAME "libcurl"
+    VERSION "${CURL_VERSION}"
+    SUPPLIER "curl project"
+    VCS_URL "https://github.com/curl/curl.git"
+    GIT_TAG "curl-${CURL_TAG}"
+    SOURCE_DIR "${curl_SOURCE_DIR}"
+    LICENSE "curl"
+    PURL "pkg:github/curl/curl@curl-${CURL_TAG}"
+    CPE "cpe:2.3:a:haxx:libcurl:${CURL_VERSION}:*:*:*:*:*:*:*")
 
 unset(BUILD_CURL_EXE)
 unset(BUILD_LIBCURL_DOCS)

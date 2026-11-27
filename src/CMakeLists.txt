@@ -58,6 +58,17 @@ endif()
 
 project(rpi-imager LANGUAGES CXX C)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # 32-bit off_t wraps at 2 GiB and fails every larger device write (#1801).
+    # Set through the flags so the vendored trees' configure probes see it too.
+    #
+    # _TIME_BITS is deliberately left at the toolchain default: time_t crosses
+    # into the distribution's GnuTLS (via curl), so it must match the ABI
+    # those libraries were built with -- 32-bit on bookworm, 64-bit on trixie.
+    string(APPEND CMAKE_C_FLAGS " -D_FILE_OFFSET_BITS=64")
+    string(APPEND CMAKE_CXX_FLAGS " -D_FILE_OFFSET_BITS=64")
+endif()
+
 find_package(Git QUIET)
 
 # Build-time version: re-runs `git describe` on every build so that dirty
@@ -280,6 +291,8 @@ set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
 
 include(FetchContent)
+# Before any dependency, so each can register itself for the SBOM.
+include(cmake/sbom.cmake)
 include(dependencies/fetch-vendor.cmake)
 
 # Bundled liblzma
@@ -309,6 +322,15 @@ if(APPLE)
     find_package(CURL REQUIRED)
     # Normalize variable naming used later in include_directories
     set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    # No CPE: the version is the SDK stub's, not the installed macOS's
+    # Apple-patched library, so scanners would report CVEs it does not have.
+    rpi_imager_sbom_add_component(curl-macos-sdk
+        NAME "libcurl (macOS SDK)"
+        VERSION "${CURL_VERSION_STRING}"
+        SUPPLIER "Apple Inc."
+        LICENSE "curl"
+        ORIGIN "system library from the macOS SDK"
+        DESCRIPTION "Not bundled: /usr/lib/libcurl.4.dylib from the installed macOS, which Apple maintains; the version is the build SDK's")
     
     # Note: No need to find OpenSSL on macOS - we use native Security.framework
     # for RSA operations and CommonCrypto for hashing
@@ -330,6 +352,62 @@ elseif (WIN32)
 endif()
 
 include_directories(BEFORE .)
+
+# Native Windows privileged helper (phase 3; design doc §14). Built by default;
+# set RPI_IMAGER_DISABLE_WINDOWS_HELPER=ON to omit rpi-imager-writer.exe, the
+# WindowsUacBackend, and the WindowsHelperFileOperations adapter. Opt out at
+# runtime with RPI_IMAGER_USE_LEGACY_INPROCESS=1 or RPI_IMAGER_USE_WINDOWS_HELPER=0.
+option(RPI_IMAGER_DISABLE_WINDOWS_HELPER
+    "Omit the native Windows privileged helper (rpi-imager-writer, UAC backend)" OFF)
+
+# Native Linux privileged helper (phase 2; design doc §12). Built by default;
+# set RPI_IMAGER_DISABLE_LINUX_HELPER=ON to omit LinuxPolkitBackend and
+# rpi-imager-writer. LinuxEmbedded (in-process when already root) is always
+# compiled on Linux. Opt out at runtime with RPI_IMAGER_USE_LEGACY_INPROCESS=1
+# or RPI_IMAGER_USE_LINUX_HELPER=0.
+option(RPI_IMAGER_DISABLE_LINUX_HELPER
+    "Omit the native Linux privileged helper (rpi-imager-writer, polkit backend)" OFF)
+
+# Migrate deprecated ENABLE_* cache entries from older configure runs.
+if(DEFINED CACHE{RPI_IMAGER_ENABLE_WINDOWS_HELPER})
+    if(NOT RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+        set(RPI_IMAGER_DISABLE_WINDOWS_HELPER ON CACHE BOOL
+            "Omit the native Windows privileged helper (rpi-imager-writer, UAC backend)" FORCE)
+        message(STATUS "RPI_IMAGER_ENABLE_WINDOWS_HELPER is deprecated; applied DISABLE_WINDOWS_HELPER=ON")
+    else()
+        message(STATUS "RPI_IMAGER_ENABLE_WINDOWS_HELPER is deprecated; helpers are on by default — remove it from your cache")
+    endif()
+    unset(RPI_IMAGER_ENABLE_WINDOWS_HELPER CACHE)
+endif()
+if(DEFINED CACHE{RPI_IMAGER_ENABLE_LINUX_HELPER})
+    if(NOT RPI_IMAGER_ENABLE_LINUX_HELPER)
+        set(RPI_IMAGER_DISABLE_LINUX_HELPER ON CACHE BOOL
+            "Omit the native Linux privileged helper (rpi-imager-writer, polkit backend)" FORCE)
+        message(STATUS "RPI_IMAGER_ENABLE_LINUX_HELPER is deprecated; applied DISABLE_LINUX_HELPER=ON")
+    else()
+        message(STATUS "RPI_IMAGER_ENABLE_LINUX_HELPER is deprecated; helpers are on by default — remove it from your cache")
+    endif()
+    unset(RPI_IMAGER_ENABLE_LINUX_HELPER CACHE)
+endif()
+
+# Shipping identity (publisher org, Windows client exe name, …). Shared by C++
+# (rpi_imager_identity.h), VERSIONINFO, and the Inno Setup template. Included
+# after helper/signing options so auto-discovery can read them.
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/rpi_imager_identity.cmake)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/rpi_imager_identity.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/rpi_imager_identity.h
+    @ONLY)
+
+# Privileged I/O Platform Abstraction Layer (Qt-free; see
+# doc/privileged-helper-plan.md). Builds a static `privileged_io` library
+# that the main binary links against, and that future helper binaries
+# (rpi-imager-writer) will reuse.
+add_subdirectory(privileged_io)
+
+# Privileged helper binary. macOS-only at present; the subdirectory's
+# CMakeLists no-ops on other platforms. See design doc §8a / §12.
+add_subdirectory(writer)
 
 # Test if we need libatomic
 include(CheckCXXSourceCompiles)
@@ -364,7 +442,26 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "disk_formatter.cpp" "bootimgcreator.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
     "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "secureboot_crypto_common.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
     "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp" "writeprogresswatchdog.cpp"
-    "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "github_keys.cpp" "connect_device_signin.cpp" "dependencies/qrcodegen/qrcodegen.cpp" "eeprom_repo_override.cpp")
+    "oslistparser.cpp" "imagesizeparser.cpp" "model_row_diff.cpp" "network_poll_action.cpp" "github_keys.cpp" "connect_device_signin.cpp" "dependencies/qrcodegen/qrcodegen.cpp" "eeprom_repo_override.cpp"
+    "local_shim_backend.cpp" "privileged_io_glue.cpp"
+    "privileged_helper_diagnostic.cpp"
+    "file_operations_benchmark.cpp")
+
+rpi_imager_sbom_add_component(qrcodegen
+    NAME "QR Code generator library (C++)"
+    SUPPLIER "Project Nayuki"
+    VCS_URL "https://github.com/nayuki/QR-Code-generator.git"
+    COMMIT "3c6d0b3cefb4"
+    LICENSE "MIT"
+    PURL "pkg:github/nayuki/QR-Code-generator@3c6d0b3cefb4"
+    ORIGIN "source copy in src/dependencies/qrcodegen")
+rpi_imager_sbom_add_component(sha256crypt
+    NAME "SHA-crypt (SHA-256)"
+    SUPPLIER "Person: Ulrich Drepper"
+    DOWNLOAD_LOCATION "https://www.akkadia.org/drepper/SHA-crypt.txt"
+    LICENSE "LicenseRef-Public-Domain"
+    LICENSE_TEXT "Released into the public domain by its author."
+    ORIGIN "source copy in src/dependencies/sha256crypt")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -403,6 +500,7 @@ set(SOURCES ${SOURCES}
     "fastboot/fastboot_protocol.cpp"
     "fastboot/bmap.cpp"
     "fastboot/sparse_encoder.cpp"
+    "fastboot/write_manifest.cpp"
     "fastboot/pieeprom.cpp"
     "fastboot/eeprom_signer.cpp"
     "fastbootflashthread.cpp"
@@ -431,13 +529,31 @@ endif()
 if (Qt6_FOUND)
     set(QT Qt6)
     if (APPLE)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "13" CACHE STRING "" FORCE)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "14.4" CACHE STRING "" FORCE)
     endif()
 else()
     message(FATAL_ERROR "Missing suitable Qt library (must be at least version 6.9)" )
 endif()
 if(${QT}WinExtras_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)
+endif()
+
+# Keep in step with the target_link_libraries() calls below.
+if(BUILD_CLI_ONLY)
+    rpi_imager_sbom_add_qt(Core Network)
+elseif(UNIX AND NOT APPLE AND NOT BUILD_EMBEDDED)
+    rpi_imager_sbom_add_qt(Core Gui Qml Quick Svg Network DBus)
+else()
+    rpi_imager_sbom_add_qt(Core Gui Qml Quick Svg Network)
+endif()
+if(NOT BUILD_CLI_ONLY)
+    rpi_imager_sbom_add_component(roboto
+        NAME "Roboto"
+        SUPPLIER "Google LLC"
+        VCS_URL "https://github.com/googlefonts/roboto.git"
+        LICENSE "Apache-2.0"
+        TYPE data
+        ORIGIN "font files in src/fonts, compiled into the Qt resources")
 endif()
 
 # Find all translation files automatically
@@ -489,6 +605,15 @@ if(GENERATE_TIMEZONES_FROM_IANA)
             -DTZDATA_DIR=${CMAKE_CURRENT_BINARY_DIR}/tzdata
     )
     list(APPEND SOURCES "${GENERATED_TZ_QRC}")
+    rpi_imager_sbom_add_component(tzdata
+        NAME "tzdata"
+        VERSION "${TZDATA_VERSION}"
+        SUPPLIER "IANA"
+        DOWNLOAD_LOCATION "${TZDATA_URL}"
+        LICENSE "LicenseRef-Public-Domain"
+        LICENSE_TEXT "Released into the public domain by its author."
+        TYPE data
+        DESCRIPTION "Time zone names, or the source-tree list when the download fails")
 endif()
 
 option(GENERATE_COUNTRIES_FROM_REGDB "Generate countries list from latest wireless-regdb" ON)
@@ -505,6 +630,14 @@ if(GENERATE_COUNTRIES_FROM_REGDB)
         EXTRA_CMAKE_ARGS -DREGDB_URL=${REGDB_URL}
     )
     list(APPEND SOURCES "${GENERATED_COUNTRIES_QRC}")
+    rpi_imager_sbom_add_component(wireless-regdb
+        NAME "wireless-regdb"
+        SUPPLIER "wireless-regdb maintainers"
+        DOWNLOAD_LOCATION "${REGDB_URL}"
+        VCS_URL "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git"
+        LICENSE "ISC"
+        TYPE data
+        DESCRIPTION "Country list from db.txt at build time, or the source-tree list when the download fails")
 endif()
 
 # Create the application target before tools reference it
@@ -588,6 +721,8 @@ if(NOT BUILD_CLI_ONLY)
         wizard/dialogs/ConfirmUnfilterDialog.qml
         wizard/dialogs/ConfirmSystemDriveDialog.qml
         wizard/dialogs/KeychainPermissionDialog.qml
+        wizard/dialogs/PrivilegedHelperDialog.qml
+        wizard/dialogs/FullDiskAccessDialog.qml
         wizard/dialogs/UpdateAvailableDialog.qml
         wizard/dialogs/PasswordlessSudoWarningDialog.qml
         wizard/dialogs/RepositoryDialog.qml
@@ -617,6 +752,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/WizardContainer.qml
         wizard/DeviceSelectionStep.qml
         wizard/OSSelectionStep.qml
+        wizard/EulaAcceptanceStep.qml
         wizard/StorageSelectionStep.qml
         wizard/HostnameCustomizationStep.qml
         wizard/IfAndFeaturesCustomizationStep.qml
@@ -669,6 +805,9 @@ if(NOT BUILD_CLI_ONLY)
     )
 endif()
 
+# Defined before packaging so the platform hooks can depend on it.
+rpi_imager_sbom_add_target(${PROJECT_NAME})
+
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
     include(windows/PlatformPackaging.cmake)
@@ -697,6 +836,69 @@ else()
     else()
         target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${RPIBOOT_LIBS} ${EXTRALIBS})
     endif()
+endif()
+
+# Privileged I/O PAL — the same library is linked into every variant.
+target_link_libraries(${PROJECT_NAME} PRIVATE privileged_io)
+
+# When the experimental Windows helper is enabled, the client (this target)
+# compiles the WindowsHelperFileOperations adapter and selects it from
+# file_operations_windows.cpp's factory under this define. It is scoped to the
+# client target so the helper binary never inherits it (§14.6).
+if(WIN32 AND NOT RPI_IMAGER_DISABLE_WINDOWS_HELPER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE RPI_IMAGER_ENABLE_WINDOWS_HELPER)
+endif()
+
+if(UNIX AND NOT APPLE AND NOT RPI_IMAGER_DISABLE_LINUX_HELPER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE RPI_IMAGER_ENABLE_LINUX_HELPER)
+    if(TARGET rpi_imager_writer_linux)
+        target_link_libraries(${PROJECT_NAME} PRIVATE rpi_imager_writer_linux)
+    endif()
+endif()
+
+# Bundle the privileged helper into RpiImager.app on macOS. The
+# rpi-imager-writer target is added in src/writer/CMakeLists.txt; we
+# wire the post-build copy here, after the main rpi-imager target
+# exists, because POST_BUILD on rpi-imager-writer doesn't fire when
+# the helper itself is up-to-date.
+if(APPLE AND TARGET rpi-imager-writer)
+    add_dependencies(${PROJECT_NAME} rpi-imager-writer)
+
+    # Bundle copy. Earlier shape attached this as a POST_BUILD of
+    # ${PROJECT_NAME}, which left a stale helper in the bundle whenever
+    # only writer sources changed (the main app didn't re-link, so its
+    # POST_BUILD didn't fire). Use OUTPUT-driven custom commands instead
+    # so ninja tracks the bundled paths as real files with the helper
+    # binary + plist as their inputs: refresh whenever EITHER input is
+    # newer than the bundled copy.
+    add_custom_command(
+        OUTPUT "${RPI_IMAGER_WRITER_BUNDLED_HELPER_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/rpi-imager.app/Contents/MacOS"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:rpi-imager-writer>"
+            "${RPI_IMAGER_WRITER_BUNDLED_HELPER_PATH}"
+        DEPENDS rpi-imager-writer
+        COMMENT "Bundling rpi-imager-writer into RpiImager.app"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT "${RPI_IMAGER_WRITER_BUNDLED_PLIST_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/rpi-imager.app/Contents/Library/LaunchDaemons"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${RPI_IMAGER_WRITER_SMAPP_PLIST_GENERATED}"
+            "${RPI_IMAGER_WRITER_BUNDLED_PLIST_PATH}"
+        DEPENDS "${RPI_IMAGER_WRITER_SMAPP_PLIST_GENERATED}"
+        COMMENT "Bundling SMAppService plist into RpiImager.app"
+        VERBATIM
+    )
+    add_custom_target(rpi_imager_bundle_helper ALL
+        DEPENDS
+            "${RPI_IMAGER_WRITER_BUNDLED_HELPER_PATH}"
+            "${RPI_IMAGER_WRITER_BUNDLED_PLIST_PATH}"
+    )
+    add_dependencies(${PROJECT_NAME} rpi_imager_bundle_helper)
 endif()
 
 # Testing

@@ -16,6 +16,8 @@
 #include "embedded_config.h"
 #include "config.h"
 #include "file_operations.h"
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
 #include "drivelistitem.h"
 #include "customization_generator.h"
 #include "drivelist/drivelist.h"
@@ -43,12 +45,15 @@
 #include <QTextStream>
 #include <QProcess>
 #include <QRegularExpression>
+#include <cerrno>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimeZone>
 #include <QNetworkInterface>
 #include <QCoreApplication>
 #include <QPointer>
+#include <QDir>
+#include <QThread>
 #ifndef CLI_ONLY_BUILD
 #include <QQmlContext>
 #include <QWindow>
@@ -72,6 +77,7 @@
 #include <QTranslator>
 #include <QVersionNumber>
 #include <QCryptographicHash>
+#include <QStringDecoder>
 #include <QRandomGenerator>
 #ifndef CLI_ONLY_BUILD
 #include <QDesktopServices>
@@ -85,6 +91,7 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include "windows/usbdriver_windows.h"
 #include <QProcessEnvironment>
 #endif
 
@@ -105,6 +112,15 @@ namespace {
 
 // Initialize static member for secure boot CLI override
 bool ImageWriter::_forceSecureBootEnabled = false;
+
+bool ImageWriter::s_desktopSandboxed = false;
+
+bool ImageWriter::sandboxRefuses(const char *what)
+{
+    if (s_desktopSandboxed)
+        qDebug() << "Sandboxed, not:" << what;
+    return s_desktopSandboxed;
+}
 
 #ifndef CLI_ONLY_BUILD
 ImageWriter *ImageWriter::s_qmlInstance = nullptr;
@@ -198,6 +214,11 @@ ImageWriter::ImageWriter(QObject *parent)
         qDebug() << "[FileOps]" << msg.c_str();
     });
     qDebug() << "FileOperations log callback installed";
+
+    // Probe the privileged-helper state so the QML layer can render
+    // its initial UI correctly (e.g. show "needs install" prompt on
+    // the device-selection page if applicable).
+    refreshPrivilegedHelperState();
 
     QString platform;
 #ifndef CLI_ONLY_BUILD
@@ -676,6 +697,9 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osReleaseDate = releaseDate;
     _customisationCreatesUser = false;
     _bmapUrl = bmapUrl;
+    // A licence belongs to the OS that named it; setEulaUrl() names the next.
+    _forgetEula();
+    _eulaUrl.clear();
 
     qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
@@ -996,6 +1020,58 @@ void ImageWriter::onRpibootError(const QString &msg)
     onError(msg);
 }
 
+static QString bundledUsbDriverInf()
+{
+    return QDir::toNativeSeparators(QCoreApplication::applicationDirPath()
+                                    + QStringLiteral("/rpiboot-winusb.inf"));
+}
+
+bool ImageWriter::canInstallUsbDriver() const
+{
+#ifdef Q_OS_WIN
+    return QFileInfo::exists(bundledUsbDriverInf());
+#else
+    return false;
+#endif
+}
+
+void ImageWriter::installUsbDriver()
+{
+#ifdef Q_OS_WIN
+    if (_usbDriverInstalling)
+        return;
+    _usbDriverInstalling = true;
+    const std::wstring inf = bundledUsbDriverInf().toStdWString();
+    QPointer<ImageWriter> self(this);
+    QThread *worker = QThread::create([self, inf]() {
+        unsigned long detail = 0;
+        const auto result = UsbDriverWindows::installRpibootDriver(inf, detail);
+        qDebug() << "USB driver install: result" << static_cast<int>(result) << "detail" << detail;
+        QMetaObject::invokeMethod(qApp, [self, result, detail]() {
+            if (!self)
+                return;
+            self->_usbDriverInstalling = false;
+            using R = UsbDriverWindows::InstallResult;
+            if (result == R::Installed) {
+                self->_usbDriverMissing = false;
+                emit self->usbDriverInstallFinished(true,
+                    tr("The driver is installed. Unplug the device, plug it in again, then write again."));
+            } else if (result == R::Declined) {
+                emit self->usbDriverInstallFinished(false,
+                    tr("The driver was not installed because administrator permission was not given."));
+            } else {
+                emit self->usbDriverInstallFinished(false,
+                    tr("The driver could not be installed (error %1).").arg(detail));
+            }
+        }, Qt::QueuedConnection);
+    });
+    connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+    worker->start();
+#else
+    emit usbDriverInstallFinished(false, tr("Installing a USB driver is only needed on Windows."));
+#endif
+}
+
 /* Returns true if src and dst are set and destination device is still valid */
 bool ImageWriter::readyToWrite()
 {
@@ -1051,6 +1127,7 @@ QString ImageWriter::getHardwareName()
 void ImageWriter::_configureAndStartFastbootFlash()
 {
     _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    _fastbootFlashThread->setVerifyEnabled(_verifyEnabled);
     if (!_bmapUrl.isEmpty())
         _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
 
@@ -1063,6 +1140,7 @@ void ImageWriter::_configureAndStartFastbootFlash()
     if (_connectOrgRegistrationForWrite(orgKey, orgDesc))
         _fastbootFlashThread->setConnectRegistration(orgKey, orgDesc);
     connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(_fastbootFlashThread, &FastbootFlashThread::usbDriverMissing, this, [this]() { _usbDriverMissing = true; });
     connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
     connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
     connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
@@ -1070,6 +1148,12 @@ void ImageWriter::_configureAndStartFastbootFlash()
     });
     connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
         emit writeProgress(QVariant(now), QVariant(total));
+    });
+    connect(_fastbootFlashThread, &FastbootFlashThread::verifyProgress, this, [this](quint64 now, quint64 total) {
+        if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
+            _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
+            setWriteState(WriteState::Verifying);
+        emit verifyProgress(QVariant(now), QVariant(total));
     });
     connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
     connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
@@ -1097,6 +1181,10 @@ void ImageWriter::_configureAndStartFastbootFlash()
     connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
             this, [this](quint64 now, quint64 total){
                 _performanceStats->recordWriteProgress(now, total);
+            });
+    connect(_fastbootFlashThread, &FastbootFlashThread::verifyProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordVerifyProgress(now, total);
             });
 
     _fastbootFlashThread->start();
@@ -1195,6 +1283,8 @@ void ImageWriter::_configureWriteThread()
 
     connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
+    connect(_thread, &DownloadThread::privilegedHelperRequired,
+            this, &ImageWriter::refreshPrivilegedHelperState);
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
     connect(_thread, &DownloadThread::ejectStarted, this, &ImageWriter::onEjectStarted);
@@ -1403,6 +1493,12 @@ void ImageWriter::_configureWriteThread()
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
             });
+    connect(_thread, &DownloadThread::eventHelperSessionSummary,
+            this, [this](quint32 durationMs, QString metadata){
+                _performanceStats->recordEvent(
+                    PerformanceStats::EventType::HelperSessionSummary,
+                    durationMs, true, metadata);
+            });
     connect(_thread, &DownloadThread::eventDeviceIOTimeout,
             this, [this](quint32 pendingWrites, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
@@ -1464,9 +1560,12 @@ void ImageWriter::_configureWriteThread()
                 _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
             });
     connect(_thread, &DownloadThread::eventAsyncIOConfig,
-            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
-                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
-                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
+            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd,
+                         bool zeroCopyEngaged, quint64 zeroCopySubmits, quint64 copySubmits){
+                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4; "
+                                           "zeroCopyEngaged: %5; zeroCopySubmits: %6; copySubmits: %7")
+                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd)
+                    .arg(zeroCopyEngaged).arg(zeroCopySubmits).arg(copySubmits);
                 _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
             });
     connect(_thread, &DownloadThread::eventAsyncIOTiming,
@@ -1650,8 +1749,15 @@ void ImageWriter::startWrite()
         return;
     }
 
+    if (imageRequiresEula() && !isEulaAccepted())
+    {
+        emit error(tr("Cannot start write. The licence for %1 has not been accepted.").arg(_osName));
+        return;
+    }
+
     setWriteState(WriteState::Preparing);
     setEjectState(EjectState::EjectIdle);
+    _usbDriverMissing = false;
 
     if (choosePath() == WritePath::FastbootDevice)
     {
@@ -1697,6 +1803,7 @@ void ImageWriter::startWrite()
         // After sideload, start FastbootFlashThread
         connect(_rpibootThread, &RpibootThread::fastbootDeviceReady, this, &ImageWriter::onRpibootFastbootReady);
 
+        connect(_rpibootThread, &RpibootThread::usbDriverMissing, this, [this]() { _usbDriverMissing = true; });
         connect(_rpibootThread, &RpibootThread::error, this, &ImageWriter::onRpibootError);
         connect(_rpibootThread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
 
@@ -2255,14 +2362,30 @@ QString ImageWriter::constantVersion() const
 /* Returns true if version argument is newer than current program */
 bool ImageWriter::isVersionNewer(const QString &version)
 {
-    // Strip 'v' prefix if present - QVersionNumber requires strings to start with a digit
-    QString serverVersion = version.startsWith('v', Qt::CaseInsensitive) ? version.mid(1) : version;
-    QString currentVersion = QString(IMAGER_VERSION_STR);
-    if (currentVersion.startsWith('v', Qt::CaseInsensitive)) {
-        currentVersion = currentVersion.mid(1);
-    }
-    
-    return QVersionNumber::fromString(serverVersion) > QVersionNumber::fromString(currentVersion);
+    return isVersionNewerThan(version, QStringLiteral(IMAGER_VERSION_STR));
+}
+
+bool ImageWriter::isVersionNewerThan(const QString &candidate, const QString &current)
+{
+    struct Parsed { QVersionNumber number; bool prerelease; };
+    const auto parse = [](QString v) {
+        // QVersionNumber wants a digit first.
+        if (v.startsWith('v', Qt::CaseInsensitive))
+            v = v.mid(1);
+        qsizetype suffixAt = 0;
+        const QVersionNumber number = QVersionNumber::fromString(v, &suffixAt);
+        // "-rc1", "-beta2": before the release they number. "-5-gabc" is
+        // after it, as git describe writes a build past a tag.
+        static const QRegularExpression pre(
+            QStringLiteral("^-(rc|beta|alpha)\\d*"),
+            QRegularExpression::CaseInsensitiveOption);
+        return Parsed{number, pre.match(v.mid(suffixAt)).hasMatch()};
+    };
+    const Parsed c = parse(candidate);
+    const Parsed cur = parse(current);
+    if (c.number != cur.number)
+        return c.number > cur.number;
+    return cur.prerelease && !c.prerelease;
 }
 
 void ImageWriter::setCustomOsListUrl(const QUrl &url)
@@ -3514,6 +3637,15 @@ QString ImageWriter::usbMediaRoot() const
     return QStringLiteral("/media");
 }
 
+QString ImageWriter::mountUsbImageFolder()
+{
+    if (!mountUsbSourceMedia()) {
+        emit error(tr("No USB drive could be read. Connect a USB drive containing images and try again."));
+        return QString();
+    }
+    return QUrl::fromLocalFile(usbMediaRoot()).toString();
+}
+
 QByteArray ImageWriter::getUsbSourceOSlist()
 {
 #ifdef Q_OS_LINUX
@@ -3766,6 +3898,8 @@ static void locationPermissionCallback(int authorized, void *context)
 
 QString ImageWriter::getSSID()
 {
+    if (sandboxRefuses("reading the Wi-Fi SSID"))
+        return QString();
 #ifdef Q_OS_DARWIN
     // On macOS, set up a callback to be notified if location permission is granted
     // after the initial timeout. This handles the race condition where the user
@@ -3778,6 +3912,8 @@ QString ImageWriter::getSSID()
 
 QString ImageWriter::getPSK()
 {
+    if (sandboxRefuses("reading the Wi-Fi key"))
+        return QString();
 #ifdef Q_OS_DARWIN
     /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
      * Request user permission through QML dialog instead of QtWidgets QMessageBox. */
@@ -3818,6 +3954,8 @@ QString ImageWriter::getPSKForSSID(const QString &ssid)
         qDebug() << "ImageWriter::getPSKForSSID(): Empty SSID provided, cannot retrieve PSK";
         return QString();
     }
+    if (sandboxRefuses("reading the Wi-Fi key"))
+        return QString();
 
 #ifdef Q_OS_DARWIN
     /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
@@ -4500,6 +4638,135 @@ bool ImageWriter::imageRequiresUser()
     return imageSupportsCustomization() && checkSWCapability(QStringLiteral("user_required"));
 }
 
+namespace {
+const QString kAcceptedEulaDigests = QStringLiteral("accepted_eula_digests");
+}
+
+void ImageWriter::_forgetEula()
+{
+    _eulaText.clear();
+    _eulaDigest.clear();
+    if (_eulaFetcher)
+        _eulaFetcher->cancel();
+    _eulaFetcher.clear();
+}
+
+void ImageWriter::setEulaUrl(const QString &url)
+{
+    _forgetEula();
+    _eulaUrl = url.trimmed();
+}
+
+bool ImageWriter::imageRequiresEula() const
+{
+    return !_eulaUrl.isEmpty();
+}
+
+void ImageWriter::fetchEula()
+{
+    if (_eulaUrl.isEmpty())
+    {
+        emit eulaFailed(tr("The selected OS has no licence to accept."));
+        return;
+    }
+    if (!_eulaDigest.isEmpty())
+    {
+        emit eulaReady(_eulaText, isEulaAccepted());
+        return;
+    }
+    if (_eulaFetcher)
+        return;
+
+    const QUrl url(_eulaUrl, QUrl::StrictMode);
+    if (!url.isValid() || url.scheme() != QLatin1String("https") || url.host().isEmpty())
+    {
+        emit eulaFailed(tr("The OS list gives a licence address that is not https, so it cannot be shown. "
+                           "Please report this to whoever publishes the OS list."));
+        return;
+    }
+
+    auto *fetcher = new CurlFetcher(this);
+    fetcher->setMaxSize(maxEulaBytes);
+    _eulaFetcher = fetcher;
+    // The OS may have changed while this was under way; only the current
+    // fetch is listened to.
+    connect(fetcher, &CurlFetcher::finished, this,
+            [this, fetcher](const QByteArray &data, const QUrl &, const QUrl &effectiveUrl) {
+                if (_eulaFetcher.data() != fetcher)
+                    return;
+                _eulaFetcher.clear();
+                onEulaFetched(data, QString(), effectiveUrl);
+            });
+    connect(fetcher, &CurlFetcher::error, this,
+            [this, fetcher](const QString &message, const QUrl &requested) {
+                if (_eulaFetcher.data() != fetcher)
+                    return;
+                _eulaFetcher.clear();
+                onEulaFetched(QByteArray(), message, requested);
+            });
+    fetcher->fetch(url);
+}
+
+void ImageWriter::onEulaFetched(const QByteArray &body, const QString &fetchError, const QUrl &effectiveUrl)
+{
+    _eulaText.clear();
+    _eulaDigest.clear();
+
+    if (!fetchError.isEmpty())
+    {
+        emit eulaFailed(tr("The licence could not be downloaded: %1").arg(fetchError));
+        return;
+    }
+    // Redirects may leave https; what is accepted must have arrived over it.
+    if (effectiveUrl.scheme() != QLatin1String("https"))
+    {
+        emit eulaFailed(tr("The licence was redirected to an address that is not https, so it cannot be shown."));
+        return;
+    }
+    if (body.size() > maxEulaBytes)
+    {
+        emit eulaFailed(tr("The licence is larger than %1 KiB, so it cannot be shown.").arg(maxEulaBytes / 1024));
+        return;
+    }
+    QStringDecoder decoder(QStringDecoder::Utf8, QStringDecoder::Flag::Stateless);
+    const QString text = decoder(body);
+    if (decoder.hasError())
+    {
+        emit eulaFailed(tr("The licence is not UTF-8 text, so it cannot be shown."));
+        return;
+    }
+    if (text.trimmed().isEmpty())
+    {
+        emit eulaFailed(tr("The licence is empty."));
+        return;
+    }
+
+    _eulaText = text;
+    _eulaDigest = QString::fromLatin1(QCryptographicHash::hash(body, QCryptographicHash::Sha256).toHex());
+    emit eulaReady(_eulaText, isEulaAccepted());
+}
+
+void ImageWriter::setEulaAccepted(bool accepted)
+{
+    if (_eulaDigest.isEmpty())
+        return;
+    QStringList digests = _settings.value(kAcceptedEulaDigests).toStringList();
+    if (digests.contains(_eulaDigest) == accepted)
+        return;
+    if (accepted)
+        digests.append(_eulaDigest);
+    else
+        digests.removeAll(_eulaDigest);
+    _settings.setValue(kAcceptedEulaDigests, digests);
+    _settings.sync();
+}
+
+bool ImageWriter::isEulaAccepted() const
+{
+    return !_eulaDigest.isEmpty()
+        && _settings.value(kAcceptedEulaDigests).toStringList().contains(_eulaDigest);
+}
+
 bool ImageWriter::imageSupportsCcRpi()
 {
     return _initFormat == "cloudinit-rpi";
@@ -5016,6 +5283,8 @@ ImageWriter::RebootPath ImageWriter::rebootPathFor(bool embedded)
 
 void ImageWriter::reboot()
 {
+    if (sandboxRefuses("rebooting"))
+        return;
     qDebug() << "Rebooting system.";
     if (rebootPathFor(isEmbeddedMode()) == RebootPath::KernelCallThenQuit) {
 #ifdef Q_OS_LINUX
@@ -5057,6 +5326,8 @@ void ImageWriter::openUrl(const QUrl &url)
         qWarning() << "Refusing to open URL that is not a web page:" << url.scheme();
         return;
     }
+    if (sandboxRefuses("opening a URL"))
+        return;
 
     // Platform-native URL launching lives in the PAL (PlatformQuirks). It
     // returns false when it cannot — or deliberately will not — open the URL
@@ -5297,6 +5568,8 @@ bool ImageWriter::installElevationPolicy()
 
 void ImageWriter::restartWithElevatedPrivileges()
 {
+    if (sandboxRefuses("restarting elevated"))
+        return;
     // Pass through --log-file if present
     QStringList extraArgs;
     QStringList appArgs = QCoreApplication::arguments();
@@ -5458,6 +5731,156 @@ void ImageWriter::_handleMemoryAllocationFailure(const char* what)
     setWriteState(WriteState::Failed);
     _performanceStats->endSession(false, "Memory allocation failure");
     emit error(errorMsg);
+}
+
+// ---------------------------------------------------------------------------
+// Privileged-helper state (macOS SMAppService)
+//
+// Refresh queries the PAL's helper status and translates the backend's
+// HelperState enum into the QML-facing PrivilegedHelperState enum.
+// Non-macOS platforms (and macOS pre-13 fallback to authopen) always
+// report Ready - those elevation models don't have an equivalent
+// "user must approve in Settings" gate.
+// ---------------------------------------------------------------------------
+void ImageWriter::refreshPrivilegedHelperState()
+{
+    PrivilegedHelperState newState = PrivilegedHelperState::Ready;
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+#ifdef Q_OS_DARWIN
+    auto status = w.queryHelperStatus();
+    if (!status.ok) {
+        newState = PrivilegedHelperState::Unknown;
+    } else {
+        using HS = rpi_imager::privileged::proto::HelperState;
+        switch (status.value.state()) {
+            case HS::HELPER_STATE_INSTALLED_READY:
+                newState = PrivilegedHelperState::Ready;
+                break;
+            case HS::HELPER_STATE_NOT_INSTALLED:
+                newState = PrivilegedHelperState::NeedsInstall;
+                break;
+            case HS::HELPER_STATE_INSTALLED_DISABLED:
+                newState = PrivilegedHelperState::NeedsApproval;
+                break;
+            case HS::HELPER_STATE_VERSION_MISMATCH:
+                newState = PrivilegedHelperState::NeedsInstall;
+                break;
+            default:
+                newState = PrivilegedHelperState::Unknown;
+                break;
+        }
+    }
+    // If the backend isn't the XPC helper (e.g. user opted into
+    // legacy authopen via RPI_IMAGER_USE_LEGACY_AUTHOPEN=1), nothing
+    // to manage at the UI level.
+    if (w.backend() != rpi_imager::privileged::BackendKind::MacOSXpc) {
+        newState = PrivilegedHelperState::Unavailable;
+    }
+#elif defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    using BK = rpi_imager::privileged::BackendKind;
+    const auto kind = w.backend();
+    if (kind == BK::LinuxPolkit || kind == BK::WindowsUac) {
+        auto status = w.queryHelperStatus();
+        if (!status.ok) {
+            newState = PrivilegedHelperState::Unknown;
+        } else {
+            using HS = rpi_imager::privileged::proto::HelperState;
+            switch (status.value.state()) {
+                case HS::HELPER_STATE_INSTALLED_READY:
+                    newState = PrivilegedHelperState::Ready;
+                    break;
+                case HS::HELPER_STATE_NOT_INSTALLED:
+                    newState = PrivilegedHelperState::NeedsInstall;
+                    break;
+                case HS::HELPER_STATE_VERSION_MISMATCH:
+                    newState = PrivilegedHelperState::NeedsInstall;
+                    break;
+                default:
+                    newState = PrivilegedHelperState::Unknown;
+                    break;
+            }
+        }
+    } else {
+        newState = PrivilegedHelperState::Unavailable;
+    }
+#endif
+    if (_privilegedHelperState != newState) {
+        _privilegedHelperState = newState;
+        emit privilegedHelperStateChanged();
+    }
+}
+
+#ifdef Q_OS_DARWIN
+namespace rpi_imager { void OpenLoginItemsSettings(); }
+#endif
+
+bool ImageWriter::fullDiskAccessDenied()
+{
+#ifdef Q_OS_DARWIN
+    static const QRegularExpression wholeDisk(QStringLiteral("^/dev/r?disk(\\d+)$"));
+    const auto m = wholeDisk.match(_dst);
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    if (!m.hasMatch() || _privilegedHelperState != PrivilegedHelperState::Ready
+        || w.backend() != ::rpi_imager::privileged::BackendKind::MacOSXpc)
+        return false;
+    const auto r = w.probeDeviceAccess(
+        QStringLiteral("/dev/rdisk%1").arg(m.captured(1)).toStdString());
+    // Only the privacy refusal; anything else is left to the write to report.
+    return !r.ok && r.error.kernel_errno() == EPERM;
+#else
+    return false;
+#endif
+}
+
+void ImageWriter::openFullDiskAccessSettings()
+{
+    if (sandboxRefuses("opening System Settings"))
+        return;
+#ifdef Q_OS_DARWIN
+    QDesktopServices::openUrl(QUrl(QStringLiteral(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")));
+#endif
+}
+
+void ImageWriter::openLoginItemsSettings()
+{
+    if (sandboxRefuses("opening System Settings"))
+        return;
+#ifdef Q_OS_DARWIN
+    // Routes via SMAppService.openSystemSettingsLoginItems on macOS 13+,
+    // which Apple maintains across pane renames - the x-apple.systempreferences
+    // URLs have been unreliable since System Preferences became System Settings.
+    rpi_imager::OpenLoginItemsSettings();
+#endif
+}
+
+QString ImageWriter::installPrivilegedHelper()
+{
+    if (sandboxRefuses("installing the privileged helper"))
+        return {};
+    using BK = ::rpi_imager::privileged::BackendKind;
+    QString failure;
+    auto& w = ::rpi_imager::getProcessPrivilegedWriter();
+    const auto kind = w.backend();
+    // On Windows and Linux this starts the helper, with its UAC or polkit
+    // prompt; on macOS it registers it.
+    if (kind == BK::MacOSXpc || kind == BK::WindowsUac || kind == BK::LinuxPolkit) {
+        auto r = w.installHelper();
+        if (!r.ok) {
+            failure = QString::fromStdString(r.error.detail());
+            qDebug() << "installPrivilegedHelper:" << failure;
+        }
+    }
+    refreshPrivilegedHelperState();
+    // macOS's register() also fails when it has only queued the helper for
+    // the user's approval; that state is progress, not failure.
+    if (_privilegedHelperState == PrivilegedHelperState::Ready
+        || _privilegedHelperState == PrivilegedHelperState::NeedsApproval
+        || _privilegedHelperState == PrivilegedHelperState::Unavailable)
+        return {};
+    if (failure.isEmpty())
+        failure = tr("the helper did not respond.");
+    return tr("The privileged helper could not be started: %1").arg(failure);
 }
 
 void ImageWriter::_handleSetupException(const char* what)

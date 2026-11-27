@@ -67,6 +67,10 @@ add_custom_command(TARGET ${PROJECT_NAME} PRE_LINK
     COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_BUNDLE_PATH}/Contents"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_BUNDLE_PATH}/Contents/MacOS"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_BUNDLE_PATH}/Contents/Resources"
+    # macdeployqt only adds: what an earlier Qt deployed would otherwise ship.
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/PlugIns"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml"
     COMMENT "Creating app bundle directory structure"
 )
 
@@ -104,6 +108,9 @@ add_custom_command(TARGET ${PROJECT_NAME}
     COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fluentwinui3styleimplplugin.dylib"
     COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fluentwinui3styleplugin.dylib"
     COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2nativestyleplugin.dylib"
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquicknativestyleplugin.dylib"
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libquicktestplugin.dylib"
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqmldesignsupportplugin.dylib"
     COMMENT "Removing unused QuickControls2 style plugins (keeping Material + Basic fallback)"
 )
 
@@ -178,12 +185,22 @@ add_custom_command(TARGET ${PROJECT_NAME}
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/macOS"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/FluentWinUI3"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/designer"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/Native"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/NativeStyle"
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQml/DesignSupport"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/VirtualKeyboard"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtTest"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/test"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Assets"
     COMMAND /bin/sh -c "find \"${APP_BUNDLE_PATH}/Contents/Resources/qml\" -type d -name 'objects-*' -prune -exec rm -rf {} +"
     COMMENT "Removing unused QML theme directories and modules (keeping Material theme + Basic fallback)"
+)
+
+# Runs after every prune above: it removes the libraries they leave unloaded.
+add_custom_command(TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND /bin/sh "${CMAKE_CURRENT_SOURCE_DIR}/mac/prune_unlinked_libs.sh" "${APP_BUNDLE_PATH}"
+    COMMENT "Removing Qt libraries nothing in the bundle loads"
 )
 
 # Install pre-compiled icon assets for dark mode + Liquid Glass support (macOS Tahoe+)
@@ -227,6 +244,8 @@ file(WRITE "${_dmg_extra_vars}"
     "set(IMAGER_SIGNING_IDENTITY \"${IMAGER_SIGNING_IDENTITY}\")\n"
     "set(IMAGER_NOTARIZE_APP \"${IMAGER_NOTARIZE_APP}\")\n"
     "set(IMAGER_NOTARIZE_KEYCHAIN_PROFILE \"${IMAGER_NOTARIZE_KEYCHAIN_PROFILE}\")\n"
+    "set(RPI_IMAGER_SBOM_INPUTS \"${RPI_IMAGER_SBOM_INPUTS}\")\n"
+    "set(RPI_IMAGER_SBOM_GENERATOR \"${RPI_IMAGER_SBOM_GENERATOR}\")\n"
 )
 
 if(IMAGER_SIGNED_APP)
@@ -285,6 +304,23 @@ else()
         COMMENT "Creating macOS DMG"
         VERBATIM)
 endif()
+
+    # The bundle carries the SBOM in Contents/Resources/sbom. The signed path
+    # rewrites it, and writes the copy beside the DMG, in create_styled_dmg.sh.
+    add_dependencies(dmg rpi_imager_sbom)
+    if(NOT IMAGER_SIGNED_APP)
+        set(_dmg_stem "imager_@IMAGER_FILE_VERSION@")
+        add_custom_command(TARGET dmg POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                "-DSBOM_INPUTS=${RPI_IMAGER_SBOM_INPUTS}"
+                "-DSBOM_COPY_DIRS="
+                "-DSBOM_OUTPUT_DIR=${CMAKE_BINARY_DIR}"
+                "-DSBOM_ARTEFACT=${CMAKE_BINARY_DIR}/${_dmg_stem}.dmg"
+                "-DSBOM_LIFECYCLE=post-build"
+                -P "${RPI_IMAGER_SBOM_GENERATOR}"
+            COMMENT "Writing the SBOM beside the DMG"
+            VERBATIM)
+    endif()
 
     message(STATUS "Added 'dmg' target to build the macOS DMG installer")
 endif() # BUILD_CLI_ONLY

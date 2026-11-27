@@ -142,6 +142,7 @@ TestCase {
         return [
             { tag: "device",     step: wiz.stepDeviceSelection },
             { tag: "os",         step: wiz.stepOSSelection },
+            { tag: "eula",       step: wiz.stepEulaAcceptance },
             { tag: "storage",    step: wiz.stepStorageSelection },
             { tag: "hostname",   step: wiz.stepHostnameCustomization },
             { tag: "locale",     step: wiz.stepLocaleCustomization },

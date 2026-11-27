@@ -6,6 +6,7 @@
 #include "file_operations_macos.h"
 #include "macfile.h"
 
+
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -1062,8 +1063,34 @@ FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& pa
   return {};
 }
 
+// Forward declaration: helper-routed FileOperations lives in xpc_file_operations.mm
+extern std::unique_ptr<FileOperations> CreateXpcFileOperations();
+
 // Platform-specific factory function implementation
+//
+// On macOS the privileged-helper path is the default: writes flow
+// through rpi-imager-writer via NSXPC, the helper opens /dev/rdiskN
+// itself with its own FD, and the Tahoe authopen-FD bug never has a
+// chance to fire.
+//
+// Opt-out via `RPI_IMAGER_USE_LEGACY_AUTHOPEN=1` for diagnostic
+// comparison or fallback when the helper isn't installable (older
+// macOS, sandbox refuses SMAppService registration, etc.).
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
+  const char* legacy = std::getenv("RPI_IMAGER_USE_LEGACY_AUTHOPEN");
+  if (legacy && legacy[0] == '1') {
+    return std::make_unique<MacOSFileOperations>();
+  }
+  // Also accept the old opt-IN env var so existing scripts don't break.
+  const char* use_xpc = std::getenv("RPI_IMAGER_USE_XPC_HELPER");
+  if (use_xpc && use_xpc[0] == '0') {
+    // Explicit opt-out via the legacy variable name.
+    return std::make_unique<MacOSFileOperations>();
+  }
+  return CreateXpcFileOperations();
+}
+
+std::unique_ptr<FileOperations> CreateInProcessPlatformFileOperations() {
   return std::make_unique<MacOSFileOperations>();
 }
 

@@ -203,11 +203,13 @@ TEST_CASE("Every OS role is either drawn or knowingly carried",
         QStringLiteral("website"), QStringLiteral("tooltip"),
     };
 
-    // Carried through the parser and the model, and drawn by nothing. Empty
-    // today: 'website' and 'tooltip' were the two, and the delegate now shows
-    // both. A role added without a home belongs here with a reason, or in the
-    // list above with somewhere to appear.
-    const QSet<QString> carriedButNotDrawn = {};
+    // Carried through the parser and the model, and drawn by nothing. A role
+    // added without a home belongs here with a reason, or in the list above
+    // with somewhere to appear.
+    //
+    // 'eula_url' is read when the row is chosen: the licence it names is
+    // drawn on a step of its own, not in the row.
+    const QSet<QString> carriedButNotDrawn = {QStringLiteral("eula_url")};
 
     const QStringList names = roleNameList(*model);
     REQUIRE_FALSE(names.isEmpty());

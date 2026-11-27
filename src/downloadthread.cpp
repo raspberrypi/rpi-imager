@@ -7,6 +7,8 @@
 
 #include <QCoreApplication>
 #include "aligned_buffer.h"
+#include <algorithm>
+#include <cstring>
 #include "config.h"
 #include "cmdline_params.h"
 #include "config_txt_merge.h"
@@ -15,6 +17,8 @@
 #include "systemmemorymanager.h"
 #include "timeout_utils.h"
 #include "platformquirks.h"
+#include "privileged_io_glue.h"
+#include "privileged_io/privileged_writer.h"
 #include "drivelist/drivelist.h"
 #include <fstream>
 #include <sstream>
@@ -97,8 +101,12 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     QSettings settings;
     _ejectEnabled = settings.value("eject", true).toBool();
 
-    // Initialize unified file operations
-    _file = rpi_imager::FileOperations::Create();
+    // Initialize unified file operations. The helpers open only devices, so
+    // a regular-file destination (the CLI allows one) stays in process.
+    const bool toDevice = _filename.startsWith("/dev/")
+        || _filename.toLower().startsWith("\\\\.\\physicaldrive");
+    _file = toDevice ? rpi_imager::FileOperations::Create()
+                     : rpi_imager::FileOperations::CreateInProcess();
 #ifdef Q_OS_WIN
     _volumeFile = rpi_imager::FileOperations::Create();
 #endif
@@ -164,6 +172,8 @@ DownloadThread::~DownloadThread()
 
     if (_firstBlock)
         qFreeAligned(_firstBlock);
+    if (_stage)
+        qFreeAligned(_stage);
     
     // Note: curl_global_cleanup() is not called here - it happens at process exit.
     // This is safe and avoids issues with multiple DownloadThread instances.
@@ -222,23 +232,64 @@ bool DownloadThread::_openAndPrepareDevice()
 {
     QElapsedTimer unmountTimer;
     QElapsedTimer openTimer;
-    
+
+    // Where the helper starts on demand, the first helper call below starts
+    // it, and that is when the system asks for permission. Said here, the
+    // prompt arrives over a screen that explains it rather than one that
+    // reads "Cleaning disk...".
+    auto announcePermissionPrompt = [this] {
+        if (!rpi_imager::getProcessPrivilegedWriter().helperActive()) {
+            emit preparationStatusUpdate(
+                tr("Waiting for your permission to write to the storage device..."));
+        }
+    };
+
     if (_filename.startsWith("/dev/"))
     {
         emit preparationStatusUpdate(tr("Unmounting drive..."));
         unmountTimer.start();
         // Use block device path for unmount (e.g., /dev/disk on macOS, not /dev/rdisk)
-        // DADiskUnmount with kDADiskUnmountOptionWhole automatically unmounts 
+        // DADiskUnmount with kDADiskUnmountOptionWhole automatically unmounts
         // all child volumes (APFS containers, partitions, etc.)
         QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
-        qDebug() << "Unmounting:" << unmountPath;
-        PlatformQuirks::DiskResult unmountResult = PlatformQuirks::unmountDisk(unmountPath);
-        bool unmountSuccess = (unmountResult == PlatformQuirks::DiskResult::Success);
+        qDebug() << "Unmounting via PAL:" << unmountPath;
+
+        // Route through IPrivilegedWriter rather than calling
+        // PlatformQuirks::unmountDisk directly, so the active backend (the
+        // macOS helper, or the LocalShimBackend elsewhere) handles it
+        // without touching this call site.
+        auto& writer = rpi_imager::getProcessPrivilegedWriter();
+        announcePermissionPrompt();
+        auto unmountResult = writer.unmount(unmountPath.toStdString());
+        bool unmountSuccess = unmountResult.ok;
         emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), unmountSuccess);
-        
+
         if (!unmountSuccess) {
-            qDebug() << "Unmount failed with result:" << static_cast<int>(unmountResult);
+            qDebug() << "Unmount failed:"
+                     << QString::fromStdString(unmountResult.error.detail())
+                     << "(code" << unmountResult.error.code() << ")";
+            // The first privileged call is this one, so a refused or
+            // dismissed password prompt surfaces here, not as a busy disk.
+            if (unmountResult.error.code()
+                    == rpi_imager::privileged::proto::ERROR_HELPER_INSTALL_REJECTED) {
+                emit error(tr("Raspberry Pi Imager was not given permission to write to "
+                              "the storage device. Nothing has been written."));
+                return false;
+            }
+            if (unmountResult.error.code()
+                    == rpi_imager::privileged::proto::ERROR_DEVICE_DISCONNECTED) {
+                emit error(tr("The part of Raspberry Pi Imager that writes to storage "
+                              "devices stopped unexpectedly. Nothing has been written."));
+                return false;
+            }
 #ifdef Q_OS_DARWIN
+            if (unmountResult.error.code()
+                    == rpi_imager::privileged::proto::ERROR_HELPER_NOT_INSTALLED) {
+                emit privilegedHelperRequired();
+                emit error(tr("Raspberry Pi Imager cannot write to storage devices "
+                              "because the privileged helper is not available."));
+                return false;
+            }
             emit error(tr("Failed to unmount disk '%1'. Please close any applications using the disk and try again.").arg(unmountPath));
 #else
             emit error(tr("Failed to unmount disk '%1'.").arg(unmountPath));
@@ -284,28 +335,52 @@ bool DownloadThread::_openAndPrepareDevice()
                 }
             };
 
-            // Unmount volumes first (with performance instrumentation)
-            emit preparationStatusUpdate(tr("Unmounting volumes..."));
-            auto unmountResult = DiskpartUtil::unmountVolumes(_filename, lockedVolumes, timingCallback);
-            if (!unmountResult.success)
-            {
-                qDebug() << "Warning: Volume unmount had issues:" << unmountResult.errorMessage;
-                // Continue anyway - cleanDiskFast may still succeed
-            }
-
-            // Clean disk using fast direct IOCTL method (replaces diskpart)
+            // The helper is elevated and this process may not be (asInvoker),
+            // so the helper cleans when it can; NOT_IMPLEMENTED means no helper.
             emit preparationStatusUpdate(tr("Cleaning disk..."));
-            auto cleanResult = DiskpartUtil::cleanDiskFast(_filename, timingCallback);
-            if (!cleanResult.success)
+            announcePermissionPrompt();
+            QElapsedTimer helperCleanTimer;
+            helperCleanTimer.start();
+            const auto helperClean =
+                rpi_imager::getProcessPrivilegedWriter().cleanDisk(_filename.toStdString());
+            const bool cleanInProcess = !helperClean.ok
+                && helperClean.error.code() == rpi_imager::privileged::proto::ERROR_NOT_IMPLEMENTED;
+            if (!cleanInProcess) {
+                emit eventDriveDiskClean(static_cast<quint32>(helperCleanTimer.elapsed()),
+                                         helperClean.ok);
+                if (!helperClean.ok) {
+                    qDebug() << "Helper disk clean failed:"
+                             << QString::fromStdString(helperClean.error.detail());
+                    emit error(tr("Failed to clean disk '%1'. Please close any applications using the disk and try again.")
+                                   .arg(QString::fromLatin1(_filename)));
+                    return false;
+                }
+            }
+            else
             {
-                // Fall back to legacy diskpart method if direct IOCTLs fail
-                qDebug() << "Fast disk clean failed, falling back to diskpart:" << cleanResult.errorMessage;
-                emit preparationStatusUpdate(tr("Cleaning disk (legacy method)..."));
-                cleanResult = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::SkipUnmounting);
+                // Unmount volumes first (with performance instrumentation)
+                emit preparationStatusUpdate(tr("Unmounting volumes..."));
+                auto unmountResult = DiskpartUtil::unmountVolumes(_filename, lockedVolumes, timingCallback);
+                if (!unmountResult.success)
+                {
+                    qDebug() << "Warning: Volume unmount had issues:" << unmountResult.errorMessage;
+                    // Continue anyway - cleanDiskFast may still succeed
+                }
+
+                // Clean disk using fast direct IOCTL method (replaces diskpart)
+                emit preparationStatusUpdate(tr("Cleaning disk..."));
+                auto cleanResult = DiskpartUtil::cleanDiskFast(_filename, timingCallback);
                 if (!cleanResult.success)
                 {
-                    emit error(cleanResult.errorMessage);
-                    return false;
+                    // Fall back to legacy diskpart method if direct IOCTLs fail
+                    qDebug() << "Fast disk clean failed, falling back to diskpart:" << cleanResult.errorMessage;
+                    emit preparationStatusUpdate(tr("Cleaning disk (legacy method)..."));
+                    cleanResult = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::SkipUnmounting);
+                    if (!cleanResult.success)
+                    {
+                        emit error(cleanResult.errorMessage);
+                        return false;
+                    }
                 }
             }
         }
@@ -419,8 +494,10 @@ bool DownloadThread::_openAndPrepareDevice()
 #ifdef Q_OS_DARWIN
         // On macOS, this might be due to permission issues
         QString msg = tr("Error opening disk device '%1'").arg(QString(_filename));
-        msg += "<br>"+tr("Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').");
-        QStringList args("x-apple.systempreferences:com.apple.preference.security?Privacy_RemovableVolume");
+        // The helper opens the raw device, which 'Removable Volumes' under
+        // Files and Folders does not cover.
+        msg += "<br>"+tr("Please allow 'Raspberry Pi Imager' under Full Disk Access in System Settings, in Privacy & Security, then try again. macOS may ask you to reopen Raspberry Pi Imager.");
+        QStringList args("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
         QProcess::execute("open", args);
         emit error(msg);
 #elif defined(Q_OS_LINUX)
@@ -488,17 +565,13 @@ bool DownloadThread::_openAndPrepareDevice()
         const auto& limits = _file->GetDeviceIOLimits();
         if (_debugAsyncIO && limits.suggested_queue_depth > 0 && !_debugIgnoreDeviceLimits)
         {
-            // Use 3x the device's queue depth for write-ahead latency hiding.
-            // Network downloads feed the write queue in bursts (jitter + decompression),
-            // so we need more headroom than pure sequential I/O to prevent device
-            // starvation during pipeline stalls.  See #1592.
-            int deviceCap = qMax(4, limits.suggested_queue_depth * 3);
-            if (deviceCap < _debugAsyncQueueDepth)
+            const int capped = limits.capAsyncQueueDepth(_debugAsyncQueueDepth);
+            if (capped < _debugAsyncQueueDepth)
             {
                 qDebug() << "Capping async queue depth from" << _debugAsyncQueueDepth
-                         << "to" << deviceCap
+                         << "to" << capped
                          << "(device suggested:" << limits.suggested_queue_depth << ")";
-                _debugAsyncQueueDepth = deviceCap;
+                _debugAsyncQueueDepth = capped;
             }
         }
         if (limits.max_transfer_bytes > 0)
@@ -507,6 +580,11 @@ bool DownloadThread::_openAndPrepareDevice()
 
     // Configure async I/O if enabled
     if (_debugAsyncIO && _file->IsAsyncIOSupported()) {
+        // Tell the backend the largest write we'll submit so it can size any
+        // pre-mapped I/O buffers to the actual chunk size (macOS helper ring).
+        if (size_t hint = _maxWriteChunkHint(); hint > 0) {
+            _file->SetMaxWriteSizeHint(hint);
+        }
         bool asyncConfigured = _file->SetAsyncQueueDepth(_debugAsyncQueueDepth);
         qDebug() << "Async I/O:" << (asyncConfigured ? "configured" : "failed to configure")
                  << "with queue depth" << _debugAsyncQueueDepth;
@@ -529,7 +607,7 @@ bool DownloadThread::_openAndPrepareDevice()
     }
 #endif
 
-    // Zero the first and last megabyte, and time the second one.
+    // Zero the first and last megabyte, and time the whole operation.
     //
     // The write to the end is what catches a counterfeit card. A card
     // reporting a capacity it does not have never returns from a write to
@@ -539,118 +617,78 @@ bool DownloadThread::_openAndPrepareDevice()
     // survives an MBR-only wipe and leaves the card looking like a hybrid
     // nothing agrees how to read.
     //
-    // This was #ifndef Q_OS_WIN with no #else, so Windows had neither: no
-    // counterfeit detection at all, on the platform most cards are written
-    // from. Nothing in it is POSIX -- the buffer, the timeout and the four
-    // device calls are all platform-agnostic -- so the guard is gone rather
-    // than answered.
+    // Unified via FileOperations::PrepareDevice. On macOS
+    // (XpcFileOperations) this is a single privileged call that runs both
+    // scrubs + fsync inside the helper; elsewhere it falls back to the
+    // in-process Seek/Write/Flush/Sync sequence in file_operations.cpp.
     QElapsedTimer mbrTimer;
     mbrTimer.start();
-    
+
     std::uint64_t knownsize = 0;
     rpi_imager::FileError sizeResult = _file->GetSize(knownsize);
     if (sizeResult != rpi_imager::FileError::kSuccess) {
         emit error(_fileErrorToString(sizeResult, tr("getting device size")));
         return false;
     }
-    
-    // Use aligned buffer for O_DIRECT compatibility on Linux
-    // O_DIRECT requires buffers to be aligned to the filesystem's logical block size
-    constexpr size_t emptyMBSize = 1024 * 1024;
-    rpi_imager::AlignedBuffer emptyMB(emptyMBSize);
-    if (!emptyMB) {
-        emit error(tr("Failed to allocate buffer for MBR zeroing.\n\n"
-                     "The system may be low on memory."));
-        return false;
-    }
-    
-    emit preparationStatusUpdate(tr("Zero'ing out first and last MB of drive..."));
-    qDebug() << "Zeroing out first and last MB of drive";
-    _timer.start();
 
-    rpi_imager::FileError mbrWriteResult = _file->WriteSequential(emptyMB.data(), emptyMBSize);
-    rpi_imager::FileError mbrFlushResult = (mbrWriteResult == rpi_imager::FileError::kSuccess) ? _file->Flush() : mbrWriteResult;
-    if (mbrWriteResult != rpi_imager::FileError::kSuccess || mbrFlushResult != rpi_imager::FileError::kSuccess)
-    {
-        rpi_imager::FileError errorToReport = (mbrWriteResult != rpi_imager::FileError::kSuccess) ? mbrWriteResult : mbrFlushResult;
-        emit error(_writeFailureToString(errorToReport, tr("preparing storage device")));
-        return false;
-    }
-    qint64 firstMBMs = _timer.elapsed();
-    qDebug() << "  First MB + flush took" << firstMBMs << "ms";
-
-    // Zero out last part of card (may have GPT backup table)
-    // This operation can hang indefinitely on counterfeit SD cards that report
-    // a fake capacity larger than their actual storage, so we use a timeout.
-    // Can be skipped via debug option for users with counterfeit cards.
-    if (_debugSkipEndOfDevice)
-    {
+    const bool zeroLastMb = !_debugSkipEndOfDevice;
+    if (_debugSkipEndOfDevice) {
         qDebug() << "Skipping last MB zeroing (debug: skip end-of-device operations for counterfeit card support)";
     }
-    else if (knownsize > emptyMBSize)
-    {
-        _timer.restart();
-        emit preparationStatusUpdate(tr("Zero'ing out end of drive..."));
-        
-        // Everything the lambda touches has to outlive it, because
-        // runWithTimeout() detaches its worker on the cancel and timeout
-        // paths and the worker runs on for as long as the syscall blocks.
-        // A raw _file.get() and a pointer into the local emptyMB were both
-        // dangling by the time a cancelled worker unblocked -- pressing
-        // Cancel early in a write could take the process down with it.
-        auto file = _file;                       // shares ownership
-        auto buffer = std::make_shared<rpi_imager::AlignedBuffer>(emptyMBSize);
-        if (!*buffer) {
-            emit error(tr("Failed to allocate buffer for MBR zeroing.\n\n"
-                          "The system may be low on memory."));
-            return false;
-        }
-        uint64_t seekPosition = knownsize - emptyMBSize;
-        
-        // Write to end of device can hang on counterfeit cards with fake capacity
-        // Use timeout to detect counterfeit cards with fake capacity
-        int lastMBResultInt = 0;
-        auto timeoutResult = runWithTimeout(
-            [file, seekPosition, buffer, emptyMBSize]() {
-                if (file->Seek(seekPosition) != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kSeekError);
-                if (file->WriteSequential(buffer->data(), emptyMBSize) != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kWriteError);
-                if (file->Flush() != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kFlushError);
-                if (file->ForceSync() != rpi_imager::FileError::kSuccess)
-                    return static_cast<int>(rpi_imager::FileError::kSyncError);
-                return static_cast<int>(rpi_imager::FileError::kSuccess);
-            },
-            lastMBResultInt,
-            TimeoutConfig(kHardTimeoutSeconds).withCancelFlag(&_cancelled)
-        );
-        
-        if (timeoutResult == TimeoutResult::Cancelled) {
-            qDebug() << "Last MB write cancelled";
-            return false;
-        }
-        
-        if (timeoutResult == TimeoutResult::TimedOut) {
-            emit error(tr("Timeout writing to end of storage device.\n\n"
-                          "This may indicate a counterfeit SD card with fake capacity.\n\n"
-                          "Please try a different storage device."));
-            return false;
-        }
-        
-        auto lastMBResult = static_cast<rpi_imager::FileError>(lastMBResultInt);
-        if (lastMBResult != rpi_imager::FileError::kSuccess) {
-            emit error(tr("Write error while trying to zero out last part of card.\n\n"
-                          "This could indicate the card is advertising wrong capacity "
-                          "(possible counterfeit).\n\n"
-                          "Please try a different storage device."));
-            return false;
-        }
-        qDebug() << "  Last MB + flush + sync took" << _timer.elapsed() << "ms";
+
+    emit preparationStatusUpdate(tr("Zero'ing out first and last MB of drive..."));
+    qDebug() << "Zeroing out first and last MB of drive";
+
+    // runWithTimeout() detaches its worker on the cancel and timeout paths,
+    // so the lambda must share ownership rather than hold _file.get().
+    auto file = _file;
+    int prepResultInt = 0;
+    auto timeoutResult = runWithTimeout(
+        [file, knownsize, zeroLastMb]() {
+            return static_cast<int>(file->PrepareDevice(knownsize, zeroLastMb));
+        },
+        prepResultInt,
+        TimeoutConfig(kHardTimeoutSeconds).withCancelFlag(&_cancelled)
+    );
+
+    if (timeoutResult == TimeoutResult::Cancelled) {
+        qDebug() << "MBR zero cancelled";
+        return false;
     }
-    // Back to the start for the image itself. The position is currently at
-    // the end of the device, where the last megabyte was just zeroed, so a
-    // failure here that went unnoticed would begin the image there.
+    if (timeoutResult == TimeoutResult::TimedOut) {
+        emit error(tr("Timeout writing to end of storage device.\n\n"
+                      "This may indicate a counterfeit SD card with fake capacity.\n\n"
+                      "Please try a different storage device."));
+        return false;
+    }
+
+    auto prepResult = static_cast<rpi_imager::FileError>(prepResultInt);
+    if (prepResult != rpi_imager::FileError::kSuccess) {
+        // Permission failures meet the first megabyte, and take the hints
+        // #1773 restored; the rest fail at the end, as a card lying about
+        // its capacity does.
+        QString classified;
+        if (prepResult == rpi_imager::FileError::kWriteError) {
+            switch (_file->ClassifyLastWriteError()) {
+                case rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess:
+                case rpi_imager::WriteErrorClass::kAccessDenied:
+                case rpi_imager::WriteErrorClass::kWriteProtected:
+                    classified = _classifiedWriteError();
+                    break;
+                default:
+                    break;
+            }
+        }
+        emit error(!classified.isEmpty() ? classified
+                   : tr("Write error while trying to zero out last part of card.\n\n"
+                        "This could indicate the card is advertising wrong capacity "
+                        "(possible counterfeit).\n\n"
+                        "Please try a different storage device."));
+        return false;
+    }
+
+    // PrepareDevice's default implementation ignores its final Seek(0); a
+    // failure there would begin the image at the end of the device.
     const rpi_imager::FileError rewind = _file->Seek(0);
     if (rewind != rpi_imager::FileError::kSuccess)
     {
@@ -661,10 +699,12 @@ bool DownloadThread::_openAndPrepareDevice()
     qint64 mbrTotalMs = mbrTimer.elapsed();
     qDebug() << "Done zero'ing out start and end of drive. Total MBR prep:" << mbrTotalMs << "ms";
     
-    // Emit MBR zeroing performance event with detailed breakdown
-    QString mbrMetadata = QString("first_mb_ms: %1; last_mb_ms: %2; device_size_mb: %3")
-        .arg(firstMBMs)
-        .arg(_timer.elapsed())  // Last MB timing (from last _timer.restart)
+    // Emit MBR zeroing performance event. PrepareDevice does first +
+    // last MB + fsync as a single op (the helper measures sub-phases on
+    // its side); from here we only have the total.
+    QString mbrMetadata = QString("total_ms: %1; zero_last_mb: %2; device_size_mb: %3")
+        .arg(mbrTotalMs)
+        .arg(zeroLastMb ? "yes" : "no")
         .arg(knownsize / (1024 * 1024));
     emit eventDriveMbrZeroing(static_cast<quint32>(mbrTotalMs), true, mbrMetadata);
 
@@ -977,7 +1017,27 @@ size_t DownloadThread::_writeData(const char *buf, size_t len)
 
     if (!_filename.isEmpty())
     {
-        return _writeFileZeroSkip(buf, len);
+        size_t taken = 0;
+        while (taken < len)
+        {
+            if (!_stage)
+            {
+                _stage = static_cast<char *>(qMallocAligned(kStageSize, 4096));
+                if (!_stage)
+                    return 0;
+            }
+            const size_t n = std::min(len - taken, kStageSize - _stageFill);
+            ::memcpy(_stage + _stageFill, buf + taken, n);
+            _stageFill += n;
+            taken += n;
+            if (_stageFill == kStageSize)
+            {
+                _stageFill = 0;
+                if (_writeFileZeroSkip(_stage, kStageSize) != kStageSize)
+                    return 0;
+            }
+        }
+        return len;
     }
     else
     {
@@ -1057,6 +1117,25 @@ void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
 void DownloadThread::_hashData(const char *buf, size_t len)
 {
     _writehash.addData(buf, len);
+}
+
+size_t DownloadThread::_deviceBlockSize() const
+{
+    return _file ? _file->GetDeviceIOLimits().blockSizeOr512() : 512;
+}
+
+bool DownloadThread::_flushStage()
+{
+    if (!_stage || _stageFill == 0)
+        return true;
+    const size_t block = _deviceBlockSize();
+    const size_t padding = (block - _stageFill % block) % block;
+    if (padding > kStageSize - _stageFill)
+        return false;
+    ::memset(_stage + _stageFill, 0, padding);
+    const size_t total = _stageFill + padding;
+    _stageFill = 0;
+    return _writeFile(_stage, total, nullptr, padding) == total;
 }
 
 /*
@@ -1164,16 +1243,20 @@ QString DownloadThread::_writeFailureReason() const
     return tr("Error writing to device.");
 }
 
-size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete)
+size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete,
+                                  size_t padding)
 {
     if (_cancelled) {
         if (onComplete) onComplete();
         return len;
     }
 
+    const size_t hashLen = padding < len ? len - padding : 0;
+    _paddingBytes += padding;
+
     if (!_firstBlock)
     {
-        _writehash.addData(buf, len);
+        _writehash.addData(buf, hashLen);
         _firstBlock = (char *) qMallocAligned(len, 4096);
         _firstBlockSize = len;
         ::memcpy(_firstBlock, buf, len);
@@ -1218,9 +1301,9 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
 
     // Start hash computation for current buffer
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    _pendingHashFuture = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
+    _pendingHashFuture = QtConcurrent::run(&DownloadThread::_hashData, this, buf, hashLen);
 #else
-    _pendingHashFuture = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
+    _pendingHashFuture = QtConcurrent::run(this, &DownloadThread::_hashData, buf, hashLen);
 #endif
     _hasPendingHash = true;
 
@@ -1638,7 +1721,16 @@ void DownloadThread::_onDownloadError(const QString &msg)
     // OS may be holding a stale view of the disk (no drive letter, no visible
     // partitions) — give it a chance to re-enumerate before we report the
     // failure. No-op on platforms where the kernel does this automatically.
+#ifdef Q_OS_WIN
+    // As cleanDisk: the rescan needs the drive opened for writing.
+    const auto rescanned =
+        rpi_imager::getProcessPrivilegedWriter().rescanDisk(_filename.toStdString());
+    if (!rescanned.ok
+        && rescanned.error.code() == rpi_imager::privileged::proto::ERROR_NOT_IMPLEMENTED)
+        PlatformQuirks::refreshDiskView(_filename);
+#else
     PlatformQuirks::refreshDiskView(_filename);
+#endif
 
     emit error(msg);
 }
@@ -1792,6 +1884,49 @@ void DownloadThread::_closeFiles()
             qWarning() << "DownloadThread: closing the storage device failed:"
                        << _fileErrorToString(err, tr("closing the storage device"));
         }
+
+        // §7a helper-side session telemetry, if the backend captured it
+        // during Close (currently only macOS XpcFileOperations).
+        auto hss = _file->GetLastSessionStats();
+        if (hss.valid) {
+            // Format as a semicolon-separated key:value string so the
+            // existing PerformanceStats exporter, which treats event
+            // metadata as opaque, can include it verbatim.
+            // §7a per-write latency histogram, formatted as
+            // "<=100us=N,<=250us=M,...,>50000us=K" (edges arrive from the
+            // helper, last bucket is open-ended with a UINT64_MAX sentinel).
+            QString latencyBuckets;
+            {
+                const auto& edges = hss.write_latency_bucket_upper_us;
+                const auto& counts = hss.write_latency_bucket_counts;
+                for (size_t i = 0; i < edges.size() && i < counts.size(); ++i) {
+                    if (!latencyBuckets.isEmpty()) latencyBuckets += ",";
+                    QString label = (edges[i] == UINT64_MAX)
+                        ? QString(">%1us").arg(i > 0 ? static_cast<qulonglong>(edges[i-1]) : 0)
+                        : QString("<=%1us").arg(static_cast<qulonglong>(edges[i]));
+                    latencyBuckets += QString("%1=%2").arg(label).arg(static_cast<qulonglong>(counts[i]));
+                }
+            }
+            QString meta = QString(
+                    "writeCount:%1; minLatencyUs:%2; avgLatencyUs:%3; "
+                    "maxLatencyUs:%4; fsyncUs:%5; fsyncCount:%6; "
+                    "prepareDeviceUs:%7; hashDeviceUs:%8; "
+                    "bytesWritten:%9; helperDurationMs:%10; "
+                    "latencyBuckets:%11")
+                .arg(hss.write_count)
+                .arg(hss.min_write_latency_us)
+                .arg(hss.avg_write_latency_us)
+                .arg(hss.max_write_latency_us)
+                .arg(hss.total_fsync_us)
+                .arg(hss.fsync_count)
+                .arg(hss.prepare_device_us)
+                .arg(hss.hash_device_us)
+                .arg(static_cast<qulonglong>(hss.bytes_written))
+                .arg(static_cast<qulonglong>(hss.duration_ms))
+                .arg(latencyBuckets);
+            emit eventHelperSessionSummary(
+                static_cast<quint32>(hss.duration_ms), meta);
+        }
     }
 #ifdef Q_OS_WIN
     if (_volumeFile && _volumeFile->IsOpen()) {
@@ -1821,6 +1956,12 @@ void DownloadThread::_closeFiles()
 
 void DownloadThread::_writeComplete()
 {
+    if (!_cancelled && !_flushStage())
+    {
+        _onDownloadError(_writeFailureReason());
+        return;
+    }
+
     // Wait for all async writes to complete before proceeding
     // This is critical for data integrity before verification
     if (_file && _file->IsAsyncIOSupported() && _file->GetAsyncQueueDepth() > 1) {
@@ -1833,9 +1974,18 @@ void DownloadThread::_writeComplete()
         quint32 asyncWaitMs = static_cast<quint32>(asyncWaitTimer.elapsed());
         qDebug() << "Async I/O drain:" << pendingBefore << "pending writes completed in" << asyncWaitMs << "ms";
         
+        // Zero-copy write observability: did the helper write directly from
+        // producer memory, and how many submits took each path?
+        bool zcEngaged = false;
+        std::uint64_t zcSubmits = 0, copySubmits = 0;
+        _file->GetZeroCopyWriteStats(zcEngaged, zcSubmits, copySubmits);
+        qDebug() << "Zero-copy writes:" << (zcEngaged ? "engaged" : "not engaged")
+                 << "(zero-copy submits" << zcSubmits << ", copy submits" << copySubmits << ")";
+
         // Emit async I/O stats for performance logging
         emit eventAsyncIOConfig(_debugAsyncIO, _file->IsAsyncIOSupported(), 
-                               _file->GetAsyncQueueDepth(), static_cast<quint32>(pendingBefore));
+                               _file->GetAsyncQueueDepth(), static_cast<quint32>(pendingBefore),
+                               zcEngaged, zcSubmits, copySubmits);
         
         // Get and emit detailed async I/O timing stats
         uint32_t wallClockMs, writeCount, minLatencyUs, maxLatencyUs, avgLatencyUs;
@@ -2129,9 +2279,18 @@ void DownloadThread::_performEject()
 
     // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
     QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
+    // Through the PAL: dismounting needs the privileges the client no longer
+    // has. Without a helper, LocalShimBackend calls PlatformQuirks::ejectDisk.
+    const auto ejected = rpi_imager::getProcessPrivilegedWriter().eject(ejectPath.toStdString());
+    if (!ejected.ok)
+        qDebug() << "Eject failed:" << QString::fromStdString(ejected.error.detail());
+    const bool succeeded = ejected.ok;
+#else
     PlatformQuirks::DiskResult result = PlatformQuirks::ejectDisk(ejectPath);
 
     const bool succeeded = (result == PlatformQuirks::DiskResult::Success);
+#endif
 
     qDebug() << "Background eject finished for" << ejectPath << "succeeded:" << succeeded;
     emit ejectFinished(succeeded);
@@ -2315,19 +2474,100 @@ bool DownloadThread::_verifyCustomisation()
     return false;
 }
 
+// Calculate and emit verification read throughput periodically
+void DownloadThread::_emitVerifyThroughput()
+{
+    qint64 elapsed = _verifyThroughputTimer.elapsed();
+    if (elapsed < 500)
+        return;
+    qint64 bytesDelta = _lastVerifyNow.load() - _verifyThroughputBytes;
+    quint32 throughputKBps = 0;
+    if (bytesDelta > 0) {
+        throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
+    }
+    _verifyThroughputBytes = _lastVerifyNow.load();
+    _verifyThroughputTimer.restart();
+    emit bottleneckStateChanged(BottleneckState::Verifying, throughputKBps);
+}
+
 bool DownloadThread::_verify()
 {
     _lastVerifyNow = 0;
     _verifyTotal = _file->Tell();
     _verifyThroughputBytes = 0;
     _verifyThroughputTimer.start();
-    
+
+    QElapsedTimer t1;
+    t1.start();
+
+    // Fast path: ask the FileOperations impl to hash the device range
+    // itself. On the macOS helper-routed path this hashes inside the
+    // helper - no data crosses the XPC boundary, just the 32-byte
+    // digest. Implementations that don't support this (legacy paths,
+    // tests) return supported=false and we fall through to the
+    // read-and-hash loop below.
+    //
+    // Layout of the data being hashed must match the write-time hash:
+    //   firstBlock (held in client memory, written to disk last) ||
+    //   device[firstBlockSize..sourceTotal]
+    // where sourceTotal stops short of the zeroes that padded the last block:
+    // the write hash left them out so it would match the source's own hash.
+    const quint64 sourceTotal = (quint64)_verifyTotal - std::min<quint64>(_paddingBytes, _verifyTotal);
+    {
+        const std::uint8_t* prefix = _firstBlock
+            ? reinterpret_cast<const std::uint8_t*>(_firstBlock)
+            : nullptr;
+        const std::size_t prefix_len = _firstBlock
+            ? (std::size_t)std::min<quint64>(_firstBlockSize, sourceTotal)
+            : 0;
+        const std::uint64_t device_off = (std::uint64_t)_firstBlockSize;
+        const std::uint64_t device_len = sourceTotal > device_off ? sourceTotal - device_off : 0;
+
+        auto fast = _file->FastVerifySha256(prefix, prefix_len,
+                                              device_off, device_len,
+                                              [this, device_off](std::uint64_t hashed) {
+            _lastVerifyNow.store(static_cast<qint64>(device_off + hashed));
+            _emitVerifyThroughput();
+            _onVerifyProgress();
+            return !_cancelled;
+        });
+        // As the read-back loop below: a cancel is not a failure.
+        if (fast.supported && fast.error == rpi_imager::FileError::kCancelled) {
+            return true;
+        }
+        if (fast.supported && fast.error == rpi_imager::FileError::kSuccess) {
+            QByteArray helper_digest(fast.digest.data(),
+                                       (int)fast.digest.size());
+            QByteArray write_digest = _writehash.result();
+            qDebug() << "Fast-verify hash:" << helper_digest.toHex();
+            qDebug() << "Fast-verify done in" << t1.elapsed() / 1000.0 << "seconds";
+            const bool match = (helper_digest == write_digest);
+            emit eventVerify(static_cast<quint32>(t1.elapsed()), match,
+                             write_digest.toHex(), helper_digest.toHex());
+            _lastVerifyNow.store(_verifyTotal.load());
+            _onVerifyProgress();
+            if (match) return true;
+            // Hash mismatch - fall through with the usual error
+            // emission. We don't fall back to the slow loop here;
+            // mismatch is mismatch.
+            DownloadThread::_onDownloadError(tr("Verification failed.<br>"
+                                                "Contents of storage did not match what was written to it."));
+            return false;
+        }
+        if (fast.supported && fast.error != rpi_imager::FileError::kSuccess) {
+            // Real I/O error during fast verify. Surface it; don't
+            // silently fall back to slow path.
+            qWarning() << "FastVerifySha256 reported error" << (int)fast.error;
+            DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
+                                                "SD card may be broken."));
+            return false;
+        }
+        // fast.supported == false → fall through to read-and-hash.
+    }
+
     // Use adaptive buffer size based on file size and system memory for optimal verification performance
     size_t verifyBufferSize = SystemMemoryManager::instance().getAdaptiveVerifyBufferSize(_verifyTotal);
     char *verifyBuf = (char *) qMallocAligned(verifyBufferSize, 4096);
-    
-    QElapsedTimer t1;
-    t1.start();
     
     qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
              << _verifyTotal/(1024*1024) << "MB image";
@@ -2336,13 +2576,16 @@ bool DownloadThread::_verify()
     // Invalidates cache and enables read-ahead hints
     _file->PrepareForSequentialRead(0, _verifyTotal);
 
+    // Device bytes read so far that belong to the source, and so are hashed.
+    quint64 hashed = 0;
     if (!_firstBlock)
     {
         _file->Seek(0);
     }
     else
     {
-        _verifyhash.addData(_firstBlock, _firstBlockSize);
+        hashed = std::min<quint64>(_firstBlockSize, sourceTotal);
+        _verifyhash.addData(_firstBlock, static_cast<qint64>(hashed));
         _file->Seek(_firstBlockSize);
         _lastVerifyNow += _firstBlockSize;
     }
@@ -2360,23 +2603,14 @@ bool DownloadThread::_verify()
             return false;
         }
 
-        _verifyhash.addData(verifyBuf, static_cast<qint64>(lenRead));
+        // Whole blocks are read, as O_DIRECT requires; the padding at the end
+        // of the last one is not hashed.
+        const quint64 toHash = std::min<quint64>(lenRead, sourceTotal - std::min(hashed, sourceTotal));
+        _verifyhash.addData(verifyBuf, static_cast<qint64>(toHash));
+        hashed += toHash;
         _lastVerifyNow += static_cast<qint64>(lenRead);
 
-        // Calculate and emit verification read throughput periodically
-        {
-            qint64 elapsed = _verifyThroughputTimer.elapsed();
-            if (elapsed >= 500) {
-                qint64 bytesDelta = _lastVerifyNow.load() - _verifyThroughputBytes;
-                quint32 throughputKBps = 0;
-                if (bytesDelta > 0) {
-                    throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
-                }
-                _verifyThroughputBytes = _lastVerifyNow.load();
-                _verifyThroughputTimer.restart();
-                emit bottleneckStateChanged(BottleneckState::Verifying, throughputKBps);
-            }
-        }
+        _emitVerifyThroughput();
 
         // Allow subclasses to emit progress updates
         _onVerifyProgress();

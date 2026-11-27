@@ -1,0 +1,838 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 Raspberry Pi Ltd
+//
+// WindowsUacBackend implementation. See windows_uac.h and
+// doc/privileged-helper-plan.md §14.
+//
+// SCAFFOLD: the launch/connect/framed-RPC transport is implemented; session,
+// bulk shared-memory, and verify paths are wired over the helper server
+// (src/writer/server/win). Drive enumeration and the FileOperations adapter
+// remain stubbed. This file compiles only under RPI_IMAGER_ENABLE_WINDOWS_HELPER
+// and is never the default backend.
+
+#include "windows_uac.h"
+
+#include "../wire/handshake.h"
+#include "../wire/win_shared_memory.h"
+#include "../wire/drive_descriptor_json.h"
+#include "../wire/duplex_connection.h"
+#include "../wire/protocol.h"
+#include "../wire/win_pipe_stream.h"
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
+#include <objbase.h>
+#include <aclapi.h>
+
+#include <algorithm>
+#include <atomic>
+#include <cstring>
+#include <mutex>
+#include <string>
+
+namespace rpi_imager::privileged::backends {
+
+namespace {
+
+constexpr std::uint32_t kProtocolVersion = wire::kProtocolVersion;
+
+proto_ns::ErrorInfo makeError(proto_ns::ErrorCode code,
+                              const std::string& detail,
+                              int kernel_errno = 0) {
+    proto_ns::ErrorInfo e;
+    e.set_code(code);
+    e.set_detail(detail);
+    if (kernel_errno != 0) {
+        e.set_kernel_errno(kernel_errno);
+    }
+    return e;
+}
+
+// A reply that does not parse fails the call: read as a default message,
+// it became session 0, an empty digest or a read of nothing.
+proto_ns::ErrorInfo malformedReply(const google::protobuf::MessageLite& m) {
+    return makeError(proto_ns::ERROR_UNKNOWN,
+                     "malformed " + std::string(m.GetTypeName()) + " from helper");
+}
+
+std::wstring widen(const std::string& s) {
+    if (s.empty()) return std::wstring();
+    const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(),
+                                      static_cast<int>(s.size()), nullptr, 0);
+    std::wstring w(static_cast<std::size_t>(n), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()),
+                        w.data(), n);
+    return w;
+}
+
+// Path to the running client executable, used to resolve the helper exe that
+// ships beside it when Options::helper_exe_path is empty.
+std::wstring clientExeDir() {
+    wchar_t buf[MAX_PATH] = {0};
+    const DWORD n = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    std::wstring path(buf, n);
+    const auto slash = path.find_last_of(L"\\/");
+    return slash == std::wstring::npos ? std::wstring() : path.substr(0, slash + 1);
+}
+
+std::wstring helperExePath(const WindowsUacBackend::Options& options) {
+    return options.helper_exe_path.empty() ? clientExeDir() + L"rpi-imager-writer.exe"
+                                           : widen(options.helper_exe_path);
+}
+
+// When a standard user's write is approved with an administrator's
+// credentials, the helper runs as that administrator, and this process's
+// default DACL names only its own user: the helper's OpenProcess for
+// DuplicateHandle is refused and the bulk ring falls back to copying through
+// the pipe. Administrators can already open any process with SeDebugPrivilege,
+// so granting them handle duplication here widens nothing. Best effort: on
+// failure the write still works, only slower.
+void allowAdministratorsToShareHandles() {
+    BYTE sid_buf[SECURITY_MAX_SID_SIZE];
+    DWORD sid_size = sizeof(sid_buf);
+    if (!CreateWellKnownSid(WinBuiltinAdministratorsSid, nullptr, sid_buf, &sid_size)) {
+        return;
+    }
+
+    PACL old_dacl = nullptr;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (GetSecurityInfo(GetCurrentProcess(), SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
+                        nullptr, nullptr, &old_dacl, nullptr, &sd) != ERROR_SUCCESS) {
+        return;
+    }
+
+    EXPLICIT_ACCESSW ea{};
+    ea.grfAccessPermissions = PROCESS_DUP_HANDLE | PROCESS_QUERY_LIMITED_INFORMATION;
+    ea.grfAccessMode = GRANT_ACCESS;
+    ea.grfInheritance = NO_INHERITANCE;
+    ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea.Trustee.TrusteeType = TRUSTEE_IS_GROUP;
+    ea.Trustee.ptstrName = reinterpret_cast<LPWSTR>(sid_buf);
+
+    PACL new_dacl = nullptr;
+    if (SetEntriesInAclW(1, &ea, old_dacl, &new_dacl) == ERROR_SUCCESS) {
+        SetSecurityInfo(GetCurrentProcess(), SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
+                        nullptr, nullptr, new_dacl, nullptr);
+        LocalFree(new_dacl);
+    }
+    LocalFree(sd);
+}
+
+} // namespace
+
+struct WindowsUacBackend::State {
+    Options options;
+
+    std::mutex      mutex;          // serialises connect + sync control-plane RPCs
+    HANDLE          pipe = INVALID_HANDLE_VALUE;
+    HANDLE          helper_process = nullptr;
+    // Atomic so helperActive() can read it without the mutex, which a
+    // connect holds for as long as the UAC prompt is open.
+    std::atomic<bool> connected{false};
+    wire::DuplexConnection duplex;
+
+    // Bulk plane.
+    wire::WinSharedMemory bulk;
+    proto_ns::SessionId   bulk_session;
+
+    ~State() {
+        duplex.detach();
+        if (pipe != INVALID_HANDLE_VALUE) {
+            CloseHandle(pipe);
+        }
+        if (helper_process != nullptr) {
+            CloseHandle(helper_process);
+        }
+    }
+};
+
+WindowsUacBackend::WindowsUacBackend() : WindowsUacBackend(Options{}) {}
+
+WindowsUacBackend::WindowsUacBackend(Options opts)
+    : state_(std::make_unique<State>()) {
+    state_->options = std::move(opts);
+}
+
+WindowsUacBackend::~WindowsUacBackend() = default;
+
+// ---------------------------------------------------------------------------
+// Connection lifecycle (§14.8 vehicle A: lazy launch, resident per app run)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+bool ensureConnectedImpl(WindowsUacBackend::State* st,
+                         proto_ns::ErrorInfo& err) {
+    if (st->connected && st->pipe != INVALID_HANDLE_VALUE && st->duplex.isAttached()) {
+        return true;
+    }
+
+    // Unique, unpredictable pipe name. The helper is launched with this name
+    // and creates the server end; we connect as the client.
+    GUID guid{};
+    CoCreateGuid(&guid);
+    wchar_t guid_str[64] = {0};
+    StringFromGUID2(guid, guid_str, 64);
+    std::wstring pipe_name = std::wstring(L"\\\\.\\pipe\\rpi-imager-writer-") + guid_str;
+
+    const std::wstring helper = helperExePath(st->options);
+
+    std::wstring params = L"--pipe " + pipe_name;
+
+    SHELLEXECUTEINFOW sei{};
+    sei.cbSize = sizeof(sei);
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    sei.lpVerb = L"runas";                 // triggers the UAC consent prompt
+    sei.lpFile = helper.c_str();
+    sei.lpParameters = params.c_str();
+    sei.nShow = SW_HIDE;
+
+    allowAdministratorsToShareHandles();
+    if (!ShellExecuteExW(&sei)) {
+        const DWORD gle = GetLastError();
+        if (gle == ERROR_CANCELLED) {
+            err = makeError(proto_ns::ERROR_HELPER_INSTALL_REJECTED,
+                            "User declined the elevation prompt",
+                            static_cast<int>(gle));
+        } else {
+            err = makeError(proto_ns::ERROR_HELPER_NOT_INSTALLED,
+                            "Failed to launch privileged helper",
+                            static_cast<int>(gle));
+        }
+        return false;
+    }
+    st->helper_process = sei.hProcess;
+
+    // Wait for the helper's pipe server to come up, then connect. The helper
+    // creates the named pipe shortly after launch; poll within the timeout.
+    const DWORD deadline = GetTickCount() +
+        (st->options.handshake_timeout_ms ? st->options.handshake_timeout_ms : 30000);
+    HANDLE pipe = INVALID_HANDLE_VALUE;
+    for (;;) {
+        pipe = wire::openPipeClient(pipe_name);
+        if (pipe != INVALID_HANDLE_VALUE) {
+            break;
+        }
+        if (GetLastError() == ERROR_PIPE_BUSY) {
+            WaitNamedPipeW(pipe_name.c_str(), 1000);
+        } else {
+            Sleep(50);  // not created yet
+        }
+        if (GetTickCount() > deadline) {
+            err = makeError(proto_ns::ERROR_HELPER_NOT_INSTALLED,
+                            "Timed out connecting to the privileged helper pipe");
+            return false;
+        }
+    }
+
+    st->pipe = pipe;
+    st->connected = true;
+    if (!st->duplex.isAttached()) {
+        st->duplex.attach(std::make_unique<wire::WinPipeStream>(pipe));
+    }
+    return true;
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// Framed RPC core (§14.3)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+bool callRpcLocked(WindowsUacBackend::State* st,
+                   proto_ns::WireMethod method,
+                   const std::string& request_payload,
+                   proto_ns::ErrorInfo& err,
+                   std::string& out_reply_payload) {
+    if (!ensureConnectedImpl(st, err)) {
+        return false;
+    }
+
+    const wire::RpcResult rpc = st->duplex.call(method, request_payload);
+    if (!rpc.ok) {
+        err = rpc.error;
+        if (err.code() == proto_ns::ERROR_DEVICE_DISCONNECTED
+            || err.code() == proto_ns::ERROR_DEVICE_IO) {
+            st->connected = false;
+        }
+        return false;
+    }
+    out_reply_payload = rpc.payload;
+    return true;
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// Helper lifecycle
+// ---------------------------------------------------------------------------
+
+bool WindowsUacBackend::helperActive() const {
+    return state_->connected.load() && state_->duplex.isAttached();
+}
+
+Result<proto_ns::HelperStatus> WindowsUacBackend::queryHelperStatus() {
+    // Probing a helper that is not running would start it, and the UAC
+    // prompt with it. It ships beside the client and starts on first use, so
+    // until then being present is all there is to report.
+    if (!helperActive()) {
+        proto_ns::HelperStatus s;
+        const bool present =
+            GetFileAttributesW(helperExePath(state_->options).c_str()) != INVALID_FILE_ATTRIBUTES;
+        s.set_state(present ? proto_ns::HELPER_STATE_INSTALLED_READY
+                            : proto_ns::HELPER_STATE_NOT_INSTALLED);
+        s.set_client_version(std::to_string(kProtocolVersion));
+        return Result<proto_ns::HelperStatus>::success(std::move(s));
+    }
+
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    // Handshake doubles as a status probe: it forces a connect + version
+    // exchange. If the helper isn't reachable we report NOT_INSTALLED.
+    proto_ns::ProtocolVersion pv;
+    pv.set_version(kProtocolVersion);
+    std::string pv_ser;
+    (void)pv.SerializeToString(&pv_ser);
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_HELLO, pv_ser, err, reply)) {
+        proto_ns::HelperStatus s;
+        if (err.code() == proto_ns::ERROR_HELPER_VERSION_MISMATCH) {
+            s.set_state(proto_ns::HELPER_STATE_VERSION_MISMATCH);
+        } else {
+            s.set_state(proto_ns::HELPER_STATE_NOT_INSTALLED);
+        }
+        s.set_client_version(std::to_string(kProtocolVersion));
+        return Result<proto_ns::HelperStatus>::success(std::move(s));
+    }
+    proto_ns::HelperStatus s;
+    if (!s.ParseFromString(reply)) {
+        return Result<proto_ns::HelperStatus>::failure(malformedReply(s));
+    }
+    wire::applyClientProtocolVersion(s, kProtocolVersion);
+    return Result<proto_ns::HelperStatus>::success(std::move(s));
+}
+
+Result<void> WindowsUacBackend::installHelper() {
+    // Vehicle A has no install step; "install" is the lazy elevated launch on
+    // first use (§14.8). Force a connect here so callers that want an explicit
+    // install point get the UAC prompt now.
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    if (!ensureConnectedImpl(state_.get(), err)) {
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
+Result<void> WindowsUacBackend::uninstallHelper() {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    state_->duplex.detach();
+    if (state_->pipe != INVALID_HANDLE_VALUE) {
+        CloseHandle(state_->pipe);
+        state_->pipe = INVALID_HANDLE_VALUE;
+        state_->connected = false;
+    }
+    return Result<void>::success();
+}
+
+std::string WindowsUacBackend::backendDescription() const {
+    return "WindowsUacBackend (elevated rpi-imager-writer.exe over named pipe)";
+}
+
+// ---------------------------------------------------------------------------
+// Drive enumeration (§5)
+// ---------------------------------------------------------------------------
+
+Result<std::vector<proto_ns::DriveInfo>> WindowsUacBackend::listDrivesNow() {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_LIST_DRIVES, {}, err, reply)) {
+        return Result<std::vector<proto_ns::DriveInfo>>::failure(std::move(err));
+    }
+    proto_ns::DriveList list;
+    if (!list.ParseFromString(reply)) {
+        return Result<std::vector<proto_ns::DriveInfo>>::failure(malformedReply(list));
+    }
+    std::vector<proto_ns::DriveInfo> out(list.drives().begin(), list.drives().end());
+    return Result<std::vector<proto_ns::DriveInfo>>::success(std::move(out));
+}
+
+Result<void> WindowsUacBackend::subscribeDrives(DriveChangeCallback cb) {
+    if (!cb) {
+        return Result<void>::failure(
+            makeError(proto_ns::ERROR_UNKNOWN, "null drive-change callback"));
+    }
+    state_->duplex.setEventCallback(
+        [cb = std::move(cb)](const proto_ns::WireEvent& ev) {
+            if (ev.kind() != proto_ns::WIRE_EVENT_DRIVE_CHANGED) {
+                return;
+            }
+            proto_ns::DriveChange dc = ev.change();
+            if (dc.kind() == proto_ns::DriveChange::KIND_UNKNOWN) {
+                dc.set_kind(proto_ns::DriveChange::KIND_UPDATED);
+            }
+            cb(dc);
+        });
+
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_SUBSCRIBE_DRIVES, {}, err, reply)) {
+        state_->duplex.setEventCallback(nullptr);
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
+Result<void> WindowsUacBackend::unsubscribeDrives() {
+    state_->duplex.setEventCallback(nullptr);
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    (void)callRpcLocked(state_.get(), proto_ns::WIRE_UNSUBSCRIBE_DRIVES, {}, err, reply);
+    return Result<void>::success();
+}
+
+Result<std::vector<Drivelist::DeviceDescriptor>>
+WindowsUacBackend::listDevicesNow() {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_LIST_DRIVES, {}, err, reply)) {
+        return Result<std::vector<Drivelist::DeviceDescriptor>>::failure(std::move(err));
+    }
+    proto_ns::DriveList list;
+    if (!list.ParseFromString(reply)) {
+        return Result<std::vector<Drivelist::DeviceDescriptor>>::failure(malformedReply(list));
+    }
+    return Result<std::vector<Drivelist::DeviceDescriptor>>::success(
+        wire::deviceDescriptorsFromDriveList(list));
+}
+
+// ---------------------------------------------------------------------------
+// Session lifecycle (§6)
+// ---------------------------------------------------------------------------
+
+Result<proto_ns::SessionId> WindowsUacBackend::openSession(
+    const std::string& device_path, const proto_ns::OpenOptions& opts) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::OpenSessionRequest req;
+    req.set_device_path(device_path);
+    *req.mutable_options() = opts;
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_OPEN_SESSION, req_ser, err, reply)) {
+        return Result<proto_ns::SessionId>::failure(std::move(err));
+    }
+    proto_ns::SessionId sid;
+    if (!sid.ParseFromString(reply)) {
+        return Result<proto_ns::SessionId>::failure(malformedReply(sid));
+    }
+    return Result<proto_ns::SessionId>::success(std::move(sid));
+}
+
+Result<proto_ns::DeviceLimits> WindowsUacBackend::queryDeviceLimits(
+    const proto_ns::SessionId& sid) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::SessionRequest req;
+    *req.mutable_session_id() = sid;
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_QUERY_DEVICE_LIMITS, req_ser, err, reply)) {
+        return Result<proto_ns::DeviceLimits>::failure(std::move(err));
+    }
+    proto_ns::DeviceLimits limits;
+    if (!limits.ParseFromString(reply)) {
+        return Result<proto_ns::DeviceLimits>::failure(malformedReply(limits));
+    }
+    return Result<proto_ns::DeviceLimits>::success(std::move(limits));
+}
+
+Result<void> WindowsUacBackend::prepareDevice(
+    const proto_ns::SessionId& sid, const proto_ns::PrepareOptions& opts) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::PrepareDeviceRequest req;
+    *req.mutable_session_id() = sid;
+    *req.mutable_options() = opts;
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_PREPARE_DEVICE, req_ser, err, reply)) {
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
+Result<Slot> WindowsUacBackend::acquireSlot(const proto_ns::SessionId&) {
+    // The bulk plane uses mapBulkBuffer + bulkWriteFromBuffer like macOS, not
+    // the generic acquireSlot/submitWrite pair; that PAL path is unused here.
+    Result<Slot> r;
+    r.ok = false;
+    r.error = makeError(proto_ns::ERROR_NOT_IMPLEMENTED,
+                        "acquireSlot: use mapBulkBuffer/bulkWriteFromBuffer");
+    return r;
+}
+
+void WindowsUacBackend::submitWrite(const proto_ns::SessionId&,
+                                    std::uint32_t, std::uint64_t, std::uint64_t,
+                                    WriteCompleteCallback on_complete) {
+    if (on_complete) {
+        proto_ns::WriteResult wr;
+        *wr.mutable_error() = makeError(proto_ns::ERROR_NOT_IMPLEMENTED,
+                                        "submitWrite: use submitBulkWriteAsync");
+        on_complete(wr);
+    }
+}
+
+Result<std::size_t> WindowsUacBackend::readChunk(
+    const proto_ns::SessionId& sid, std::uint64_t offset,
+    std::byte* out, std::size_t len) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::ReadRequest req;
+    *req.mutable_session_id() = sid;
+    req.set_offset(offset);
+    req.set_length(len);
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_READ_CHUNK, req_ser, err, reply)) {
+        return Result<std::size_t>::failure(std::move(err));
+    }
+    proto_ns::ReadReply rr;
+    if (!rr.ParseFromString(reply)) {
+        return Result<std::size_t>::failure(malformedReply(rr));
+    }
+    const std::size_t n = std::min<std::size_t>(len, rr.data().size());
+    std::memcpy(out, rr.data().data(), n);
+    return Result<std::size_t>::success(n);
+}
+
+Result<std::size_t> WindowsUacBackend::writeChunk(
+    const proto_ns::SessionId& sid, std::uint64_t offset,
+    const std::byte* in, std::size_t len) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::WriteChunkRequest req;
+    *req.mutable_session_id() = sid;
+    req.set_offset(offset);
+    req.set_data(std::string(reinterpret_cast<const char*>(in), len));
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_WRITE_CHUNK, req_ser, err, reply)) {
+        return Result<std::size_t>::failure(std::move(err));
+    }
+    proto_ns::WriteChunkReply wr;
+    if (!wr.ParseFromString(reply)) {
+        return Result<std::size_t>::failure(malformedReply(wr));
+    }
+    return Result<std::size_t>::success(static_cast<std::size_t>(wr.bytes_written()));
+}
+
+Result<void> WindowsUacBackend::syncDevice(const proto_ns::SessionId& sid) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::SessionRequest req;
+    *req.mutable_session_id() = sid;
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_SYNC_DEVICE, req_ser, err, reply)) {
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
+Result<std::string> WindowsUacBackend::hashDeviceSha256(
+    const proto_ns::SessionId& sid, const std::string& prefix,
+    std::uint64_t device_offset, std::uint64_t length) {
+    return hashRequest(sid, prefix, device_offset, length, false, true, true);
+}
+
+Result<std::string> WindowsUacBackend::hashDeviceSha256Chunk(
+    const proto_ns::SessionId& sid, const std::string& prefix,
+    std::uint64_t device_offset, std::uint64_t length, bool begin, bool finish) {
+    return hashRequest(sid, prefix, device_offset, length, true, begin, finish);
+}
+
+Result<std::string> WindowsUacBackend::hashRequest(
+    const proto_ns::SessionId& sid, const std::string& prefix,
+    std::uint64_t device_offset, std::uint64_t length,
+    bool incremental, bool begin, bool finish) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::HashDeviceRequest req;
+    *req.mutable_session_id() = sid;
+    req.set_prefix(prefix);
+    req.set_device_offset(device_offset);
+    req.set_length(length);
+    if (incremental) {
+        req.set_incremental(true);
+        req.set_begin(begin);
+        req.set_finish(finish);
+    }
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_HASH_DEVICE_SHA256, req_ser, err, reply)) {
+        return Result<std::string>::failure(std::move(err));
+    }
+    proto_ns::HashDeviceReply hr;
+    if (!hr.ParseFromString(reply)) {
+        return Result<std::string>::failure(malformedReply(hr));
+    }
+    return Result<std::string>::success(hr.digest());
+}
+
+Result<proto_ns::SessionStats> WindowsUacBackend::closeSession(
+    const proto_ns::SessionId& sid) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    state_->bulk.release();
+    proto_ns::SessionRequest req;
+    *req.mutable_session_id() = sid;
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_CLOSE_SESSION, req_ser, err, reply)) {
+        return Result<proto_ns::SessionStats>::failure(std::move(err));
+    }
+    proto_ns::SessionStats stats;
+    if (!stats.ParseFromString(reply)) {
+        return Result<proto_ns::SessionStats>::failure(malformedReply(stats));
+    }
+    return Result<proto_ns::SessionStats>::success(std::move(stats));
+}
+
+// ---------------------------------------------------------------------------
+// Maintenance
+// ---------------------------------------------------------------------------
+
+Result<void> WindowsUacBackend::unmount(const std::string& device_path) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::PathRequest req;
+    req.set_device_path(device_path);
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_UNMOUNT, req_ser, err, reply)) {
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
+Result<void> WindowsUacBackend::eject(const std::string& device_path) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::PathRequest req;
+    req.set_device_path(device_path);
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_EJECT, req_ser, err, reply)) {
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
+Result<void> WindowsUacBackend::cleanDisk(const std::string& device_path) {
+    return pathRpc(proto_ns::WIRE_CLEAN_DISK, device_path);
+}
+
+Result<void> WindowsUacBackend::rescanDisk(const std::string& device_path) {
+    return pathRpc(proto_ns::WIRE_RESCAN_DISK, device_path);
+}
+
+Result<void> WindowsUacBackend::pathRpc(proto_ns::WireMethod method,
+                                        const std::string& device_path) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    proto_ns::PathRequest req;
+    req.set_device_path(device_path);
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), method, req_ser, err, reply)) {
+        return Result<void>::failure(std::move(err));
+    }
+    return Result<void>::success();
+}
+
+// ---------------------------------------------------------------------------
+// Bulk-write shared-memory plane (§6, §14.3)
+// ---------------------------------------------------------------------------
+
+Result<void> WindowsUacBackend::mapBulkBuffer(const proto_ns::SessionId& sid,
+                                              std::size_t size_bytes,
+                                              const std::uint32_t async_queue_depth) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+
+    proto_ns::MapBulkBufferRequest req;
+    *req.mutable_session_id() = sid;
+    req.set_size_bytes(size_bytes);
+    req.set_async_queue_depth(async_queue_depth);
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_MAP_BULK_BUFFER, req_ser, err, reply)) {
+        return Result<void>::failure(std::move(err));
+    }
+
+    if (size_bytes == 0) {
+        state_->bulk.release();
+        return Result<void>::success();
+    }
+
+    proto_ns::MapBulkBufferReply map_reply;
+    if (!map_reply.ParseFromString(reply)) {
+        return Result<void>::failure(makeError(proto_ns::ERROR_UNKNOWN,
+                                                "mapBulkBuffer: malformed reply"));
+    }
+    if (map_reply.section_handle() == 0 || map_reply.size_bytes() == 0) {
+        return Result<void>::failure(makeError(proto_ns::ERROR_UNKNOWN,
+                                                "mapBulkBuffer: helper returned no handle"));
+    }
+
+    state_->bulk.release();
+    if (!state_->bulk.adoptFromHandle(
+            map_reply.section_handle(),
+            static_cast<std::size_t>(map_reply.size_bytes()))) {
+        return Result<void>::failure(makeError(
+            proto_ns::ERROR_UNKNOWN,
+            "mapBulkBuffer: client MapViewOfFile failed",
+            static_cast<int>(GetLastError())));
+    }
+    state_->bulk_session = sid;
+    if (async_queue_depth > 1) {
+        state_->duplex.setMaxOutstandingAsync(async_queue_depth);
+    }
+    return Result<void>::success();
+}
+
+void* WindowsUacBackend::bulkBufferBase() const {
+    return state_->bulk.base();
+}
+
+std::size_t WindowsUacBackend::bulkBufferSize() const {
+    return state_->bulk.size();
+}
+
+Result<std::size_t> WindowsUacBackend::bulkWriteFromBuffer(
+    const proto_ns::SessionId& sid, std::uint64_t buffer_offset,
+    std::uint64_t device_offset, std::size_t length) {
+    std::lock_guard<std::mutex> lk(state_->mutex);
+    if (!state_->bulk.valid() || length == 0
+        || buffer_offset > state_->bulk.size()
+        || length > state_->bulk.size() - buffer_offset) {
+        return Result<std::size_t>::failure(makeError(
+            proto_ns::ERROR_UNKNOWN,
+            "bulkWriteFromBuffer: no buffer mapped or out of bounds"));
+    }
+
+    proto_ns::WriteRequest req;
+    *req.mutable_session_id() = sid;
+    req.set_buffer_offset(buffer_offset);
+    req.set_offset(device_offset);
+    req.set_length(length);
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    proto_ns::ErrorInfo err;
+    std::string reply;
+    if (!callRpcLocked(state_.get(), proto_ns::WIRE_BULK_WRITE, req_ser, err, reply)) {
+        return Result<std::size_t>::failure(std::move(err));
+    }
+    proto_ns::WriteResult wr;
+    if (!wr.ParseFromString(reply)) {
+        return Result<std::size_t>::failure(malformedReply(wr));
+    }
+    return Result<std::size_t>::success(static_cast<std::size_t>(wr.bytes_written()));
+}
+
+void WindowsUacBackend::submitBulkWriteAsync(const proto_ns::SessionId& sid,
+                                             std::uint64_t buffer_offset,
+                                             std::uint64_t device_offset,
+                                             std::size_t length,
+                                             BulkWriteCallback on_complete) {
+    if (!on_complete) {
+        return;
+    }
+
+    if (!state_->bulk.valid() || length == 0
+        || buffer_offset > state_->bulk.size()
+        || length > state_->bulk.size() - buffer_offset) {
+        on_complete(Result<std::size_t>::failure(makeError(
+            proto_ns::ERROR_UNKNOWN,
+            "bulkWriteFromBuffer: no buffer mapped or out of bounds")));
+        return;
+    }
+
+    proto_ns::WriteRequest req;
+    *req.mutable_session_id() = sid;
+    req.set_buffer_offset(buffer_offset);
+    req.set_offset(device_offset);
+    req.set_length(length);
+    std::string req_ser;
+    (void)req.SerializeToString(&req_ser);
+
+    {
+        std::lock_guard<std::mutex> lk(state_->mutex);
+        proto_ns::ErrorInfo err;
+        if (!ensureConnectedImpl(state_.get(), err)) {
+            on_complete(Result<std::size_t>::failure(std::move(err)));
+            return;
+        }
+    }
+
+    WindowsUacBackend* self = this;
+    BulkWriteCallback user_cb = std::move(on_complete);
+    state_->duplex.submitAsync(
+        proto_ns::WIRE_BULK_WRITE, req_ser,
+        [self, user_cb = std::move(user_cb)](wire::RpcResult rpc) mutable {
+            if (!rpc.ok) {
+                {
+                    std::lock_guard<std::mutex> lk(self->state_->mutex);
+                    if (rpc.error.code() == proto_ns::ERROR_DEVICE_DISCONNECTED
+                        || rpc.error.code() == proto_ns::ERROR_DEVICE_IO) {
+                        self->state_->connected = false;
+                    }
+                }
+                user_cb(Result<std::size_t>::failure(std::move(rpc.error)));
+                return;
+            }
+            proto_ns::WriteResult wr;
+            if (!wr.ParseFromString(rpc.payload)) {
+                user_cb(Result<std::size_t>::failure(makeError(
+                    proto_ns::ERROR_UNKNOWN, "bulkWrite: bad WriteResult reply")));
+                return;
+            }
+            user_cb(Result<std::size_t>::success(
+                static_cast<std::size_t>(wr.bytes_written())));
+        });
+}
+
+} // namespace rpi_imager::privileged::backends

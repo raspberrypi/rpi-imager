@@ -157,7 +157,7 @@ QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-desktop-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/$(appimage_release_name imager "$GIT_VERSION" "$ARCH")"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -196,9 +196,10 @@ if [ "$APPIMAGE_PACKAGING" = pack ] && [ ! -d "$APPDIR/usr/bin" ]; then
     exit 1
 fi
 
-if [ "$APPIMAGE_PACKAGING" != pack ]; then
-# Set up build directory
+# Set up build directory; the pack stage needs it too for the SBOM
 BUILD_DIR="build-$ARCH"
+
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
 
 # Clean up previous builds if requested
 if [ "$CLEAN_BUILD" -eq 1 ]; then
@@ -225,6 +226,9 @@ fi
 
 # Add Qt path to CMake flags
 CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
+if [ -n "${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS:-}" ]; then
+    CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DRPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS=${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS}"
+fi
 
 # shellcheck disable=SC2086
 cmake -G Ninja "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
@@ -422,6 +426,26 @@ if [ "$APPIMAGE_PACKAGING" != pack ]; then
     appimage_deploy_lib_closure "$APPDIR" "$QT_DIR/lib" || exit 1
 fi
 
+export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
+
+# linuxdeploy only deploys here: the SBOM hashes the AppDir, so nothing may
+# change it between the SBOM and packing.
+if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
+export APPIMAGE_EXTRACT_AND_RUN=1
+"$LINUXDEPLOY" --appdir="$APPDIR" \
+    --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
+    --exclude-library="libsystemd*" \
+    --exclude-library="libdbus-*" \
+    --exclude-library="libcap*" \
+    --exclude-library="libwayland-*" \
+    --verbosity=0
+fi
+
+if [ "$APPIMAGE_PACKAGING" != pack ]; then
+    sbom_package_tree "$APPDIR" "$PWD/$BUILD_DIR" \
+        "$APPDIR/usr/share/doc/rpi-imager/sbom" || exit 1
+fi
+
 if [ "$APPIMAGE_PACKAGING" = build ]; then
     prepare_appdir_for_appimagetool "$APPDIR" com.raspberrypi.rpi-imager
     echo "create-appimage: build stage complete (AppDir at $APPDIR)"
@@ -433,30 +457,7 @@ echo "Creating AppImage..."
 rm -f "$PWD/rpi-imager-desktop-$ARCH.AppImage"
 rm -f "$PWD/rpi-imager-$ARCH.AppImage"
 
-export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
-
-if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ] && [ "$ARCH" = "$TOOL_ARCH" ] && [ "$APPIMAGE_PACKAGING" = all ]; then
-export APPIMAGE_EXTRACT_AND_RUN=1
-"$LINUXDEPLOY" --appdir="$APPDIR" \
-    --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
-    --exclude-library="libsystemd*" \
-    --exclude-library="libdbus-*" \
-    --exclude-library="libcap*" \
-    --exclude-library="libwayland-*" \
-    --output=appimage \
-    --verbosity=0
-
-LINUXDEPLOY_OUTPUT="Raspberry_Pi_Imager-${ARCH}.AppImage"
-if [ -f "$LINUXDEPLOY_OUTPUT" ]; then
-    echo "Renaming '$LINUXDEPLOY_OUTPUT' to '$(basename "$OUTPUT_FILE")'"
-    mv "$LINUXDEPLOY_OUTPUT" "$OUTPUT_FILE"
-elif [ -f "$OUTPUT_FILE" ]; then
-    echo "Output file already exists: $OUTPUT_FILE"
-else
-    echo "Warning: Expected linuxdeploy output '$LINUXDEPLOY_OUTPUT' not found"
-    ls -la ./*.AppImage 2>/dev/null || true
-fi
-elif [ -n "${APPIMAGETOOL:-}" ] && [ -f "$APPIMAGETOOL" ]; then
+if [ -n "${APPIMAGETOOL:-}" ] && [ -f "$APPIMAGETOOL" ]; then
     appimage_pack_with_tool "$APPIMAGETOOL" "$APPDIR" "$OUTPUT_FILE" \
         "$ARCH" "$TOOL_ARCH" com.raspberrypi.rpi-imager || exit 1
 else
@@ -470,6 +471,36 @@ if [ ! -f "$OUTPUT_FILE" ]; then
     echo "Error: AppImage was not created at $OUTPUT_FILE" >&2
     exit 1
 fi
+
+# Optional embedded GPG signature (Type 2 .sha256_sig section, no sidecar).
+if [ -n "${RPI_IMAGER_APPIMAGE_SIGN_KEY:-}" ]; then
+    echo "Signing AppImage with key ${RPI_IMAGER_APPIMAGE_SIGN_KEY}..."
+    SIGNED_TMP="${OUTPUT_FILE%.AppImage}.signed.AppImage"
+    rm -f "$SIGNED_TMP"
+    # Re-packing must embed the target runtime, as appimage_pack_with_tool does.
+    set --
+    if SIGN_RUNTIME=$(appimage_runtime_file "$ARCH"); then
+        set -- --runtime-file "$SIGN_RUNTIME"
+    elif [ "$ARCH" != "$TOOL_ARCH" ]; then
+        echo "Error: no AppImage runtime for $ARCH; cannot sign a cross-packed AppImage" >&2
+        exit 1
+    fi
+    APPIMAGE_EXTRACT_AND_RUN=1 ARCH="${ARCH}" VERSION="${PROJECT_VERSION}" \
+        "$APPIMAGETOOL" "$@" --sign --sign-key "${RPI_IMAGER_APPIMAGE_SIGN_KEY}" \
+        --no-appstream "$APPDIR" "$SIGNED_TMP"
+    mv "$SIGNED_TMP" "$OUTPUT_FILE"
+    if [ -z "${RPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS:-}" ]; then
+        FPR="$(gpg --with-colons --fingerprint "${RPI_IMAGER_APPIMAGE_SIGN_KEY}" 2>/dev/null \
+            | awk -F: '/^fpr:/ {print toupper($10); exit}')"
+        if [ -n "$FPR" ]; then
+            echo "Detected signing key fingerprint: $FPR"
+            echo "Reconfigure with -DRPI_IMAGER_TRUSTED_APPIMAGE_KEY_FINGERPRINTS=${FPR} for peer auth pinning."
+        fi
+    fi
+    echo "Signed AppImage at $OUTPUT_FILE"
+fi
+
+sbom_publish_beside "$APPDIR" "$PWD/$BUILD_DIR" "$OUTPUT_FILE" || exit 1
 
 # Create symlinks for debian packaging and user convenience
 # Primary symlink matches debian/rpi-imager.install expectations

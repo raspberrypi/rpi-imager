@@ -450,3 +450,39 @@ TEST_CASE("A large page size still caps sensibly", "[device_io_limits][buffer]")
     // 64 KB pages, as some systems use.
     CHECK(rpi_imager::CapWriteBufferToDevice(1024 * 1024, 200000, 65536) == 196608u);
 }
+
+#ifdef __linux__
+#include <filesystem>
+#include <system_error>
+
+TEST_CASE("The block size read for a device is the one the kernel publishes",
+          "[device_io_limits]")
+{
+    // Any real block device will do; its logical block size is what O_DIRECT
+    // writes to it must be multiples of.
+    std::string dev, published;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator("/sys/class/block", ec)) {
+        std::ifstream f(e.path() / "queue" / "logical_block_size");
+        std::string v;
+        if (f >> v) {
+            dev = "/dev/" + e.path().filename().string();
+            published = v;
+            break;
+        }
+    }
+    if (dev.empty() || !std::filesystem::exists(dev))
+        SKIP("no block device with a published logical block size");
+
+    const auto limits = FileOperations::QueryDeviceIOLimits(dev);
+    INFO(dev);
+    CHECK(std::to_string(limits.logical_block_size) == published);
+}
+
+TEST_CASE("A regular file has no block size of its own", "[device_io_limits]")
+{
+    const auto limits = FileOperations::QueryDeviceIOLimits("/etc/hostname");
+    CHECK(limits.logical_block_size == 0);
+    CHECK(limits.blockSizeOr512() == 512);
+}
+#endif
