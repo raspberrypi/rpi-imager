@@ -19,12 +19,14 @@
 
 #include <gnutls/crypto.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -238,11 +240,23 @@ TEST_CASE("Drive events reach the subscriber, and only drive events",
     REQUIRE(::write(helper_fd, frames.data(), frames.size())
             == static_cast<ssize_t>(frames.size()));
 
+    // The subscription also watches real drives, whose changes arrive as
+    // KIND_UPDATED like the injected one: a loop device from a test running
+    // alongside adds some. Only the injected ADDED is unique.
+    const auto isAdded = [](const proto::DriveChange& c) {
+        return c.kind() == proto::DriveChange::KIND_ADDED;
+    };
     std::unique_lock<std::mutex> lk(m);
-    REQUIRE(cv.wait_for(lk, std::chrono::seconds(10), [&] { return seen.size() >= 2; }));
-    REQUIRE(seen.size() == 2);
-    CHECK(seen[0].kind() == proto::DriveChange::KIND_UPDATED);
-    CHECK(seen[1].kind() == proto::DriveChange::KIND_ADDED);
+    REQUIRE(cv.wait_for(lk, std::chrono::seconds(10), [&] {
+        return std::any_of(seen.begin(), seen.end(), isAdded);
+    }));
+    const auto added_at = std::find_if(seen.begin(), seen.end(), isAdded);
+    CHECK(std::count_if(seen.begin(), seen.end(), isAdded) == 1);
+    REQUIRE(added_at != seen.begin());
+    CHECK(std::prev(added_at)->kind() == proto::DriveChange::KIND_UPDATED);
+    for (const auto& c : seen) {
+        CHECK((c.kind() == proto::DriveChange::KIND_UPDATED || isAdded(c)));
+    }
     lk.unlock();
 
     CHECK(backend->unsubscribeDrives().ok);
