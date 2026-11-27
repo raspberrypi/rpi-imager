@@ -148,7 +148,9 @@ Name: "{commondesktop}\{cm:ProgramName}"; Filename: "{app}\{#MyAppExeName}"; Tas
 ; Stage and install WinUSB driver for Raspberry Pi USB boot mode devices.
 ; pnputil /install also applies the driver to any currently-connected device.
 ; Return code 3010 means success-with-reboot-required and is treated as success.
-Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\rpiboot-winusb.inf"" /install"; Flags: runhidden waituntilterminated; StatusMsg: "Installing USB driver for Raspberry Pi boot mode..."
+; Skipped by /SILENT and /VERYSILENT unless /USBDRIVER=1: a first install raises a
+; driver-trust prompt that blocks unattended deployment (#1804).
+Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\rpiboot-winusb.inf"" /install"; Flags: runhidden waituntilterminated; Check: ShouldInstallUSBDriver; StatusMsg: "Installing USB driver for Raspberry Pi boot mode..."
 
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser
 
@@ -172,6 +174,11 @@ Type: files; Name: "{commondesktop}\树莓派启动盘制作工具.lnk"; Check: 
 function IsChineseSimplified: Boolean;
 begin
   Result := ActiveLanguage = 'chinesesimplified';
+end;
+
+function ShouldInstallUSBDriver: Boolean;
+begin
+  Result := not WizardSilent or (ExpandConstant('{param:USBDRIVER|0}') = '1');
 end;
 
 // Helper function to find a process by name
